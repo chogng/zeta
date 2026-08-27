@@ -526,7 +526,7 @@ impl NativeApp {
         if let Some(index) = file_editor_tab_index(id, 0..self.file_editor_host.tabs().len()) {
             self.file_editor_host.select(index);
             self.file_editor_input.dismiss_prompt();
-            self.inspector_part.expand();
+            self.workbench.expand_inspector();
             self.workspace_surface.show_editor();
             self.file_editor_input.fractional_rows = 0.0;
             self.pending_focus = Some(FILE_EDITOR_DOCUMENT);

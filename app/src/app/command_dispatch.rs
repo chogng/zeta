@@ -245,8 +245,8 @@ fn execute_toggle_terminal_surface(app: &mut NativeApp, _request: &CommandReques
     } else {
         Some(shell_interaction::COMPOSER)
     };
-    app.terminal_selection.clear();
-    app.terminal_scroll.reset();
+    app.terminal_view_mut().selection.clear();
+    app.terminal_view_mut().scroll.reset();
     app.keybindings.cancel_chord();
 }
 
@@ -277,18 +277,21 @@ fn execute_manage_remote_tunnels(app: &mut NativeApp, _request: &CommandRequest)
 }
 
 fn execute_toggle_tab_container(app: &mut NativeApp, _request: &CommandRequest) {
-    app.tab_container.toggle();
+    app.workbench.toggle_tab_container();
     session_switch_trace::event(
         None,
         "tab-container-toggle",
-        format_args!("expanded={}", app.tab_container.is_expanded()),
+        format_args!(
+            "expanded={}",
+            app.workbench.tab_container_state().is_expanded()
+        ),
     );
 }
 
 fn execute_toggle_workspace_pane(app: &mut NativeApp, _request: &CommandRequest) {
     if app.workspace_surface.is_editor() {
         app.show_agent_pane();
-        app.inspector_part.collapse();
+        app.workbench.collapse_inspector();
         app.pending_focus = Some(shell_interaction::COMPOSER);
         return;
     }

@@ -1,17 +1,19 @@
 //! TabPart's model, chrome UI, presentation state, and stable interaction identities.
 
 mod identity;
-mod inspector_state;
-mod model;
 mod style;
+mod tab_group;
+mod tab_input;
+mod tab_mount;
+mod tab_part;
 mod tabs;
 mod tabs_state;
 mod titlebar;
 mod toolbar;
 
-pub use model::{
-    TabGroup, TabGroupId, TabInput, TabInputChange, TabInputKey, TabInputMetadata, TabPart,
-};
+pub use tab_group::{TabGroup, TabGroupId};
+pub use tab_input::{TabInput, TabInputChange, TabInputKey, TabInputMetadata};
+pub use tab_part::TabPart;
 
 pub use identity::{
     ADD_SESSION, FIRST_TAB_CONTAINER_SESSION_TAB, FIRST_TITLEBAR_SESSION_TAB, SESSION_SEARCH_INPUT,
@@ -20,7 +22,6 @@ pub use identity::{
     TITLEBAR_TAB_CONTAINER, TITLEBAR_TAB_LIST, WINDOW, WORKSPACE_PANE_TOGGLE, session_tab_id,
     tab_group_list_id, titlebar_session_tab_id, titlebar_tab_group_list_id,
 };
-pub use inspector_state::InspectorPartState;
 pub use style::WorkbenchUiStyle;
 pub use tabs::{
     TabContainer, TabContainerPlacement, WorkbenchTab, WorkbenchTabGroup, tab_input_element_id,

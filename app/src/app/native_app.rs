@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::process::ExitCode;
 use std::time::Instant;
 
@@ -29,9 +28,6 @@ use crate::shell_scene::{
 };
 use crate::shell_style::{SHELL_PALETTE, ShellPalette, code_editor_style};
 use crate::terminal_pane_view::TerminalPaneViewState;
-use crate::terminal_pointer::TerminalPointer;
-use crate::terminal_scrollback::TerminalScroll;
-use crate::terminal_selection::TerminalSelection;
 use crate::terminal_session::{TerminalSession, TerminalSessionEvent, TerminalSessionKey};
 use crate::thread_projection::ThreadProjection;
 use crate::thread_timeline_scroll::ThreadTimelineScroll;
@@ -46,11 +42,12 @@ use zeta_protocol::SessionId;
 use zeta_settings::SettingsPageSection;
 use zeta_terminal::{BlockStatus, GridSize, ScreenBuffer};
 use zeta_terminal_workspace::PaneBinding;
+use zeta_terminal_workspace::TerminalPaneViews;
 use zeta_theme::{ColorScheme, ThemeLoadOptions, ThemeLoader, ThemeSurface, default_device_root};
-use zeta_ui_components::{Resizable, SashOrientation, SashPointerPresence};
+use zeta_ui_components::{SashOrientation, SashPointerPresence};
 use zeta_workbench::{
-    InspectorPartState, LogicalViewport, PaneGroupId as PaneId, PaneHostScope, PaneInput,
-    PaneInputKind, PaneSplitDirection, PaneSplitId, TabContainerState, TabInputKey, WorkbenchHost,
+    LogicalViewport, PaneGroupId as PaneId, PaneInput, PaneInputKind, PaneKey, PaneSplitDirection,
+    PaneSplitId, TabInputKey, WorkbenchHost,
 };
 use zui::ui::{CaretBlinkAdvance, CaretBlinkController, Point, TextInputLayoutEngine};
 use zui::ui::{SplitViewOrientation, SplitViewResizeSnapshot};
@@ -252,7 +249,6 @@ pub(crate) mod workspace_surface;
 
 pub use run::run;
 pub(crate) use state::NativeApp;
-use state::TerminalPaneResize;
 
 pub(crate) const PRODUCT_DISPLAY_NAME: &str = "app";
 const DEFAULT_THEME_ENTRY: &str = "app";

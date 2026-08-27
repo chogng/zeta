@@ -7,10 +7,7 @@ enum InspectorPartVisibility {
     Expanded,
 }
 
-/// Visibility and preferred width for the right Workbench Inspector.
-///
-/// The preferred width survives scene rebuilds. Feature content and product commands remain owned
-/// by their feature coordinator.
+/// Visibility and preferred width for the right Workbench inspector.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct InspectorPartState {
     visibility: InspectorPartVisibility,
@@ -67,5 +64,5 @@ impl InspectorPartState {
 }
 
 #[cfg(test)]
-#[path = "inspector_state_tests.rs"]
+#[path = "layout_inspector_tests.rs"]
 mod tests;

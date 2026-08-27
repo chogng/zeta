@@ -12,12 +12,17 @@ mod panepart;
 mod tabpart;
 mod workbench;
 
-pub use host::{PaneBindingId, PaneHost, PaneHostScope, PaneKey, PaneMount, WorkbenchHost};
+pub use host::{ClosedPane, PaneActivation, PaneBindingId, PaneKey, PaneMount, WorkbenchHost};
 pub use layout::{
-    InspectorLayoutSpec, LogicalViewport, PartVisibility, TabContainerLayout,
-    TabContainerLayoutSpec, WorkbenchLayout, WorkbenchLayoutSpec, WorkbenchPart, WorkspaceLayout,
+    InspectorLayoutSpec, InspectorPartState, LogicalViewport, PartVisibility, TabContainerLayout,
+    TabContainerLayoutSpec, WorkbenchLayout, WorkbenchLayoutSpec, WorkbenchLayoutState,
+    WorkbenchPart, WorkspaceLayout,
 };
 pub use panepart::PaneGroupLayout;
+pub use panepart::PanePartSashes;
+pub use panepart::PaneResizeState;
+pub use panepart::pane_group_element_id;
+pub use panepart::pane_sash_element_id;
 pub use panepart::{
     Pane, PaneContainer, PaneGroup, PaneGroupId, PaneInput, PaneInputId, PaneInputKind, PaneNode,
     PanePart, PaneSplitDirection, PaneSplitId,

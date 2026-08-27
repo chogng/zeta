@@ -6,7 +6,9 @@ license-file.workspace = true
 publish.workspace = true
 
 [dependencies]
+zeta-app-server-protocol = { workspace = true }
 zeta-icons = { workspace = true }
+zeta-lsp-server-provider = { workspace = true }
 zeta-ui-components = { workspace = true }
 zui = { workspace = true, default-features = false }
 

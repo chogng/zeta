@@ -9,13 +9,11 @@ use zui::ui::Point;
 
 impl NativeApp {
     pub(super) fn route_inspector_resize_move(&mut self, point: Point) -> bool {
-        if !self.inspector_resizable.is_dragging() {
+        if !self.workbench.inspector_is_resizing() {
             return false;
         }
-        if let Some(next) = self.inspector_resizable.resize_to(point)
-            && self.inspector_part.set_preferred_width(next.next_size())
-        {
-            self.terminal_selection.clear();
+        if self.workbench.resize_inspector(point) {
+            self.terminal_view_mut().selection.clear();
             self.rebuild_presentation();
             self.request_redraw();
         }
@@ -36,18 +34,18 @@ impl NativeApp {
                 });
                 let Some(snapshot) = inspector_resize_snapshot_for_viewport(
                     self.logical_viewport(),
-                    self.tab_container,
-                    self.inspector_part,
+                    self.workbench.tab_container_state(),
+                    self.workbench.inspector_state(),
                 ) else {
                     return false;
                 };
-                if !over_handle || !self.inspector_resizable.begin_drag(snapshot, point, now) {
+                if !over_handle || !self.workbench.start_inspector_resize(snapshot, point, now) {
                     return false;
                 }
             }
             ElementState::Released => {
                 let presence = self.sash_pointer_presence(INSPECTOR_RESIZE_HANDLE);
-                if !self.inspector_resizable.end_drag(presence, now) {
+                if !self.workbench.finish_inspector_resize(presence, now) {
                     return false;
                 }
             }
@@ -71,7 +69,7 @@ impl NativeApp {
     }
 
     pub(super) fn cancel_inspector_resize(&mut self) {
-        if self.inspector_resizable.cancel() {
+        if self.workbench.cancel_inspector_resize() {
             self.rebuild_presentation();
             self.update_cursor();
             self.request_redraw();

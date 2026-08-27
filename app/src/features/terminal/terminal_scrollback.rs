@@ -1,85 +1,16 @@
 use std::time::Instant;
 
-use zeta_ui_components::{ScrollCommand, ScrollDelta, ScrollbarController, ScrollbarPresentation};
+use zeta_ui_components::{ScrollCommand, ScrollDelta};
 use zui::input::MouseScrollDelta;
 
 use crate::NativeApp;
 use crate::shell_interaction::{AGENT_EXPLORER_PANE, MULTI_DIFF_EDITOR};
+use crate::terminal_pointer::TerminalPointerRouting;
 use crate::terminal_projection::scroll_limit;
 use crate::workspace_panes::FILE_LIST_ROW_HEIGHT;
 
 const LINES_PER_WHEEL_STEP: f32 = 3.0;
-const PIXELS_PER_LINE: f64 = 18.0;
 const MULTI_DIFF_PIXELS_PER_LINE: f32 = 18.0;
-
-/// Ephemeral viewport position over terminal-owned retained output.
-#[derive(Default)]
-pub(crate) struct TerminalScroll {
-    offset: usize,
-    fractional_lines: f64,
-    scrollbar: ScrollbarController,
-}
-
-impl TerminalScroll {
-    pub(crate) const fn offset(&self) -> usize {
-        self.offset
-    }
-
-    pub(crate) fn scroll(&mut self, delta: MouseScrollDelta, limit: usize) -> bool {
-        let lines = match delta {
-            MouseScrollDelta::LineDelta(_, vertical) => f64::from(vertical * LINES_PER_WHEEL_STEP),
-            MouseScrollDelta::PixelDelta(position) => position.y / PIXELS_PER_LINE,
-        };
-        if lines.signum() != self.fractional_lines.signum() {
-            self.fractional_lines = 0.0;
-        }
-        self.fractional_lines += lines;
-        let whole_lines = self.fractional_lines.trunc() as isize;
-        self.fractional_lines -= whole_lines as f64;
-        let previous = self.offset;
-        if whole_lines > 0 {
-            self.offset = self.offset.saturating_add(whole_lines as usize).min(limit);
-        } else {
-            self.offset = self.offset.saturating_sub(whole_lines.unsigned_abs());
-        }
-        self.offset != previous
-    }
-
-    pub(crate) fn scrollbar_activity(&mut self, now: Instant) {
-        self.scrollbar.activity(now);
-    }
-
-    pub(crate) fn scrollbar_presentation(&self) -> ScrollbarPresentation {
-        self.scrollbar.presentation()
-    }
-
-    pub(crate) fn advance_scrollbar(&mut self, now: Instant) -> bool {
-        self.scrollbar.advance(now)
-    }
-
-    pub(crate) const fn scrollbar_deadline(&self) -> Option<Instant> {
-        self.scrollbar.next_deadline()
-    }
-
-    pub(crate) fn cancel_scrollbar(&mut self) {
-        self.scrollbar.cancel();
-    }
-
-    pub(crate) fn preserve_view_after_growth(&mut self, added_lines: usize, limit: usize) {
-        if self.offset > 0 {
-            self.offset = self.offset.saturating_add(added_lines).min(limit);
-        }
-    }
-
-    pub(crate) fn clamp(&mut self, limit: usize) {
-        self.offset = self.offset.min(limit);
-    }
-
-    pub(crate) fn reset(&mut self) {
-        self.offset = 0;
-        self.fractional_lines = 0.0;
-    }
-}
 
 impl NativeApp {
     pub(super) fn mouse_wheel(&mut self, delta: MouseScrollDelta) {
@@ -120,7 +51,7 @@ impl NativeApp {
             .cursor_position
             .and_then(|point| self.terminal_mouse_position(point));
         let modifiers = self.modifiers;
-        let mut terminal_pointer = std::mem::take(&mut self.terminal_pointer);
+        let mut terminal_pointer = std::mem::take(&mut self.terminal_view_mut().pointer);
         let captured = self.active_terminal_mut().map(|terminal| {
             match terminal_pointer.route_wheel(terminal, position, delta, modifiers) {
                 Ok(captured) => captured,
@@ -130,7 +61,7 @@ impl NativeApp {
                 }
             }
         });
-        self.terminal_pointer = terminal_pointer;
+        self.terminal_view_mut().pointer = terminal_pointer;
         let Some(captured) = captured else {
             return;
         };
@@ -138,9 +69,11 @@ impl NativeApp {
             return;
         }
         let limit = self.terminal_scroll_limit();
-        if self.terminal_scroll.scroll(delta, limit) {
-            self.terminal_scroll.scrollbar_activity(Instant::now());
-            self.terminal_selection.clear();
+        if self.terminal_view_mut().scroll.scroll(delta, limit) {
+            self.terminal_view_mut()
+                .scroll
+                .scrollbar_activity(Instant::now());
+            self.terminal_view_mut().selection.clear();
             self.rebuild_presentation();
             self.request_redraw();
         }

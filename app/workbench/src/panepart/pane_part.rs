@@ -70,7 +70,7 @@ impl Pane {
 
 /// Immutable logical topology for the visible groups in a [`PanePart`].
 ///
-/// The layout crate converts this tree into geometry. The node deliberately contains no renderer,
+/// The Workbench layout module converts this tree into geometry. The node contains no renderer,
 /// framework layout, or product runtime types.
 #[derive(Clone, Debug, PartialEq)]
 pub enum PaneNode {

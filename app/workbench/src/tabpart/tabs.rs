@@ -19,15 +19,12 @@ use super::WorkbenchUiStyle;
 use crate::TabInputKey;
 use crate::TabPart;
 
-#[path = "tabs/model.rs"]
-mod model;
-
-pub use model::TabContainerPlacement;
-pub use model::WorkbenchTab;
-pub use model::WorkbenchTabGroup;
-use model::WorkbenchTabKind;
-pub use model::tab_input_element_id;
-pub use model::workbench_tab_groups;
+pub use super::tab_mount::TabContainerPlacement;
+pub use super::tab_mount::WorkbenchTab;
+pub use super::tab_mount::WorkbenchTabGroup;
+use super::tab_mount::WorkbenchTabKind;
+pub use super::tab_mount::tab_input_element_id;
+pub use super::tab_mount::workbench_tab_groups;
 
 const BODY_TAB_HEIGHT: f32 = 52.0;
 const BODY_TAB_GAP: f32 = 6.0;

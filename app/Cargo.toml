@@ -45,7 +45,7 @@ zeta-remote-ui = { workspace = true }
 zeta-settings = { workspace = true }
 zeta-server-host = { workspace = true }
 zeta-slash-commands = { workspace = true }
-zeta-session-ui = { workspace = true }
+zeta-session = { workspace = true }
 zeta-terminal = { workspace = true }
 zeta-terminal-workspace = { workspace = true }
 zeta-text-file = { workspace = true }

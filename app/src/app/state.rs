@@ -5,25 +5,15 @@ pub(crate) struct NativeApp {
     pub(super) presentation: Option<ShellPresentation>,
     pub(super) frame_scheduler: FrameScheduler,
     pub(super) retained_runtime: RetainedRuntime,
-    pub(super) inspector_part: InspectorPartState,
-    pub(super) inspector_resizable: Resizable,
     pub(super) workspace_pane_host: WorkspacePaneHost,
     pub(super) file_editor_host: FileEditorHost,
     pub(super) file_editor_input: FileEditorInputState,
     pub(super) file_editor_search: file_editor_search::FileEditorSearchState,
     pub(super) language_service: language_service_host::NativeLanguageService,
-    pub(super) tab_container: TabContainerState,
     pub(super) session_search: SessionSearch,
     pub(super) workbench: WorkbenchHost<PaneBinding>,
-    pub(super) workspace_returns: HashMap<TabInputKey, PaneInput>,
     pub(super) terminal_workspace: TerminalWorkspace,
-    pub(super) pane_view_states: HashMap<(TabInputKey, PaneId), TerminalPaneViewState>,
-    /// Last host view projection used to save and restore feature-specific view state.
-    ///
-    /// The canonical active group remains in the active `zeta_workbench::PanePart`; this is only a transient
-    /// host identity for the terminal view state cache.
-    pub(super) active_pane: Option<(TabInputKey, PaneId)>,
-    pub(super) terminal_pane_resize: Option<TerminalPaneResize>,
+    pub(super) terminal_pane_views: TerminalPaneViews<PaneKey, TerminalPaneViewState>,
     pub(super) session_context_menu: SessionContextMenuState,
     pub(super) git_branch_context_menu: GitBranchContextMenuState,
     pub(super) workspace_path_picker: WorkspacePathPickerState,
@@ -47,9 +37,6 @@ pub(crate) struct NativeApp {
     pub(super) clipboard: ClipboardHandle,
     pub(super) cursor_position: Option<Point>,
     pub(super) command_registry: command_dispatch::NativeCommandRegistry,
-    pub(super) terminal_pointer: TerminalPointer,
-    pub(super) terminal_scroll: TerminalScroll,
-    pub(super) terminal_selection: TerminalSelection,
     pub(super) keybindings: keybindings::NativeKeybindings,
     pub(super) keybindings_resource: KeybindingsResource,
     pub(super) keyboard_shortcuts: KeyboardShortcutsState,
@@ -63,12 +50,6 @@ pub(crate) struct NativeApp {
     pub(super) palette: ShellPalette,
     pub(super) theme_scheme: ColorScheme,
     pub(super) theme_follows_system: bool,
-}
-
-pub(super) struct TerminalPaneResize {
-    pub(super) tab_key: TabInputKey,
-    pub(super) split_id: PaneSplitId,
-    pub(super) resizable: Resizable,
 }
 
 impl NativeApp {
@@ -116,17 +97,13 @@ impl NativeApp {
             presentation: None,
             frame_scheduler: FrameScheduler::default(),
             retained_runtime: RetainedRuntime::default(),
-            inspector_part: InspectorPartState::default(),
-            inspector_resizable: Resizable::new(SashOrientation::Vertical),
             workspace_pane_host,
             file_editor_input: FileEditorInputState::default(),
             file_editor_search: file_editor_search::FileEditorSearchState::default(),
             language_service,
             file_editor_host: FileEditorHost::default(),
-            tab_container: TabContainerState::default(),
             session_search: SessionSearch::default(),
             workbench: WorkbenchHost::new(),
-            workspace_returns: HashMap::new(),
             terminal_workspace: {
                 let terminal_event_proxy = event_proxy.clone();
                 let terminal_target = app_server_host.clone();
@@ -142,9 +119,7 @@ impl NativeApp {
                     TerminalSession::resize,
                 )
             },
-            pane_view_states: HashMap::new(),
-            active_pane: None,
-            terminal_pane_resize: None,
+            terminal_pane_views: TerminalPaneViews::default(),
             session_context_menu: SessionContextMenuState::default(),
             git_branch_context_menu: GitBranchContextMenuState::default(),
             workspace_path_picker: WorkspacePathPickerState::default(),
@@ -168,9 +143,6 @@ impl NativeApp {
             clipboard,
             cursor_position: None,
             command_registry: command_dispatch::builtin_command_registry(),
-            terminal_pointer: TerminalPointer::default(),
-            terminal_scroll: TerminalScroll::default(),
-            terminal_selection: TerminalSelection::default(),
             keybindings,
             keybindings_resource,
             keyboard_shortcuts: KeyboardShortcutsState::default(),

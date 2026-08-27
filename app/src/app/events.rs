@@ -67,11 +67,11 @@ pub(super) fn handle_terminal_event(
         }
         app.refresh_files_from_app_server();
     }
-    if active_screen == ScreenBuffer::Alternate || app.terminal_scroll.offset() == 0 {
-        app.terminal_selection.clear();
+    if active_screen == ScreenBuffer::Alternate || app.terminal_view().scroll.offset() == 0 {
+        app.terminal_view_mut().selection.clear();
     }
     let scroll_limit = app.terminal_scroll_limit();
-    app.terminal_scroll.preserve_view_after_growth(
+    app.terminal_view_mut().scroll.preserve_view_after_growth(
         scroll_limit.saturating_sub(previous_scroll_limit),
         scroll_limit,
     );

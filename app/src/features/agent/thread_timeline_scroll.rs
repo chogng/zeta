@@ -6,8 +6,8 @@ use crate::NativeApp;
 use crate::shell_interaction::THREAD_TIMELINE;
 use crate::thread_timeline::{line_capacity, line_count};
 
-pub(crate) use zeta_session_ui::ThreadTimelineScroll;
-use zeta_session_ui::TimelineScrollDelta;
+pub(crate) use zeta_session::ThreadTimelineScroll;
+use zeta_session::TimelineScrollDelta;
 
 impl NativeApp {
     pub(super) fn route_thread_timeline_wheel(&mut self, delta: MouseScrollDelta) -> bool {

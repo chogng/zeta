@@ -4,7 +4,7 @@ use crate::TabListOrientation;
 use zui::ui::ElementId;
 use zui::ui::NavigationAxis;
 
-use super::super::identity::{
+use super::identity::{
     FIRST_TAB_CONTAINER_SESSION_TAB, FIRST_TITLEBAR_SESSION_TAB, TAB_CONTAINER,
     TAB_CONTAINER_SETTINGS_TAB, TITLEBAR, TITLEBAR_SETTINGS_TAB, TITLEBAR_TAB_CONTAINER, WINDOW,
     session_tab_id, tab_group_list_id, titlebar_session_tab_id, titlebar_tab_group_list_id,

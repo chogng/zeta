@@ -6,11 +6,10 @@
 
 ---------------------------------------------------
 - zeta-agent-session：App Server Session client、worker、订阅、文件/Git/LSP 请求、命令/事件队列和断线恢复策略
-- zeta-session-ui：Thread 状态、时间线、滚动、菜单、搜索
+- zeta-session：Thread 状态、时间线、滚动、菜单、搜索
 - zeta-workspace-ui：Files/SCM、目录树、搜索、路径选择
 - zeta-editor-host：编辑器 Tab、搜索、诊断、LSP 展示
-- zeta-terminal-host：终端输出、滚动、选择、指针、Block (had delete)
+- zeta-terminal-workspace：终端 runtime、Pane binding、滚动、选择、指针和视图状态
 - zeta-remote-ui：连接管理、Picker、Tunnel 状态和 UI
-- workbentch-ui: 界面布局
-- 如果是 ui 界面， 那就在 <package-ui> 这样
+- zeta-workbench：TabPart、PanePart、布局、基础 UI 和跨能力生命周期入口
 - 考虑是否单个的ui界面都塞到workspace-ui里管理

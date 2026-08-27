@@ -73,8 +73,8 @@ impl NativeApp {
         let context = NativeKeybindingContext::from_facts(NativeKeybindingFacts {
             direct_terminal,
             terminal_surface_visible: self.workspace_surface.is_terminal(),
-            tab_container_visible: self.tab_container.is_expanded(),
-            inspector_visible: self.inspector_part.is_expanded(),
+            tab_container_visible: self.workbench.tab_container_state().is_expanded(),
+            inspector_visible: self.workbench.inspector_state().is_expanded(),
             file_search_visible: self.workspace_pane_host.search_visible(),
             composer_route: match self.composer.route() {
                 ComposerRoute::Agent => "agent",
@@ -508,8 +508,8 @@ impl NativeApp {
             eprintln!("{error_context}: {error}");
             return;
         }
-        self.terminal_scroll.reset();
-        self.terminal_selection.clear();
+        self.terminal_view_mut().scroll.reset();
+        self.terminal_view_mut().selection.clear();
         self.rebuild_presentation();
         self.request_redraw();
     }

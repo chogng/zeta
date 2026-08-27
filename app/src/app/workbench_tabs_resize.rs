@@ -8,11 +8,11 @@ use zui::ui::Point;
 
 impl NativeApp {
     pub(super) fn route_tab_container_resize_move(&mut self, point: Point) -> bool {
-        if !self.tab_container.is_resizing() {
+        if !self.workbench.tab_container_is_resizing() {
             return false;
         }
-        if self.tab_container.resize_to(point) {
-            self.terminal_selection.clear();
+        if self.workbench.resize_tab_container(point) {
+            self.terminal_view_mut().selection.clear();
             self.rebuild_presentation();
             self.request_redraw();
         }
@@ -32,16 +32,18 @@ impl NativeApp {
                         == Some(TAB_CONTAINER_RESIZE_HANDLE)
                 });
                 if !over_handle
-                    || !self
-                        .tab_container
-                        .start_resizing(self.logical_viewport().width, point, now)
+                    || !self.workbench.start_tab_container_resize(
+                        self.logical_viewport().width,
+                        point,
+                        now,
+                    )
                 {
                     return false;
                 }
             }
             ElementState::Released => {
                 let presence = self.sash_pointer_presence(TAB_CONTAINER_RESIZE_HANDLE);
-                if !self.tab_container.finish_resizing(presence, now) {
+                if !self.workbench.finish_tab_container_resize(presence, now) {
                     return false;
                 }
             }
@@ -65,7 +67,7 @@ impl NativeApp {
     }
 
     pub(super) fn cancel_tab_container_resize(&mut self) {
-        if self.tab_container.cancel_resizing() {
+        if self.workbench.cancel_tab_container_resize() {
             self.rebuild_presentation();
             self.update_cursor();
             self.request_redraw();

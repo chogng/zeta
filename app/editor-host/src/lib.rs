@@ -6,12 +6,14 @@
 
 mod auto_scroll;
 mod diagnostics;
+mod file_host;
 mod language_features;
 mod search;
 mod style;
 
 pub use auto_scroll::{FileEditorAutoScrollDirection, FileEditorAutoScrollState};
 pub use diagnostics::FileEditorDiagnosticTooltip;
+pub use file_host::{FileEditorCloseRequest, FileEditorHost, FileEditorTab};
 pub use language_features::{LanguageCompletionPopover, LanguageHoverPopover};
 pub use search::{FileEditorSearchMode, FileEditorSearchState};
 pub use style::EditorOverlayStyle;

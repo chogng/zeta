@@ -6,21 +6,19 @@ impl NativeApp {
         let _trace = session_switch_trace::Span::new(None, "rebuild_presentation");
         let viewport = self.logical_viewport();
         let active_screen = self.active_screen();
-        let terminal_size = terminal_grid_size_for_viewport(
-            viewport,
-            active_screen,
-            self.tab_container,
-            self.inspector_part,
-        );
+        let tab_container = self.workbench.tab_container_state();
+        let inspector = self.workbench.inspector_state();
+        let terminal_size =
+            terminal_grid_size_for_viewport(viewport, active_screen, tab_container, inspector);
         self.resize_terminal_panes(viewport, active_screen, terminal_size);
         let scroll_limit = self.terminal_scroll_limit();
-        self.terminal_scroll.clamp(scroll_limit);
+        self.terminal_view_mut().scroll.clamp(scroll_limit);
         let window_control_insets = self
             .window
             .as_ref()
             .map(WindowHandle::window_control_insets)
             .unwrap_or(WindowControlInsets::NONE);
-        let inspector_sash_state = self.inspector_resizable.presentation();
+        let inspector_sash_state = self.workbench.inspector_sash_state();
         let mut presentation = with_shell_presentation_model(
             self,
             window_control_insets,
@@ -50,7 +48,7 @@ impl NativeApp {
                 .reconcile_focus(presentation.interaction_frame(), preferred_focus)
         };
         if focus_outcome.invalidation != DispatchInvalidation::None {
-            let inspector_sash_state = self.inspector_resizable.presentation();
+            let inspector_sash_state = self.workbench.inspector_sash_state();
             presentation = with_shell_presentation_model(
                 self,
                 window_control_insets,
@@ -73,7 +71,7 @@ impl NativeApp {
             outcome.invalidation != DispatchInvalidation::None || sash_changed
         });
         if pointer_requires_rebuild {
-            let inspector_sash_state = self.inspector_resizable.presentation();
+            let inspector_sash_state = self.workbench.inspector_sash_state();
             presentation = with_shell_presentation_model(
                 self,
                 window_control_insets,
@@ -120,8 +118,8 @@ impl NativeApp {
         let panes = terminal_pane_bounds_for_viewport(
             viewport,
             active_screen,
-            self.tab_container,
-            self.inspector_part,
+            self.workbench.tab_container_state(),
+            self.workbench.inspector_state(),
             layout,
         );
         if panes.is_empty() {
@@ -132,9 +130,8 @@ impl NativeApp {
             .into_iter()
             .filter_map(|(pane, bounds)| {
                 self.workbench
-                    .pane_host()
-                    .binding(&(PaneHostScope::Tab(tab_key.clone()), pane))
-                    .and_then(PaneBinding::terminal_key)
+                    .mount(&tab_key, pane)
+                    .and_then(|mount| mount.binding().terminal_key())
                     .map(|key| (key, terminal_grid_size_for_bounds(bounds)))
             })
             .collect::<Vec<_>>();

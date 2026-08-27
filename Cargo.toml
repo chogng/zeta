@@ -129,7 +129,7 @@ members = [
     "app/markdown",
     "app/keybindings",
     "app/remote-ui",
-    "app/session-ui",
+    "app/session",
     "app/settings",
     "app/terminal-workspace",
     "app/ui-components",
@@ -370,7 +370,7 @@ zeta-search = { path = "zeta-rs/search" }
 zeta-server-host = { path = "zeta-rs/server-host" }
 zeta-secrets = { path = "zeta-rs/secrets" }
 zeta-session-store = { path = "zeta-rs/session-store" }
-zeta-session-ui = { path = "app/session-ui" }
+zeta-session = { path = "app/session" }
 zeta-settings = { path = "app/settings" }
 zeta-shell-command = { path = "zeta-rs/shell-command" }
 zeta-shell-completion = { path = "zeta-rs/shell-completion" }

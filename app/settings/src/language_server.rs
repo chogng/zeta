@@ -4,23 +4,23 @@ use std::path::Path;
 use zeta_app_server_protocol::protocol::config::{
     ConfigReadResult, LanguageServerConfigDto, LanguageServerModeDto,
 };
-use zeta_language_server_catalog::{
+use zeta_lsp_server_provider::{
     BASH_LANGUAGE_SERVER_ID, JSON_LANGUAGE_SERVER_ID, RUST_ANALYZER_SERVER_ID,
 };
 use zeta_ui_components::SwitchSelection;
 use zui::ui::{TextInput, TextInputCommand, TextInputCompositionEvent};
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub(crate) enum LanguageServerSettingsTarget {
+pub enum LanguageServerSettingsTarget {
     RustAnalyzer,
     Json,
     Bash,
 }
 
 impl LanguageServerSettingsTarget {
-    pub(crate) const ALL: [Self; 3] = [Self::RustAnalyzer, Self::Json, Self::Bash];
+    pub const ALL: [Self; 3] = [Self::RustAnalyzer, Self::Json, Self::Bash];
 
-    pub(crate) const fn server_id(self) -> &'static str {
+    pub const fn server_id(self) -> &'static str {
         match self {
             Self::RustAnalyzer => RUST_ANALYZER_SERVER_ID,
             Self::Json => JSON_LANGUAGE_SERVER_ID,
@@ -28,7 +28,7 @@ impl LanguageServerSettingsTarget {
         }
     }
 
-    pub(crate) const fn label(self) -> &'static str {
+    pub const fn label(self) -> &'static str {
         match self {
             Self::RustAnalyzer => "Rust",
             Self::Json => "JSON",
@@ -36,7 +36,7 @@ impl LanguageServerSettingsTarget {
         }
     }
 
-    pub(crate) const fn executable_name(self) -> &'static str {
+    pub const fn executable_name(self) -> &'static str {
         match self {
             Self::RustAnalyzer => "rust-analyzer",
             Self::Json => "vscode-json-language-server",
@@ -78,7 +78,7 @@ impl Default for LanguageServerDraft {
 
 /// Native drafts for catalog preferences whose durable authority remains App Server Config.
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct LanguageServerSettingsState {
+pub struct LanguageServerSettingsState {
     visible: bool,
     revision: Option<u64>,
     generation: Option<u64>,
@@ -104,16 +104,16 @@ impl Default for LanguageServerSettingsState {
 }
 
 impl LanguageServerSettingsState {
-    pub(crate) const fn is_visible(&self) -> bool {
+    pub const fn is_visible(&self) -> bool {
         self.visible
     }
 
-    pub(crate) fn open(&mut self) {
+    pub fn open(&mut self) {
         self.visible = true;
         self.current_mut().status = SaveStatus::Idle;
     }
 
-    pub(crate) fn close(&mut self) {
+    pub fn close(&mut self) {
         self.visible = false;
         self.search.cancel_composition();
         for draft in self.drafts.values_mut() {
@@ -121,7 +121,7 @@ impl LanguageServerSettingsState {
         }
     }
 
-    pub(crate) fn synchronize(&mut self, configuration: &ConfigReadResult) {
+    pub fn synchronize(&mut self, configuration: &ConfigReadResult) {
         if self
             .generation
             .is_some_and(|generation| configuration.generation <= generation)
@@ -152,40 +152,40 @@ impl LanguageServerSettingsState {
         }
     }
 
-    pub(crate) const fn selected_server(&self) -> LanguageServerSettingsTarget {
+    pub const fn selected_server(&self) -> LanguageServerSettingsTarget {
         self.selected
     }
 
-    pub(crate) fn search_input(&self) -> &TextInput {
+    pub fn search_input(&self) -> &TextInput {
         &self.search
     }
 
-    pub(crate) fn selected_search_text(&self) -> Option<&str> {
+    pub fn selected_search_text(&self) -> Option<&str> {
         self.search.selected_text()
     }
 
-    pub(crate) fn apply_search(&mut self, command: TextInputCommand) {
+    pub fn apply_search(&mut self, command: TextInputCommand) {
         self.search.apply(command);
     }
 
-    pub(crate) fn apply_search_composition(&mut self, event: TextInputCompositionEvent) {
+    pub fn apply_search_composition(&mut self, event: TextInputCompositionEvent) {
         self.search.apply_composition(event);
     }
 
-    pub(crate) fn cancel_search_composition(&mut self) {
+    pub fn cancel_search_composition(&mut self) {
         self.search.cancel_composition();
     }
 
-    pub(crate) fn select_server(&mut self, target: LanguageServerSettingsTarget) {
+    pub fn select_server(&mut self, target: LanguageServerSettingsTarget) {
         self.current_mut().executable.cancel_composition();
         self.selected = target;
     }
 
-    pub(crate) fn mode(&self) -> LanguageServerModeDto {
+    pub fn mode(&self) -> LanguageServerModeDto {
         self.current().mode
     }
 
-    pub(crate) fn select_mode(&mut self, mode: LanguageServerModeDto) {
+    pub fn select_mode(&mut self, mode: LanguageServerModeDto) {
         let draft = self.current_mut();
         draft.mode = mode;
         if mode != LanguageServerModeDto::Disabled {
@@ -195,15 +195,15 @@ impl LanguageServerSettingsState {
         draft.status = SaveStatus::Idle;
     }
 
-    pub(crate) fn is_enabled(&self) -> bool {
+    pub fn is_enabled(&self) -> bool {
         self.mode() != LanguageServerModeDto::Disabled
     }
 
-    pub(crate) fn switch_selection(&self) -> SwitchSelection {
+    pub fn switch_selection(&self) -> SwitchSelection {
         switch_selection(self.current().mode)
     }
 
-    pub(crate) fn set_enabled(&mut self, enabled: bool) {
+    pub fn set_enabled(&mut self, enabled: bool) {
         let mode = if enabled {
             match self.mode() {
                 LanguageServerModeDto::Disabled => self.current().last_enabled_mode,
@@ -215,33 +215,33 @@ impl LanguageServerSettingsState {
         self.select_mode(mode);
     }
 
-    pub(crate) fn executable_input(&self) -> &TextInput {
+    pub fn executable_input(&self) -> &TextInput {
         &self.current().executable
     }
 
-    pub(crate) fn apply_executable(&mut self, command: TextInputCommand) {
+    pub fn apply_executable(&mut self, command: TextInputCommand) {
         let draft = self.current_mut();
         draft.executable.apply(command);
         draft.dirty = true;
         draft.status = SaveStatus::Idle;
     }
 
-    pub(crate) fn apply_executable_composition(&mut self, event: TextInputCompositionEvent) {
+    pub fn apply_executable_composition(&mut self, event: TextInputCompositionEvent) {
         let draft = self.current_mut();
         draft.executable.apply_composition(event);
         draft.dirty = true;
         draft.status = SaveStatus::Idle;
     }
 
-    pub(crate) fn cancel_executable_composition(&mut self) {
+    pub fn cancel_executable_composition(&mut self) {
         self.current_mut().executable.cancel_composition();
     }
 
-    pub(crate) fn selected_executable_text(&self) -> Option<&str> {
+    pub fn selected_executable_text(&self) -> Option<&str> {
         self.current().executable.selected_text()
     }
 
-    pub(crate) fn configuration(
+    pub fn configuration(
         &self,
     ) -> Result<(u64, &'static str, LanguageServerConfigDto), &'static str> {
         let revision = self.revision.ok_or("Configuration is still loading")?;
@@ -260,35 +260,35 @@ impl LanguageServerSettingsState {
         ))
     }
 
-    pub(crate) fn reset_target(&self) -> Result<(u64, &'static str), &'static str> {
+    pub fn reset_target(&self) -> Result<(u64, &'static str), &'static str> {
         self.revision
             .map(|revision| (revision, self.selected.server_id()))
             .ok_or("Configuration is still loading")
     }
 
-    pub(crate) fn can_reset(&self) -> bool {
+    pub fn can_reset(&self) -> bool {
         self.current().configured && self.revision.is_some()
     }
 
-    pub(crate) fn can_save(&self) -> bool {
+    pub fn can_save(&self) -> bool {
         self.revision.is_some() && !matches!(self.current().status, SaveStatus::Saving)
     }
 
-    pub(crate) fn saving(&mut self) {
+    pub fn saving(&mut self) {
         self.current_mut().status = SaveStatus::Saving;
     }
 
-    pub(crate) fn save_succeeded(&mut self) {
+    pub fn save_succeeded(&mut self) {
         let draft = self.current_mut();
         draft.dirty = false;
         draft.status = SaveStatus::Saved;
     }
 
-    pub(crate) fn save_failed(&mut self, error: impl Into<String>) {
+    pub fn save_failed(&mut self, error: impl Into<String>) {
         self.current_mut().status = SaveStatus::Error(error.into());
     }
 
-    pub(crate) fn status_message(&self) -> Option<(&str, bool)> {
+    pub fn status_message(&self) -> Option<(&str, bool)> {
         match &self.current().status {
             SaveStatus::Idle => None,
             SaveStatus::Saving => Some(("Saving…", false)),

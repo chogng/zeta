@@ -10,7 +10,7 @@ use zui::ui::ComponentElement;
 use zui::ui::ComputedElement;
 use zui::ui::UiNode;
 
-pub(crate) use zeta_session_ui::SessionCanvasLayout;
+pub(crate) use zeta_session::SessionCanvasLayout;
 
 /// Adapts product workspace metadata and the shell palette to the Session UI header.
 pub(crate) struct SessionHeader<'a> {
@@ -18,7 +18,7 @@ pub(crate) struct SessionHeader<'a> {
     title: &'a str,
     projection: &'a ThreadProjection,
     metadata: String,
-    style: zeta_session_ui::SessionHeaderStyle,
+    style: zeta_session::SessionHeaderStyle,
 }
 
 impl<'a> SessionHeader<'a> {
@@ -36,7 +36,7 @@ impl<'a> SessionHeader<'a> {
             workspace.git_branch_label(),
             workspace.diff_summary_label(),
         );
-        let style = zeta_session_ui::SessionHeaderStyle::new(
+        let style = zeta_session::SessionHeaderStyle::new(
             palette.surface,
             palette.border,
             palette.surface_raised,
@@ -56,8 +56,8 @@ impl<'a> SessionHeader<'a> {
         }
     }
 
-    fn inner(&self) -> zeta_session_ui::SessionHeader<'_> {
-        zeta_session_ui::SessionHeader::new(
+    fn inner(&self) -> zeta_session::SessionHeader<'_> {
+        zeta_session::SessionHeader::new(
             self.bounds,
             self.title,
             self.metadata.clone(),

@@ -1,5 +1,5 @@
 [package]
-name = "zeta-session-ui"
+name = "zeta-session"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -7,7 +7,7 @@ publish.workspace = true
 
 [lib]
 doctest = false
-name = "zeta_session_ui"
+name = "zeta_session"
 path = "src/lib.rs"
 
 [dependencies]

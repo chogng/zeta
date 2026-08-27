@@ -1,71 +1,155 @@
-use super::PaneHost;
-use super::PaneHostScope;
 use super::PaneKey;
 use super::WorkbenchHost;
 use crate::LogicalViewport;
-use crate::PaneGroupId;
 use crate::PaneInput;
-use crate::PanePart;
 use crate::PaneSplitDirection;
+use crate::TabInput;
 use crate::TabInputKey;
+use crate::TabInputMetadata;
+
+fn session_id(value: &str) -> zeta_protocol::SessionId {
+    zeta_protocol::SessionId::new(value).expect("valid session id")
+}
+
+fn session_input(id: zeta_protocol::SessionId) -> TabInput {
+    TabInput::session(
+        id,
+        TabInputMetadata::new("Session", "/workspace").with_status_label("Active"),
+    )
+}
 
 #[test]
-fn pane_host_mounts_a_product_neutral_binding() {
-    let tab_key = TabInputKey::Settings;
-    let pane_part = PanePart::with_input(PaneInput::settings());
-    let key: PaneKey = (PaneHostScope::Tab(tab_key.clone()), pane_part.root_group());
-    let mut host = PaneHost::new();
+fn host_mounts_binding_by_tab_pane_and_input_identity() {
+    let session = session_id("session-1");
+    let tab = TabInputKey::session(session.clone());
+    let mut host = WorkbenchHost::new();
+    host.upsert_session_input_with(
+        session_input(session.clone()),
+        PaneInput::terminal(session),
+        || "terminal",
+    );
+    let pane = host
+        .workbench()
+        .pane_part(&tab)
+        .expect("session pane part")
+        .root_group();
 
-    let binding_id = host.insert(key.clone(), "settings");
-    let mount = host
-        .mount(
-            &PaneHostScope::Tab(tab_key),
-            &pane_part,
-            pane_part.root_group(),
+    let mount = host.mount(&tab, pane).expect("bound input should mount");
+
+    assert_eq!(mount.key().tab(), &tab);
+    assert_eq!(mount.pane_id(), pane);
+    assert_eq!(*mount.binding(), "terminal");
+}
+
+#[test]
+fn switching_group_inputs_preserves_each_binding() {
+    let session = session_id("session-1");
+    let tab = TabInputKey::session(session.clone());
+    let mut host = WorkbenchHost::new();
+    host.upsert_session_input_with(
+        session_input(session.clone()),
+        PaneInput::terminal(session.clone()),
+        || "terminal",
+    );
+    let pane = host
+        .workbench()
+        .pane_part(&tab)
+        .expect("session pane part")
+        .root_group();
+    let terminal = host
+        .mount(&tab, pane)
+        .expect("terminal mount")
+        .key()
+        .clone();
+
+    let opened = host
+        .open_or_activate_input_with(
+            &tab,
+            pane,
+            PaneInput::files("/workspace".into()),
+            || "files",
         )
-        .expect("bound pane should mount");
+        .expect("files activation");
+    assert!(opened.opened());
+    assert_eq!(host.binding(&terminal), Some(&"terminal"));
+    assert_eq!(host.binding(opened.current()), Some(&"files"));
 
-    assert_eq!(mount.kind(), crate::PaneInputKind::Settings);
-    assert_eq!(mount.binding_id(), binding_id);
-    assert_eq!(*mount.binding(), "settings");
-    assert_eq!(mount.input(), &PaneInput::settings());
+    let activated = host
+        .open_or_activate_input_with(&tab, pane, PaneInput::terminal(session), || {
+            panic!("existing input must not create a replacement binding")
+        })
+        .expect("terminal activation");
+    assert!(!activated.opened());
+    assert_eq!(activated.current(), &terminal);
+    assert_eq!(host.binding(&terminal), Some(&"terminal"));
 }
 
 #[test]
-fn pane_host_rejects_unbound_and_stale_panes() {
-    let scope = PaneHostScope::Tab(TabInputKey::Settings);
-    let mut pane_part = PanePart::with_input(PaneInput::settings());
-    let root = pane_part.root_group();
-    let mut host = PaneHost::<()>::new();
+fn closing_a_pane_detaches_all_group_input_bindings() {
+    let session = session_id("session-1");
+    let tab = TabInputKey::session(session.clone());
+    let mut host = WorkbenchHost::new();
+    host.upsert_session_input_with(
+        session_input(session.clone()),
+        PaneInput::terminal(session.clone()),
+        || "root",
+    );
+    let split = host
+        .try_split_active_with(
+            PaneInput::terminal(session),
+            PaneSplitDirection::Horizontal,
+            || Ok::<_, std::convert::Infallible>("split-terminal"),
+        )
+        .expect("binding creation")
+        .expect("split input");
+    host.open_or_activate_input_with(
+        &tab,
+        split.pane(),
+        PaneInput::files("/workspace".into()),
+        || "split-files",
+    )
+    .expect("second split input");
 
-    assert!(host.mount(&scope, &pane_part, root).is_none());
+    let closed = host.close_active_pane().expect("active split pane");
+    let active = closed.active_pane();
+    let mut bindings = closed.into_bindings();
+    bindings.sort_unstable();
 
-    let stale_pane = pane_part.split_active(PaneSplitDirection::Horizontal);
-    let stale_key = (scope.clone(), stale_pane);
-    host.bind(stale_key, ());
-    assert!(pane_part.close_group(stale_pane).is_some());
-
-    assert!(host.mount(&scope, &pane_part, stale_pane).is_none());
+    assert_eq!(bindings, vec!["split-files", "split-terminal"]);
+    assert_ne!(active, split.pane());
 }
 
 #[test]
-fn removing_a_tab_only_releases_its_bindings() {
-    let closed = TabInputKey::Settings;
-    let kept =
-        TabInputKey::session(zeta_protocol::SessionId::new("session-1").expect("valid session id"));
-    let mut host = PaneHost::new();
-    let closed_key: PaneKey = (PaneHostScope::Tab(closed.clone()), PaneGroupId::ROOT);
-    let kept_key: PaneKey = (PaneHostScope::Tab(kept.clone()), PaneGroupId::ROOT);
-    host.insert(closed_key.clone(), "closed");
-    host.insert(kept_key.clone(), "kept");
+fn closing_a_tab_detaches_only_its_bindings() {
+    let first = session_id("session-1");
+    let second = session_id("session-2");
+    let first_tab = TabInputKey::session(first.clone());
+    let second_tab = TabInputKey::session(second.clone());
+    let mut host = WorkbenchHost::new();
+    host.upsert_session_input_with(
+        session_input(first.clone()),
+        PaneInput::terminal(first),
+        || "first",
+    );
+    host.upsert_session_input_with(
+        session_input(second.clone()),
+        PaneInput::terminal(second),
+        || "second",
+    );
+    let second_key = host.active_mount().expect("second mount").key().clone();
 
-    assert_eq!(host.remove_tab(&closed), vec!["closed"]);
-    assert!(host.binding(&closed_key).is_none());
-    assert_eq!(host.binding(&kept_key), Some(&"kept"));
+    let (_, bindings) = host.close_tab(&first_tab).expect("first tab should close");
+
+    assert_eq!(bindings, vec!["first"]);
+    assert_eq!(host.binding(&second_key), Some(&"second"));
+    assert_eq!(
+        host.workbench().tab_part().active_tab_key(),
+        Some(&second_tab)
+    );
 }
 
 #[test]
-fn workbench_host_delegates_layout_without_mutating_model() {
+fn host_delegates_layout_without_mutating_model() {
     let host = WorkbenchHost::<()>::new();
     let before = host.workbench().clone();
     let layout = host.layout(
@@ -97,29 +181,18 @@ fn workbench_host_delegates_layout_without_mutating_model() {
 }
 
 #[test]
-fn closing_a_workbench_tab_cleans_up_its_bindings() {
-    let mut host = WorkbenchHost::<&'static str>::new();
-    let session_id = zeta_protocol::SessionId::new("session-1").expect("valid session id");
-    host.workbench_mut().upsert_session_input(
-        crate::TabInput::session(
-            session_id.clone(),
-            crate::TabInputMetadata::new("Session", "/workspace").with_status_label("Active"),
-        ),
-        crate::PaneInput::terminal(session_id.clone()),
+fn pane_key_keeps_input_identity_distinct_inside_one_group() {
+    let tab = TabInputKey::Settings;
+    let first = PaneKey::new(
+        tab.clone(),
+        crate::PaneGroupId::ROOT,
+        crate::PaneInputId::from_value(1),
     );
-    let tab_key = crate::TabInputKey::session(session_id);
-    let pane = host
-        .workbench()
-        .pane_container(&tab_key)
-        .expect("session pane container should exist")
-        .pane_part()
-        .root_group();
-    let key = (PaneHostScope::Tab(tab_key.clone()), pane);
-    host.pane_host_mut().insert(key.clone(), "runtime");
+    let second = PaneKey::new(
+        tab,
+        crate::PaneGroupId::ROOT,
+        crate::PaneInputId::from_value(2),
+    );
 
-    let (closed, bindings) = host.close_tab(&tab_key).expect("session tab should close");
-
-    assert_eq!(closed.active_tab(), Some(&crate::TabInputKey::Settings));
-    assert_eq!(bindings, vec!["runtime"]);
-    assert!(host.pane_host().binding(&key).is_none());
+    assert_ne!(first, second);
 }

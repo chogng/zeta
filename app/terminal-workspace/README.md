@@ -1,7 +1,7 @@
 # `zeta-terminal-workspace`
 
-`zeta-terminal-workspace` owns the process-local mapping between Workbench sessions, terminal keys, pending startup, and active or inactive terminal runtimes. It also owns the terminal-specific `PaneBinding` that connects a Workbench pane to a terminal key. The caller supplies terminal creation and resize functions, so this crate does not depend on the product event loop, App Server adapter, PTY implementation, or renderer.
+1. 管终端 runtime 的预留、异步就绪、Session/Pane key 绑定、激活、后台保留和释放。
+2. 管每个 Workbench `PaneInput` 的完整终端视图状态，包括滚动、滚动条、指针、选择及其基础绘制。
+3. 通过 `PaneBinding` 连接 Workbench，不依赖产品组合根；调用方只提供 runtime 创建、尺寸更新和平台事件转发。
 
-`TerminalWorkspace<T, E>` retains terminal values of type `T` and buffers startup events of type `E`. `TerminalReady<T>` completes an earlier reservation, while `TerminalReadyOutcome<E>` tells the product whether the runtime became active, inactive, failed, or had already been removed.
-
-Run `cargo test -p zeta-terminal-workspace` to verify reservation, activation, retry, binding, and removal semantics.
+验证：`cargo test -p zeta-terminal-workspace --lib`。

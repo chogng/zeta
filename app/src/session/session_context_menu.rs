@@ -21,11 +21,11 @@ use zui::ui::Point;
 use zui::ui::UiDispatch;
 use zui::ui::UiNode;
 
-pub(crate) use zeta_session_ui::SessionContextMenuState;
+pub(crate) use zeta_session::SessionContextMenuState;
 
 /// Adapts the product palette and host parent to the reusable Session UI menu.
 pub(crate) struct SessionContextMenu {
-    inner: zeta_session_ui::SessionContextMenu,
+    inner: zeta_session::SessionContextMenu,
 }
 
 impl SessionContextMenu {
@@ -35,16 +35,14 @@ impl SessionContextMenu {
         palette: ShellPalette,
         dispatch: &UiDispatch,
     ) -> Option<Self> {
-        let style = zeta_session_ui::SessionContextMenuStyle::new(
+        let style = zeta_session::SessionContextMenuStyle::new(
             palette.surface,
             palette.border,
             palette.text,
             palette.session_tab_highlight,
         );
         Some(Self {
-            inner: zeta_session_ui::SessionContextMenu::new(
-                viewport, state, style, WINDOW, dispatch,
-            )?,
+            inner: zeta_session::SessionContextMenu::new(viewport, state, style, WINDOW, dispatch)?,
         })
     }
 }
@@ -236,5 +234,5 @@ fn update_session_context_menu_pointer(
     point: Point,
     frame: &InteractionFrame,
 ) -> DispatchOutcome {
-    zeta_session_ui::update_session_context_menu_pointer(dispatch, point, frame)
+    zeta_session::update_session_context_menu_pointer(dispatch, point, frame)
 }

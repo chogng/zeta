@@ -143,5 +143,5 @@ impl WorkbenchLayout {
 }
 
 #[cfg(test)]
-#[path = "workbench_tests.rs"]
+#[path = "layout_workbench_tests.rs"]
 mod tests;

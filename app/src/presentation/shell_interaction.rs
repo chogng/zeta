@@ -11,11 +11,10 @@ pub(crate) use zeta_workbench::{
     FIRST_TITLEBAR_SESSION_TAB, TAB_CONTAINER_ACTION_BAR, TAB_CONTAINER_LIST,
     TAB_CONTAINER_TOOLBAR, TITLEBAR, TITLEBAR_TAB_LIST,
 };
-use zeta_workbench::{PaneGroupId as PaneId, PaneSplitId};
 
 #[cfg(test)]
-pub(crate) use zeta_session_ui::interaction::SESSION_CONTEXT_MENU;
-pub(crate) use zeta_session_ui::interaction::SessionContextMenuAction;
+pub(crate) use zeta_session::interaction::SESSION_CONTEXT_MENU;
+pub(crate) use zeta_session::interaction::SessionContextMenuAction;
 #[cfg(test)]
 pub(crate) use zeta_workspace_ui::interaction::{
     AGENT_CHANGES, AGENT_EDITOR_PANE, AGENT_FILES, AGENT_FILES_ACTION_BAR, AGENT_FILES_TOOLBAR,
@@ -30,7 +29,6 @@ pub(crate) use crate::workspace_panes::WorkspacePaneSelection;
 
 const SHELL_SCOPE: u32 = 1;
 const FILE_EDITOR_ACTION_SCOPE: u32 = 7;
-const TERMINAL_PANE_SCOPE: u32 = 15;
 #[cfg(test)]
 const SESSION_CONTENT_SCOPE: u32 = 16;
 
@@ -67,8 +65,6 @@ const FILE_EDITOR_FIND_NEXT: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SC
 const FILE_EDITOR_REPLACE_CURRENT: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 9);
 const FILE_EDITOR_REPLACE_ALL: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 10);
 const FILE_EDITOR_CLOSE_SEARCH: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 11);
-const FIRST_TERMINAL_PANE: u32 = 100;
-const FIRST_TERMINAL_PANE_SASH: u32 = 1;
 const FIRST_COMPOSER_INTERACTION_ITEM: u32 = 100;
 const FIRST_FILE_EDITOR_TAB: u32 = 200;
 const FIRST_FILE_EDITOR_FOLD: u32 = 1_000;
@@ -98,22 +94,6 @@ pub(crate) fn session_tab_index(id: ElementId, mounted: Range<usize>) -> Option<
                 .into_iter()
                 .find(|index| titlebar_session_tab_id(*index) == id)
         })
-}
-
-pub(crate) fn terminal_pane_id(pane: PaneId) -> ElementId {
-    let local = u32::try_from(pane.value())
-        .ok()
-        .and_then(|value| FIRST_TERMINAL_PANE.checked_add(value))
-        .expect("terminal pane identity must fit its element scope");
-    ElementId::scoped(TERMINAL_PANE_SCOPE, local)
-}
-
-pub(crate) fn terminal_pane_sash_id(split: PaneSplitId) -> ElementId {
-    let local = u32::try_from(split.value())
-        .ok()
-        .and_then(|value| FIRST_TERMINAL_PANE_SASH.checked_add(value))
-        .expect("terminal pane split identity must fit its element scope");
-    ElementId::scoped(TERMINAL_PANE_SCOPE, local)
 }
 
 pub(crate) fn file_editor_tab_id(index: usize) -> ElementId {

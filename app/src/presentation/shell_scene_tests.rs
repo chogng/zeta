@@ -37,8 +37,8 @@ use zeta_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, Te
 use zeta_ui_components::ScrollbarPresentation;
 use zeta_workbench::TabContainerState;
 use zeta_workbench::{
-    InspectorPartState, PaneHost, PaneHostScope, PaneInput, PanePart, PaneSplitDirection,
-    TabInputKey, TabPart,
+    InspectorPartState, PaneInput, PanePart, PaneSplitDirection, TabInput, TabInputKey,
+    TabInputMetadata, TabPart, WorkbenchHost,
 };
 use zui::runtime::AccessibilityNode;
 use zui::ui::{AccessibilityRole, CursorFeedback, DispatchInvalidation, UiDispatch, UiIntent};
@@ -196,32 +196,31 @@ fn presentation_with_active_tab_input(
     let inspector_part = workspace_pane_enabled
         .then(InspectorPartState::default)
         .unwrap_or(inspector_part);
-    let workspace_pane_group = PanePart::with_input(PaneInput::files(
-        workspace_context.working_directory().to_path_buf(),
-    ));
-    let mut pane_host = PaneHost::new();
-    if workspace_pane_enabled {
-        pane_host.insert(
-            (
-                PaneHostScope::Tab(workspace_tab_key.clone()),
-                workspace_pane_group.root_pane(),
-            ),
-            PaneBinding::new(),
-        );
-    }
+    let mut workspace_workbench = WorkbenchHost::new();
+    workspace_workbench.upsert_session_input_with(
+        TabInput::session(
+            workspace_tab_key
+                .session_id()
+                .expect("workspace tab must carry a session")
+                .clone(),
+            TabInputMetadata::new("Workspace", workspace_context.working_directory_label()),
+        ),
+        PaneInput::files(workspace_context.working_directory().to_path_buf()),
+        PaneBinding::new,
+    );
+    let workspace_pane_group = workspace_workbench
+        .workbench()
+        .pane_part(&workspace_tab_key)
+        .expect("workspace pane part");
     let workspace_pane = workspace_pane_enabled.then(|| {
-        pane_host
-            .mount(
-                &PaneHostScope::Tab(workspace_tab_key.clone()),
-                &workspace_pane_group,
-                workspace_pane_group.root_pane(),
-            )
+        workspace_workbench
+            .mount(&workspace_tab_key, workspace_pane_group.root_pane())
             .expect("workspace pane should mount")
     });
     let active_tab_input = active_tab_input
         .as_ref()
         .or(workspace_pane_enabled.then_some(&workspace_tab_key));
-    let pane_group = workspace_pane_enabled.then_some(&workspace_pane_group);
+    let pane_group = workspace_pane_enabled.then_some(workspace_pane_group);
     let tab_part = TabPart::default();
     let initial = build_shell_presentation(
         viewport(),
@@ -934,22 +933,23 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
     let tab_key = TabInputKey::session(
         zeta_protocol::SessionId::new("session-1").expect("test session ID is non-empty"),
     );
-    let main_pane_group = PanePart::with_input(PaneInput::diff(
-        workspace_context.working_directory().to_path_buf(),
-    ));
-    let mut pane_host = PaneHost::new();
-    pane_host.insert(
-        (
-            PaneHostScope::Tab(tab_key.clone()),
-            main_pane_group.root_pane(),
+    let mut workbench = WorkbenchHost::new();
+    workbench.upsert_session_input_with(
+        TabInput::session(
+            tab_key
+                .session_id()
+                .expect("session tab must carry a session")
+                .clone(),
+            TabInputMetadata::new("Session", workspace_context.working_directory_label()),
         ),
-        PaneBinding::new(),
+        PaneInput::diff(workspace_context.working_directory().to_path_buf()),
+        PaneBinding::new,
     );
-    let main_pane = pane_host.mount(
-        &PaneHostScope::Tab(tab_key.clone()),
-        &main_pane_group,
-        main_pane_group.root_pane(),
-    );
+    let main_pane_group = workbench
+        .workbench()
+        .pane_part(&tab_key)
+        .expect("main pane part");
+    let main_pane = workbench.mount(&tab_key, main_pane_group.root_pane());
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
     let thread_projection = ThreadProjection::default();
@@ -961,7 +961,7 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
             palette: crate::shell_style::SHELL_PALETTE,
             terminal: None,
             terminal_panes: &[],
-            pane_group: Some(&main_pane_group),
+            pane_group: Some(main_pane_group),
             active_pane: main_pane,
             terminal_pane_resize_split: None,
             terminal_scroll_offset: 0,

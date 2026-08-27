@@ -19,9 +19,7 @@ use zui::ui::{
 use crate::shell_interaction::WINDOW;
 use crate::shell_style::ShellPalette;
 
-#[path = "language_server_settings_model.rs"]
-mod model;
-pub(crate) use model::{LanguageServerSettingsState, LanguageServerSettingsTarget};
+pub(crate) use zeta_settings::{LanguageServerSettingsState, LanguageServerSettingsTarget};
 
 #[path = "language_server_settings_style.rs"]
 mod presentation;

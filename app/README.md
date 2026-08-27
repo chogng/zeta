@@ -64,7 +64,7 @@ src/session/            Session 搜索、菜单和画布接线
 | Agent Session | [`zeta-agent-session`](agent-session/README.md) |
 | Composer | [`zeta-composer`](composer/README.md) |
 | Editor | [`zeta-editor`](editor/README.md)、[`zeta-editor-host`](editor-host/README.md) |
-| Session UI | [`zeta-session-ui`](session-ui/README.md) |
+| Session | [`zeta-session`](session/README.md) |
 | Workspace UI | [`zeta-workspace-ui`](workspace-ui/README.md) |
 | Remote UI | [`zeta-remote-ui`](remote-ui/README.md) |
 | Terminal runtime 与 Pane 绑定 | [`zeta-terminal-workspace`](terminal-workspace/README.md)、[`TERMINAL.md`](TERMINAL.md) |

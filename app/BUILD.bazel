@@ -39,7 +39,7 @@ filegroup(
         "//app/markdown:markdown_sources",
         "//app/keybindings:keybindings_sources",
         "//app/remote-ui:remote-ui_sources",
-        "//app/session-ui:session-ui_sources",
+        "//app/session:session_sources",
         "//app/settings:settings_sources",
         "//app/terminal-workspace:terminal-workspace_sources",
         "//app/ui-components:ui-components_sources",

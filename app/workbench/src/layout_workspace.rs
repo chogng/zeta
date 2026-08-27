@@ -156,5 +156,5 @@ impl WorkspaceLayout {
 }
 
 #[cfg(test)]
-#[path = "workspace_tests.rs"]
+#[path = "layout_workspace_tests.rs"]
 mod tests;

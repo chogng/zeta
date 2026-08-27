@@ -1,31 +1,63 @@
-//! Workbench content binding and lifecycle coordination.
-//!
-//! This crate owns the boundary between logical Workbench state and product runtime bindings. It
-//! does not know which runtime is attached to a pane and does not own rendering, interaction
-//! dispatch, or frame scheduling.
+//! Workbench state and content-binding coordination.
 
 use std::collections::HashMap;
 
 use crate::ClosedTab;
+use crate::LogicalViewport;
+use crate::Pane;
 use crate::PaneGroupId;
 use crate::PaneInput;
+use crate::PaneInputId;
 use crate::PaneInputKind;
 use crate::PanePart;
+use crate::PaneResizeState;
+use crate::PaneSplitDirection;
+use crate::PaneSplitId;
+use crate::TabInput;
+use crate::TabInputChange;
 use crate::TabInputKey;
 use crate::Workbench;
-use crate::{LogicalViewport, WorkbenchLayout, WorkbenchLayoutSpec};
+use crate::WorkbenchLayout;
+use crate::WorkbenchLayoutSpec;
+use crate::WorkbenchLayoutState;
+use std::time::Instant;
+use zeta_ui_components::SashOrientation;
+use zeta_ui_components::SashPointerPresence;
+use zeta_ui_components::SashState;
+use zui::ui::Point;
+use zui::ui::SplitViewResizeSnapshot;
 
-/// Product scope that owns a mounted pane tree.
+/// Stable identity of one content input mounted in a Workbench pane.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub enum PaneHostScope {
-    /// The pane belongs to one logical Workbench tab.
-    Tab(TabInputKey),
+pub struct PaneKey {
+    tab: TabInputKey,
+    pane: PaneGroupId,
+    input: PaneInputId,
 }
 
-/// Stable lookup key for one product binding attached to a logical pane.
-pub type PaneKey = (PaneHostScope, PaneGroupId);
+impl PaneKey {
+    /// Creates the binding key for one pane input.
+    pub const fn new(tab: TabInputKey, pane: PaneGroupId, input: PaneInputId) -> Self {
+        Self { tab, pane, input }
+    }
 
-/// Opaque identity for one binding entry in a [`PaneHost`].
+    /// Returns the owning top-level tab.
+    pub const fn tab(&self) -> &TabInputKey {
+        &self.tab
+    }
+
+    /// Returns the owning pane group.
+    pub const fn pane(&self) -> PaneGroupId {
+        self.pane
+    }
+
+    /// Returns the group-local input identity.
+    pub const fn input(&self) -> PaneInputId {
+        self.input
+    }
+}
+
+/// Opaque identity for one binding entry.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct PaneBindingId(u64);
 
@@ -43,73 +75,62 @@ struct BindingEntry<B> {
     binding: B,
 }
 
-/// Registry connecting visible logical panes to product-owned runtime bindings.
-///
-/// `B` is supplied by the product host. The registry never inspects or constrains that type, so
-/// Terminal, Agent, Editor, and Settings integrations can share the same logical contract.
-pub struct PaneHost<B> {
+struct PaneHost<B> {
     bindings: HashMap<PaneKey, BindingEntry<B>>,
     next_binding_id: u64,
 }
 
-impl<B> Default for PaneHost<B> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl<B> PaneHost<B> {
-    /// Creates an empty binding registry.
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             bindings: HashMap::new(),
             next_binding_id: PaneBindingId::FIRST,
         }
     }
 
-    /// Inserts or replaces the binding for one logical pane and returns its opaque identity.
-    pub fn insert(&mut self, key: PaneKey, binding: B) -> PaneBindingId {
+    fn insert(&mut self, key: PaneKey, binding: B) -> (PaneBindingId, Option<B>) {
         let id = self.allocate_binding_id();
-        self.bindings.insert(key, BindingEntry { id, binding });
-        id
+        let previous = self
+            .bindings
+            .insert(key, BindingEntry { id, binding })
+            .map(|entry| entry.binding);
+        (id, previous)
     }
 
-    /// Binds product state to one logical pane and returns its opaque identity.
-    pub fn bind(&mut self, key: PaneKey, binding: B) -> PaneBindingId {
-        self.insert(key, binding)
-    }
-
-    /// Returns the existing binding or inserts the supplied empty binding for one logical pane.
-    pub fn ensure(&mut self, key: PaneKey, binding: B) -> &mut B {
+    fn ensure_with(&mut self, key: PaneKey, create: impl FnOnce() -> B) -> &mut B {
         if !self.bindings.contains_key(&key) {
             let id = self.allocate_binding_id();
-            self.bindings
-                .insert(key.clone(), BindingEntry { id, binding });
+            self.bindings.insert(
+                key.clone(),
+                BindingEntry {
+                    id,
+                    binding: create(),
+                },
+            );
         }
         &mut self
             .bindings
             .get_mut(&key)
-            .expect("ensured Pane binding must be present")
+            .expect("ensured pane input binding must be present")
             .binding
     }
 
-    /// Removes one logical pane binding.
-    pub fn remove(&mut self, key: &PaneKey) -> Option<B> {
+    fn remove(&mut self, key: &PaneKey) -> Option<B> {
         self.bindings.remove(key).map(|entry| entry.binding)
     }
 
-    /// Unbinds product state from one logical pane.
-    pub fn unbind(&mut self, key: &PaneKey) -> Option<B> {
-        self.remove(key)
+    fn remove_panes(&mut self, tab: &TabInputKey, panes: &[Pane]) -> Vec<B> {
+        panes
+            .iter()
+            .filter_map(|pane| self.remove(&PaneKey::new(tab.clone(), pane.id(), pane.input_id())))
+            .collect()
     }
 
-    /// Removes every binding owned by one logical Workbench tab.
-    pub fn remove_tab(&mut self, tab_key: &TabInputKey) -> Vec<B> {
-        let scope = PaneHostScope::Tab(tab_key.clone());
+    fn remove_tab(&mut self, tab: &TabInputKey) -> Vec<B> {
         let bindings = std::mem::take(&mut self.bindings);
         let mut removed = Vec::new();
         for (key, entry) in bindings {
-            if key.0 == scope {
+            if key.tab() == tab {
                 removed.push(entry);
             } else {
                 self.bindings.insert(key, entry);
@@ -119,28 +140,22 @@ impl<B> PaneHost<B> {
         removed.into_iter().map(|entry| entry.binding).collect()
     }
 
-    /// Returns a product binding without exposing registry internals.
-    pub fn binding(&self, key: &PaneKey) -> Option<&B> {
+    fn binding(&self, key: &PaneKey) -> Option<&B> {
         self.bindings.get(key).map(|entry| &entry.binding)
     }
 
-    /// Returns the opaque identity of one binding.
-    pub fn binding_id(&self, key: &PaneKey) -> Option<PaneBindingId> {
-        self.bindings.get(key).map(|entry| entry.id)
-    }
-
-    /// Produces a mount descriptor only for an active input in the supplied Pane Part.
-    pub fn mount<'a>(
+    fn mount<'a>(
         &'a self,
-        scope: &PaneHostScope,
+        tab: &TabInputKey,
         pane_part: &'a PanePart,
-        pane_id: PaneGroupId,
+        pane: PaneGroupId,
     ) -> Option<PaneMount<'a, B>> {
-        let input = pane_part.active_input(pane_id)?;
-        let key = (scope.clone(), pane_id);
-        let entry = self.bindings.get(&key)?;
+        let input_id = pane_part.active_input_id(pane)?;
+        let input = pane_part.active_input(pane)?;
+        let key = PaneKey::new(tab.clone(), pane, input_id);
+        let (key, entry) = self.bindings.get_key_value(&key)?;
         Some(PaneMount {
-            pane_id,
+            key,
             input,
             binding_id: entry.id,
             binding: &entry.binding,
@@ -152,14 +167,14 @@ impl<B> PaneHost<B> {
         self.next_binding_id = self
             .next_binding_id
             .checked_add(1)
-            .expect("Pane binding identity space exhausted");
+            .expect("pane binding identity space exhausted");
         id
     }
 }
 
-/// Immutable description of one mounted logical pane.
+/// Immutable mounted content selected by one pane group.
 pub struct PaneMount<'a, B> {
-    pane_id: PaneGroupId,
+    key: &'a PaneKey,
     input: &'a PaneInput,
     binding_id: PaneBindingId,
     binding: &'a B,
@@ -174,36 +189,92 @@ impl<'a, B> Clone for PaneMount<'a, B> {
 }
 
 impl<'a, B> PaneMount<'a, B> {
-    /// Returns the stable logical group identity.
-    pub const fn pane_id(self) -> PaneGroupId {
-        self.pane_id
+    /// Returns the complete content identity.
+    pub const fn key(&self) -> &'a PaneKey {
+        self.key
     }
 
-    /// Returns the logical input kind.
-    pub const fn kind(self) -> PaneInputKind {
+    /// Returns the stable pane group identity.
+    pub const fn pane_id(&self) -> PaneGroupId {
+        self.key.pane()
+    }
+
+    /// Returns the selected content kind.
+    pub const fn kind(&self) -> PaneInputKind {
         self.input.kind()
     }
 
-    /// Returns the logical input description.
-    pub const fn input(self) -> &'a PaneInput {
+    /// Returns the selected logical content description.
+    pub const fn input(&self) -> &'a PaneInput {
         self.input
     }
 
     /// Returns the opaque binding identity.
-    pub const fn binding_id(self) -> PaneBindingId {
+    pub const fn binding_id(&self) -> PaneBindingId {
         self.binding_id
     }
 
-    /// Returns the product binding associated with this mount.
-    pub const fn binding(self) -> &'a B {
+    /// Returns the capability-owned runtime binding.
+    pub const fn binding(&self) -> &'a B {
         self.binding
     }
 }
 
-/// Workbench coordinator containing logical state and generic pane bindings.
+/// Result of selecting or opening content in a pane group.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PaneActivation {
+    previous: Option<PaneKey>,
+    current: PaneKey,
+    opened: bool,
+}
+
+impl PaneActivation {
+    /// Returns the previously selected content, when selection changed.
+    pub const fn previous(&self) -> Option<&PaneKey> {
+        self.previous.as_ref()
+    }
+
+    /// Returns the selected content identity.
+    pub const fn current(&self) -> &PaneKey {
+        &self.current
+    }
+
+    /// Returns whether a new logical input and binding were created.
+    pub const fn opened(&self) -> bool {
+        self.opened
+    }
+}
+
+/// Pane-group teardown result, including every detached capability binding.
+pub struct ClosedPane<B> {
+    panes: Vec<Pane>,
+    bindings: Vec<B>,
+    active_pane: PaneGroupId,
+}
+
+impl<B> ClosedPane<B> {
+    /// Returns all removed logical inputs.
+    pub fn panes(&self) -> &[Pane] {
+        &self.panes
+    }
+
+    /// Returns the pane selected after teardown.
+    pub const fn active_pane(&self) -> PaneGroupId {
+        self.active_pane
+    }
+
+    /// Consumes the result and returns detached capability bindings.
+    pub fn into_bindings(self) -> Vec<B> {
+        self.bindings
+    }
+}
+
+/// Sole mutation boundary for Workbench state and content bindings.
 pub struct WorkbenchHost<B> {
     workbench: Workbench,
     pane_host: PaneHost<B>,
+    layout: WorkbenchLayoutState,
+    pane_resize: Option<PaneResizeState>,
 }
 
 impl<B> Default for WorkbenchHost<B> {
@@ -213,45 +284,446 @@ impl<B> Default for WorkbenchHost<B> {
 }
 
 impl<B> WorkbenchHost<B> {
-    /// Creates a Workbench coordinator with an empty binding registry.
+    /// Creates an empty coordinator.
     pub fn new() -> Self {
         Self {
             workbench: Workbench::new(),
             pane_host: PaneHost::new(),
+            layout: WorkbenchLayoutState::default(),
+            pane_resize: None,
         }
     }
 
-    /// Returns the logical Workbench model.
+    /// Returns the immutable Workbench model used for presentation queries.
     pub const fn workbench(&self) -> &Workbench {
         &self.workbench
     }
 
-    /// Returns the mutable logical Workbench model.
-    pub const fn workbench_mut(&mut self) -> &mut Workbench {
-        &mut self.workbench
+    /// Returns the body-mounted Tab Container presentation state.
+    pub const fn tab_container_state(&self) -> crate::TabContainerState {
+        self.layout.tab_container()
     }
 
-    /// Returns the product binding registry.
-    pub const fn pane_host(&self) -> &PaneHost<B> {
-        &self.pane_host
+    /// Returns the inspector presentation state.
+    pub const fn inspector_state(&self) -> crate::InspectorPartState {
+        self.layout.inspector()
     }
 
-    /// Returns the mutable product binding registry.
-    pub const fn pane_host_mut(&mut self) -> &mut PaneHost<B> {
-        &mut self.pane_host
+    pub fn toggle_tab_container(&mut self) {
+        self.layout.toggle_tab_container();
     }
 
-    /// Closes one logical Workbench tab and removes all bindings owned by that tab.
-    ///
-    /// The returned bindings remain product-owned. A product host can use them to release a
-    /// Terminal, Agent, Editor, or other runtime after the logical tab has been removed.
-    pub fn close_tab(&mut self, tab_key: &TabInputKey) -> Option<(ClosedTab, Vec<B>)> {
-        let closed = self.workbench.close_tab(tab_key)?;
-        let bindings = self.pane_host.remove_tab(tab_key);
+    pub fn toggle_inspector(&mut self) {
+        self.layout.toggle_inspector();
+    }
+
+    pub fn expand_inspector(&mut self) {
+        self.layout.expand_inspector();
+    }
+
+    pub fn collapse_inspector(&mut self) {
+        self.layout.collapse_inspector();
+    }
+
+    pub const fn tab_container_is_resizing(&self) -> bool {
+        self.layout.tab_container_is_resizing()
+    }
+
+    pub const fn inspector_is_resizing(&self) -> bool {
+        self.layout.inspector_is_resizing()
+    }
+
+    pub fn start_tab_container_resize(
+        &mut self,
+        viewport_width: f32,
+        point: Point,
+        now: Instant,
+    ) -> bool {
+        self.layout
+            .start_tab_container_resize(viewport_width, point, now)
+    }
+
+    pub fn resize_tab_container(&mut self, point: Point) -> bool {
+        self.layout.resize_tab_container(point)
+    }
+
+    pub fn finish_tab_container_resize(
+        &mut self,
+        presence: SashPointerPresence,
+        now: Instant,
+    ) -> bool {
+        self.layout.finish_tab_container_resize(presence, now)
+    }
+
+    pub fn cancel_tab_container_resize(&mut self) -> bool {
+        self.layout.cancel_tab_container_resize()
+    }
+
+    pub fn start_inspector_resize(
+        &mut self,
+        snapshot: SplitViewResizeSnapshot,
+        point: Point,
+        now: Instant,
+    ) -> bool {
+        self.layout.start_inspector_resize(snapshot, point, now)
+    }
+
+    pub fn resize_inspector(&mut self, point: Point) -> bool {
+        self.layout.resize_inspector(point)
+    }
+
+    pub fn finish_inspector_resize(&mut self, presence: SashPointerPresence, now: Instant) -> bool {
+        self.layout.finish_inspector_resize(presence, now)
+    }
+
+    pub fn cancel_inspector_resize(&mut self) -> bool {
+        self.layout.cancel_inspector_resize()
+    }
+
+    pub fn tab_sash_pointer_presence(
+        &mut self,
+        presence: SashPointerPresence,
+        now: Instant,
+    ) -> bool {
+        self.layout.tab_sash_pointer_presence(presence, now)
+    }
+
+    pub fn inspector_sash_pointer_presence(
+        &mut self,
+        presence: SashPointerPresence,
+        now: Instant,
+    ) -> bool {
+        self.layout.inspector_sash_pointer_presence(presence, now)
+    }
+
+    pub fn advance_layout_sashes(&mut self, now: Instant) -> bool {
+        self.layout.advance_sashes(now)
+    }
+
+    pub const fn tab_sash_state(&self) -> SashState {
+        self.layout.tab_sash_state()
+    }
+
+    pub const fn inspector_sash_state(&self) -> SashState {
+        self.layout.inspector_sash_state()
+    }
+
+    pub const fn tab_sash_deadline(&self) -> Option<Instant> {
+        self.layout.tab_sash_deadline()
+    }
+
+    pub const fn inspector_sash_deadline(&self) -> Option<Instant> {
+        self.layout.inspector_sash_deadline()
+    }
+
+    pub const fn pane_resize_split(&self) -> Option<PaneSplitId> {
+        match &self.pane_resize {
+            Some(resize) => Some(resize.split()),
+            None => None,
+        }
+    }
+
+    pub const fn pane_resize_orientation(&self) -> Option<SashOrientation> {
+        match &self.pane_resize {
+            Some(resize) => Some(resize.orientation()),
+            None => None,
+        }
+    }
+
+    pub fn start_pane_resize(
+        &mut self,
+        tab: TabInputKey,
+        split: PaneSplitId,
+        orientation: SashOrientation,
+        snapshot: SplitViewResizeSnapshot,
+        point: Point,
+        now: Instant,
+    ) -> bool {
+        if self.pane_resize.is_some() {
+            return false;
+        }
+        let Some(resize) = PaneResizeState::new(tab, split, orientation, snapshot, point, now)
+        else {
+            return false;
+        };
+        self.pane_resize = Some(resize);
+        true
+    }
+
+    pub fn resize_pane(&mut self, point: Point) -> bool {
+        let Some(resize) = self.pane_resize.as_mut() else {
+            return false;
+        };
+        let Some(ratio) = resize.ratio_at(point) else {
+            return false;
+        };
+        let tab = resize.tab().clone();
+        let split = resize.split();
+        self.workbench.resize_split(&tab, split, ratio)
+    }
+
+    pub fn finish_pane_resize(&mut self, presence: SashPointerPresence, now: Instant) -> bool {
+        let Some(mut resize) = self.pane_resize.take() else {
+            return false;
+        };
+        resize.finish(presence, now)
+    }
+
+    pub fn cancel_pane_resize(&mut self) -> bool {
+        let Some(mut resize) = self.pane_resize.take() else {
+            return false;
+        };
+        resize.cancel()
+    }
+
+    /// Returns the binding for one exact pane input.
+    pub fn binding(&self, key: &PaneKey) -> Option<&B> {
+        self.pane_host.binding(key)
+    }
+
+    /// Resolves the selected input and binding for one pane group.
+    pub fn mount(&self, tab: &TabInputKey, pane: PaneGroupId) -> Option<PaneMount<'_, B>> {
+        let pane_part = self.workbench.pane_part(tab)?;
+        self.pane_host.mount(tab, pane_part, pane)
+    }
+
+    /// Resolves the active pane input and binding.
+    pub fn active_mount(&self) -> Option<PaneMount<'_, B>> {
+        let tab = self.workbench.tab_part().active_tab_key()?;
+        let pane_part = self.workbench.pane_part(tab)?;
+        self.pane_host
+            .mount(tab, pane_part, pane_part.active_group())
+    }
+
+    /// Inserts or refreshes a Session tab and creates its first content binding atomically.
+    pub fn upsert_session_input_with(
+        &mut self,
+        tab_input: TabInput,
+        initial_input: PaneInput,
+        create_binding: impl FnOnce() -> B,
+    ) -> TabInputChange {
+        let change = self
+            .workbench
+            .upsert_session_input(tab_input, initial_input);
+        if let TabInputChange::Added(tab) = &change {
+            self.bind_initial_input(tab, create_binding());
+        }
+        change
+    }
+
+    /// Inserts or refreshes a catalog Session without changing the selected tab.
+    pub fn upsert_catalog_session_input_with(
+        &mut self,
+        tab_input: TabInput,
+        initial_input: PaneInput,
+        create_binding: impl FnOnce() -> B,
+    ) -> TabInputChange {
+        let change = self
+            .workbench
+            .upsert_catalog_session_input(tab_input, initial_input);
+        if let TabInputChange::Added(tab) = &change {
+            self.bind_initial_input(tab, create_binding());
+        }
+        change
+    }
+
+    fn bind_initial_input(&mut self, tab: &TabInputKey, binding: B) {
+        let part = self
+            .workbench
+            .pane_part(tab)
+            .expect("new tab must own a pane part");
+        let pane = part.root_group();
+        let input = part
+            .active_input_id(pane)
+            .expect("new tab must own its initial pane input");
+        let (_, previous) = self
+            .pane_host
+            .insert(PaneKey::new(tab.clone(), pane, input), binding);
+        assert!(
+            previous.is_none(),
+            "new pane input must not replace a binding"
+        );
+    }
+
+    /// Ensures the root pane and returns its binding for capability-specific attachment.
+    pub fn ensure_root_binding_with(
+        &mut self,
+        tab: TabInputKey,
+        input: PaneInput,
+        create_binding: impl FnOnce() -> B,
+    ) -> Option<(PaneKey, &mut B)> {
+        if self.workbench.pane_container(&tab).is_none() {
+            return None;
+        }
+        let pane = self.workbench.ensure_root_pane(tab.clone(), input);
+        let input = self.workbench.pane_part(&tab)?.active_input_id(pane)?;
+        let key = PaneKey::new(tab, pane, input);
+        let binding = self.pane_host.ensure_with(key.clone(), create_binding);
+        Some((key, binding))
+    }
+
+    /// Opens an input once or selects its existing group-local identity.
+    pub fn open_or_activate_input_with(
+        &mut self,
+        tab: &TabInputKey,
+        pane: PaneGroupId,
+        input: PaneInput,
+        create_binding: impl FnOnce() -> B,
+    ) -> Option<PaneActivation> {
+        let part = self.workbench.pane_part(tab)?;
+        let group = part.group(pane)?;
+        let previous = group
+            .active_input_id()
+            .map(|input| PaneKey::new(tab.clone(), pane, input));
+        let existing = group
+            .input_ids()
+            .into_iter()
+            .find(|id| group.input(*id) == Some(&input));
+
+        let (input_id, opened) = match existing {
+            Some(input_id) => {
+                let activated = self.workbench.activate_input(tab, pane, input_id);
+                assert!(activated, "resolved pane input must activate");
+                (input_id, false)
+            }
+            None => {
+                let input_id = self.workbench.open_input(tab, pane, input)?;
+                let (_, previous_binding) = self
+                    .pane_host
+                    .insert(PaneKey::new(tab.clone(), pane, input_id), create_binding());
+                assert!(
+                    previous_binding.is_none(),
+                    "new pane input must not replace a binding"
+                );
+                (input_id, true)
+            }
+        };
+        let activated = self.workbench.activate_pane(tab, pane);
+        assert!(activated, "resolved pane must activate");
+        let current = PaneKey::new(tab.clone(), pane, input_id);
+        Some(PaneActivation {
+            previous: (previous.as_ref() != Some(&current))
+                .then_some(previous)
+                .flatten(),
+            current,
+            opened,
+        })
+    }
+
+    /// Replaces the selected input and its binding while preserving input identity.
+    pub fn replace_active_input(
+        &mut self,
+        tab: &TabInputKey,
+        pane: PaneGroupId,
+        input: PaneInput,
+        binding: B,
+    ) -> Option<(PaneInput, Option<B>)> {
+        let input_id = self.workbench.pane_part(tab)?.active_input_id(pane)?;
+        let previous_input = self.workbench.mount_input(tab, pane, input)?;
+        let (_, previous_binding) = self
+            .pane_host
+            .insert(PaneKey::new(tab.clone(), pane, input_id), binding);
+        Some((previous_input, previous_binding))
+    }
+
+    /// Creates a sibling pane with its first content binding as one operation.
+    pub fn try_split_active_with<E>(
+        &mut self,
+        input: PaneInput,
+        direction: PaneSplitDirection,
+        create_binding: impl FnOnce() -> Result<B, E>,
+    ) -> Result<Option<PaneKey>, E> {
+        let Some(tab) = self.workbench.tab_part().active_tab_key().cloned() else {
+            return Ok(None);
+        };
+        let binding = create_binding()?;
+        let pane = self
+            .workbench
+            .create_pane_with_direction(input, direction)
+            .expect("validated active tab must create a pane");
+        let input = self
+            .workbench
+            .pane_part(&tab)
+            .and_then(|part| part.active_input_id(pane))
+            .expect("new pane must own its initial input");
+        let key = PaneKey::new(tab, pane, input);
+        let (_, previous) = self.pane_host.insert(key.clone(), binding);
+        assert!(
+            previous.is_none(),
+            "new pane input must not replace a binding"
+        );
+        Ok(Some(key))
+    }
+
+    /// Closes the active pane group and detaches every binding owned by its inputs.
+    pub fn close_active_pane(&mut self) -> Option<ClosedPane<B>> {
+        self.cancel_pane_resize();
+        let tab = self.workbench.tab_part().active_tab_key()?.clone();
+        let panes = self.workbench.destroy_pane()?;
+        let bindings = self.pane_host.remove_panes(&tab, &panes);
+        let active_pane = self.workbench.pane_part(&tab)?.active_group();
+        Some(ClosedPane {
+            panes,
+            bindings,
+            active_pane,
+        })
+    }
+
+    /// Closes a top-level tab and detaches every binding owned by it.
+    pub fn close_tab(&mut self, tab: &TabInputKey) -> Option<(ClosedTab, Vec<B>)> {
+        if self
+            .pane_resize
+            .as_ref()
+            .is_some_and(|resize| resize.tab() == tab)
+        {
+            self.cancel_pane_resize();
+        }
+        let closed = self.workbench.close_tab(tab)?;
+        let bindings = self.pane_host.remove_tab(tab);
         Some((closed, bindings))
     }
 
-    /// Resolves Workbench geometry without participating in rendering.
+    /// Activates a known top-level tab.
+    pub fn activate_tab(&mut self, tab: TabInputKey) -> bool {
+        self.workbench.activate_tab(tab)
+    }
+
+    /// Activates the Settings tab.
+    pub fn activate_settings(&mut self) -> bool {
+        self.workbench.activate_settings()
+    }
+
+    /// Returns to the last selected Session tab.
+    pub fn activate_last_session(&mut self) -> bool {
+        self.workbench.activate_last_session()
+    }
+
+    /// Activates a pane group.
+    pub fn activate_pane(&mut self, tab: &TabInputKey, pane: PaneGroupId) -> bool {
+        self.workbench.activate_pane(tab, pane)
+    }
+
+    /// Selects the next pane group.
+    pub fn focus_next_pane(&mut self, tab: &TabInputKey) -> Option<PaneGroupId> {
+        self.workbench.focus_next_pane(tab)
+    }
+
+    /// Selects the previous pane group.
+    pub fn focus_previous_pane(&mut self, tab: &TabInputKey) -> Option<PaneGroupId> {
+        self.workbench.focus_previous_pane(tab)
+    }
+
+    /// Updates one split ratio.
+    pub fn resize_split(&mut self, tab: &TabInputKey, split: PaneSplitId, ratio: f32) -> bool {
+        self.workbench.resize_split(tab, split, ratio)
+    }
+
+    /// Updates Session tab status metadata.
+    pub fn update_session_status(&mut self, session_id: &zeta_protocol::SessionId, status: &str) {
+        self.workbench.update_session_status(session_id, status);
+    }
+
+    /// Resolves Workbench geometry without mutating model or bindings.
     pub fn layout(
         &self,
         spec: WorkbenchLayoutSpec,

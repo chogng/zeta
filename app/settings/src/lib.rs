@@ -5,10 +5,16 @@
 //! the search input, action availability, palette, and parent window identity, then execute the
 //! element activations emitted by the shared interaction frame.
 
+mod language_server;
 mod navigation;
 mod page;
+mod sections;
 
+pub use language_server::{LanguageServerSettingsState, LanguageServerSettingsTarget};
 pub use page::SettingsPage;
+pub use sections::{
+    SETTINGS_SECTION_CONTENT, SettingsKeybindingRow, SettingsSectionPane, SettingsSectionStyle,
+};
 
 use zeta_ui_components::ActionBarStyle;
 use zeta_ui_components::ButtonStyle;

@@ -66,10 +66,11 @@ use zeta_composer::Composer;
 use zeta_composer::ComposerPanelLayout;
 use zeta_terminal_workspace::PaneBinding;
 use zeta_workbench::{
-    InspectorPartState, PaneGroupId as PaneId, PaneInputKind, PaneMount, PanePart, PaneSplitId,
-    TITLEBAR_HEIGHT, TabContainer, TabContainerPlacement, TabContainerState, TabContainerToolbar,
-    TabGroupId, TabInput, TabInputKey, TabPart, Titlebar, TitlebarInsets, WorkbenchTab,
-    WorkbenchTabGroup, tab_input_element_id, workbench_tab_groups,
+    InspectorPartState, PaneGroupId as PaneId, PaneInputKind, PaneMount, PanePart, PanePartSashes,
+    PaneSplitId, TITLEBAR_HEIGHT, TabContainer, TabContainerPlacement, TabContainerState,
+    TabContainerToolbar, TabGroupId, TabInput, TabInputKey, TabPart, Titlebar, TitlebarInsets,
+    WorkbenchTab, WorkbenchTabGroup, pane_group_element_id, tab_input_element_id,
+    workbench_tab_groups,
 };
 
 type PaneViewMount<'a> = PaneMount<'a, PaneBinding>;
@@ -1037,7 +1038,7 @@ fn draw_workspace_pane(
         "Workspace pane",
     )
     .with_parent(WINDOW);
-    let active_view = match view.pane.map(PaneViewMount::kind) {
+    let active_view = match view.pane.map(|pane| pane.kind()) {
         Some(PaneInputKind::Diff) => Some(WorkspacePaneView::Changes),
         Some(PaneInputKind::Files) | None => Some(WorkspacePaneView::Files),
         Some(PaneInputKind::Agent)
@@ -1463,7 +1464,7 @@ fn draw_main(
                                     };
                                     let terminal_region = InteractionRegion::new(
                                         "TerminalPane",
-                                        crate::shell_interaction::terminal_pane_id(pane_id),
+                                        pane_group_element_id(pane_id),
                                         bounds,
                                         AccessibilityRole::Terminal,
                                         "Interactive terminal Pane",
@@ -1480,13 +1481,14 @@ fn draw_main(
                                         );
                                     });
                                 }
-                                draw_terminal_pane_sashes(
-                                    context,
+                                context.draw_component(&PanePartSashes::new(
                                     &pane_geometry,
-                                    palette,
+                                    MAIN_SURFACE,
+                                    palette.border,
+                                    palette.accent,
                                     view.dispatch,
                                     view.terminal_pane_resize_split,
-                                );
+                                ));
                             }
                         }
                         WorkspaceSurfaceKind::Agent | WorkspaceSurfaceKind::Editor => {
@@ -1684,58 +1686,6 @@ fn draw_terminal_in_bounds(
             view.selection,
             palette,
         );
-    }
-}
-
-fn draw_terminal_pane_sashes(
-    context: &mut ComponentContext<'_, '_>,
-    layout: &zeta_workbench::PaneGroupLayout<PaneId, PaneSplitId>,
-    palette: ShellPalette,
-    dispatch: &UiDispatch,
-    active_split: Option<PaneSplitId>,
-) {
-    for sash in layout.sashes() {
-        let track = sash.track_bounds();
-        let orientation = match sash.orientation() {
-            SplitViewOrientation::Horizontal => SashOrientation::Vertical,
-            SplitViewOrientation::Vertical => SashOrientation::Horizontal,
-        };
-        let identity = crate::shell_interaction::terminal_pane_sash_id(sash.split_id());
-        let state = if active_split == Some(sash.split_id()) {
-            SashState::Active
-        } else if dispatch.is_hovered(identity) {
-            SashState::Hovered
-        } else {
-            SashState::Resting
-        };
-        let sash_component = Sash::new(track, orientation, state, SashStyle::new(palette.accent));
-        let divider = match sash.orientation() {
-            SplitViewOrientation::Horizontal => {
-                Rect::from_xywh(track.origin.x - 0.5, track.origin.y, 1.0, track.size.height)
-            }
-            SplitViewOrientation::Vertical => {
-                Rect::from_xywh(track.origin.x, track.origin.y - 0.5, track.size.width, 1.0)
-            }
-        };
-        context
-            .scene_mut()
-            .draw_rect(PaintRect::new(divider, palette.border));
-        context.draw_component(
-            &InteractionRegion::new(
-                "TerminalPaneSash",
-                identity,
-                sash_component.interaction_bounds(),
-                AccessibilityRole::Separator,
-                "Resize terminal split",
-            )
-            .with_parent(MAIN_SURFACE)
-            .with_cursor(match orientation {
-                SashOrientation::Vertical => CursorFeedback::ResizeHorizontal,
-                SashOrientation::Horizontal => CursorFeedback::ResizeVertical,
-            })
-            .with_value(format!("{} pixels", track.origin.x.round())),
-        );
-        context.draw_component(&sash_component);
     }
 }
 

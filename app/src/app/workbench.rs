@@ -1,9 +1,26 @@
 use super::*;
 
 impl NativeApp {
+    pub(super) const fn terminal_view(&self) -> &TerminalPaneViewState {
+        self.terminal_pane_views.active_view()
+    }
+
+    pub(super) const fn terminal_view_mut(&mut self) -> &mut TerminalPaneViewState {
+        self.terminal_pane_views.active_view_mut()
+    }
+
     /// Closes one logical Session tab and releases every product resource keyed by that tab.
     pub(super) fn close_session_tab(&mut self, tab_key: &TabInputKey) -> bool {
         if !tab_key.is_session() {
+            return false;
+        }
+        if self
+            .workbench
+            .workbench()
+            .tab_part()
+            .input(tab_key)
+            .is_none()
+        {
             return false;
         }
         if let Some(session) = self.agent_session.as_ref()
@@ -17,31 +34,20 @@ impl NativeApp {
         let Some((closed, bindings)) = self.workbench.close_tab(tab_key) else {
             return false;
         };
-        self.workspace_returns.remove(tab_key);
-
         for binding in bindings {
             if let Some(terminal_key) = binding.terminal_key() {
                 let _ = self.terminal_workspace.remove_key(terminal_key);
             }
         }
-        self.pane_view_states.retain(|(key, _), _| key != tab_key);
-        if self
-            .active_pane
-            .as_ref()
-            .is_some_and(|(key, _)| key == tab_key)
-        {
-            self.active_pane = None;
-            self.terminal_selection.clear();
-            self.terminal_pointer.cancel();
+        let active_terminal_view = self
+            .terminal_pane_views
+            .active()
+            .is_some_and(|key| key.tab() == tab_key);
+        self.terminal_pane_views.retain(|key| key.tab() != tab_key);
+        if active_terminal_view {
+            self.terminal_view_mut().selection.clear();
+            self.terminal_view_mut().pointer.cancel();
         }
-        if self
-            .terminal_pane_resize
-            .as_ref()
-            .is_some_and(|resize| resize.tab_key == *tab_key)
-        {
-            self.terminal_pane_resize = None;
-        }
-
         if was_active {
             match closed.active_tab().cloned() {
                 Some(tab_key @ TabInputKey::Session(_)) => {
@@ -62,24 +68,15 @@ impl NativeApp {
         {
             Ok(()) => {
                 let tab_key = TabInputKey::session(session_id.clone());
-                let root_pane = self
-                    .workbench
-                    .workbench_mut()
-                    .ensure_root_pane(tab_key.clone(), PaneInput::terminal(session_id.clone()));
                 if let Some(terminal_key) = self.terminal_workspace.key_for_session(session_id) {
-                    let Some(input) = self
-                        .workbench
-                        .workbench()
-                        .pane_part(&tab_key)
-                        .and_then(|pane_part| pane_part.pane_input(root_pane))
-                        .cloned()
-                    else {
+                    let input = PaneInput::terminal(session_id.clone());
+                    let Some((_, binding)) = self.workbench.ensure_root_binding_with(
+                        tab_key,
+                        input.clone(),
+                        PaneBinding::new,
+                    ) else {
                         return false;
                     };
-                    let binding = self
-                        .workbench
-                        .pane_host_mut()
-                        .ensure((PaneHostScope::Tab(tab_key), root_pane), PaneBinding::new());
                     if !binding.bind_terminal(&input, session_id, terminal_key) {
                         return false;
                     }
@@ -103,52 +100,23 @@ impl NativeApp {
         else {
             return false;
         };
-        let host_key = (PaneHostScope::Tab(tab_key.clone()), pane);
-        let current = self
-            .workbench
-            .workbench()
-            .pane_part(&tab_key)
-            .and_then(|pane_part| pane_part.pane_input(pane))
-            .cloned();
-        if current
-            .as_ref()
-            .is_some_and(|input| matches!(input.kind(), PaneInputKind::Files | PaneInputKind::Diff))
-        {
-            if let Some(current) = current {
-                self.workspace_returns.insert(tab_key.clone(), current);
-            }
-        }
-        let Some(terminal_key) = self
-            .workbench
-            .pane_host()
-            .binding(&host_key)
-            .and_then(PaneBinding::terminal_key)
-            .or_else(|| self.terminal_workspace.key_for_session(session_id))
-        else {
+        let Some(terminal_key) = self.terminal_workspace.key_for_session(session_id) else {
             return false;
         };
-        self.workbench.workbench_mut().mount_input(
+        let Some(activation) = self.workbench.open_or_activate_input_with(
             &tab_key,
             pane,
             PaneInput::terminal(session_id.clone()),
-        );
-        self.workbench
-            .pane_host_mut()
-            .insert(host_key.clone(), PaneBinding::new());
-        let Some(input) = self
-            .workbench
-            .workbench()
-            .pane_part(&tab_key)
-            .and_then(|pane_part| pane_part.pane_input(pane))
-            .cloned()
-        else {
+            || PaneBinding::terminal(terminal_key),
+        ) else {
             return false;
         };
-        let binding = self
+        if self
             .workbench
-            .pane_host_mut()
-            .ensure(host_key, PaneBinding::new());
-        if !binding.bind_terminal(&input, session_id, terminal_key) {
+            .binding(activation.current())
+            .and_then(PaneBinding::terminal_key)
+            != Some(terminal_key)
+        {
             return false;
         }
         if !self.activate_pane_context(tab_key, pane) {
@@ -162,40 +130,16 @@ impl NativeApp {
         true
     }
 
-    pub(super) fn save_active_pane_view(&mut self) {
-        let Some(binding) = self.active_pane.clone() else {
-            return;
-        };
-        let state = TerminalPaneViewState {
-            scroll: std::mem::take(&mut self.terminal_scroll),
-            pointer: std::mem::take(&mut self.terminal_pointer),
-            selection: std::mem::take(&mut self.terminal_selection),
-        };
-        self.pane_view_states.insert(binding, state);
-    }
-
-    pub(super) fn restore_pane_view(&mut self, binding: &(TabInputKey, PaneId)) {
-        let state = self.pane_view_states.remove(binding).unwrap_or_default();
-        self.terminal_scroll = state.scroll;
-        self.terminal_pointer = state.pointer;
-        self.terminal_selection = state.selection;
-    }
-
     pub(super) fn activate_pane_context(&mut self, tab_key: TabInputKey, pane: PaneId) -> bool {
-        let binding = (tab_key.clone(), pane);
-        if self.active_pane.as_ref() != Some(&binding) {
-            self.save_active_pane_view();
-            self.active_pane = Some(binding.clone());
-            self.restore_pane_view(&binding);
-        }
-        if !self.workbench.workbench_mut().activate_pane(&tab_key, pane) {
+        if !self.workbench.activate_pane(&tab_key, pane) {
             return false;
         }
-        let host_binding = (PaneHostScope::Tab(tab_key.clone()), pane);
-        let Some(pane_binding) = self.workbench.pane_host().binding(&host_binding) else {
+        let Some(mount) = self.workbench.mount(&tab_key, pane) else {
             return false;
         };
-        let terminal_key = pane_binding.terminal_key();
+        let binding = mount.key().clone();
+        let terminal_key = mount.binding().terminal_key();
+        self.terminal_pane_views.activate(binding);
         let Some(terminal_key) = terminal_key else {
             return true;
         };
@@ -204,23 +148,17 @@ impl NativeApp {
     }
 
     pub(super) fn active_pane_terminal_key(&self) -> Option<TerminalSessionKey> {
-        match self.active_pane.as_ref() {
-            Some((tab_key, pane)) => self
-                .workbench
-                .pane_host()
-                .binding(&(PaneHostScope::Tab(tab_key.clone()), *pane))
-                .and_then(PaneBinding::terminal_key),
-            None => self.terminal_workspace.active_key(),
-        }
+        self.workbench
+            .active_mount()
+            .and_then(|mount| mount.binding().terminal_key())
+            .or_else(|| self.terminal_workspace.active_key())
     }
 
     pub(super) fn update_terminal_status(&mut self, key: TerminalSessionKey, status: &str) {
         let Some(session_id) = self.terminal_workspace.session_id_for_key(key) else {
             return;
         };
-        self.workbench
-            .workbench_mut()
-            .update_session_status(&session_id, status);
+        self.workbench.update_session_status(&session_id, status);
     }
 
     pub(super) fn active_terminal(&self) -> Option<&TerminalSession> {
@@ -255,27 +193,25 @@ impl NativeApp {
         if !self.ensure_terminal_for_session(&session_id) {
             return;
         }
-        let terminal_key = match self.terminal_workspace.spawn_pane(self.terminal_size()) {
-            Ok(key) => key,
+        let terminal_size = self.terminal_size();
+        let (workbench, terminal_workspace) = (&mut self.workbench, &mut self.terminal_workspace);
+        let key = match workbench.try_split_active_with(
+            PaneInput::terminal(session_id.clone()),
+            direction,
+            || {
+                let terminal_key = terminal_workspace.spawn_pane(terminal_size)?;
+                terminal_workspace.bind_key_to_session(terminal_key, session_id);
+                Ok::<_, anyhow::Error>(PaneBinding::terminal(terminal_key))
+            },
+        ) {
+            Ok(Some(key)) => key,
+            Ok(None) => return,
             Err(error) => {
                 eprintln!("could not create split terminal Pane: {error}");
                 return;
             }
         };
-        self.terminal_workspace
-            .bind_key_to_session(terminal_key, session_id.clone());
-        let Some(pane) = self
-            .workbench
-            .workbench_mut()
-            .create_pane_with_direction(PaneInput::terminal(session_id.clone()), direction)
-        else {
-            return;
-        };
-        self.workbench.pane_host_mut().insert(
-            (PaneHostScope::Tab(tab_key.clone()), pane),
-            PaneBinding::terminal(terminal_key),
-        );
-        let _ = self.activate_pane_context(tab_key, pane);
+        let _ = self.activate_pane_context(tab_key, key.pane());
         self.rebuild_presentation_on_next_redraw();
     }
 
@@ -286,34 +222,19 @@ impl NativeApp {
         let Some(tab_key) = self.active_session_tab_key() else {
             return;
         };
-        let Some(removed) = self.workbench.workbench_mut().destroy_pane() else {
+        let Some(closed) = self.workbench.close_active_pane() else {
             return;
         };
-        let Some(removed) = removed.first() else {
-            return;
-        };
-        let removed_pane = removed.id();
-        let removed_binding = (tab_key.clone(), removed_pane);
-        let removed_host_binding = (PaneHostScope::Tab(tab_key.clone()), removed_pane);
-        let removed_binding_state = self.workbench.pane_host_mut().remove(&removed_host_binding);
-        let removed_key = removed_binding_state
-            .as_ref()
-            .and_then(|binding| binding.terminal_key());
-        if let Some(removed_key) = removed_key {
-            let _ = self.terminal_workspace.remove_key(removed_key);
+        for pane in closed.panes() {
+            let key = PaneKey::new(tab_key.clone(), pane.id(), pane.input_id());
+            self.terminal_pane_views.remove(&key);
         }
-        self.pane_view_states.remove(&removed_binding);
-        if self.active_pane.as_ref() == Some(&removed_binding) {
-            self.active_pane = None;
+        let replacement_pane = closed.active_pane();
+        for binding in closed.into_bindings() {
+            if let Some(key) = binding.terminal_key() {
+                let _ = self.terminal_workspace.remove_key(key);
+            }
         }
-        let Some(replacement_pane) = self
-            .workbench
-            .workbench()
-            .pane_part(&tab_key)
-            .map(|pane_part| pane_part.active_pane())
-        else {
-            return;
-        };
         let _ = self.activate_pane_context(tab_key, replacement_pane);
         self.rebuild_presentation_on_next_redraw();
     }
@@ -334,9 +255,9 @@ impl NativeApp {
             return;
         };
         let Some(pane) = (if next {
-            self.workbench.workbench_mut().focus_next_pane(&tab_key)
+            self.workbench.focus_next_pane(&tab_key)
         } else {
-            self.workbench.workbench_mut().focus_previous_pane(&tab_key)
+            self.workbench.focus_previous_pane(&tab_key)
         }) else {
             return;
         };
@@ -361,8 +282,8 @@ impl NativeApp {
         terminal_pane_sash_for_viewport(
             self.logical_viewport(),
             self.active_screen(),
-            self.tab_container,
-            self.inspector_part,
+            self.workbench.tab_container_state(),
+            self.workbench.inspector_state(),
             layout,
             point,
         )
@@ -370,26 +291,12 @@ impl NativeApp {
     }
 
     pub(super) fn route_terminal_pane_resize_move(&mut self, point: Point) -> bool {
-        let Some(resize) = self.terminal_pane_resize.as_mut() else {
+        if self.workbench.pane_resize_split().is_none() {
             return false;
-        };
-        let Some(next) = resize.resizable.resize_to(point) else {
-            self.update_cursor();
-            return true;
-        };
-        let total = next.previous_size() + next.next_size();
-        let Some(ratio) = (total.is_finite() && total > 0.0)
-            .then(|| (next.previous_size() / total).clamp(0.0, 1.0))
-        else {
-            self.update_cursor();
-            return true;
-        };
-        let changed =
-            self.workbench
-                .workbench_mut()
-                .resize_split(&resize.tab_key, resize.split_id, ratio);
+        }
+        let changed = self.workbench.resize_pane(point);
         if changed {
-            self.terminal_selection.clear();
+            self.terminal_view_mut().selection.clear();
             self.rebuild_presentation();
             self.request_redraw();
         }
@@ -401,7 +308,7 @@ impl NativeApp {
         let now = Instant::now();
         match state {
             ElementState::Pressed => {
-                if self.terminal_pane_resize.is_some() {
+                if self.workbench.pane_resize_split().is_some() {
                     return true;
                 }
                 let Some(point) = self.cursor_position else {
@@ -412,7 +319,7 @@ impl NativeApp {
                 else {
                     return false;
                 };
-                let identity = shell_interaction::terminal_pane_sash_id(split_id);
+                let identity = zeta_workbench::pane_sash_element_id(split_id);
                 let over_sash = self.presentation.as_ref().is_some_and(|presentation| {
                     presentation.interaction_frame().target_at(point) == Some(identity)
                 });
@@ -423,23 +330,24 @@ impl NativeApp {
                     SplitViewOrientation::Horizontal => SashOrientation::Vertical,
                     SplitViewOrientation::Vertical => SashOrientation::Horizontal,
                 };
-                let mut resizable = Resizable::new(orientation);
-                if !resizable.begin_drag(snapshot, point, now) {
-                    return false;
-                }
-                self.terminal_pane_resize = Some(TerminalPaneResize {
+                if !self.workbench.start_pane_resize(
                     tab_key,
                     split_id,
-                    resizable,
-                });
+                    orientation,
+                    snapshot,
+                    point,
+                    now,
+                ) {
+                    return false;
+                }
             }
             ElementState::Released => {
-                let Some(mut resize) = self.terminal_pane_resize.take() else {
+                let Some(split) = self.workbench.pane_resize_split() else {
                     return false;
                 };
-                let identity = shell_interaction::terminal_pane_sash_id(resize.split_id);
+                let identity = zeta_workbench::pane_sash_element_id(split);
                 let presence = self.sash_pointer_presence(identity);
-                let _ = resize.resizable.end_drag(presence, now);
+                let _ = self.workbench.finish_pane_resize(presence, now);
             }
         }
         self.rebuild_presentation();
@@ -449,10 +357,7 @@ impl NativeApp {
     }
 
     pub(super) fn cancel_terminal_pane_resize(&mut self) -> bool {
-        let Some(mut resize) = self.terminal_pane_resize.take() else {
-            return false;
-        };
-        resize.resizable.cancel()
+        self.workbench.cancel_pane_resize()
     }
 }
 
@@ -462,7 +367,7 @@ impl NativeApp {
         if !self.workbench.workbench().tab_part().is_settings() {
             self.settings_section = zeta_settings::SettingsPageSection::LanguageServers;
         }
-        let _ = self.workbench.workbench_mut().activate_settings();
+        let _ = self.workbench.activate_settings();
         self.language_server_settings.open();
         self.keyboard_shortcuts.close();
         let _ = self.git_branch_context_menu.dismiss();
@@ -478,7 +383,7 @@ impl NativeApp {
     /// Returns to the last selected session without fabricating a session for Settings.
     pub(super) fn activate_session_workbench_tab(&mut self) {
         let was_terminal = self.workspace_surface.is_terminal();
-        let _ = self.workbench.workbench_mut().activate_last_session();
+        let _ = self.workbench.activate_last_session();
         if let Some(session_id) = self
             .workbench
             .workbench()

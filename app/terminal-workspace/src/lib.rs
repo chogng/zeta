@@ -10,8 +10,20 @@ use zeta_protocol::SessionId;
 use zeta_terminal::GridSize;
 
 mod pane_binding;
+mod pane_view;
+mod pane_views;
+mod pointer;
+mod scroll;
+mod selection;
 
 pub use pane_binding::PaneBinding;
+pub use pane_view::TerminalPaneViewState;
+pub use pane_views::TerminalPaneViews;
+pub use pointer::{PointerInput, TerminalPointer};
+pub use scroll::TerminalScroll;
+pub use selection::{
+    TerminalSelection, TerminalSelectionRange, paint_terminal_selection, selected_text,
+};
 
 /// Process-local identity for one terminal runtime.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]

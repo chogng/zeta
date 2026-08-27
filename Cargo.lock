@@ -318,7 +318,7 @@ dependencies = [
  "zeta-remote-host",
  "zeta-remote-ui",
  "zeta-server-host",
- "zeta-session-ui",
+ "zeta-session",
  "zeta-settings",
  "zeta-slash-commands",
  "zeta-terminal",
@@ -11380,6 +11380,7 @@ version = "0.1.0"
 dependencies = [
  "zeta-editor",
  "zeta-lsp-manager",
+ "zeta-text-file",
  "zeta-ui-components",
  "zui",
 ]
@@ -12002,15 +12003,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-session-store"
-version = "0.1.0"
-dependencies = [
- "serde",
- "zeta-protocol",
-]
-
-[[package]]
-name = "zeta-session-ui"
+name = "zeta-session"
 version = "0.1.0"
 dependencies = [
  "serde_json",
@@ -12021,10 +12014,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-session-store"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "zeta-protocol",
+]
+
+[[package]]
 name = "zeta-settings"
 version = "0.1.0"
 dependencies = [
+ "zeta-app-server-protocol",
  "zeta-icons",
+ "zeta-lsp-server-provider",
  "zeta-ui-components",
  "zui",
 ]
@@ -12157,9 +12160,12 @@ name = "zeta-terminal-workspace"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "unicode-width 0.2.0",
  "zeta-protocol",
  "zeta-terminal",
+ "zeta-ui-components",
  "zeta-workbench",
+ "zui",
 ]
 
 [[package]]

@@ -49,8 +49,8 @@ impl App<NativeEvent> for NativeApp {
         let terminal_size = terminal_grid_size_for_viewport(
             self.logical_viewport(),
             ScreenBuffer::Primary,
-            self.tab_container,
-            self.inspector_part,
+            self.workbench.tab_container_state(),
+            self.workbench.inspector_state(),
         );
         if let Err(error) = self.terminal_workspace.spawn_initial(terminal_size) {
             self.fail(error);
@@ -98,13 +98,13 @@ impl App<NativeEvent> for NativeApp {
                 context.close();
             }
             WindowEvent::Resized(size) => {
-                self.terminal_selection.clear();
+                self.terminal_view_mut().selection.clear();
                 self.physical_extent = PhysicalExtent::new(size.width, size.height);
                 self.rebuild_presentation();
                 self.request_redraw();
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                self.terminal_selection.clear();
+                self.terminal_view_mut().selection.clear();
                 self.scale_factor = scale_factor;
                 self.rebuild_presentation();
                 self.request_redraw();
@@ -133,7 +133,7 @@ impl App<NativeEvent> for NativeApp {
                 self.modifiers = ModifiersState::default();
                 self.keybindings.cancel_chord();
                 self.keyboard_shortcuts.window_blurred();
-                self.terminal_pointer.cancel();
+                self.terminal_view_mut().pointer.cancel();
                 self.file_editor_input.cancel_pointer();
                 self.cancel_tab_container_resize();
                 self.cancel_inspector_resize();
@@ -141,7 +141,7 @@ impl App<NativeEvent> for NativeApp {
                     self.update_cursor();
                 }
                 self.workspace_pane_host.cancel_multi_diff_scrollbar();
-                self.terminal_scroll.cancel_scrollbar();
+                self.terminal_view_mut().scroll.cancel_scrollbar();
                 self.session_context_menu.dismiss();
                 self.git_branch_context_menu.dismiss();
                 self.workspace_path_picker.dismiss();
@@ -302,10 +302,8 @@ impl App<NativeEvent> for NativeApp {
             CaretBlinkAdvance::VisibilityChanged(_)
         );
         let scrollbar_changed = self.workspace_pane_host.advance_multi_diff_scrollbar(now);
-        let terminal_scrollbar_changed = self.terminal_scroll.advance_scrollbar(now);
-        let vertical_tab_sash_changed = self.tab_container.advance_sash(now);
-        let inspector_sash_changed = self.inspector_resizable.advance(now);
-        let sash_changed = vertical_tab_sash_changed || inspector_sash_changed;
+        let terminal_scrollbar_changed = self.terminal_view_mut().scroll.advance_scrollbar(now);
+        let sash_changed = self.workbench.advance_layout_sashes(now);
         let retained_runtime_due = self
             .retained_runtime
             .next_deadline()
@@ -327,10 +325,10 @@ impl App<NativeEvent> for NativeApp {
         for deadline in [
             self.caret_blink.next_deadline(),
             self.workspace_pane_host.multi_diff_scrollbar_deadline(),
-            self.terminal_scroll.scrollbar_deadline(),
+            self.terminal_view().scroll.scrollbar_deadline(),
             self.retained_runtime.next_deadline(),
-            self.tab_container.sash_deadline(),
-            self.inspector_resizable.next_deadline(),
+            self.workbench.tab_sash_deadline(),
+            self.workbench.inspector_sash_deadline(),
             self.keybindings.chord_deadline(),
             self.keyboard_shortcuts_deadline(),
             Some(self.keybindings_resource.next_deadline()),

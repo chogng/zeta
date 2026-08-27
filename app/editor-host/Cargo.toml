@@ -13,6 +13,7 @@ path = "src/lib.rs"
 [dependencies]
 zeta-editor = { workspace = true }
 zeta-lsp-manager = { workspace = true }
+zeta-text-file = { workspace = true }
 zeta-ui-components = { workspace = true }
 zui = { workspace = true, default-features = false }
 

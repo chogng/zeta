@@ -28,12 +28,14 @@ impl NativeApp {
                     .pointer_feedback(presentation.interaction_frame())
             })
             .unwrap_or_default();
-        let cursor = if let Some(resize) = self.terminal_pane_resize.as_ref() {
-            match resize.resizable.orientation() {
+        let cursor = if let Some(orientation) = self.workbench.pane_resize_orientation() {
+            match orientation {
                 SashOrientation::Vertical => CursorIcon::ColResize,
                 SashOrientation::Horizontal => CursorIcon::RowResize,
             }
-        } else if self.tab_container.is_resizing() || self.inspector_resizable.is_dragging() {
+        } else if self.workbench.tab_container_is_resizing()
+            || self.workbench.inspector_is_resizing()
+        {
             CursorIcon::ColResize
         } else {
             match feedback {
@@ -85,11 +87,11 @@ impl NativeApp {
             SashPointerPresence::Outside
         };
         let session_changed = self
-            .tab_container
-            .sash_pointer_presence(session_presence, now);
+            .workbench
+            .tab_sash_pointer_presence(session_presence, now);
         let agent_changed = self
-            .inspector_resizable
-            .pointer_presence(agent_presence, now);
+            .workbench
+            .inspector_sash_pointer_presence(agent_presence, now);
         session_changed || agent_changed
     }
 

@@ -117,5 +117,5 @@ impl TabContainerLayout {
 }
 
 #[cfg(test)]
-#[path = "tab_container_tests.rs"]
+#[path = "layout_tab_container_tests.rs"]
 mod tests;
