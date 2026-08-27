@@ -17,9 +17,12 @@ interface QuickDiffDecorationMetadata {
 	readonly providerLabels: readonly string[];
 }
 
+const QUICK_DIFF_DECORATION_OWNER = 'quick-diff';
+
 /** Projects one shared Quick Diff model into gutter, overview-ruler, and minimap decorations. */
 export class QuickDiffDecorator extends Disposable implements OwnedDecorationSource {
-	readonly glyphMarginLanes = Object.freeze([]);
+	readonly glyphMarginLanes;
+	readonly linesDecorationLanes;
 	private readonly collection: TextDecorationCollection<QuickDiffDecorationMetadata>;
 	private readonly source: DecorationSource;
 	readonly onDidChange: Event<void>;
@@ -28,8 +31,12 @@ export class QuickDiffDecorator extends Disposable implements OwnedDecorationSou
 		super();
 		const modelReference = this._register(modelService.createModelReference(resource, model, diffApi));
 		this.collection = this._register(new TextDecorationCollection<QuickDiffDecorationMetadata>(model));
-		this.source = createStanzaDecorationSource(this.collection, decoration => this.resolve(decoration.metadata), decoration => hoverText(decoration.metadata));
+		this.source = createStanzaDecorationSource(this.collection, decoration => this.resolve(decoration.metadata), decoration => hoverText(decoration.metadata), {
+			linesDecorationLanes: [{ owner: QUICK_DIFF_DECORATION_OWNER, width: 4 }],
+		});
 		this.onDidChange = this.source.onDidChange;
+		this.glyphMarginLanes = this.source.glyphMarginLanes;
+		this.linesDecorationLanes = this.source.linesDecorationLanes;
 		this._register(modelReference.object.onDidChange(() => this.rebuild(modelReference.object.state.comparisons)));
 		this._register(configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(ScmConfiguration.diffDecorations)) this.rebuild(modelReference.object.state.comparisons);
@@ -47,7 +54,7 @@ export class QuickDiffDecorator extends Disposable implements OwnedDecorationSou
 		const gutter = setting === 'all' || setting === 'gutter';
 		return Object.freeze({
 			presentation: metadata.presentation,
-			...(gutter ? { linesDecoration: { className: `zeta-quick-diff-gutter ${classNameForPresentation(metadata.presentation)}`, tooltip: hoverText(metadata) } } : {}),
+			...(gutter ? { linesDecoration: { owner: QUICK_DIFF_DECORATION_OWNER, className: `zeta-quick-diff-gutter ${classNameForPresentation(metadata.presentation)}`, tooltip: hoverText(metadata) } } : {}),
 			overviewRuler: setting === 'all' || setting === 'overview',
 			minimap: setting === 'all' || setting === 'minimap',
 		});

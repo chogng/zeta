@@ -9,24 +9,23 @@ import { EditorViewPart, type EditorRenderingContext } from '../../view/viewPart
 import { type DecorationGlyphMarginPresentation, type DecorationSource, type ResolvedDecoration, GlyphMarginLane } from '../decorations/decorationPresentation.js';
 import { type DecorationsPart } from '../decorations/decorationsPart.js';
 
-export const EDITOR_GLYPH_MARGIN_LANE_WIDTH = 20;
-
 export interface GlyphMarginPartOptions {
 	readonly host: HTMLElement;
-	readonly sources: readonly DecorationSource[];
+	readonly lanes: readonly GlyphMarginLane[];
 	readonly decorationsPart: DecorationsPart;
 	readonly readVisualLines: () => EditorVisualLineProjection;
 	readonly readLeft: () => number;
+	readonly readLaneWidth: () => number;
 }
 
 /** Renders decoration-backed glyphs in shared, stable margin lanes. */
 export class GlyphMarginPart extends EditorViewPart {
 	public readonly domNode: HTMLDivElement;
-	public readonly width: number;
 	private readonly root: FastDomNode<HTMLDivElement>;
 	private readonly decorationsPart: DecorationsPart;
 	private readonly readVisualLines: () => EditorVisualLineProjection;
 	private readonly readLeft: () => number;
+	private readonly readLaneWidth: () => number;
 	private readonly laneDomNodes: ReadonlyMap<GlyphMarginLane, HTMLSpanElement>;
 	private readonly buttons = new Map<TextDecorationId, HTMLButtonElement>();
 
@@ -35,18 +34,15 @@ export class GlyphMarginPart extends EditorViewPart {
 		this.decorationsPart = options.decorationsPart;
 		this.readVisualLines = options.readVisualLines;
 		this.readLeft = options.readLeft;
-		const lanes = collectGlyphMarginLanes(options.sources);
-		this.width = lanes.length * EDITOR_GLYPH_MARGIN_LANE_WIDTH;
+		this.readLaneWidth = options.readLaneWidth;
 		this.domNode = h(options.host.ownerDocument, 'div');
 		this.root = new FastDomNode(this.domNode);
 		this.root.setClassName('stanza-editor-glyph-margin');
-		this.root.setWidth(this.width);
-		this.root.setHidden(lanes.length === 0);
-		this.laneDomNodes = new Map(lanes.map((lane, index) => {
+		this.root.setHidden(options.lanes.length === 0);
+		this.laneDomNodes = new Map(options.lanes.map(lane => {
 			const domNode = h(this.domNode.ownerDocument, 'span');
 			domNode.className = 'stanza-editor-glyph-margin-lane';
 			domNode.dataset.glyphMarginLane = lane;
-			domNode.style.left = `${index * EDITOR_GLYPH_MARGIN_LANE_WIDTH}px`;
 			this.domNode.append(domNode);
 			return [lane, domNode] as const;
 		}));
@@ -54,9 +50,17 @@ export class GlyphMarginPart extends EditorViewPart {
 	}
 
 	public render(context: EditorRenderingContext): void {
+		const laneWidth = this.readLaneWidth();
 		this.root.setLeft(context.layout.scrollPosition.left + this.readLeft());
+		this.root.setWidth(this.laneDomNodes.size * laneWidth);
 		this.root.setHeight(context.layout.contentSize.height);
-		for (const laneDomNode of this.laneDomNodes.values()) laneDomNode.style.height = `${context.layout.contentSize.height}px`;
+		let laneIndex = 0;
+		for (const laneDomNode of this.laneDomNodes.values()) {
+			laneDomNode.style.left = `${laneIndex * laneWidth}px`;
+			laneDomNode.style.width = `${laneWidth}px`;
+			laneDomNode.style.height = `${context.layout.contentSize.height}px`;
+			laneIndex += 1;
+		}
 		const overlay = context.overlay;
 		if (!overlay) {
 			this.clearButtons();
@@ -131,6 +135,12 @@ export function collectGlyphMarginLanes(sources: readonly DecorationSource[]): r
 		}
 	}
 	return Object.freeze([...new Set(laneOwners.values())].sort((left, right) => laneOrder(left) - laneOrder(right)));
+}
+
+export function resolveGlyphMarginLanes(sources: readonly DecorationSource[], enabled: boolean): readonly GlyphMarginLane[] {
+	if (!enabled) return Object.freeze([]);
+	const lanes = collectGlyphMarginLanes(sources);
+	return lanes.length > 0 ? lanes : Object.freeze([GlyphMarginLane.Center]);
 }
 
 function compareGlyphDecorations(left: ResolvedDecoration & { readonly glyphMargin: DecorationGlyphMarginPresentation }, right: ResolvedDecoration & { readonly glyphMargin: DecorationGlyphMarginPresentation }): number {

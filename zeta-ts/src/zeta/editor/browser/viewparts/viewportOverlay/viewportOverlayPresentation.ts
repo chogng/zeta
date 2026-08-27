@@ -5,7 +5,7 @@ import { type EditorVisualLineProjection } from "../../../common/viewModel/model
 import { type TextMeasurer } from "../../../common/viewModel/textMeasurer.js";
 import { type EditorLineRange } from "../../../common/viewModel.js";
 import { getStanzaDomTextCaretLeft, getStanzaDomTextRangeRectangles } from "./domTextGeometry.js";
-import { type RenderedLine } from "../viewLines/renderedLine.js";
+import { type ViewLine } from "../viewLines/viewLine.js";
 
 /** Selects whether selection projection marks the cursor's logical line as active. */
 export type ActiveLineHighlight = "on" | "off";
@@ -14,7 +14,7 @@ export interface ViewportOverlayContext {
 	readonly ownerDocument: Document;
 	readonly model: TextModel;
 	readonly visualLineProjection: EditorVisualLineProjection;
-	readonly renderedLines: ReadonlyMap<number, RenderedLine>;
+	readonly renderedLines: ReadonlyMap<number, ViewLine>;
 	readonly renderLines: EditorLineRange;
 	readonly textLeft: number;
 	readonly textMeasurer: TextMeasurer;

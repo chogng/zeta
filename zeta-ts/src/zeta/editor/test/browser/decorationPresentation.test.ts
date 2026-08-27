@@ -164,6 +164,36 @@ test("Decoration sources declare and validate glyph-margin ownership", () => {
 	assert.throws(() => undeclared.decorations, /did not declare lane/);
 });
 
+test("Decoration sources declare and validate line-decoration ownership", () => {
+	using model = new TextModel("abc");
+	using collection = new TextDecorationCollection<string>(model);
+	const id = collection.add({
+		range: TextRange.emptyAt(TextPosition.at(0, 0)),
+		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		metadata: "folding",
+	});
+	const source = createStanzaDecorationSource(collection, () => ({
+		presentation: DecorationPresentation.LineDecoration,
+		linesDecoration: { owner: "folding", className: "folding-marker" },
+	}), undefined, {
+		linesDecorationLanes: [{ owner: "folding", width: 20 }],
+	});
+
+	assert.deepEqual(source.linesDecorationLanes, [{ owner: "folding", width: 20 }]);
+	assert.deepEqual(source.decorations, [{
+		id,
+		range: TextRange.emptyAt(TextPosition.at(0, 0)),
+		presentation: DecorationPresentation.LineDecoration,
+		linesDecoration: { owner: "folding", className: "folding-marker" },
+	}]);
+
+	const undeclared = createStanzaDecorationSource(collection, () => ({
+		presentation: DecorationPresentation.LineDecoration,
+		linesDecoration: { owner: "quick-diff", className: "quick-diff-marker" },
+	}));
+	assert.throws(() => undeclared.decorations, /did not declare a lane/);
+});
+
 interface DecorationMetadata {
 	readonly presentation?: DecorationPresentation;
 }

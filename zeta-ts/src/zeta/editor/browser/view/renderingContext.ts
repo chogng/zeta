@@ -20,7 +20,7 @@ export function createEditorRenderingContext(layout: EditorViewportLayout, overl
 	return Object.freeze({
 		layout,
 		viewportData,
-		overlay: overlay.visualLineProjection.modelVersion === overlay.model.version ? overlay : undefined,
+		overlay: overlay.model.version === layout.modelVersion && overlay.visualLineProjection.modelVersion === layout.modelVersion ? overlay : undefined,
 	});
 }
 

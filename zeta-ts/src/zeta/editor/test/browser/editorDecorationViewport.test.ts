@@ -184,6 +184,7 @@ test("Line and block decoration parts project source presentation details", () =
 			? {
 				presentation: DecorationPresentation.DiffModified,
 				linesDecoration: {
+					owner: "test-lines",
 					className: "stanza-test-line-marker",
 					firstLineClassName: "stanza-test-first-line-marker",
 					tooltip: "line marker",
@@ -196,6 +197,8 @@ test("Line and block decoration parts project source presentation details", () =
 					padding: [1, 2, 3, 4],
 				},
 			},
+		undefined,
+		{ linesDecorationLanes: [{ owner: "test-lines", width: 4 }] },
 	);
 	using viewport = new EditorViewport({
 		container,
@@ -214,14 +217,17 @@ test("Line and block decoration parts project source presentation details", () =
 	assert.equal(firstMarker.classList.contains("stanza-test-line-marker"), true);
 	assert.equal(firstMarker.classList.contains("stanza-test-first-line-marker"), true);
 	assert.equal(firstMarker.title, "line marker");
+	assert.equal(firstMarker.dataset.decorationOwner, "test-lines");
+	assert.equal(firstMarker.style.getPropertyValue("--stanza-editor-line-decoration-offset"), "0px");
+	assert.equal(firstMarker.style.getPropertyValue("--stanza-editor-line-decoration-width"), "4px");
 	assert.equal(secondMarker.classList.contains("stanza-test-line-marker"), true);
 	assert.equal(secondMarker.classList.contains("stanza-test-first-line-marker"), false);
 	assert.equal(thirdLine.querySelector(".stanza-editor-line-decoration"), null);
 
 	const block = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-block-decoration");
 	assert.equal(block.classList.contains("stanza-test-block"), true);
-	assert.equal(block.style.left, "34px");
-	assert.equal(block.style.width, "168px");
+	assert.equal(block.style.left, "38px");
+	assert.equal(block.style.width, "164px");
 	assert.equal(block.style.top, "-1px");
 	assert.equal(block.style.height, "64px");
 	dom.window.close();

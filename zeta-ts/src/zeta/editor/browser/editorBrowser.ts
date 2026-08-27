@@ -104,6 +104,7 @@ export interface EditorBrowserOptions {
 	readonly minimap?: EditorMinimap;
 	readonly activeLineHighlight?: EditorActiveLineHighlight;
 	readonly showLineNumbers?: boolean;
+	readonly glyphMargin?: boolean;
 	readonly rulers?: readonly EditorRuler[];
 	readonly showIndentationGuides?: boolean;
 	readonly bracketPairColorization?: boolean;
@@ -262,6 +263,7 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 					fontSize: configuration.fontSize,
 					fontLigatures: configuration.fontLigatures,
 					showLineNumbers: options.showLineNumbers,
+					glyphMargin: options.glyphMargin,
 					rulers: options.rulers,
 					showIndentationGuides: options.showIndentationGuides,
 					minimap: options.minimap,
@@ -369,6 +371,7 @@ function validateOptions(options: EditorBrowserOptions): void {
 	}
 	for (const [name, value] of [
 		["line numbers", options.showLineNumbers],
+		["glyph margin", options.glyphMargin],
 		["indentation guides", options.showIndentationGuides],
 		["bracket pair colorization", options.bracketPairColorization],
 		["sticky scroll", options.stickyScroll],

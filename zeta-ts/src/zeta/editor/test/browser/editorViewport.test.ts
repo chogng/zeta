@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
+import { createStanzaDecorationSource, DecorationPresentation, GlyphMarginLane } from "../../browser/viewparts/decorations/decorationPresentation.js";
 import { EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
 import { EditorFoldingModel } from "../../contrib/folding/browser/foldingModel.js";
 import { EditorHiddenRangeModel } from "../../contrib/folding/browser/hiddenRangeModel.js";
@@ -10,6 +11,8 @@ import { TextSelection, TextSelectionSet } from "../../common/core/selection.js"
 import { TextPosition, TextRange } from "../../common/core/text.js";
 import { WrappingIndent } from "../../common/config/editorOptions.js";
 import { TextModel } from "../../common/model/textModel.js";
+import { TextDecorationCollection } from "../../common/model/decorationCollection.js";
+import { TrackedRangeStickiness } from "../../common/model/trackedRange.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -77,7 +80,7 @@ test("EditorViewport projects the initial virtual line window", () => {
 		viewport.element.style.getPropertyValue(
 			"--stanza-editor-gutter-width",
 		),
-		"40px",
+		"60px",
 	);
 	assert.equal(
 		requiredElement(viewport.element, ".stanza-editor-content").style.height,
@@ -122,7 +125,7 @@ test("EditorViewport projects configured column rulers through the margin coordi
 
 	const rulers = [...viewport.element.querySelectorAll<HTMLElement>(".stanza-editor-ruler")];
 	assert.equal(rulers.length, 2);
-	assert.deepEqual(rulers.map(ruler => ruler.style.left), ["68px", "116px"]);
+	assert.deepEqual(rulers.map(ruler => ruler.style.left), ["88px", "136px"]);
 	assert.equal(rulers[1]?.style.boxShadow, "1px 0 0 0 red inset");
 	assert.equal(rulers[0]?.style.height, "20px");
 
@@ -248,8 +251,8 @@ test("EditorViewport projects indentation guides for visible logical rows only",
 	viewport.layout({ width: 300, height: 40 });
 	const firstGuides = requiredLine(viewport.element, 0).querySelectorAll<HTMLElement>(".stanza-editor-indent-guide");
 	assert.deepEqual([...firstGuides].map(guide => ({ level: guide.dataset.indentLevel, left: guide.style.left })), [
-		{ level: "1", left: "57px" },
-		{ level: "2", left: "77px" },
+		{ level: "1", left: "77px" },
+		{ level: "2", left: "97px" },
 	]);
 	assert.equal(requiredLine(viewport.element, 1).querySelectorAll(".stanza-editor-indent-guide").length, 1);
 	dom.window.close();
@@ -460,7 +463,7 @@ test("Soft wrapping virtualizes visual rows and maps DOM coordinates back to log
 		lineWrapping: EditorLineWrapping.On,
 	});
 
-	viewport.layout({ width: 70, height: 40 });
+	viewport.layout({ width: 90, height: 40 });
 
 	assert.equal(viewport.viewportLayout.contentSize.height, 80);
 	assert.equal(viewport.viewportLayout.maximumScrollPosition.left, 0);
@@ -495,14 +498,14 @@ test("Soft wrapping virtualizes visual rows and maps DOM coordinates back to log
 	);
 	assert.deepEqual(
 		viewport.getPositionContentCoordinates(TextPosition.at(0, 3)),
-		{ left: 48, top: 20, height: 20 },
+		{ left: 68, top: 20, height: 20 },
 	);
-	assert.deepEqual(viewport.getTargetAtClientPoint({ clientX: 50, clientY: 25 }), {
+	assert.deepEqual(viewport.getTargetAtClientPoint({ clientX: 70, clientY: 25 }), {
 		kind: "text",
 		position: TextPosition.at(0, 3),
 	});
 
-	viewport.layout({ width: 90, height: 40 });
+	viewport.layout({ width: 110, height: 40 });
 
 	assert.equal(viewport.viewportLayout.contentSize.height, 60);
 	assert.deepEqual(
@@ -526,7 +529,7 @@ test("Soft wrapping applies the configured indent to continuation DOM rows", () 
 		wrappingIndent: WrappingIndent.Same,
 	});
 
-	viewport.layout({ width: 96, height: 60 });
+	viewport.layout({ width: 116, height: 60 });
 
 	const rendered = lineElements(viewport.element);
 	assert.equal(rendered[0]?.querySelector<HTMLSpanElement>(".stanza-editor-line-text")?.style.marginInlineStart, "0px");
@@ -554,7 +557,10 @@ test("Folding model removes folded physical rows from the viewport projection", 
 	viewport.layout({ width: 300, height: 20 });
 	assert.equal(viewport.element.style.getPropertyValue("--stanza-editor-line-numbers-width"), "24px");
 	assert.equal(viewport.element.style.getPropertyValue("--stanza-editor-glyph-margin-width"), "20px");
-	assert.equal(viewport.element.style.getPropertyValue("--stanza-editor-gutter-width"), "44px");
+	assert.equal(viewport.element.style.getPropertyValue("--stanza-editor-line-numbers-left"), "20px");
+	assert.equal(viewport.element.style.getPropertyValue("--stanza-editor-line-decorations-left"), "44px");
+	assert.equal(viewport.element.style.getPropertyValue("--stanza-editor-line-decorations-width"), "20px");
+	assert.equal(viewport.element.style.getPropertyValue("--stanza-editor-gutter-width"), "64px");
 	const initialToggle = requiredElement<HTMLButtonElement>(viewport.element, ".stanza-editor-fold-toggle");
 	assert.equal(initialToggle.getAttribute("aria-expanded"), "true");
 	assert.equal(initialToggle.textContent, "");
@@ -577,7 +583,7 @@ test("Folding model removes folded physical rows from the viewport projection", 
 		text: "after",
 	}]);
 	assert.deepEqual(viewport.getPositionContentCoordinates(TextPosition.at(1, 0)), {
-		left: 56,
+		left: 76,
 		top: 0,
 		height: 20,
 	});
@@ -585,6 +591,81 @@ test("Folding model removes folded physical rows from the viewport projection", 
 	assert.equal(collapsedToggle.getAttribute("aria-expanded"), "false");
 	assert.equal(collapsedToggle.querySelectorAll("svg").length, 1);
 	assert.equal(collapsedToggle.dataset.iconId, "folding-collapsed");
+
+	dom.window.close();
+});
+
+test("Editor gutter orders generic glyphs, line numbers, folding controls, then content", () => {
+	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const container = requiredElement(dom.window.document, "main");
+	using model = new TextModel("header\nbody\nend");
+	using glyphs = new TextDecorationCollection<string>(model);
+	glyphs.add({
+		range: TextRange.emptyAt(TextPosition.at(0, 0)),
+		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		metadata: "generic",
+	});
+	const glyphSource = createStanzaDecorationSource(glyphs, () => ({
+		presentation: DecorationPresentation.GlyphMargin,
+		glyphMargin: {
+			owner: "test-glyph",
+			lane: GlyphMarginLane.Left,
+			ariaLabel: "Generic gutter marker",
+		},
+	}), undefined, {
+		glyphMarginLanes: [{ owner: "test-glyph", lane: GlyphMarginLane.Left }],
+	});
+	using folding = new EditorFoldingModel(model);
+	folding.setRanges([{ startLineIndex: 0, endLineIndex: 2 }]);
+	using foldingDecorations = new FoldingDecorationProvider(folding);
+	using viewport = new EditorViewport({
+		container,
+		model,
+		lineHeight: 20,
+		textMeasurer: fixedTextMeasurer(),
+		decorationSources: [glyphSource, foldingDecorations],
+	});
+
+	viewport.layout({ width: 300, height: 60 });
+
+	assert.equal(viewport.element.style.getPropertyValue("--stanza-editor-glyph-margin-width"), "20px");
+	assert.equal(viewport.element.style.getPropertyValue("--stanza-editor-line-numbers-left"), "20px");
+	assert.equal(viewport.element.style.getPropertyValue("--stanza-editor-line-numbers-width"), "24px");
+	assert.equal(viewport.element.style.getPropertyValue("--stanza-editor-line-decorations-left"), "44px");
+	assert.equal(viewport.element.style.getPropertyValue("--stanza-editor-line-decorations-width"), "20px");
+	assert.equal(viewport.element.style.getPropertyValue("--stanza-editor-gutter-width"), "64px");
+	assert.equal(lineNumber(requiredLine(viewport.element, 0)).textContent, "1");
+	assert.equal(requiredElement<HTMLElement>(viewport.element, ".stanza-editor-glyph-margin").style.left, "0px");
+	assert.equal(requiredElement<HTMLElement>(viewport.element, ".stanza-editor-fold-toggle").dataset.decorationOwner, "folding");
+	assert.equal(viewport.element.querySelector(".stanza-editor-decoration.line-decoration"), null);
+	assert.deepEqual(viewport.getPositionContentCoordinates(TextPosition.at(0, 0)), {
+		left: 76,
+		top: 0,
+		height: 20,
+	});
+
+	dom.window.close();
+});
+
+test("Editor gutter can disable the glyph margin without changing remaining column order", () => {
+	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const container = requiredElement(dom.window.document, "main");
+	using model = new TextModel("header");
+	using viewport = new EditorViewport({
+		container,
+		model,
+		lineHeight: 20,
+		textMeasurer: fixedTextMeasurer(),
+		glyphMargin: false,
+	});
+
+	viewport.layout({ width: 300, height: 20 });
+
+	assert.equal(viewport.element.style.getPropertyValue("--stanza-editor-glyph-margin-width"), "0px");
+	assert.equal(viewport.element.style.getPropertyValue("--stanza-editor-line-numbers-left"), "0px");
+	assert.equal(viewport.element.style.getPropertyValue("--stanza-editor-line-decorations-left"), "24px");
+	assert.equal(viewport.element.style.getPropertyValue("--stanza-editor-gutter-width"), "24px");
+	assert.equal(requiredElement<HTMLElement>(viewport.element, ".stanza-editor-glyph-margin").hidden, true);
 
 	dom.window.close();
 });
@@ -674,11 +755,11 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 		})),
 		[{
 			lineIndex: "0",
-			left: "48px",
+			left: "68px",
 			width: "40px",
 		}, {
 			lineIndex: "1",
-			left: "38px",
+			left: "58px",
 			width: "30px",
 		}],
 	);
@@ -686,7 +767,7 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 	assert.equal(caretElements.length, 2);
 	assert.equal(caretElements.every(element => element.parentElement?.classList.contains("stanza-editor-line-cursors")), true);
 	assert.equal(caretElements[0]?.classList.contains("primary"), true);
-	assert.equal(caretElements[0]?.style.left, "48px");
+	assert.equal(caretElements[0]?.style.left, "68px");
 	assert.equal(
 		lineNumber(requiredLine(viewport.element, 0))
 			.classList.contains("active"),
@@ -707,7 +788,7 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 		requiredLine(viewport.element, 1)
 			.querySelector<HTMLElement>(".stanza-editor-caret")
 			?.style.left,
-		"58px",
+		"78px",
 	);
 	assert.equal(
 		lineNumber(requiredLine(viewport.element, 1))
@@ -726,7 +807,7 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 		requiredLine(viewport.element, 2)
 			.querySelector<HTMLElement>(".stanza-editor-caret")
 			?.style.left,
-		"58px",
+		"78px",
 	);
 	assert.equal(
 		lineNumber(requiredLine(viewport.element, 2)).textContent,
@@ -759,15 +840,16 @@ test("Measured content width, line height, and scroll stay synchronized", () => 
 	viewport.scrollTo({ left: 1_000, top: 200 });
 	viewport.setLineHeight(40);
 
+	assert.equal(viewport.element.style.getPropertyValue("--stanza-editor-glyph-margin-width"), "40px");
 	assert.deepEqual(viewport.viewportLayout.scrollPosition, {
-		left: 300,
+		left: 320,
 		top: 400,
 	});
-	assert.equal(viewport.element.scrollLeft, 300);
+	assert.equal(viewport.element.scrollLeft, 320);
 	assert.equal(viewport.element.scrollTop, 400);
 	assert.equal(
 		requiredElement(viewport.element, ".stanza-editor-content").style.width,
-		"500px",
+		"540px",
 	);
 	for (const row of lineElements(viewport.element)) {
 		assert.equal(row.style.height, "40px");
@@ -789,8 +871,8 @@ test("Line width indexing updates only affected model line groups", () => {
 	});
 	viewport.layout({ width: 50, height: 40 });
 	viewport.scrollTo({ left: 1_000, top: 0 });
-	assert.equal(viewport.viewportLayout.contentSize.width, 110);
-	assert.equal(viewport.element.scrollLeft, 60);
+	assert.equal(viewport.viewportLayout.contentSize.width, 130);
+	assert.equal(viewport.element.scrollLeft, 80);
 
 	model.applyEdits([{
 		range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 1)),
@@ -801,16 +883,16 @@ test("Line width indexing updates only affected model line groups", () => {
 	}]);
 
 	assert.equal(model.getLineContent(0), "bcdf");
-	assert.equal(viewport.viewportLayout.contentSize.width, 90);
-	assert.equal(viewport.element.scrollLeft, 40);
+	assert.equal(viewport.viewportLayout.contentSize.width, 110);
+	assert.equal(viewport.element.scrollLeft, 60);
 
 	model.applyEdits([{
 		range: TextRange.emptyAt(TextPosition.at(1, 2)),
 		text: "\n0123456789",
 	}]);
 
-	assert.equal(viewport.viewportLayout.contentSize.width, 150);
-	assert.equal(viewport.viewportLayout.maximumScrollPosition.left, 100);
+	assert.equal(viewport.viewportLayout.contentSize.width, 170);
+	assert.equal(viewport.viewportLayout.maximumScrollPosition.left, 120);
 
 	dom.window.close();
 });
@@ -827,13 +909,13 @@ test("Font metric refresh rebuilds authoritative horizontal width", () => {
 		textMeasurer: measurer,
 	});
 	viewport.layout({ width: 50, height: 20 });
-	assert.equal(viewport.viewportLayout.contentSize.width, 86);
+	assert.equal(viewport.viewportLayout.contentSize.width, 106);
 
 	measurer.setCharacterWidth(20);
 	viewport.refreshFontMetrics();
 
-	assert.equal(viewport.viewportLayout.contentSize.width, 136);
-	assert.equal(viewport.viewportLayout.maximumScrollPosition.left, 86);
+	assert.equal(viewport.viewportLayout.contentSize.width, 156);
+	assert.equal(viewport.viewportLayout.maximumScrollPosition.left, 106);
 
 	dom.window.close();
 });

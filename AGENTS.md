@@ -21,7 +21,8 @@ Before modifying this repository:
 - crate 主要负责能力和依赖隔离
 - 禁止兜底写法，过渡设计，过渡思考
 - 当你思考项目架构时，请考虑从长期架构的终极形态去设计，而不是基于当前架构的优化方向
-- 使用playwright测试web and electron-ui 以及electron
+- 使用playwright测试web and electron-ui 以及electron , 调试不通过截图
 - 写 Readme.md 描述 crate 职责时，请用不超过3点来完整描述
+
 
 

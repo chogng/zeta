@@ -25,6 +25,7 @@ export class DebugBreakpointDecorationProvider extends Disposable implements Own
 
 	public readonly onDidChange;
 	public readonly glyphMarginLanes;
+	public readonly linesDecorationLanes;
 
 	constructor(private readonly debug: IDebugService, private readonly resource: URI, model: TextModel) {
 		super();
@@ -37,6 +38,7 @@ export class DebugBreakpointDecorationProvider extends Disposable implements Own
 		);
 		this.onDidChange = this.source.onDidChange;
 		this.glyphMarginLanes = this.source.glyphMarginLanes;
+		this.linesDecorationLanes = this.source.linesDecorationLanes;
 		this.updateDecorations();
 		this._register(debug.onDidChangeBreakpoints(() => this.updateDecorations()));
 	}

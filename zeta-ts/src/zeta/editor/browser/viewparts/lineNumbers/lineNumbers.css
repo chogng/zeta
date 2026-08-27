@@ -13,7 +13,7 @@
 
 .stanza-editor-line-number {
   position: absolute;
-  left: 0;
+  left: var(--stanza-editor-line-numbers-left);
   display: block;
   box-sizing: border-box;
   width: var(--stanza-editor-line-numbers-width);

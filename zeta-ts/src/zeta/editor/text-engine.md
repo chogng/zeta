@@ -91,7 +91,7 @@ VS Code 的可读性来自五个明确边界：长期依赖、帧快照、失效
 flowchart LR
     Change[Model / layout / decoration change] --> Project[EditorViewport.project]
     Project --> Layout[EditorViewportLayout]
-    Layout --> Lines[ViewLinesPart]
+    Layout --> Lines[ViewLines]
     Lines --> Parts[EditorViewPartCollection]
     Parts --> Overlay[Overlay Parts]
     Overlay --> DOM[DOM mutation]
@@ -99,7 +99,7 @@ flowchart LR
 
 - `ViewLayout` 是 DOM-free layout owner，生成不可变 `EditorViewportLayout`；`LinesLayout`、`LineHeightsManager` 分别负责行集合与行高。
 - `EditorViewport` 同时承担当前 view host、同步 scheduler、measurement 组合、hit test 和 DOM scroll 同步。
-- `EditorViewPartCollection` 按注册顺序同步 render；`ViewLinesPart` 先建立当前 rendered lines，后续 overlay Parts 再消费它们。
+- `EditorViewPartCollection` 按注册顺序同步 render；`ViewLines` 先建立当前 rendered lines，后续 overlay Parts 再消费它们。
 - `EditorViewContext` 当前集中 layout 读取、overlay snapshot 创建和 version validation，减少重复 callback；它仍是过渡结构。
 - 当前每次 `project` 会调用全部 Parts，Part 通过自己的 retained state 避免不必要的重建。
 - `EditorViewport` 先创建并注册全部 Part，再在一个显式装配阶段挂载各 Part 根节点并固定层叠顺序；Part 不接收仅用于自行挂载的容器。
@@ -127,7 +127,7 @@ this.viewParts.render(context);
 
 1. 收集 model、configuration、scroll 和 feature change，并标记受影响的 Parts。
 2. View host 在一个 frame 中创建一致的 `EditorRenderingContext`。
-3. `ViewLinesPart` 更新 virtualized line DOM。
+3. `ViewLines` 更新 virtualized line DOM。
 4. 只有确实需要 DOM measurement 的 Part 执行 `prepareRender` 读取阶段。
 5. 失效的 Parts 在 render 阶段写入自己的 DOM。
 6. frame 完成后清除本次失效状态。
@@ -154,7 +154,7 @@ this.viewParts.render(context);
 
 没有这些条件时，直接使用 frame context 中的当前值。
 
-`FastDomNode` 的通用 retained DOM 所有权遵守 [Renderer UI 样式所有权规范](../../../../docs/ui-styling-ownership.md)。Editor 只把它用于跨 render 保留、且当前同步 scheduler 会重复写入相同 geometry、line height、transform、visibility、class 或短 leaf text 的节点；`RenderedLine` 对 virtual row、line number 和 diagnostic marker 暴露 canonical wrapper，其他 Parts 通过这些 wrapper 投影各自拥有的属性。generic `SplitView`、`ContextView` 和 `Resizable` 保留直接 DOM 写入及各自已有的 size/layout guard；临时创建后立即替换的 selection、cursor、token、diff row、diff marker、minimap marker 和 overview marker DOM 不使用这一缓存，ARIA live 文本也保留原生写入以维持重复播报语义。
+`FastDomNode` 的通用 retained DOM 所有权遵守 [Renderer UI 样式所有权规范](../../../../docs/ui-styling-ownership.md)。Editor 只把它用于跨 render 保留、且当前同步 scheduler 会重复写入相同 geometry、line height、transform、visibility、class 或短 leaf text 的节点；`ViewLine` 对 virtual row、line number 和 diagnostic marker 暴露 canonical wrapper，其他 Parts 通过这些 wrapper 投影各自拥有的属性。generic `SplitView`、`ContextView` 和 `Resizable` 保留直接 DOM 写入及各自已有的 size/layout guard；临时创建后立即替换的 selection、cursor、token、diff row、diff marker、minimap marker 和 overview marker DOM 不使用这一缓存，ARIA live 文本也保留原生写入以维持重复播报语义。
 
 ## 输入与 Controller
 

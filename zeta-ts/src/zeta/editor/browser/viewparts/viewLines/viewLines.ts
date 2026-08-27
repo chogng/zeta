@@ -5,12 +5,12 @@ import { type EditorLineRange } from '../../../common/viewModel.js';
 import { type ViewportData } from '../../../common/viewLayout/viewLinesViewportData.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type BracketColorizationSource, type ResolvedSemanticToken, type SemanticTokenSource, projectStanzaSemanticTokenLine } from '../semanticTokens/semanticTokenPresentation.js';
-import { createStanzaRenderedLine, type RenderedLine } from './renderedLine.js';
+import { ViewLine } from './viewLine.js';
 import { ViewLayer } from '../../view/viewLayer.js';
 
 export type ViewLinesTextDirection = 'auto' | 'ltr' | 'rtl';
 
-export interface ViewLinesPartOptions {
+export interface ViewLinesOptions {
 	readonly host: HTMLElement;
 	readonly model: TextModel;
 	readonly readVisualProjection: () => EditorVisualLineProjection;
@@ -21,28 +21,28 @@ export interface ViewLinesPartOptions {
 }
 
 /** Projects text and semantic tokens into the generic virtualized ViewLayer. */
-export class ViewLinesPart extends Disposable {
-	readonly domNode: HTMLDivElement;
+export class ViewLines extends Disposable {
+	public readonly domNode: HTMLDivElement;
 	private readonly model: TextModel;
 	private readonly readVisualProjection: () => EditorVisualLineProjection;
 	private readonly semanticTokenSource: SemanticTokenSource | undefined;
 	private readonly bracketColorizationSource: BracketColorizationSource | undefined;
 	private readonly textDirection: ViewLinesTextDirection;
-	private readonly layer: ViewLayer<RenderedLine>;
+	private readonly layer: ViewLayer<ViewLine>;
 
-	constructor(options: ViewLinesPartOptions) {
+	constructor(options: ViewLinesOptions) {
 		super();
 		this.model = options.model;
 		this.readVisualProjection = options.readVisualProjection;
 		this.semanticTokenSource = options.semanticTokenSource;
 		this.bracketColorizationSource = options.bracketColorizationSource;
 		this.textDirection = options.textDirection;
-		this.layer = this._register(new ViewLayer<RenderedLine>({
+		this.layer = this._register(new ViewLayer<ViewLine>({
 			host: options.host,
 			readVisualProjection: options.readVisualProjection,
 			readProjectionRevision: options.readProjectionRevision,
 			lineRenderer: {
-				createLine: visualLineIndex => createStanzaRenderedLine(this.domNode.ownerDocument, visualLineIndex),
+				createLine: visualLineIndex => new ViewLine(this.domNode.ownerDocument, visualLineIndex),
 				getDomNode: line => line.domNode.domNode,
 					renderLine: (line, visualLine) => {
 						line.domNode.domNode.dataset.logicalLineIndex = String(visualLine.logicalLineIndex);
@@ -59,16 +59,16 @@ export class ViewLinesPart extends Disposable {
 		this.domNode = this.layer.domNode;
 	}
 
-	get renderedLines(): ReadonlyMap<number, RenderedLine> {
+	public get renderedLines(): ReadonlyMap<number, ViewLine> {
 		return this.layer.renderedLines;
 	}
 
-	render(viewportData: ViewportData): void {
+	public render(viewportData: ViewportData): void {
 		this.layer.render(viewportData);
 	}
 
 	/** Reprojects semantic tokens without rebuilding the visible row window. */
-	renderVisibleLineText(): void {
+	public renderVisibleLineText(): void {
 		const semanticTokens = this.resolveSemanticTokenRange(this.layer.renderedLineRange);
 		const visualProjection = this.readVisualProjection();
 		for (const [visualLineIndex, line] of this.layer.renderedLines) {
@@ -81,7 +81,7 @@ export class ViewLinesPart extends Disposable {
 		return this.semanticTokenSource?.getLineTokens(visualLine.logicalLineIndex) ?? [];
 	}
 
-	private projectLineText(line: RenderedLine, visualLine: { readonly logicalLineIndex: number; readonly startColumn: number; readonly endColumn: number }, tokens: readonly ResolvedSemanticToken[]): void {
+	private projectLineText(line: ViewLine, visualLine: { readonly logicalLineIndex: number; readonly startColumn: number; readonly endColumn: number }, tokens: readonly ResolvedSemanticToken[]): void {
 		const fullText = this.model.getLineContent(visualLine.logicalLineIndex);
 		const text = fullText.slice(visualLine.startColumn, visualLine.endColumn);
 		const brackets = this.bracketColorizationSource?.getLineBrackets(visualLine.logicalLineIndex) ?? [];

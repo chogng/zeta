@@ -1,4 +1,3 @@
-import './viewLinesGpu.css';
 import { Disposable, MutableDisposable, type IReference } from '../../../../base/common/lifecycle.js';
 import { type EditorTextDirection } from '../../view.js';
 import { ViewGpuContext } from '../../gpu/viewGpuContext.js';
@@ -8,23 +7,25 @@ import { type EditorVisualLineProjection } from '../../../common/viewModel/model
 import { type EditorViewportLayout } from '../../../common/viewLayout/viewLayout.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type BracketColorizationSource, type SemanticTokenSource } from '../semanticTokens/semanticTokenPresentation.js';
-import { type RenderedLine } from '../viewLines/renderedLine.js';
+import { type ViewLine } from '../viewLines/viewLine.js';
 import { BindingId, type GpuRenderFrame, type IGpuRenderStrategy } from '../../gpu/gpu.js';
 import { FullFileRenderStrategy } from '../../gpu/renderStrategy/fullFileRenderStrategy.js';
 import { ViewportRenderStrategy } from '../../gpu/renderStrategy/viewportRenderStrategy.js';
-import { RectangleRenderer } from '../../gpu/rectangleRenderer.js';
+import { type EditorRenderingContext } from '../../view/renderingContext.js';
 
 export interface ViewLinesGpuOptions {
 	readonly host: HTMLElement;
 	readonly model: TextModel;
-	readonly readVisualLines: () => EditorVisualLineProjection;
-	readonly readRenderedLines: () => ReadonlyMap<number, RenderedLine>;
 	readonly semanticTokenSource: SemanticTokenSource | undefined;
 	readonly bracketColorizationSource: BracketColorizationSource | undefined;
-	readonly readTextLeft: () => number;
 	readonly paddingTop: number;
 	readonly textDirection: EditorTextDirection;
 	readonly fontLigatures: boolean;
+}
+
+interface PreparedGpuFrame {
+	readonly frame: GpuRenderFrame;
+	readonly renderedLines: ReadonlyMap<number, ViewLine>;
 }
 
 const VERTEX_FLOAT_COUNT = 5;
@@ -36,7 +37,6 @@ export class ViewLinesGpu extends Disposable {
 	private readonly uniformBuffer = this._register(new MutableDisposable<IReference<GPUBuffer>>());
 	private readonly atlasTexture = this._register(new MutableDisposable<IReference<GPUTexture>>());
 	private readonly renderStrategy = this._register(new MutableDisposable<IGpuRenderStrategy>());
-	private readonly rectangleRenderer = this._register(new MutableDisposable<RectangleRenderer>());
 	private pipeline: GPURenderPipeline | undefined;
 	private sampler: GPUSampler | undefined;
 	private bindGroup: GPUBindGroup | undefined;
@@ -44,44 +44,55 @@ export class ViewLinesGpu extends Disposable {
 	private atlasRevision = -1;
 	private uploadedPageVersions: number[] = [];
 	private rasterizer: GlyphRasterizer | undefined;
-	private lastLayout: EditorViewportLayout | undefined;
+	private lastRenderingContext: EditorRenderingContext | undefined;
+	private pendingRenderingContext: EditorRenderingContext | undefined;
 	private rendering = false;
 
 	constructor(private readonly options: ViewLinesGpuOptions) {
 		super();
 		this.context = this._register(new ViewGpuContext({ host: options.host }));
 		this._register(this.context.onDidChange(() => {
-			if (this.lastLayout) this.render(this.lastLayout);
-		}));
-		if (options.semanticTokenSource) this._register(options.semanticTokenSource.onDidChange(() => {
-			this.renderStrategy.value?.reset();
-			if (this.lastLayout) this.render(this.lastLayout);
+			if (this.lastRenderingContext) this.render(this.lastRenderingContext);
 		}));
 	}
 
-	public render(layout: EditorViewportLayout): void {
-		this.lastLayout = layout;
+	public render(context: EditorRenderingContext): void {
+		this.lastRenderingContext = context;
+		this.pendingRenderingContext = context;
 		if (this.rendering) return;
 		this.rendering = true;
 		try {
-			this.context.layout(layout.viewportSize.width, layout.viewportSize.height, layout.scrollPosition.left, layout.scrollPosition.top);
-			if (this.context.status !== 'ready' || this.isForcedColors()) {
-				this.showDomText();
-				return;
+			while (this.pendingRenderingContext) {
+				const next = this.pendingRenderingContext;
+				this.pendingRenderingContext = undefined;
+				this.renderFrame(next);
 			}
-			this.ensureResources();
-			const frame = this.createFrame(layout);
-			this.uploadAtlas();
-			const dimensions = this.context.devicePixelDimensions;
-			this.rectangleRenderer.value!.draw(this.context.context, dimensions.width, dimensions.height, layout.scrollPosition.left * this.context.devicePixelRatio, layout.scrollPosition.top * this.context.devicePixelRatio);
-			this.draw(frame);
-			this.applyRenderedLines(frame.gpuLineIndexes);
 		} catch (error) {
 			this.showDomText();
+			this.context.hideCanvas();
 			this.context.markUnavailable(asError(error));
 		} finally {
 			this.rendering = false;
 		}
+	}
+
+	private renderFrame(context: EditorRenderingContext): void {
+		const layout = context.layout;
+		this.context.layout(layout.viewportSize.width, layout.viewportSize.height, layout.scrollPosition.left, layout.scrollPosition.top);
+		const overlay = context.overlay;
+		if (this.context.status !== 'ready' || this.isForcedColors() || !overlay || !this.isRenderingContextCurrent(context, overlay.visualLineProjection)) {
+			this.showDomText(overlay?.renderedLines);
+			this.context.hideCanvas();
+			return;
+		}
+		const visualLines = overlay.visualLineProjection;
+		this.validateRenderedLines(visualLines, overlay.renderedLines);
+		this.ensureResources(visualLines);
+		const prepared = this.createFrame(context, visualLines);
+		this.uploadAtlas();
+		this.draw(prepared.frame, layout);
+		this.applyRenderedLines(prepared.renderedLines, prepared.frame.gpuLineIndexes);
+		this.context.showCanvas();
 	}
 
 	public invalidateFont(): void {
@@ -90,11 +101,15 @@ export class ViewLinesGpu extends Disposable {
 		this.context.clearAtlas();
 	}
 
-	private ensureResources(): void {
+	public invalidateTokens(): void {
+		this.renderStrategy.value?.reset();
+	}
+
+	private ensureResources(visualLines: EditorVisualLineProjection): void {
 		const device = this.context.device;
 		if (!this.rasterizer || this.rasterizer.devicePixelRatio !== this.context.devicePixelRatio) {
 			this.rasterizer = new GlyphRasterizer(this.context.canvas.ownerDocument, this.context.devicePixelRatio);
-			this.renderStrategy.value = this.createRenderStrategy(this.rasterizer);
+			this.renderStrategy.value = this.createRenderStrategy(this.rasterizer, visualLines);
 		}
 		if (!this.pipeline) {
 			const presentationFormat = this.context.canvas.ownerDocument.defaultView!.navigator.gpu.getPreferredCanvasFormat();
@@ -128,7 +143,6 @@ export class ViewLinesGpu extends Disposable {
 				primitive: { topology: 'triangle-list' },
 			});
 			this.sampler = device.createSampler({ magFilter: 'nearest', minFilter: 'nearest' });
-			this.rectangleRenderer.value = new RectangleRenderer(device, presentationFormat);
 			this.uniformBuffer.value = GPULifecycle.createBuffer(device, {
 				label: 'Stanza ViewLinesGpu dimensions',
 				size: 6 * Float32Array.BYTES_PER_ELEMENT,
@@ -161,24 +175,27 @@ export class ViewLinesGpu extends Disposable {
 		});
 	}
 
-	private createFrame(layout: EditorViewportLayout): GpuRenderFrame {
+	private createFrame(context: EditorRenderingContext, visualLines: EditorVisualLineProjection): PreparedGpuFrame {
+		const overlay = context.overlay;
+		if (!overlay) throw new Error('WebGPU frame requires a version-bound overlay snapshot');
 		const rootStyle = this.context.canvas.ownerDocument.defaultView!.getComputedStyle(this.options.host);
-		const visualLines = this.options.readVisualLines();
 		this.ensureRenderStrategy(visualLines);
-		return this.renderStrategy.value!.update({
-			layout,
+		const renderedLines = new Map(overlay.renderedLines);
+		const frame = this.renderStrategy.value!.update({
+			layout: context.layout,
 			model: this.options.model,
 			visualLines,
-			visibleLineIndexes: new Set(this.options.readRenderedLines().keys()),
+			visibleLineIndexes: new Set(renderedLines.keys()),
 			semanticTokenSource: this.options.semanticTokenSource,
 			bracketColorizationSource: this.options.bracketColorizationSource,
-			textLeft: this.options.readTextLeft(),
+			textLeft: overlay.textLeft,
 			paddingTop: this.options.paddingTop,
 			textDirection: this.options.textDirection,
 			fontLigatures: this.options.fontLigatures,
 			rootStyle,
 			atlas: this.context.atlas,
 		});
+		return Object.freeze({ frame, renderedLines });
 	}
 
 	private uploadAtlas(): void {
@@ -195,11 +212,10 @@ export class ViewLinesGpu extends Disposable {
 		}
 	}
 
-	private draw(frame: GpuRenderFrame): void {
+	private draw(frame: GpuRenderFrame, layout: EditorViewportLayout): void {
 		const vertices = frame.vertices;
 		const dimensions = this.context.devicePixelDimensions;
 		const atlasSize = this.context.atlas.pageSize;
-		const layout = this.lastLayout!;
 		this.context.device.queue.writeBuffer(this.uniformBuffer.value!.object, 0, new Float32Array([
 			dimensions.width,
 			dimensions.height,
@@ -218,10 +234,12 @@ export class ViewLinesGpu extends Disposable {
 		}
 		if (vertices.byteLength > 0) this.context.device.queue.writeBuffer(this.vertexBuffer.value!.object, 0, vertices as Float32Array<ArrayBuffer>);
 		const encoder = this.context.device.createCommandEncoder({ label: 'Stanza ViewLinesGpu frame' });
+		const textureView = this.context.context.getCurrentTexture().createView();
+		this.context.rectangleRenderer.encode(encoder, textureView, dimensions.width, dimensions.height, layout.scrollPosition.left * this.context.devicePixelRatio, layout.scrollPosition.top * this.context.devicePixelRatio);
 		const pass = encoder.beginRenderPass({
 			label: 'Stanza ViewLinesGpu pass',
 			colorAttachments: [{
-				view: this.context.context.getCurrentTexture().createView(),
+				view: textureView,
 				clearValue: { r: 0, g: 0, b: 0, a: 0 },
 				loadOp: 'load',
 				storeOp: 'store',
@@ -237,12 +255,12 @@ export class ViewLinesGpu extends Disposable {
 		this.context.device.queue.submit([encoder.finish()]);
 	}
 
-	private applyRenderedLines(gpuLineIndexes: ReadonlySet<number>): void {
-		for (const [visualLineIndex, line] of this.options.readRenderedLines()) line.domNode.domNode.classList.toggle('gpu-rendered', gpuLineIndexes.has(visualLineIndex));
+	private applyRenderedLines(renderedLines: ReadonlyMap<number, ViewLine>, gpuLineIndexes: ReadonlySet<number>): void {
+		for (const [visualLineIndex, line] of renderedLines) line.domNode.domNode.classList.toggle('gpu-rendered', gpuLineIndexes.has(visualLineIndex));
 	}
 
-	private showDomText(): void {
-		for (const line of this.options.readRenderedLines().values()) line.domNode.domNode.classList.remove('gpu-rendered');
+	private showDomText(renderedLines = this.lastRenderingContext?.overlay?.renderedLines): void {
+		for (const line of renderedLines?.values() ?? []) line.domNode.domNode.classList.remove('gpu-rendered');
 	}
 
 	private isForcedColors(): boolean {
@@ -253,13 +271,23 @@ export class ViewLinesGpu extends Disposable {
 	private ensureRenderStrategy(visualLines: EditorVisualLineProjection): void {
 		const expectedType = this.canUseFullFileStrategy(visualLines) ? 'fullfile' : 'viewport';
 		if (this.renderStrategy.value?.type === expectedType) return;
-		this.renderStrategy.value = this.createRenderStrategy(this.rasterizer!);
+		this.renderStrategy.value = this.createRenderStrategy(this.rasterizer!, visualLines);
 	}
 
-	private createRenderStrategy(rasterizer: GlyphRasterizer): IGpuRenderStrategy {
-		return this.canUseFullFileStrategy(this.options.readVisualLines())
+	private createRenderStrategy(rasterizer: GlyphRasterizer, visualLines: EditorVisualLineProjection): IGpuRenderStrategy {
+		return this.canUseFullFileStrategy(visualLines)
 			? new FullFileRenderStrategy(rasterizer)
 			: new ViewportRenderStrategy(rasterizer);
+	}
+
+	private isRenderingContextCurrent(context: EditorRenderingContext, visualLines: EditorVisualLineProjection): boolean {
+		return context.layout.modelVersion === this.options.model.version && visualLines.modelVersion === this.options.model.version;
+	}
+
+	private validateRenderedLines(visualLines: EditorVisualLineProjection, renderedLines: ReadonlyMap<number, ViewLine>): void {
+		for (const visualLineIndex of renderedLines.keys()) {
+			if (!visualLines.lineAt(visualLineIndex)) throw new Error('WebGPU rendered row is outside the visual-line projection');
+		}
 	}
 
 	private canUseFullFileStrategy(visualLines: EditorVisualLineProjection): boolean {

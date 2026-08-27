@@ -65,14 +65,13 @@ export class RectangleRenderer extends Disposable {
 		return this.shapes.createEntry({ x, y, width, height, red, green, blue, alpha });
 	}
 
-	public draw(context: GPUCanvasContext, width: number, height: number, scrollLeft: number, scrollTop: number): void {
+	public encode(encoder: GPUCommandEncoder, view: GPUTextureView, width: number, height: number, scrollLeft: number, scrollTop: number): void {
 		this.updateShapeBuffer();
 		this.device.queue.writeBuffer(this.layoutBuffer, 0, new Float32Array([width, height, 0, 0, width, height]));
 		this.device.queue.writeBuffer(this.scrollBuffer, 0, new Float32Array([scrollLeft, scrollTop]));
-		const encoder = this.device.createCommandEncoder({ label: 'Stanza rectangle frame' });
 		const pass = encoder.beginRenderPass({
 			label: 'Stanza rectangle pass',
-			colorAttachments: [{ view: context.getCurrentTexture().createView(), clearValue: { r: 0, g: 0, b: 0, a: 0 }, loadOp: 'clear', storeOp: 'store' }],
+			colorAttachments: [{ view, clearValue: { r: 0, g: 0, b: 0, a: 0 }, loadOp: 'clear', storeOp: 'store' }],
 		});
 		if (this.shapes.entryCount > 0) {
 			pass.setPipeline(this.pipeline);
@@ -81,7 +80,6 @@ export class RectangleRenderer extends Disposable {
 			pass.draw(quadVertices.length / 2, this.shapes.entryCount);
 		}
 		pass.end();
-		this.device.queue.submit([encoder.finish()]);
 	}
 
 	private createShapeBuffer(): void {

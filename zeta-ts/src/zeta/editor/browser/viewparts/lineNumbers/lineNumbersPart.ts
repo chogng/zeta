@@ -1,19 +1,19 @@
 import "./lineNumbers.css";
 import { type EditorVisualLineProjection } from "../../../common/viewModel/modelLineProjection.js";
-import { type RenderedLine } from "../viewLines/renderedLine.js";
+import { type ViewLine } from "../viewLines/viewLine.js";
 import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
 
 export interface LineNumbersPartOptions {
 	readonly showLineNumbers: boolean;
 	readonly readVisualProjection: () => EditorVisualLineProjection;
-	readonly readRenderedLines: () => ReadonlyMap<number, RenderedLine>;
+	readonly readRenderedLines: () => ReadonlyMap<number, ViewLine>;
 }
 
 /** Projects line numbers into virtual rows. */
 export class LineNumbersPart extends EditorViewPart {
 	private readonly showLineNumbers: boolean;
 	private readonly readVisualProjection: () => EditorVisualLineProjection;
-	private readonly readRenderedLines: () => ReadonlyMap<number, RenderedLine>;
+	private readonly readRenderedLines: () => ReadonlyMap<number, ViewLine>;
 
 	constructor(options: LineNumbersPartOptions) {
 		super();

@@ -9,6 +9,7 @@ import { createObjectCollectionBuffer } from '../../browser/gpu/objectCollection
 import { type TextureAtlas } from '../../browser/gpu/atlas/textureAtlas.js';
 import { FullFileRenderStrategy } from '../../browser/gpu/renderStrategy/fullFileRenderStrategy.js';
 import { type GlyphRasterizer } from '../../browser/gpu/raster/glyphRasterizer.js';
+import { RectangleRenderer } from '../../browser/gpu/rectangleRenderer.js';
 
 test('BufferDirtyTracker exposes one inclusive dirty range', () => {
 	const tracker = new BufferDirtyTracker();
@@ -78,6 +79,66 @@ test('Full-file GPU rendering starts text at the canonical content coordinate', 
 
 	assert.equal(frame.vertices[0], 44);
 	assert.equal(frame.vertices[60], 60);
+	assert.equal(frame.vertices.length, 4 * 6 * 5);
+	const glyphBounds = Array.from({ length: 4 }, (_, glyphIndex) => {
+		const yCoordinates = Array.from({ length: 6 }, (_, vertexIndex) => frame.vertices[glyphIndex * 30 + vertexIndex * 5 + 1]!);
+		return {
+			top: Math.min(...yCoordinates),
+			bottom: Math.max(...yCoordinates),
+		};
+	});
+	assert.deepEqual(glyphBounds.map(bounds => Math.floor((bounds.top + bounds.bottom) / 2 / 20)), [0, 0, 1, 1]);
+	assert.ok(Math.max(glyphBounds[0]!.bottom, glyphBounds[1]!.bottom) < Math.min(glyphBounds[2]!.top, glyphBounds[3]!.top));
+});
+
+test('Rectangle GPU rendering encodes a clear pass into the caller-owned frame', () => {
+	const originalUsage = Object.getOwnPropertyDescriptor(globalThis, 'GPUBufferUsage');
+	Object.defineProperty(globalThis, 'GPUBufferUsage', {
+		configurable: true,
+		value: { COPY_DST: 1, STORAGE: 2, UNIFORM: 4, VERTEX: 8 },
+	});
+	const passes: GPURenderPassDescriptor[] = [];
+	let ended = false;
+	const device = {
+		queue: {
+			writeBuffer: () => undefined,
+		},
+		createBuffer: () => ({ destroy: () => undefined }),
+		createShaderModule: () => ({}),
+		createRenderPipeline: () => ({ getBindGroupLayout: () => ({}) }),
+		createBindGroup: () => ({}),
+	} as unknown as GPUDevice;
+	const encoder = {
+			beginRenderPass: (descriptor: GPURenderPassDescriptor) => {
+				passes.push(descriptor);
+				return { end: () => { ended = true; } };
+			},
+		} as unknown as GPUCommandEncoder;
+	const view = {} as GPUTextureView;
+
+	try {
+		using renderer = new RectangleRenderer(device, 'bgra8unorm');
+		renderer.encode(encoder, view, 800, 600, 10, 20);
+		const attachment = [...(passes[0]?.colorAttachments ?? [])][0] as GPURenderPassColorAttachment | undefined;
+		assert.deepEqual({
+			passCount: passes.length,
+			view: attachment?.view,
+			loadOp: attachment?.loadOp,
+			storeOp: attachment?.storeOp,
+			clearValue: attachment?.clearValue,
+			ended,
+		}, {
+			passCount: 1,
+			view,
+			loadOp: 'clear',
+			storeOp: 'store',
+			clearValue: { r: 0, g: 0, b: 0, a: 0 },
+			ended: true,
+		});
+	} finally {
+		if (originalUsage) Object.defineProperty(globalThis, 'GPUBufferUsage', originalUsage);
+		else Reflect.deleteProperty(globalThis, 'GPUBufferUsage');
+	}
 });
 
 function gpuRootStyle(): CSSStyleDeclaration {

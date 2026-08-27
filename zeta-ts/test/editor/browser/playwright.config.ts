@@ -8,7 +8,8 @@ export default defineConfig({
 	workers: 1,
 	use: { baseURL: "http://127.0.0.1:5185" },
 	projects: [
-		{ name: "chromium", use: { browserName: "chromium" } },
+		{ name: "chromium", testIgnore: "gpuText.integration.spec.ts", use: { browserName: "chromium" } },
+		{ name: "chrome-gpu", testMatch: "gpuText.integration.spec.ts", use: { browserName: "chromium", channel: "chrome" } },
 	],
 	webServer: process.env.ZETA_EDITOR_BROWSER_EXTERNAL_SERVER ? undefined : {
 		command: "node ../../../node_modules/vite/bin/vite.js --config vite.config.ts",

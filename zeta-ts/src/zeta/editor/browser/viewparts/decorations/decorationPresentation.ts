@@ -24,6 +24,7 @@ export enum DecorationPresentation {
 	DiffModified = "diff-modified",
 	DiffDeleted = "diff-deleted",
 	GlyphMargin = "glyph-margin",
+	LineDecoration = "line-decoration",
 }
 
 export enum GlyphMarginLane {
@@ -51,13 +52,23 @@ export interface DecorationGlyphMarginLane {
 
 export interface DecorationSourceOptions {
 	readonly glyphMarginLanes?: readonly DecorationGlyphMarginLane[];
+	readonly linesDecorationLanes?: readonly DecorationLinesLane[];
 }
 
 /** Describes an optional class projected into the editor's line-side decoration lane. */
 export interface DecorationLinesPresentation {
+	readonly owner: string;
 	readonly className?: string;
 	readonly firstLineClassName?: string;
 	readonly tooltip?: string;
+	readonly icon?: Icon;
+	readonly ariaLabel?: string;
+	readonly expanded?: boolean;
+}
+
+export interface DecorationLinesLane {
+	readonly owner: string;
+	readonly width: number;
 }
 
 /** Describes an optional block-level background or outline projected across visual rows. */
@@ -94,6 +105,7 @@ export interface DecorationSource {
 	readonly onDidChange: Event<void>;
 	readonly decorations: readonly ResolvedDecoration[];
 	readonly glyphMarginLanes: readonly DecorationGlyphMarginLane[];
+	readonly linesDecorationLanes: readonly DecorationLinesLane[];
 }
 
 /** A host-created decoration source whose lifetime transfers to one editor part. */
@@ -133,12 +145,14 @@ export function createStanzaDecorationSource<TMetadata>(
 	options: DecorationSourceOptions = {},
 ): DecorationSource {
 	const glyphMarginLanes = normalizeGlyphMarginLanes(options.glyphMarginLanes);
+	const linesDecorationLanes = normalizeLinesDecorationLanes(options.linesDecorationLanes);
 	const onDidChange: Event<void> = listener => {
 		return collection.onDidChange(() => listener());
 	};
 	return Object.freeze({
 		onDidChange,
 		glyphMarginLanes,
+		linesDecorationLanes,
 		get decorations(): readonly ResolvedDecoration[] {
 			const resolved: ResolvedDecoration[] = [];
 			for (const decoration of collection.decorations) {
@@ -153,7 +167,7 @@ export function createStanzaDecorationSource<TMetadata>(
 				if (hoverText !== undefined && (typeof hoverText !== "string" || hoverText.trim().length === 0)) {
 					throw new TypeError("Stanza decoration hover text must be non-empty text");
 				}
-				const linesDecoration = normalizeLinesPresentation(details?.linesDecoration);
+				const linesDecoration = normalizeLinesPresentation(details?.linesDecoration, linesDecorationLanes);
 				const blockDecoration = normalizeBlockPresentation(details?.blockDecoration);
 				const glyphMargin = normalizeGlyphMarginPresentation(details?.glyphMargin, glyphMarginLanes);
 				const overviewRuler = normalizeOptionalBoolean(details?.overviewRuler, "overview ruler visibility");
@@ -246,6 +260,7 @@ function validatePresentation(
 		&& presentation !== DecorationPresentation.DiffModified
 		&& presentation !== DecorationPresentation.DiffDeleted
 		&& presentation !== DecorationPresentation.GlyphMargin
+		&& presentation !== DecorationPresentation.LineDecoration
 	) {
 		throw new TypeError(`Unknown Stanza decoration presentation '${presentation}'`);
 	}
@@ -257,23 +272,30 @@ function isDecorationPresentationResolution(
 	return typeof value === "object" && value !== null;
 }
 
-function normalizeLinesPresentation(
-	presentation: DecorationLinesPresentation | undefined,
-): DecorationLinesPresentation | undefined {
+function normalizeLinesPresentation(presentation: DecorationLinesPresentation | undefined, lanes: readonly DecorationLinesLane[]): DecorationLinesPresentation | undefined {
 	if (presentation === undefined) return undefined;
 	if (!presentation || typeof presentation !== "object") {
 		throw new TypeError("Stanza lines decoration presentation must be an object");
 	}
+	const owner = normalizeOptionalText(presentation.owner, "lines decoration owner");
+	if (!owner) throw new TypeError("Stanza lines decoration owner must be non-empty text");
+	if (!lanes.some(lane => lane.owner === owner)) throw new RangeError(`Lines decoration owner '${owner}' did not declare a lane`);
 	const className = normalizeClassName(presentation.className, "lines decoration className");
 	const firstLineClassName = normalizeClassName(presentation.firstLineClassName, "first-line decoration className");
-	if (className === undefined && firstLineClassName === undefined) {
-		throw new TypeError("Stanza lines decoration presentation must provide a className");
-	}
+	if (presentation.icon !== undefined && (typeof presentation.icon.id !== "string" || presentation.icon.id.length === 0)) throw new TypeError("Stanza lines decoration icon is invalid");
+	if (className === undefined && firstLineClassName === undefined && presentation.icon === undefined) throw new TypeError("Stanza lines decoration presentation must provide a className or icon");
 	const tooltip = normalizeOptionalText(presentation.tooltip, "lines decoration tooltip");
+	const ariaLabel = normalizeOptionalText(presentation.ariaLabel, "lines decoration aria label");
+	if (presentation.icon !== undefined && !ariaLabel) throw new TypeError("Stanza interactive lines decoration must provide an aria label");
+	const expanded = normalizeOptionalBoolean(presentation.expanded, "lines decoration expanded state");
 	return Object.freeze({
+		owner,
 		...(className === undefined ? {} : { className }),
 		...(firstLineClassName === undefined ? {} : { firstLineClassName }),
 		...(tooltip === undefined ? {} : { tooltip }),
+		...(presentation.icon === undefined ? {} : { icon: presentation.icon }),
+		...(ariaLabel === undefined ? {} : { ariaLabel }),
+		...(expanded === undefined ? {} : { expanded }),
 	});
 }
 
@@ -329,6 +351,21 @@ function normalizeGlyphMarginLanes(lanes: readonly DecorationGlyphMarginLane[] |
 		seenOwners.add(owner);
 		validateGlyphMarginLane(definition.lane);
 		return Object.freeze({ owner, lane: definition.lane });
+	}));
+}
+
+function normalizeLinesDecorationLanes(lanes: readonly DecorationLinesLane[] | undefined): readonly DecorationLinesLane[] {
+	if (lanes === undefined) return Object.freeze([]);
+	if (!Array.isArray(lanes)) throw new TypeError("Stanza lines decoration lanes must be an array");
+	const seenOwners = new Set<string>();
+	return Object.freeze(lanes.map(definition => {
+		if (!definition || typeof definition !== "object") throw new TypeError("Stanza lines decoration lane must be an object");
+		const owner = normalizeOptionalText(definition.owner, "lines decoration owner");
+		if (!owner) throw new TypeError("Stanza lines decoration owner must be non-empty text");
+		if (seenOwners.has(owner)) throw new RangeError(`Duplicate lines decoration owner '${owner}'`);
+		if (!Number.isSafeInteger(definition.width) || definition.width <= 0) throw new RangeError("Stanza lines decoration lane width must be a positive safe integer");
+		seenOwners.add(owner);
+		return Object.freeze({ owner, width: definition.width });
 	}));
 }
 

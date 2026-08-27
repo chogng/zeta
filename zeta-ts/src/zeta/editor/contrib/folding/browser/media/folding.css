@@ -1,9 +1,0 @@
-.stanza-editor-fold-toggle {
-  color: var(--zeta-description-foreground);
-}
-
-.stanza-editor-fold-toggle:hover,
-.stanza-editor-fold-toggle:focus-visible {
-  color: var(--zeta-editor-foreground);
-  background: var(--zeta-button-hover-background);
-}

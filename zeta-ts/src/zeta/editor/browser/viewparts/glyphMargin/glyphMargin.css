@@ -9,7 +9,6 @@
 .stanza-editor-glyph-margin-lane {
   position: absolute;
   top: 0;
-  width: 20px;
   pointer-events: auto;
 }
 
@@ -17,7 +16,7 @@
   position: absolute;
   left: 0;
   display: flex;
-  width: 20px;
+  width: 100%;
   align-items: center;
   justify-content: center;
   padding: 0;

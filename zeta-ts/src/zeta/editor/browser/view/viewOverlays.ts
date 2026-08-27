@@ -43,7 +43,7 @@ export class ViewOverlays extends Disposable {
 			options.decorationSources,
 		));
 		this.onDidChangeDecorations = this.decorationsPart.onDidChange;
-		this.register(new LinesDecorationsPart(context, this.decorationsPart));
+		this.register(new LinesDecorationsPart(context, this.decorationsPart, options.decorationSources));
 		this.blockDecorationsPart = this.register(new BlockDecorationsPart(
 			context,
 			this.decorationsPart,

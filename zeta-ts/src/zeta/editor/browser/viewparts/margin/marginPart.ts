@@ -17,7 +17,9 @@ export interface MarginPartOptions {
 	readonly textMeasurer: TextMeasurer;
 	readonly presentation: MarginPresentation;
 	readonly showLineNumbers: boolean;
-	readonly glyphMarginWidth: number;
+	readonly glyphMarginLaneCount: number;
+	readonly lineHeight: number;
+	readonly lineDecorationsWidth: number;
 }
 
 /** Owns editor margin geometry and its background. */
@@ -30,7 +32,9 @@ export class MarginPart extends EditorViewPart {
 	private readonly textMeasurer: TextMeasurer;
 	private readonly presentation: MarginPresentation;
 	private readonly showLineNumbers: boolean;
-	private readonly glyphMarginWidth: number;
+	private readonly glyphMarginLaneCount: number;
+	private readonly lineDecorationsWidth: number;
+	private lineHeight: number;
 
 	constructor(options: MarginPartOptions) {
 		super();
@@ -40,7 +44,9 @@ export class MarginPart extends EditorViewPart {
 		this.textMeasurer = options.textMeasurer;
 		this.presentation = options.presentation;
 		this.showLineNumbers = options.showLineNumbers;
-		this.glyphMarginWidth = options.glyphMarginWidth;
+		this.glyphMarginLaneCount = options.glyphMarginLaneCount;
+		this.lineHeight = options.lineHeight;
+		this.lineDecorationsWidth = options.lineDecorationsWidth;
 		const domNode = h(options.host.ownerDocument, "div");
 		this._register(toDisposable(() => domNode.remove()));
 		this.domNode = domNode;
@@ -52,7 +58,15 @@ export class MarginPart extends EditorViewPart {
 
 	get gutterWidth(): number {
 		if (this.presentation === "embedded") return 0;
-		return this.lineNumbersWidth + this.glyphMarginWidth;
+		return this.glyphMarginWidth + this.lineNumbersWidth + this.lineDecorationsWidth;
+	}
+
+	get glyphMarginLaneWidth(): number {
+		return this.lineHeight;
+	}
+
+	private get glyphMarginWidth(): number {
+		return this.glyphMarginLaneCount * this.glyphMarginLaneWidth;
 	}
 
 	private get lineNumbersWidth(): number {
@@ -62,11 +76,23 @@ export class MarginPart extends EditorViewPart {
 	}
 
 	get glyphMarginLeft(): number {
-		return this.lineNumbersWidth;
+		return 0;
+	}
+
+	private get lineNumbersLeft(): number {
+		return this.glyphMarginWidth;
+	}
+
+	private get lineDecorationsLeft(): number {
+		return this.glyphMarginWidth + this.lineNumbersWidth;
 	}
 
 	get textLeft(): number {
 		return this.gutterWidth + this.textMeasurer.contentLeftPadding;
+	}
+
+	setLineHeight(lineHeight: number): void {
+		this.lineHeight = lineHeight;
 	}
 
 	render(context: EditorRenderingContext): void {
@@ -79,8 +105,14 @@ export class MarginPart extends EditorViewPart {
 		this.host.style.setProperty("--stanza-editor-gutter-width", `${gutterWidth}px`);
 		this.host.style.setProperty("--stanza-editor-line-numbers-width", `${lineNumbersWidth}px`);
 		this.host.style.setProperty("--stanza-editor-glyph-margin-width", `${this.glyphMarginWidth}px`);
+		this.host.style.setProperty("--stanza-editor-line-numbers-left", `${this.lineNumbersLeft}px`);
+		this.host.style.setProperty("--stanza-editor-line-decorations-left", `${this.lineDecorationsLeft}px`);
+		this.host.style.setProperty("--stanza-editor-line-decorations-width", `${this.lineDecorationsWidth}px`);
 		this.contentElement.style.setProperty("--stanza-editor-gutter-width", `${gutterWidth}px`);
 		this.contentElement.style.setProperty("--stanza-editor-line-numbers-width", `${lineNumbersWidth}px`);
 		this.contentElement.style.setProperty("--stanza-editor-glyph-margin-width", `${this.glyphMarginWidth}px`);
+		this.contentElement.style.setProperty("--stanza-editor-line-numbers-left", `${this.lineNumbersLeft}px`);
+		this.contentElement.style.setProperty("--stanza-editor-line-decorations-left", `${this.lineDecorationsLeft}px`);
+		this.contentElement.style.setProperty("--stanza-editor-line-decorations-width", `${this.lineDecorationsWidth}px`);
 	}
 }

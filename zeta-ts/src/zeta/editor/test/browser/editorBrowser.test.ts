@@ -195,7 +195,8 @@ test("Stanza editor browser mounts text drop as an optional full-editor contribu
 	});
 	editorPart.layout({ width: 120, height: 20 });
 	editorPart.viewport.element.getBoundingClientRect = () => rectangle(120, 20);
-	const drop = textDropEvent(dom.window, "dropped", 100, 5);
+	const dropPosition = editorPart.viewport.getPositionContentCoordinates(TextPosition.at(0, 5));
+	const drop = textDropEvent(dom.window, "dropped", dropPosition.left, dropPosition.top + dropPosition.height / 2);
 
 	editorPart.viewport.element.dispatchEvent(drop);
 

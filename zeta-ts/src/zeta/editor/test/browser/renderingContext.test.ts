@@ -63,7 +63,7 @@ test('EditorViewContext creates a rendering context from the current layout', ()
 });
 
 test('createEditorRenderingContext omits stale overlay geometry', () => {
-	const layout = {} as EditorViewportLayout;
+	const layout = { modelVersion: 4 } as EditorViewportLayout;
 	const viewportData = {} as ViewportData;
 	const matchingOverlay = {
 		model: { version: 4 },
@@ -73,12 +73,15 @@ test('createEditorRenderingContext omits stale overlay geometry', () => {
 		model: { version: 5 },
 		visualLineProjection: { modelVersion: 4 },
 	} as unknown as ViewportOverlayContext;
+	const staleLayout = { modelVersion: 3 } as EditorViewportLayout;
 
 	const current = createEditorRenderingContext(layout, matchingOverlay, viewportData);
 	const stale = createEditorRenderingContext(layout, staleOverlay, viewportData);
+	const staleLayoutContext = createEditorRenderingContext(staleLayout, matchingOverlay, viewportData);
 
 	assert.equal(current.overlay, matchingOverlay);
 	assert.equal(stale.overlay, undefined);
+	assert.equal(staleLayoutContext.overlay, undefined);
 	assert.equal(current.viewportData, viewportData);
 	assert.equal(Object.isFrozen(current), true);
 });

@@ -35,7 +35,7 @@ import { type BracketColorizationSource, type SemanticTokenSource } from './view
 import { type ActiveLineHighlight, type ViewportOverlayContext } from './viewparts/viewportOverlay/viewportOverlayPresentation.js';
 import { getTextGraphemeBoundaries } from '../common/core/textSegmentation.js';
 import { MarginPart } from './viewparts/margin/marginPart.js';
-import { GlyphMarginPart } from './viewparts/glyphMargin/glyphMarginPart.js';
+import { GlyphMarginPart, resolveGlyphMarginLanes } from './viewparts/glyphMargin/glyphMarginPart.js';
 import { RulersPart, type EditorRuler } from './viewparts/rulers/rulersPart.js';
 import { EditorScrollbarPart } from './viewparts/editorScrollbar/editorScrollbarPart.js';
 import { LineNumbersPart } from './viewparts/lineNumbers/lineNumbersPart.js';
@@ -44,8 +44,9 @@ import { OverviewRulerPart } from './viewparts/overviewRuler/overviewRulerPart.j
 import { ScrollDecorationPart } from './viewparts/scrollDecoration/scrollDecorationPart.js';
 import { EditorViewContext, EditorViewPartCollection } from './view/viewPart.js';
 import { ViewOverlays } from './view/viewOverlays.js';
-import { ViewLinesPart } from './viewparts/viewLines/viewLinesPart.js';
+import { ViewLines } from './viewparts/viewLines/viewLines.js';
 import { ViewLinesGpu } from './viewparts/viewLinesGpu/viewLinesGpu.js';
+import { linesDecorationsWidth } from './viewparts/linesDecorations/linesDecorationsPart.js';
 import { createEditorRenderingContext, createEditorViewportData, type EditorRenderingContext } from './view/renderingContext.js';
 import { ViewUserInputEvents } from './view/viewUserInputEvents.js';
 import { DOMLineBreaksComputer } from './view/domLineBreaksComputer.js';
@@ -375,6 +376,7 @@ export interface EditorViewportOptions {
 	readonly fontSize?: number;
 	readonly fontLigatures?: boolean;
 	readonly showLineNumbers?: boolean;
+	readonly glyphMargin?: boolean;
 	readonly rulers?: readonly EditorRuler[];
 	readonly showIndentationGuides?: boolean;
 	readonly minimap?: EditorMinimap;
@@ -408,7 +410,7 @@ export class View extends Disposable {
 	private readonly accessibilityStatusElement: HTMLDivElement;
 	private readonly viewContext: EditorViewContext;
 	private readonly viewParts: EditorViewPartCollection;
-	private readonly viewLinesPart: ViewLinesPart;
+	private readonly viewLines: ViewLines;
 	private readonly viewLinesGpu: ViewLinesGpu | undefined;
 	private readonly marginPart: MarginPart;
 	private readonly viewOverlays: ViewOverlays;
@@ -420,6 +422,7 @@ export class View extends Disposable {
 	private readonly focusOutlineOwner: EditorFocusOutlineOwner;
 	private readonly activeLineHighlight: EditorActiveLineHighlight;
 	private readonly showLineNumbers: boolean;
+	private readonly showGlyphMargin: boolean;
 	private readonly showIndentationGuides: boolean;
 	private readonly padding: EditorViewportPadding;
 	private readonly indentation: ResolvedEditorIndentationOptions;
@@ -447,6 +450,7 @@ export class View extends Disposable {
 		this.focusOutlineOwner = options.focusOutlineOwner ?? "editor";
 		this.activeLineHighlight = options.activeLineHighlight ?? (this.presentation === "embedded" ? "off" : "on");
 		this.showLineNumbers = options.showLineNumbers ?? this.presentation !== "embedded";
+		this.showGlyphMargin = this.presentation !== 'embedded' && (options.glyphMargin ?? true);
 		this.showIndentationGuides = options.showIndentationGuides ?? this.presentation !== "embedded";
 		this.padding = resolveEditorViewportPadding(options.padding);
 		this.minimap = options.minimap ?? (this.presentation === "document" ? EditorMinimap.On : EditorMinimap.Off);
@@ -558,7 +562,7 @@ export class View extends Disposable {
 			layout => this.createRenderingContext(layout),
 		);
 		this.viewParts = this._register(new EditorViewPartCollection());
-		this.viewLinesPart = this._register(new ViewLinesPart({
+		this.viewLines = this._register(new ViewLines({
 			host: this.contentElement,
 			model: this.model,
 			readVisualProjection: () => this.visualProjection,
@@ -571,18 +575,16 @@ export class View extends Disposable {
 			? this._register(new ViewLinesGpu({
 				host: this.element,
 				model: this.model,
-				readVisualLines: () => this.visualProjection,
-				readRenderedLines: () => this.viewLinesPart.renderedLines,
 				semanticTokenSource: options.semanticTokenSource,
 				bracketColorizationSource: options.bracketColorizationSource,
-				readTextLeft: () => this.textLeft,
 				paddingTop: this.padding.top,
 				textDirection: this.textDirection,
 				fontLigatures: options.fontLigatures ?? false,
 			}))
 			: undefined;
 		const decorationSources = Object.freeze([...(options.decorationSources ?? [])]);
-		const glyphMarginSources = this.presentation === 'document' ? decorationSources : Object.freeze([]);
+		const glyphMarginSources = this.showGlyphMargin ? decorationSources : Object.freeze([]);
+		const glyphMarginLanes = resolveGlyphMarginLanes(glyphMarginSources, this.showGlyphMargin);
 		this.viewOverlays = this._register(new ViewOverlays(this.viewContext, {
 			contentElement: this.contentElement,
 			model: this.model,
@@ -591,13 +593,6 @@ export class View extends Disposable {
 			showIndentationGuides: this.showIndentationGuides,
 			indentationTabSize: this.indentation.tabSize,
 		}));
-		const glyphMarginPart = this.viewParts.register(new GlyphMarginPart({
-			host: this.contentElement,
-			sources: glyphMarginSources,
-			decorationsPart: this.viewOverlays.decorationsPart,
-			readVisualLines: () => this.visualProjection,
-			readLeft: () => this.marginPart.glyphMarginLeft,
-		}));
 		this.marginPart = this.viewParts.register(new MarginPart({
 			host: this.element,
 			contentElement: this.contentElement,
@@ -605,12 +600,22 @@ export class View extends Disposable {
 			textMeasurer: this.textMeasurer,
 			presentation: this.presentation,
 			showLineNumbers: this.showLineNumbers,
-			glyphMarginWidth: glyphMarginPart.width,
+			glyphMarginLaneCount: glyphMarginLanes.length,
+			lineHeight: options.lineHeight,
+			lineDecorationsWidth: linesDecorationsWidth(decorationSources),
+		}));
+		const glyphMarginPart = this.viewParts.register(new GlyphMarginPart({
+			host: this.contentElement,
+			lanes: glyphMarginLanes,
+			decorationsPart: this.viewOverlays.decorationsPart,
+			readVisualLines: () => this.visualProjection,
+			readLeft: () => this.marginPart.glyphMarginLeft,
+			readLaneWidth: () => this.marginPart.glyphMarginLaneWidth,
 		}));
 		this.viewParts.register(new LineNumbersPart({
 			showLineNumbers: this.showLineNumbers,
 			readVisualProjection: () => this.visualProjection,
-			readRenderedLines: () => this.viewLinesPart.renderedLines,
+			readRenderedLines: () => this.viewLines.renderedLines,
 		}));
 		const rulersPart = this.viewParts.register(new RulersPart({
 			host: this.contentElement,
@@ -644,7 +649,7 @@ export class View extends Disposable {
 
 		// Root order is the visual stacking contract; Parts own nodes but do not choose their host.
 		this.contentElement.append(
-			this.viewLinesPart.domNode,
+			this.viewLines.domNode,
 			this.marginPart.domNode,
 			glyphMarginPart.domNode,
 			this.viewOverlays.blockDecorationsPart.domNode,
@@ -687,8 +692,9 @@ export class View extends Disposable {
 		const semanticTokenSource = options.semanticTokenSource;
 		if (semanticTokenSource) {
 			this._register(semanticTokenSource.onDidChange(() => {
-				this.viewLinesPart.renderVisibleLineText();
-				this.viewLinesGpu?.render(this.viewport.layout);
+				this.viewLines.renderVisibleLineText();
+				this.viewLinesGpu?.invalidateTokens();
+				this.viewLinesGpu?.render(this.createRenderingContext(this.viewport.layout));
 			}));
 		}
 		const fontSet = ownerDocument.fonts;
@@ -792,7 +798,10 @@ export class View extends Disposable {
 	}
 
 	setLineHeight(lineHeight: number): EditorViewportLayout {
-		const layout = this.viewport.setLineHeight(lineHeight);
+		this.marginPart.setLineHeight(lineHeight);
+		const lineHeightLayout = this.viewport.setLineHeight(lineHeight);
+		if (this.softWrapping) this.updateWrapWidth(lineHeightLayout.viewportSize.width);
+		const layout = this.viewport.setContentWidth(this.measuredContentWidth);
 		this.project(layout);
 		return layout;
 	}
@@ -865,7 +874,7 @@ export class View extends Disposable {
 		if (!isFiniteNumber(horizontalOffset)) throw new RangeError("Stanza visual cursor horizontal offset must be finite");
 		if (this.textDirection === EditorTextDirection.LeftToRight) return undefined;
 		const visualLine = this.visualProjection.lineAt(visualLineIndex);
-		const line = this.viewLinesPart.renderedLines.get(visualLineIndex);
+		const line = this.viewLines.renderedLines.get(visualLineIndex);
 		if (!visualLine || !line) return undefined;
 		const text = this.model.getLineContent(visualLine.logicalLineIndex).slice(visualLine.startColumn, visualLine.endColumn);
 		if (line.textElement.textContent?.length !== text.length) return undefined;
@@ -940,7 +949,7 @@ export class View extends Disposable {
 	}
 
 	private getDomTargetAtClientPoint(point: ClientPoint): EditorHitTarget | undefined {
-		for (const [visualLineIndex, renderedLine] of this.viewLinesPart.renderedLines) {
+		for (const [visualLineIndex, renderedLine] of this.viewLines.renderedLines) {
 			const offset = getStanzaDomTextOffsetAtClientPoint(
 				renderedLine.textElement,
 				point.clientX,
@@ -959,7 +968,7 @@ export class View extends Disposable {
 
 	private domCaretLeft(visualLineIndex: number, offset: number): number | undefined {
 		if (this.textDirection === EditorTextDirection.LeftToRight) return undefined;
-		const line = this.viewLinesPart.renderedLines.get(visualLineIndex);
+		const line = this.viewLines.renderedLines.get(visualLineIndex);
 		return line && isNonNegativeSafeInteger(offset) && offset <= line.textElement.textContent?.length
 			? getStanzaDomTextCaretLeft(line.textElement, offset, line.domNode.domNode)
 			: undefined;
@@ -993,7 +1002,7 @@ export class View extends Disposable {
 		this.observeRenderedLineWidths(layout);
 		if (layout !== this.viewport.layout) return;
 		const viewportData = createEditorViewportData(layout);
-		this.viewLinesPart.render(viewportData);
+		this.viewLines.render(viewportData);
 		const context = this.createRenderingContext(layout, viewportData);
 		this.element.classList.toggle("horizontally-scrollable", layout.maximumScrollPosition.left > 0);
 		this.element.classList.toggle("vertically-scrollable", layout.maximumScrollPosition.top > 0);
@@ -1003,7 +1012,7 @@ export class View extends Disposable {
 		this.viewOverlays.prepareRender(context);
 		this.viewParts.render(context);
 		this.viewOverlays.render(context);
-		this.viewLinesGpu?.render(layout);
+		this.viewLinesGpu?.render(context);
 		this.syncScrollPosition(layout);
 	}
 
@@ -1043,7 +1052,7 @@ export class View extends Disposable {
 			ownerDocument: this.element.ownerDocument,
 			model: this.model,
 			visualLineProjection: this.visualProjection,
-			renderedLines: this.viewLinesPart.renderedLines,
+			renderedLines: this.viewLines.renderedLines,
 			renderLines: layout.renderLines,
 			textLeft: this.textLeft,
 			textMeasurer: this.textMeasurer,

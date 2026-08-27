@@ -1,15 +1,15 @@
 .stanza-editor-line-lines-decorations {
   position: absolute;
   inset: 0;
-  z-index: 4;
+  z-index: 5;
   pointer-events: none;
 }
 
 .stanza-editor-line-decoration {
   position: absolute;
   top: 0;
-  left: 0;
-  width: 4px;
+  left: calc(var(--stanza-editor-line-decorations-left) + var(--stanza-editor-line-decoration-offset, 0px));
+  width: var(--stanza-editor-line-decoration-width, 4px);
   height: 100%;
   box-sizing: border-box;
   pointer-events: none;

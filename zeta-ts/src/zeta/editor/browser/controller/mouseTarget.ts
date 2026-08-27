@@ -69,6 +69,15 @@ function classifyElement(element: Element | undefined): ElementMouseTarget | und
 		return { kind: MouseTargetKind.Widget };
 	}
 	if (element.closest('.stanza-editor-line-number')) return { kind: MouseTargetKind.LineNumber };
+	const lineDecoration = element.closest<HTMLElement>('.stanza-editor-line-decoration');
+	if (lineDecoration) {
+		const decorationId = Number(lineDecoration.dataset.decorationId);
+		return {
+			kind: MouseTargetKind.GutterDecoration,
+			...(Number.isSafeInteger(decorationId) && decorationId > 0 ? { decorationId: decorationId as TextDecorationId } : {}),
+			...(lineDecoration.dataset.decorationOwner ? { decorationOwner: lineDecoration.dataset.decorationOwner } : {}),
+		};
+	}
 	const glyph = element.closest<HTMLElement>('.stanza-editor-glyph-margin-decoration');
 	const lane = element.closest<HTMLElement>('.stanza-editor-glyph-margin-lane');
 	if (glyph || lane) {

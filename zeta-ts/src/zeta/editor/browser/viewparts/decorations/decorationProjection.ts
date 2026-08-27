@@ -4,7 +4,10 @@ import { type ViewportOverlayContext, createStanzaDomRangeRectangles } from "../
 
 /** Projects visible inline decorations into rows. */
 export function projectStanzaDecorationOverlays(context: ViewportOverlayContext, decorations: readonly ResolvedDecoration[]): void {
-	const inlineDecorations = decorations.filter(decoration => decoration.presentation !== DecorationPresentation.GlyphMargin);
+	const inlineDecorations = decorations.filter(decoration => (
+		decoration.presentation !== DecorationPresentation.GlyphMargin
+		&& decoration.presentation !== DecorationPresentation.LineDecoration
+	));
 	const rectangles = createStanzaVisualDecorationRectangles(context.model, inlineDecorations, context.visualLineProjection, context.renderLines, context.textLeft, context.textMeasurer);
 	const domRectangles = context.useDomTextGeometry
 		? new Map(inlineDecorations.map(decoration => [decoration.id, createStanzaDomRangeRectangles(context, decoration.range)] as const))

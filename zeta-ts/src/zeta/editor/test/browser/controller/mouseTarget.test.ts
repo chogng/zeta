@@ -43,6 +43,16 @@ test("MouseTargetFactory preserves editor targets and classifies browser-owned r
 		decorationOwner: "folding",
 		glyphMarginLane: "center",
 	});
+	const lineDecoration = node("stanza-editor-line-decoration");
+	lineDecoration.dataset.decorationId = "8";
+	lineDecoration.dataset.decorationOwner = "folding";
+	assert.deepEqual(factory.create(mouseEvent(lineDecoration)), {
+		kind: MouseTargetKind.GutterDecoration,
+		editorTarget,
+		element: lineDecoration,
+		decorationId: 8,
+		decorationOwner: "folding",
+	});
 	assert.equal(factory.create(mouseEvent(node("stanza-editor-scrollbar-track stanza-editor-scrollbar-track-vertical")))?.kind, MouseTargetKind.Scrollbar);
 	assert.equal(factory.create(mouseEvent(node("stanza-editor-zone-widget")))?.kind, MouseTargetKind.ViewZone);
 	assert.equal(factory.create(mouseEvent(node("stanza-editor-content-widget")))?.kind, MouseTargetKind.Widget);

@@ -5,6 +5,7 @@ import { GPULifecycle } from './gpuDisposable.js';
 import { observeDevicePixelDimensions, validatedDevicePixelRatio } from './gpuUtils.js';
 import { DecorationCssRuleExtractor } from './css/decorationCssRuleExtractor.js';
 import { DecorationStyleCache } from './css/decorationStyleCache.js';
+import { RectangleRenderer } from './rectangleRenderer.js';
 
 type ViewGpuStatus = 'initializing' | 'ready' | 'unavailable';
 
@@ -25,6 +26,7 @@ export class ViewGpuContext extends Disposable {
 	private canvasContext: GPUCanvasContext | undefined;
 	private currentDevice: GPUDevice | undefined;
 	private currentAtlas: TextureAtlas | undefined;
+	private currentRectangleRenderer: RectangleRenderer | undefined;
 	private currentStatus: ViewGpuStatus = 'initializing';
 	private currentDevicePixelRatio: number;
 	private physicalWidth = 1;
@@ -73,6 +75,11 @@ export class ViewGpuContext extends Disposable {
 		return this.currentAtlas;
 	}
 
+	public get rectangleRenderer(): RectangleRenderer {
+		if (!this.currentRectangleRenderer) throw new Error('WebGPU rectangle renderer is not ready');
+		return this.currentRectangleRenderer;
+	}
+
 	public get devicePixelRatio(): number {
 		return this.currentDevicePixelRatio;
 	}
@@ -117,8 +124,17 @@ export class ViewGpuContext extends Disposable {
 		if (this.currentStatus === 'unavailable') return;
 		this.currentStatus = 'unavailable';
 		this.unavailableReason = error;
-		this.canvas.hidden = true;
+		this.hideCanvas();
 		this.changeEmitter.fire();
+	}
+
+	public showCanvas(): void {
+		if (this.currentStatus !== 'ready') throw new Error('WebGPU canvas cannot be shown before the device is ready');
+		this.canvas.hidden = false;
+	}
+
+	public hideCanvas(): void {
+		this.canvas.hidden = true;
 	}
 
 	private async initialize(): Promise<void> {
@@ -135,14 +151,15 @@ export class ViewGpuContext extends Disposable {
 			if (!canvasContext) throw new Error('This browser cannot create a WebGPU canvas context');
 			this.currentDevice = reference.object;
 			this.canvasContext = canvasContext;
+			const presentationFormat = this.ownerWindow.navigator.gpu.getPreferredCanvasFormat();
 			canvasContext.configure({
 				device: reference.object,
-				format: this.ownerWindow.navigator.gpu.getPreferredCanvasFormat(),
+				format: presentationFormat,
 				alphaMode: 'premultiplied',
 			});
+			this.currentRectangleRenderer = this._register(new RectangleRenderer(reference.object, presentationFormat));
 			this.createAtlas();
 			this.currentStatus = 'ready';
-			this.canvas.hidden = false;
 			void reference.object.lost.then(info => this.markUnavailable(new Error(`WebGPU device lost: ${info.message || info.reason}`)));
 			this.changeEmitter.fire();
 		} catch (error) {

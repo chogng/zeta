@@ -48,19 +48,24 @@ test("text-model editor projects revision-bound Rust syntax, diagnostics, foldin
 	await expect(page.locator(".stanza-editor-goto-symbol-item")).toHaveText("main");
 });
 
-test("line numbers occupy the column left of folding controls", async ({ page }) => {
+test("glyph margin, line numbers, and folding controls keep VS Code gutter order", async ({ page }) => {
 	await page.goto("/textModel.html");
+	const glyphMargin = page.locator(".stanza-editor-glyph-margin");
 	const foldingControl = page.locator(".stanza-editor-fold-toggle[data-logical-line-index='0']");
+	await expect(glyphMargin).toBeVisible();
 	await expect(foldingControl).toBeVisible();
 	const firstLine = page.locator(".stanza-editor-line[data-logical-line-index='0']");
 	await expect(firstLine.locator(".stanza-editor-line-number")).toHaveText("1");
 	const foldingBox = await foldingControl.boundingBox();
+	const glyphMarginBox = await glyphMargin.boundingBox();
 	const lineNumberBox = await firstLine.locator(".stanza-editor-line-number").boundingBox();
 	const textBox = await firstLine.locator(".stanza-editor-line-text").boundingBox();
 	assertBox(foldingBox, "folding control");
+	assertBox(glyphMarginBox, "glyph margin");
 	assertBox(lineNumberBox, "line number");
 	assertBox(textBox, "line text");
 
+	expect(glyphMarginBox.x + glyphMarginBox.width).toBe(lineNumberBox.x);
 	expect(lineNumberBox.x + lineNumberBox.width).toBeLessThanOrEqual(foldingBox.x);
 	expect(foldingBox.x + foldingBox.width).toBeLessThanOrEqual(textBox.x);
 
@@ -76,13 +81,16 @@ test("line numbers occupy the column left of folding controls", async ({ page })
 	});
 	await expect.poll(() => editor.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
 	const editorBox = await editor.boundingBox();
+	const scrolledGlyphMarginBox = await glyphMargin.boundingBox();
 	const scrolledFoldingBox = await foldingControl.boundingBox();
 	const scrolledLineNumberBox = await firstLine.locator(".stanza-editor-line-number").boundingBox();
 	assertBox(editorBox, "editor");
+	assertBox(scrolledGlyphMarginBox, "scrolled glyph margin");
 	assertBox(scrolledFoldingBox, "scrolled folding control");
 	assertBox(scrolledLineNumberBox, "scrolled line number");
 
-	expect(scrolledLineNumberBox.x).toBe(editorBox.x);
+	expect(scrolledGlyphMarginBox.x).toBe(editorBox.x);
+	expect(scrolledGlyphMarginBox.x + scrolledGlyphMarginBox.width).toBe(scrolledLineNumberBox.x);
 	expect(scrolledLineNumberBox.x + scrolledLineNumberBox.width).toBe(scrolledFoldingBox.x);
 });
 
