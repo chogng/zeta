@@ -1,4 +1,6 @@
-use zeta_ui_components::InteractionRegion;
+use zeta_ui_components::ScrollState;
+use zeta_ui_components::ScrollViewStyle;
+use zeta_ui_components::ScrollbarPresentation;
 use zui::ui::AccessibilityRole;
 use zui::ui::Border;
 use zui::ui::Component;
@@ -6,15 +8,9 @@ use zui::ui::ComponentContext;
 use zui::ui::ComponentElement;
 use zui::ui::ComputedElement;
 use zui::ui::CornerRadii;
-use zui::ui::CursorFeedback;
 use zui::ui::Element;
 use zui::ui::ElementId;
-use zui::ui::FocusBehavior;
-use zui::ui::FontFamily;
 use zui::ui::FontWeight;
-use zui::ui::NavigationAxis;
-use zui::ui::NavigationGroupId;
-use zui::ui::NodeAction;
 use zui::ui::PaintRect;
 use zui::ui::Rect;
 use zui::ui::TextBlock;
@@ -23,14 +19,14 @@ use zui::ui::UiDispatch;
 use zui::ui::UiNode;
 use zui::ui::UiScene;
 
-use crate::{SETTINGS_PAGE, SettingsPageSection};
+use crate::SETTINGS_PAGE;
+use crate::SettingsPageSection;
+use crate::keybindings_section::KeybindingsSection;
+use crate::section_layout::CARD_GAP;
+use crate::section_layout::ROW_HEIGHT;
+use crate::section_layout::SettingsSectionLayout;
 
 const SETTINGS_SECTION_SCOPE: u32 = 11;
-const CONTENT_INSET_X: f32 = 38.0;
-const CONTENT_INSET_TOP: f32 = 32.0;
-const CONTENT_INSET_BOTTOM: f32 = 28.0;
-const CARD_GAP: f32 = 12.0;
-const ROW_HEIGHT: f32 = 36.0;
 
 pub const SETTINGS_SECTION_CONTENT: ElementId = ElementId::scoped(SETTINGS_SECTION_SCOPE, 1);
 
@@ -45,6 +41,7 @@ pub struct SettingsSectionStyle {
     pub text_muted: zui::ui::Color,
     pub accent: zui::ui::Color,
     pub error: zui::ui::Color,
+    pub scroll_view: ScrollViewStyle,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -66,6 +63,8 @@ pub struct SettingsSectionPane<'a> {
     keybinding_diagnostics: &'a [String],
     theme_scheme: &'a str,
     theme_follows_system: bool,
+    scroll_state: ScrollState,
+    scrollbar_presentation: ScrollbarPresentation,
     dispatch: &'a UiDispatch,
 }
 
@@ -83,6 +82,8 @@ impl<'a> SettingsSectionPane<'a> {
         keybinding_diagnostics: &'a [String],
         theme_scheme: &'a str,
         theme_follows_system: bool,
+        scroll_state: ScrollState,
+        scrollbar_presentation: ScrollbarPresentation,
         dispatch: &'a UiDispatch,
     ) -> Self {
         Self {
@@ -97,62 +98,23 @@ impl<'a> SettingsSectionPane<'a> {
             keybinding_diagnostics,
             theme_scheme,
             theme_follows_system,
+            scroll_state,
+            scrollbar_presentation,
             dispatch,
         }
     }
 
-    fn keybinding_row_bounds(&self, index: usize) -> Rect {
-        let content = self.content_bounds();
-        Rect::from_xywh(
-            content.origin.x,
-            content.origin.y + 92.0 + index as f32 * ROW_HEIGHT,
-            content.size.width,
-            ROW_HEIGHT,
-        )
-    }
-
     fn content_bounds(&self) -> Rect {
-        Rect::from_xywh(
-            self.bounds.origin.x + CONTENT_INSET_X,
-            self.bounds.origin.y + CONTENT_INSET_TOP,
-            (self.bounds.size.width - CONTENT_INSET_X * 2.0).max(1.0),
-            (self.bounds.size.height - CONTENT_INSET_TOP - CONTENT_INSET_BOTTOM).max(1.0),
-        )
-    }
-
-    fn interaction_regions(&self) -> Vec<InteractionRegion> {
-        if self.section != SettingsPageSection::Keybindings || self.keyboard_shortcuts_visible {
-            return Vec::new();
-        }
-        let navigation = NavigationGroupId::new(SETTINGS_SECTION_CONTENT);
-        self.keybinding_rows
-            .iter()
-            .enumerate()
-            .map(|(index, row)| {
-                InteractionRegion::new(
-                    "SettingsKeybindingRow",
-                    row.element,
-                    self.keybinding_row_bounds(index),
-                    AccessibilityRole::Button,
-                    format!("Record shortcut for {}", row.label),
-                )
-                .with_parent(SETTINGS_SECTION_CONTENT)
-                .with_cursor(CursorFeedback::Pointer)
-                .with_focus(FocusBehavior::TabStop)
-                .with_action(NodeAction::Activate)
-                .with_navigation(navigation, NavigationAxis::Vertical)
-                .with_value(row.value.clone())
-            })
-            .collect()
+        SettingsSectionLayout::new(self.bounds).content()
     }
 
     fn paint_section(&self, scene: &mut UiScene) {
-        scene.with_clip(self.bounds, |scene| match self.section {
+        match self.section {
             SettingsPageSection::General => self.paint_general(scene),
             SettingsPageSection::Appearance => self.paint_appearance(scene),
-            SettingsPageSection::Keybindings => self.paint_keybindings(scene),
+            SettingsPageSection::Keybindings => self.paint_keybindings_header(scene),
             SettingsPageSection::Remote => {}
-        });
+        }
     }
 
     fn paint_general(&self, scene: &mut UiScene) {
@@ -238,61 +200,12 @@ impl<'a> SettingsSectionPane<'a> {
         }
     }
 
-    fn paint_keybindings(&self, scene: &mut UiScene) {
+    fn paint_keybindings_header(&self, scene: &mut UiScene) {
         self.paint_header(
             scene,
             "Keybindings",
             "Current commands and shortcuts. Select a row to record a new shortcut.",
         );
-        for (index, row) in self.keybinding_rows.iter().enumerate() {
-            let bounds = self.keybinding_row_bounds(index);
-            if self.dispatch.is_hovered(row.element)
-                || self.dispatch.is_focused(row.element)
-                || self.dispatch.is_pressed(row.element)
-            {
-                scene.draw_rect(
-                    PaintRect::new(bounds, self.style.surface_hovered)
-                        .with_corner_radii(CornerRadii::uniform(4.0)),
-                );
-            }
-            draw_label(
-                scene,
-                &row.label,
-                Rect::from_xywh(
-                    bounds.origin.x + 10.0,
-                    bounds.origin.y + 8.0,
-                    bounds.size.width * 0.55,
-                    20.0,
-                ),
-                TextStyle::new(13.0, self.style.text).with_line_height(20.0),
-            );
-            draw_label(
-                scene,
-                &row.value,
-                Rect::from_xywh(
-                    bounds.origin.x + bounds.size.width * 0.58,
-                    bounds.origin.y + 8.0,
-                    bounds.size.width * 0.4,
-                    20.0,
-                ),
-                TextStyle::new(12.0, self.style.text_muted)
-                    .with_family(FontFamily::Monospace)
-                    .with_line_height(20.0),
-            );
-        }
-        if let Some(diagnostic) = self.keybinding_diagnostics.first() {
-            draw_label(
-                scene,
-                diagnostic,
-                Rect::from_xywh(
-                    self.content_bounds().origin.x,
-                    self.content_bounds().bottom() - 24.0,
-                    self.content_bounds().size.width,
-                    20.0,
-                ),
-                TextStyle::new(12.0, self.style.error).with_line_height(20.0),
-            );
-        }
     }
 
     fn paint_header(&self, scene: &mut UiScene, title: &str, description: &str) {
@@ -389,18 +302,34 @@ impl Component for SettingsSectionPane<'_> {
     }
 
     fn compose(&self, context: &mut ComponentContext<'_, '_>, _element: &ComputedElement) {
-        for region in self.interaction_regions() {
-            context.draw_component(&region);
-        }
         self.paint_section(context.scene_mut());
+        if self.section == SettingsPageSection::Keybindings {
+            context.draw_component(&self.keybindings_section());
+        }
     }
 
     fn paint(&self, scene: &mut UiScene) {
         self.paint_section(scene);
+        if self.section == SettingsPageSection::Keybindings {
+            scene.draw_component(&self.keybindings_section());
+        }
     }
 }
 
 impl SettingsSectionPane<'_> {
+    fn keybindings_section(&self) -> KeybindingsSection<'_> {
+        KeybindingsSection::new(
+            SettingsSectionLayout::new(self.bounds).keybindings_list(),
+            self.keybinding_rows,
+            self.keybinding_diagnostics,
+            !self.keyboard_shortcuts_visible,
+            self.scroll_state,
+            self.scrollbar_presentation,
+            self.style,
+            self.dispatch,
+        )
+    }
+
     fn section_label(&self) -> &'static str {
         match self.section {
             SettingsPageSection::General => "General settings",
@@ -423,3 +352,7 @@ fn draw_label(scene: &mut UiScene, text: &str, bounds: Rect, style: TextStyle) {
         style,
     ));
 }
+
+#[cfg(test)]
+#[path = "sections_tests.rs"]
+mod tests;

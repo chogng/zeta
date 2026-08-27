@@ -6,10 +6,12 @@
 //! identity, then execute the actions emitted by the shared interaction frame.
 
 mod keybindings;
+mod keybindings_section;
 mod navigation;
 mod page;
 mod pane;
 mod remote;
+mod section_layout;
 mod sections;
 mod state;
 
@@ -17,6 +19,10 @@ pub use keybindings::{
     KEYBOARD_SHORTCUTS, KEYBOARD_SHORTCUTS_CLOSE, KeyboardShortcutRow, KeyboardShortcutsState,
     ShortcutCommit, draw_keyboard_shortcuts_overlay, keyboard_shortcut_row_element,
     keyboard_shortcut_rows, settings_keybinding_rows,
+};
+pub use keybindings_section::{
+    SETTINGS_KEYBINDINGS_LIST, SETTINGS_KEYBINDINGS_SCROLLBAR, SettingsKeybindingsViewport,
+    SettingsScrollbarPointerOutcome,
 };
 pub use page::SettingsPage;
 pub use pane::{

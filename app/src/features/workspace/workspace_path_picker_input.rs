@@ -9,8 +9,8 @@ use zui::ui::{
 };
 
 use crate::NativeApp;
-use crate::session_host::WorkspaceSwitchResult;
 use crate::file_editor_host::FileEditorCloseRequest;
+use crate::session_host::WorkspaceSwitchResult;
 use crate::shell_interaction::CONTEXT_WORKING_DIRECTORY;
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
 use crate::workspace_path_picker::{

@@ -11,6 +11,7 @@ use crate::workspace_panes::FILE_LIST_ROW_HEIGHT;
 
 const LINES_PER_WHEEL_STEP: f32 = 3.0;
 const MULTI_DIFF_PIXELS_PER_LINE: f32 = 18.0;
+const SETTINGS_PIXELS_PER_LINE: f32 = 18.0;
 
 impl NativeApp {
     pub(super) fn mouse_wheel(&mut self, delta: MouseScrollDelta) {
@@ -27,6 +28,9 @@ impl NativeApp {
             return;
         }
         if self.tab_context_menu.is_open() {
+            return;
+        }
+        if self.route_settings_wheel(delta) {
             return;
         }
         if self.route_file_editor_wheel(delta) {
@@ -77,6 +81,31 @@ impl NativeApp {
             self.rebuild_presentation();
             self.request_redraw();
         }
+    }
+
+    fn route_settings_wheel(&mut self, delta: MouseScrollDelta) -> bool {
+        let Some(point) = self.cursor_position else {
+            return false;
+        };
+        let Some(viewport) = self.settings_keybindings_viewport() else {
+            return false;
+        };
+        let Some(bounds) = self.presentation.as_ref().and_then(|presentation| {
+            presentation.element_bounds(zeta_settings::SETTINGS_KEYBINDINGS_LIST)
+        }) else {
+            return false;
+        };
+        if !bounds.contains(point) {
+            return false;
+        }
+        if self.settings.scroll_keybindings(
+            settings_scroll_command(delta),
+            viewport,
+            Instant::now(),
+        ) {
+            self.rebuild_presentation_on_next_redraw();
+        }
+        true
     }
 
     fn route_composer_interaction_wheel(&mut self, delta: MouseScrollDelta) -> bool {
@@ -216,6 +245,16 @@ fn multi_diff_scroll_pixels(delta: MouseScrollDelta) -> f32 {
     }
 }
 
+fn settings_scroll_command(delta: MouseScrollDelta) -> ScrollCommand {
+    let pixels = match delta {
+        MouseScrollDelta::LineDelta(_, vertical) => {
+            vertical * LINES_PER_WHEEL_STEP * SETTINGS_PIXELS_PER_LINE
+        }
+        MouseScrollDelta::PixelDelta(position) => position.y as f32,
+    };
+    ScrollCommand::ByPixels(ScrollDelta::vertical(-pixels))
+}
+
 fn file_list_scroll_pixels(delta: MouseScrollDelta) -> f32 {
     match delta {
         MouseScrollDelta::LineDelta(_, vertical) => {
@@ -226,5 +265,5 @@ fn file_list_scroll_pixels(delta: MouseScrollDelta) -> f32 {
 }
 
 #[cfg(test)]
-#[path = "terminal_scrollback_tests.rs"]
+#[path = "mouse_wheel_tests.rs"]
 mod tests;

@@ -145,7 +145,17 @@ impl NativeApp {
                     | NamedKey::Enter
             )
         ) {
-            return self.dispatch_primary_keyboard_input(event);
+            let handled = self.dispatch_primary_keyboard_input(event);
+            if handled
+                && let Some(focused) = self.ui_dispatch.focused()
+                && let Some(viewport) = self.settings_keybindings_viewport()
+                && self
+                    .settings
+                    .ensure_keybinding_visible(focused, viewport, Instant::now())
+            {
+                self.rebuild_presentation_on_next_redraw();
+            }
+            return handled;
         }
         false
     }

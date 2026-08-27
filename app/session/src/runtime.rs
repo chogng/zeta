@@ -22,9 +22,9 @@ use zeta_protocol::SessionId;
 
 pub use crate::runtime_contract::CommandResult;
 pub use crate::runtime_contract::SESSION_UNAVAILABLE_COMMAND_ERROR;
+use crate::runtime_contract::SessionRuntimeCommand;
 pub use crate::runtime_contract::SessionRuntimeEvent;
 pub use crate::runtime_contract::WorkspaceSwitchResult;
-use crate::runtime_contract::SessionRuntimeCommand;
 use crate::runtime_contract::command_channel;
 
 /// Connection authority supplied by the product host.

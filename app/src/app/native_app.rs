@@ -2,7 +2,6 @@ use std::process::ExitCode;
 use std::time::Instant;
 
 use crate::app_server::{AppServerHost, AppServerRequestHandle, local_profile_root};
-use crate::session_host::SessionRuntime;
 use crate::file_editor_host::FileEditorHost;
 use crate::file_editor_input::FileEditorInputState;
 use crate::git_branch_context_menu::GitBranchContextMenuState;
@@ -14,6 +13,7 @@ use crate::remote_connection_manager::RemoteConnectionManagerState;
 use crate::remote_connection_picker::RemoteConnectionPickerState;
 use crate::remote_tunnel_manager::RemoteTunnelManagerState;
 use crate::remote_tunnel_process::NativeRemoteTunnelHost;
+use crate::session_host::SessionRuntime;
 use crate::shell_interaction::{COMPOSER, FILE_EDITOR_DOCUMENT};
 use crate::shell_scene::{
     ShellPresentation, ShellPresentationModel, build_shell_presentation_with_animation_bindings,
@@ -83,8 +83,6 @@ use zui::window::WindowEvent;
 use zui::window::WindowHandle;
 use zui::window::WindowOptions;
 
-#[path = "../features/agent/session_host.rs"]
-pub(crate) mod session_host;
 #[path = "../app_server.rs"]
 pub(crate) mod app_server;
 #[path = "command_dispatch.rs"]
@@ -137,6 +135,8 @@ pub(crate) mod launch_test_support;
 pub(crate) mod launch_tests;
 #[path = "lifecycle.rs"]
 mod lifecycle;
+#[path = "mouse_wheel.rs"]
+pub(crate) mod mouse_wheel;
 #[path = "../platform/native_event.rs"]
 pub(crate) mod native_event;
 #[path = "presentation.rs"]
@@ -179,6 +179,8 @@ mod run;
 mod runtime;
 #[path = "../features/agent/session_catalog.rs"]
 pub(crate) mod session_catalog;
+#[path = "../features/agent/session_host.rs"]
+pub(crate) mod session_host;
 #[path = "../presentation/shell_interaction.rs"]
 pub(crate) mod shell_interaction;
 #[path = "../presentation/shell_scene.rs"]
@@ -201,8 +203,6 @@ pub(crate) mod terminal_pane_view;
 pub(crate) mod terminal_pointer;
 #[path = "../features/terminal/terminal_projection.rs"]
 pub(crate) mod terminal_projection;
-#[path = "../features/terminal/terminal_scrollback.rs"]
-pub(crate) mod terminal_scrollback;
 #[path = "../features/terminal/terminal_selection.rs"]
 pub(crate) mod terminal_selection;
 #[path = "../features/terminal/terminal_session.rs"]

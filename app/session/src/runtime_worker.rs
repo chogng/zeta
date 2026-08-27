@@ -18,12 +18,12 @@ use zeta_app_server_client::ServerNotification;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadUpdate;
 
+use crate::RECONNECT_WINDOW;
 use crate::SESSION_UNAVAILABLE_COMMAND_ERROR;
 use crate::SessionRuntimeCommand;
 use crate::SessionRuntimeEvent;
 use crate::SessionRuntimeEventSink;
 use crate::SessionRuntimeTarget;
-use crate::RECONNECT_WINDOW;
 use crate::reconnect_delay_within_window;
 use crate::reject_disconnected_command;
 
@@ -348,10 +348,9 @@ fn drive(
                     active.subscription =
                         subscribe_session(client, &active.session_id, active.session_sequence)?;
                     active.session_sequence = active.subscription.session.sequence;
-                    active.sequence =
-                        active_thread_entry(&active.subscription, &active.thread_id)?
-                            .thread
-                            .sequence;
+                    active.sequence = active_thread_entry(&active.subscription, &active.thread_id)?
+                        .thread
+                        .sequence;
                     publish_subscription(event_sink, &active.subscription, &active.thread_id)?;
                 }
                 Ok(SessionRuntimeCommand::SwitchWorkspace { root, response }) => {

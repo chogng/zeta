@@ -309,6 +309,7 @@ impl App<NativeEvent> for NativeApp {
             CaretBlinkAdvance::VisibilityChanged(_)
         );
         let scrollbar_changed = self.workspace_pane_host.advance_multi_diff_scrollbar(now);
+        let settings_scrollbar_changed = self.settings.advance_keybindings_scrollbar(now);
         let terminal_scrollbar_changed = self.terminal_view_mut().scroll.advance_scrollbar(now);
         let sash_changed = self.workbench.advance_layout_sashes(now);
         let retained_runtime_due = self
@@ -319,6 +320,7 @@ impl App<NativeEvent> for NativeApp {
         let file_editor_auto_scrolled = self.advance_file_editor_auto_scroll(now);
         if caret_changed
             || scrollbar_changed
+            || settings_scrollbar_changed
             || terminal_scrollbar_changed
             || file_search_changed
             || file_editor_auto_scrolled
@@ -332,6 +334,7 @@ impl App<NativeEvent> for NativeApp {
         for deadline in [
             self.caret_blink.next_deadline(),
             self.workspace_pane_host.multi_diff_scrollbar_deadline(),
+            self.settings.keybindings_scrollbar_deadline(),
             self.terminal_view().scroll.scrollbar_deadline(),
             self.retained_runtime.next_deadline(),
             self.workbench.tab_sash_deadline(),

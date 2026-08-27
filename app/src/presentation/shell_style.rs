@@ -112,6 +112,7 @@ impl ShellPalette {
             text_muted: self.text_muted,
             accent: self.accent,
             error: self.error,
+            scroll_view: self.overlay_scroll_view_style(),
         }
     }
 

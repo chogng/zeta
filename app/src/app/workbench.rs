@@ -9,11 +9,8 @@ impl NativeApp {
         self.terminal_pane_views.active_view_mut()
     }
 
-    /// Closes one logical Session tab and releases every product resource keyed by that tab.
-    pub(super) fn close_session_tab(&mut self, tab_key: &TabInputKey) -> bool {
-        if !tab_key.is_session() {
-            return false;
-        }
+    /// Closes one logical tab and releases every product resource keyed by that tab.
+    pub(super) fn close_workbench_tab(&mut self, tab_key: &TabInputKey) -> bool {
         if self
             .workbench
             .workbench()
@@ -22,6 +19,9 @@ impl NativeApp {
             .is_none()
         {
             return false;
+        }
+        if tab_key.is_settings() && self.remote_connection_manager.is_settings() {
+            self.dismiss_remote_connection_manager();
         }
         if let Some(session) = self.session_runtime.as_ref()
             && let Some(session_id) = tab_key.session_id()
@@ -48,13 +48,19 @@ impl NativeApp {
             self.terminal_view_mut().selection.clear();
             self.terminal_view_mut().pointer.cancel();
         }
+        if tab_key.is_settings() {
+            self.settings.close();
+        }
         if was_active {
             match closed.active_tab().cloned() {
                 Some(tab_key @ TabInputKey::Session(_)) => {
                     self.mount_session_pane(&tab_key);
                 }
                 Some(TabInputKey::Settings) => self.activate_settings_tab(),
-                None => self.workspace_surface.show_agent(),
+                None => {
+                    self.workspace_surface.show_agent();
+                    self.pending_focus = Some(crate::shell_interaction::COMPOSER);
+                }
             }
         }
         self.rebuild_presentation_on_next_redraw();
@@ -404,7 +410,6 @@ impl NativeApp {
                 let _ = self.bind_agent_pane();
             }
         }
-        self.dismiss_remote_connection_manager();
         self.settings.close();
         self.pending_focus = Some(if self.workspace_surface.is_editor() {
             crate::shell_interaction::FILE_EDITOR_DOCUMENT
@@ -414,6 +419,6 @@ impl NativeApp {
     }
 
     pub(super) fn close_settings_tab(&mut self) {
-        self.activate_session_workbench_tab();
+        let _ = self.close_workbench_tab(&TabInputKey::Settings);
     }
 }

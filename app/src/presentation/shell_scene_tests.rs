@@ -15,8 +15,9 @@ use crate::shell_interaction::{
     AGENT_FILES_REFRESH, AGENT_FILES_SEARCH, COMPOSER, COMPOSER_INFO_BAR, COMPOSER_PANEL,
     ContextAction, FILE_EDITOR_DOCUMENT, FILE_EDITOR_PANE, FILE_EDITOR_TAB_LIST,
     INSPECTOR_RESIZE_HANDLE, MULTI_DIFF_EDITOR, SESSION_HEADER, SESSION_SEARCH_INPUT,
-    TAB_CONTAINER_RESIZE_HANDLE, TAB_CONTAINER_SETTINGS_TAB, TAB_CONTEXT_MENU, THREAD_TIMELINE,
-    TITLEBAR, WORKSPACE_PANE, WORKSPACE_PANE_NAVIGATION, WORKSPACE_PANE_TOOLBAR,
+    TAB_CONTAINER_RESIZE_HANDLE, TAB_CONTAINER_SETTINGS_CLOSE, TAB_CONTAINER_SETTINGS_TAB,
+    TAB_CONTEXT_MENU, THREAD_TIMELINE, TITLEBAR, WORKSPACE_PANE, WORKSPACE_PANE_NAVIGATION,
+    WORKSPACE_PANE_TOOLBAR,
 };
 use crate::tab_context_menu::TabContextMenuState;
 use crate::workspace_context::WorkspaceContext;
@@ -345,6 +346,7 @@ fn settings_tab_input_renders_settings_and_selects_the_tab_container_entry() {
 
     assert!(
         presentation
+            .frame()
             .scene()
             .text_blocks()
             .iter()
@@ -352,6 +354,7 @@ fn settings_tab_input_renders_settings_and_selects_the_tab_container_entry() {
     );
     assert!(
         presentation
+            .frame()
             .scene()
             .icons()
             .iter()
@@ -362,6 +365,13 @@ fn settings_tab_input_renders_settings_and_selects_the_tab_container_entry() {
         .find(|node| node.id == TAB_CONTAINER_SETTINGS_TAB)
         .expect("settings workbench item should be mounted");
     assert_eq!(node.selection, zui::ui::AccessibilitySelection::Selected);
+    assert_eq!(
+        accessibility_nodes
+            .iter()
+            .find(|node| node.id == TAB_CONTAINER_SETTINGS_CLOSE)
+            .map(|node| node.role),
+        Some(AccessibilityRole::Button)
+    );
 }
 
 #[test]
@@ -416,7 +426,7 @@ fn expanded_inspector_part_file_row_hover_rebuilds_with_the_hover_background() {
     );
 
     assert!(
-        hovered.scene().rects().iter().any(|rect| {
+        hovered.frame().scene().rects().iter().any(|rect| {
             rect.bounds() == row_bounds && rect.fill() == Color::rgb(242, 242, 242)
         })
     );
@@ -526,6 +536,7 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
     }
     assert!(
         presentation
+            .frame()
             .scene()
             .text_blocks()
             .iter()
@@ -533,6 +544,7 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
     );
     assert!(
         presentation
+            .frame()
             .scene()
             .text_blocks()
             .iter()
@@ -573,12 +585,14 @@ fn primary_presentation_uses_a_flat_light_surface() {
     .unwrap();
     let presentation = presentation(None, 0);
     let composer_panel = presentation
+        .frame()
         .scene()
         .rects()
         .iter()
         .find(|rect| rect.bounds() == layout.composer_panel)
         .unwrap();
     let info_editor_separator = presentation
+        .frame()
         .scene()
         .rects()
         .iter()
@@ -591,7 +605,10 @@ fn primary_presentation_uses_a_flat_light_surface() {
         })
         .unwrap();
 
-    assert_eq!(presentation.scene().background(), Color::rgb(252, 252, 253));
+    assert_eq!(
+        presentation.frame().scene().background(),
+        Color::rgb(252, 252, 253)
+    );
     assert_eq!(composer_panel.fill(), Color::WHITE);
     assert_eq!(composer_panel.border().widths().top, 1.0);
     assert_eq!(
@@ -599,6 +616,7 @@ fn primary_presentation_uses_a_flat_light_surface() {
         crate::shell_style::SHELL_PALETTE.border
     );
     let intentional_pills = presentation
+        .frame()
         .scene()
         .rects()
         .iter()
@@ -612,6 +630,7 @@ fn primary_presentation_uses_a_flat_light_surface() {
 fn primary_presentation_has_an_agent_timeline_and_fixed_composer() {
     let presentation = presentation(None, 0);
     let visible_text = presentation
+        .frame()
         .scene()
         .text_blocks()
         .iter()
@@ -624,7 +643,7 @@ fn primary_presentation_has_an_agent_timeline_and_fixed_composer() {
     assert!(visible_text.contains(&"Local"));
     assert!(!visible_text.contains(&"Agent"));
     assert!(!visible_text.contains(&"SESSIONS"));
-    assert_eq!(presentation.scene().icons().len(), 7);
+    assert_eq!(presentation.frame().scene().icons().len(), 8);
 }
 
 #[test]
@@ -638,6 +657,7 @@ fn expanded_tab_container_reflow_the_terminal_and_publish_a_selected_session_tab
     let presentation = presentation_with_tab_container(None, 0, TabContainerState::expanded());
     let accessibility_nodes = accessibility_nodes(&presentation, &UiDispatch::default());
     let visible_text = presentation
+        .frame()
         .scene()
         .text_blocks()
         .iter()
@@ -666,12 +686,14 @@ fn expanded_tab_container_reflow_the_terminal_and_publish_a_selected_session_tab
     assert_eq!(layout.composer.origin.x, 224.0);
     assert!(visible_text.contains(&"Search sessions..."));
     let inspected_search = presentation
+        .frame()
         .scene()
         .inspection()
         .target_at(Point::new(20.0, 50.0))
         .expect("session search should expose its inspection hierarchy");
     assert_eq!(
         presentation
+            .frame()
             .scene()
             .inspection()
             .ancestry(inspected_search.id())
@@ -793,6 +815,7 @@ fn session_search_filters_tabs_by_session_name() {
     );
     assert!(
         presentation
+            .frame()
             .scene()
             .text_blocks()
             .iter()
@@ -872,6 +895,7 @@ fn workspace_pane_defaults_to_files_in_the_main_workbench_with_navigation_and_ac
             .all(|node| !matches!(node.id, AGENT_EDITOR_PANE | MULTI_DIFF_EDITOR))
     );
     let visible_text = presentation
+        .frame()
         .scene()
         .text_blocks()
         .iter()
@@ -998,6 +1022,7 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
         AGENT_EXPLORER_PANE | AGENT_FILES_REFRESH | AGENT_FILES_SEARCH
     )));
     let visible_text = presentation
+        .frame()
         .scene()
         .text_blocks()
         .iter()
@@ -1057,6 +1082,7 @@ fn open_tab_context_menu_is_topmost_and_exposes_generic_actions() {
     );
     assert!(
         presentation
+            .frame()
             .scene()
             .text_blocks()
             .iter()
@@ -1084,6 +1110,7 @@ fn primary_presentation_publishes_current_control_semantics_and_focus() {
     assert_eq!(info_bar.role, AccessibilityRole::Group);
     assert_eq!(info_bar.label, "/ for commands");
     let inspected_info_bar = presentation
+        .frame()
         .scene()
         .inspection()
         .target_at(Point::new(
@@ -1093,6 +1120,7 @@ fn primary_presentation_publishes_current_control_semantics_and_focus() {
         .expect("composer info bar should expose its inspection hierarchy");
     assert_eq!(
         presentation
+            .frame()
             .scene()
             .inspection()
             .ancestry(inspected_info_bar.id())
@@ -1197,7 +1225,7 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
     };
     let mut presentation =
         build_shell_presentation(viewport(), closed_model.clone(), &mut text_layout);
-    let base_scene = presentation.scene().clone();
+    let base_scene = presentation.frame().scene().clone();
     let base_interactions = presentation.interaction_frame().clone();
     let base_accessibility = accessibility_nodes(&presentation, &dispatch);
     let mut menu = TabContextMenuState::default();
@@ -1225,7 +1253,7 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
             .node(TAB_CONTEXT_MENU)
             .is_some()
     );
-    assert_ne!(*presentation.scene(), base_scene);
+    assert_ne!(*presentation.frame().scene(), base_scene);
 
     assert!(rebuild_shell_overlays(
         &mut presentation,
@@ -1233,7 +1261,7 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         closed_model,
         &mut text_layout,
     ));
-    assert_eq!(*presentation.scene(), base_scene);
+    assert_eq!(*presentation.frame().scene(), base_scene);
     assert_eq!(*presentation.interaction_frame(), base_interactions);
     assert_eq!(
         accessibility_nodes(&presentation, &dispatch),
@@ -1374,9 +1402,9 @@ fn compact_viewport_uses_bounded_fallback_scene() {
         &mut text_layout,
     );
 
-    assert_eq!(presentation.scene().rects().len(), 1);
-    assert_eq!(presentation.scene().text_blocks().len(), 1);
-    assert_eq!(presentation.scene().text_blocks()[0].text(), "app");
+    assert_eq!(presentation.frame().scene().rects().len(), 1);
+    assert_eq!(presentation.frame().scene().text_blocks().len(), 1);
+    assert_eq!(presentation.frame().scene().text_blocks()[0].text(), "app");
 }
 
 #[test]
@@ -1448,6 +1476,7 @@ fn primary_terminal_blocks_do_not_override_the_agent_timeline() {
 
     let presentation = presentation(Some(&terminal), 0);
     let visible_text = presentation
+        .frame()
         .scene()
         .text_blocks()
         .iter()
@@ -1468,6 +1497,7 @@ fn primary_terminal_scrollback_does_not_change_the_agent_timeline() {
     }
     let presentation = presentation(Some(&terminal), 80);
     let visible_text = presentation
+        .frame()
         .scene()
         .text_blocks()
         .iter()
@@ -1518,6 +1548,7 @@ fn background_terminal_title_does_not_replace_the_agent_session_title() {
         presentation_with_tab_container(Some(&terminal), 0, TabContainerState::expanded());
 
     let text = presentation
+        .frame()
         .scene()
         .text_blocks()
         .iter()

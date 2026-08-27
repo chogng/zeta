@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use crate::{
     Point, Rect, ScrollAxis, ScrollCommand, ScrollState, ScrollView, ScrollViewStyle,
-    ScrollViewport, Size, UiScene,
+    ScrollViewport, ScrollbarPresentation, Size, UiScene,
 };
 
 /// Geometry for one projected list item.
@@ -318,6 +318,11 @@ impl ListView {
 
     pub fn with_overscan_items(mut self, overscan_items: usize) -> Self {
         self.layout = self.layout.with_overscan_items(overscan_items);
+        self
+    }
+
+    pub fn with_scrollbar_presentation(mut self, presentation: ScrollbarPresentation) -> Self {
+        self.scroll_view = self.scroll_view.with_scrollbar_presentation(presentation);
         self
     }
 

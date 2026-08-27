@@ -191,7 +191,7 @@ impl NativeApp {
                     }
                 }
                 zeta_workbench::TabIntent::Close(tab) => {
-                    let _ = self.close_session_tab(&tab);
+                    let _ = self.close_workbench_tab(&tab);
                 }
             }
             return;
@@ -262,6 +262,9 @@ impl NativeApp {
         if self.route_multi_diff_scrollbar_move(point) {
             return;
         }
+        if self.route_settings_scrollbar_move(point) {
+            return;
+        }
         let terminal_position = self.terminal_mouse_position(point);
         let terminal_captured = self.route_terminal_pointer_move(terminal_position);
         if !terminal_captured && self.route_terminal_selection_move(terminal_position) {
@@ -289,6 +292,12 @@ impl NativeApp {
         {
             self.rebuild_presentation();
             self.request_redraw();
+        }
+        if self
+            .settings
+            .keybindings_scrollbar_pointer_left(Instant::now())
+        {
+            self.rebuild_presentation_on_next_redraw();
         }
         let outcome = self.ui_dispatch.pointer_left();
         if pane_resize_cancelled {
@@ -373,6 +382,9 @@ impl NativeApp {
         if button == MouseButton::Left && self.route_multi_diff_scrollbar_button(state) {
             return;
         }
+        if button == MouseButton::Left && self.route_settings_scrollbar_button(state) {
+            return;
+        }
         if button == MouseButton::Left
             && state == ElementState::Pressed
             && let Some(point) = self.cursor_position
@@ -398,6 +410,60 @@ impl NativeApp {
         self.presentation
             .as_ref()?
             .element_bounds(shell_interaction::MULTI_DIFF_EDITOR)
+    }
+
+    pub(super) fn settings_keybindings_viewport(
+        &self,
+    ) -> Option<zeta_settings::SettingsKeybindingsViewport> {
+        if !self.workbench.workbench().tab_part().is_settings()
+            || self.settings.section() != zeta_settings::SettingsPageSection::Keybindings
+            || self.settings.keyboard_shortcuts().is_visible()
+        {
+            return None;
+        }
+        let bounds = self
+            .presentation
+            .as_ref()?
+            .element_bounds(zeta_settings::SETTINGS_KEYBINDINGS_LIST)?;
+        Some(zeta_settings::SettingsKeybindingsViewport::new(
+            bounds,
+            zeta_commands::AppCommandId::BINDABLE.len(),
+            self.keybindings_resource.diagnostics().len(),
+            self.palette.settings_section_style().scroll_view,
+        ))
+    }
+
+    fn route_settings_scrollbar_move(&mut self, point: Point) -> bool {
+        let Some(viewport) = self.settings_keybindings_viewport() else {
+            return false;
+        };
+        let outcome =
+            self.settings
+                .keybindings_scrollbar_pointer_moved(point, viewport, Instant::now());
+        if outcome.presentation_changed {
+            self.rebuild_presentation_on_next_redraw();
+        }
+        outcome.handled
+    }
+
+    fn route_settings_scrollbar_button(&mut self, state: ElementState) -> bool {
+        let Some(viewport) = self.settings_keybindings_viewport() else {
+            return false;
+        };
+        let point = self.cursor_position.unwrap_or(Point::new(-1.0, -1.0));
+        let now = Instant::now();
+        let outcome = match state {
+            ElementState::Pressed => self
+                .settings
+                .press_keybindings_scrollbar(point, viewport, now),
+            ElementState::Released => self
+                .settings
+                .release_keybindings_scrollbar(point, viewport, now),
+        };
+        if outcome.presentation_changed {
+            self.rebuild_presentation_on_next_redraw();
+        }
+        outcome.handled
     }
 
     pub(super) fn route_multi_diff_scrollbar_move(&mut self, point: Point) -> bool {

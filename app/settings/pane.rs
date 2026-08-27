@@ -160,6 +160,8 @@ pub fn draw_settings_pane(
             view.features.keybindings.keybinding_diagnostics,
             view.features.appearance.scheme,
             view.features.appearance.follows_system,
+            view.state.keybindings_scroll_state(),
+            view.state.keybindings_scrollbar_presentation(),
             view.dispatch,
         ));
     }

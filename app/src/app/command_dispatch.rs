@@ -310,7 +310,7 @@ fn execute_tab_context_menu_action(app: &mut NativeApp, request: &CommandRequest
     app.dismiss_tab_context_menu();
     if command_id == AppCommandId::CloseSession {
         if let Some(target_tab) = target_tab {
-            let _ = app.close_session_tab(&target_tab);
+            let _ = app.close_workbench_tab(&target_tab);
         }
         return;
     }
