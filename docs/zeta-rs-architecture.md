@@ -90,7 +90,7 @@ zeta-rs/
 ├── tool-executor/         # target local process execution boundary
 ```
 
-产品宿主不属于共享后端：`app` 的 `zui`、`zeta-ui`、renderer、`wgpu` 和 `winit` 位于
+产品宿主不属于共享后端：`app` 的 `zui`、`zeta-ui-components`、`zeta-workbench-ui`、renderer、`wgpu` 和 `winit` 位于
 `app/` 的直接子 crate；`zeta-code` 的 `zeta-cli` 与 `zeta-tui` 位于 `zeta-code/`。它们仍加入同一个
 根 Cargo workspace，但 ownership 由物理目录和依赖方向表达。
 
@@ -166,7 +166,7 @@ Agent conversation state；App Server 按请求组合并通过
 `zeta-editor` 当前拥有 `app` 使用的多行编辑、caret/selection、undo/redo、IME、language-aware
 syntax lifecycle/projection、普通文档结构折叠、viewport soft wrap 与 source/visual row 映射、代码视口绘制、retained `DiffEditorDocument`、复用两个 CodeEditor pane 的 side-by-side DiffEditor，以及纵向组合
 多个文件 section 的 MultiDiffEditor；它依赖
-`zeta-ui`、`zeta-diff` 和 `zeta-syntax`，但不依赖 `app`，也不拥有文件 Tab、平台事件、EditorHost 或
+`zeta-ui-components`、`zeta-diff` 和 `zeta-syntax`，但不依赖 `app`，也不拥有文件 Tab、平台事件、EditorHost 或
 TUI presentation。当前 API、接入义务和限制见
 [`editor/README.md`](../app/editor/README.md)。
 
@@ -188,7 +188,7 @@ Native 拥有关闭确认和 reload/conflict 操作条，而显式覆盖请求�
 [`text-file/README.md`](../zeta-rs/text-file/README.md)。
 
 `zeta-markdown` 当前拥有有资源上限的 CommonMark/GFM parsing、只读文档 snapshot、富文本与
-block layout 和 app presentation，并消费 `zeta-ui::ScrollState`；它依赖 `zeta-ui`，但不依赖
+block layout 和 app presentation，并消费 `zeta-ui-components::ScrollState`；它依赖 `zeta-ui-components`，但不依赖
 `app`，也不拥有消息 identity、网络图片、链接激活、平台输入或持久化。当前 API、
 信任边界和限制见 [`markdown/README.md`](../app/markdown/README.md)。
 
@@ -228,15 +228,15 @@ replacement、hover/completion/definition 和事件循环接到该层；PATH 中
 `zeta-editor`、不发现 executable，也不绘制 UI。crate contract 见
 [`lsp-manager/README.md`](../zeta-rs/lsp-manager/README.md)。
 
-`zeta-ui::ScrollState`、`ScrollMetrics`、`ScrollView` 与 `ScrollbarController` 提供
+`zeta-ui-components::ScrollState`、`ScrollMetrics`、`ScrollView` 与 `ScrollbarController` 提供
 domain-agnostic logical-pixel offset、clamp、viewport clip、内容坐标、同源 scrollbar
 paint/hit/track-page/thumb-drag geometry，以及 hover/active/fade deadline。MultiDiffEditor
 复用这套基座；平台 wheel normalization、pointer capture，以及 Terminal scrollback 的距底部
 行偏移、输出增长锚定和 alternate-screen 分流仍由 `app` 拥有，不能迁入通用 ScrollView。
 
-组件到 GPU 的依赖方向固定为 `zeta-ui Component → zui::UiScene → Renderer → concrete backend`；
+组件到 GPU 的依赖方向固定为 `zeta-ui-components Component → zui::UiScene → Renderer → concrete backend`；
 `UiScene` 通过 `SceneBatch` 保留跨 primitive 的真实绘制顺序。`zui` 不依赖组件 crate、窗口系统或
-wgpu，`zeta-ui` 只向下依赖 `zui`；`app` 只保存
+wgpu，`zeta-ui-components` 只向下依赖 `zui`；`app` 只保存
 `dyn Renderer`，当前具体类型只在 composition-root adapter 中选择。Native 的 interaction 与
 accessibility frame 不进入 renderer。完整所有权、后端替换路径和架构约束见
 [`app/docs/rendering-architecture.md`](../app/docs/rendering-architecture.md)。

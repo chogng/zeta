@@ -2,7 +2,7 @@
 
 > 状态：Compatibility。Agent 开发能力、Thread authority、统一 Composer 与 direct Shell Turn 以 [`native-agent-console.md`](native-agent-console.md) 为 canonical；Agent Terminal 会话流、按需检查、最大化与主窗口组合由 [`native-layout.md`](native-layout.md) 拥有。本文只维护 Terminal Surface、PTY、grid、screen mode、selection 与 terminal protocol 的兼容性边界。
 
-> 本文是 `app` terminal compatibility 和分阶段演进的 canonical 文档。三条公开产品线与宿主边界见 [`product-lines.md`](../../docs/product-lines.md)；本文只负责 `app` 的纯 Rust Desktop 终端实现。当前源码所有权、调用路径和测试入口见 [`app` README](../README.md)；terminal grid 与 BlockList 的实现契约见 [`zeta-terminal` README](../../zeta-rs/terminal/README.md)；文本输入、IME 与 caret 的跨 crate 所有权见 [`native-text-input.md`](native-text-input.md)；窗口 chrome 与控件占位的实现契约见 [`zui` 开发文档](../zui/README.md)。Workbench 模型、布局和通用 binding 的边界见 [`zeta-workbench`](../workbench/README.md)、[`zeta-workbench-layout`](../workbench-layout/README.md) 和 [`zeta-workbench-host`](../workbench-host/README.md)。
+> 本文是 `app` terminal compatibility 和分阶段演进的 canonical 文档。三条公开产品线与宿主边界见 [`product-lines.md`](../../docs/product-lines.md)；本文只负责 `app` 的纯 Rust Desktop 终端实现。当前源码所有权、调用路径和测试入口见 [`app` README](../README.md)；terminal grid 与 BlockList 的实现契约见 [`zeta-terminal` README](../../zeta-rs/terminal/README.md)；文本输入、IME 与 caret 的跨 crate 所有权见 [`native-text-input.md`](native-text-input.md)；窗口 chrome 与控件占位的实现契约见 [`zui` 开发文档](../zui/README.md)。Workbench 模型、布局、界面和通用 binding 的边界见 [`zeta-workbench`](../workbench/README.md)、[`zeta-workbench-layout`](../workbench-layout/README.md)、[`zeta-workbench-ui`](../workbench-ui/README.md) 和 [`zeta-workbench-host`](../workbench-host/README.md)。
 
 ## 快速理解
 
@@ -33,7 +33,7 @@ Terminal session 是 `app` 主窗口的执行上下文和交互基座，但 PTY 
 
 | 边界 | 规范名称 | 示例 |
 | --- | --- | --- |
-| 共享仓库、crate 和内部标识 | `zeta` / `zeta-*` | `zeta-ui`、`zeta-terminal-*` |
+| 共享仓库、crate 和内部标识 | `zeta` / `zeta-*` | `zeta-ui-components`、`zeta-terminal-*` |
 | `app` Cargo package、发布的终端应用及其用户可见表面 | `app` | package、executable、app bundle、窗口标题、Top Bar 和输入提示 |
 
 因此不把内部 crate、CSS、协议或测试标识重命名为 `app-*`。公开发布前仍需单独核查 `app`
@@ -98,17 +98,17 @@ Body mount
 
 | 层 | 责任 | 当前 owner / 状态 |
 | --- | --- | --- |
-| `NavBar` | 横向/纵向容器、slot、滚动或 overflow 的 presentation geometry | 计划由 `zeta-ui` 提供 presentation-only contract；尚未作为独立 public component 实现 |
-| `TabList` | Tab surface 的排列、item bounds 和状态绘制 | `zeta-ui::TabList`；不拥有 identity、active transition、关闭动作或 tabpanel |
+| `NavBar` | 横向/纵向容器、slot、滚动或 overflow 的 presentation geometry | 计划由 `zeta-ui-components` 提供 presentation-only contract；尚未作为独立 public component 实现 |
+| `TabList` | Tab surface 的排列、item bounds 和状态绘制 | `zeta-ui-components::TabList`；不拥有 identity、active transition、关闭动作或 tabpanel |
 | `TabPart` | 保存多个 browser-style `TabGroup`、全局 active Tab 与跨组移动/合并 | `zeta-workbench::TabPart`；不保存方向、bounds 或 UI identity |
 | `TabGroup` | 保存一组有序 `TabInput` 及 label/collapsed 元数据 | `zeta-workbench::TabGroup`；不拥有独立内容 viewport 或 renderer node |
 | `TabInput` | 一个可被 Workbench 导航的逻辑内容输入，例如 Session 或 Settings | `zeta-workbench::TabInput`；不分配 UI identity、不绘制、不直接执行激活副作用 |
-| Tab presentation | 将 `TabPart`/`TabGroup`/`TabInput` 映射为方向、标题、状态、图标、`ElementId` 和 accessibility node | `zeta-ui::TabContainer` 同时承载 body 与 Titlebar 两种排列，两处使用独立 UI identity scope |
+| Tab presentation | 将 `TabPart`/`TabGroup`/`TabInput` 映射为方向、标题、状态、图标、`ElementId` 和 accessibility node | `zeta-workbench-ui::TabContainer` 同时承载 body 与 Titlebar 两种排列，两处使用独立 UI identity scope |
 | Controller / provider | 处理选择后的 Session、Settings、Agent 或外部资源行为 | 当前由 `app` host 和各自 feature crate 负责；尚无通用 Provider API |
 
 这里的 `TabInput` 采用 VS Code `EditorInput` 类似的含义，表示“被打开的内容”，不是文本输入框。搜索或创建入口继续使用 `SearchBox`、`InputBox` 等 UI 组件，避免与逻辑 `TabInput` 混淆。
 
-逻辑导航位于 `zeta-workbench`：`TabPart → TabGroup → TabInput` 只保存稳定 identity、分组和选择。可复用的 `TabContainer`、Titlebar、Toolbar、interaction identity 和 resize state 位于 `zeta-ui::workbench`；产品 app 只提供 palette、Session 可用性和命令接线。
+逻辑导航位于 `zeta-workbench`：`TabPart → TabGroup → TabInput` 只保存稳定 identity、分组和选择。`TabContainer`、Titlebar、Toolbar、interaction identity 和 resize state 位于 `zeta-workbench-ui`；产品 app 只提供 palette、Session 可用性和命令接线。
 
 ### 2.2 TabPart、TabGroup 与 PaneGroup
 
@@ -153,7 +153,7 @@ Workbench
 
 选择 `PaneInput` 而不是 `EditorInput`，是因为 Terminal、Agent、Files、Diff 和 Settings 并不都是 editor。`PaneInput` 表示“要在这个 Pane 位置打开什么”；`Pane` 表示“这个内容当前位于哪一个布局叶子”；`PaneView` 才负责把输入投影成具体 UI。一个 `PaneGroup` 可以有多个 `PaneInput` kind，但一个可见 Pane 只绑定一个 PaneInput；同一个逻辑 input 若需要同时打开多次，应由不同的 PaneId 或 feature instance identity 区分。
 
-PaneGroup 拥有 UI-neutral 的 PaneInput descriptor 与 active input identity，但不拥有对应的 renderer、TerminalSession 或 feature runtime。host 可以使用 `PaneInputKind` 做允许组合、快捷键和输入路由判断，再把内容绘制委托给对应 crate；`zeta-ui` 只接收 PanePart 的几何 spec，不识别这些 kind。
+PaneGroup 拥有 UI-neutral 的 PaneInput descriptor 与 active input identity，但不拥有对应的 renderer、TerminalSession 或 feature runtime。host 可以使用 `PaneInputKind` 做允许组合、快捷键和输入路由判断，再把内容绘制委托给对应 crate；`zeta-ui-components` 只接收 PanePart 的几何 spec，不识别这些 kind。
 
 PaneGroup 的纯结构模型位于 `zeta-workbench`。产品 pane binding 由 `zeta-workbench-controller` 对接，Session 到 terminal runtime 的生命周期由 `zeta-terminal-workspace` 管理，产品 command 和 scene lifecycle 留在 app composition；稳定的通用递归几何位于 `zeta-workbench-layout` 并复用 `zui`，不把 feature state 或产品 runtime 下沉到 Workbench crate。
 
@@ -161,25 +161,25 @@ PaneGroup 的纯结构模型位于 `zeta-workbench`。产品 pane binding 由 `z
 
 | 能力 | 最终 owner | 职责边界 |
 | --- | --- | --- |
-| Window、Top Bar 与 Terminal Workspace 外部布局 | `app` product host | 决定窗口区域和活动会话，不进入 `zeta-ui` |
-| 单轴 Pane 尺寸约束、Sash track、feedback geometry 与通用 resize snapshot drag | `zui::SplitViewLayout` / `zeta-ui::{Sash,SashController,Resizable}` | 不持有产品显隐、preferred width、pointer capture 或持久化；`Resizable` 只负责通用 drag 计算 |
+| Window 与 Terminal Workspace 外部布局 | `app` product host | 决定窗口区域和活动会话，不进入 UI 组件或 Workbench UI crate |
+| 单轴 Pane 尺寸约束、Sash track、feedback geometry 与通用 resize snapshot drag | `zui::SplitViewLayout` / `zeta-ui-components::{Sash,SashController,Resizable}` | 不持有产品显隐、preferred width、pointer capture 或持久化；`Resizable` 只负责通用 drag 计算 |
 | 递归 Pane geometry 与 owning-split Sash 路由 | `zui::GridLayout` | 递归组合 SplitView；不持有 Terminal Session、Agent content、Pane Tree mutation 或 active Pane |
-| Product PaneContainer/PanePart/PaneGroup topology 与选择状态 | `zeta-workbench` | Workbench 保存 TabInput → PaneContainer；PaneContainer 持有 PanePart，PanePart 保存 split tree、active PaneGroup 与 ratio，PaneGroup 保存 PaneInput tabs；不进入 `zeta-ui` |
+| Product PaneContainer/PanePart/PaneGroup topology 与选择状态 | `zeta-workbench` | Workbench 保存 TabInput → PaneContainer；PaneContainer 持有 PanePart，PanePart 保存 split tree、active PaneGroup 与 ratio，PaneGroup 保存 PaneInput tabs；不进入 UI crate |
 | PaneInput descriptor 与 Pane binding | `zeta-workbench::PaneInput` + `zeta-workbench-host::{PaneHost,PaneHostScope}` | 区分 Pane layout identity、Terminal/Agent/Files/Diff/Settings content kind 与可选 runtime；产品层使用 `PaneBindingId` 连接具体 runtime |
 | PaneGroup 的递归叶子 bounds 与 owning-split sash | `zeta-workbench-layout::PaneGroupLayout` + `zui::GridLayout` | 消费 Workbench 提供的 `PaneNode`；只计算 bounds/sash，不拥有 PaneTree mutation 或 active Pane |
-| Tab Container 显隐与 preferred width；产品 resize gesture | `zeta-ui::TabContainerState` | 使用通用 Split/Sash geometry；状态保存尺寸、显隐和 drag snapshot，产品 app 负责命中与 pointer 路由；不拥有 TabInput 或 Session lifecycle |
+| Tab Container 显隐与 preferred width；产品 resize gesture | `zeta-workbench-ui::TabContainerState` | 使用通用 Split/Sash geometry；状态保存尺寸、显隐和 drag snapshot，产品 app 负责命中与 pointer 路由；不拥有 TabInput 或 Session lifecycle |
 | InspectorPart 显隐与 preferred width；产品 resize gesture | `zeta-workbench::InspectorPartState` | 使用通用 Split/Sash geometry；产品 app 负责命中与 pointer 路由；默认 520px、限制为 360–800px，并为 main Pane 保留至少 400px；不拥有 Files/Diff feature state |
 | Main workspace Files/Diff composition | `zeta-workbench-host::PaneHost` + [`features/workspace`](../src/features/workspace/workspace_panes.rs) 的 `WorkspacePaneNavigation` / `FilesPane` / `EditorPane` | 产品 host 按 `PaneInputKind` 挂载主工作区 Pane；workspace feature 只拥有 Files/SCM state 与具体 view，不拥有外层 Workbench geometry |
 | Files 树、模糊搜索与领先/落后显示 | [`features/workspace`](../src/features/workspace/workspace_panes.rs) / `zeta-file-search` / `zeta-git` | `features/workspace::files::FilesState` 保存可丢弃 UI 状态；app 适配目录 DTO 并执行动作，Git 命令解析和模糊匹配器仍由各自 crate 拥有 |
 | 多文件差异内容与视口 binding | `features/workspace::scm::EditorPane` / `zeta-editor::MultiDiffEditor` | SCM feature 保存 changed-file collection 与每文件 `DiffEditorState`；Native 只提供 SCM 投影 |
-| 通用 UI 滚动 geometry、交互映射与状态 transition | `zeta-ui::ScrollView` / `ScrollState` / `ScrollbarController` | MultiDiff 复用完整 logical-pixel 状态和交互映射；BlockOutputViewport 通过 Native adapter 复用 clip、内容坐标和 scrollbar paint；Terminal 仍保留底部相对行锚定与输出增长策略 |
-| Top Bar 内部 action 排列 | `zeta-ui::ActionBar` | 后续有真实 action 时使用；只拥有 representation geometry 和 paint |
-| 通用 Tab surface 与横/纵排列 | `zeta-ui::Tab` / `TabList` | 只拥有 presentation state、item size/gap、surface paint 和同源 bounds；不拥有 product content 或 tabpanel |
-| NavBar 导航容器 | 计划中的 `zeta-ui` presentation contract | 尚未实现；若落地，只拥有方向、slot、滚动/overflow geometry，不拥有产品 identity 或状态 |
-| Workbench Tabs 与活动 Session/Settings presentation | `zeta-workbench::{TabPart,TabGroup,TabInput}` + `zeta-ui::TabContainer` + app activation wiring | `TabPart` 统一维护分组和全局 active selection；两种排列各自分配 `ElementId`，只通过 `TabInputKey` 汇合，Settings 不复制 Session lifecycle |
-| 锚点浮层定位、viewport 约束与 layer 合成 | `zeta-ui::ContextView` | 不拥有显示生命周期、输入路由或产品 action |
-| 无边框下拉 surface、可选 header、纵向 item geometry 与默认选择 | `zeta-ui::Dropdown` | 组合 ContextView/ActionBar；不拥有产品查询、选择 identity、关闭或 command |
-| 柔和阴影、2px menu padding、4px radius、纵向 item geometry 与默认选择 | `zeta-ui::ContextMenu` | 组合 ContextView/ActionBar；不拥有 Session identity、关闭或 command |
+| 通用 UI 滚动 geometry、交互映射与状态 transition | `zeta-ui-components::ScrollView` / `ScrollState` / `ScrollbarController` | MultiDiff 复用完整 logical-pixel 状态和交互映射；BlockOutputViewport 通过 Native adapter 复用 clip、内容坐标和 scrollbar paint；Terminal 仍保留底部相对行锚定与输出增长策略 |
+| Top Bar 内部 action 排列 | `zeta-ui-components::ActionBar` | 后续有真实 action 时使用；只拥有 representation geometry 和 paint |
+| 通用 Tab surface 与横/纵排列 | `zeta-ui-components::Tab` / `TabList` | 只拥有 presentation state、item size/gap、surface paint 和同源 bounds；不拥有 product content 或 tabpanel |
+| NavBar 导航容器 | 计划中的 `zeta-ui-components` presentation contract | 尚未实现；若落地，只拥有方向、slot、滚动/overflow geometry，不拥有产品 identity 或状态 |
+| Workbench Tabs 与活动 Session/Settings presentation | `zeta-workbench::{TabPart,TabGroup,TabInput}` + `zeta-workbench-ui::TabContainer` + app activation wiring | `TabPart` 统一维护分组和全局 active selection；两种排列各自分配 `ElementId`，只通过 `TabInputKey` 汇合，Settings 不复制 Session lifecycle |
+| 锚点浮层定位、viewport 约束与 layer 合成 | `zeta-ui-components::ContextView` | 不拥有显示生命周期、输入路由或产品 action |
+| 无边框下拉 surface、可选 header、纵向 item geometry 与默认选择 | `zeta-ui-components::Dropdown` | 组合 ContextView/ActionBar；不拥有产品查询、选择 identity、关闭或 command |
+| 柔和阴影、2px menu padding、4px radius、纵向 item geometry 与默认选择 | `zeta-ui-components::ContextMenu` | 组合 ContextView/ActionBar；不拥有 Session identity、关闭或 command |
 | Session Tab 右键菜单生命周期与 command identity | `app/src/session/session_context_menu` | 保存目标、锚点与恢复焦点；菜单关闭后不保留第二份 Session 状态 |
 | Product command identity 与注册式执行 | [`zeta-commands`](../commands/README.md) / `app/src/app/command_dispatch` | pointer、menu 和 shortcut 只提供入口，业务行为汇合到同一 `CommandRequest`，再由宿主注册的 handler 执行 |
 | 平台无关按键、规则顺序与冲突解析 | [`zeta-keybinding`](../../zeta-rs/keybinding/README.md) | 不读取 winit event、focus、terminal state 或用户配置，不执行产品 command |
@@ -211,13 +211,13 @@ Session、Thread、Turn、PTY process 和 durable output 必须来自对应 runt
 | --- | --- | --- |
 | `titlebar::Titlebar` | 绘制 32px 窗口顶区、拖拽区、横向 `TabContainer`、Tab Container toggle 和 Workspace Pane toggle `ActionBar`；不显示独立标题文案 | Top Bar |
 | `zui::WindowControlInsets` | 按 native chrome policy 提供覆盖产品内容的左右逻辑占位；macOS full-size titlebar 当前为左侧 70px | 原生窗口控件安全区 |
-| `zeta-ui::TabContainer` | 按 `TabGroup` 把 `TabPart` 组合成一个或多个 `zeta-ui::TabList`；body 使用两行纵向项，Titlebar 使用单行横向项，Settings 绘制 gear icon | 通用 TabList 支持双向排列；App Server Session 切换、browser-style group model、singleton Settings selection 和双挂载 identity 已接入 |
+| `zeta-workbench-ui::TabContainer` | 按 `TabGroup` 把 `TabPart` 组合成一个或多个 `zeta-ui-components::TabList`；body 使用两行纵向项，Titlebar 使用单行横向项，Settings 绘制 gear icon | 通用 TabList 支持双向排列；App Server Session 切换、browser-style group model、singleton Settings selection 和双挂载 identity 已接入 |
 | `session::session_context_menu::SessionContextMenu` | 右键任一真实 Session Tab 后，用通用 `ContextMenu` 基座绘制 Pin、Close、Rename、Fork；目标保存逻辑 `TabInputKey`；基座提供 renderer 柔和阴影、2px padding 与 4px radius，默认选择 Pin；菜单子树打开时成为 modal interaction scope，hover 同步 roving focus 并在移出后保留最后一项，同时支持菜单外点击、Escape、上下键、Tab、Enter/Space 与焦点恢复 | 下层控件在菜单打开期间不接收 pointer、focus 或 activation；Close 通过 App Server Stop contract 执行并清理本地 Tab/Pane/runtime，Pin/Rename/Fork transition 尚未执行 |
 | `ShellLayout` | 组合扁平 titlebar、可选 Tab Container，并把剩余区域交给 `WorkspaceLayout` | primary screen 窗口外层布局 |
 | `zeta-workbench-layout::PaneGroupLayout` / `zui::GridLayout` | 把 Workbench `PaneNode` 投影为递归 Grid Leaf 和 owning-split Sash；alternate screen 使用每个 Pane 自己的完整 Leaf | Terminal PanePart 的 host model、逐 Pane runtime、焦点路由、Sash 比例调整和逐 Pane resize 已接入 |
 | `pane_input::{PaneInput,PaneInputKind,PaneBinding}` / `zeta-workbench-host::{PaneHost,PaneHostScope}` | 把 Pane leaf 映射到 Terminal、Agent、Files、Diff 或 Settings descriptor，并在 frame 组装阶段产生含 `PaneBindingId` 的 view mount | Session Tab 的 Agent/Terminal/Files/Diff Pane 已挂载；Settings 仍待具体 view/state 接入 |
-| `TabContainerState` / `zeta-ui::Resizable + Sash` | host 保存 preferred width 与 visibility；Resizable 保存 drag snapshot/relative delta，Sash 只绘制 8px track / 2px feedback | 垂直投影宽度限制为 160–480px，并始终为 main Pane 保留至少 240px |
-| `InspectorPartState` / `zeta-ui::Resizable + Sash` | host 保存 Inspector Part 的 preferred width 与 visibility；Resizable 保存 drag snapshot/relative delta，Sash 只绘制 8px track / 2px feedback | 默认 520px、限制为 360–800px，并始终为 main Pane 保留至少 400px；只承载文件编辑器 Inspector |
+| `TabContainerState` / `zeta-ui-components::Resizable + Sash` | host 保存 preferred width 与 visibility；Resizable 保存 drag snapshot/relative delta，Sash 只绘制 8px track / 2px feedback | 垂直投影宽度限制为 160–480px，并始终为 main Pane 保留至少 240px |
+| `InspectorPartState` / `zeta-ui-components::Resizable + Sash` | host 保存 Inspector Part 的 preferred width 与 visibility；Resizable 保存 drag snapshot/relative delta，Sash 只绘制 8px track / 2px feedback | 默认 520px、限制为 360–800px，并始终为 main Pane 保留至少 400px；只承载文件编辑器 Inspector |
 | `features/workspace::WorkspacePaneNavigation` | 跨功能 Changes/Files ActionBar 与导航语义 | 不拥有 Files/SCM 功能布局 |
 | `features/workspace::files::{FilesLayout, FilesToolbar, FilesPane}` / `zeta-file-search` | Files 自己拥有 36px 功能 toolbar、根目录文件树与工作区路径模糊匹配结果 | Search 输入已接键盘、剪贴板和 IME；目录展开、滚动和文件打开动作已由 Native adapter 接线 |
 | `features/workspace::scm::{ScmLayout, EditorPaneState, EditorPane}` / `zeta-editor::MultiDiffEditor` | SCM 自己拥有 Changes toolbar slot 与整体纵向视口；Native 将 `zeta-git` snapshot 映射为 `ScmDiff` | 启动、Refresh 与 command completion 更新；binary、非 UTF-8 或单侧超过 2 MiB 的文件跳过 |
@@ -386,7 +386,7 @@ geometry API，RTL 换边和未来 Windows controls overlay 仍是 adapter 扩�
   父子关系、语义和 intent，业务模型仍由各自 owner 保存；
 - 为现有 AccessKit adapter 增加 VoiceOver/Narrator/Orca smoke coverage，并扩展 text selection/edit action；
 - 让 root layout 收敛为 Top Bar、Agent Terminal 会话流和单一临时检查对象；Session 列表改为按需打开，通用单轴约束继续委托给 `SplitViewLayout`；
-- 保持 `zeta-ui` presentation-only，不把 Session 或 terminal reducer 下沉到组件层。
+- 保持 `zeta-ui-components` 通用、`zeta-workbench-ui` 只负责 Workbench presentation，不把 Session 或 terminal reducer 下沉到 UI crate。
 
 ### 6.2 Terminal Pane 分屏
 
@@ -428,7 +428,7 @@ Terminal Pane Splitter 复用当前 `GridLayout`、`SplitViewLayout` 与 `Sash` 
 
 - 终端会话是窗口主体，chrome 和导航服务于终端而不是与终端平级；
 - primary screen 始终由上方 BlockOutputViewport 与固定底部 CommandInputEditor 组成；
-- product host 决定活动 Session、布局和事件路由，`zeta-ui` 只消费 presentation state；
+- product host 决定活动 Session、布局和事件路由，`zeta-workbench-ui` 只消费 Workbench presentation state；
 - pointer、menu、shortcut 与后续 command palette 必须执行同一个 product command identity；
 - hit-test、hover/press/capture、focus、键盘导航、cursor 和 accessibility semantics 必须共享
   同一个 `ElementId`，不能由各组件建立彼此不一致的状态表；

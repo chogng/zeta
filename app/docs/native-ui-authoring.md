@@ -1,6 +1,6 @@
 # Native UI：编写与样式契约
 
-> 状态：Current contract。本文是 `zui`、`zeta-ui`、`zeta-workbench-layout` 与 `app` product host 之间的 UI 编写和样式边界；具体 crate API 由 [`zui` README](../zui/README.md)、[`zeta-ui` README](../ui/README.md) 和 [`zeta-workbench-layout` README](../workbench-layout/README.md) 维护。
+> 状态：Current contract。本文是 `zui`、`zeta-ui-components`、`zeta-workbench-ui`、`zeta-workbench-layout` 与 `app` product host 之间的 UI 编写和样式边界；具体 crate API 由 [`zui` README](../zui/README.md)、[`zeta-ui-components` README](../ui-components/README.md)、[`zeta-workbench-ui` README](../workbench-ui/README.md) 和 [`zeta-workbench-layout` README](../workbench-layout/README.md) 维护。
 
 ## 快速理解
 
@@ -9,7 +9,7 @@ Native UI 使用 Rust 声明组件结构和布局，使用 typed style struct �
 | 想表达什么 | 当前写法 | 谁拥有含义 | 是否允许调用方穿透覆盖 |
 | --- | --- | --- | --- |
 | 组件树与基础布局 | `Element::leaf`、`Element::row`、`Element::column` 及其 builder | `zui::ui::presentation` | 否；通过公开的 Element API 表达 |
-| Button、Tab、InputBox 等组件外观 | `ButtonStyle`、`TabStyle`、`InputBoxStyle` 等 typed style | `zeta-ui` 组件 | 否；通过 style、state 或 named variant 传入 |
+| Button、Tab、InputBox 等组件外观 | `ButtonStyle`、`TabStyle`、`InputBoxStyle` 等 typed style | `zeta-ui-components` 组件 | 否；通过 style、state 或 named variant 传入 |
 | 主题颜色和标准尺寸 | `ThemeSnapshot` 到 product palette，再到组件 style | `zeta-theme` 与各宿主投影 | 否；不在组件中复制主题值 |
 | hover、focus、selected、disabled | host 投影的 typed state | 交互/产品 host 判定，组件解释视觉 | 否；组件不自行猜测业务状态 |
 | view-local / projected state 与订阅 | `ViewState<T>`、`ComponentRuntime`、`ComponentContext::{local_state,observe_state,retain_resource}` | `zui` 管理 presentation 生命周期；host 仍拥有产品权威状态与副作用 | 否；只能通过 typed state 和稳定 component identity 连接 |
@@ -21,7 +21,7 @@ Native UI 使用 Rust 声明组件结构和布局，使用 typed style struct �
 flowchart LR
     T[ThemeSnapshot] --> P[Host palette/style factory]
     S[Product state + UiDispatch] --> V[Presentation state]
-    P --> C[zeta-ui component]
+    P --> C[zeta-ui-components component]
     V --> C
     C --> E[zui Element tree]
     E --> CE[ComputedElement]
@@ -35,7 +35,7 @@ flowchart LR
 
 ## 1. 适用范围与非目标
 
-本文适用于 `app/zui` 的 backend-neutral UI contract、`app/ui` 的可复用 Native 组件，以及 `app` 和领域 crate 的产品 presentation adapter。
+本文适用于 `app/zui` 的 backend-neutral UI contract、`app/ui-components` 的可复用 Native 组件，以及 `app` 和领域 crate 的产品 presentation adapter。
 
 本文不定义浏览器 Renderer 的 CSS；浏览器 DOM、CSS selector 和 Workbench Part 样式仍由 [`ui-styling-ownership.md`](../../docs/ui-styling-ownership.md) 拥有。共享 design token 的跨宿主规则由 [`design-tokens.md`](../../docs/design-tokens.md) 拥有。
 
@@ -54,7 +54,8 @@ Native UI 当前明确不提供以下能力：
 | 层 | 负责什么 | 当前入口 | 明确不负责什么 |
 | --- | --- | --- | --- |
 | `zui` presentation | Element 树、基础 flow、computed geometry、paint primitive、scene、inspection，以及 view-local state/subscription 和 component mount resource | `zui::ui::{Element,Component,ComputedElement,UiScene,ViewState,ComponentRuntime}` | Button 语义、主题选择、产品 reducer、GPU 和业务 action/副作用 |
-| `zeta-ui` component | Button、TabList、ScrollView、InputBox 等组件的内部几何、视觉状态解释和 scene composition | `zeta_ui::{ButtonStyle,TabStyle,ScrollViewStyle,...}` | 产品 identity、业务 state、pointer capture、command、副作用 |
+| `zeta-ui-components` component | Button、TabList、ScrollView、InputBox 等组件的内部几何、视觉状态解释和 scene composition | `zeta_ui_components::{ButtonStyle,TabStyle,ScrollViewStyle,...}` | 产品 identity、业务 state、pointer capture、command、副作用 |
+| `zeta-workbench-ui` | Workbench Titlebar、TabContainer、Toolbar、interaction identity 与 presentation state | `zeta_workbench_ui::{Titlebar,TabContainer,TabContainerState,...}` | Session 生命周期、持久模型、产品命令执行 |
 | Theme / palette projection | 将共享主题 token 解析为 immutable snapshot，再映射为宿主 palette 或组件 style | `zeta_theme::ThemeSnapshot`、`ShellPalette` 及领域 style factory | 判断组件是否 hover、selected 或 visible；创建 selector |
 | Product host | 选择组件、保存权威状态、投影交互状态、提供 bounds、组合 scene 和执行 action | `app`、`features/workspace`、`zeta-editor` 等 | 复制组件内部布局、从 primitive 反推语义、穿透修改共享组件内部状态 |
 
@@ -119,9 +120,9 @@ let button_style = ButtonStyle::new(
 
 ### 4.2 外部布局与组件内部布局分开
 
-`zeta-workbench-layout` 负责 Workbench/Pane 的外部结构几何，并使用 `zui::ui::{SplitViewLayout,GridLayout}` 计算通用约束；它们不替代 `Element`，也不持有产品 Pane state。`zeta-ui` 只负责组件内部的 Button、Tab、scrollbar、input chrome 和浮层布局。
+`zeta-workbench-layout` 负责 Workbench/Pane 的外部结构几何，并使用 `zui::ui::{SplitViewLayout,GridLayout}` 计算通用约束；它们不替代 `Element`，也不持有产品 Pane state。`zeta-ui-components` 只负责组件内部的 Button、Tab、scrollbar、input chrome 和浮层布局。
 
-组件内部的 Button content、Tab item、scrollbar、input chrome 和浮层 content 由对应 `zeta-ui` 组件 style 与 Element tree 负责。产品 host 只提供外部 bounds、数据投影和 interaction identity。
+组件内部的 Button content、Tab item、scrollbar、input chrome 和浮层 content 由对应 `zeta-ui-components` 组件 style 与 Element tree 负责。产品 host 只提供外部 bounds、数据投影和 interaction identity。
 
 如果组件需要当前 contract 尚未表达的 min/max size、cross-axis alignment、intrinsic measurement、margin 或 wrapping，应先提出一个 typed layout contract；不能通过 host 手工计算一套平行 geometry，也不能用未定义的 CSS-like 字符串逃避类型设计。
 
@@ -143,7 +144,7 @@ Native 中的 style struct 是组件公开的样式 contract。它可以包含�
 
 1. 如果只是主题值不同，从现有 `ThemeSnapshot` 或 palette 投影不同值。
 2. 如果是同一组件的稳定语义差异，增加有名称的 typed variant 或 selection，例如 `ButtonSelection`。
-3. 如果多个组件共享同一套 geometry 或状态解释，扩展 `zeta-ui` 的公共组件 contract。
+3. 如果多个组件共享同一套 geometry 或状态解释，扩展 `zeta-ui-components` 的公共组件 contract。
 4. 只有结构、交互语义或生命周期确实不同，才新增组件类型。
 
 不要为单个 product host 增加无语义的布尔开关、任意 CSS class、深层 selector 或公共组件继承层。
@@ -183,7 +184,7 @@ Native 中的 style struct 是组件公开的样式 contract。它可以包含�
 zeta-theme token
   → immutable ThemeSnapshot
   → host palette / domain style factory
-  → typed zeta-ui style
+  → typed zeta-ui-components style
   → component state selection
   → UiScene primitives
 ```
@@ -213,7 +214,7 @@ Native UI 的 authoring contract 不只决定颜色和布局，还决定一帧�
 
 - `zui` 已提供 `Element`、`ComputedElement`、`Component`、`UiScene`、inspection 和 backend-neutral primitive contract；
 - `zui` 已提供 `ViewState` revision/subscription，以及由稳定 `ElementId` 驱动 local state、external observation、RAII resource 和 unmount cleanup 的 `ComponentRuntime`；
-- `zeta-ui` 已提供 Button、Switch、ActionBar、TabList、ScrollView、InputBox、ContextView 等 typed component/style contract；
+- `zeta-ui-components` 已提供 Button、Switch、ActionBar、TabList、ScrollView、InputBox、ContextView 等 typed component/style contract；
 - Native host 已通过主题快照、palette 和领域 style factory 向组件投影颜色与标准尺寸；
 - 组件的 paint、interaction、inspection 和 accessibility 已沿同一 frame/Element contract 组合；
 - DevTools 展示 scene inspection 和 computed layout，但不模拟 DOM/CSS debugger。
@@ -231,7 +232,7 @@ Native UI 的 authoring contract 不只决定颜色和布局，还决定一帧�
 未来扩展必须先回答：
 
 - 新属性是结构布局、组件内部几何、主题值还是产品状态？
-- 是否有至少两个真实 caller，足以证明它应进入 `zui` 或 `zeta-ui` 公共 contract？
+- 是否有至少两个真实 caller，足以证明它应进入 `zui` 或 `zeta-ui-components` 公共 contract？
 - 它如何同时驱动 paint、hit-test、inspection 和 accessibility？
 - 它是否需要 retained state、animation 或 frame invalidation？如果需要，能否接入 `ComponentRuntime`、`ViewState`、`AnimationRegistry` 或现有 `zui::runtime`，并由稳定 identity 管理生命周期？
 - 它是否会让 host 通过字符串 selector 穿透组件内部？如果会，应改成 typed variant 或新的组件 owner。
@@ -249,7 +250,7 @@ Native UI 的 authoring contract 不只决定颜色和布局，还决定一帧�
 - [ ] 子组件通过统一 composition context 绘制，inspection、interaction 和 accessibility 没有平行树。
 - [ ] 组件不依赖 `wgpu`、`winit`、product reducer、App Server 或平台 timer。
 - [ ] 测试验证 computed geometry、状态 presentation、hit-test 和必要的 accessibility projection。
-- [ ] 修改了 public API、owner、token 或限制时，同步更新 `zui`/`zeta-ui` README 和本契约的状态表。
+- [ ] 修改了 public API、owner、token 或限制时，同步更新 `zui`/`zeta-ui-components` README 和本契约的状态表。
 
 ## 10. 实现入口
 
@@ -258,7 +259,7 @@ Native UI 的 authoring contract 不只决定颜色和布局，还决定一帧�
 | 修改内容 | 入口 |
 | --- | --- |
 | Element、computed layout、scene、inspection、renderer-neutral primitive | [`zui` README](../zui/README.md) |
-| Button、List、Tab、ScrollView、InputBox 等通用组件 | [`zeta-ui` README](../ui/README.md) |
+| Button、List、Tab、ScrollView、InputBox 等通用组件 | [`zeta-ui-components` README](../ui-components/README.md) |
 | 主题 token、alias、snapshot 和跨宿主值 | [`Design Token 文档`](../../docs/design-tokens.md) |
 | Native host 的 pane/product composition | [`app` 文档导航](README.md) 与对应 domain crate README |
 | GPU、surface、atlas、shader 和 present | [`rendering-architecture.md`](rendering-architecture.md) |

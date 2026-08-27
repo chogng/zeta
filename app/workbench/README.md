@@ -1,6 +1,6 @@
 # `zeta-workbench`
 
-`zeta-workbench` 是 Workbench 的纯逻辑模型。它负责 Tab、PaneContainer、PanePart、PaneGroup、PaneInput、激活、分割、关闭和工作区恢复等状态转换，不依赖 `zeta-ui`、`zui`、renderer、窗口事件或具体产品运行状态。
+`zeta-workbench` 是 Workbench 的纯逻辑模型。它负责 Tab、PaneContainer、PanePart、PaneGroup、PaneInput、激活、分割、关闭和工作区恢复等状态转换，不依赖 `zeta-workbench-ui`、`zeta-ui-components`、`zui`、renderer、窗口事件或具体产品运行状态。
 
 ## 边界
 
@@ -8,7 +8,7 @@
 
 `PanePart::tree()` 返回只读的 `PaneNode` 拓扑；`set_split_ratio` 只修改逻辑拆分比例，不接收 UI 布局类型，也不处理鼠标拖拽。一个 PaneContainer 可以包含多个 PaneGroup，一个 PaneGroup 可以包含多个 PaneInput；同一 Group 只有 active input 对应的 Pane 可见。
 
-`InspectorPartState` 只保存 Inspector 的展开状态和首选宽度。布局约束、sash、拖拽和指针状态由产品宿主与 `zeta-workbench-layout`、`zeta-ui` 协作完成。
+`InspectorPartState` 只保存 Inspector 的展开状态和首选宽度。布局约束、sash、拖拽和指针状态由产品宿主与 `zeta-workbench-layout`、`zeta-workbench-ui`、`zeta-ui-components` 协作完成。
 
 ## 依赖方向
 

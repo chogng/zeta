@@ -1,6 +1,6 @@
 # `app`：Agent Terminal 布局
 
-> 状态：Proposed product layout。本文是 `app` 主窗口信息架构、会话流、检查界面、响应式行为与渐进迁移的 canonical owner。Agent 能力、机器反馈和人类观测原则见 [`native-agent-console.md`](native-agent-console.md)；PTY、grid、screen mode 与 Terminal protocol 兼容性见 [`native-terminal-ui.md`](native-terminal-ui.md)；Workbench 模型、产品 Pane geometry 与组件边界见 [`zeta-workbench`](../workbench/README.md)、[`zeta-workbench-layout`](../workbench-layout/README.md) 和 [`zeta-ui`](../ui/README.md)。
+> 状态：Proposed product layout。本文是 `app` 主窗口信息架构、会话流、检查界面、响应式行为与渐进迁移的 canonical owner。Agent 能力、机器反馈和人类观测原则见 [`native-agent-console.md`](native-agent-console.md)；PTY、grid、screen mode 与 Terminal protocol 兼容性见 [`native-terminal-ui.md`](native-terminal-ui.md)；Workbench 模型、产品 Pane geometry 与组件边界见 [`zeta-workbench`](../workbench/README.md)、[`zeta-workbench-layout`](../workbench-layout/README.md)、[`zeta-workbench-ui`](../workbench-ui/README.md) 和 [`zeta-ui-components`](../ui-components/README.md)。
 
 ## 快速理解
 

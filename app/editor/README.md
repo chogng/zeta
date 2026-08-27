@@ -44,8 +44,8 @@ undo/redo、IME composition、语法 token、结构折叠、viewport soft wrap�
 | `MultiDiffEditor` | public | 把多个文件标题和 `DiffEditor` section 组合为一个纵向裁剪 surface |
 | `MultiDiffEditorItem` | public | 为一帧借用文件名、`DiffEditorDocument`、两侧标签和该文件的 `DiffEditorState`；产品 host 应通过 `with_identity` 提供稳定 changed-file identity |
 | `MultiDiffEditorItemIdentity` | public | 从 host-owned stable slot 派生 section/header/diff/fold `ElementId`，并提供折叠 section 的 `AnimationProperty::Height` key |
-| `MultiDiffEditorLayout` | public | 用 `zeta-ui::VirtualListLayout` 缓存精确 item/state/presentation snapshot 的可变 section heights、prefix index 与总内容高度，供高频滚动复用 |
-| `zeta-ui::ScrollState` | delegated | 保存 MultiDiffEditor 整体 logical-pixel offset；clamp 与 transition 由通用滚动基座执行 |
+| `MultiDiffEditorLayout` | public | 用 `zeta-ui-components::VirtualListLayout` 缓存精确 item/state/presentation snapshot 的可变 section heights、prefix index 与总内容高度，供高频滚动复用 |
+| `zeta-ui-components::ScrollState` | delegated | 保存 MultiDiffEditor 整体 logical-pixel offset；clamp 与 transition 由通用滚动基座执行 |
 | `MultiDiffEditorStyle` | public | 拥有文件 header、section 间距与嵌套 DiffEditor 样式 |
 | `DiffEditorPalette` / `MultiDiffEditorPalette` | public | 让产品宿主通过命名字段注入 diff marker/background、scrollbar 与文件 header 视觉 |
 | `DiffSideRows` | private | 把 `DiffEditorDocument` 的一侧惰性转换为带 editor-owned syntax token 的 `CodeEditorRow` |
@@ -187,7 +187,7 @@ paint 与子组件放在一个宿主根下时，使用 `ComponentContext::with_c
 - 为每个文件保存独立的 document identity 与 editor viewport，并在创建 document 时选择
   `CodeEditorLanguage`；
 - 为 `MultiDiffEditorItem` 提供已排序的 changed-file snapshot，并保留整体
-  `zeta-ui::ScrollState`；产品 host 必须为 changed file 分配稳定的
+  `zeta-ui-components::ScrollState`；产品 host 必须为 changed file 分配稳定的
   `MultiDiffEditorItemIdentity`，不能用当前列表 index 作为 retained 或 animation key；
 - 保存每文件 `DiffEditorState`，并用 `fold_controls` 发布的 identity 与 bounds 路由未修改区间
   的展开/收起输入；

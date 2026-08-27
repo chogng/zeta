@@ -1,75 +1,83 @@
-# 产品图标系统：SVG 输入与多端生成
+# Product Icon System：资源、语义与渲染边界
 
 > 状态：Current。
-> 本文拥有产品图标的跨客户端资源规范和生成边界。SVG 文件操作见 [`resources/README.md`](../resources/README.md)，Rust API 见 [`zeta-icons`](../app/icons/README.md)。
+> 本文拥有跨 Desktop、Rust native 与 renderer 的 product-icon ownership。Canonical SVG
+> 文件操作见 [`resources/README.md`](../resources/README.md)，Rust API 与生成路径见
+> [`zeta-icons`](../app/icons/README.md)。
 
 ## 快速理解
 
-维护者只需要把符合命名规范的 SVG 放进 `resources/icons`，然后运行 `pnpm icons:generate`。生成工具会规范化 SVG，并同时生成 manifest、TypeScript 图标库和 Rust 图标库；不需要手写图标 ID、文件映射或渲染模式。
+Product icon 是 renderer-independent semantic identity，不是某个 component 或 GPU backend
+的资源私有类型：
 
-| 想做什么 | 需要修改什么 | 需要运行什么 |
-| --- | --- | --- |
-| 新增图标 | 添加 `resources/icons/<id>.svg` | `pnpm icons:generate` |
-| 替换图稿 | 修改同名 SVG | `pnpm icons:generate` |
-| 删除图标 | 删除 SVG，并迁移仍在使用该 ID 的调用方 | `pnpm icons:generate` |
-| 检查生成状态 | 不修改文件 | `pnpm icons:check` |
-
-```mermaid
-flowchart LR
-    SVG[resources/icons/*.svg] --> Generator[统一生成工具]
-    Generator --> Manifest[manifest.json]
-    Generator --> TypeScript[product-icons.ts]
-    Generator --> Rust[generated.rs]
-    TypeScript --> Browser[浏览器界面]
-    Rust --> App[Rust UI]
+```text
+resources/icons/*.svg
+  ├─ Desktop generator → private SVG factories → semantic registry → browser SVG renderer
+  └─ Rust generator → private artwork → explicit semantic library
+                                     → zeta-icons
+                       → zui PaintIcon → zeta-ui-components IconLabel / Button
+                       → native product host
 ```
 
-## 1. 唯一输入
-
-`resources/icons/*.svg` 是产品图标的唯一人工输入。文件名必须使用小写 kebab-case，去掉 `.svg` 后就是稳定图标 ID，例如 `chevron-down.svg` 生成 ID `chevron-down`、TypeScript 属性 `chevronDown` 和 Rust 常量 `CHEVRON_DOWN`。
-
-图标 ID 与 SVG 文件一一对应。需要箭头的控件直接使用 `chevron-down`，需要终端图标的控件直接使用 `terminal`；不得再创建只为指向另一张画稿的手写别名。
-
-## 2. 生成产物
-
-| 产物 | 用途 | 是否允许手改 |
+| 想做什么 | 使用的契约 | 不应该传递什么 |
 | --- | --- | --- |
-| `resources/icons/manifest.json` | 记录 ID、文件名和推导出的渲染模式 | 否 |
-| `zeta-ts/generated/product-icons.ts` | 提供全部浏览器 SVG 工厂和自动注册函数 | 否 |
-| `app/icons/src/generated.rs` | 提供全部 Rust 图标常量、资源绑定和排序目录 | 否 |
+| 在产品界面使用已有图标 | 稳定语义图标 ID | 文件名或原始 SVG |
+| 更换图稿但保留含义 | 更新语义 ID 对应的资源 | 要求所有调用方改名 |
+| 增加新的产品动作图标 | 显式注册新的语义图标 | 让资源目录自动扩张公共 API |
+| 在不同渲染器显示图标 | 各渲染器消费同一语义定义 | 把 GPU 或组件类型放入资源 crate |
 
-`build/resources/icons/generate.ts` 是统一入口：它扫描并校验 SVG、生成 manifest，再分别调用 `generate-to-ts.ts` 和 `generate-to-rs.ts`。两个目标生成器不再各自扫描资源，因此两个客户端不会分别决定 ID 对应哪张图稿。
+## 2. 所有权
 
-## 3. 渲染模式
+| 能力 | 当前 owner | 状态 |
+| --- | --- | --- |
+| Canonical first-party SVG artwork | `resources/icons` | ✅ |
+| Desktop generated SVG factories | `zeta-ts/generated/product-icons.ts` | ✅ |
+| Desktop semantic registration与resolution | `base/common/icon.ts` / `lxiconsLibrary.ts` | ✅ |
+| Rust semantic identity、definition 与 rendering mode | `zeta-icons` | ✅ |
+| Rust logical placement、tint 与 clip scene contract | `zui::PaintIcon` | ✅ |
+| Rust icon+text component geometry | `zeta-ui-components::IconLabel` | ✅ |
+| Product command 与 icon selection | 各 product host | ✅ |
+| Seti file-extension/theme resolution | `zeta-file-icons` | ✅，独立系统 |
+| Native symbolic mask、fixed-color atlas 与 render path | `zeta-wgpu` | ✅ |
 
-渲染模式由生成器读取优化后的 SVG 自动推导。只含黑、白、`currentColor`、`none` 或默认黑色的图标生成 `symbolic`；出现其他固定颜色时生成 `multicolor`。维护者不得在 manifest 或客户端代码中覆盖这个结果。
+`zeta-icons` 不依赖 `zui` 或 `zeta-ui-components`。`PaintIcon`、`IconLabel`、`Button` 和 `InputBox` 可以依赖 icon identity，但
+资源 crate 不得包含 component、font、layout、theme color、GPU 或 input routing。
 
-浏览器渲染器把黑色区域替换为当前文字颜色。Rust 渲染器把单色覆盖写入可着色遮罩，把固定颜色写入 sRGB 图集。渲染器只执行 manifest 已确定的模式，不重新分类画稿。
+## 3. 身份与图稿
 
-## 4. 使用边界
+- 产品接口传递 `Icon` / `IconId`，不传 filename 或 raw SVG；
+- public semantic library 由产品显式登记，不能由 resource filename 自动扩张；
+- semantic ID 与 artwork 是多对一关系，允许稳定 alias 和无调用方迁移的 artwork 替换；
+- checked-in generated binding 保证 Cargo/Bazel compile action 不运行 generator；
+- `IconRendering::Symbolic` 表示整个图标由 caller tint；
+- `IconRendering::Multicolor` 表示固定颜色必须保留，同时黑色 symbolic region 可以跟随 caller
+  tint；
+- renderer 不支持某种 mode 时必须显式失败，不能静默降级为错误颜色；
+- resource filename 是 artwork generation input，不是 component API。
 
-- 产品代码只使用 `Icon`、生成的 TypeScript 属性或 `zeta_icons::icons` 常量。
-- 产品代码不得传递 SVG 路径、文件名、原始 SVG 文本或生成器内部定义。
-- TypeScript 不读取 Rust 产物，Rust 不读取 TypeScript 产物；两端只共享 SVG 输入和同一次生成结果。
-- Seti 文件类型图标继续由 `zeta-file-icons` 独立拥有，其 WOFF 字体不属于产品图标系统。
-- 应用品牌图和 `zui` 开发工具私有图标不进入产品图标目录，因为它们不属于产品语义图标库。
+## 4. 当前实现
 
-## 5. 修改与验证
+Rust generator 扫描全部 canonical SVG，生成 164 个 crate-private `IconDefinition` binding；
+`library.rs` 显式登记与 Desktop `lxiconsLibrary` 对齐的公共 semantic constants、排序后的
+`ALL_ICONS` 和 `icon_by_id` lookup。`history → refresh.svg`、`dropdown-indicator →
+chevron-down.svg` 等映射证明 semantic identity 不依赖 filename。`Button` 的 icon+text paint
+path 复用 `IconLabel`。
+`zeta-wgpu` 使用共享区域分配的 R8 symbolic-mask atlas 与 sRGB RGBA fixed-color atlas。Symbolic
+artwork 只写 mask；multicolor artwork 经 `resvg` 栅格化后，把纯黑 coverage 写入 mask、其余
+颜色写入 fixed-color atlas，shader 再把 caller tint 与固定色合成为一个 icon draw。
 
-在仓库根目录运行：
+Native shell 从 `zeta-icons::icons` 选择语义 icon，再交给 component；titlebar sidebar toggle
+已同时消费 symbolic 与 multicolor artwork。
+
+## 5. 修改路径
 
 ```bash
-pnpm icons:generate
-pnpm icons:check
-pnpm test:icons
-cargo test --manifest-path Cargo.toml -p zeta-icons
+node build/app/syncRustIcons.ts
+node build/app/syncRustIcons.ts --check
+cargo test --manifest-path Cargo.toml -p zeta-icons -p zeta-ui-components
 ```
 
-`icons:generate` 是维护者唯一需要调用的写入命令。Vite 开发服务复用同一生成入口更新 TypeScript 产物；`icons:check` 只比较规范化 SVG 与三份生成产物，不修改文件。检查时统一换行语义，因此 Windows 的 CRLF 不会造成误报。Desktop 的生成资源检查会调用同一检查入口，缺失或过期产物会让构建失败。
-
-## 6. 长期不变量
-
-- 人只维护 SVG，机器维护 manifest 和语言绑定。
-- 一个 SVG 文件产生一个同名语义 ID，不存在客户端私有画稿映射。
-- 一次生成同时决定所有客户端可见的 ID 和渲染模式。
-- 编译过程只读取已生成产物，不在 Cargo 或 Bazel 编译动作中运行生成器。
+Desktop 继续运行自己的 generate/check/optimize workflow。新增 SVG 必须同时更新两个 checked-in
+generated output；新增公共语义还必须显式更新两个客户端的 library。未来可以把两个 generator
+的 discovery/validation 合并为 repository-level tool，但不能让 Rust 或 Desktop build 在编译
+阶段隐式改写源码。

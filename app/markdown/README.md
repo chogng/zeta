@@ -3,10 +3,10 @@
 > 本 README 是 Native Markdown 解析、布局和 presentation 的 crate-level canonical
 > contract。跨 crate 的 Rust Workspace 边界见
 > [`docs/zeta-rs-architecture.md`](../../docs/zeta-rs-architecture.md)；底层 scene、富文本和字体
-> shaping contract 见 [`ui/README.md`](../ui/README.md)。
+> shaping contract 见 [`zeta-ui-components`](../ui-components/README.md)。
 
 `zeta-markdown` 把有资源上限的 CommonMark/GFM 输入解析为只读文档 snapshot，并通过
-`zeta-ui` primitive 生成 Native Markdown 组件。它拥有 Markdown 结构、脚注与数学片段投影、
+`zeta-ui-components` primitive 生成 Native Markdown 组件。它拥有 Markdown 结构、脚注与数学片段投影、
 `syntect` 代码高亮、RaTeX 数学排版、安全链接策略、图片解码/布局、文字命中/选择/搜索几何、
 复制文本投影、accessibility 语义树、滚动 snapshot 消费和主题 token；不拥有消息 identity、网络取图、
 平台 URL opener/clipboard、输入事件分发、持久化或产品生命周期。
@@ -21,7 +21,7 @@
 | `MarkdownPresentation` | public | 绑定 caller-retained selection、search matches 与已授权解码的图片 snapshot |
 | `Markdown` / `MarkdownLink` | public | 保存当前帧可见 primitive、文本命中/选择几何、语义树和 viewport-clipped link hit fragments |
 | `MarkdownLinkPolicy` | public | 解析 document fragment 或绝对 URL，拒绝 credentials/未知 scheme，并只产出策略允许的 `MarkdownLinkTarget` |
-| `MarkdownImages` / `decode_markdown_image` | public | 接收 host 已授权取得的 bytes，在 16,777,216 pixel 上限内解码为 `zeta_ui::ImageData`；不执行 I/O |
+| `MarkdownImages` / `decode_markdown_image` | public | 接收 host 已授权取得的 bytes，在 16,777,216 pixel 上限内解码为 `zui::ui::ImageData`；不执行 I/O |
 | `MarkdownSyntaxHighlighter` / `SyntectMarkdownHighlighter` | public | 定义 fenced-code byte-range 高亮 contract，并提供 bundled syntax/theme 实现 |
 | `render_markdown_math` / `MarkdownMathMode` | public | 在 64 KiB source 和 4,194,304 pixel 上限内把 inline/display LaTeX 排版并栅格化为 `ImageData` |
 | `MarkdownSelectionController` / `MarkdownDocument::text_for_selection` | public | 保存 pointer selection anchor/focus，并把合法范围投影为可写入 clipboard 的文本 |
@@ -51,14 +51,14 @@ MarkdownDocument::parse
 
 MarkdownLayoutEngine::layout
 ├─ MarkdownBlock + MarkdownStyle
-├─ zeta_ui::TextLayoutEngine
+├─ zui::ui::TextLayoutEngine
 │  └─ TextLayout size + per-span/per-UTF-8-cluster wrapped/BiDi visual fragments
 ├─ SyntectMarkdownHighlighter → fenced-code TextSpan colors
 ├─ MarkdownMathCache → RaTeX parse/layout/SVG → bounded RGBA ImageData
 ├─ MarkdownPresentation → selection/search/image snapshots
 ├─ layout_inline → inline backgrounds/decorations/link hit fragments
 ├─ layout_table → intrinsic column sizing → wrapped cell layout
-├─ content_height + clamped zeta_ui::ScrollState
+├─ content_height + clamped zeta_ui_components::ScrollState
 └─ Markdown::emit
    ├─ PaintRect: code/table/quote/rule/inline/selection/search decoration
    ├─ PaintImage: decoded RGBA image + inline/display typeset math
@@ -73,8 +73,8 @@ Markdown::paint
 
 `MarkdownLayoutEngine` 必须由 host 复用；每次 document、bounds、style 或 scroll snapshot 变化时重新
 生成 immutable `Markdown`。`Markdown` 不保存 parser 或 font system，也不接受输入事件。
-`zeta_ui::ScrollState` 是 product-owned retained state，组件只消费其 snapshot；wheel normalization、
-scrollbar 和 input routing 继续复用 `zeta-ui` 的通用 scroll contract。
+`zeta_ui_components::ScrollState` 是 product-owned retained state，组件只消费其 snapshot；wheel normalization、
+scrollbar 和 input routing 继续复用 `zeta-ui-components` 的通用 scroll contract。
 
 ## 解析、信任与显示语义
 
@@ -115,7 +115,7 @@ scene projection、Unicode search、selection/copy/hit geometry、语义 heading
 段落换行和 viewport clamp。修改 parser option 或 `DocumentBuilder` 时必须同步检查资源上限、
 HTML/image 信任边界和 block fixtures；修改 `ProjectedBlock`/spacing 时必须同步检查 content
 height、offscreen culling 与 scroll clamp；修改 rich span/selection contract 时必须同步检查
-`zeta-ui::TextLayout` UTF-8 cluster geometry、renderer validation 和 `ui/README.md`。
+`zui::ui::TextLayout` UTF-8 cluster geometry、renderer validation 和 [`zeta-ui-components`](../ui-components/README.md)。
 
 当前仍不拥有平台 URL 打开、clipboard 写入、网络/文件取图和 pointer/keyboard 事件路由；
 这些副作用由 `app` 或其他 host 绑定现有 policy/input service。尚未支持 Markdown source

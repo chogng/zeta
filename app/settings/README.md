@@ -11,7 +11,7 @@
 | Section selection and selected navigation semantics | `SettingsPageSection` / `SettingsPage` | Keeps the active section presentation contract in the shell; the host maps each navigation identity to its section state. |
 | Back item and semantic icon+label navigation | `SettingsPage` | Keeps Settings navigation presentation and activation identities together; the host maps Back to its surface transition. |
 | Active section content | Settings section host | Paints into `SettingsPage::content_bounds()`. |
-| Generic controls and layout primitives | `zeta-ui` / `zui` | Supplies reusable presentation and backend-neutral interaction contracts. |
+| Generic controls and layout primitives | `zeta-ui-components` / `zui` | Supplies reusable presentation and backend-neutral interaction contracts. |
 | Configuration load/save and platform events | Native/config host | Adapts DTOs, executes actions, and owns IME/window lifecycle. |
 
 ## Execution path

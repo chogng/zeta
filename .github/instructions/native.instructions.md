@@ -11,7 +11,7 @@ Route new capability to its long-term owner:
 
 - backend-independent frame, layout, paint, inspection, interaction, animation, invalidation, and retained lifecycle contracts belong in `app/zui`;
 - reusable application/window lifecycle, renderer initialization, platform capability, event-loop, and multi-window orchestration belong to the single public `app/zui` crate; its foundation/layout/text/presentation/runtime/application/platform/renderer modules are private implementation boundaries, not sibling crates or alternative entry points;
-- reusable UI components and app product pane topology belong in `app/ui` (the `zeta-ui` crate); generic layout algorithms remain in `app/zui`;
+- reusable UI controls belong in `app/ui-components` (`zeta-ui-components`), while Workbench titlebar, tab navigation, interaction identities, and presentation state belong in `app/workbench-ui` (`zeta-workbench-ui`); generic layout algorithms remain in `app/zui`;
 - file, SCM, editor, terminal, and other domain behavior belongs in its domain crate;
 - `app` owns product state mapping, product event meaning, scene construction, and the native product entry point; it consumes platform events and rendering only through public `zui` contracts.
 

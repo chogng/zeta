@@ -21,7 +21,7 @@
 依赖方向固定为：
 
 ```text
-App → app-keybinding-ui → zeta-ui → zui
+App → app-keybinding-ui → zeta-ui-components → zui
                             └→ zeta-keybinding
 ```
 

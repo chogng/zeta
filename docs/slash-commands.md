@@ -47,7 +47,7 @@ local commands 合并。命令定义、名称冲突、补全和提交解析属�
 | 现有 Surface | Catalog 来源 | Core/adapter | Renderer owner |
 | --- | --- | --- | --- |
 | TUI | built-ins + initialize snapshot + enabled Skill metadata | 直接使用 `zeta-slash-commands`；Skill target 保存在 client binding | Ratatui popup |
-| Native zeta-ui | local `/model` + initialize snapshot | 直接使用 `zeta-slash-commands`；Native 另拥有 model picker | WGPU composer interaction rows |
+| Native zeta-ui-components | local `/model` + initialize snapshot | 直接使用 `zeta-slash-commands`；Native 另拥有 model picker | WGPU composer interaction rows |
 | Desktop Chat | Workbench actions + initialize snapshot + enabled Skill metadata | canonical generated `SlashCommandDefinition` + separate action/Skill binding | Stanza completion widget；textarea/legacy editor runtime 可复用同一 catalog |
 
 TUI 与 Desktop 已把用户可调用 Skill 以 `/name` 投影到同一补全菜单。启动与刷新只读取 Skill

@@ -1,6 +1,6 @@
 # `zui-demo`
 
-`zui-demo` is a framework-only host smoke test. It composes a `zeta-ui::ActionBar` with a local `zui::ui::Icon`, submits the resulting `UiScene` through the `zui::render::Renderer` contract, and uses an in-memory recording backend. The reusable view observes a `zui::ui::ViewState<bool>` through a `ComponentRuntime`, so the same host also verifies stable component identity, retained subscriptions, and redraw invalidation. It intentionally has no dependency on `app`, commands, terminal sessions, App Server state, `zeta-icons`, `winit`, or `wgpu`.
+`zui-demo` is a framework-only host smoke test. It composes a `zeta-ui-components::ActionBar` with a local `zui::ui::Icon`, submits the resulting `UiScene` through the `zui::render::Renderer` contract, and uses an in-memory recording backend. The reusable view observes a `zui::ui::ViewState<bool>` through a `ComponentRuntime`, so the same host also verifies stable component identity, retained subscriptions, and redraw invalidation. It intentionally has no dependency on `app`, commands, terminal sessions, App Server state, `zeta-icons`, `winit`, or `wgpu`.
 
 The crate is not a production application. Its purpose is to keep the portability claim executable: if a reusable component starts requiring product state or a platform backend, this host should fail to remain small and dependency-neutral.
 

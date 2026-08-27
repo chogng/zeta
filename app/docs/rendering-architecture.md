@@ -1,7 +1,7 @@
 # UI 渲染架构
 
 > 状态：当前实现。本文拥有组件到图形后端之间的替换边界；`zui` 内部开发规则见
-> [`zui` 开发文档](../zui/README.md)，组件边界见 [`zeta-ui`](../ui/README.md)，产品 icon
+> [`zui` 开发文档](../zui/README.md)，组件边界见 [`zeta-ui-components`](../ui-components/README.md)，产品 icon
 > catalog 见 [`zeta-icons`](../icons/README.md)。
 
 ## 快速理解
@@ -40,7 +40,8 @@ flowchart LR
 | private `zui::render/wgpu` | physical conversion、batch execution、resource cache、shader、submit、present | 产品 layout、identity、input、accessibility |
 | `zui::window` / `zui::input` private native integration | native window、keyboard/IME、chrome capability | scene、GPU pipeline、产品 reducer |
 | `zui::app` | event loop、backend 选择、window/renderer registry、resize/scale 与 retry orchestration | 产品领域状态、具体组件 |
-| `zeta-ui` | Button、ActionBar、TabList、ContextView 与产品 pane geometry | scene/backend ownership、产品状态 |
+| `zeta-ui-components` | Button、ActionBar、TabList、ContextView 等通用控件 | scene/backend ownership、Workbench 或产品状态 |
+| `zeta-workbench-ui` | Workbench 标题栏、Tab 导航、交互标识和界面状态 | 逻辑模型、Session 生命周期、命令执行 |
 | Product | Session、PTY、App Server、command 与 authoritative state transition | 直接依赖内部 platform/GPU 实现 |
 
 布局检查器消费 `UiScene` 同步生成的 `InspectionFrame`。所有 `Component` 和产品 composition
@@ -72,7 +73,7 @@ wgpu 在 macOS、Linux 和 Windows 上本身可选择 Metal、Vulkan 或 DX12。
 - backend-neutral 模块不依赖组件 crate、窗口系统或具体 GPU API；
 - public `zui` 可以组合内部 window/GPU 实现，但不在应用 API 暴露具体 backend 类型；
 - 通用 `Icon` contract 归 `zui`，`zui` 不依赖 `zeta-icons` 产品 catalog；
-- `zeta-ui` 只依赖 `zui`，不拥有 scene/backend contract；
+- `zeta-ui-components` 只依赖 `zui`，不拥有 scene/backend contract；`zeta-workbench-ui` 单向依赖组件、Workbench 模型和布局；
 - Component 只能产生 scene primitive，不能接受 backend context；
 - backend 不重新解释产品 layout、component identity 或 interaction state；
 - interaction/accessibility frame 不进入 `Renderer` 或 GPU 模块；
@@ -80,7 +81,7 @@ wgpu 在 macOS、Linux 和 Windows 上本身可选择 Metal、Vulkan 或 DX12。
 - backend-specific 优化不能污染 scene API，除非能定义稳定的跨后端语义。
 
 `zui::architecture_tests` 固定内部 layer direction、同名 capability owner、native dependency 归属和
-500 行模块上限；product 的 `component_composition_tests` 固定 `zeta-ui → zui`、旧 sibling crate
+500 行模块上限；product 的 `component_composition_tests` 固定 `zeta-workbench-ui → zeta-ui-components → zui`、旧 sibling crate
 不可恢复，以及 GPU 不拥有 interaction/accessibility。
 
 ## 当前状态与演进

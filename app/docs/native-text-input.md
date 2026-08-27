@@ -3,7 +3,7 @@
 > 状态：Current。
 > 本文拥有 Native 单行控件与多行代码编辑器输入的跨 crate ownership、用户语义和演进边界。具体源码接口与
 > 修改路径分别由 [`app`](../README.md)、
-> [`zui`](../zui/README.md) 和 [`zeta-ui`](../ui/README.md) 说明。
+> [`zui`](../zui/README.md) 和 [`zeta-ui-components`](../ui-components/README.md) 说明。
 
 ## 快速理解
 
@@ -13,12 +13,12 @@ Native 文本输入采用单向依赖，不建立同时理解窗口事件、编�
 winit keyboard / IME event
   → private zui window/input forwarding
   → app focus and event routing
-  ├─ single-line → zui TextInput → TextInputLayoutEngine → zeta-ui InputBox
+  ├─ single-line → zui TextInput → TextInputLayoutEngine → zeta-ui-components InputBox
   └─ multiline   → zeta-editor CodeEditorDocument / CodeEditorViewport → CodeEditor
   → zui UiScene
 ```
 
-`zui` 的 backend-neutral `ui`/`runtime` modules 不依赖 `zeta-ui`、winit 或 GPU；`zui::window` 与 `zui::input` 统一导出 ZUI-owned 事件，并在各自 owner 内组合 private native adapter。`TextInput` 不保存 `winit::Ime`、`KeyEvent` 或 GPU 类型；平台
+`zui` 的 backend-neutral `ui`/`runtime` modules 不依赖 `zeta-ui-components`、winit 或 GPU；`zui::window` 与 `zui::input` 统一导出 ZUI-owned 事件，并在各自 owner 内组合 private native adapter。`TextInput` 不保存 `winit::Ime`、`KeyEvent` 或 GPU 类型；平台
 adapter 不理解 committed text、selection 或 composition。这个边界让 Unicode 编辑语义、
 shaping geometry 和真实平台接入可以分别测试。
 
@@ -43,7 +43,7 @@ shaping geometry 和真实平台接入可以分别测试。
 | Preedit/commit/cancel composition state | `zui::TextInput` | ✅ |
 | 单行 shaping、selection/caret/preedit geometry | `zui::TextInputLayoutEngine` | ✅ |
 | Caret blink phase state machine | `zui::CaretBlinkController` | ✅ |
-| Input-box chrome、状态与 scene composition | `zeta-ui::InputBox` | ✅ |
+| Input-box chrome、状态与 scene composition | `zeta-ui-components::InputBox` | ✅ |
 | Blink deadline scheduling 与 redraw | `app/src/app` 的 `NativeApp` | ✅ |
 | 文件 Editor mouse caret、drag selection、clipboard 与 viewport | `file_editor_input` + `zeta-editor` | ✅ |
 | 文件 Editor undo/redo 与 vertical navigation | `zeta-editor::CodeEditorDocument` | ✅ |
@@ -120,7 +120,7 @@ IME composition 和 caret blink；其 mouse selection、clipboard、undo/redo �
 由 `zui` 发布现有语义树；更完整的 selection/edit action 与各平台读屏 smoke coverage 仍需补充。
 
 两类输入必须继续消费各自 owner 的同源 hit-test/layout，不能在 Native 另建字符宽度估算。
-`TextInput` 基座留在 `zui`，输入框 chrome 留在 `zeta-ui`；多行文档、命令和可见行投影留在
+`TextInput` 基座留在 `zui`，输入框 chrome 留在 `zeta-ui-components`；多行文档、命令和可见行投影留在
 `zeta-editor`。
 
 ## 7. 长期不变量
@@ -130,4 +130,4 @@ IME composition 和 caret blink；其 mouse selection、clipboard、undo/redo �
 - render component 不执行产品命令；
 - composition 与 committed text 保持可区分；
 - cursor/selection geometry 与实际 shaping 使用同一文本语义；
-- 产品领域状态不得下沉到 `zui` 或 `zeta-ui`。
+- 产品领域状态不得下沉到 `zui` 或 `zeta-ui-components`。

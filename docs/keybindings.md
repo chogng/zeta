@@ -80,7 +80,7 @@ Zeta Renderer ──→ TypeScript keybinding implementation
 all clients ── semantic command only ──→ App Server
 ```
 
-如果 `zeta-keybinding` 开始依赖 `zui`、`zeta-ui`、`winit`、Crossterm、profile 路径或产品命令，说明共享边界已经漂移。若 Zeta Renderer 需要 IPC 才能决定是否阻止浏览器按键，也说明执行边界已经漂移。
+如果 `zeta-keybinding` 开始依赖 `zui`、`zeta-ui-components`、`winit`、Crossterm、profile 路径或产品命令，说明共享边界已经漂移。若 Zeta Renderer 需要 IPC 才能决定是否阻止浏览器按键，也说明执行边界已经漂移。
 
 ## 4. 共享语义与产品差异
 

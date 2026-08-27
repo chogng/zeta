@@ -162,7 +162,7 @@ pub(crate) enum AppServerBackend {
 - remote scheduler 仍位于 `zeta-exec` 上层，不属于 App Server backend。
 
 在 app 中，这个产品边界位于 `app/src/app_server/`。Agent、Language 和 Terminal 通过
-`crate::app_server` 使用它导出的 session/event contract；`zui`、`zeta-ui`、Agent Sidebar
+`crate::app_server` 使用它导出的 session/event contract；`zui`、`zeta-ui-components`、Agent Sidebar
 等 UI crate 不依赖 App Server client。这样 `zeta-rs` 提供核心协议和通用 client，app 提供
 产品启动、Workspace、Remote backend 与重连协调，两边不会再各自复制一套 client。
 

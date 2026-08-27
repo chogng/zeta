@@ -2,7 +2,7 @@
 
 `zui` 是 Rust 桌面应用唯一需要依赖的原生 UI framework crate。它拥有 UI 内核、Application 与多窗口生命周期、任务和定时器、窗口及应用级平台事件归一化、系统服务、托盘和全局快捷键、协议 URL、资源与隔离进程、OS accessibility、应用分发工具、渲染器契约、默认 wgpu 后端与确定性 testing；这些职责在同一 crate 内按能力目录隔离，不通过 sibling crate 暴露替代入口。
 
-产品通过 `zui::app` 启动应用，通过 `zui::window` 和 `zui::input` 接收 ZUI 自有事件，通过 `zui::ui` 构造 scene。Native UI 的编写、布局、样式和主题投影边界见 [`native-ui-authoring.md`](../docs/native-ui-authoring.md)。`zeta-ui` 在它之上提供可复用组件和 app pane topology；产品状态、Session、PTY、App Server 与业务 reducer 不得进入 `zui`。
+产品通过 `zui::app` 启动应用，通过 `zui::window` 和 `zui::input` 接收 ZUI 自有事件，通过 `zui::ui` 构造 scene。Native UI 的编写、布局、样式和主题投影边界见 [`native-ui-authoring.md`](../docs/native-ui-authoring.md)。`zeta-ui-components` 在它之上提供可复用组件，`zeta-workbench-ui` 负责 Workbench 界面；产品状态、Session、PTY、App Server 与业务 reducer 不得进入 `zui`。
 
 ## 1. Crate 边界
 
@@ -36,7 +36,8 @@
 | 默认 GPU composition | `zui::app::Application::run` | private `render/wgpu` |
 | 常用最小导入 | `zui::prelude` | `prelude.rs` |
 | 手动时钟、确定性 lifecycle/timer 与 headless renderer | `zui::testing`；`zui::testkit` 是兼容别名 | `testing` |
-| Button、List、ContextMenu 与产品 pane topology | 不属于 `zui` | `zeta-ui` / 产品 crate |
+| Button、List、ContextMenu | 不属于 `zui` | `zeta-ui-components` |
+| Workbench Titlebar、TabContainer 与交互标识 | 不属于 `zui` | `zeta-workbench-ui` |
 
 `src/lib.rs` 只声明这些同名能力模块，不再通过 `api.rs` 拼装第二套目录。根级类型导出、`zui::task` 和 `zui::testkit` 暂时作为现有消费者兼容入口保留；新代码使用上表的规范入口。
 
@@ -214,7 +215,7 @@ let outcome = zui::app::Application::builder()
 
 `SignedHttpUpdater` 对 manifest 的原始 payload 执行 strict Ed25519 verification，再按目标平台选择 artifact；下载完成后必须通过 manifest 中的 SHA-256 才能原子进入 staging。`UpdateInstaller` 只接收已经验证的 `StagedUpdate`，默认 backend 交给操作系统打开 installer，也可注入企业部署或测试实现。HTTP transport 与 installer backend 可以阻塞，但 `UpdateHandle` 始终把它们放到 service worker pool，产品直接 await future，不占用 UI callback。
 
-`zui::devtools::DiagnosticsHandle` 提供有界、按序的 runtime trace 和即时 snapshot。它跟踪窗口 metrics、帧数、最近 scene primitive/accessibility 数量、活跃 task/timer 以及 lifecycle、display、menu、tray、shortcut、second-instance、application activation、open-file、protocol URL 和 accessibility action；容量由 `ApplicationBuilder::with_diagnostics_capacity` 控制，`DiagnosticsSink` 可把事件流接到日志或开发工具。调用 `ApplicationBuilder::with_diagnostics_inspection` 后，最近一帧的完整 `InspectionFrame` 也会保留在 `SceneDiagnostics` 中；默认关闭以避免每帧复制节点。每个 runtime window 都提供共享的 `DevToolsHandle`，因此产品可以直接调用 `WindowContext::{open_devtools, close_devtools, toggle_devtools}` 或 `WindowHandle` 上的同名方法；这些调用会由 zui 创建/销毁一个独立的默认 DevTools 原生窗口，并把产品最近提交的 scene 作为 Inspector 数据源。快捷键、工具栏和拾取路由由 zui 统一维护，产品不需要再复制 inspector 状态。默认 Inspector 所需的通用 SVG（Pick、Close、展开/折叠 Chevron）也编译进 `zui`，其他 App 不需要提供资源；产品图标目录仍由 `zeta-icons` 负责。`InspectionSelection`、`InspectorState` 与 `DevToolsHandle` 仍是 product-neutral 的会话 contract；zui 提供默认 Inspector 视图，完整显示 `InspectionFrame` 节点树，支持展开/折叠，并在 hover 或选中深层节点时自动展开祖先、滚动定位；zeta-ui 或产品可以在此基础上提供主题和扩展。snapshot 不持有 native window、renderer 或产品状态。
+`zui::devtools::DiagnosticsHandle` 提供有界、按序的 runtime trace 和即时 snapshot。它跟踪窗口 metrics、帧数、最近 scene primitive/accessibility 数量、活跃 task/timer 以及 lifecycle、display、menu、tray、shortcut、second-instance、application activation、open-file、protocol URL 和 accessibility action；容量由 `ApplicationBuilder::with_diagnostics_capacity` 控制，`DiagnosticsSink` 可把事件流接到日志或开发工具。调用 `ApplicationBuilder::with_diagnostics_inspection` 后，最近一帧的完整 `InspectionFrame` 也会保留在 `SceneDiagnostics` 中；默认关闭以避免每帧复制节点。每个 runtime window 都提供共享的 `DevToolsHandle`，因此产品可以直接调用 `WindowContext::{open_devtools, close_devtools, toggle_devtools}` 或 `WindowHandle` 上的同名方法；这些调用会由 zui 创建/销毁一个独立的默认 DevTools 原生窗口，并把产品最近提交的 scene 作为 Inspector 数据源。快捷键、工具栏和拾取路由由 zui 统一维护，产品不需要再复制 inspector 状态。默认 Inspector 所需的通用 SVG（Pick、Close、展开/折叠 Chevron）也编译进 `zui`，其他 App 不需要提供资源；产品图标目录仍由 `zeta-icons` 负责。`InspectionSelection`、`InspectorState` 与 `DevToolsHandle` 仍是 product-neutral 的会话 contract；zui 提供默认 Inspector 视图，完整显示 `InspectionFrame` 节点树，支持展开/折叠，并在 hover 或选中深层节点时自动展开祖先、滚动定位；zeta-ui-components 或产品可以在此基础上提供主题和扩展。snapshot 不持有 native window、renderer 或产品状态。
 
 `InteractionFrame::accessibility_nodes` 是语义树的唯一来源。`WindowContext::present_frame` 接收完整 `UiFrame<InteractionFrame>` 与当前 `UiDispatch`，由私有 resolver 在同一提交边界解析 scene、inspection 与 accessibility；公共 API 不再接受独立的 scene 与缓存语义快照。adapter 在窗口第一次可见前创建。ZUI 内的 `AccessibilityNode` bounds 保持逻辑像素，bridge 在边界处按当前 `WindowMetrics::scale_factor` 转换为 AccessKit 所需的窗口物理像素。OS 请求的 Focus/Click 只有在 root tree 且目标节点确实声明对应 action 时才转换成 `AccessibilityActionKind::{Focus, Activate}` 并回到 `App::accessibility_action`，产品继续通过现有 `UiDispatch` 与 reducer 处理，不产生第二套控件身份。renderer 仍只消费 `UiScene`，不拥有 accessibility。
 
@@ -275,7 +276,7 @@ ZUI 拥有签名流程与验证契约，但不拥有签名身份、私钥或发�
 - **新 primitive 或 batch ordering**：先修改 `ui/presentation` contract，再同步所有 renderer。
 - **新 layout 算法**：放入 `ui/layout`，输入必须是 caller-owned state，输出必须是 immutable geometry。
 - **新 renderer**：实现 public trait，通过 factory 注入；默认 backend 实现保持 private。
-- **新通用组件**：放入 `zeta-ui`；产品专属 surface/state 留在产品 crate。
+- **新通用组件**：放入 `zeta-ui-components`；产品专属 surface/state 留在产品 crate。
 - **新 product icon artwork/语义目录**：放入 `zeta-icons`，通用 icon value contract 只在 `ui/foundation/icon` 演进；仅服务于 zui 默认 DevTools 的内置 artwork 放在 `devtools/assets`，避免 zui 反向依赖 product icon crate。
 - **文件规模**：production Rust module 不超过 500 行，超过时按单一职责拆出 owned submodule。
 
@@ -314,7 +315,7 @@ cargo clippy -p zui --no-default-features --features native --all-targets -- -D 
 cargo check -p zui --no-default-features --features native --bins
 cargo check -p zui --no-default-features --features native --target x86_64-pc-windows-gnu --lib --bins
 bazel test //app/zui:zui-unit-tests
-cargo test -p zeta-ui
+cargo test -p zeta-ui-components
 cargo check -p zui-demo --features native --bin zui-native-demo
 python3 -B build/cargo_with_v8.py test -p app
 ```

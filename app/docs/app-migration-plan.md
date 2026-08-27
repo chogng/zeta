@@ -2,7 +2,7 @@
 
 > 状态：当前迁移计划。本文拥有 `app` 从 `zeta-rs/native` 迁移到仓库根 `app/` 的阶段、边界和验收条件；
 > 共享 Rust backend 的 crate contract 由对应 `zeta-rs` README 维护，Native UI framework 的当前 contract 见
-> [`../zui/README.md`](../zui/README.md) 和 [`../ui/README.md`](../ui/README.md)；兼容边界见
+> [`../zui/README.md`](../zui/README.md) 和 [`../ui-components/README.md`](../ui-components/README.md)；兼容边界见
 > [`native-deprecation-plan.md`](native-deprecation-plan.md)。
 
 ## 快速理解
@@ -16,10 +16,10 @@ Native UI 的 crate 从共享 workspace 中分离。
 | --- | --- | --- | --- |
 | `app` binary 与产品事件语义 | `zeta-rs/native` | `app/` | 已实现 `zui::App` |
 | 通用 application/window runtime | `zeta-rs/native` 的历史宿主 glue | public `app/zui` | 已拥有 event loop、window registry、renderer 初始化与 resize/scale 同步；内部由 `app/window/input/render` 能力目录隔离 |
-| `app` Root/Shell/Workspace 产品布局 | `zeta-rs/native/src` | `app/ui::layout` + `app/composer` + `app/src` | Root/Workspace geometry 与 Composer state/input/interaction/layout 已抽取；Shell scene composition 仍在宿主 |
+| `app` Root/Shell/Workspace 产品布局 | `zeta-rs/native/src` | `zeta-workbench-layout` + `zeta-workbench-ui` + `app/composer` + `app/src` | Root/Workspace geometry 与 Composer state/input/interaction/layout 已抽取；Shell scene composition 仍在宿主 |
 | 通用 icon asset contract | 旧 Native icon types | `app/zui::ui` | 已收入单一 `zui` crate；产品 catalog 保留在 `app/icons` |
 | Element、Scene、Interaction、Animation、Retained Runtime | `app/zui` | app-owned crates in root workspace | 已迁入 app |
-| Button、Tree、List、Editor/Workspace pane presentation | `app/ui`、`editor`、`features/workspace` | app-owned modules and crates in root workspace | 已迁入 app |
+| Button、Tree、List、Editor/Workspace pane presentation | `app/ui-components`、`editor`、`features/workspace` | app-owned modules and crates in root workspace | 已迁入 app |
 | Renderer、wgpu、winit | 历史 `app/renderer`、`wgpu`、`winit` | private `app/zui` modules | 已收入单一 `zui` crate |
 | App Server、Core、Protocol、Session、File/Git、Diff、Terminal model | `zeta-rs/*` | `zeta-rs` | 保留 |
 | 纯 Rust editor transaction、syntax、LSP manager | `zeta-rs/editor-core`、`syntax`、`lsp-manager` | `zeta-rs` | 保留；presentation 与底层分离 |
@@ -72,7 +72,7 @@ zeta-rs ───────→ no app/desktop product host
 
 - [x] 在 `AGENTS.md` 中禁止向 `zeta-rs/native` 新增能力；
 - [x] 将 Native split scene/interaction host API 迁移到 `UiFrame`，并删除旧兼容入口；
-- [x] 明确 `zui`、`zeta-ui`、renderer 和生命周期机制的长期 owner；
+- [x] 明确 `zui`、`zeta-ui-components`、renderer 和生命周期机制的长期 owner；
 - [x] 迁移期间将 `zeta-rs/native` 作为只读迁移源，期间不再把它当作新功能落点；阶段一完成后已删除。
 
 ### 阶段一：迁移 `app` 产品宿主（已完成）
@@ -134,12 +134,12 @@ hub 消费 rules_rs 生成的 package deps。`bazel build //app:app` 已在当�
 ### 阶段五：通用框架可移植性（当前演进）
 
 - [x] 将 `IconId`、SVG definition 和 rendering mode 收入 `zui` 通用 contract；`zeta-icons`
-      只保留可选的 app product catalog，`zui`/`zeta-ui` 不依赖该 catalog；
-- [x] 将 Workbench/Pane 的结构布局迁移到 `zeta-workbench-layout`，并让 `zeta-ui` 只保留可复用组件；
+      只保留可选的 app product catalog，`zui`/`zeta-ui-components` 不依赖该 catalog；
+- [x] 将 Workbench/Pane 的结构布局迁移到 `zeta-workbench-layout`，并让 `zeta-ui-components` 只保留可复用组件；
 - [x] 将 `zeta-workbench` 纯化为不依赖 UI 的 Tab/Pane 模型，公开 `PaneNode` 和 ratio contract；
 - [x] 将通用 `WorkbenchHost`、`PaneHost`、`PaneBindingId` 和 Tab binding 清理迁移到
       `zeta-workbench-host`，具体 runtime 仍由 app 产品宿主负责；
-- [x] 建立 `zui-demo`，只依赖 public `zui` 与 `zeta-ui`，以 recording backend 验证通用
+- [x] 建立 `zui-demo`，只依赖 public `zui` 与 `zeta-ui-components`，以 recording backend 验证通用
       组件可脱离 app product host 组合；
 - [x] 将 Composer text/routing/history/completion、Slash/model interaction、scroll state、panel/list
       geometry 抽到 `zeta-composer`；Native 只保留 Thread/catalog adapter、提交 effect 与 scene paint；
@@ -152,7 +152,7 @@ hub 消费 rules_rs 生成的 package deps。`bazel build //app:app` 已在当�
 
 ### `app/src` 拆分审计（2026-08-27）
 
-Agent Session 的完整 App Server 执行链已经进入 `zeta-agent-session`；`app/src` 不再持有它的 worker、订阅、文件、Git 或配置请求。其他已有 `zeta-composer`、`zeta-editor`、`zeta-workbench*`、`zeta-ui`、`zeta-terminal`、`zeta-remote*` 和 LSP crate 继续拥有各自能力，`app/src` 负责产品数据、样式、窗口事件和输入路由。
+Agent Session 的完整 App Server 执行链已经进入 `zeta-agent-session`；`app/src` 不再持有它的 worker、订阅、文件、Git 或配置请求。其他已有 `zeta-composer`、`zeta-editor`、`zeta-workbench*`、`zeta-ui-components`、`zeta-terminal`、`zeta-remote*` 和 LSP crate 继续拥有各自能力，`app/src` 负责产品数据、样式、窗口事件和输入路由。
 
 新增的 app-side crate 如下：
 

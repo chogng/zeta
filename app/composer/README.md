@@ -22,7 +22,7 @@ The dependency direction is:
 
 ```text
 app host → zeta-composer → zeta-editor / zeta-input-classifier / zeta-slash-commands
-                             → zeta-ui → zui
+                             → zeta-ui-components → zui
 ```
 
 `zeta-composer` must not import `NativeApp`, workspace/session state, `winit`, `wgpu`, renderer

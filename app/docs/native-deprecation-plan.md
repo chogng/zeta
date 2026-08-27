@@ -10,14 +10,14 @@
 
 `app` 产品宿主不会整体弃用；它现在由 `app/` 承载。要逐步弃用的是迁移前留下的 Native UI
 split scene/interaction boundary，以及重复定义通用 UI runtime 的兼容入口。通用机制归 `zui`，可复用
-组件归 `zeta-ui` 或对应领域 crate，app 只保留产品适配。
+组件归 `zeta-ui-components` 或对应领域 crate，app 只保留产品适配。
 
 | 读者关心的对象 | 当前 canonical owner | Native 状态 | 下一步 |
 | --- | --- | --- | --- |
 | Element、layout、ComputedElement、scene、inspection | `zui` | 委托 | 禁止在 Native 复制几何或检查树 |
 | interaction、focus、capture、失效等级 | `zui` | 委托 | 产品事件只映射为 `UiIntent` 和失效请求 |
 | animation、deadline、retained fragment lifecycle | `zui` | 委托；Native 已持有 `RetainedRuntime` 并接入 Shell cleanup | 新产品 fragment 必须显式选择即时 unmount 或 exit spec；禁止 Native 自建 runtime |
-| Button、Tree、List、Diff 等通用组件 | `zeta-ui` / 领域 crate | 委托 | Native 只提供状态投影和 action adapter |
+| Button、Tree、List、Diff 等通用组件 | `zeta-ui-components` / 领域 crate | 委托 | Native 只提供状态投影和 action adapter |
 | 窗口、平台事件、App Server、文件/Git/Session 状态 | `app` | ✅ 保留 | 不迁入 `zui` |
 | Shell/Composer/Inspector 的产品组合 | `app` | ✅ 保留 | 通过 `UiFrame` 组合 |
 | `ShellPresentation` 的 frame ownership | `app` | ✅ 已完成 | 继续保持单一 `UiFrame<InteractionFrame>` owner |
@@ -31,7 +31,7 @@ split scene/interaction boundary，以及重复定义通用 UI runtime 的兼容
 
 - `zui` 拥有后端无关的 frame、layout、paint、inspection、interaction、animation、deadline 和 retained
   lifecycle 契约；这些能力不能因为 Native 接入方便而在 Native 再实现一份。
-- `zeta-ui` 和领域 crate 拥有可复用组件的内部几何、状态投影和交互节点；Workbench Part 只组合它们，
+- `zeta-ui-components` 和领域 crate 拥有可复用组件的内部几何、状态投影和交互节点；Workbench Part 只组合它们，
   不用深层选择器或重复 hit-test 覆盖组件内部规则。
 - Native 拥有产品状态、平台事件适配、App Server/文件/Git/Session 映射、command 执行和具体产品
   Part/Overlay 的组合。它可以保存可丢弃的 presentation state，但不拥有通用 UI runtime。
@@ -95,7 +95,7 @@ Shell；当前 Language Server switch 使用即时 unmount，SCM fold height 使
 - 在 Native 为 hover、focus、动画、fragment exit 或 deadline 安装独立 timer/registry；
 - 一个组件同时拥有 `compose`/`interaction_node` 和手写第二次 interaction registration；
 - 为了适配一个产品 Part，给 `zui` 增加产品 identity、文件/Git/Session 类型或反向依赖；
-- 用 host-specific deep selector 覆盖 `zeta-ui` 组件内部的 selected、hover、active、focus 或 disabled 样式。
+- 用 host-specific deep selector 覆盖 `zeta-ui-components` 组件内部的 selected、hover、active、focus 或 disabled 样式。
 
 这些规则不要求 Native 变薄到没有产品逻辑；它们要求“产品决定什么”和“框架如何表达/调度”保持可定位的
 边界。
