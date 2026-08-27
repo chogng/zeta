@@ -34,6 +34,15 @@ impl StatusLineItem {
             Self::GitChanges => "Git changes",
         }
     }
+
+    pub(crate) fn description(self) -> &'static str {
+        match self {
+            Self::Permissions => "Current permission mode",
+            Self::Model => "Configured model",
+            Self::GitBranch => "Current Git branch",
+            Self::GitChanges => "Working tree changes",
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]

@@ -677,7 +677,7 @@ owning crate interface / typed App Server result
 
 `status_line/` 定义稳定的 item identity、固定顺序、用户开关、separator 和 overflow policy；`StatusLineResource` 把四个产品显示开关保存到 CLI 显式提供的 `<profile>/zeta-code/statusline.json`，资源不进入 App Server，renderer 也不读取文件。昂贵或异步接口在后台完成后以 event 更新模型；失败只影响对应 item，并保留其明确的 unavailable/stale 语义。任何新 item 都应先回答“哪个 crate/interface 拥有这个事实”，再添加展示映射和宽度测试。
 
-当前实现由 `features/status_line/model.rs` 按“权限、模型、Git 分支、Git 变更”顺序拥有展示映射与宽度降级，`features/status_line/resource.rs` 拥有显示开关的有界读取、revision 校验和原子保存，`features/status_line/setup.rs` 为 `/statusline` 生成左侧 item、右侧 `true/false` 的操作页面，`features/status_line/view.rs` 在唯一 footer 区域内从左向右渲染已启用项目。Turn 运行状态不属于 status line。`app/frame/footer.rs` 只决定 Chord 等临时操作提示何时覆盖普通 status line，`components/welcome::WelcomeModel` 单独拥有空会话 workspace 路径文案。
+当前实现由 `features/status_line/model.rs` 按“权限、模型、Git 分支、Git 变更”顺序拥有展示映射与宽度降级，`features/status_line/resource.rs` 拥有显示开关的有界读取、revision 校验和原子保存，`features/status_line/setup.rs` 为 `/statusline` 生成左侧项目、中间说明、右侧开关的操作页面；每次切换只刷新页面和 footer，不向对话记录追加状态消息。`features/status_line/view.rs` 在唯一 footer 区域内从左向右渲染已启用项目。Turn 运行状态不属于 status line。`app/frame/footer.rs` 只决定 Chord 等临时操作提示何时覆盖普通 status line，`components/welcome::WelcomeModel` 单独拥有空会话 workspace 路径文案。
 
 ## 12. `host/`：窄宿主能力
 

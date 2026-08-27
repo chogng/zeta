@@ -64,7 +64,7 @@ impl StatusLineResource {
     pub(crate) fn apply_edit(
         &mut self,
         edit: &StatusLineEdit,
-    ) -> Result<(StatusLineSettings, StatusLineSelectionView, String), String> {
+    ) -> Result<(StatusLineSettings, StatusLineSelectionView), String> {
         if edit.expected_revision != self.revision {
             return Err(
                 "status-line settings changed after the editor opened; reopen /statusline and try again"
@@ -92,12 +92,7 @@ impl StatusLineResource {
         self.settings = settings;
         self.revision = self.revision.saturating_add(1);
         let view = self.setup_view();
-        let notice = format!(
-            "{}: {}",
-            edit.item.label(),
-            if edit.enabled { "true" } else { "false" }
-        );
-        Ok((settings, view, notice))
+        Ok((settings, view))
     }
 }
 

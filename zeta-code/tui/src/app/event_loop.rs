@@ -348,10 +348,9 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     },
                     AppCommand::EditStatusLine(edit) => match status_line_resource.as_mut() {
                         Some(resource) => match resource.apply_edit(&edit) {
-                            Ok((settings, view, notice)) => {
+                            Ok((settings, view)) => {
                                 app.update(AppEvent::StatusLineSettingsReceived(settings));
                                 app.update(AppEvent::StatusLineViewReplaced(view));
-                                app.update(AppEvent::HostOperationCompleted(Ok(notice)));
                             }
                             Err(error) => app.update(AppEvent::FailureReported(error)),
                         },

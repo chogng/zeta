@@ -10,7 +10,7 @@ fn edit_is_persisted_and_reloaded() {
     let settings = resource.refresh().unwrap();
     assert!(settings.enabled(StatusLineItem::Model));
 
-    let (settings, _, _) = resource
+    let (settings, _) = resource
         .apply_edit(&StatusLineEdit {
             expected_revision: 1,
             item: StatusLineItem::Model,
