@@ -248,6 +248,33 @@ impl ThreadController {
                 None => FrozenModelSelection::ConfiguredDefault,
             };
             let mut instruction_fragments = request.instructions.context_fragments();
+            if let Some(goal) = loaded
+                .snapshot
+                .goal
+                .as_ref()
+                .filter(|goal| goal.status.is_active())
+            {
+                let budget = match goal.token_budget {
+                    Some(token_budget) => zeta_prompts::GoalBudget::Limited {
+                        token_budget,
+                        tokens_used: goal.tokens_used,
+                    },
+                    None => zeta_prompts::GoalBudget::Unbounded,
+                };
+                let prompt = zeta_prompts::GoalPromptContext::new(&goal.objective, budget)
+                    .map(zeta_prompts::render_goals_prompt)
+                    .map_err(|error| CoreError::Context(error.to_string()))?;
+                instruction_fragments.push(crate::context::InstructionFragment::new(
+                    crate::context::InstructionSource::new(
+                        "product",
+                        "thread-goal",
+                        zeta_prompts::GOALS_PROMPT.revision(),
+                    ),
+                    crate::context::InstructionLayer::Product,
+                    crate::context::InstructionRetention::Required,
+                    prompt.body(),
+                ));
+            }
             instruction_fragments.extend(crate::multi_agent::agent_context_fragments(
                 &loaded.snapshot,
             ));

@@ -118,6 +118,7 @@ function unavailableChatService(): IChatService {
 	const neverEvent = <T>(): Event<T> => () => toDisposable(() => {});
 	return {
 		onDidUpdateThread: neverEvent<ThreadUpdateEnvelope>(),
+		onDidUpdateGoal: neverEvent<import("../../../../services/chat/common/chatService.js").ThreadGoalUpdate>(),
 		onDidBecomeReady: neverEvent<void>(),
 		onDidChangeModels: neverEvent<void>(),
 		onDidChangeSkills: neverEvent<void>(),

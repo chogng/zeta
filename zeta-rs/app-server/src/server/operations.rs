@@ -9,6 +9,10 @@ use zeta_app_server_protocol::protocol::document::{
     TypstSourceRangeDto,
 };
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
+use zeta_app_server_protocol::protocol::goal::{
+    ThreadGoalClearParams, ThreadGoalClearResponse, ThreadGoalGetParams, ThreadGoalGetResponse,
+    ThreadGoalSetParams, ThreadGoalSetResponse,
+};
 use zeta_app_server_protocol::protocol::initialize::{
     InitializeParams, InitializeResult, ProtocolVersion, ServerCapabilities,
 };
@@ -45,7 +49,6 @@ use zeta_protocol::ModelAccess;
 use zeta_protocol::ModelRef;
 use zeta_protocol::SessionStatus;
 use zeta_protocol::StableTurnError;
-use zeta_protocol::TurnResourceBudget;
 use zeta_protocol::UserInput;
 use zeta_typst::{
     TypstCompileError, TypstCompileOutcome, TypstDiagnostic, TypstDiagnosticSeverity,
@@ -433,13 +436,11 @@ impl AppServer {
             SessionRequest::StartTurn {
                 thread_id,
                 approval_mode,
-                resource_budget,
                 input,
             } => result(&SessionRequestResult::Turn(self.start_turn_request(
                 mutation,
                 thread_id,
                 approval_mode,
-                resource_budget,
                 input,
             )?)),
             SessionRequest::StartShellTurn {
@@ -705,6 +706,64 @@ impl AppServer {
         result(&SessionThreadReadResult { thread, history })
     }
 
+    pub(super) fn thread_goal_get(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: ThreadGoalGetParams = decode(params)?;
+        let thread = self.read_goal_thread(&params.thread_id)?;
+        result(&ThreadGoalGetResponse { goal: thread.goal })
+    }
+
+    pub(super) fn thread_goal_set(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: ThreadGoalSetParams = decode(params)?;
+        self.read_goal_thread(&params.thread_id)?;
+        let result_goal = self
+            .sessions
+            .threads()
+            .set_goal(
+                &params.thread_id,
+                zeta_core::SetGoalRequest {
+                    objective: params.objective,
+                    status: params.status,
+                    token_budget: params.token_budget,
+                },
+            )
+            .map_err(core_error)?;
+        if result_goal.changed {
+            self.updates.publish_thread_goal_updated(
+                zeta_app_server_protocol::protocol::goal::ThreadGoalUpdatedNotification {
+                    thread_id: params.thread_id.clone(),
+                    turn_id: None,
+                    goal: result_goal.goal.clone(),
+                },
+            );
+            if result_goal.goal.status == zeta_protocol::ThreadGoalStatus::Active {
+                self.turn_executor_snapshot()
+                    .resume_goal_continuation(&params.thread_id)
+                    .map_err(core_error)?;
+            }
+        }
+        result(&ThreadGoalSetResponse {
+            goal: result_goal.goal,
+        })
+    }
+
+    pub(super) fn thread_goal_clear(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: ThreadGoalClearParams = decode(params)?;
+        self.read_goal_thread(&params.thread_id)?;
+        let cleared = self
+            .sessions
+            .threads()
+            .clear_goal(&params.thread_id)
+            .map_err(core_error)?;
+        if cleared {
+            self.updates.publish_thread_goal_cleared(
+                zeta_app_server_protocol::protocol::goal::ThreadGoalClearedNotification {
+                    thread_id: params.thread_id,
+                },
+            );
+        }
+        result(&ThreadGoalClearResponse { cleared })
+    }
+
     pub(super) fn session_thread_subscribe(
         &self,
         connection: &mut ConnectionState,
@@ -781,6 +840,30 @@ impl AppServer {
         Ok(thread)
     }
 
+    fn read_goal_thread(
+        &self,
+        thread_id: &zeta_protocol::ThreadId,
+    ) -> Result<ThreadSnapshot, RpcError> {
+        let thread = self
+            .sessions
+            .threads()
+            .read_thread(thread_id)
+            .map_err(core_error)?;
+        let session = self
+            .sessions
+            .read_session(&thread.session_id)
+            .map_err(core_error)?;
+        if session.workspace_binding_is_legacy
+            || session.workspace != self.active_workspace_binding()
+        {
+            return Err(RpcError::new(
+                -32053,
+                AppServerErrorName::WorkspaceAuthorityMismatch,
+            ));
+        }
+        Ok(thread)
+    }
+
     fn offer_pending_interactions(&self, thread: &ThreadSnapshot) {
         for turn in &thread.turns {
             if let Some(interaction) = &turn.pending_interaction {
@@ -799,7 +882,6 @@ impl AppServer {
         mutation: SessionMutation,
         thread_id: zeta_protocol::ThreadId,
         approval_mode: ApprovalMode,
-        resource_budget: Option<TurnResourceBudget>,
         input: Vec<InputItem>,
     ) -> Result<TurnStartResult, RpcError> {
         let thread_before = self
@@ -839,7 +921,6 @@ impl AppServer {
             &thread_before,
             &mutation.command_id,
             approval_mode,
-            resource_budget.as_ref(),
             &input,
         )? {
             return Ok(replayed);
@@ -871,7 +952,6 @@ impl AppServer {
                     model,
                     policy_revision,
                     approval_mode,
-                    resource_budget: resource_budget.clone(),
                     tool_profile: Some(tool_profile),
                     activated_skills: Vec::new(),
                     input,
@@ -889,7 +969,6 @@ impl AppServer {
                 &snapshot,
                 &command_id,
                 approval_mode,
-                resource_budget.as_ref(),
                 &replay_input,
             )?
             .ok_or_else(|| RpcError::new(-32000, AppServerErrorName::InternalError));

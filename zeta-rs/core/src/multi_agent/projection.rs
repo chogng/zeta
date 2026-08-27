@@ -99,10 +99,10 @@ fn build_node(
             .unwrap_or(AgentTreeExecutionStatus::Idle),
         current_turn_id: turn.map(|turn| turn.turn_id.clone()),
         waiting_reason: turn.and_then(|turn| waiting_reason(turn.status)),
-        resource_budget: turn.and_then(|turn| turn.resource_budget.clone()),
         usage: turn
             .map(|turn| turn.usage.clone())
             .unwrap_or_else(ModelUsageSummary::default),
+        goal: thread.goal.clone(),
         role: thread
             .agent_context_seed
             .as_ref()

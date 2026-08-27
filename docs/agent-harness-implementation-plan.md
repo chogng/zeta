@@ -6,14 +6,14 @@
 
 ## 快速理解
 
-Zeta 已经具备可持续运行、调用工具、等待批准、运行中追问、自动与手动压缩上下文、恢复执行、usage/资源预算治理、按模型校准未来预算、模型输入逐项限幅、冻结的统一代码编辑工具面、durable 计划，以及使用 native OAuth target 的 ChatGPT 订阅本地 Agent Loop。Core、App Server 和 Desktop 的确定性行为由现有测试与 smoke 入口覆盖；后续重点是 ChatGPT 订阅兼容收口，真实模型 benchmark 与 production telemetry 仅在产品确有需要时再建设。
+Zeta 已经具备可持续运行、调用工具、等待批准、运行中追问、自动与手动压缩上下文、恢复执行、usage/Goal 治理、按模型校准未来预算、模型输入逐项限幅、冻结的统一代码编辑工具面、durable 计划，以及使用 native OAuth target 的 ChatGPT 订阅本地 Agent Loop。Core、App Server 和 Desktop 的确定性行为由现有测试与 smoke 入口覆盖；后续重点是 ChatGPT 订阅兼容收口，真实模型 benchmark 与 production telemetry 仅在产品确有需要时再建设。
 
 | 用户场景 | 当前表现 | 本计划完成后的结果 | 对应阶段 |
 | --- | --- | --- | --- |
 | 让 Agent 修复代码并运行测试 | 已能完成模型→工具→模型循环，并支持冻结工具 profile、durable 计划、批准、取消和恢复 | 用现有行为测试验证确定性闭环；真实模型成功率后置 | S3、S7 |
 | Agent 运行中追加要求 | 消息 durable 追加到当前 Turn；所有模型都由本地执行器在模型安全点重规划 | 增加完整故障矩阵和恢复验证 | S1、S5 |
 | 供应商报上下文溢出或认证失败 | 认证直接成为当前 Turn 错误；上下文溢出会先持久化压缩并以新快照重试一次 | 错误 UI 提供与类别匹配的下一步 | S1 |
-| 长会话消耗大量 token | 有 ContextPlan、逐项输入限幅、自动与 `/compact` 手动压缩、durable usage、冻结到 Turn 的 token/成本预算，以及按模型和估算 revision 恢复的未来预算校准 | 由现有压缩、usage 和预算测试验证；质量/成本 benchmark 后置 | S2、S7 |
+| 长会话消耗大量 token | 有 ContextPlan、逐项输入限幅、自动与 `/compact` 手动压缩、durable usage、跨 Turn 累计的 Thread Goal token 预算，以及按模型和估算 revision 恢复的未来预算校准 | 由现有压缩、usage 和 Goal 测试验证；质量/成本 benchmark 后置 | S2、S7 |
 | 切换 OpenAI、Anthropic 或 Google 模型 | Turn 接受时已冻结同一套 coding ToolProfile；`apply_patch` 默认承担通用变更，`edit` 只承担唯一字符串微编辑和降级 | 由 provider conformance 与行为测试保持统一 profile；模型对比 benchmark 后置 | S3、S7 |
 | 使用 ChatGPT 订阅模型 | native device OAuth、SecretStore、refresh、Responses target 与本地 Agent Loop 已接通 | 增加兼容探测、secret、rate-limit 与故障矩阵 | S5 |
 | 使用 Skills、MCP 和子 Agent | 显式 Skill、动态工具发现和多 Agent durable 协调已具备 | 自动选择受控、MCP 暴露策略固定、多 Agent 有完整故障验证 | S6、S7 |
@@ -30,7 +30,7 @@ Zeta 已经具备可持续运行、调用工具、等待批准、运行中追问
 | 工具安全与恢复 | 已实现 | 工具绑定、策略版本、批准、sandbox escalation、未知结果不重放 | `zeta-rs/core/src/turn/tool_scheduler.rs` |
 | ContextPlan 与上下文压缩 | 已实现 | 自动、手动和供应商溢出恢复都只吸收完整 terminal 前缀，并在 durable checkpoint 提交后重规划 | `zeta-rs/core/src/context/`、`zeta-rs/core/src/thread_controller/context.rs` |
 | Durable usage | 已实现 | 每个实际返回的模型调用在消费输出前独立写入，包括模型驱动的 compaction；Thread/Turn reducer 聚合已报告下限和完整性，恢复 replay 不变 | `zeta-rs/core/src/turn/executor.rs`、`zeta-rs/core/src/context/compaction.rs`、`zeta-rs/core/src/thread_reducer.rs` |
-| Turn 资源预算 | 已实现 | 默认不限额；可选 token/cost ceiling 与带 revision 的模型价格快照在 Turn 接受时持久化；模型、压缩和工具安全点按 usage 已报告下限终止，恢复不读取漂移目录 | `zeta-rs/core/src/turn/resource_budget.rs`、`zeta-rs/core/src/turn/executor.rs`、`zeta-rs/core/src/turn/tool_scheduler.rs` |
+| Thread Goal 预算 | 已实现 | 每个 Thread 最多一个 Goal；可选 token budget 跨 Turn 累计，缺失 usage 不伪造精确值，达到预算后收口当前 Turn 并停止自动继续 | `zeta-rs/protocol/src/thread/goal.rs`、`zeta-rs/core/src/thread_reducer.rs`、`zeta-rs/core/src/thread_controller.rs` |
 | 流式传输与 Desktop gap 恢复 | 已实现 | Core transient cursor、App Server 独立 writer、Desktop 去重和 canonical read | `zeta-rs/app-server/src/server.rs`、`zeta-ts/src/zeta/workbench/contrib/chat/browser/pane/chatPaneModel.ts` |
 | 本地 coding 工具闭环 | 已实现 | `coding-v1` 在 Turn 接受时冻结 exact 工具名、顺序、schema digest 与并行调用设置；canonical `read_file`/`write_file`/`edit`/`grep`/`glob`、`apply_patch`、`shell-command` 与 `update_plan` 已接线 | `zeta-rs/core/src/tool_profile.rs`、`zeta-rs/app-server/src/local_tools.rs` |
 | Skills 与 MCP | 已具备 S6 基线 | slash、显式 SkillRef、可信 metadata 自动 selector、`skills-read`、registry snapshot，以及 MCP direct/meta 阈值切换已接通 | `zeta-rs/skills`、`zeta-rs/ext/skills`、`zeta-rs/app-server` |
@@ -78,7 +78,7 @@ S1、S2 与 S3 已完成；确定性行为由现有测试覆盖，下一阶段�
 | ID | 状态 | 工作项 | 构建内容 | 验收标准 |
 | --- | --- | --- | --- | --- |
 | AL-201 | 已实现 | Durable usage 账本 | 每次实际返回的模型调用写入 `ModelUsageRecorded`，模型驱动的 compaction 通过强制 recorder 回调进入同一账本；provider-reported input、cached input、output 和 reasoning usage 聚合到 Thread，并在 Turn 内保留预算所需投影 | crash/restart 前后聚合一致；空响应、compaction 等调用分别记账；缺失或部分 usage 用 `reported + complete` 表达，不伪造为精确值；分叉只导入对话内容，不重复计算源 Thread 成本 |
-| AL-202 | 已实现 | Turn 资源预算 | 可选 token 与成本上限随 start-Turn command 和 `TurnAccepted` 持久化；成本使用带 revision 的模型价格 snapshot，不读取运行中漂移的目录值；App Server 与 Desktop 保留 canonical projection | 默认只记账不设限；达到已报告下限后在下一个模型、压缩或工具安全点以 `turnBudgetExhausted` 终止；final answer 可在刚好到限时完成；恢复继续使用冻结预算 |
+| AL-202 | 已实现 | Thread Goal 预算 | 每个 Thread 最多一个可选 Goal；Goal 状态、token budget 与累计用量通过同一条 Thread event log 持久化；统计已知的未缓存输入与输出 token，不伪造缺失 usage；App Server 与 Desktop 保留 canonical projection | 预算跨 Turn 累计；达到上限后 Goal 变为 `BudgetLimited`，当前 final answer 可完成但不再自动续跑；普通错误为 `Blocked`，provider usage limit 为 `UsageLimited`；重启/replay 保持状态和用量一致 |
 | AL-203 | 已实现 | 模型输入逐项限幅 | ContextPlan 选入时对 shell、文件读取、搜索和 MCP 生成带 continuation 诊断的 bounded clone；图片保留 durable 原图并在 provider-bound materialization 时按模型策略降采样 | 普通调用和 compaction 共用 bounded clone；structured content 按实际内容计量；durable Tool Result 和附件对象不被静默改写 |
 | AL-204 | 已实现 | 手动压缩 | `/compact` 以独立、不可 steering 的 Turn 执行；可选保留提示冻结在 typed command receipt；本地路径复用 durable checkpoint/usage，订阅路径把无提示请求委托给 upstream `thread/compact/start` | 只覆盖完整 terminal durable 前缀；压缩 Turn 和未完成工具组不被吸收；超长 Core-managed 前缀分批提交；失败不提交半成品 checkpoint；command replay 不重复外部调用 |
 | AL-205 | 已实现 | 预算校准 | 普通调用和模型驱动的 compaction 把带 estimator/calibration revision 的调用前估算写入 `ModelUsageRecorded`；reducer 按冻结模型与 estimator revision 从 provider input usage 重建只收紧未来容量的非对称 EMA；现有 OpenAI exact preflight、其他声明式 remote preflight 与本地 tokenizer 降级路径继续作用于最终 request | 重启后校准一致；缺失 input usage 不生成样本；上调立即生效、下调渐进衰减；未知窗口仍为 provider-managed；历史 durable usage 聚合保持原值 |

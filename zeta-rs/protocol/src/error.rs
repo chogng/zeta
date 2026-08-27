@@ -75,13 +75,14 @@ impl StableTurnError {
         }
     }
 
-    pub fn turn_budget_exhausted() -> Self {
+    pub fn usage_limited() -> Self {
         Self {
-            code: StableTurnErrorCode::TurnBudgetExhausted,
-            message: "The Turn resource budget was exhausted".into(),
+            code: StableTurnErrorCode::UsageLimited,
+            message: "Model provider usage limit reached".into(),
             retryable: false,
         }
     }
+
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -95,5 +96,5 @@ pub enum StableTurnErrorCode {
     CompletionPersistenceFailed,
     InteractionDeadlineElapsed,
     ToolRepetition,
-    TurnBudgetExhausted,
+    UsageLimited,
 }

@@ -18,6 +18,9 @@ use zeta_app_server_protocol::protocol::connectors::ConnectorsChanged;
 use zeta_app_server_protocol::protocol::extension_host::ExtensionHostChanged;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
 use zeta_app_server_protocol::protocol::git::{GitStatusChanged, GitStatusResult};
+use zeta_app_server_protocol::protocol::goal::{
+    ThreadGoalClearedNotification, ThreadGoalUpdatedNotification,
+};
 use zeta_app_server_protocol::protocol::language::LanguageDiagnosticsNotification;
 use zeta_app_server_protocol::protocol::language::LanguageServerMessageNotification;
 use zeta_app_server_protocol::protocol::language::LanguageServerProgressNotification;
@@ -484,6 +487,46 @@ impl UpdateBroker {
             | ThreadUpdate::ItemDelta { .. }
             | ThreadUpdate::ToolOutputDelta { .. } => self.publish_thread_transient(&update),
         }
+    }
+
+    pub(super) fn publish_thread_goal_updated(&self, updated: ThreadGoalUpdatedNotification) {
+        self.publish_thread_goal_notification(
+            &updated.thread_id,
+            ServerNotificationMethod::ThreadGoalUpdated,
+            &updated,
+        );
+    }
+
+    pub(super) fn publish_thread_goal_cleared(&self, cleared: ThreadGoalClearedNotification) {
+        self.publish_thread_goal_notification(
+            &cleared.thread_id,
+            ServerNotificationMethod::ThreadGoalCleared,
+            &cleared,
+        );
+    }
+
+    fn publish_thread_goal_notification<T: Serialize>(
+        &self,
+        thread_id: &ThreadId,
+        method: ServerNotificationMethod,
+        params: &T,
+    ) {
+        let Ok(mut state) = self.state.lock() else {
+            return;
+        };
+        state.subscribers.retain(|_, subscriber| {
+            let Some(queue) = subscriber.queue.upgrade() else {
+                return false;
+            };
+            if subscriber
+                .threads
+                .get(thread_id)
+                .is_some_and(|subscription| !subscription.session_owners.is_empty())
+            {
+                queue.push(notification(method, params));
+            }
+            true
+        });
     }
 
     pub(super) fn publish_skills_changed(&self, generation: u64) {

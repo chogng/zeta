@@ -246,7 +246,7 @@ FIFO/shared-read 调度；connection-resource key 由 runtime 再加入 connecti
 - `SessionRequest::ResolveInteraction` 使用 canonical `AgentResponse` 与 exact `RequestId`。
 - `AgentRequestEnvelope` 携带 Session/Thread/Turn aggregate context 和 full durable request，但不携带
   connection owner；`ClientCapabilities.agentInteractions.kinds` 必须与可产生的 response kind 一致。
-- `SessionRequest::StartTurn.resource_budget` 可选投影 canonical `TurnResourceBudget`；缺失表示只记账不限额，cost ceiling 必须同时携带带 revision 且匹配所选模型的价格快照。预算由 Core 在 Turn 接受时冻结，App Server 不从运行中目录补写价格。
+- `thread/goal/get|set|clear` 管理 Thread 唯一的持久化 Goal；Goal 的状态和跨 Turn token 用量由 Core 从 Thread event log 恢复，App Server 不维护旁路预算状态。
 - `SessionRequest::StartTurn.input` 是有序、非空的 tagged union：`text { text }` 或
   `image { url }` 或 `skill { skill: SkillRef }`；图片在进入 wire contract 前必须已经从本地路径
   规范化为 HTTP(S)/data URL，Skill 只能携带 source-qualified ID 与 version selector，不能携带

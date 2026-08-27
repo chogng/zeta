@@ -45,6 +45,20 @@
   flex: 1 1 auto;
 }
 
+.zeta-chat-goal {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  margin: 8px 12px 0;
+  padding: 6px 8px;
+  border: 1px solid var(--zeta-border);
+  border-radius: 4px;
+  color: var(--zeta-description-foreground);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .zeta-chat.empty > .zeta-chat-list-widget {
   flex: 0 0 0;
 }

@@ -475,6 +475,87 @@ fn wait_for_latest_turn(server: &AppServer, thread_id: &str, expected: TurnStatu
 }
 
 #[test]
+fn thread_goal_rpc_round_trips_and_publishes_scoped_updates() {
+    let server = server();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let session = create_session(&server, &mut connection, 2, "goal-session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = create_thread(&server, &mut connection, 3, "goal-thread", session_id, 1);
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+    call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":4,
+            "method":"session/thread/subscribe",
+            "params":{"sessionId":session_id,"threadId":thread_id,"afterSequence":1}
+        }),
+    );
+    server.drain_notifications(&mut connection);
+
+    let set = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":5,
+            "method":"thread/goal/set",
+            "params":{"threadId":thread_id,"objective":"finish the implementation","tokenBudget":100}
+        }),
+    );
+    assert_eq!(set["result"]["goal"]["status"], "active");
+    assert_eq!(set["result"]["goal"]["tokensUsed"], 0);
+    assert_eq!(set["result"]["goal"]["tokenBudget"], 100);
+    let updates = server.drain_notifications(&mut connection);
+    assert!(updates.iter().any(|notification| {
+        notification.contains("\"method\":\"thread/goal/updated\"")
+            && notification.contains("finish the implementation")
+    }));
+
+    let get = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":6,
+            "method":"thread/goal/get",
+            "params":{"threadId":thread_id}
+        }),
+    );
+    assert_eq!(get["result"]["goal"]["goalId"], set["result"]["goal"]["goalId"]);
+
+    let clear = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":7,
+            "method":"thread/goal/clear",
+            "params":{"threadId":thread_id}
+        }),
+    );
+    assert_eq!(clear["result"]["cleared"], true);
+    assert!(server
+        .drain_notifications(&mut connection)
+        .iter()
+        .any(|notification| notification.contains("\"method\":\"thread/goal/cleared\"")));
+
+    let missing = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":8,
+            "method":"thread/goal/get",
+            "params":{"threadId":thread_id}
+        }),
+    );
+    assert!(missing["result"]["goal"].is_null());
+}
+
+#[test]
 fn initialize_is_required_and_request_ids_are_connection_unique() {
     let server = server();
     let mut connection = server.connection();
@@ -1905,7 +1986,7 @@ fn completed_turn_replays_without_invoking_the_model_twice() {
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
     let thread = create_thread(&server, &mut connection, 3, "thread", session_id, 1);
     let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
-    let request = |id, max_total_tokens| {
+    let request = |id| {
         serde_json::json!({
             "jsonrpc":"2.0",
             "id":id,
@@ -1917,35 +1998,20 @@ fn completed_turn_replays_without_invoking_the_model_twice() {
                 "request":{
                     "type":"startTurn",
                     "threadId":thread_id,
-                    "resourceBudget":{"maxTotalTokens":max_total_tokens},
                     "input":[{"type":"text","text":"hello"}]
                 }
             }
         })
     };
-    let first = call(&server, &mut connection, request(4, 100));
-    let replayed = call(&server, &mut connection, request(5, 100));
-    let conflict = call(&server, &mut connection, request(6, 101));
+    let first = call(&server, &mut connection, request(4));
+    let replayed = call(&server, &mut connection, request(5));
 
     assert_eq!(
         first["result"]["value"]["turnId"],
         replayed["result"]["value"]["turnId"]
     );
-    assert_eq!(conflict["error"]["message"], "CommandConflict");
     wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
     assert_eq!(model.calls.load(Ordering::Relaxed), 1);
-    let thread = call(
-        &server,
-        &mut connection,
-        serde_json::json!({
-            "jsonrpc":"2.0","id":7,"method":"session/thread/read",
-            "params":{"sessionId":session_id,"threadId":thread_id}
-        }),
-    );
-    assert_eq!(
-        thread["result"]["thread"]["turns"][0]["resourceBudget"]["maxTotalTokens"],
-        100
-    );
     let notifications = server.drain_notifications(&mut connection);
     assert!(notifications.iter().any(|notification| {
         notification.contains("\"method\":\"session/thread/update\"")
@@ -3035,7 +3101,6 @@ fn interaction_resolution_uses_the_durable_identity_and_resumes_the_turn() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                resource_budget: None,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -3403,7 +3468,6 @@ fn expired_interaction_is_cancelled_and_fails_the_turn() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                resource_budget: None,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -3494,7 +3558,6 @@ fn approval_interaction_resolves_through_the_typed_app_server_contract() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                resource_budget: None,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -3610,7 +3673,6 @@ fn interaction_response_is_rejected_from_a_capable_non_owner_connection() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                resource_budget: None,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {

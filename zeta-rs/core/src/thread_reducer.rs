@@ -35,6 +35,7 @@ use zeta_protocol::PlanUpdate;
 use zeta_protocol::RequestId;
 use zeta_protocol::SessionId;
 use zeta_protocol::StableTurnError;
+use zeta_protocol::StableTurnErrorCode;
 use zeta_protocol::Thread;
 use zeta_protocol::ThreadCommand;
 use zeta_protocol::ThreadEvent;
@@ -47,7 +48,6 @@ use zeta_protocol::Turn;
 use zeta_protocol::TurnExecutionBinding;
 use zeta_protocol::TurnId;
 use zeta_protocol::TurnInteraction;
-use zeta_protocol::TurnResourceBudget;
 use zeta_protocol::TurnStatus;
 
 #[path = "thread_reducer_approval.rs"]
@@ -61,6 +61,10 @@ pub struct ThreadSnapshot {
     pub turn_execution_binding: Option<TurnExecutionBinding>,
     pub sequence: u64,
     pub usage: ModelUsageSummary,
+    pub goal: Option<zeta_protocol::ThreadGoal>,
+    /// The Turn that crossed a Goal budget. This is derived from the event log and lets the
+    /// remainder of that in-flight Turn be accounted without charging later Turns.
+    pub(crate) goal_budget_limited_turn_id: Option<TurnId>,
     pub(crate) context_calibrations: Vec<ContextCalibration>,
     pub turns: Vec<TurnSnapshot>,
     pub items: Vec<ThreadItem>,
@@ -128,6 +132,7 @@ impl ThreadSnapshot {
             status: ThreadStatus::Active,
             sequence: self.sequence,
             usage: self.usage.clone(),
+            goal: self.goal.clone(),
             turns: self
                 .turns
                 .iter()
@@ -135,7 +140,6 @@ impl ThreadSnapshot {
                     turn_id: turn.turn_id.clone(),
                     status: turn.status,
                     model: turn.model.clone(),
-                    resource_budget: turn.resource_budget.clone(),
                     tool_profile: turn.tool_profile.clone(),
                     usage: turn.usage.clone(),
                     items: self
@@ -195,7 +199,6 @@ pub struct TurnSnapshot {
     pub failure: Option<StableTurnError>,
     pub pending_interaction: Option<TurnInteraction>,
     pub execution_backend_attempt: Option<String>,
-    pub resource_budget: Option<TurnResourceBudget>,
     pub tool_profile: Option<ToolProfileSnapshot>,
     pub plan: Option<PlanUpdate>,
     pub usage: ModelUsageSummary,
@@ -285,6 +288,8 @@ pub fn reduce_thread_event(
                     turn_execution_binding: None,
                     sequence: envelope.sequence,
                     usage: ModelUsageSummary::default(),
+                    goal: None,
+                    goal_budget_limited_turn_id: None,
                     context_calibrations: Vec::new(),
                     turns: Vec::new(),
                     items: Vec::new(),
@@ -331,6 +336,63 @@ pub fn reduce_thread_event(
             return Err(CoreError::Journal(
                 "Thread cannot be created more than once".into(),
             ));
+        }
+        ThreadEvent::GoalCreated { thread_id, goal } => {
+            require_no_command(envelope)?;
+            validate_goal_identity(&snapshot, thread_id, goal)?;
+            if snapshot.goal.is_some() {
+                return Err(CoreError::Journal(
+                    "Thread can own only one Goal at a time".into(),
+                ));
+            }
+            if goal.tokens_used != 0 {
+                return Err(CoreError::Journal(
+                    "a newly created Goal must have zero tokens used".into(),
+                ));
+            }
+            snapshot.goal = Some(goal.clone());
+            snapshot.goal_budget_limited_turn_id = None;
+        }
+        ThreadEvent::GoalUpdated { thread_id, goal } => {
+            require_no_command(envelope)?;
+            validate_goal_identity(&snapshot, thread_id, goal)?;
+            let current = snapshot.goal.as_ref().ok_or_else(|| {
+                CoreError::Journal("cannot update a Thread without a Goal".into())
+            })?;
+            if current.goal_id != goal.goal_id {
+                return Err(CoreError::Journal(
+                    "Goal update ID does not match the current Thread Goal".into(),
+                ));
+            }
+            if current.tokens_used != goal.tokens_used {
+                return Err(CoreError::Journal(
+                    "Goal updates cannot change the durable token counter".into(),
+                ));
+            }
+            snapshot.goal = Some(goal.clone());
+            snapshot.goal_budget_limited_turn_id = None;
+        }
+        ThreadEvent::GoalCleared {
+            thread_id,
+            goal_id,
+        } => {
+            require_no_command(envelope)?;
+            if thread_id != &snapshot.thread_id {
+                return Err(CoreError::Journal(
+                    "Goal event Thread identity does not match the rollout".into(),
+                ));
+            }
+            let current = snapshot
+                .goal
+                .as_ref()
+                .ok_or_else(|| CoreError::Journal("cannot clear a missing Thread Goal".into()))?;
+            if current.goal_id != *goal_id {
+                return Err(CoreError::Journal(
+                    "Goal clear ID does not match the current Thread Goal".into(),
+                ));
+            }
+            snapshot.goal = None;
+            snapshot.goal_budget_limited_turn_id = None;
         }
         ThreadEvent::TurnExecutionBound { binding, .. } => {
             require_no_command(envelope)?;
@@ -428,6 +490,26 @@ pub fn reduce_thread_event(
             };
             snapshot.turns[turn_index].usage = next_turn_usage;
             snapshot.usage = next_thread_usage;
+            if let Some(goal) = snapshot.goal.as_mut() {
+                let account_usage = goal.status.allows_usage_accounting()
+                    && (goal.status != zeta_protocol::ThreadGoalStatus::BudgetLimited
+                        || snapshot.goal_budget_limited_turn_id.as_ref() == Some(turn_id));
+                if account_usage {
+                    goal.tokens_used = goal
+                        .tokens_used
+                        .checked_add(goal_token_delta(usage.as_ref()))
+                        .ok_or_else(|| {
+                            CoreError::Journal("Thread Goal token usage overflowed".into())
+                        })?;
+                    if goal
+                        .token_budget
+                        .is_some_and(|budget| goal.tokens_used >= budget)
+                    {
+                        goal.status = zeta_protocol::ThreadGoalStatus::BudgetLimited;
+                        snapshot.goal_budget_limited_turn_id = Some(turn_id.clone());
+                    }
+                }
+            }
             if let Some(next_calibrations) = next_calibrations {
                 snapshot.context_calibrations = next_calibrations;
             }
@@ -513,7 +595,6 @@ pub fn reduce_thread_event(
             policy_revision,
             approval_mode,
             activated_skills,
-            resource_budget,
             tool_profile,
             ..
         } => {
@@ -522,8 +603,6 @@ pub fn reduce_thread_event(
                     "Turn policy revision must not be empty".into(),
                 ));
             }
-            crate::turn::validate_resource_budget(model.as_ref(), resource_budget.as_ref())
-                .map_err(|error| CoreError::Journal(error.to_string()))?;
             if let Some(tool_profile) = tool_profile {
                 crate::tool_profile::validate_tool_profile_snapshot(tool_profile)
                     .map_err(CoreError::Journal)?;
@@ -540,7 +619,6 @@ pub fn reduce_thread_event(
                     failure: None,
                     pending_interaction: None,
                     execution_backend_attempt: None,
-                    resource_budget: resource_budget.clone(),
                     tool_profile: tool_profile.clone(),
                     plan: None,
                     usage: ModelUsageSummary::default(),
@@ -554,7 +632,6 @@ pub fn reduce_thread_event(
                     model: command_model,
                     activated_skills: command_skills,
                     approval_mode: command_approval_mode,
-                    resource_budget: command_resource_budget,
                     tool_profile: command_tool_profile,
                     input,
                     ..
@@ -562,7 +639,6 @@ pub fn reduce_thread_event(
                     command_model == model
                         && command_skills == activated_skills
                         && command_approval_mode == approval_mode
-                        && command_resource_budget == resource_budget
                         && command_tool_profile.as_deref() == tool_profile.as_ref()
                         && turn_skill_activations_match(input, activated_skills)
                 }
@@ -571,7 +647,6 @@ pub fn reduce_thread_event(
                     ..
                 } => {
                     model.is_none()
-                        && resource_budget.is_none()
                         && tool_profile.is_none()
                         && command_approval_mode == approval_mode
                         && activated_skills.is_empty()
@@ -581,7 +656,6 @@ pub fn reduce_thread_event(
                     ..
                 } => {
                     command_model == model
-                        && resource_budget.is_none()
                         && tool_profile.is_none()
                         && *approval_mode == ApprovalMode::AskPermissions
                         && activated_skills.is_empty()
@@ -1080,6 +1154,15 @@ pub fn reduce_thread_event(
                 TurnStatus::Failed,
                 Some(error.clone()),
             )?;
+            if let Some(goal) = snapshot.goal.as_mut() {
+                if !goal.status.is_terminal() {
+                    goal.status = if error.code == StableTurnErrorCode::UsageLimited {
+                        zeta_protocol::ThreadGoalStatus::UsageLimited
+                    } else {
+                        zeta_protocol::ThreadGoalStatus::Blocked
+                    };
+                }
+            }
         }
         ThreadEvent::TurnCancelling { turn_id, .. } => {
             if let Some(receipt) = envelope.command.clone() {
@@ -1719,7 +1802,6 @@ fn import_history(
             failure: turn.error.clone(),
             pending_interaction: None,
             execution_backend_attempt: None,
-            resource_budget: None,
             tool_profile: turn.tool_profile.clone(),
             plan: turn.plan.clone(),
             usage: ModelUsageSummary::default(),
@@ -1902,6 +1984,32 @@ fn create_turn(snapshot: &mut ThreadSnapshot, turn: TurnSnapshot) -> Result<(), 
     }
     snapshot.turns.push(turn);
     Ok(())
+}
+
+fn validate_goal_identity(
+    snapshot: &ThreadSnapshot,
+    thread_id: &ThreadId,
+    goal: &zeta_protocol::ThreadGoal,
+) -> Result<(), CoreError> {
+    if thread_id != &snapshot.thread_id || goal.thread_id != snapshot.thread_id {
+        return Err(CoreError::Journal(
+            "Goal event Thread identity does not match the rollout".into(),
+        ));
+    }
+    goal.validate().map_err(CoreError::Journal)
+}
+
+fn goal_token_delta(usage: Option<&zeta_protocol::ModelUsage>) -> u64 {
+    let Some(usage) = usage else {
+        return 0;
+    };
+    let uncached_input = match (usage.input_tokens, usage.cached_input_tokens) {
+        (Some(input), Some(cached)) => input.saturating_sub(cached),
+        // Without both provider values, the uncached input amount is unknown. Do not invent a
+        // precise number; output tokens, when present, remain independently attributable.
+        _ => 0,
+    };
+    uncached_input.saturating_add(usage.output_tokens.unwrap_or_default())
 }
 
 fn require_no_command(envelope: &StoredEvent) -> Result<(), CoreError> {

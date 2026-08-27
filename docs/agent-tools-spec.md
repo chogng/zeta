@@ -546,7 +546,7 @@ bounded results。进程恢复会重新求值 waiting join。
 
 App Server 的 parent Turn interrupt 与 Session stop 会提交 cancellation facts，并向 live child
 descendants 递归传播。`session/subscribe.agentTree` 是从同一 durable Session/Thread read set 生成的
-canonical nested projection，包含 execution status、等待原因、Turn budget/usage、role、join 和
+canonical nested projection，包含 execution status、等待原因、Goal budget/usage、role、join 和
 delegation result。Desktop Agent Sidebar 只消费该 projection；`session/thread/update` 只触发
 重新读取 canonical projection，旧 Thread sequence 通知会被忽略。中断使用节点的 exact
 `threadId/currentTurnId/threadSequence` 中断单个目标。

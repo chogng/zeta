@@ -30,6 +30,9 @@ export function createDisconnectedThreadApi(unavailable: UnavailableOperation): 
 		read: () => unavailable("thread.read"),
 		subscribe: () => unavailable("thread.subscribe"),
 		unsubscribe: () => unavailable("thread.unsubscribe"),
+		getGoal: () => unavailable("thread.goal.get"),
+		setGoal: () => unavailable("thread.goal.set"),
+		clearGoal: () => unavailable("thread.goal.clear"),
 	};
 }
 
@@ -69,6 +72,9 @@ export function createViteDevThreadApi(connection: ViteDevAppServerConnection): 
 		read: (params) => viteDevRequest(connection, "session/thread/read", params),
 		subscribe: (params) => viteDevRequest(connection, "session/thread/subscribe", params),
 		unsubscribe: (params) => voidResult(viteDevRequest(connection, "session/thread/unsubscribe", params)),
+		getGoal: (params) => viteDevRequest(connection, "thread/goal/get", params),
+		setGoal: (params) => viteDevRequest(connection, "thread/goal/set", params),
+		clearGoal: (params) => viteDevRequest(connection, "thread/goal/clear", params),
 	};
 }
 

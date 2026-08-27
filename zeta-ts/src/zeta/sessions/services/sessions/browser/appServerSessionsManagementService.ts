@@ -436,12 +436,7 @@ function toAgentTreeNode(node: AgentTreeNodeProjectionDto): AgentTreeNode {
 		executionStatus: node.executionStatus,
 		...(node.currentTurnId ? { currentTurnId: node.currentTurnId } : {}),
 		...(node.waitingReason ? { waitingReason: node.waitingReason } : {}),
-		...(node.resourceBudget ? {
-			resourceBudget: {
-				...(node.resourceBudget.maxTotalTokens !== undefined && node.resourceBudget.maxTotalTokens !== null ? { maxTotalTokens: node.resourceBudget.maxTotalTokens } : {}),
-				...(node.resourceBudget.maxCostUsdMicros !== undefined && node.resourceBudget.maxCostUsdMicros !== null ? { maxCostUsdMicros: node.resourceBudget.maxCostUsdMicros } : {}),
-			},
-		} : {}),
+		...(node.goal ? { goal: { ...node.goal } } : {}),
 		usage: {
 			inputTokens: node.usage.inputTokens.reported,
 			outputTokens: node.usage.outputTokens.reported,

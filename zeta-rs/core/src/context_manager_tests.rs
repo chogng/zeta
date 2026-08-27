@@ -71,6 +71,8 @@ fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
         turn_execution_binding: None,
         sequence,
         usage: zeta_protocol::ModelUsageSummary::default(),
+        goal: None,
+        goal_budget_limited_turn_id: None,
         context_calibrations: Vec::new(),
         turns: vec![TurnSnapshot {
             turn_id: turn_id.clone(),
@@ -82,7 +84,6 @@ fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
             failure: None,
             pending_interaction: None,
             execution_backend_attempt: None,
-            resource_budget: None,
             tool_profile: None,
             plan: None,
             usage: zeta_protocol::ModelUsageSummary::default(),

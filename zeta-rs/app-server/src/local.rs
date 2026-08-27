@@ -1266,6 +1266,9 @@ pub fn open_local_app_server_with_code_index_providers(
     server
         .resume_recovered_tool_continuations()
         .map_err(open_error)?;
+    server
+        .resume_recovered_goal_continuations()
+        .map_err(open_error)?;
     let workspace_tools = server
         .local_workspace_tool_ports()
         .ok_or_else(|| OpenAppServerError("local Workspace tools are unavailable".into()))?;

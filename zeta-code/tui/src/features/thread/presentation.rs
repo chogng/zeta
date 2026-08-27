@@ -128,9 +128,8 @@ pub(crate) fn present_turn_error(error: &StableTurnError) -> String {
              change the request before retrying."
                 .into()
         }
-        StableTurnErrorCode::TurnBudgetExhausted => {
-            "This request used its allowed resource budget. Increase the budget or narrow the \
-             request, then try again."
+        StableTurnErrorCode::UsageLimited => {
+            "The model provider's usage limit was reached. Check the provider account or try again later."
                 .into()
         }
     }

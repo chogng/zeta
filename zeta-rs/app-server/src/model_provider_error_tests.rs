@@ -75,6 +75,14 @@ fn transient_retry_delay_crosses_the_product_boundary_as_typed_metadata() {
 }
 
 #[test]
+fn provider_usage_limit_maps_to_a_non_retryable_goal_failure_category() {
+    assert_eq!(
+        map_model_provider_error(ModelProviderError::Api(ApiError::UsageLimited)),
+        CoreError::ModelUsageLimited
+    );
+}
+
+#[test]
 fn direct_provider_failures_keep_retry_policy_and_stable_codes_through_the_turn() {
     let auth = run_provider_failure(ProviderFailure::Auth);
     assert_eq!(auth, (StableTurnErrorCode::ProviderAuth, false, 1));
@@ -108,7 +116,6 @@ fn provider_context_overflow_compacts_and_retries_through_the_product_boundary()
                 model: None,
                 policy_revision: "provider-error-policy-v1".into(),
                 approval_mode: ApprovalMode::AskPermissions,
-                resource_budget: None,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -130,7 +137,6 @@ fn provider_context_overflow_compacts_and_retries_through_the_product_boundary()
                 model: None,
                 policy_revision: "provider-error-policy-v1".into(),
                 approval_mode: ApprovalMode::AskPermissions,
-                resource_budget: None,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -236,7 +242,6 @@ fn run_provider_failure(failure: ProviderFailure) -> (StableTurnErrorCode, bool,
                 model: None,
                 policy_revision: "provider-error-policy-v1".into(),
                 approval_mode: ApprovalMode::AskPermissions,
-                resource_budget: None,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {

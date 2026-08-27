@@ -241,6 +241,16 @@ fn project_item(item: &ThreadItem, tool_names: &BTreeMap<ToolCallId, String>) ->
         ThreadItem::UserMessage { item_id, text, .. } => {
             item_message(item_id.as_str(), MessageRole::User, text.clone())
         }
+        ThreadItem::UserContext {
+            item_id,
+            name,
+            content,
+            ..
+        } => item_message(
+            item_id.as_str(),
+            MessageRole::User,
+            format!("Context · {name}\n{content}"),
+        ),
         ThreadItem::UserImage { item_id, .. } | ThreadItem::UserImageAttachment { item_id, .. } => {
             item_message(item_id.as_str(), MessageRole::User, "[Image]".into())
         }

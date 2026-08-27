@@ -163,6 +163,7 @@ pub(crate) struct ContextInput {
     item_sequences: BTreeMap<ItemId, u64>,
     tools: Vec<ToolDefinition>,
     budget: ContextBudget,
+    allow_empty_current_turn: bool,
 }
 
 impl ContextInput {
@@ -173,6 +174,15 @@ impl ContextInput {
         tools: Vec<ToolDefinition>,
         budget: ContextBudget,
     ) -> Self {
+        let allow_empty_current_turn = snapshot.commands.iter().any(|command| {
+            matches!(
+                (&command.receipt.command, &command.result),
+                (
+                    zeta_protocol::ThreadCommand::StartTurn { input, .. },
+                    crate::ThreadCommandResult::TurnAccepted { turn_id },
+                ) if turn_id == &current_turn_id && input.is_empty()
+            )
+        });
         Self {
             source_thread_sequence: snapshot.sequence,
             current_turn_id,
@@ -196,6 +206,7 @@ impl ContextInput {
             item_sequences: snapshot.item_sequences.clone(),
             tools,
             budget,
+            allow_empty_current_turn,
         }
     }
 
@@ -242,5 +253,9 @@ impl ContextInput {
 
     pub(crate) const fn budget(&self) -> ContextBudget {
         self.budget
+    }
+
+    pub(crate) const fn allow_empty_current_turn(&self) -> bool {
+        self.allow_empty_current_turn
     }
 }

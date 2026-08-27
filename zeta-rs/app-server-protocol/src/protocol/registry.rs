@@ -178,6 +178,11 @@ use crate::protocol::fs::{
     FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsRenameParams, FsWriteFileParams,
     FsWriteFileResult,
 };
+use crate::protocol::goal::{
+    ThreadGoalClearParams, ThreadGoalClearResponse, ThreadGoalClearedNotification,
+    ThreadGoalGetParams, ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse,
+    ThreadGoalUpdatedNotification,
+};
 use crate::protocol::git::{
     GitBranchDto, GitBranchListResult, GitBranchSwitchParams, GitChangeFileComparisonDto,
     GitChangeFileParams, GitChangeFileResult, GitChangeStatusDto, GitCommitChangeDto,
@@ -402,15 +407,15 @@ use zeta_protocol::{
     DelegationArtifactRef, DelegationId, DelegationResult, DelegationResultDigest,
     DelegationResultStatus, DynamicToolCall, DynamicToolOutput, DynamicToolResponse,
     ForkedAgentContext, FrozenAgentDefinitionRef, FrozenSkillActivation, InteractionCancelReason,
-    InteractionDeadline, ItemDelta, ModelInputEstimate, ModelPriceSnapshot, ModelUsage,
+    InteractionDeadline, ItemDelta, ModelInputEstimate, ModelUsage,
     ModelUsageSummary, ModelUsageTotal, PendingInteraction, PlanStep, PlanStepStatus, PlanUpdate,
     ProcessExecutionOutput, ProcessExitStatus, RequestUserInput, RequestUserInputResponse,
     SandboxDenialOutput, Session, SessionEvent, SessionStatus, SessionThread, SessionThreadStatus,
     SessionUpdate, SkillActivationReason, SkillId, SkillName, SkillRef, SkillSourceId,
     SkillVersionSelector, StableTurnError, StableTurnErrorCode, StreamCursor, Thread, ThreadEvent,
     ThreadItem, ThreadOrigin, ThreadSequenceRange, ThreadStatus, ThreadUpdate,
-    ToolExecutionAuthority, ToolOutputStream, ToolProfileSnapshot, ToolReplaySafety, Turn,
-    TurnExecutionBinding, TurnInteraction, TurnResourceBudget, TurnStatus, UserInputAnswer,
+    ThreadGoal, ThreadGoalStatus, ToolExecutionAuthority, ToolOutputStream, ToolProfileSnapshot,
+    ToolReplaySafety, Turn, TurnExecutionBinding, TurnInteraction, TurnStatus, UserInputAnswer,
     UserInputOption, UserInputQuestion,
 };
 
@@ -753,6 +758,21 @@ client_methods! {
         params: SessionThreadReadParams,
         response: SessionThreadReadResult,
         serialization: SessionSharedRead,
+    },
+    ThreadGoalGet => "thread/goal/get" {
+        params: ThreadGoalGetParams,
+        response: ThreadGoalGetResponse,
+        serialization: GlobalSharedRead,
+    },
+    ThreadGoalSet => "thread/goal/set" {
+        params: ThreadGoalSetParams,
+        response: ThreadGoalSetResponse,
+        serialization: GlobalExclusive,
+    },
+    ThreadGoalClear => "thread/goal/clear" {
+        params: ThreadGoalClearParams,
+        response: ThreadGoalClearResponse,
+        serialization: GlobalExclusive,
     },
     SessionThreadSubscribe => "session/thread/subscribe" {
         params: SessionThreadSubscribeParams,
@@ -1826,6 +1846,12 @@ server_notifications! {
         params: ThreadUpdateEnvelope,
         storage: boxed,
     },
+    ThreadGoalUpdated => "thread/goal/updated" {
+        params: ThreadGoalUpdatedNotification,
+    },
+    ThreadGoalCleared => "thread/goal/cleared" {
+        params: ThreadGoalClearedNotification,
+    },
     ConfigChanged => "config/changed" {
         params: ConfigChanged,
     },
@@ -2207,6 +2233,16 @@ typescript_bindings! {
     SessionSubscribeResult,
     SessionThreadProjection,
     SessionThreadResult,
+    ThreadGoalStatus,
+    ThreadGoal,
+    ThreadGoalSetParams,
+    ThreadGoalSetResponse,
+    ThreadGoalGetParams,
+    ThreadGoalGetResponse,
+    ThreadGoalClearParams,
+    ThreadGoalClearResponse,
+    ThreadGoalUpdatedNotification,
+    ThreadGoalClearedNotification,
     ThreadSnapshotHistory,
     ThreadHistoryBoundary,
     CapabilitySupport,
@@ -2254,8 +2290,6 @@ typescript_bindings! {
     ModelUsage,
     ModelUsageTotal,
     ModelUsageSummary,
-    ModelPriceSnapshot,
-    TurnResourceBudget,
     ToolProfileSnapshot,
     Turn,
     Thread,

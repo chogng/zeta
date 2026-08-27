@@ -1,6 +1,7 @@
 use super::CodeIndexSemanticModels;
 use super::code_index_runtime::CodeIndexRuntime;
 use super::fs_watcher::FileSystemWatcher;
+use super::goal_tool::GoalToolService;
 use super::git_runtime::{GitRuntime, GitWatcher};
 use super::multi_agent_tools::MultiAgentToolService;
 use super::semantic_index_job::AppServerSemanticIndexMetrics;
@@ -1045,6 +1046,7 @@ impl AppServer {
         )
         .with_hooks(hooks.clone())
         .with_thread_updates(Arc::new(AppServerThreadUpdates {
+            sessions: Arc::clone(&self.sessions),
             updates: Arc::clone(&self.updates),
         }));
         executor = executor.with_extensions(Arc::clone(&self.agent_extensions));
@@ -2136,6 +2138,13 @@ fn append_multi_agent_tools(
         local,
         Arc::new(
             UpdatePlanToolService::new(Arc::clone(sessions))
+                .with_action_policy_revision(action_policy_revision.clone()),
+        ),
+    );
+    let local = append_local_tool(
+        local,
+        Arc::new(
+            GoalToolService::new(Arc::clone(sessions))
                 .with_action_policy_revision(action_policy_revision.clone()),
         ),
     );

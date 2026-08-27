@@ -887,7 +887,6 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                resource_budget: None,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -1164,7 +1163,6 @@ fn active_turn_blocks_workspace_switch_without_changing_authority() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                resource_budget: None,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {

@@ -16,11 +16,11 @@ pub enum CoreError {
     ModelAuthFailed,
     ModelInvalidRequest,
     ModelInvalidResponse,
+    ModelUsageLimited,
     NotFound(String),
     Policy(String),
     PolicyCircuitBreaker(String),
     ToolRepetition(String),
-    TurnBudgetExhausted,
     CommandConflict,
     SessionStore(SessionStoreError),
     ThreadStore(ThreadStoreError),
@@ -46,13 +46,13 @@ impl fmt::Display for CoreError {
             Self::ModelAuthFailed => formatter.write_str("model provider authentication failed"),
             Self::ModelInvalidRequest => formatter.write_str("model request was invalid"),
             Self::ModelInvalidResponse => formatter.write_str("model response was invalid"),
+            Self::ModelUsageLimited => formatter.write_str("model provider usage limit reached"),
             Self::NotFound(value) => write!(formatter, "not found: {value}"),
             Self::Policy(message) => write!(formatter, "policy error: {message}"),
             Self::PolicyCircuitBreaker(message) => {
                 write!(formatter, "policy circuit breaker: {message}")
             }
             Self::ToolRepetition(message) => write!(formatter, "tool repetition: {message}"),
-            Self::TurnBudgetExhausted => formatter.write_str("Turn resource budget exhausted"),
             Self::CommandConflict => formatter.write_str("command ID conflict"),
             Self::SessionStore(error) => error.fmt(formatter),
             Self::ThreadStore(error) => error.fmt(formatter),

@@ -12,7 +12,7 @@
 |---|---|---|---|
 | System | `SYSTEM_PROMPT` (`system-v4`) | Agent invocation/context caller | ✅ 已通过 harness/context 注入；包含 canonical 编辑工具和计划工具 guidance |
 | Compaction | `COMPACTION_PROMPT` | Core `ContextCompactionService` | ✅ 已接入 durable checkpoint 流程 |
-| Goals | `GOALS_PROMPT` + `render_goals_prompt` | Goal lifecycle caller | 已具备模板和类型化渲染，目标模型尚未完成 |
+| Goals | `GOALS_PROMPT` + `render_goals_prompt` | Goal lifecycle caller | ✅ 已接入 Core Thread Goal；按 active Goal 注入目标与累计 token 快照 |
 | Review | `REVIEW_PROMPT` | Review caller | 已具备通用 review 资产 |
 
 `zeta-auto-review` 的专用审查 prompt 不属于这里：它必须和 response schema、`review-protocol-3`

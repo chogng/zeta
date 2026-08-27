@@ -39,7 +39,7 @@ fn every_stable_turn_error_has_a_user_facing_message() {
         StableTurnError::completion_persistence_failed(),
         StableTurnError::interaction_deadline_elapsed(),
         StableTurnError::tool_repetition(),
-        StableTurnError::turn_budget_exhausted(),
+        StableTurnError::usage_limited(),
     ];
 
     for error in errors {
@@ -54,7 +54,6 @@ fn turn(id: &str, status: TurnStatus) -> Turn {
         turn_id: TurnId::new(id).unwrap(),
         status,
         model: None,
-        resource_budget: None,
         tool_profile: None,
         usage: zeta_protocol::ModelUsageSummary::default(),
         items: Vec::<ThreadItem>::new(),

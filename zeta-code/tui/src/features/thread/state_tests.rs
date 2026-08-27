@@ -92,7 +92,6 @@ fn older_history_page_is_merged_before_the_loaded_snapshot() {
             turn_id: older_turn_id.clone(),
             status: TurnStatus::Completed,
             model: None,
-            resource_budget: None,
             tool_profile: None,
             usage: zeta_protocol::ModelUsageSummary::default(),
             items: vec![ThreadItem::UserMessage {
@@ -138,7 +137,6 @@ fn older_history_page_preserves_the_active_transient_projection() {
             turn_id: older_turn_id.clone(),
             status: TurnStatus::Completed,
             model: None,
-            resource_budget: None,
             tool_profile: None,
             usage: zeta_protocol::ModelUsageSummary::default(),
             items: vec![ThreadItem::UserMessage {
@@ -360,7 +358,6 @@ fn thread_snapshot() -> Thread {
             turn_id: turn_id.clone(),
             status: TurnStatus::Completed,
             model: None,
-            resource_budget: None,
             tool_profile: None,
             usage: zeta_protocol::ModelUsageSummary::default(),
             items: vec![

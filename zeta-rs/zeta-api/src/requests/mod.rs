@@ -55,6 +55,9 @@ pub(crate) fn post_json_to_path(
 
 pub(crate) fn response_error(response: &zeta_client::ClientResponse) -> ApiError {
     match response.status() {
+        429 if is_usage_limited(&provider_error_detail(response.body())) => {
+            ApiError::UsageLimited
+        }
         429 => ApiError::RateLimited {
             retry_after_ms: response
                 .retry_after()
@@ -122,6 +125,9 @@ fn classify_provider_error(body: &[u8], fallback: ProviderErrorFallback) -> ApiE
     if is_auth_failure(&normalized) {
         return ApiError::AuthFailed(detail);
     }
+    if is_usage_limited(&normalized) {
+        return ApiError::UsageLimited;
+    }
     if is_overloaded(&normalized) {
         return ApiError::Overloaded;
     }
@@ -171,6 +177,16 @@ fn is_auth_failure(detail: &str) -> bool {
         || detail.contains("invalid api key")
         || detail.contains("incorrect api key")
         || detail.contains("permission_denied")
+}
+
+fn is_usage_limited(detail: &str) -> bool {
+    detail.contains("insufficient_quota")
+        || detail.contains("insufficient quota")
+        || detail.contains("exceeded your current quota")
+        || detail.contains("usage limit")
+        || detail.contains("usage_limit")
+        || detail.contains("billing hard limit")
+        || detail.contains("monthly limit")
 }
 
 fn is_overloaded(detail: &str) -> bool {

@@ -3,7 +3,8 @@ use crate::{
     ActionPolicyService, ContextBudget, ContextCompactionLimit, ContextTokenCount,
     ContextTokenMeasurementCapability, ContextTokenMeasurementOutcome, CreateThreadRequest,
     InMemoryThreadStore, ModelSelection, ModelService, ModelStreamSink, SequenceExpectation,
-    StartContextCompactionRequest, StartTurnRequest, SteerTurnRequest, ThreadUpdateSink,
+    StartContextCompactionRequest, StartGoalTurnRequest, StartTurnRequest, SteerTurnRequest,
+    ThreadUpdateSink,
     ToolAuthorization, ToolExecutionFacts, ToolExecutionOutput, ToolInteractionService,
     ToolOutputSink, ToolService, ToolUserInputOutcome, TurnExecutionOutcome,
 };
@@ -24,11 +25,11 @@ use zeta_context_engine::ContextTokenMeasurement;
 use zeta_context_engine::ContextTokenMeasurementSource;
 use zeta_protocol::{
     AgentResponse, CommandId, ContentDigest, ContentPart, FrozenSkillActivation, InputItem,
-    ModelId, ModelPriceSnapshot, ModelRef, ModelRequest, ModelResponse, ModelStreamEvent,
+    ModelId, ModelRef, ModelRequest, ModelResponse, ModelStreamEvent,
     ModelUsage, ProviderId, RequestUserInput, RequestUserInputResponse, ResponseItem, SessionId,
     SkillActivationReason, SkillId, SkillName, SkillRef, SkillSourceId, StableTurnErrorCode,
     StopReason, ThreadId, ThreadItem, ThreadUpdate, ThreadUpdateEnvelope, ToolCallId,
-    ToolDefinition, ToolName, TurnResourceBudget, TurnStatus, UserInput, UserInputAnswer,
+    ToolDefinition, ToolName, TurnStatus, UserInput, UserInputAnswer,
     UserInputQuestion,
 };
 use zeta_sandboxing::{FileSystemAccess, NetworkAccess, SandboxPolicy};
@@ -110,7 +111,6 @@ fn frozen_tool_profile_rejects_definition_drift_before_model_invocation() {
                 )),
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                resource_budget: None,
                 tool_profile: Some(profile.clone()),
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -154,7 +154,6 @@ fn frozen_tool_profile_rejects_definition_drift_before_model_invocation() {
                 )),
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                resource_budget: None,
                 tool_profile: Some(profile),
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -288,7 +287,6 @@ fn manual_context_compaction_batches_a_prefix_that_exceeds_the_model_window() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                resource_budget: None,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -612,67 +610,11 @@ fn first_invocation_injects_untrusted_evidence_once() {
 }
 
 #[test]
-fn token_budget_stops_before_the_next_tool_safe_point() {
-    let budget = TurnResourceBudget {
-        max_total_tokens: Some(12),
-        max_cost_usd_micros: None,
-        price_snapshot: None,
-    };
-    let (threads, thread_id, turn_id) = started_turn_with_resource_budget(None, budget);
-    let model = Arc::new(ScriptedModel::new([Ok(ModelResponse {
-        output: vec![ResponseItem::ToolCall(ToolCall {
-            id: ToolCallId::new("budgeted-tool-call").unwrap(),
-            name: ToolName::new("weather").unwrap(),
-            arguments: json!({"city": "Paris"}),
-        })],
-        usage: Some(ModelUsage {
-            input_tokens: Some(10),
-            output_tokens: Some(2),
-            cached_input_tokens: Some(0),
-            reasoning_tokens: Some(0),
-        }),
-        stop_reason: StopReason::ToolUse,
-    })]));
-    let executor = TurnExecutor::new(
-        threads.clone(),
-        model.clone(),
-        Arc::new(WeatherTool),
-        Arc::new(SandboxActionPolicyService),
-    );
-
-    let error = match executor.execute(&thread_id, &turn_id, &CancellationSource::new().token()) {
-        Ok(_) => panic!("the Tool Call must not execute after the budget is exhausted"),
-        Err(error) => error,
-    };
-
-    assert_eq!(error, CoreError::TurnBudgetExhausted);
-    assert_eq!(model.requests().len(), 1);
-    let snapshot = threads.read_thread(&thread_id).unwrap();
-    assert_eq!(snapshot.turns[0].status, TurnStatus::Failed);
-    assert_eq!(
-        snapshot.turns[0].failure.as_ref().map(|error| error.code),
-        Some(StableTurnErrorCode::TurnBudgetExhausted)
-    );
-    assert!(snapshot.items.iter().any(|item| matches!(
-        item,
-        ThreadItem::ToolCall { tool_call_id, .. }
-            if tool_call_id.as_str() == "budgeted-tool-call"
-    )));
-    assert!(!snapshot.items.iter().any(|item| matches!(
-        item,
-        ThreadItem::ToolResult { tool_call_id, .. }
-            if tool_call_id.as_str() == "budgeted-tool-call"
-    )));
-}
-
-#[test]
-fn final_answer_may_complete_when_its_usage_reaches_the_budget() {
-    let budget = TurnResourceBudget {
-        max_total_tokens: Some(12),
-        max_cost_usd_micros: None,
-        price_snapshot: None,
-    };
-    let (threads, thread_id, turn_id) = started_turn_with_resource_budget(None, budget);
+fn final_answer_may_complete_when_goal_usage_reaches_the_budget() {
+    let (threads, thread_id, turn_id) = started_turn();
+    threads
+        .create_goal(&thread_id, "finish the requested task".into(), Some(12))
+        .unwrap();
     let model = Arc::new(ScriptedModel::new([Ok(ModelResponse {
         output: vec![ResponseItem::Text("done".into())],
         usage: Some(ModelUsage {
@@ -692,6 +634,130 @@ fn final_answer_may_complete_when_its_usage_reaches_the_budget() {
     assert_eq!(
         threads.read_thread(&thread_id).unwrap().turns[0].status,
         TurnStatus::Completed
+    );
+    let goal = threads.read_thread(&thread_id).unwrap().goal.unwrap();
+    assert_eq!(goal.tokens_used, 12);
+    assert_eq!(goal.status, zeta_protocol::ThreadGoalStatus::BudgetLimited);
+}
+
+#[test]
+fn active_goal_starts_a_hidden_follow_up_until_the_budget_stops_it() {
+    let (threads, thread_id, turn_id) = started_turn();
+    threads
+        .create_goal(&thread_id, "finish the requested task".into(), Some(15))
+        .unwrap();
+    let model = Arc::new(ScriptedModel::new([
+        Ok(ModelResponse {
+            output: vec![ResponseItem::Text("first answer".into())],
+            usage: Some(ModelUsage {
+                input_tokens: Some(1),
+                output_tokens: Some(0),
+                cached_input_tokens: Some(0),
+                reasoning_tokens: None,
+            }),
+            stop_reason: StopReason::Completed,
+        }),
+        Ok(ModelResponse {
+            output: vec![ResponseItem::Text("final answer".into())],
+            usage: Some(ModelUsage {
+                input_tokens: Some(14),
+                output_tokens: Some(0),
+                cached_input_tokens: Some(0),
+                reasoning_tokens: None,
+            }),
+            stop_reason: StopReason::Completed,
+        }),
+    ]));
+
+    let executor = TurnExecutor::without_tools(threads.clone(), model.clone());
+    executor
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+
+    let deadline = Instant::now() + Duration::from_secs(1);
+    loop {
+        let snapshot = threads.read_thread(&thread_id).unwrap();
+        if snapshot.turns.len() == 2 && snapshot.turns[1].status == TurnStatus::Completed {
+            assert_eq!(model.requests().len(), 2);
+            assert_eq!(
+                snapshot
+                    .items
+                    .iter()
+                    .filter(|item| matches!(item, ThreadItem::UserMessage { .. }))
+                    .count(),
+                1
+            );
+            let goal = snapshot.goal.unwrap();
+            assert_eq!(goal.tokens_used, 15);
+            assert_eq!(goal.status, zeta_protocol::ThreadGoalStatus::BudgetLimited);
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "active Goal did not finish its hidden follow-up Turn: statuses={:?}, requests={}, goal={:?}",
+            snapshot
+                .turns
+                .iter()
+                .map(|turn| turn.status)
+                .collect::<Vec<_>>(),
+            model.requests().len(),
+            snapshot.goal
+        );
+        thread::sleep(Duration::from_millis(1));
+    }
+}
+
+#[test]
+fn recovered_active_goal_resumes_a_running_hidden_turn() {
+    let (threads, thread_id, first_turn_id) = started_turn();
+    threads
+        .complete_turn(&thread_id, &first_turn_id, "first answer".into())
+        .unwrap();
+    threads
+        .create_goal(&thread_id, "finish the requested task".into(), Some(1))
+        .unwrap();
+    let hidden_turn = threads
+        .start_goal_turn(
+            &thread_id,
+            StartGoalTurnRequest {
+                command_id: CommandId::new("recovered-goal-continuation").unwrap(),
+                model: None,
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                tool_profile: None,
+            },
+        )
+        .unwrap()
+        .expect("active Goal should create a continuation")
+        .turn_id;
+    let model = Arc::new(ScriptedModel::new([Ok(ModelResponse {
+        output: vec![ResponseItem::Text("recovered answer".into())],
+        usage: Some(ModelUsage {
+            input_tokens: Some(1),
+            output_tokens: Some(0),
+            cached_input_tokens: Some(0),
+            reasoning_tokens: None,
+        }),
+        stop_reason: StopReason::Completed,
+    })]));
+    let executor = TurnExecutor::without_tools(threads.clone(), model.clone());
+    let session_ids = [SessionId::new("session").unwrap()]
+        .into_iter()
+        .collect::<BTreeSet<_>>();
+
+    assert_eq!(
+        executor
+            .resume_recovered_goal_continuations_in_sessions(&session_ids)
+            .unwrap(),
+        1
+    );
+    wait_for_turn_status(&threads, &thread_id, &hidden_turn, TurnStatus::Completed);
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    assert_eq!(model.requests().len(), 1);
+    assert_eq!(snapshot.turns.len(), 2);
+    assert_eq!(
+        snapshot.goal.unwrap().status,
+        zeta_protocol::ThreadGoalStatus::BudgetLimited
     );
 }
 
@@ -758,7 +824,6 @@ fn compacts_durable_history_then_replans_with_the_verified_checkpoint() {
                     model: None,
                     policy_revision: "test-policy-v1".into(),
                     approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                    resource_budget: None,
                     tool_profile: None,
                     activated_skills: Vec::new(),
                     input: vec![UserInput::Text {
@@ -781,7 +846,6 @@ fn compacts_durable_history_then_replans_with_the_verified_checkpoint() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                resource_budget: None,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -842,7 +906,6 @@ fn provider_preflight_tightens_the_budget_and_rechecks_after_compaction() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                resource_budget: None,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -917,7 +980,6 @@ fn explicit_skill_selection_uses_frozen_digest_and_layered_body() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                resource_budget: None,
                 tool_profile: None,
                 activated_skills: vec![activation.clone()],
                 input: vec![
@@ -1429,7 +1491,6 @@ fn restart_after_overflow_checkpoint_commit_does_not_replay_the_model_call() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                resource_budget: None,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -1451,7 +1512,6 @@ fn restart_after_overflow_checkpoint_commit_does_not_replay_the_model_call() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                resource_budget: None,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -1564,7 +1624,7 @@ fn retries_one_empty_response_and_completes_refusal_as_agent_message() {
 }
 
 #[test]
-fn model_usage_and_price_budget_projection_are_identical_after_recovery() {
+fn model_usage_and_goal_projection_are_identical_after_recovery() {
     let store = Arc::new(InMemoryThreadStore::default());
     let original = Arc::new(ThreadController::with_store(store.clone()));
     let thread_id = ThreadId::new("usage-recovery-thread").unwrap();
@@ -1579,17 +1639,9 @@ fn model_usage_and_price_budget_projection_are_identical_after_recovery() {
         ProviderId::new("provider").unwrap(),
         ModelId::new("priced-model").unwrap(),
     );
-    let resource_budget = TurnResourceBudget {
-        max_total_tokens: Some(100),
-        max_cost_usd_micros: Some(10),
-        price_snapshot: Some(ModelPriceSnapshot {
-            model: model_ref.clone(),
-            revision: "prices-2026-08-23".into(),
-            input_usd_micros_per_million_tokens: 10,
-            cached_input_usd_micros_per_million_tokens: 2,
-            output_usd_micros_per_million_tokens: 20,
-        }),
-    };
+    original
+        .create_goal(&thread_id, "finish the task".into(), Some(2))
+        .unwrap();
     let turn_id = original
         .start_turn(
             &thread_id,
@@ -1599,7 +1651,6 @@ fn model_usage_and_price_budget_projection_are_identical_after_recovery() {
                 model: Some(model_ref.clone()),
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                resource_budget: Some(resource_budget.clone()),
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -1641,10 +1692,7 @@ fn model_usage_and_price_budget_projection_are_identical_after_recovery() {
         Some(&before_calibration)
     );
     assert_eq!(before_calibration.samples(), 1);
-    assert_eq!(
-        after_restart.turns[0].resource_budget,
-        Some(resource_budget)
-    );
+    assert_eq!(after_restart.goal, before_restart.goal);
 }
 
 #[test]
@@ -1727,7 +1775,6 @@ fn per_thread_mailboxes_run_independently_and_interrupt_the_active_turn() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                resource_budget: None,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -2865,44 +2912,6 @@ fn started_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                resource_budget: None,
-                tool_profile: None,
-                activated_skills: Vec::new(),
-                input: vec![UserInput::Text {
-                    text: "hello".into(),
-                }],
-            },
-        )
-        .unwrap()
-        .turn_id;
-    (threads, thread_id, turn_id)
-}
-
-fn started_turn_with_resource_budget(
-    model: Option<ModelRef>,
-    resource_budget: TurnResourceBudget,
-) -> (Arc<ThreadController>, ThreadId, TurnId) {
-    let threads = Arc::new(ThreadController::with_store(Arc::new(
-        InMemoryThreadStore::default(),
-    )));
-    let thread_id = ThreadId::new("budget-thread").unwrap();
-    threads
-        .create_thread(CreateThreadRequest {
-            session_id: SessionId::new("budget-session").unwrap(),
-            thread_id: thread_id.clone(),
-            title: "budget test".into(),
-        })
-        .unwrap();
-    let turn_id = threads
-        .start_turn(
-            &thread_id,
-            StartTurnRequest {
-                command_id: CommandId::new("budget-start").unwrap(),
-                expected_sequence: SequenceExpectation::Any,
-                model,
-                policy_revision: "test-policy-v1".into(),
-                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                resource_budget: Some(resource_budget),
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -2929,7 +2938,6 @@ fn started_turn_with_history() -> (Arc<ThreadController>, ThreadId, TurnId) {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                resource_budget: None,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {

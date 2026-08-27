@@ -39,7 +39,10 @@ where
     T: JsonRpcTransport,
 {
     client
-        .read_directory(FsReadDirectoryParams { path: path.clone() })
+        .read_directory(FsReadDirectoryParams {
+            workspace_folder_id: None,
+            path: path.clone(),
+        })
         .map(|result| directory_view(path, &result.entries))
 }
 
@@ -51,7 +54,10 @@ where
     T: JsonRpcTransport,
 {
     client
-        .read_file(FsReadFileParams { path: path.clone() })
+        .read_file(FsReadFileParams {
+            workspace_folder_id: None,
+            path: path.clone(),
+        })
         .map(|result| file_preview(path, &result.content, &result.revision))
 }
 

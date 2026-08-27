@@ -103,6 +103,7 @@ mod syntax_operations;
 mod terminal_operations;
 mod turn_backend_router;
 pub(crate) mod update_broker;
+pub(crate) mod goal_tool;
 pub(crate) mod update_plan_tool;
 mod workspace_customizations;
 mod workspace_operations;
@@ -409,6 +410,7 @@ impl AppServer {
         );
         let turn_executor = TurnExecutor::without_tools(sessions.threads().clone(), model.clone())
             .with_thread_updates(Arc::new(AppServerThreadUpdates {
+                sessions: Arc::clone(&sessions),
                 updates: updates.clone(),
             }))
             .with_extensions(Arc::clone(&agent_extensions));
@@ -1131,6 +1133,7 @@ impl AppServer {
             policy,
         )
         .with_thread_updates(Arc::new(AppServerThreadUpdates {
+            sessions: Arc::clone(&self.sessions),
             updates: self.updates.clone(),
         }));
         executor = executor.with_extensions(Arc::clone(&self.agent_extensions));
@@ -1214,6 +1217,22 @@ impl AppServer {
             .collect::<BTreeSet<_>>();
         self.turn_executor_snapshot()
             .resume_recovered_tool_continuations_in_sessions(&session_ids)
+    }
+
+    /// Starts durable idle Goal continuations after the local runtime has been restored.
+    pub fn resume_recovered_goal_continuations(&self) -> Result<usize, CoreError> {
+        let workspace = self.active_workspace_binding();
+        let session_ids = self
+            .sessions
+            .list_sessions()?
+            .into_iter()
+            .filter(|session| {
+                !session.workspace_binding_is_legacy && session.workspace == workspace
+            })
+            .map(|session| session.session_id)
+            .collect::<BTreeSet<_>>();
+        self.turn_executor_snapshot()
+            .resume_recovered_goal_continuations_in_sessions(&session_ids)
     }
 
     pub fn drain_notifications(&self, connection: &mut ConnectionState) -> Vec<String> {
@@ -1545,6 +1564,9 @@ impl AppServer {
                 self.session_unsubscribe(connection, &request.params)
             }
             Some(ClientMethod::SessionThreadRead) => self.session_thread_read(&request.params),
+            Some(ClientMethod::ThreadGoalGet) => self.thread_goal_get(&request.params),
+            Some(ClientMethod::ThreadGoalSet) => self.thread_goal_set(&request.params),
+            Some(ClientMethod::ThreadGoalClear) => self.thread_goal_clear(&request.params),
             Some(ClientMethod::SessionThreadSubscribe) => {
                 self.session_thread_subscribe(connection, &request.params)
             }
@@ -1874,12 +1896,70 @@ impl AppServer {
 }
 
 struct AppServerThreadUpdates {
+    sessions: Arc<SessionCoordinator>,
     updates: Arc<UpdateBroker>,
 }
 
 impl ThreadUpdateSink for AppServerThreadUpdates {
     fn publish(&self, update: ThreadUpdateEnvelope) {
+        enum GoalNotification {
+            Updated(
+                zeta_app_server_protocol::protocol::goal::ThreadGoalUpdatedNotification,
+            ),
+            Cleared(
+                zeta_app_server_protocol::protocol::goal::ThreadGoalClearedNotification,
+            ),
+        }
+
+        let goal_notification = match &update.update {
+            zeta_protocol::ThreadUpdate::Committed { event } => match event {
+                zeta_protocol::ThreadEvent::GoalCreated { goal, .. }
+                | zeta_protocol::ThreadEvent::GoalUpdated { goal, .. } => Some(
+                    GoalNotification::Updated(
+                        zeta_app_server_protocol::protocol::goal::ThreadGoalUpdatedNotification {
+                            thread_id: update.thread_id.clone(),
+                            turn_id: None,
+                            goal: goal.clone(),
+                        },
+                    ),
+                ),
+                zeta_protocol::ThreadEvent::GoalCleared { .. } => Some(
+                    GoalNotification::Cleared(
+                        zeta_app_server_protocol::protocol::goal::ThreadGoalClearedNotification {
+                            thread_id: update.thread_id.clone(),
+                        },
+                    ),
+                ),
+                zeta_protocol::ThreadEvent::ModelUsageRecorded { turn_id, .. }
+                | zeta_protocol::ThreadEvent::TurnFailed { turn_id, .. } => self
+                    .sessions
+                    .threads()
+                    .get_goal(&update.thread_id)
+                    .ok()
+                    .flatten()
+                    .map(|goal| {
+                        GoalNotification::Updated(
+                            zeta_app_server_protocol::protocol::goal::ThreadGoalUpdatedNotification {
+                                thread_id: update.thread_id.clone(),
+                                turn_id: Some(turn_id.clone()),
+                                goal,
+                            },
+                        )
+                    }),
+                _ => None,
+            },
+            _ => None,
+        };
         self.updates.publish_thread_update(update);
+        match goal_notification {
+            Some(GoalNotification::Updated(updated)) => {
+                self.updates.publish_thread_goal_updated(updated)
+            }
+            Some(GoalNotification::Cleared(cleared)) => {
+                self.updates.publish_thread_goal_cleared(cleared)
+            }
+            None => {}
+        }
     }
 }
 

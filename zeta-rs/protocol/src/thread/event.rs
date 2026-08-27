@@ -27,7 +27,6 @@ use crate::Turn;
 use crate::TurnExecutionBinding;
 use crate::TurnId;
 use crate::TurnInteraction;
-use crate::TurnResourceBudget;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -74,6 +73,18 @@ pub enum ThreadEvent {
         thread_id: ThreadId,
         title: String,
     },
+    GoalCreated {
+        thread_id: ThreadId,
+        goal: crate::ThreadGoal,
+    },
+    GoalUpdated {
+        thread_id: ThreadId,
+        goal: crate::ThreadGoal,
+    },
+    GoalCleared {
+        thread_id: ThreadId,
+        goal_id: String,
+    },
     /// Legacy read-compatibility fact from the removed external full-Turn backend integration.
     /// Current product code does not append this event.
     TurnExecutionBound {
@@ -111,9 +122,6 @@ pub enum ThreadEvent {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         model: Option<ModelRef>,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional = nullable)]
-        resource_budget: Option<TurnResourceBudget>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         tool_profile: Option<ToolProfileSnapshot>,
@@ -261,6 +269,9 @@ impl ThreadEvent {
     pub fn kind(&self) -> &'static str {
         match self {
             Self::ThreadCreated { .. } => "thread.created",
+            Self::GoalCreated { .. } => "thread.goal_created",
+            Self::GoalUpdated { .. } => "thread.goal_updated",
+            Self::GoalCleared { .. } => "thread.goal_cleared",
             Self::TurnExecutionBound { .. } => "turn.execution_bound",
             Self::AgentContextSeedCommitted { .. } => "agent.context_seed_committed",
             Self::HistoryImported { .. } => "thread.history_imported",
@@ -301,6 +312,9 @@ impl ThreadEvent {
     pub fn thread_id(&self) -> &ThreadId {
         match self {
             Self::ThreadCreated { thread_id, .. }
+            | Self::GoalCreated { thread_id, .. }
+            | Self::GoalUpdated { thread_id, .. }
+            | Self::GoalCleared { thread_id, .. }
             | Self::TurnExecutionBound { thread_id, .. }
             | Self::AgentContextSeedCommitted { thread_id, .. }
             | Self::HistoryImported { thread_id, .. }

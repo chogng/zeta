@@ -497,7 +497,6 @@ impl MultiAgentCoordinator {
                 model: seed.role.model.clone(),
                 policy_revision: seed.policy_ceiling.policy_revision.clone(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                resource_budget: None,
                 tool_profile: parent_tool_profile,
                 activated_skills: seed.capability_scope.skills.clone(),
                 input: vec![UserInput::Text {

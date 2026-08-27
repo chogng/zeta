@@ -22,6 +22,7 @@ export class ChatPane extends DisposableOwner {
 	private readonly model: ChatPaneModel;
 	private readonly listWidget: ChatListWidget;
 	private readonly inputPart: ChatInputPart;
+	private readonly goalElement: HTMLDivElement;
 	private readonly sessionService: ISessionsManagementService;
 	private submittedMessage = false;
 
@@ -36,6 +37,9 @@ export class ChatPane extends DisposableOwner {
 		container.append(this.element);
 		this.sessionService = sessionService;
 		this.model = this.own(new ChatPaneModel(chatService, selection, sessionService));
+		this.goalElement = h(ownerDocument, "div");
+		this.goalElement.className = "zeta-chat-goal";
+		this.goalElement.hidden = true;
 		this.listWidget = this.own(new ChatListWidget(this.element, {
 			onDidRequestErrorAction: (action) => void this.handleTurnErrorAction(action).catch(() => undefined),
 		}));
@@ -48,7 +52,7 @@ export class ChatPane extends DisposableOwner {
 			resolveInteraction: (response) => this.model.resolveInteraction(response),
 		};
 		this.inputPart = this.own(new ChatInputPart(this.element, inputDelegate, contextMenuService, contextViewService, contextPickService, quickInputService));
-		this.element.append(this.listWidget.element, this.inputPart.element);
+		this.element.append(this.goalElement, this.listWidget.element, this.inputPart.element);
 		this.own(this.model.onDidChange(() => this.render()));
 		this.defer(() => this.element.remove());
 		this.render();
@@ -143,6 +147,7 @@ export class ChatPane extends DisposableOwner {
 
 	private render(): void {
 		this.syncIdentity();
+		this.renderGoal();
 		const items = this.model.items;
 		this.updateConversationState(items.length > 0);
 		this.listWidget.render(items);
@@ -156,6 +161,20 @@ export class ChatPane extends DisposableOwner {
 			selectedModel: this.model.selectedModel,
 			interaction: this.model.interaction,
 		});
+	}
+
+	private renderGoal(): void {
+		const goal = this.model.goal;
+		if (!goal) {
+			this.goalElement.hidden = true;
+			this.goalElement.textContent = "";
+			return;
+		}
+		this.goalElement.hidden = false;
+		const usage = goal.tokenBudget === null || goal.tokenBudget === undefined
+			? `${formatNumber(goal.tokensUsed)} tokens`
+			: `${formatNumber(goal.tokensUsed)}/${formatNumber(goal.tokenBudget)} tokens`;
+		this.goalElement.textContent = `Goal · ${goal.status} · ${usage} · ${goal.objective}`;
 	}
 
 	private updateConversationState(hasTranscript = this.model.items.length > 0): void {
@@ -176,3 +195,5 @@ export class ChatPane extends DisposableOwner {
 		else this.element.removeAttribute("data-untitled-session-id");
 	}
 }
+
+function formatNumber(value: number): string { return new Intl.NumberFormat("en-US").format(value); }

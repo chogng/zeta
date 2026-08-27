@@ -87,7 +87,6 @@ where
         request: SessionRequest::StartTurn {
             thread_id: scope.thread_id,
             approval_mode,
-            resource_budget: None,
             input,
         },
     })? {

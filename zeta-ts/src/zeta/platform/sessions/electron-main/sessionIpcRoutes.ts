@@ -1,6 +1,6 @@
-import { APP_SERVER_METHODS, type SessionCreateParams, type SessionReadParams, type SessionSubscribeParams, type SessionThreadReadParams, type SessionThreadSubscribeParams, type SessionThreadUnsubscribeParams, type SessionUnsubscribeParams } from "../../../../../generated/app-server/types.js";
+import { APP_SERVER_METHODS, type SessionCreateParams, type SessionReadParams, type SessionSubscribeParams, type SessionThreadReadParams, type SessionThreadSubscribeParams, type SessionThreadUnsubscribeParams, type SessionUnsubscribeParams, type ThreadGoalClearParams, type ThreadGoalGetParams, type ThreadGoalSetParams } from "../../../../../generated/app-server/types.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
-import { boolean, nonEmptyString, nonNegativeInteger, record, string, stringEnum } from "../../ipc/electron-main/ipcValidation.js";
+import { boolean, nonEmptyString, nonNegativeInteger, positiveInteger, record, string, stringEnum } from "../../ipc/electron-main/ipcValidation.js";
 import { sessionRequest, sessionResult, sessionThreadResult, turnInteractionResolveResult, turnInterruptResult, turnStartResult, turnSteerResult } from "../common/sessionApi.js";
 import type { SessionMutationParams, SessionOperationInput } from "../common/sessionApi.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
@@ -87,6 +87,21 @@ export function sessionIpcRoutes(supervisor: AppServerSupervisor): readonly IpcR
 			channel: "zeta:thread:unsubscribe",
 			validate: threadUnsubscribeParams,
 			invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/thread/unsubscribe"], params),
+		}),
+		route({
+			channel: "zeta:thread:goal:get",
+			validate: threadGoalGetParams,
+			invoke: (params) => supervisor.request(APP_SERVER_METHODS["thread/goal/get"], params),
+		}),
+		route({
+			channel: "zeta:thread:goal:set",
+			validate: threadGoalSetParams,
+			invoke: (params) => supervisor.request(APP_SERVER_METHODS["thread/goal/set"], params),
+		}),
+		route({
+			channel: "zeta:thread:goal:clear",
+			validate: threadGoalClearParams,
+			invoke: (params) => supervisor.request(APP_SERVER_METHODS["thread/goal/clear"], params),
 		}),
 		route({
 			channel: "zeta:turn:start",
@@ -227,6 +242,26 @@ function threadSubscribeParams(value: unknown): SessionThreadSubscribeParams {
 
 function threadUnsubscribeParams(value: unknown): SessionThreadUnsubscribeParams {
 	return threadReadParams(value);
+}
+
+function threadGoalGetParams(value: unknown): ThreadGoalGetParams {
+	const params = record(value, ["threadId"]);
+	return { threadId: nonEmptyString(params.threadId, "threadId") };
+}
+
+function threadGoalSetParams(value: unknown): ThreadGoalSetParams {
+	const params = record(value, ["threadId"], ["objective", "status", "tokenBudget"]);
+	return {
+		threadId: nonEmptyString(params.threadId, "threadId"),
+		...(params.objective === undefined ? {} : { objective: params.objective === null ? null : nonEmptyString(params.objective, "objective") }),
+		...(params.status === undefined ? {} : { status: params.status === null ? null : stringEnum(params.status, "status", ["active", "paused", "blocked", "usageLimited", "budgetLimited", "complete"] as const) }),
+		...(params.tokenBudget === undefined ? {} : { tokenBudget: params.tokenBudget === null ? null : positiveInteger(params.tokenBudget, "tokenBudget") }),
+	};
+}
+
+function threadGoalClearParams(value: unknown): ThreadGoalClearParams {
+	const params = record(value, ["threadId"]);
+	return { threadId: nonEmptyString(params.threadId, "threadId") };
 }
 
 function turnStartParams(value: unknown): SessionOperationInput<"startTurn"> {

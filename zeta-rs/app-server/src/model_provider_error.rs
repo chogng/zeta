@@ -20,6 +20,7 @@ pub(super) fn map_model_provider_error(error: ModelProviderError) -> CoreError {
         | ModelProviderError::Api(ApiError::InvalidRequest(_)) => CoreError::ModelInvalidRequest,
         ModelProviderError::InvalidResponse(_)
         | ModelProviderError::Api(ApiError::InvalidResponse(_)) => CoreError::ModelInvalidResponse,
+        ModelProviderError::Api(ApiError::UsageLimited) => CoreError::ModelUsageLimited,
         _ if error.is_transient() => CoreError::ModelTransient { retry_after_ms },
         _ => CoreError::Model("model invocation failed".into()),
     };

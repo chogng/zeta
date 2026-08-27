@@ -24,9 +24,12 @@ export interface AgentTreeNode {
 	readonly executionStatus: AgentThreadExecutionStatus;
 	readonly currentTurnId?: string;
 	readonly waitingReason?: AgentWaitingReason;
-	readonly resourceBudget?: {
-		readonly maxTotalTokens?: number;
-		readonly maxCostUsdMicros?: number;
+	readonly goal?: {
+		readonly goalId: string;
+		readonly objective: string;
+		readonly status: "active" | "paused" | "blocked" | "usageLimited" | "budgetLimited" | "complete";
+		readonly tokenBudget?: number | null;
+		readonly tokensUsed: number;
 	};
 	readonly usage: {
 		readonly inputTokens: number;

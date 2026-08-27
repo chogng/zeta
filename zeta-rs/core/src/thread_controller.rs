@@ -39,6 +39,8 @@ use zeta_protocol::SkillActivationReason;
 use zeta_protocol::StableTurnError;
 use zeta_protocol::ThreadCommand;
 use zeta_protocol::ThreadEvent;
+use zeta_protocol::ThreadGoal;
+use zeta_protocol::ThreadGoalStatus;
 use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadItem;
 use zeta_protocol::ThreadUpdate;
@@ -49,7 +51,6 @@ use zeta_protocol::ToolDefinition;
 use zeta_protocol::ToolName;
 use zeta_protocol::TurnId;
 use zeta_protocol::TurnInteraction;
-use zeta_protocol::TurnResourceBudget;
 use zeta_protocol::TurnStatus;
 use zeta_protocol::UserInput;
 use zeta_thread_store::AppendBatchResult;
@@ -75,10 +76,22 @@ pub struct StartTurnRequest {
     pub policy_revision: String,
     /// Host-seeded automatic activations. Explicit selections are resolved by extensions.
     pub approval_mode: ApprovalMode,
-    pub resource_budget: Option<TurnResourceBudget>,
     pub tool_profile: Option<zeta_protocol::ToolProfileSnapshot>,
     pub activated_skills: Vec<FrozenSkillActivation>,
     pub input: Vec<UserInput>,
+}
+
+/// Internal continuation request created when an active Thread Goal reaches a Turn boundary.
+///
+/// Goal continuations intentionally carry no user input. The Goal prompt is injected at the next
+/// model-invocation boundary, so the continuation is durable without manufacturing a user
+/// message that was never sent.
+pub struct StartGoalTurnRequest {
+    pub command_id: CommandId,
+    pub model: Option<ModelRef>,
+    pub policy_revision: String,
+    pub approval_mode: ApprovalMode,
+    pub tool_profile: Option<zeta_protocol::ToolProfileSnapshot>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -142,6 +155,22 @@ pub struct CreateRewoundThreadRequest {
     pub title: String,
     pub source_thread_id: ThreadId,
     pub before_turn_id: TurnId,
+}
+
+/// Fields controlled by the Thread Goal API. `token_budget` is a double option so callers can
+/// distinguish "leave unchanged" from "clear the budget".
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct SetGoalRequest {
+    pub objective: Option<String>,
+    pub status: Option<ThreadGoalStatus>,
+    pub token_budget: Option<Option<u64>>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SetGoalResult {
+    pub goal: ThreadGoal,
+    pub changed: bool,
+    pub created: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -496,7 +525,6 @@ impl ThreadController {
             .ok_or_else(|| CoreError::NotFound(request.before_turn_id.to_string()))?;
         let mut imported_turns = source.public_thread().turns[..checkpoint].to_vec();
         for turn in &mut imported_turns {
-            turn.resource_budget = None;
             turn.usage = zeta_protocol::ModelUsageSummary::default();
         }
         let created = self.create_thread(CreateThreadRequest {
@@ -534,10 +562,6 @@ impl ThreadController {
     ) -> Result<StartTurnResult, CoreError> {
         validate_command_id(&request.command_id)?;
         validate_policy_revision(&request.policy_revision)?;
-        crate::turn::validate_resource_budget(
-            request.model.as_ref(),
-            request.resource_budget.as_ref(),
-        )?;
         let normalized_input =
             user_input::normalize_images(&request.input, &self.image_attachments)?;
         let thread = self.read_thread(thread_id)?;
@@ -552,7 +576,6 @@ impl ThreadController {
                 activated_skills,
                 host_activated_skills,
                 approval_mode,
-                resource_budget,
                 tool_profile,
                 input,
                 ..
@@ -564,7 +587,6 @@ impl ThreadController {
                 || replay_host_activations(host_activated_skills.as_deref(), activated_skills)
                     != request.activated_skills
                 || approval_mode != &request.approval_mode
-                || resource_budget != &request.resource_budget
                 || tool_profile.as_deref() != request.tool_profile.as_ref()
                 || input != &normalized_input
             {
@@ -640,7 +662,6 @@ impl ThreadController {
             activated_skills: activated_skills.clone(),
             host_activated_skills: Some(request.activated_skills.clone()),
             approval_mode: request.approval_mode,
-            resource_budget: request.resource_budget.clone(),
             tool_profile: request.tool_profile.clone().map(Box::new),
             input: normalized_input.clone(),
         };
@@ -678,7 +699,6 @@ impl ThreadController {
                 approval_mode: request.approval_mode,
                 activated_skills: activated_skills.clone(),
                 model: request.model.clone(),
-                resource_budget: request.resource_budget.clone(),
                 tool_profile: request.tool_profile.clone(),
             });
             events.extend(
@@ -713,6 +733,226 @@ impl ThreadController {
                 sequence: snapshot.sequence,
                 disposition: StartTurnDisposition::Created,
             })
+        })
+    }
+
+    /// Starts one durable no-input continuation for the active Goal, if the Thread is idle.
+    ///
+    /// The mutation is guarded by the same per-Thread gate as ordinary Turns. This makes the
+    /// completion-to-continuation boundary safe when a user command, recovery pass, or another
+    /// executor observes the same completed Turn concurrently.
+    pub fn start_goal_turn(
+        &self,
+        thread_id: &ThreadId,
+        request: StartGoalTurnRequest,
+    ) -> Result<Option<StartTurnResult>, CoreError> {
+        validate_command_id(&request.command_id)?;
+        validate_policy_revision(&request.policy_revision)?;
+        let command = ThreadCommand::StartTurn {
+            model: request.model.clone(),
+            activated_skills: Vec::new(),
+            host_activated_skills: Some(Vec::new()),
+            approval_mode: request.approval_mode,
+            tool_profile: request.tool_profile.clone().map(Box::new),
+            input: Vec::new(),
+        };
+        self.mutate_thread(thread_id, |snapshot| {
+            let Some(goal) = snapshot.goal.as_ref() else {
+                return Ok(None);
+            };
+            if !goal.status.is_active()
+                || goal
+                    .token_budget
+                    .is_some_and(|budget| goal.tokens_used >= budget)
+                || snapshot.turns.iter().any(|turn| {
+                    !matches!(
+                        turn.status,
+                        TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted
+                    )
+                })
+            {
+                return Ok(None);
+            }
+            if let Some(existing) = snapshot
+                .commands
+                .iter()
+                .find(|existing| existing.receipt.command_id == request.command_id)
+            {
+                if existing.receipt.command != command {
+                    return Err(CoreError::CommandConflict);
+                }
+                let ThreadCommandResult::TurnAccepted { turn_id } = &existing.result else {
+                    return Err(CoreError::Journal(
+                        "Goal continuation command has an invalid result".into(),
+                    ));
+                };
+                return Ok(Some(StartTurnResult {
+                    turn_id: turn_id.clone(),
+                    sequence: existing.response_sequence,
+                    disposition: StartTurnDisposition::Replayed,
+                }));
+            }
+
+            let turn_id =
+                TurnId::new(self.next_identifier("turn")).expect("generated Turn ID is non-empty");
+            let (next_snapshot, batch) = self.project_batch(
+                Some(snapshot.clone()),
+                &snapshot.thread_id,
+                vec![
+                    ThreadEvent::TurnAccepted {
+                        thread_id: thread_id.clone(),
+                        turn_id: turn_id.clone(),
+                        policy_revision: request.policy_revision.clone(),
+                        approval_mode: request.approval_mode,
+                        activated_skills: Vec::new(),
+                        model: request.model.clone(),
+                        tool_profile: request.tool_profile.clone(),
+                    },
+                    ThreadEvent::TurnStarted {
+                        thread_id: thread_id.clone(),
+                        turn_id: turn_id.clone(),
+                    },
+                ],
+                BatchCommand::AtEvent {
+                    index: 0,
+                    receipt: ThreadCommandReceipt {
+                        command_id: request.command_id,
+                        command,
+                    },
+                },
+            )?;
+            self.commit_batch(&batch)?;
+            *snapshot = next_snapshot;
+            Ok(Some(StartTurnResult {
+                turn_id,
+                sequence: snapshot.sequence,
+                disposition: StartTurnDisposition::Created,
+            }))
+        })
+    }
+
+    pub fn get_goal(&self, thread_id: &ThreadId) -> Result<Option<ThreadGoal>, CoreError> {
+        Ok(self.read_thread(thread_id)?.goal)
+    }
+
+    /// Creates or updates the single Goal owned by a Thread.
+    pub fn set_goal(
+        &self,
+        thread_id: &ThreadId,
+        request: SetGoalRequest,
+    ) -> Result<SetGoalResult, CoreError> {
+        self.mutate_thread(thread_id, |snapshot| {
+            let Some(current) = snapshot.goal.clone() else {
+                let objective = request.objective.clone().ok_or_else(|| {
+                    CoreError::InvalidInput("creating a Goal requires an objective".into())
+                })?;
+                let goal = make_goal(
+                    snapshot.thread_id.clone(),
+                    self.next_identifier("goal"),
+                    objective,
+                    request.status.unwrap_or(ThreadGoalStatus::Active),
+                    request.token_budget.flatten(),
+                    0,
+                )?;
+                self.record_batch(
+                    snapshot,
+                    vec![ThreadEvent::GoalCreated {
+                        thread_id: snapshot.thread_id.clone(),
+                        goal: goal.clone(),
+                    }],
+                )?;
+                return Ok(SetGoalResult {
+                    goal,
+                    changed: true,
+                    created: true,
+                });
+            };
+
+            let goal = make_goal(
+                snapshot.thread_id.clone(),
+                current.goal_id.clone(),
+                request
+                    .objective
+                    .unwrap_or_else(|| current.objective.clone()),
+                request.status.unwrap_or(current.status),
+                request.token_budget.unwrap_or(current.token_budget),
+                current.tokens_used,
+            )?;
+            if goal == current {
+                return Ok(SetGoalResult {
+                    goal,
+                    changed: false,
+                    created: false,
+                });
+            }
+            self.record_batch(
+                snapshot,
+                vec![ThreadEvent::GoalUpdated {
+                    thread_id: snapshot.thread_id.clone(),
+                    goal: goal.clone(),
+                }],
+            )?;
+            Ok(SetGoalResult {
+                goal,
+                changed: true,
+                created: false,
+            })
+        })
+    }
+
+    /// Creates a new Goal, rejecting another unfinished Goal. A completed Goal is cleared and
+    /// replaced atomically in the same Thread event batch.
+    pub fn create_goal(
+        &self,
+        thread_id: &ThreadId,
+        objective: String,
+        token_budget: Option<u64>,
+    ) -> Result<ThreadGoal, CoreError> {
+        self.mutate_thread(thread_id, |snapshot| {
+            if let Some(current) = snapshot.goal.as_ref()
+                && !current.status.is_complete()
+            {
+                return Err(CoreError::InvalidInput(
+                    "Thread already has an unfinished Goal".into(),
+                ));
+            }
+            let goal = make_goal(
+                snapshot.thread_id.clone(),
+                self.next_identifier("goal"),
+                objective,
+                ThreadGoalStatus::Active,
+                token_budget,
+                0,
+            )?;
+            let mut events = Vec::with_capacity(2);
+            if let Some(current) = snapshot.goal.as_ref() {
+                events.push(ThreadEvent::GoalCleared {
+                    thread_id: snapshot.thread_id.clone(),
+                    goal_id: current.goal_id.clone(),
+                });
+            }
+            events.push(ThreadEvent::GoalCreated {
+                thread_id: snapshot.thread_id.clone(),
+                goal: goal.clone(),
+            });
+            self.record_batch(snapshot, events)?;
+            Ok(goal)
+        })
+    }
+
+    pub fn clear_goal(&self, thread_id: &ThreadId) -> Result<bool, CoreError> {
+        self.mutate_thread(thread_id, |snapshot| {
+            let Some(goal_id) = snapshot.goal.as_ref().map(|goal| goal.goal_id.clone()) else {
+                return Ok(false);
+            };
+            self.record_batch(
+                snapshot,
+                vec![ThreadEvent::GoalCleared {
+                    thread_id: snapshot.thread_id.clone(),
+                    goal_id,
+                }],
+            )?;
+            Ok(true)
         })
     }
 
@@ -786,7 +1026,6 @@ impl ThreadController {
                     approval_mode: ApprovalMode::AskPermissions,
                     activated_skills: Vec::new(),
                     model: request.model.clone(),
-                    resource_budget: None,
                     tool_profile: None,
                 },
                 ThreadEvent::TurnStarted {
@@ -889,7 +1128,6 @@ impl ThreadController {
                     approval_mode: request.approval_mode,
                     activated_skills: Vec::new(),
                     model: None,
-                    resource_budget: None,
                     tool_profile: None,
                 },
                 ThreadEvent::ItemCompleted {
@@ -1587,6 +1825,31 @@ impl ThreadController {
             .as_nanos();
         format!("{prefix}_{timestamp:032x}_{ordinal:016x}")
     }
+}
+
+fn make_goal(
+    thread_id: ThreadId,
+    goal_id: String,
+    objective: String,
+    mut status: ThreadGoalStatus,
+    token_budget: Option<u64>,
+    tokens_used: u64,
+) -> Result<ThreadGoal, CoreError> {
+    if status.allows_usage_accounting()
+        && token_budget.is_some_and(|budget| tokens_used >= budget)
+    {
+        status = ThreadGoalStatus::BudgetLimited;
+    }
+    let goal = ThreadGoal {
+        thread_id,
+        goal_id,
+        objective,
+        status,
+        token_budget,
+        tokens_used,
+    };
+    goal.validate().map_err(CoreError::InvalidInput)?;
+    Ok(goal)
 }
 
 fn skill_is_within_ceiling(

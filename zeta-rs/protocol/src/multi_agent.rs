@@ -10,10 +10,10 @@ use crate::ModelRef;
 use crate::ModelUsageSummary;
 use crate::SessionThreadStatus;
 use crate::ThreadId;
+use crate::ThreadGoal;
 use crate::ThreadOrigin;
 use crate::ToolName;
 use crate::TurnId;
-use crate::TurnResourceBudget;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -100,10 +100,10 @@ pub struct AgentTreeNodeProjection {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub waiting_reason: Option<AgentTreeWaitingReason>,
+    pub usage: ModelUsageSummary,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
-    pub resource_budget: Option<TurnResourceBudget>,
-    pub usage: ModelUsageSummary,
+    pub goal: Option<ThreadGoal>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub role: Option<FrozenAgentDefinitionRef>,

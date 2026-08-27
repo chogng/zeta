@@ -190,7 +190,6 @@ fn wait_timeout_returns_a_durable_waiting_join_without_losing_the_delegation() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                resource_budget: None,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -291,7 +290,6 @@ fn recovered_spawn_starts_a_new_child_turn_once() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                resource_budget: None,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {

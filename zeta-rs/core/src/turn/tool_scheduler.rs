@@ -82,12 +82,6 @@ impl ToolScheduler {
             let Some(pending) = next_pending_call(&snapshot.items, turn_id)? else {
                 return Ok(ToolSchedulingProgress::Complete);
             };
-            let turn = snapshot
-                .turns
-                .iter()
-                .find(|turn| &turn.turn_id == turn_id)
-                .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
-            crate::turn::ensure_resource_budget_available(turn)?;
             if let Err(error) = self
                 .tools
                 .validate_call_binding(&pending.call, pending.binding.as_ref())

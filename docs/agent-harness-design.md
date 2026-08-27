@@ -227,7 +227,7 @@ Profile 解析发生在 Turn 接受安全点：host 选择声明式 ToolProfile�
 ### 7.3 失控防护
 
 - **重复失败调用（已实现）**：Core 从 durable Tool Call/Result 按同一工具 + canonical 参数 digest 重建连续窗口；第 3 次失败的 Tool Result 附 reminder，第 5 次在下一个 scheduler safe point 使 Turn fail（stable error `toolRepetition`）。成功、工具变化或参数变化清零；重启在模型再次调用前收敛为相同稳定错误。
-- **Turn 资源上限（已实现）**：durable usage 记账（§9.3）之上可配置 per-Turn token/成本上限；cost ceiling 必须携带与所选模型匹配、带 revision 的价格快照，并与 start-Turn command、`TurnAccepted` 一起持久化。默认不设限，仅记账；已报告 token/cost 下限达到 ceiling 后，在下一次模型、压缩或工具安全点以 `turnBudgetExhausted` 终止，刚返回且无需继续调用资源的 final answer 仍可完成。恢复继续使用冻结预算，不读取运行中漂移目录。
+- **Thread Goal 预算（已实现）**：durable usage 记账（§9.3）之上，每个 Thread 最多有一个可选 Goal；Goal 可设置跨 Turn 累计的 token 上限，仅统计已知的未缓存输入与输出 token，不伪造缺失 usage，也不做 cost/time ceiling。达到预算后将 Goal 标记为 `BudgetLimited`，当前已返回的 final answer 仍可完成，但不再自动启动下一个 Turn；Goal 状态、用量和重放结果都来自同一条 Thread event log。
 - 无迭代次数硬上限（与 runtime 文档一致：上限应由可取消的资源策略表达，不用进程内计数器）。
 
 ### 7.4 当前接线与剩余恢复
@@ -235,7 +235,7 @@ Profile 解析发生在 Turn 接受安全点：host 选择声明式 ToolProfile�
 - **已实现**：`ApiError` 分类 `RateLimited { retry_after_ms }`、`Overloaded`、`ContextOverflow`、`AuthFailed`、`InvalidRequest` 和 `InvalidResponse`；HTTP/SSE 适配器从状态码和 OpenAI、Anthropic、Google 错误体映射，`ModelProviderError` 与 `CoreError` 透传类别。
 - **已实现**：重试循环位于 `ModelService` 之上的执行器；认证与无效请求不重试，无效响应只重试一次，瞬时错误保留类型化 `Retry-After`。
 - **已实现**：`ContextOverflow` 触发一次 durable compaction；`ContextOverflowRecoveryCommitted` 把 checkpoint 与 Turn 级恢复标记原子提交，执行器随后从新 snapshot 重试一次；再次溢出保持 `contextOverflow`。
-- **已实现**：Desktop 只读取 canonical Turn 的 `StableTurnErrorCode` 来投影错误卡片。临时失败可显式开始新 Turn，认证错误进入模型选择，上下文或预算错误创建新对话，无效请求与 `toolRepetition` 聚焦输入以修改方案；刷新和重连不保留第二份错误状态。
+- **已实现**：Desktop 只读取 canonical Turn 的 `StableTurnErrorCode` 来投影错误卡片。临时失败可显式开始新 Turn，认证错误进入模型选择，上下文或 Goal 预算耗尽创建新对话，无效请求与 `toolRepetition` 聚焦输入以修改方案；刷新和重连不保留第二份错误状态。
 
 ## 8. 引导与并发输入
 
@@ -444,7 +444,7 @@ M0–M6 只表示本文行为规格的覆盖状态，不再承担实际构建顺
 | M0（完成）提示词接线 | SYSTEM_PROMPT、环境快照、Global `.zeta/instructions`、稳定组装、工具指导与统一编辑选择 guidance 已接线 | `ContextAssembler`、host 环境快照、`WorkspaceCustomizations` | 无 |
 | M1（实现完成）工具最小闭环 | canonical 文件工具、`apply_patch`、shell、模型中立的 `coding-v1` ToolProfile、durable `update_plan` 与模型输入逐项限幅已接线；确定性行为由现有测试覆盖 | 本地工具组合、executor contributions、profile 声明层 | 现有行为测试 |
 | M2（完成）失败弹性 + steering | Provider 错误分类、退避、空响应、Refusal、overflow 恢复、steering、重复失败工具熔断和对话内错误动作已实现 | executor 重试层、Thread command、App Server protocol | protocol/schema/Desktop 同批同步 |
-| M3（实现完成）限幅/预算/压缩 | ContextPlan、逐项输入限幅、配置窗口、preflight、自动/手动 durable compaction、模型调用 usage 账本、冻结 token/cost Turn 预算及按模型恢复的未来预算校准已实现；限幅、预算和压缩由现有测试覆盖 | ContextPlan 选入路径、checkpoint、usage 与预算持久化 | 现有行为测试 |
+| M3（实现完成）限幅/预算/压缩 | ContextPlan、逐项输入限幅、配置窗口、preflight、自动/手动 durable compaction、模型调用 usage 账本、跨 Turn 累计的 Thread Goal token 预算已实现；限幅、预算和压缩由现有测试覆盖 | ContextPlan 选入路径、checkpoint、usage 与 Goal 持久化 | 现有行为测试 |
 | M4（完成）缓存 | Anthropic tools/system/滚动 user 三断点、字节稳定、cached usage 观测，以及模型/profile/压缩 cache scope 回归已接通 | `anthropic_messages` adapter、conformance fixture | 无 |
 | M5（完成）MCP 策略 | registry snapshot、≤15/≤5k 平铺阈值、超阈值整体 `search_tools`/`call_mcp_tool` 与 catalog/definition digest binding 已实现 | MCP registry 之上的冻结暴露策略 | ToolProfile contract |
 | M6（完成）Skills/slash | slash、explicit SkillRef、frozen activation、`skills-read`、Desktop 显式选择与仅限 verified built-in 的 metadata 自动 selector 已接通 | App Server 展开、Skill metadata selector、ActivatedSkill layer | 评测与信任策略 |

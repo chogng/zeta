@@ -1204,6 +1204,16 @@
         "executionStatus": {
           "$ref": "#/$defs/AgentTreeExecutionStatus"
         },
+        "goal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadGoal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "joins": {
           "items": {
             "$ref": "#/$defs/AgentJoin"
@@ -1215,16 +1225,6 @@
         },
         "origin": {
           "$ref": "#/$defs/ThreadOrigin"
-        },
-        "resourceBudget": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/TurnResourceBudget"
-            },
-            {
-              "type": "null"
-            }
-          ]
         },
         "result": {
           "anyOf": [
@@ -2309,6 +2309,54 @@
             },
             "params": {
               "$ref": "#/$defs/SessionThreadReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "thread/goal/get",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ThreadGoalGetParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "thread/goal/set",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ThreadGoalSetParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "thread/goal/clear",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ThreadGoalClearParams"
             }
           },
           "required": [
@@ -5337,6 +5385,54 @@
             },
             "result": {
               "$ref": "#/$defs/SessionThreadReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "thread/goal/get",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ThreadGoalGetResponse"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "thread/goal/set",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ThreadGoalSetResponse"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "thread/goal/clear",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ThreadGoalClearResponse"
             }
           },
           "required": [
@@ -17545,40 +17641,6 @@
       ],
       "type": "string"
     },
-    "ModelPriceSnapshot": {
-      "description": "Immutable USD price inputs used to evaluate one Turn's cost budget.\n\nRates are expressed as micro-USD per one million tokens so the durable contract never depends\non floating-point arithmetic or a mutable model catalog.",
-      "properties": {
-        "cachedInputUsdMicrosPerMillionTokens": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "inputUsdMicrosPerMillionTokens": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "model": {
-          "$ref": "#/$defs/ModelRef"
-        },
-        "outputUsdMicrosPerMillionTokens": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "revision": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "model",
-        "revision",
-        "inputUsdMicrosPerMillionTokens",
-        "cachedInputUsdMicrosPerMillionTokens",
-        "outputUsdMicrosPerMillionTokens"
-      ],
-      "type": "object"
-    },
     "ModelRef": {
       "properties": {
         "model": {
@@ -18849,6 +18911,38 @@
         {
           "properties": {
             "method": {
+              "const": "thread/goal/updated",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ThreadGoalUpdatedNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "thread/goal/cleared",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/ThreadGoalClearedNotification"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "config/changed",
               "type": "string"
             },
@@ -19470,16 +19564,6 @@
               },
               "minItems": 1,
               "type": "array"
-            },
-            "resourceBudget": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/TurnResourceBudget"
-                },
-                {
-                  "type": "null"
-                }
-              ]
             },
             "threadId": {
               "$ref": "#/$defs/ThreadId"
@@ -20546,7 +20630,7 @@
         "completionPersistenceFailed",
         "interactionDeadlineElapsed",
         "toolRepetition",
-        "turnBudgetExhausted"
+        "usageLimited"
       ],
       "type": "string"
     },
@@ -21533,6 +21617,16 @@
     "Thread": {
       "description": "Canonical readable state for one independently ordered Agent execution branch.",
       "properties": {
+        "goal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadGoal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "sequence": {
           "format": "uint64",
           "minimum": 0,
@@ -21613,6 +21707,66 @@
             "sessionId",
             "threadId",
             "title"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "goal": {
+              "$ref": "#/$defs/ThreadGoal"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "const": "goalCreated",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "goal"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "goal": {
+              "$ref": "#/$defs/ThreadGoal"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "const": "goalUpdated",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "goal"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "goalId": {
+              "type": "string"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "const": "goalCleared",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "goalId"
           ],
           "type": "object"
         },
@@ -21758,16 +21912,6 @@
             "policyRevision": {
               "default": "legacy-unversioned-policy",
               "type": "string"
-            },
-            "resourceBudget": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/TurnResourceBudget"
-                },
-                {
-                  "type": "null"
-                }
-              ]
             },
             "threadId": {
               "$ref": "#/$defs/ThreadId"
@@ -22437,6 +22581,186 @@
           "type": "object"
         }
       ]
+    },
+    "ThreadGoal": {
+      "description": "The durable Thread-scoped task Goal and its cumulative token usage.",
+      "properties": {
+        "goalId": {
+          "type": "string"
+        },
+        "objective": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/ThreadGoalStatus"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "tokenBudget": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "tokensUsed": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "threadId",
+        "goalId",
+        "objective",
+        "status",
+        "tokensUsed"
+      ],
+      "type": "object"
+    },
+    "ThreadGoalClearParams": {
+      "properties": {
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "threadId"
+      ],
+      "type": "object"
+    },
+    "ThreadGoalClearResponse": {
+      "properties": {
+        "cleared": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "cleared"
+      ],
+      "type": "object"
+    },
+    "ThreadGoalClearedNotification": {
+      "properties": {
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "threadId"
+      ],
+      "type": "object"
+    },
+    "ThreadGoalGetParams": {
+      "properties": {
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "threadId"
+      ],
+      "type": "object"
+    },
+    "ThreadGoalGetResponse": {
+      "properties": {
+        "goal": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadGoal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ThreadGoalSetParams": {
+      "properties": {
+        "objective": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadGoalStatus"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "tokenBudget": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "threadId"
+      ],
+      "type": "object"
+    },
+    "ThreadGoalSetResponse": {
+      "properties": {
+        "goal": {
+          "$ref": "#/$defs/ThreadGoal"
+        }
+      },
+      "required": [
+        "goal"
+      ],
+      "type": "object"
+    },
+    "ThreadGoalStatus": {
+      "description": "Lifecycle state for the one durable Goal owned by a Thread.",
+      "enum": [
+        "active",
+        "paused",
+        "blocked",
+        "usageLimited",
+        "budgetLimited",
+        "complete"
+      ],
+      "type": "string"
+    },
+    "ThreadGoalUpdatedNotification": {
+      "properties": {
+        "goal": {
+          "$ref": "#/$defs/ThreadGoal"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "turnId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TurnId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "threadId",
+        "goal"
+      ],
+      "type": "object"
     },
     "ThreadHistoryBoundary": {
       "description": "Describes whether a bounded Thread snapshot has older durable Turns available.",
@@ -23552,16 +23876,6 @@
             }
           ]
         },
-        "resourceBudget": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/TurnResourceBudget"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "status": {
           "$ref": "#/$defs/TurnStatus"
         },
@@ -23694,38 +24008,6 @@
       "required": [
         "sequence"
       ],
-      "type": "object"
-    },
-    "TurnResourceBudget": {
-      "description": "Optional resource ceilings frozen when a Turn is accepted.\n\n`max_total_tokens` counts provider-reported input plus output tokens. Cached input and\nreasoning tokens remain observable usage subsets and are not counted twice. A cost ceiling\nrequires `price_snapshot`; Core validates both the snapshot revision and exact model binding.",
-      "properties": {
-        "maxCostUsdMicros": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "maxTotalTokens": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "priceSnapshot": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ModelPriceSnapshot"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
       "type": "object"
     },
     "TurnStartResult": {

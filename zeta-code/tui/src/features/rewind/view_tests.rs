@@ -56,7 +56,6 @@ fn thread(messages: &[&str]) -> Thread {
                     turn_id: turn_id.clone(),
                     status: TurnStatus::Completed,
                     model: None,
-                    resource_budget: None,
                     tool_profile: None,
                     usage: zeta_protocol::ModelUsageSummary::default(),
                     items: vec![ThreadItem::UserMessage {

@@ -1,6 +1,6 @@
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
-import type { AgentResponse, IChatService, ModelCatalogEntry, SkillCommandDefinition, SlashCommandDefinition, Thread, ThreadItem, ThreadUpdateEnvelope, Turn, TurnInteraction } from "../../../../services/chat/common/chatService.js";
+import type { AgentResponse, IChatService, ModelCatalogEntry, SkillCommandDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadItem, ThreadUpdateEnvelope, Turn, TurnInteraction } from "../../../../services/chat/common/chatService.js";
 import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
 import type { ResolvedChatContext } from "../../../../services/chat/common/chatContextService.js";
 import type { IActiveSessionThread, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
@@ -55,6 +55,11 @@ export class ChatPaneModel extends DisposableOwner {
 		this.sessionService = sessionService;
 		this.selection = selection;
 		this.own(chatService.onDidUpdateThread((update) => this.acceptUpdate(update)));
+		this.own(chatService.onDidUpdateGoal((update) => {
+			if (update.threadId !== this.threadId || !this._thread) return;
+			this._thread = { ...this._thread, goal: update.goal ?? null };
+			this._onDidChange.fire();
+		}));
 		this.own(chatService.onDidBecomeReady(() => void this.reconnect()));
 		this.own(chatService.onDidChangeModels(() => void this.loadModels()));
 		this.own(chatService.onDidChangeSkills(() => void this.loadSkillCommands()));
@@ -78,6 +83,10 @@ export class ChatPaneModel extends DisposableOwner {
 
 	get thread(): Thread | undefined {
 		return this._thread;
+	}
+
+	get goal(): ThreadGoal | undefined {
+		return this._thread?.goal ?? undefined;
 	}
 
 	get sessionId(): SessionId | undefined {

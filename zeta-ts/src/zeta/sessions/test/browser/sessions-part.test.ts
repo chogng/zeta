@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { Emitter } from "../../../base/common/event.js";
+import { toDisposable } from "../../../base/common/lifecycle.js";
 import type { ICommandEvent, ICommandService } from "../../../platform/commands/common/commands.js";
 import type { IContextMenuService } from "../../../platform/contextview/browser/contextMenu.js";
 import type { IContextViewService } from "../../../platform/contextview/browser/contextView.js";
@@ -87,6 +88,7 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
 	const ready = new Emitter<void>();
 	const chatService: IChatService = {
 		onDidUpdateThread: threadUpdates.event,
+		onDidUpdateGoal: () => toDisposable(() => {}),
 		onDidBecomeReady: ready.event,
 		onDidChangeModels: ready.event,
 		onDidChangeSkills: ready.event,

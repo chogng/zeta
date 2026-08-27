@@ -73,6 +73,7 @@ impl From<ApiError> for ModelProviderError {
             ApiError::InvalidResponse(message) => Self::InvalidResponse(message),
             ApiError::ContextOverflow(message) => Self::ContextOverflow(message),
             ApiError::AuthFailed(message) => Self::AuthFailed(message),
+            ApiError::UsageLimited => Self::Api(ApiError::UsageLimited),
             ApiError::Cancelled(message) => Self::Cancelled(message),
             error => Self::Api(error),
         }

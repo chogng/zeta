@@ -18,8 +18,8 @@ use crate::{
     ActionPolicyService, CompletedTurn, ContextAssembler, ContextCompactionRequest,
     ContextCompactionResult, ContextCompactionService, CoreError, HarnessInstructions,
     HarnessInstructionsProvider, HookService, ModelSelection, ModelService, ModelStreamSink,
-    NoHooks, NoThreadUpdates, NoTools, ThreadController, ThreadUpdateSink, ToolService,
-    TurnCompletedHookRequest,
+    NoHooks, NoThreadUpdates, NoTools, StartGoalTurnRequest, ThreadController,
+    ThreadUpdateSink, ToolService, TurnCompletedHookRequest,
 };
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -28,9 +28,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use zeta_async_utils::{Cancellation, CancellationReason, CancellationToken};
 use zeta_context_engine::ContextTokenMeasurementOutcome;
 use zeta_protocol::{
-    ItemId, ModelInputEstimate, ModelResponse, ModelStreamEvent, ResponseItem, SessionId,
-    StableTurnError, StreamCursor, StreamInstanceId, ThreadCommand, ThreadId, ThreadItem,
-    ThreadUpdate, ThreadUpdateEnvelope, ToolCall, TurnId, TurnStatus,
+    CommandId, ItemId, ModelInputEstimate, ModelResponse, ModelStreamEvent, ResponseItem,
+    SessionId, StableTurnError, StreamCursor, StreamInstanceId, ThreadCommand, ThreadId,
+    ThreadItem, ThreadUpdate, ThreadUpdateEnvelope, ToolCall, TurnId, TurnStatus,
 };
 
 /// Executes provider-independent model and tool steps for one already-started Turn.
@@ -298,6 +298,57 @@ impl TurnExecutor {
         })
     }
 
+    /// Starts an idle continuation for every recovered active Goal owned by the supplied Sessions.
+    ///
+    /// Completed Turns and Goal state are already durable, so this pass is safe to repeat after a
+    /// restart. The Thread mutation gate suppresses a duplicate when another executor wins the
+    /// completion-to-continuation race first.
+    pub fn resume_recovered_goal_continuations_in_sessions(
+        &self,
+        session_ids: &BTreeSet<SessionId>,
+    ) -> Result<usize, CoreError> {
+        let mut resumed = 0;
+        for snapshot in self.threads.list_threads()? {
+            if !session_ids.contains(&snapshot.session_id) {
+                continue;
+            }
+            if let Some(running_goal_turn) = snapshot.turns.iter().find(|turn| {
+                turn.status == TurnStatus::Running
+                    && is_goal_continuation_turn(&snapshot, &turn.turn_id)
+            }) {
+                self.resume(&snapshot.thread_id, &running_goal_turn.turn_id)?;
+                resumed += 1;
+                continue;
+            }
+            let Some(completed_turn) = snapshot
+                .turns
+                .iter()
+                .rev()
+                .find(|turn| turn.status == TurnStatus::Completed)
+            else {
+                continue;
+            };
+            if self.maybe_start_goal_continuation(&snapshot.thread_id, &completed_turn.turn_id)? {
+                resumed += 1;
+            }
+        }
+        Ok(resumed)
+    }
+
+    /// Starts an idle active-Goal continuation for one Thread after a user Goal mutation.
+    pub fn resume_goal_continuation(&self, thread_id: &ThreadId) -> Result<bool, CoreError> {
+        let snapshot = self.threads.read_thread(thread_id)?;
+        let Some(completed_turn) = snapshot
+            .turns
+            .iter()
+            .rev()
+            .find(|turn| turn.status == TurnStatus::Completed)
+        else {
+            return Ok(false);
+        };
+        self.maybe_start_goal_continuation(thread_id, &completed_turn.turn_id)
+    }
+
     fn resume_recovered_tool_continuations_matching(
         &self,
         matches_session: impl Fn(&SessionId) -> bool,
@@ -342,6 +393,9 @@ impl TurnExecutor {
             }
         };
         self.publish_committed_after(thread_id, sequence_before_execution);
+        if matches!(&result, Ok(TurnExecutionOutcome::Completed(_))) {
+            let _ = self.maybe_start_goal_continuation(thread_id, turn_id);
+        }
         result
     }
 
@@ -441,6 +495,9 @@ impl TurnExecutor {
             }
         };
         self.publish_committed_after(thread_id, sequence_before_execution);
+        if matches!(&result, Ok(TurnExecutionOutcome::Completed(_))) {
+            let _ = self.maybe_start_goal_continuation(thread_id, turn_id);
+        }
         result
     }
 
@@ -637,8 +694,6 @@ impl TurnExecutor {
             let mut invalid_response_attempt = false;
             let mut empty_attempt = false;
             let (response, mut stream) = loop {
-                self.ensure_resource_budget_available(thread_id, turn_id)
-                    .map_err(ExecutionFailure::service)?;
                 let mut stream = InvocationStream::new(
                     self.threads.clone(),
                     self.updates.clone(),
@@ -957,7 +1012,6 @@ impl TurnExecutor {
                 }
             };
             retry_invalid_model_response(|| {
-                self.ensure_resource_budget_available(thread_id, turn_id)?;
                 self.compaction
                     .compact(request, cancellation, &mut record_model_usage)
             })
@@ -994,20 +1048,6 @@ impl TurnExecutor {
                 "cannot execute a {status:?} Turn"
             ))))
         }
-    }
-
-    fn ensure_resource_budget_available(
-        &self,
-        thread_id: &ThreadId,
-        turn_id: &TurnId,
-    ) -> Result<(), CoreError> {
-        let snapshot = self.threads.read_thread(thread_id)?;
-        let turn = snapshot
-            .turns
-            .iter()
-            .find(|turn| &turn.turn_id == turn_id)
-            .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
-        crate::turn::ensure_resource_budget_available(turn)
     }
 
     fn model_reasoning_items(
@@ -1048,6 +1088,57 @@ impl TurnExecutor {
                 self.updates.publish(update);
             }
         }
+    }
+
+    /// Starts the next hidden model Turn after a completed answer when the Goal is still active.
+    ///
+    /// The command ID is derived from the completed Turn, making the boundary idempotent across
+    /// duplicate completion callbacks and recovery. A user-created Turn that wins the race is
+    /// allowed to suppress this continuation; its eventual completion will evaluate the Goal
+    /// again.
+    fn maybe_start_goal_continuation(
+        &self,
+        thread_id: &ThreadId,
+        completed_turn_id: &TurnId,
+    ) -> Result<bool, CoreError> {
+        let snapshot = self.threads.read_thread(thread_id)?;
+        if !snapshot
+            .goal
+            .as_ref()
+            .is_some_and(|goal| goal.status.is_active())
+        {
+            return Ok(false);
+        }
+        let Some(completed_turn) = snapshot
+            .turns
+            .iter()
+            .find(|turn| &turn.turn_id == completed_turn_id)
+            .filter(|turn| turn.status == TurnStatus::Completed)
+        else {
+            return Ok(false);
+        };
+        let command_id = CommandId::new(format!(
+            "goal_continue_{}",
+            completed_turn.turn_id
+        ))
+        .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
+        let Some(start) = self.threads.start_goal_turn(
+            thread_id,
+            StartGoalTurnRequest {
+                command_id,
+                model: completed_turn.model.clone(),
+                policy_revision: completed_turn.policy_revision.clone(),
+                approval_mode: completed_turn.approval_mode,
+                tool_profile: completed_turn.tool_profile.clone(),
+            },
+        )? else {
+            return Ok(false);
+        };
+        if start.disposition == crate::StartTurnDisposition::Created {
+            self.start(thread_id, &start.turn_id)?;
+            return Ok(true);
+        }
+        Ok(false)
     }
 
     fn bind_model_tool_calls(
@@ -1144,6 +1235,18 @@ fn current_turn_query(snapshot: &crate::ThreadSnapshot, turn_id: &TurnId) -> Opt
         .collect::<Vec<_>>()
         .join("\n");
     (!query.trim().is_empty()).then_some(query)
+}
+
+fn is_goal_continuation_turn(snapshot: &crate::ThreadSnapshot, turn_id: &TurnId) -> bool {
+    snapshot.commands.iter().any(|command| {
+        matches!(
+            (&command.receipt.command, &command.result),
+            (
+                ThreadCommand::StartTurn { input, .. },
+                crate::ThreadCommandResult::TurnAccepted { turn_id: command_turn_id },
+            ) if command_turn_id == turn_id && input.is_empty()
+        )
+    })
 }
 
 fn validate_model_tool_calls(
@@ -1393,13 +1496,13 @@ impl ExecutionFailure {
                 error,
                 stable: StableTurnError::invalid_response(),
             },
+            error @ CoreError::ModelUsageLimited => Self::Failed {
+                error,
+                stable: StableTurnError::usage_limited(),
+            },
             error @ CoreError::ToolRepetition(_) => Self::Failed {
                 error,
                 stable: StableTurnError::tool_repetition(),
-            },
-            error @ CoreError::TurnBudgetExhausted => Self::Failed {
-                error,
-                stable: StableTurnError::turn_budget_exhausted(),
             },
             _ => Self::model(error),
         }

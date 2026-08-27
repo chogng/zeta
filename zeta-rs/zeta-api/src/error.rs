@@ -9,6 +9,7 @@ pub enum ApiError {
     Cancelled(String),
     Transport(String),
     RateLimited { retry_after_ms: Option<u64> },
+    UsageLimited,
     Overloaded,
     HttpStatus(u16),
     InvalidResponse(String),
@@ -33,6 +34,7 @@ impl fmt::Display for ApiError {
                 ),
                 None => formatter.write_str("model API rate limited"),
             },
+            Self::UsageLimited => formatter.write_str("model provider usage limit reached"),
             Self::Overloaded => formatter.write_str("model API is overloaded"),
             Self::HttpStatus(status) => write!(formatter, "model API returned HTTP {status}"),
             Self::InvalidResponse(message) => {

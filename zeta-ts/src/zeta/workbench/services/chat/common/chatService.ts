@@ -1,6 +1,7 @@
 import type { Event } from "../../../../base/common/event.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { ModelRef, SessionId, ThreadId } from "../../../../sessions/services/sessions/common/session.js";
+import type { ThreadGoal as ThreadGoalDto } from "../../../../../../generated/app-server/types.js";
 import type { SkillReference } from "../../../../platform/skills/common/skillApi.js";
 import type { ModelCatalogEntry } from "./modelCatalog.js";
 import type { ResolvedChatContext } from "./chatContextService.js";
@@ -42,7 +43,7 @@ export type ThreadItem =
 export type TurnStatus = "created" | "running" | "waitingForApproval" | "waitingForUserInput" | "waitingForCapability" | "cancelling" | "completed" | "failed" | "interrupted";
 
 export interface TurnError {
-	readonly code: "modelInvocationFailed" | "contextOverflow" | "providerAuth" | "invalidRequest" | "invalidResponse" | "completionPersistenceFailed" | "interactionDeadlineElapsed" | "toolRepetition" | "turnBudgetExhausted";
+	readonly code: "modelInvocationFailed" | "contextOverflow" | "providerAuth" | "invalidRequest" | "invalidResponse" | "completionPersistenceFailed" | "interactionDeadlineElapsed" | "toolRepetition" | "usageLimited";
 	readonly message: string;
 	readonly retryable: boolean;
 }
@@ -63,7 +64,6 @@ export interface Turn {
 	readonly turnId: string;
 	readonly status: TurnStatus;
 	readonly model?: ModelRef | null;
-	readonly resourceBudget?: TurnResourceBudget | null;
 	readonly plan?: PlanUpdate | null;
 	readonly usage: ModelUsageSummary;
 	readonly items: readonly ThreadItem[];
@@ -83,19 +83,8 @@ export interface ModelUsageSummary {
 	readonly reasoningTokens: ModelUsageTotal;
 }
 
-export interface ModelPriceSnapshot {
-	readonly model: ModelRef;
-	readonly revision: string;
-	readonly inputUsdMicrosPerMillionTokens: number;
-	readonly cachedInputUsdMicrosPerMillionTokens: number;
-	readonly outputUsdMicrosPerMillionTokens: number;
-}
-
-export interface TurnResourceBudget {
-	readonly maxTotalTokens?: number | null;
-	readonly maxCostUsdMicros?: number | null;
-	readonly priceSnapshot?: ModelPriceSnapshot | null;
-}
+export type ThreadGoal = ThreadGoalDto;
+export type ThreadGoalStatus = ThreadGoal["status"];
 
 export interface Thread {
 	readonly sessionId: SessionId;
@@ -104,7 +93,13 @@ export interface Thread {
 	readonly status: "active" | "archived";
 	readonly sequence: number;
 	readonly usage: ModelUsageSummary;
+	readonly goal?: ThreadGoal | null;
 	readonly turns: readonly Turn[];
+}
+
+export interface ThreadGoalUpdate {
+	readonly threadId: ThreadId;
+	readonly goal?: ThreadGoal;
 }
 
 export interface UserInputOption { readonly label: string; readonly description: string }
@@ -158,7 +153,7 @@ export interface ThreadSubscription {
 	readonly updates: readonly ThreadUpdateEnvelope[];
 }
 
-export interface StartTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly text: string; readonly contexts?: readonly ResolvedChatContext[]; readonly skills?: readonly SkillReference[]; readonly resourceBudget?: TurnResourceBudget }
+export interface StartTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly text: string; readonly contexts?: readonly ResolvedChatContext[]; readonly skills?: readonly SkillReference[] }
 export interface CompactContextOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly retentionPrompt?: string }
 export interface SteerTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number; readonly text: string; readonly contexts?: readonly ResolvedChatContext[] }
 export interface InterruptTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number }
@@ -167,6 +162,7 @@ export interface ResolveInteractionOptions extends InterruptTurnOptions { readon
 /** Frontend Chat operations, catalogs, and Thread update lifecycle. */
 export interface IChatService {
 	readonly onDidUpdateThread: Event<ThreadUpdateEnvelope>;
+	readonly onDidUpdateGoal: Event<ThreadGoalUpdate>;
 	readonly onDidBecomeReady: Event<void>;
 	readonly onDidChangeModels: Event<void>;
 	readonly onDidChangeSkills: Event<void>;

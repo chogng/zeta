@@ -1,4 +1,4 @@
-import type { ModelListResult, SessionCreateParams, SessionListResult, SessionReadParams, SessionRequest, SessionRequestParams, SessionRequestResult, SessionResult, SessionSubscribeParams, SessionSubscribeResult, SessionThreadReadParams, SessionThreadReadResult, SessionThreadResult, SessionThreadSubscribeParams, SessionThreadSubscribeResult, SessionThreadUnsubscribeParams, SessionUnsubscribeParams, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult } from "../../../../../generated/app-server/types.js";
+import type { ModelListResult, SessionCreateParams, SessionListResult, SessionReadParams, SessionRequest, SessionRequestParams, SessionRequestResult, SessionResult, SessionSubscribeParams, SessionSubscribeResult, SessionThreadReadParams, SessionThreadReadResult, SessionThreadResult, SessionThreadSubscribeParams, SessionThreadSubscribeResult, SessionThreadUnsubscribeParams, SessionUnsubscribeParams, ThreadGoalClearParams, ThreadGoalClearResponse, ThreadGoalGetParams, ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult } from "../../../../../generated/app-server/types.js";
 
 export type { SessionRequestResult };
 
@@ -62,6 +62,9 @@ export interface IThreadApi {
 	read(params: SessionThreadReadParams): Promise<SessionThreadReadResult>;
 	subscribe(params: SessionThreadSubscribeParams): Promise<SessionThreadSubscribeResult>;
 	unsubscribe(params: SessionThreadUnsubscribeParams): Promise<void>;
+	getGoal(params: ThreadGoalGetParams): Promise<ThreadGoalGetResponse>;
+	setGoal(params: ThreadGoalSetParams): Promise<ThreadGoalSetResponse>;
+	clearGoal(params: ThreadGoalClearParams): Promise<ThreadGoalClearResponse>;
 }
 
 export interface ITurnApi {

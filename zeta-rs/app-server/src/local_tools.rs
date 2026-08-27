@@ -868,6 +868,24 @@ static LOCAL_EXEC_POLICY_HOST_LAYER: LazyLock<ExecPolicyLayer> = LazyLock::new(|
             ExecPolicyEffect::AllowUnsandboxed,
         ),
         local_rule(
+            "built-in:get_goal",
+            crate::server::goal_tool::GET_GOAL_TOOL_NAME,
+            ExecPolicyActionKind::SystemOperation,
+            ExecPolicyEffect::AllowUnsandboxed,
+        ),
+        local_rule(
+            "built-in:create_goal",
+            crate::server::goal_tool::CREATE_GOAL_TOOL_NAME,
+            ExecPolicyActionKind::SystemOperation,
+            ExecPolicyEffect::AllowUnsandboxed,
+        ),
+        local_rule(
+            "built-in:update_goal",
+            crate::server::goal_tool::UPDATE_GOAL_TOOL_NAME,
+            ExecPolicyActionKind::SystemOperation,
+            ExecPolicyEffect::AllowUnsandboxed,
+        ),
+        local_rule(
             "built-in:spawn_agent",
             crate::server::multi_agent_tools::SPAWN_AGENT_TOOL_NAME,
             ExecPolicyActionKind::SystemOperation,

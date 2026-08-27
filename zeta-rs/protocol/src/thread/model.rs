@@ -1,4 +1,4 @@
-use crate::{ModelUsageSummary, SessionId, ThreadId, ThreadStatus, Turn};
+use crate::{ModelUsageSummary, SessionId, ThreadGoal, ThreadId, ThreadStatus, Turn};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -15,5 +15,8 @@ pub struct Thread {
     pub sequence: u64,
     #[serde(default)]
     pub usage: ModelUsageSummary,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub goal: Option<ThreadGoal>,
     pub turns: Vec<Turn>,
 }

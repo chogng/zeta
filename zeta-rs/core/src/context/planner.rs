@@ -65,14 +65,19 @@ impl ContextPlanner {
         let groups = group_visible_items(&model_items);
         let current_group = groups
             .iter()
-            .find(|group| &group.turn_id == input.current_turn_id())
-            .ok_or_else(|| {
-                ContextPreparationError::UnsupportedContextShape(format!(
-                    "current Turn {} has no model-visible input",
-                    input.current_turn_id()
-                ))
-            })?;
-        let current_turn_tokens = estimate_items(&current_group.items);
+            .find(|group| &group.turn_id == input.current_turn_id());
+        let current_turn_tokens = match current_group {
+            Some(group) => estimate_items(&group.items),
+            None if input.allow_empty_current_turn() => ContextTokenCount::ZERO,
+            None => {
+                return Err(ContextPreparationError::UnsupportedContextShape(
+                    format!(
+                        "current Turn {} has no model-visible input",
+                        input.current_turn_id()
+                    ),
+                ));
+            }
+        };
         let history_groups = groups
             .iter()
             .filter(|group| &group.turn_id != input.current_turn_id())
@@ -303,16 +308,21 @@ impl ContextPlanner {
         validate_items(&raw_items)?;
         let model_items = limit_model_input_items(&raw_items);
         let groups = group_visible_items(&model_items);
-        let current_group_index = groups
+        let history_groups = match groups
             .iter()
             .position(|group| &group.turn_id == input.current_turn_id())
-            .ok_or_else(|| {
-                ContextPreparationError::UnsupportedContextShape(format!(
-                    "current Turn {} has no model-visible input",
-                    input.current_turn_id()
-                ))
-            })?;
-        let history_groups = &groups[..current_group_index];
+        {
+            Some(current_group_index) => &groups[..current_group_index],
+            None if input.allow_empty_current_turn() => groups.as_slice(),
+            None => {
+                return Err(ContextPreparationError::UnsupportedContextShape(
+                    format!(
+                        "current Turn {} has no model-visible input",
+                        input.current_turn_id()
+                    ),
+                ));
+            }
+        };
         if history_groups
             .iter()
             .any(|group| !input.is_terminal_turn(&group.turn_id))

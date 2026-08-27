@@ -35,7 +35,7 @@ serde / schemars / ts-rs
 | Skill identity | `SkillName`, `SkillSourceId`, `SkillId` | Agent Skills name + source-qualified cross-config/catalog identity |
 | Product model | `Session`, `SessionThread`, `Thread`, `Turn`, `ThreadItem`, `PlanUpdate`, `ToolProfileSnapshot` | `Session → Thread → Turn → Item` snapshot；Turn 冻结工具 profile 并保存 canonical plan |
 | Intent | `SessionCommand`, `ThreadCommand` | 请求改变状态，不表示已发生 |
-| Durable fact | `SessionEvent`, `ThreadEvent`, `ToolExecutionAuthority` | reducer/store 接受的过去式事实 |
+| Durable fact | `SessionEvent`, `ThreadEvent`, `ThreadGoal`, `ToolExecutionAuthority` | reducer/store 接受的过去式事实；Goal 与 Thread 共用 event log |
 | Tool execution | `ProcessExecutionOutput`, `SandboxDenialOutput`, `ToolExecutionOutput`, `ToolReplaySafety` | executor、Core 与 durable audit 共享的原始结果/重放语义 |
 | Consumer update | `SessionUpdateEnvelope`, `ThreadUpdateEnvelope`, `ThreadUpdate`, `ItemDelta` | durable committed 与 transient projection |
 | Interaction | `TurnInteraction`, `AgentRequest`, `AgentResponse`, `PendingInteraction` | Turn 等待/恢复的 typed request-response |
@@ -49,7 +49,7 @@ serde / schemars / ts-rs
 derive `Eq`、serde、`JsonSchema` 与 `TS`。是否生成 TypeScript/schema artifact 由
 `zeta-app-server-protocol` 负责，不在这里写文件。
 
-供应商失败的持久化错误码是 `ContextOverflow`、`ProviderAuth`、`InvalidRequest` 和 `InvalidResponse`；工具重复失败使用 `ToolRepetition`；资源预算使用 `TurnBudgetExhausted`。`TurnResourceBudget` 把可选 token/cost ceiling 与带 revision 的 `ModelPriceSnapshot` 冻结到 start-Turn command 和 `TurnAccepted`；cost snapshot 必须匹配所选模型。错误只携带稳定用户文案和能否手动重试，不保存原始供应商、工具或预算内部错误细节。未细分的模型失败继续使用 `ModelInvocationFailed`。
+供应商失败的持久化错误码是 `ContextOverflow`、`ProviderAuth`、`InvalidRequest`、`InvalidResponse` 和 `UsageLimited`；工具重复失败使用 `ToolRepetition`。Thread 可拥有一个持久化 Goal，Goal 状态和跨 Turn 累计的 token 用量由 reducer 从同一条 event log 恢复；预算只统计已知的未缓存输入 token 与输出 token，不做 cost/time ceiling。错误只携带稳定用户文案和能否手动重试，不保存原始供应商或工具内部错误细节。未细分的模型失败继续使用 `ModelInvocationFailed`。
 
 ## 内部接口地图
 

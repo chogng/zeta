@@ -65,8 +65,9 @@ pub use skill::{
 pub use stream::{StreamCursor, StreamInstanceId};
 pub use thread::{
     ContextCheckpoint, ContextCheckpointVerification, ContextSourceDigest, ContextSourceRange,
-    InvalidContextSourceDigest, ItemDelta, Thread, ThreadCommand, ThreadEvent, ThreadStatus,
-    ThreadUpdate, ThreadUpdateEnvelope, ToolExecutionAuthority, ToolOutputStream,
+    InvalidContextSourceDigest, ItemDelta, Thread, ThreadCommand, ThreadEvent, ThreadGoal,
+    ThreadGoalStatus, ThreadStatus, ThreadUpdate, ThreadUpdateEnvelope, ToolExecutionAuthority,
+    ToolOutputStream,
 };
 pub use tool_binding::{ToolCallBinding, ToolCallCaller, ToolSourceProvenance};
 pub use tool_execution::{
@@ -74,7 +75,7 @@ pub use tool_execution::{
     ToolReplaySafety,
 };
 pub use tool_name::{InvalidToolName, ToolName};
-pub use turn::{ModelPriceSnapshot, ToolProfileSnapshot, Turn, TurnResourceBudget, TurnStatus};
+pub use turn::{ToolProfileSnapshot, Turn, TurnStatus};
 pub use turn_execution::TurnExecutionBinding;
 pub use zeta_workspace::WorkspaceBinding;
 pub use zeta_workspace::WorkspaceTrustId;

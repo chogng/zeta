@@ -7,7 +7,7 @@ import type { IAppServerApi, IServerEventApi } from "../../../../platform/app-se
 import type { IModelApi, IThreadApi, ITurnApi } from "../../../../platform/sessions/common/sessionApi.js";
 import type { ISkillApi } from "../../../../platform/skills/common/skillApi.js";
 import type { ModelRef, SessionId, ThreadId } from "../../../../sessions/services/sessions/common/session.js";
-import type { CompactContextOptions, IChatService, InterruptTurnOptions, ModelCatalogEntry, ResolveInteractionOptions, SkillCommandDefinition, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadSubscription, ThreadUpdateEnvelope } from "../common/chatService.js";
+import type { CompactContextOptions, IChatService, InterruptTurnOptions, ModelCatalogEntry, ResolveInteractionOptions, SkillCommandDefinition, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadSubscription, ThreadUpdateEnvelope } from "../common/chatService.js";
 import { ModelCatalogConfiguration, modelRefIdentity } from "../common/modelCatalog.js";
 
 export interface ChatServiceOptions {
@@ -23,6 +23,7 @@ export interface ChatServiceOptions {
 /** App Server-backed implementation of the frontend Chat service. */
 export class ChatService extends DisposableOwner implements IChatService {
 	private readonly _onDidUpdateThread = this.own(new Emitter<ThreadUpdateEnvelope>());
+	private readonly _onDidUpdateGoal = this.own(new Emitter<ThreadGoalUpdate>());
 	private readonly _onDidBecomeReady = this.own(new Emitter<void>());
 	private readonly _onDidChangeModels = this.own(new Emitter<void>());
 	private readonly _onDidChangeSkills = this.own(new Emitter<void>());
@@ -32,6 +33,7 @@ export class ChatService extends DisposableOwner implements IChatService {
 	private hasLoadedModelCatalog = false;
 
 	readonly onDidUpdateThread = this._onDidUpdateThread.event;
+	readonly onDidUpdateGoal = this._onDidUpdateGoal.event;
 	readonly onDidBecomeReady = this._onDidBecomeReady.event;
 	readonly onDidChangeModels = this._onDidChangeModels.event;
 	readonly onDidChangeSkills = this._onDidChangeSkills.event;
@@ -40,6 +42,8 @@ export class ChatService extends DisposableOwner implements IChatService {
 		super();
 		const events = options.eventApi.subscribe((event) => {
 			if (event.method === "session/thread/update") this._onDidUpdateThread.fire(toThreadUpdate(event.params));
+			if (event.method === "thread/goal/updated") this._onDidUpdateGoal.fire({ threadId: event.params.threadId, goal: { ...event.params.goal } });
+			if (event.method === "thread/goal/cleared") this._onDidUpdateGoal.fire({ threadId: event.params.threadId });
 			if (event.method === "skills/changed") this._onDidChangeSkills.fire();
 		});
 		this.defer(() => events.dispose());
@@ -134,7 +138,7 @@ export class ChatService extends DisposableOwner implements IChatService {
 			...(options.contexts ?? []).map(context => ({ type: "context" as const, name: context.name, content: context.content })),
 			{ type: "text", text: options.text },
 		];
-		await this.options.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, approvalMode: "askPermissions", resourceBudget: options.resourceBudget, input });
+		await this.options.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, approvalMode: "askPermissions", input });
 	}
 
 	async compactContext(options: CompactContextOptions): Promise<void> {
@@ -225,6 +229,7 @@ function toThread(thread: ThreadDto): Thread {
 		title: thread.title,
 		status: thread.status,
 		sequence: thread.sequence,
+		goal: thread.goal ? { ...thread.goal } : thread.goal,
 		usage: {
 			modelInvocations: thread.usage.modelInvocations,
 			inputTokens: { ...thread.usage.inputTokens },
@@ -236,13 +241,6 @@ function toThread(thread: ThreadDto): Thread {
 			turnId: turn.turnId,
 			status: turn.status,
 			model: turn.model ? { ...turn.model } : turn.model,
-			resourceBudget: turn.resourceBudget ? {
-				...turn.resourceBudget,
-				priceSnapshot: turn.resourceBudget.priceSnapshot ? {
-					...turn.resourceBudget.priceSnapshot,
-					model: { ...turn.resourceBudget.priceSnapshot.model },
-				} : turn.resourceBudget.priceSnapshot,
-			} : turn.resourceBudget,
 			plan: turn.plan ? {
 				explanation: turn.plan.explanation,
 				steps: turn.plan.steps.map((step) => ({ ...step })),

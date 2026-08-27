@@ -23,7 +23,6 @@ fn envelope(sequence: u64, event: ThreadEvent) -> StoredEvent {
                 activated_skills: Vec::new(),
                 host_activated_skills: Some(Vec::new()),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                resource_budget: None,
                 tool_profile: None,
                 input: vec![UserInput::Text {
                     text: "hello".into(),
@@ -71,7 +70,6 @@ fn reducer_keeps_legacy_external_execution_attempts_readable() {
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 model: None,
-                resource_budget: None,
                 tool_profile: None,
             },
         ),
@@ -133,7 +131,6 @@ fn reducer_rebuilds_a_failed_turn_with_stable_error_details() {
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 model: None,
-                resource_budget: None,
                 tool_profile: None,
             },
         ),
@@ -185,7 +182,6 @@ fn reducer_rebuilds_model_calibration_and_rejects_unknown_algorithm_revisions() 
             approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
             activated_skills: Vec::new(),
             model: Some(model.clone()),
-            resource_budget: None,
             tool_profile: None,
         },
     );
@@ -196,7 +192,6 @@ fn reducer_rebuilds_model_calibration_and_rejects_unknown_algorithm_revisions() 
             activated_skills: Vec::new(),
             host_activated_skills: Some(Vec::new()),
             approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-            resource_budget: None,
             tool_profile: None,
             input: vec![UserInput::Text {
                 text: "hello".into(),
@@ -288,7 +283,6 @@ fn reducer_rebuilds_a_steer_receipt_from_its_immediately_preceding_items() {
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 model: None,
-                resource_budget: None,
                 tool_profile: None,
             },
         ),
@@ -372,35 +366,17 @@ fn reducer_rebuilds_a_steer_receipt_from_its_immediately_preceding_items() {
 }
 
 #[test]
-fn reducer_replays_schema_v1_turns_with_legacy_policy_and_no_skills() {
-    let thread = reduce_thread_event(
-        None,
-        &envelope(
-            1,
-            ThreadEvent::ThreadCreated {
-                session_id: zeta_protocol::SessionId::new("session_1").unwrap(),
-                thread_id: ThreadId::new("thread_1").unwrap(),
-                title: "legacy".into(),
-            },
-        ),
-    )
-    .unwrap();
-    let event = serde_json::from_value::<ThreadEvent>(serde_json::json!({
-        "type": "turnAccepted",
-        "threadId": "thread_1",
-        "turnId": "turn_1"
-    }))
-    .unwrap();
-    let mut accepted = envelope(2, event);
-    accepted.schema_version = 1;
+fn reducer_rejects_history_older_than_current_schema() {
+    let event = ThreadEvent::ThreadCreated {
+        session_id: zeta_protocol::SessionId::new("session_1").unwrap(),
+        thread_id: ThreadId::new("thread_1").unwrap(),
+        title: "legacy".into(),
+    };
+    let mut legacy = envelope(1, event);
+    legacy.schema_version = CURRENT_STORED_EVENT_SCHEMA_VERSION.saturating_sub(1);
 
-    let rebuilt = reduce_thread_event(Some(thread), &accepted).unwrap();
-
-    assert_eq!(
-        rebuilt.turns[0].policy_revision,
-        "legacy-unversioned-policy"
-    );
-    assert!(rebuilt.turns[0].activated_skills.is_empty());
+    let error = reduce_thread_event(None, &legacy).unwrap_err();
+    assert!(matches!(error, CoreError::Journal(message) if message.contains("unsupported")));
 }
 
 #[test]
@@ -423,7 +399,6 @@ fn reducer_verifies_and_rebuilds_a_context_checkpoint() {
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 model: None,
-                resource_budget: None,
                 tool_profile: None,
             },
         ),
@@ -554,7 +529,6 @@ fn reducer_rejects_sequence_gaps_and_illegal_transitions() {
                     approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                     activated_skills: Vec::new(),
                     model: None,
-                    resource_budget: None,
                     tool_profile: None,
                 }
             )
@@ -573,7 +547,6 @@ fn reducer_rejects_sequence_gaps_and_illegal_transitions() {
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 model: None,
-                resource_budget: None,
                 tool_profile: None,
             },
         ),
@@ -605,7 +578,6 @@ fn reducer_rebuilds_typed_command_receipt_and_all_durable_item_kinds() {
             approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
             activated_skills: Vec::new(),
             model: None,
-            resource_budget: None,
             tool_profile: None,
         },
     );
@@ -616,7 +588,6 @@ fn reducer_rebuilds_typed_command_receipt_and_all_durable_item_kinds() {
             activated_skills: Vec::new(),
             host_activated_skills: Some(Vec::new()),
             approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-            resource_budget: None,
             tool_profile: None,
             input: vec![UserInput::Text {
                 text: "hello".into(),
@@ -748,7 +719,6 @@ fn reducer_rejects_a_tool_result_without_its_tool_call() {
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 model: None,
-                resource_budget: None,
                 tool_profile: None,
             },
         ),
@@ -858,7 +828,6 @@ fn started_sandboxed_tool_snapshot() -> ThreadSnapshot {
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 activated_skills: Vec::new(),
                 model: None,
-                resource_budget: None,
                 tool_profile: None,
             },
         ),

@@ -5,14 +5,14 @@ export function agentNodeDetail(node: AgentTreeNode): string {
 	const parts = [node.role?.name ?? agentNodeKind(node), node.executionStatus];
 	if (node.waitingReason) parts.push(waitingReasonLabel(node.waitingReason));
 	const reportedTokens = node.usage.inputTokens + node.usage.outputTokens;
-	if (node.resourceBudget?.maxTotalTokens !== undefined) {
-		parts.push(`${formatNumber(reportedTokens)}/${formatNumber(node.resourceBudget.maxTotalTokens)} tokens`);
+	if (node.goal?.tokenBudget !== undefined && node.goal.tokenBudget !== null) {
+		parts.push(`${formatNumber(node.goal.tokensUsed)}/${formatNumber(node.goal.tokenBudget)} goal tokens`);
+	} else if (node.goal && node.goal.tokensUsed > 0) {
+		parts.push(`${formatNumber(node.goal.tokensUsed)} goal tokens`);
 	} else if (reportedTokens > 0) {
 		parts.push(`${formatNumber(reportedTokens)} tokens`);
 	}
-	if (node.resourceBudget?.maxCostUsdMicros !== undefined) {
-		parts.push(`$${(node.resourceBudget.maxCostUsdMicros / 1_000_000).toFixed(2)} cap`);
-	}
+	if (node.goal) parts.push(`goal ${goalStatusLabel(node.goal.status)}`);
 	const waitingJoins = node.joins.filter(join => join.status === "waiting").length;
 	if (waitingJoins > 0) parts.push(`${waitingJoins} join${waitingJoins === 1 ? "" : "s"} waiting`);
 	if (node.result) parts.push(`result ${node.result.status}`);
@@ -43,3 +43,14 @@ function waitingReasonLabel(reason: NonNullable<AgentTreeNode["waitingReason"]>)
 }
 
 function formatNumber(value: number): string { return new Intl.NumberFormat("en-US").format(value); }
+
+function goalStatusLabel(status: NonNullable<AgentTreeNode["goal"]>["status"]): string {
+	switch (status) {
+		case "active": return "active";
+		case "paused": return "paused";
+		case "blocked": return "blocked";
+		case "usageLimited": return "usage limited";
+		case "budgetLimited": return "budget limited";
+		case "complete": return "complete";
+	}
+}

@@ -12,8 +12,9 @@ use zeta_protocol::{
     ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalDecision,
     ActionApprovalRequest, ActionApprovalResponse, AgentRequest, AgentResponse, CommandId,
     ContextSourceRange, InteractionDeadline, PlanStep, PlanStepStatus, PlanUpdate, RequestId,
-    RequestUserInput, RequestUserInputResponse, SessionId, StableTurnError, StableTurnErrorCode,
-    ThreadEvent, ThreadId, ThreadItem, ToolCallId, ToolName, TurnId, UserInput, UserInputQuestion,
+    ModelUsage, RequestUserInput, RequestUserInputResponse, SessionId, StableTurnError,
+    StableTurnErrorCode, ThreadEvent, ThreadGoalStatus, ThreadId, ThreadItem, ToolCallId,
+    ToolName, TurnId, UserInput, UserInputQuestion,
 };
 
 struct OneShotActivation {
@@ -53,7 +54,6 @@ fn start_request(key: &str) -> StartTurnRequest {
         model: None,
         policy_revision: "test-policy-v1".into(),
         approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-        resource_budget: None,
         tool_profile: None,
         activated_skills: Vec::new(),
         input: vec![UserInput::Text {
@@ -172,6 +172,184 @@ fn failure_is_durable_before_snapshot_exposes_it() {
     assert_eq!(
         snapshot.turns[0].failure.as_ref().unwrap().code,
         StableTurnErrorCode::ModelInvocationFailed
+    );
+}
+
+#[test]
+fn thread_goal_lifecycle_is_durable_and_unfinished_goals_cannot_be_replaced() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let threads = ThreadController::with_store(store.clone());
+    let thread = create_thread(&threads, "goal lifecycle");
+
+    let created = threads
+        .create_goal(&thread, "finish the implementation".into(), Some(100))
+        .unwrap();
+    assert_eq!(created.status, ThreadGoalStatus::Active);
+    assert_eq!(created.tokens_used, 0);
+    assert_eq!(threads.get_goal(&thread).unwrap(), Some(created.clone()));
+    assert!(threads
+        .create_goal(&thread, "a duplicate objective".into(), None)
+        .is_err());
+
+    let paused = threads
+        .set_goal(
+            &thread,
+            SetGoalRequest {
+                objective: Some("finish the implementation carefully".into()),
+                status: Some(ThreadGoalStatus::Paused),
+                token_budget: Some(Some(200)),
+            },
+        )
+        .unwrap()
+        .goal;
+    assert_eq!(paused.goal_id, created.goal_id);
+    assert_eq!(paused.status, ThreadGoalStatus::Paused);
+    assert!(threads
+        .create_goal(&thread, "still a duplicate".into(), None)
+        .is_err());
+
+    let completed = threads
+        .set_goal(
+            &thread,
+            SetGoalRequest {
+                status: Some(ThreadGoalStatus::Complete),
+                ..SetGoalRequest::default()
+            },
+        )
+        .unwrap()
+        .goal;
+    assert_eq!(completed.status, ThreadGoalStatus::Complete);
+    let replacement = threads
+        .create_goal(&thread, "start the next objective".into(), Some(50))
+        .unwrap();
+    assert_ne!(replacement.goal_id, completed.goal_id);
+    assert!(threads.clear_goal(&thread).unwrap());
+    assert!(!threads.clear_goal(&thread).unwrap());
+
+    let recovered = ThreadController::with_store(store)
+        .recover_thread(&thread)
+        .unwrap();
+    assert_eq!(recovered.goal, None);
+}
+
+#[test]
+fn thread_goal_usage_accumulates_across_turns_without_inventing_missing_input() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let threads = ThreadController::with_store(store.clone());
+    let thread = create_thread(&threads, "goal usage");
+    threads
+        .create_goal(&thread, "finish the implementation".into(), Some(15))
+        .unwrap();
+
+    let first_turn = start_turn(&threads, &thread, "goal-usage-first");
+    threads
+        .record_model_usage(
+            &thread,
+            &first_turn,
+            Some(ModelUsage {
+                input_tokens: Some(10),
+                cached_input_tokens: Some(2),
+                output_tokens: Some(3),
+                reasoning_tokens: None,
+            }),
+        )
+        .unwrap();
+    threads
+        .complete_turn(&thread, &first_turn, "first answer".into())
+        .unwrap();
+
+    let second_turn = start_turn(&threads, &thread, "goal-usage-second");
+    threads
+        .record_model_usage(
+            &thread,
+            &second_turn,
+            Some(ModelUsage {
+                input_tokens: Some(4),
+                cached_input_tokens: Some(0),
+                output_tokens: Some(0),
+                reasoning_tokens: None,
+            }),
+        )
+        .unwrap();
+    assert_eq!(threads.get_goal(&thread).unwrap().unwrap().tokens_used, 15);
+    threads
+        .record_model_usage(
+            &thread,
+            &second_turn,
+            Some(ModelUsage {
+                input_tokens: Some(1),
+                cached_input_tokens: Some(0),
+                output_tokens: Some(2),
+                reasoning_tokens: None,
+            }),
+        )
+        .unwrap();
+    threads
+        .complete_turn(&thread, &second_turn, "second answer".into())
+        .unwrap();
+
+    let third_turn = start_turn(&threads, &thread, "goal-usage-third");
+    threads
+        .record_model_usage(
+            &thread,
+            &third_turn,
+            Some(ModelUsage {
+                input_tokens: Some(100),
+                cached_input_tokens: None,
+                output_tokens: Some(100),
+                reasoning_tokens: None,
+            }),
+        )
+        .unwrap();
+
+    let goal = threads.get_goal(&thread).unwrap().unwrap();
+    assert_eq!(goal.tokens_used, 18);
+    assert_eq!(goal.status, ThreadGoalStatus::BudgetLimited);
+    assert_eq!(goal.remaining_tokens(), Some(0));
+
+    let recovered = ThreadController::with_store(store)
+        .recover_thread(&thread)
+        .unwrap();
+    assert_eq!(recovered.goal, Some(goal));
+}
+
+#[test]
+fn thread_goal_turn_failures_stop_the_goal_with_their_stable_category() {
+    let threads = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
+    let thread = create_thread(&threads, "goal failure");
+    threads
+        .create_goal(&thread, "finish the implementation".into(), None)
+        .unwrap();
+
+    let blocked_turn = start_turn(&threads, &thread, "goal-blocked");
+    threads
+        .fail_turn(
+            &thread,
+            &blocked_turn,
+            StableTurnError::model_invocation_failed(),
+        )
+        .unwrap();
+    assert_eq!(
+        threads.get_goal(&thread).unwrap().unwrap().status,
+        ThreadGoalStatus::Blocked
+    );
+
+    threads
+        .set_goal(
+            &thread,
+            SetGoalRequest {
+                status: Some(ThreadGoalStatus::Active),
+                ..SetGoalRequest::default()
+            },
+        )
+        .unwrap();
+    let limited_turn = start_turn(&threads, &thread, "goal-usage-limited");
+    threads
+        .fail_turn(&thread, &limited_turn, StableTurnError::usage_limited())
+        .unwrap();
+    assert_eq!(
+        threads.get_goal(&thread).unwrap().unwrap().status,
+        ThreadGoalStatus::UsageLimited
     );
 }
 
@@ -970,7 +1148,6 @@ fn typed_command_rejects_reusing_an_id_with_different_input() {
         model: None,
         policy_revision: "test-policy-v1".into(),
         approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-        resource_budget: None,
         tool_profile: None,
         activated_skills: Vec::new(),
         input: vec![UserInput::Text {
@@ -1515,7 +1692,6 @@ fn start_turn_persists_ordered_text_and_normalized_image_attachment_items() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                resource_budget: None,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![

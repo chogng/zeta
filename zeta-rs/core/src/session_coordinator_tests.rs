@@ -73,7 +73,6 @@ fn stop_archives_session_and_interrupts_active_child_turns() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                resource_budget: None,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![zeta_protocol::UserInput::Text {
@@ -241,11 +240,6 @@ fn rewind_creates_a_child_with_only_turns_before_the_checkpoint() {
                     model: None,
                     policy_revision: "test-policy-v1".into(),
                     approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                    resource_budget: Some(zeta_protocol::TurnResourceBudget {
-                        max_total_tokens: Some(100),
-                        max_cost_usd_micros: None,
-                        price_snapshot: None,
-                    }),
                     tool_profile: None,
                     activated_skills: Vec::new(),
                     input: vec![zeta_protocol::UserInput::Text {
@@ -307,7 +301,6 @@ fn rewind_creates_a_child_with_only_turns_before_the_checkpoint() {
     assert_eq!(replayed.disposition, CommandDisposition::Replayed);
     assert_eq!(child.turns.len(), 1);
     assert_eq!(child.turns[0].turn_id, turn_ids[0]);
-    assert_eq!(child.turns[0].resource_budget, None);
     assert_eq!(
         child.turns[0].usage,
         zeta_protocol::ModelUsageSummary::default()

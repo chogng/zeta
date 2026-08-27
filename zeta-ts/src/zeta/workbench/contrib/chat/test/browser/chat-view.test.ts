@@ -1272,7 +1272,7 @@ test("Turn error presentation is selected only from the stable error code", () =
 		{ code: "completionPersistenceFailed", retryable: true },
 		{ code: "interactionDeadlineElapsed", retryable: true },
 		{ code: "toolRepetition", retryable: false },
-		{ code: "turnBudgetExhausted", retryable: false },
+		{ code: "usageLimited", retryable: false },
 	];
 
 	assert.deepEqual(cases.map(({ code, retryable }) => {
@@ -1287,7 +1287,7 @@ test("Turn error presentation is selected only from the stable error code", () =
 		{ code: "completionPersistenceFailed", label: "Save failed", action: "retry", message },
 		{ code: "interactionDeadlineElapsed", label: "Interaction expired", action: "retry", message },
 		{ code: "toolRepetition", label: "Repeated tool failure", action: "revise", message },
-		{ code: "turnBudgetExhausted", label: "Turn budget", action: "startNewChat", message },
+		{ code: "usageLimited", label: "Usage limit", action: "chooseModel", message },
 	]);
 });
 
@@ -1323,10 +1323,10 @@ test("ChatPaneModel rebuilds error actions from canonical Thread state after ref
 	await waitFor(() => model.items[0]?.errorCode === "toolRepetition");
 	assert.equal(model.items[0]?.action?.type, "revise");
 
-	currentThread = threadWithFailure("turnBudgetExhausted", false, 5);
+	currentThread = threadWithFailure("usageLimited", false, 5);
 	fake.emitReady();
-	await waitFor(() => model.items[0]?.errorCode === "turnBudgetExhausted");
-	assert.equal(model.items[0]?.action?.type, "startNewChat");
+	await waitFor(() => model.items[0]?.errorCode === "usageLimited");
+	assert.equal(model.items[0]?.action?.type, "chooseModel");
 });
 
 test("ChatPaneModel retries only the latest retryable failed Turn as a new visible Turn", async () => {

@@ -51,6 +51,7 @@ JSONL / in-process caller
    ├─ optional Web Search executor → zeta-web-search-extension
    ├─ trusted Workspace coding tools → read_file / write_file / edit / grep / glob / apply_patch / shell-command / update_plan
    ├─ trusted Workspace Agent tools → spawn_agent / send_agent_message / wait_agent
+   ├─ Thread Goal tools → get_goal / create_goal / update_goal
    ├─ Skill RPC/config/event adapters → zeta-skills-extension
    │                                  → zeta-skills + zeta-file-watcher
    ├─ WorkspaceCustomizations → zeta-instructions + zeta-agents
@@ -99,6 +100,7 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 | `AppServer::with_mcp_oauth_service` | 安装独立 Config MCP 的 process-local OAuth coordinator，并广告 `mcpOAuth` capability |
 | `AppServer::with_dynamic_tools` | 校验 client-hosted dynamic specs，并接入共享 registry、审批和 durable interaction 执行链 |
 | `AppServer::resume_recovered_agent_coordinations` | 恢复 Agent spawn/delivery/join/cancellation saga，并调度恢复期间新建的 child Turn |
+| `AppServer::resume_recovered_goal_continuations` | 重启后恢复 idle active Goal 的隐藏 continuation Turn |
 | `open_local_app_server` | 按 SessionStateMode 选择 durable/in-memory coordinator，打开 config 并组合 provider-backed model |
 | `open_local_app_server_with_cloud_providers` | 在 Workspace 激活前注入 cloud code-index providers；默认入口使用空 registry |
 | `open_local_app_server_with_code_index_providers` | 在 Workspace 激活前同时注入本地 semantic models 与可选 cloud providers |
@@ -263,7 +265,7 @@ src/
 | `BrowserToolPolicy` | crate-private | 只接受 built-in `BrowserInteraction` + 单个 `UserInterface` capability，并要求一次性批准 | 不复用 local shell、MCP 或 extension policy |
 | `InteractionDeadlineWatcher` | crate-private | 在 workspace mutation gate 下重检 durable pending request，持久化 `DeadlineElapsed` cancellation 并失败 Turn | 不选择 UI、不解释 approval policy、不修改 reducer |
 | `zeta-skills-extension::SkillRuntime` | external runtime | 组合 roots、缓存 metadata projection、叠加 enablement，并贡献 durable activation/context fragment | App Server 只安装 runtime、提供 config/event adapter 与协议 projection |
-| `start_turn::replayed_result` | private | 用 durable command receipt 校验重复 `StartTurn` 输入、审批模式和资源预算并返回原 Turn 结果 | 重放不重新读取 model config、价格目录或 Skill 文件；不同输入返回 `CommandConflict` |
+| `start_turn::replayed_result` | private | 用 durable command receipt 校验重复 `StartTurn` 输入和审批模式并返回原 Turn 结果 | 重放不重新读取 model config 或 Skill 文件；不同输入返回 `CommandConflict` |
 | `SkillConfigSnapshotProvider` adapter | crate-private implementation | 给 external runtime 最新 `SkillsConfig` 与 commit signal | implementation 不把客户端 path 直接升级为 trusted root |
 | `SkillRuntimeEventSink` adapter | `UpdateBroker` implementation | 把 runtime generation change 投影为 `skills/changed` | 不参与 catalog reconcile |
 | `WorkspaceCustomizations` | crate-private | 发现/刷新 `.zeta/instructions` 与 `.zeta/agents`，发布 future-invocation harness snapshot | 不执行 Agent、不激活 Skill、不解析外部生态格式 |
@@ -425,9 +427,9 @@ start/compact/interrupt 与 interaction resolve，并以 tagged `SessionRequestR
 
 1. 校验 Thread 属于 supplied Session；
 2. 校验 Session 仍为 active；
-3. 读取 Session 当前模型并从 exact registry definitions 构造 `coding-v1` `ToolProfileSnapshot`，再把模型、profile、请求携带的 `ApprovalMode` 和可选 `TurnResourceBudget` 一起作为 `TurnAccepted` 的 durable snapshot；cost ceiling 的带 revision 价格快照由 Core 校验必须匹配该模型；
+3. 读取 Session 当前模型并从 exact registry definitions 构造 `coding-v1` `ToolProfileSnapshot`，再把模型、profile 和请求携带的 `ApprovalMode` 一起作为 `TurnAccepted` 的 durable snapshot；Thread Goal 通过独立的 `thread/goal/*` mutation 写入同一条 Thread event log；
 4. `start_turn` 使用 typed command ID + exact expected sequence；
-5. replay 在读取 mutable model/Skill authority 前校验 input、resource budget 与 approval mode，terminal failure/interruption 不伪装成 success；
+5. replay 在读取 mutable model/Skill authority 前校验 input 与 approval mode，terminal failure/interruption 不伪装成 success；
 6. 新 start 发布 durable update 后调用 `TurnExecutor::start`；执行器在每次模型调用前复核冻结的工具名、顺序和 definition digest，漂移时 fail closed。
 
 Trusted Workspace 的 canonical local coding surface 由 direct `LocalToolSuite` 唯一提供

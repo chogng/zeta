@@ -85,11 +85,11 @@ function turnErrorPresentation(turnId: string, error: TurnError): { readonly lab
 			return retryPresentation(turnId, "Interaction expired", "The requested interaction expired before it received a response.");
 		case "toolRepetition":
 			return revisePresentation("Repeated tool failure", "The same tool and arguments failed five times. Ask Zeta to use a different approach or explain the blocker.");
-		case "turnBudgetExhausted":
+		case "usageLimited":
 			return {
-				label: "Turn budget",
-				detail: "This Turn reached its configured resource budget. Start a new chat before continuing.",
-				action: { type: "startNewChat", label: "Start new chat" },
+				label: "Usage limit",
+				detail: "The model provider's usage limit was reached. Choose another model or try again later.",
+				action: { type: "chooseModel", label: "Choose another model" },
 			};
 	}
 }

@@ -384,36 +384,6 @@ fn failed_child_is_reconciled_to_one_terminal_result() {
 }
 
 #[test]
-fn exhausted_child_turn_budget_is_reconciled_as_one_failed_delegation() {
-    let fixture = fixture();
-    let spawned = fixture.coordinator.spawn(spawn_request(&fixture)).unwrap();
-    fixture
-        .sessions
-        .threads()
-        .fail_turn(
-            &spawned.child_thread_id,
-            &spawned.child_turn_id,
-            zeta_protocol::StableTurnError::turn_budget_exhausted(),
-        )
-        .unwrap();
-
-    let result = fixture
-        .coordinator
-        .reconcile_terminal_delegation(&spawned.child_thread_id)
-        .unwrap()
-        .unwrap();
-
-    assert_eq!(result.status, DelegationResultStatus::Failed);
-    assert_eq!(result.summary, "The Turn resource budget was exhausted");
-    let replayed = fixture
-        .coordinator
-        .reconcile_terminal_delegation(&spawned.child_thread_id)
-        .unwrap()
-        .unwrap();
-    assert_eq!(result, replayed);
-}
-
-#[test]
 fn structural_agent_budget_rejects_a_second_live_child_without_partial_delegation() {
     let fixture = fixture();
     let coordinator = MultiAgentCoordinator::new(
@@ -487,7 +457,6 @@ fn later_child_turns_cannot_expand_the_spawned_skill_ceiling() {
                 model: None,
                 policy_revision: "policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                resource_budget: None,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -531,7 +500,6 @@ fn later_child_turns_cannot_expand_the_spawned_skill_ceiling() {
             model: None,
             policy_revision: "policy-v1".into(),
             approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-            resource_budget: None,
             tool_profile: None,
             activated_skills: Vec::new(),
             input: vec![UserInput::Skill {
@@ -999,7 +967,6 @@ fn fixture() -> Fixture {
                 model: None,
                 policy_revision: "policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
-                resource_budget: None,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
