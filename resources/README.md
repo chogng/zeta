@@ -48,7 +48,7 @@ The cross-client ownership and rendering contract is documented in [`docs/icons.
 
 - SVG filenames use lowercase kebab-case and become the icon IDs without a second mapping table.
 - `manifest.json` is generated output; do not edit its `file` or `rendering` fields.
-- The Seti file-icon theme remains owned by `zeta-rs/file-icons` and is intentionally not duplicated here.
+- The browser-only Seti file-icon theme is owned by `zeta-ts/src/zeta/platform/theme/browser/media/seti` and remains separate from product icons.
 - Renderer-specific tinting, caching, rasterization, and component layout remain in each client.
 
 The generator uses SVGO with multiple passes, removes fixed root dimensions while preserving `viewBox`, prefixes SVG IDs, rejects active or linked content, and infers `symbolic` or `multicolor` from the optimized paint values. `pnpm icons:check` verifies the SVGs and all generated outputs without modifying files; `pnpm test:icons` covers generation, optimization, deletion, safety checks, manifest metadata, and the Vite update path.

@@ -4,7 +4,7 @@ import type { URI } from "../../../base/common/uri.js";
 import { isDarkColorScheme } from "../common/theme.js";
 import type { IThemeService } from "../common/themeService.js";
 import type { IFileIconThemeService } from "./fileIconThemeService.js";
-import setiThemeData from "../../../../../generated/file-icons/seti/manifest.json" with {
+import setiThemeData from "./media/seti/vs-seti-icon-theme.json" with {
 	type: "json",
 };
 import "./setiFileIconTheme.css";

@@ -45,7 +45,6 @@ members = [
     "zeta-rs/exec",
     "zeta-rs/execpolicy",
     "zeta-rs/tool-executor",
-    "zeta-rs/file-icons",
     "zeta-rs/file-identity",
     "zeta-rs/file-search",
     "zeta-rs/file-system",
@@ -325,7 +324,6 @@ zeta-tool-executor = { path = "zeta-rs/tool-executor" }
 zeta-extensions = { path = "zeta-rs/extensions" }
 zeta-editor-extension-host = { path = "zeta-rs/editor-extension-host" }
 zeta-icons = { path = "app/icons" }
-zeta-file-icons = { path = "zeta-rs/file-icons" }
 zeta-file-identity = { path = "zeta-rs/file-identity" }
 zeta-file-search = { path = "zeta-rs/file-search" }
 zeta-file-system = { path = "zeta-rs/file-system" }

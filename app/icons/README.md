@@ -59,7 +59,7 @@ generator。`syncRustIcons` 拒绝不规范的 filename、多 SVG root、active/
 新增产品语义时更新 `src/library.rs`、`src/icon_tests.rs`，并确认 Desktop
 `lxiconsLibrary.ts` 是否应保持同一跨客户端 identity。只替换现有 artwork 时更新 SVG 和生成文件，
 不修改 semantic ID。任何 runtime registry、GPU type、component style 或 file-extension matching
-进入本 crate 都表示 ownership 漂移；Seti file-icon resolution 继续由 `zeta-file-icons` 拥有。
+进入本 crate 都表示 ownership 漂移；Seti 文件图标解析由 Desktop 的 `platform/theme/browser` 拥有。
 
 当前 crate 能携带 multicolor definition；`zeta-ui-components` 使用 fixed-color atlas 与 symbolic-mask
 atlas 实现该 contract。跨 renderer 状态和演进见 [`docs/icons.md`](../../docs/icons.md)。

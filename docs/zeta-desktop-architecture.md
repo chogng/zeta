@@ -125,11 +125,7 @@ production consumer，因此下表的共享 URI 状态仍为“部分具备”�
 | 宿主终端环境继承 | Electron Main + Rust / App Server | ✅ 双层 allowlist，凭据变量不进入 App Server 或 PTY |
 | 任意 executable/environment 选择 | 无 | ❌ 当前客户端不能提交 |
 
-文件图标的跨客户端数据契约由
-[`zeta-file-icons`](../zeta-rs/file-icons/README.md) 拥有：crate 内保存 Seti manifest、WOFF
-并提供 Rust resolver。Desktop 在构建前同步运行时资源、直接从 JSON 推导 TypeScript 所需
-结构并负责 DOM glyph 渲染；App Server 不参与图标解析。Rust TUI 当前没有 terminal
-Seti codepoint adapter；`zeta code` 的当前产品要求也不包含该呈现，因此不构成 TUI backlog。
+Seti 文件图标是 Renderer 主题能力：`platform/theme/browser` 直接拥有主题 JSON、WOFF、文件名解析和 DOM glyph 渲染。App Server 与 Rust 客户端不参与文件图标解析；`zeta code` 的当前产品要求也不包含该呈现，因此不存在跨客户端数据契约。
 
 因此，一项完整功能可以具有一条跨层执行路径：
 

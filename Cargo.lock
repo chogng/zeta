@@ -11431,14 +11431,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-file-icons"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "zeta-file-identity"
 version = "0.1.0"
 dependencies = [

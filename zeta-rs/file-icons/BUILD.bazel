@@ -1,7 +1,0 @@
-load("//:defs.bzl", "zeta_rust_crate")
-
-zeta_rust_crate(
-    name = "file-icons",
-    crate_name = "zeta_file_icons",
-    data = glob(["seti/**"]),
-)

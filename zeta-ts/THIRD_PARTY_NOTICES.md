@@ -9,7 +9,7 @@ texts.
 | [DOMPurify](https://github.com/cure53/DOMPurify) | 3.4.12 | Apache-2.0, selected from `MPL-2.0 OR Apache-2.0` | [`licenses/DOMPurify.txt`](licenses/DOMPurify.txt) |
 | [Marked](https://github.com/markedjs/marked) | 18.0.7 | MIT and bundled Markdown notice | [`licenses/Marked.txt`](licenses/Marked.txt) |
 | [markdown-it](https://github.com/markdown-it/markdown-it) | 14.3.0 | MIT | [`licenses/markdown-it.txt`](licenses/markdown-it.txt) |
-| [Seti UI](https://github.com/jesseweed/seti-ui) | commit `2d6c5e68b4ded73c92dac291845ee44e1182d511` | MIT | [`zeta-rs/file-icons/seti/LICENSE.txt`](../zeta-rs/file-icons/seti/LICENSE.txt) |
+| [Seti UI](https://github.com/jesseweed/seti-ui) | commit `2d6c5e68b4ded73c92dac291845ee44e1182d511` | MIT | [`src/zeta/platform/theme/browser/media/seti/ThirdPartyNotices.txt`](src/zeta/platform/theme/browser/media/seti/ThirdPartyNotices.txt) |
 | [Typst](https://github.com/typst/typst) | 0.15.1 | Apache-2.0; includes separately attributed third-party material | [`Typst.txt`](../zeta-rs/utils/typst/licenses/Typst.txt), [`Typst-NOTICE.txt`](../zeta-rs/utils/typst/licenses/Typst-NOTICE.txt) |
 | [typst-assets bundled fonts](https://github.com/typst/typst-assets) | 0.15.1 | Apache-2.0 plus the font and asset licenses enumerated upstream | [`Typst.txt`](../zeta-rs/utils/typst/licenses/Typst.txt), [`Typst-Assets-NOTICE.txt`](../zeta-rs/utils/typst/licenses/Typst-Assets-NOTICE.txt) |
 

@@ -37,7 +37,7 @@ resources/icons/*.svg
 | Rust logical placement、tint 与 clip scene contract | `zui::PaintIcon` | ✅ |
 | Rust icon+text component geometry | `zeta-ui-components::IconLabel` | ✅ |
 | Product command 与 icon selection | 各 product host | ✅ |
-| Seti file-extension/theme resolution | `zeta-file-icons` | ✅，独立系统 |
+| Seti file-extension/theme resolution | `zeta-ts/src/zeta/platform/theme/browser` | ✅，浏览器主题能力 |
 | Native symbolic mask、fixed-color atlas 与 render path | `zeta-wgpu` | ✅ |
 
 `zeta-icons` 不依赖 `zui` 或 `zeta-ui-components`。`PaintIcon`、`IconLabel`、`Button` 和 `InputBox` 可以依赖 icon identity，但
