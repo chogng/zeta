@@ -1,4 +1,5 @@
 import { type IGlyphRasterizer, type IGpuGlyphStyle, type IRasterizedGlyph } from './raster.js';
+import { createCanvasFontShorthand } from '../../config/fontMeasurements.js';
 
 let nextId = 0;
 
@@ -60,6 +61,12 @@ export class GlyphRasterizer implements IGlyphRasterizer {
 
 	private applyFont(style: IGpuGlyphStyle): void {
 		const fontSize = Math.ceil(style.fontSize * this.devicePixelRatio);
-		this.context.font = `${style.fontStyle} ${style.fontVariant} ${style.fontWeight} ${fontSize}px ${style.fontFamily}`;
+		this.context.font = createCanvasFontShorthand({
+			style: style.fontStyle,
+			variant: style.fontVariant,
+			weight: style.fontWeight,
+			size: `${fontSize}px`,
+			family: style.fontFamily,
+		});
 	}
 }

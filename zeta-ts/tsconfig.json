@@ -3,7 +3,7 @@
   "compilerOptions": {
     "outDir": "../.build/desktop/all",
     "rootDir": ".",
-    "types": ["node", "electron"]
+    "types": ["node", "electron", "@webgpu/types"]
   },
   "include": ["src/**/*.ts", "generated/**/*.ts"]
 }

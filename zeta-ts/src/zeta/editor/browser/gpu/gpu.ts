@@ -1,5 +1,4 @@
 import { type IDisposable } from '../../../base/common/lifecycle.js';
-import { type TextMeasurer } from '../config/fontMeasurements.js';
 import { type EditorTextDirection } from '../view.js';
 import { type EditorViewportLayout } from '../../common/viewLayout/viewLayout.js';
 import { type EditorVisualLineProjection } from '../../common/viewModel/modelLineProjection.js';
@@ -25,7 +24,6 @@ export interface GpuRenderStrategyInput {
 	readonly visibleLineIndexes: ReadonlySet<number>;
 	readonly semanticTokenSource: SemanticTokenSource | undefined;
 	readonly bracketColorizationSource: BracketColorizationSource | undefined;
-	readonly textMeasurer: TextMeasurer;
 	readonly textLeft: number;
 	readonly paddingTop: number;
 	readonly textDirection: EditorTextDirection;

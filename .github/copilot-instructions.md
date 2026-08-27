@@ -17,6 +17,13 @@ Before changing a file, identify its owner and read every matching scoped instru
 
 Scoped instructions contain implementation rules. Architecture documents contain design, status, and rationale.
 
+### Finding Related Code
+1. **Semantic search first**: Use file search for general concepts
+2. **Grep for exact strings**: Use grep for error messages or specific function names
+3. **Follow imports**: Check what files import the problematic module
+4. **Check test files**: Often reveal usage patterns and expected behavior
+
+
 ## Repository ownership
 
 Desktop frontend paths below are relative to `zeta-ts/`.

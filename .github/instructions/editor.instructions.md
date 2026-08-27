@@ -53,3 +53,9 @@ See [`src/zeta/editor/README.md`](../../zeta-ts/src/zeta/editor/README.md), [`te
 - Keep common editor contracts independent of browser and Workbench services.
 - Require explicit invalidation for every cache or retained projection.
 - Measure before adding per-Part DOM write caches.
+
+## Learnings
+
+- 排查编辑器问题时，先做语义搜索，再搜索精确字符串；随后沿 import 反向检查所有调用方，并阅读相关测试确认实际用法和预期行为。
+- 对齐或迁移 VS Code 编辑器文件时，同时检查它导入的 base/platform 能力及其调用方依赖的事件、生命周期和调度契约；禁止在目标文件内复制、删减或伪造已有基础能力。
+- 不要创建重复 import；已有 import 或公共能力可以满足需求时，必须直接复用。

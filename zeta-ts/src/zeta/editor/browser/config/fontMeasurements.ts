@@ -23,14 +23,14 @@ export function readFontMeasurements(referenceElement: HTMLElement, charWidthRea
 	const tabSize = positiveCssNumber(style.tabSize, 4);
 	const contentLeftPadding = cssNumber(style.paddingLeft, 0);
 	const horizontalPadding = contentLeftPadding + cssNumber(style.paddingRight, 0);
-	const canvasFont = [
-		style.fontStyle || 'normal',
-		style.fontVariant || 'normal',
-		style.fontWeight || '400',
-		style.fontStretch || 'normal',
-		style.fontSize || `${fontSize}px`,
-		style.fontFamily || 'monospace',
-	].join(' ');
+	// Canvas rejects Chrome's computed `font-variant: none` and `font-stretch: 100%` shorthand values.
+	const canvasFont = createCanvasFontShorthand({
+		style: style.fontStyle || 'normal',
+		variant: fontVariantForCanvas(style),
+		weight: style.fontWeight || '400',
+		size: style.fontSize || `${fontSize}px`,
+		family: style.fontFamily || 'monospace',
+	});
 	const fallbackCharacterWidth = fontSize * 0.6;
 	charWidthReader.setFont(canvasFont);
 	const spaceWidth = positiveNumber(charWidthReader.measureText(' '), fallbackCharacterWidth);
@@ -54,6 +54,15 @@ export function readFontMeasurements(referenceElement: HTMLElement, charWidthRea
 		contentLeftPadding,
 		fallbackCharacterWidth,
 	});
+}
+
+/** Returns the CSS2 font variant accepted by the Canvas font shorthand. */
+export function fontVariantForCanvas(style: Pick<CSSStyleDeclaration, 'fontVariantCaps'>): string {
+	return style.fontVariantCaps || 'normal';
+}
+
+export function createCanvasFontShorthand(font: { readonly style: string; readonly variant: string; readonly weight: string; readonly size: string; readonly family: string }): string {
+	return `${font.style} ${font.variant} ${font.weight} ${font.size} ${font.family}`;
 }
 
 /** Browser-backed line measurer using one resolved font environment. */

@@ -575,7 +575,6 @@ export class View extends Disposable {
 				readRenderedLines: () => this.viewLinesPart.renderedLines,
 				semanticTokenSource: options.semanticTokenSource,
 				bracketColorizationSource: options.bracketColorizationSource,
-				textMeasurer: this.textMeasurer,
 				readTextLeft: () => this.textLeft,
 				paddingTop: this.padding.top,
 				textDirection: this.textDirection,
@@ -597,6 +596,7 @@ export class View extends Disposable {
 			sources: glyphMarginSources,
 			decorationsPart: this.viewOverlays.decorationsPart,
 			readVisualLines: () => this.visualProjection,
+			readLeft: () => this.marginPart.glyphMarginLeft,
 		}));
 		this.marginPart = this.viewParts.register(new MarginPart({
 			host: this.element,

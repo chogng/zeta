@@ -4,9 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-patchedDependencies:
-  native-keymap@3.3.9: d2146018649aec694f1d3022c3e378d1cf37db2eced7620983dfe11944a58f0d
-
 importers:
 
   .: {}
@@ -180,7 +177,7 @@ importers:
     optionalDependencies:
       native-keymap:
         specifier: 3.3.9
-        version: 3.3.9(patch_hash=d2146018649aec694f1d3022c3e378d1cf37db2eced7620983dfe11944a58f0d)
+        version: 3.3.9
 
 packages:
 
@@ -7163,7 +7160,7 @@ snapshots:
 
   napi-postinstall@0.3.4: {}
 
-  native-keymap@3.3.9(patch_hash=d2146018649aec694f1d3022c3e378d1cf37db2eced7620983dfe11944a58f0d):
+  native-keymap@3.3.9:
     optional: true
 
   natural-compare@1.4.0: {}

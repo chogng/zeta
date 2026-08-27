@@ -1,4 +1,5 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
+import { fontVariantForCanvas } from '../../config/fontMeasurements.js';
 import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken } from '../../viewparts/semanticTokens/semanticTokenPresentation.js';
 import { createContentSegmenter } from '../contentSegmenter.js';
 import { type ITextureAtlasPageGlyph } from '../atlas/atlas.js';
@@ -32,7 +33,7 @@ export abstract class BaseRenderStrategy extends Disposable implements IGpuRende
 			const tokens = input.semanticTokenSource?.getLineTokens(visualLine.logicalLineIndex) ?? [];
 			const brackets = input.bracketColorizationSource?.getLineBrackets(visualLine.logicalLineIndex) ?? [];
 			if (!this.canRenderLine(input, text, tokens)) continue;
-			const lineStart = Math.ceil((input.textLeft + input.textMeasurer.contentLeftPadding + (visualLine.wrappedTextIndentWidth ?? 0)) * this.glyphRasterizer.devicePixelRatio);
+			const lineStart = Math.ceil((input.textLeft + (visualLine.wrappedTextIndentWidth ?? 0)) * this.glyphRasterizer.devicePixelRatio);
 			let deviceX = lineStart;
 			const lineTop = (input.paddingTop + visualLineIndex * input.layout.lineHeight) * this.glyphRasterizer.devicePixelRatio;
 			const segments = createContentSegmenter(text, { isBasicASCII: /^[\x00-\x7f]*$/u.test(text), useMonospaceOptimizations: false });
@@ -74,7 +75,7 @@ function readBaseStyle(style: CSSStyleDeclaration): IGpuGlyphStyle {
 		fontFamily: style.fontFamily,
 		fontSize: positiveNumber(Number.parseFloat(style.fontSize), 14),
 		fontStyle: style.fontStyle || 'normal',
-		fontVariant: style.fontVariant || 'normal',
+		fontVariant: fontVariantForCanvas(style),
 		fontWeight: style.fontWeight || '400',
 		letterSpacing: style.letterSpacing === 'normal' ? 0 : Number.parseFloat(style.letterSpacing) || 0,
 	});

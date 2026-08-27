@@ -18,6 +18,7 @@ export interface RenderedLine {
 /** Creates one reusable virtual-line DOM subtree owned by the ViewLines part. */
 export function createStanzaRenderedLine(ownerDocument: Document, lineIndex: number): RenderedLine {
 	const domNode = new FastDomNode(h(ownerDocument, "div"));
+	const marginElement = h(ownerDocument, "span");
 	const numberDomNode = new FastDomNode(h(ownerDocument, "span"));
 	const diagnosticDomNode = new FastDomNode(h(ownerDocument, "span"));
 	const textElement = h(ownerDocument, "span");
@@ -29,6 +30,8 @@ export function createStanzaRenderedLine(ownerDocument: Document, lineIndex: num
 	const compositionElement = h(ownerDocument, "div");
 	domNode.setClassName("stanza-editor-line");
 	domNode.domNode.dataset.lineIndex = String(lineIndex);
+	marginElement.className = "stanza-editor-line-margin";
+	marginElement.setAttribute("aria-hidden", "true");
 	numberDomNode.setClassName("stanza-editor-line-number");
 	numberDomNode.domNode.setAttribute("aria-hidden", "true");
 	diagnosticDomNode.setClassName("stanza-editor-diagnostic-marker");
@@ -47,7 +50,8 @@ export function createStanzaRenderedLine(ownerDocument: Document, lineIndex: num
 	cursorElement.setAttribute("aria-hidden", "true");
 	compositionElement.className = "stanza-editor-line-composition";
 	compositionElement.setAttribute("aria-hidden", "true");
-	domNode.domNode.append(indentationElement, decorationElement, linesDecorationElement, selectionElement, cursorElement, compositionElement, diagnosticDomNode.domNode, numberDomNode.domNode, textElement);
+	marginElement.append(numberDomNode.domNode);
+	domNode.domNode.append(indentationElement, decorationElement, linesDecorationElement, selectionElement, cursorElement, compositionElement, diagnosticDomNode.domNode, marginElement, textElement);
 	return {
 		domNode,
 		numberDomNode,

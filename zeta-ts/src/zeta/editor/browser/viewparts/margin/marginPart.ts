@@ -61,6 +61,10 @@ export class MarginPart extends EditorViewPart {
 		return Math.ceil(this.textMeasurer.measureLineWidth("9".repeat(digitCount)) + GUTTER_HORIZONTAL_PADDING);
 	}
 
+	get glyphMarginLeft(): number {
+		return this.lineNumbersWidth;
+	}
+
 	get textLeft(): number {
 		return this.gutterWidth + this.textMeasurer.contentLeftPadding;
 	}

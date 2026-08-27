@@ -1,7 +1,6 @@
 import './viewLinesGpu.css';
 import { Disposable, MutableDisposable, type IReference } from '../../../../base/common/lifecycle.js';
 import { type EditorTextDirection } from '../../view.js';
-import { type TextMeasurer } from '../../config/fontMeasurements.js';
 import { ViewGpuContext } from '../../gpu/viewGpuContext.js';
 import { GPULifecycle } from '../../gpu/gpuDisposable.js';
 import { GlyphRasterizer } from '../../gpu/raster/glyphRasterizer.js';
@@ -22,7 +21,6 @@ export interface ViewLinesGpuOptions {
 	readonly readRenderedLines: () => ReadonlyMap<number, RenderedLine>;
 	readonly semanticTokenSource: SemanticTokenSource | undefined;
 	readonly bracketColorizationSource: BracketColorizationSource | undefined;
-	readonly textMeasurer: TextMeasurer;
 	readonly readTextLeft: () => number;
 	readonly paddingTop: number;
 	readonly textDirection: EditorTextDirection;
@@ -174,7 +172,6 @@ export class ViewLinesGpu extends Disposable {
 			visibleLineIndexes: new Set(this.options.readRenderedLines().keys()),
 			semanticTokenSource: this.options.semanticTokenSource,
 			bracketColorizationSource: this.options.bracketColorizationSource,
-			textMeasurer: this.options.textMeasurer,
 			textLeft: this.options.readTextLeft(),
 			paddingTop: this.options.paddingTop,
 			textDirection: this.options.textDirection,

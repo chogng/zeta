@@ -23,6 +23,8 @@ test('DomTextMeasurer resolves computed spacing and tab stops', () => {
 	reference.style.fontFamily = 'Stanza Mono';
 	reference.style.fontSize = '10px';
 	reference.style.fontWeight = '400';
+	reference.style.fontVariant = 'none';
+	reference.style.fontStretch = '100%';
 	reference.style.letterSpacing = '1px';
 	reference.style.paddingLeft = '2px';
 	reference.style.paddingRight = '3px';
@@ -34,6 +36,8 @@ test('DomTextMeasurer resolves computed spacing and tab stops', () => {
 	assert.equal(measurer.measureLineWidth('ab'), 12);
 	assert.equal(measurer.measureLineWidth('a\tb'), 26);
 	assert.equal(measurer.refresh(), false);
+	assert.doesNotMatch(context.font, /\bnone\b/u);
+	assert.doesNotMatch(context.font, /100%/u);
 
 	reference.style.fontSize = '12px';
 	assert.equal(measurer.refresh(), true);

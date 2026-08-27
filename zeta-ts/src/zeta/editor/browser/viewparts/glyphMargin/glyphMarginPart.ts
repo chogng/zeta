@@ -16,6 +16,7 @@ export interface GlyphMarginPartOptions {
 	readonly sources: readonly DecorationSource[];
 	readonly decorationsPart: DecorationsPart;
 	readonly readVisualLines: () => EditorVisualLineProjection;
+	readonly readLeft: () => number;
 }
 
 /** Renders decoration-backed glyphs in shared, stable margin lanes. */
@@ -25,6 +26,7 @@ export class GlyphMarginPart extends EditorViewPart {
 	private readonly root: FastDomNode<HTMLDivElement>;
 	private readonly decorationsPart: DecorationsPart;
 	private readonly readVisualLines: () => EditorVisualLineProjection;
+	private readonly readLeft: () => number;
 	private readonly laneDomNodes: ReadonlyMap<GlyphMarginLane, HTMLSpanElement>;
 	private readonly buttons = new Map<TextDecorationId, HTMLButtonElement>();
 
@@ -32,6 +34,7 @@ export class GlyphMarginPart extends EditorViewPart {
 		super();
 		this.decorationsPart = options.decorationsPart;
 		this.readVisualLines = options.readVisualLines;
+		this.readLeft = options.readLeft;
 		const lanes = collectGlyphMarginLanes(options.sources);
 		this.width = lanes.length * EDITOR_GLYPH_MARGIN_LANE_WIDTH;
 		this.domNode = h(options.host.ownerDocument, 'div');
@@ -51,6 +54,7 @@ export class GlyphMarginPart extends EditorViewPart {
 	}
 
 	public render(context: EditorRenderingContext): void {
+		this.root.setLeft(context.layout.scrollPosition.left + this.readLeft());
 		this.root.setHeight(context.layout.contentSize.height);
 		for (const laneDomNode of this.laneDomNodes.values()) laneDomNode.style.height = `${context.layout.contentSize.height}px`;
 		const overlay = context.overlay;

@@ -1,16 +1,27 @@
-.stanza-editor-line-number {
+.stanza-editor-line-margin {
   position: sticky;
   left: 0;
   z-index: 4;
   display: inline-block;
   box-sizing: border-box;
   width: var(--stanza-editor-gutter-width);
-  padding: 0 8px 0 calc(var(--stanza-editor-glyph-margin-width, 0px) + 8px);
+  height: 100%;
+  vertical-align: top;
+  user-select: none;
+  background: var(--zeta-editor-background);
+}
+
+.stanza-editor-line-number {
+  position: absolute;
+  left: 0;
+  display: block;
+  box-sizing: border-box;
+  width: var(--stanza-editor-line-numbers-width);
+  height: 100%;
+  padding: 0 8px;
   color: var(--zeta-description-foreground);
   font-variant-numeric: tabular-nums;
   text-align: right;
-  user-select: none;
-  background: var(--zeta-editor-background);
 }
 
 .stanza-editor-line-number.active {
@@ -18,8 +29,11 @@
 }
 
 @media (forced-colors: active) {
+  .stanza-editor-line-margin {
+    background: Canvas;
+  }
+
   .stanza-editor-line-number {
     color: CanvasText;
-    background: Canvas;
   }
 }

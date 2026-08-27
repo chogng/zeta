@@ -48,6 +48,44 @@ test("text-model editor projects revision-bound Rust syntax, diagnostics, foldin
 	await expect(page.locator(".stanza-editor-goto-symbol-item")).toHaveText("main");
 });
 
+test("line numbers occupy the column left of folding controls", async ({ page }) => {
+	await page.goto("/textModel.html");
+	const foldingControl = page.locator(".stanza-editor-fold-toggle[data-logical-line-index='0']");
+	await expect(foldingControl).toBeVisible();
+	const firstLine = page.locator(".stanza-editor-line[data-logical-line-index='0']");
+	await expect(firstLine.locator(".stanza-editor-line-number")).toHaveText("1");
+	const foldingBox = await foldingControl.boundingBox();
+	const lineNumberBox = await firstLine.locator(".stanza-editor-line-number").boundingBox();
+	const textBox = await firstLine.locator(".stanza-editor-line-text").boundingBox();
+	assertBox(foldingBox, "folding control");
+	assertBox(lineNumberBox, "line number");
+	assertBox(textBox, "line text");
+
+	expect(lineNumberBox.x + lineNumberBox.width).toBeLessThanOrEqual(foldingBox.x);
+	expect(foldingBox.x + foldingBox.width).toBeLessThanOrEqual(textBox.x);
+
+	const editor = page.locator(".stanza-editor");
+	const input = page.locator(".stanza-editor-input");
+	await input.focus();
+	await page.keyboard.press("Control+Home");
+	await page.keyboard.type("x".repeat(200));
+	await expect.poll(() => editor.evaluate(element => element.scrollWidth - element.clientWidth)).toBeGreaterThan(0);
+	await editor.evaluate(element => {
+		element.scrollLeft = 160;
+		element.dispatchEvent(new Event("scroll"));
+	});
+	await expect.poll(() => editor.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+	const editorBox = await editor.boundingBox();
+	const scrolledFoldingBox = await foldingControl.boundingBox();
+	const scrolledLineNumberBox = await firstLine.locator(".stanza-editor-line-number").boundingBox();
+	assertBox(editorBox, "editor");
+	assertBox(scrolledFoldingBox, "scrolled folding control");
+	assertBox(scrolledLineNumberBox, "scrolled line number");
+
+	expect(scrolledLineNumberBox.x).toBe(editorBox.x);
+	expect(scrolledLineNumberBox.x + scrolledLineNumberBox.width).toBe(scrolledFoldingBox.x);
+});
+
 test("text-model editor has the accessibility contract", async ({ page }) => {
 	await page.goto("/textModel.html");
 	const editor = page.locator(".stanza-editor");
@@ -63,3 +101,7 @@ test("text-model editor has the accessibility contract", async ({ page }) => {
 	const contrast = await getAxeResults(page, undefined, { runOnly: { type: "rule", values: ["color-contrast"] } });
 	expect(contrast.violations).toEqual([]);
 });
+
+function assertBox(box: { readonly x: number; readonly y: number; readonly width: number; readonly height: number } | null, name: string): asserts box is { readonly x: number; readonly y: number; readonly width: number; readonly height: number } {
+	expect(box, `Expected ${name} geometry`).not.toBeNull();
+}

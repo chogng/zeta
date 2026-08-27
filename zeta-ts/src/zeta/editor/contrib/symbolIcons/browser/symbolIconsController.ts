@@ -39,7 +39,9 @@ export class SymbolIconsController extends Disposable {
 			icon.textContent = symbolIcon(symbol.kind);
 			icon.title = symbol.detail ? `${symbol.name}: ${symbol.detail}` : symbol.name;
 			icon.setAttribute("aria-label", icon.title);
-			line.prepend(icon);
+			const lineMargin = line.querySelector(".stanza-editor-line-margin");
+			if (!lineMargin) throw new Error("Rendered editor line is missing its margin");
+			lineMargin.after(icon);
 		}
 	}
 }
