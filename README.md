@@ -67,6 +67,19 @@ corepack pnpm dev:web:full # Rust-backed UI at http://127.0.0.1:5174/
 
 The full Web mode is a local development integration, not a deployable Web service.
 
+### Stanza standalone editor
+
+只调试 Stanza 编辑器本身时运行：
+
+```bash
+corepack pnpm dev:stanza
+```
+
+然后打开 `http://127.0.0.1:5199/build/vite/stanza/index.html`。在 VS Code 中也可以直接选择
+`Stanza Editor - Standalone` 配置按 F5；它会自动启动同一个 Vite 任务。页面把完整 API 暴露为
+`globalThis.stanza`，可在浏览器控制台检查 `stanza.editor.getEditors()` 和
+`stanza.editor.getModels()`。
+
 ### `app`
 
 ```bash

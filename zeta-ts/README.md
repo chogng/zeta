@@ -39,6 +39,17 @@ corepack pnpm dev:web
 Browser Workbench 使用 disconnected API，因此 UI 可以独立开发；Chat、Explorer、Git、
 Terminal 等依赖后端的操作会明确报告不可用。
 
+只调试 Stanza 编辑器和它的 standalone services 时，在仓库根目录运行：
+
+```bash
+corepack pnpm dev:stanza
+```
+
+打开 `http://127.0.0.1:5199/build/vite/stanza/index.html`。VS Code 的
+`Stanza Editor - Standalone` 启动配置会自动执行同一条命令。调试页使用
+`globalThis.stanza.editor.create/createModel`，因此可以直接在浏览器控制台检查模型、编辑器和
+生命周期事件，不会启动 Workbench 或 App Server。
+
 需要真实 App Server 能力时运行完整 Web 开发模式：
 
 ```bash
