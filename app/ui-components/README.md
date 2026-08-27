@@ -1,4 +1,4 @@
-# `zeta-ui`
+# `zeta-ui-components`
 
 > 本 README 是 app 可复用 UI 组件的当前实现说明。Element、scene、inspection、font 与基础
 > layout contract 由 [`zui`](../zui/README.md) 维护；跨 crate 渲染边界见
@@ -9,35 +9,36 @@
 > [`docs/native-ui-authoring.md`](../docs/native-ui-authoring.md)。`Keycap` 的快捷键产品组合由
 > [`app-keybinding-ui`](../keybinding-ui/README.md) 拥有。
 
-`zeta-ui` 基于 `zui` 提供 presentation-only 的 Button、Switch、ActionBar、ContextMenu、Dropdown、TabList、Keycap、Sash、Resizable、ContextView、ScrollView 和输入框等可复用组合控件。它暂时 `pub use zui::ui::*`，让现有产品代码可以渐进迁移 import；这只是兼容入口，不表示本 crate 拥有 framework contract。
+`zeta-ui-components` 基于 `zui` 提供 Button、Switch、ActionBar、ContextMenu、Dropdown、TabList、Keycap、Sash、Resizable、ContextView、ScrollView 和输入框等可复用组合控件。调用方必须直接从 `zui::ui` 引用框架类型；本 crate 不转发 `zui` API。
 GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。
 
 ## 1. 边界与依赖方向
 
 | 能力 | 当前 owner | 状态 |
 | --- | --- | --- |
-| Presentation-only component contract、Element、scene 与 inspection | [`zui`](../zui/README.md) | 委托；本 crate 兼容 re-export |
-| Text、symbolic-icon 与 icon-only button 的状态、样式和内部布局 | `zeta-ui::Button` | ✅ |
-| Switch track、thumb、on/off 与交互状态 presentation | `zeta-ui::Switch` | ✅；值、输入路由和 accessibility 归 host |
-| Button/Separator action 排列、绘制和可查询命中几何 | `zeta-ui::ActionBar` | ✅ |
-| Tab surface 状态与横/纵 TabList 排列 | `zeta-ui::Tab` / `TabList` | ✅；product content 与 tabpanel 不在本 crate |
-| NavBar 导航容器 | 计划中的 `zeta-ui` presentation composition | 尚未作为独立 public component 实现；若落地，只拥有方向、slot、滚动/overflow geometry，不拥有 product identity、active state 或 provider |
+| Component、Element、scene 与 inspection contract | [`zui`](../zui/README.md) | 委托；调用方直接依赖 `zui` |
+| Text、symbolic-icon 与 icon-only button 的状态、样式和内部布局 | `zeta-ui-components::Button` | ✅ |
+| Switch track、thumb、on/off 与交互状态 presentation | `zeta-ui-components::Switch` | ✅；值、输入路由和 accessibility 归 host |
+| Button/Separator action 排列、绘制和可查询命中几何 | `zeta-ui-components::ActionBar` | ✅ |
+| Tab surface 状态与横/纵 TabList 排列 | `zeta-ui-components::Tab` / `TabList` | ✅；product content 与 tabpanel 不在本 crate |
+| NavBar 导航容器 | 计划中的 `zeta-ui-components` presentation composition | 尚未作为独立 public component 实现；若落地，只拥有方向、slot、滚动/overflow geometry，不拥有 product identity、active state 或 provider |
 | 单轴 Pane 与递归 Grid layout | `zui::{SplitViewLayout,GridLayout}` | 委托；算法和 constraints 归 `zui` |
 | Terminal/heterogeneous PaneGroup geometry projection | [`zeta-workbench-layout`](../workbench-layout/README.md) + `zui::GridLayout` | 委托；布局 crate 消费 host-owned `PaneNode`，返回 leaf bounds 和 owning-split sash，不拥有 PaneInput、runtime 或 active Pane |
 | Workbench 的 Titlebar、Sessions、Main、Inspector 结构几何 | [`zeta-workbench-layout`](../workbench-layout/README.md) | 委托；本 crate 不拥有 Workbench 拓扑、TabInput state 或产品布局 |
+| Workbench Titlebar、TabContainer、Toolbar、交互标识和界面状态 | [`zeta-workbench-ui`](../workbench-ui/README.md) | 委托；本 crate 只提供被其组合的通用控件 |
 | Workbench 模型与 Pane binding | [`zeta-workbench`](../workbench/README.md) + [`zeta-workbench-host`](../workbench-host/README.md) | 委托；本 crate 不拥有业务状态或 runtime |
 | Workbench TabPart、TabGroup、TabInput 的逻辑身份、分组和 active selection | `zeta-workbench` + product host | 委托；模型不含方向和 `ElementId`，横向/纵向 Tab surface 与具体内容由 host 的 projection/scene 负责 |
 | PaneInput 类型、逻辑 identity 与 Pane binding | `zeta-workbench` + `zeta-workbench-host` | 委托；具体 Terminal/Agent/Files/Diff/Settings runtime 仍由产品模块负责 |
-| Settings、Files、SCM 和 Editor pane content | `zeta-settings` / `app/src/features/workspace` / `zeta-editor` | 委托；各 feature/crate 负责自己的 view/presentation contract，domain state 与 adapter 由对应 host 保留，不能下沉到 `zeta-ui` |
-| Sash 命中几何、hover/active presentation 与通用 resize gesture | `zeta-ui::{Sash,SashController,Resizable}` | ✅；pointer capture、identity、preferred size 与产品 resize transition 归 host |
-| 通用像素滚动状态、viewport 裁剪、内容坐标与滚动条交互 geometry | `zeta-ui::ScrollState` / `ScrollView` | ✅；包含 hover/active/fade presentation、thumb drag mapping 和 track paging；平台事件路由、pointer capture 与产品内容归 host |
-| 固定/可变高度列表测量、可见/overscan range、item bounds、hit-test 与虚拟化绘制 | `zeta-ui::VirtualListLayout` / `ListView` | ✅；固定高度直接计算，可变高度使用 prefix index 二分定位；identity、selection、键盘语义与产品数据归 host |
-| 虚拟 Tree 行、层级缩进、disclosure/content geometry 与命中 | `zeta-ui::TreeView` | ✅；复用固定高度 ListView；hierarchy、稳定节点 identity、展开状态和 child loading 归 host |
-| 锚点浮层布局、viewport 翻转/约束、通用外壳与浮层合成 | `zeta-ui::ContextView` / `zui::ui::UiScene::with_overlay` | ✅；显示生命周期、关闭和输入路由归 host |
-| 柔和阴影、2px padding、4px radius、纵向 menu item geometry 与默认选择 | `zeta-ui::ContextMenu` | ✅；组合 ContextView/ActionBar，产品 identity、关闭与 command 归 host |
-| 无边框、无外层 padding 的锚定下拉项布局、可选 header 与默认选择 | `zeta-ui::Dropdown` | ✅；可滚动项复用 ListView 可见范围投影，选中 identity、header 内容、关闭与 command 归 host |
-| Icon+text label 的内部布局 | `zeta-ui::IconLabel` | ✅ |
-| 单个按键与多段快捷键的 keycap 几何和绘制 | `zeta-ui::Keycap` / `KeycapSequence` | ✅；按键语义与平台 label 归 caller |
+| Settings、Files、SCM 和 Editor pane content | `zeta-settings` / `app/src/features/workspace` / `zeta-editor` | 委托；各 feature/crate 负责自己的 view/presentation contract，domain state 与 adapter 由对应 host 保留，不能下沉到 `zeta-ui-components` |
+| Sash 命中几何、hover/active presentation 与通用 resize gesture | `zeta-ui-components::{Sash,SashController,Resizable}` | ✅；pointer capture、identity、preferred size 与产品 resize transition 归 host |
+| 通用像素滚动状态、viewport 裁剪、内容坐标与滚动条交互 geometry | `zeta-ui-components::ScrollState` / `ScrollView` | ✅；包含 hover/active/fade presentation、thumb drag mapping 和 track paging；平台事件路由、pointer capture 与产品内容归 host |
+| 固定/可变高度列表测量、可见/overscan range、item bounds、hit-test 与虚拟化绘制 | `zeta-ui-components::VirtualListLayout` / `ListView` | ✅；固定高度直接计算，可变高度使用 prefix index 二分定位；identity、selection、键盘语义与产品数据归 host |
+| 虚拟 Tree 行、层级缩进、disclosure/content geometry 与命中 | `zeta-ui-components::TreeView` | ✅；复用固定高度 ListView；hierarchy、稳定节点 identity、展开状态和 child loading 归 host |
+| 锚点浮层布局、viewport 翻转/约束、通用外壳与浮层合成 | `zeta-ui-components::ContextView` / `zui::ui::UiScene::with_overlay` | ✅；显示生命周期、关闭和输入路由归 host |
+| 柔和阴影、2px padding、4px radius、纵向 menu item geometry 与默认选择 | `zeta-ui-components::ContextMenu` | ✅；组合 ContextView/ActionBar，产品 identity、关闭与 command 归 host |
+| 无边框、无外层 padding 的锚定下拉项布局、可选 header 与默认选择 | `zeta-ui-components::Dropdown` | ✅；可滚动项复用 ListView 可见范围投影，选中 identity、header 内容、关闭与 command 归 host |
+| Icon+text label 的内部布局 | `zeta-ui-components::IconLabel` | ✅ |
+| 单个按键与多段快捷键的 keycap 几何和绘制 | `zeta-ui-components::Keycap` / `KeycapSequence` | ✅；按键语义与平台 label 归 caller |
 | Renderer-independent icon identity、SVG definition 与 rendering mode | `zui::{Icon,IconDefinition}` | 委托 |
 | 非 component 单行编辑基座与 shaping | `zui::{TextInput,TextInputLayoutEngine}` | 委托 |
 | Input-box chrome、状态与 scene composition | `InputBox` | ✅ |
@@ -52,28 +53,28 @@ GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。
 
 ```text
 product host → zeta-workbench-host → zeta-workbench-layout → zui
-product host → zeta-ui → zui
+product host → zeta-ui-components → zui
 product → zui public facade → private framework modules
 
-zeta-ui → zui::Icon
+zeta-ui-components → zui::Icon
 product catalog → zui::Icon
 zui(macOS font catalog) → coretext-rs → CoreText
 
-zeta-ui -X→ wgpu / Metal / Vulkan / winit
-zeta-ui -X→ App Server / workspace / product state
+zeta-ui-components -X→ wgpu / Metal / Vulkan / winit
+zeta-ui-components -X→ App Server / workspace / product state
 ```
 
 `zeta-icons` 是可选的产品语义目录；组件只接收 caller 提供的 `zui::Icon`，因此本 crate
 不需要依赖 app 的产品 artwork。若本 crate 开始拥有 scene primitive、font adapter、GPU API、窗口、workspace 或产品 reducer，
 说明 ownership 已经漂移。基础 framework 的内部符号、验证与扩展点以 `zui/README.md` 为准。
 
-导航和 Pane 组合的跨 crate contract 由 [`native-terminal-ui.md`](../docs/native-terminal-ui.md) 维护。当前 `zeta-ui` 只提供 `Tab`/`TabList` 和其他 presentation component；Workbench 结构布局位于 [`zeta-workbench-layout`](../workbench-layout/README.md)，模型和 binding 位于 [`zeta-workbench`](../workbench/README.md) 与 [`zeta-workbench-host`](../workbench-host/README.md)。`TabInput`、`PaneInput`、`PaneGroup`、active selection、provider/controller 和具体 tab/pane content 不得下沉到本 crate。
+导航和 Pane 组合的跨 crate contract 由 [`native-terminal-ui.md`](../docs/native-terminal-ui.md) 维护。当前 `zeta-ui-components` 只提供 `Tab`/`TabList` 和其他 presentation component；Workbench 结构布局位于 [`zeta-workbench-layout`](../workbench-layout/README.md)，模型和 binding 位于 [`zeta-workbench`](../workbench/README.md) 与 [`zeta-workbench-host`](../workbench-host/README.md)。`TabInput`、`PaneInput`、`PaneGroup`、active selection、provider/controller 和具体 tab/pane content 不得下沉到本 crate。
 
 ## 2. 文件与接口地图
 
 | Symbol | 可见性 | 精确职责 |
 | --- | --- | --- |
-| `zui::{Component,Element,ComputedElement,UiScene}` | compatibility re-export | Framework contract；canonical API 与私有 ownership 见 `zui/README.md` |
+| `zui::ui::{Component,Element,ComputedElement,UiScene}` | external | Framework contract；调用方和本 crate 均直接依赖 `zui` |
 | `components::button::{Button, ButtonState, ButtonSelection}` | public | 根据 host 投影的交互、disabled 与 selected 状态绘制 text、icon+text 或 icon-only button |
 | `components::switch::{Switch, SwitchState, SwitchSelection}` | public | 根据 host 投影的交互、on/off 状态和动画采样进度绘制 centered track 与 thumb；不拥有值、时钟或输入 |
 | `components::switch::{SwitchColors, SwitchStateColors, SwitchStyle}` | public | 定义 on/off、交互状态、track/thumb 几何、边框和圆角；动画规格属于 `zui` binding |
@@ -228,7 +229,7 @@ accessibility 与 pointer capture，再把 `Resizable` 返回的 pane size 写�
 `GridLayout` 在这层单轴能力上递归解析 caller-owned `GridNode`。每个 Split 的 identity、
 orientation、children 与 preferred sizes 都来自 Host；布局只输出当前帧的 Leaf/Split bounds
 和带 owning split identity 的 `GridSashLayout`。产品层必须把 resize 结果写回对应 Split，
-并自行处理 add/remove/move、active Pane、Session binding 与序列化。若 `zeta-ui` 开始创建
+并自行处理 add/remove/move、active Pane、Session binding 与序列化。若 `zeta-ui-components` 开始创建
 Terminal Session、决定 split command 或跨帧修改树，说明 Grid ownership 已漂移。
 
 `ScrollState` 是 logical-pixel offset primitive，不读取 `winit::MouseScrollDelta`。
@@ -297,11 +298,11 @@ IME 候选框定位读取同一个 `InputBox::caret_bounds`，即使 blink phase
 ## 6. 测试与修改路径
 
 ```bash
-cargo test --manifest-path Cargo.toml -p zui -p zeta-ui
-bazel test //app/ui:ui-unit-tests
+cargo test -p zeta-ui-components
+bazel test //app/ui-components:ui-unit-tests
 ```
 
-`zui` 单元测试覆盖检查节点、Element、scene、font/text input 与 Split/Grid；`zeta-ui` 单元测试覆盖
+`zui` 单元测试覆盖检查节点、Element、scene、font/text input 与 Split/Grid；`zeta-ui-components` 单元测试覆盖
 组件裁剪与浮层合成、Sash 命中/反馈几何、SashController deadline 与 Resizable drag 结果，
 ScrollState 的 axis clamp、绝对 offset、首尾和
 ensure-visible transition，ScrollView 的内容坐标、裁剪、visibility policy、比例 thumb geometry、
@@ -342,7 +343,7 @@ validation 测试属于具体 backend crate。
   inset 或多重 shadow。ContextMenu 也暂不内建 icon、separator、submenu、typeahead 或超高菜单滚动；
 - `TabList` 当前只拥有固定 item size、gap 和 Tab surface paint；custom content、动态宽度、
   overflow、close action、identity、interaction 与 tabpanel 均由 composed control/host 拥有；
-- `NavBar` 当前尚未作为独立 component 存在；在出现稳定的横向 Titlebar TabList 消费者后，才评估是否把方向、slot 和 overflow/scroll geometry 收敛为 `zeta-ui` presentation contract；
+- `NavBar` 当前尚未作为独立 component 存在；在出现稳定的横向 Titlebar TabList 消费者后，才评估是否把方向、slot 和 overflow/scroll geometry 收敛为 `zeta-ui-components` presentation contract；
 - `ContextView` 不拥有 shadow、arrow/callout，也不拥有 outside click、Escape、focus
   restoration 或 accessibility scope；overflow shadow 由托管内容的 `PaintRect` 拥有，
   lifecycle/interaction 由 host 与 `zui` 组合；

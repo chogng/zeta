@@ -1,5 +1,5 @@
 [package]
-name = "zeta-ui"
+name = "zeta-workbench-ui"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -7,10 +7,11 @@ publish.workspace = true
 
 [lib]
 doctest = false
-name = "zeta_ui"
+name = "zeta_workbench_ui"
 path = "src/lib.rs"
 
 [dependencies]
+zeta-ui-components = { workspace = true }
 zeta-workbench = { workspace = true }
 zeta-workbench-layout = { workspace = true }
 zui = { workspace = true, default-features = false }

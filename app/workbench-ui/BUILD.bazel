@@ -1,0 +1,8 @@
+load("//app:defs.bzl", "app_rust_library")
+
+app_rust_library(
+    name = "workbench-ui",
+    crate_name = "zeta_workbench_ui",
+    package_name = "app/workbench-ui",
+    unit_tests = True,
+)
