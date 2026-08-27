@@ -101,6 +101,14 @@ impl MentionPopup {
         }
     }
 
+    pub(super) fn select(&mut self, index: usize) -> bool {
+        if !self.view().is_some_and(|view| index < view.matches.len()) {
+            return false;
+        }
+        self.selected = index;
+        true
+    }
+
     pub(super) fn dismiss(&mut self) {
         self.dismissed = true;
     }

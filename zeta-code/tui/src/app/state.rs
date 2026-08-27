@@ -385,6 +385,10 @@ impl App {
         self.handle_interaction_pane_outcome(outcome)
     }
 
+    pub(crate) fn select_slash_command(&mut self, index: usize) -> bool {
+        self.accepts_input() && self.interaction_pane.select_slash_command(index)
+    }
+
     pub(crate) fn replace_slash_commands(
         &mut self,
         slash_commands: SlashCommandCatalog,
@@ -607,6 +611,10 @@ impl App {
 
     pub(crate) fn activate_mention(&mut self, index: usize) -> bool {
         self.accepts_input() && self.interaction_pane.activate_mention(index)
+    }
+
+    pub(crate) fn select_mention(&mut self, index: usize) -> bool {
+        self.accepts_input() && self.interaction_pane.select_mention(index)
     }
 
     pub(crate) fn mention_query(&self) -> Option<&str> {

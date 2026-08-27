@@ -279,12 +279,20 @@ impl ChatComposer {
         Some(self.submit())
     }
 
+    pub(crate) fn select_slash_command(&mut self, index: usize) -> bool {
+        self.slash_commands.select(index)
+    }
+
     pub(crate) fn activate_mention(&mut self, index: usize) -> bool {
         let completed = self.mentions.complete_at(&mut self.textarea, index);
         if completed {
             self.sync_after_text_change();
         }
         completed
+    }
+
+    pub(crate) fn select_mention(&mut self, index: usize) -> bool {
+        self.mentions.select(index)
     }
 
     pub(crate) fn replace_slash_commands(

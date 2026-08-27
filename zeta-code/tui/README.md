@@ -26,12 +26,8 @@ Tool、approval policy 或 persistence。
   `[Image #N]` 占位符，并以结构化图片项提交；
 - `Ctrl-V` 从系统剪贴板读取图片；文件列表与原始 RGBA 位图都会统一进入同一附件占位符和
   结构化提交路径；
-- `@` 在当前 workspace 打开 mention popup；`zeta-file-search::PathSearchHandle` 使用与 Codex
-  file search 相同 revision 的完整 `nucleo` engine，在后台增量扫描和匹配路径，支持 fuzzy
-  排序、命中字符高亮、循环选择、Tab/Enter completion、Esc dismiss 和左键选择；选中路径作为
-  原子文本插入；
-- `/` 打开 command popup，支持 cursor-aware prefix filtering、循环选择、保留已有参数尾部的
-  Tab completion、Esc dismiss 与左键单击可见命令；
+- `@` 在当前 workspace 打开 mention popup；`zeta-file-search::PathSearchHandle` 使用与 Codex file search 相同 revision 的完整 `nucleo` engine，在后台增量扫描和匹配路径，支持 fuzzy 排序、命中字符高亮、循环选择、鼠标 hover 跟随选中、Tab/Enter completion、Esc dismiss 和左键选择；选中路径作为原子文本插入；
+- `/` 打开 command popup，支持 cursor-aware prefix filtering、循环选择、保留已有参数尾部的 Tab completion、Esc dismiss、鼠标 hover 跟随选中与左键单击可见命令；
 - enabled、compatible、名称无歧义且不与已有命令冲突的 Skill 直接显示为 `/name`；提交时保留
   `/name …` 用户文本并附加 exact pinned `SkillRef`，完整 `SKILL.md` 只在 App Server 接受 Turn
   后按需加载；`skills/changed` 会刷新这部分动态命令；
@@ -318,6 +314,7 @@ run(session, options)
       ├─ left mouse down → app::frame::{mention_index_at,slash_command_index_at}
       │  ├─ mention hit → App::activate_mention → atomic path completion
       │  └─ slash hit → App::activate_slash_command → existing command dispatch
+      ├─ mouse moved → app::frame hit testing → App::{select_mention,select_slash_command}
       └─ Paste → App::handle_paste → InteractionPane
          ├─ active searchable selection view in search mode → search query
          └─ no active view → ChatComposer

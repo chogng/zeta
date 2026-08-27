@@ -1,5 +1,8 @@
 use super::schedule_action;
+use super::select_hovered_popup_item;
+use crate::app::App;
 use crate::app::AppCommand;
+use ratatui::layout::Rect;
 use std::collections::VecDeque;
 use std::path::PathBuf;
 
@@ -35,4 +38,17 @@ fn quit_bypasses_a_pending_request() {
         Some(AppCommand::Quit)
     ));
     assert!(queued.is_empty());
+}
+
+#[test]
+fn pointer_move_selects_the_hovered_popup_row_and_preserves_it_outside() {
+    let mut app = App::new();
+    app.insert_text("/");
+    let area = Rect::new(0, 0, 80, 20);
+
+    select_hovered_popup_item(&mut app, area, 2, 11);
+    assert_eq!(app.slash_popup().unwrap().selected, 2);
+
+    select_hovered_popup_item(&mut app, area, 1, 11);
+    assert_eq!(app.slash_popup().unwrap().selected, 2);
 }

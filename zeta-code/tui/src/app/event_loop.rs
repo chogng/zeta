@@ -186,6 +186,11 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             .and_then(|index| app.activate_slash_command(index))
                         }
                     }
+                    Event::Mouse(mouse) if mouse.kind == MouseEventKind::Moved => {
+                        let terminal_area = terminal.area()?;
+                        select_hovered_popup_item(&mut app, terminal_area, mouse.column, mouse.row);
+                        None
+                    }
                     Event::Paste(text) => {
                         app.handle_paste(text);
                         None
@@ -808,6 +813,14 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         (Err(error), _) => Err(error),
         (Ok(_), Err(error)) => Err(error.into()),
         (Ok(exit), Ok(())) => Ok(exit),
+    }
+}
+
+fn select_hovered_popup_item(app: &mut App, area: ratatui::layout::Rect, column: u16, row: u16) {
+    if let Some(index) = frame::mention_index_at(app, area, column, row) {
+        app.select_mention(index);
+    } else if let Some(index) = frame::slash_command_index_at(app, area, column, row) {
+        app.select_slash_command(index);
     }
 }
 

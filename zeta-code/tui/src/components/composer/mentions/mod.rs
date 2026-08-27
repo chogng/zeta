@@ -41,6 +41,10 @@ impl Mentions {
         self.popup.select_next();
     }
 
+    pub(super) fn select(&mut self, index: usize) -> bool {
+        self.popup.select(index)
+    }
+
     pub(super) fn dismiss(&mut self) {
         self.popup.dismiss();
     }

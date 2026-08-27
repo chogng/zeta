@@ -169,11 +169,19 @@ impl InteractionPane {
             .map(map_composer_outcome)
     }
 
+    pub(crate) fn select_slash_command(&mut self, index: usize) -> bool {
+        self.views.is_empty() && self.composer.select_slash_command(index)
+    }
+
     pub(crate) fn activate_mention(&mut self, index: usize) -> bool {
         if !self.views.is_empty() {
             return false;
         }
         self.composer.activate_mention(index)
+    }
+
+    pub(crate) fn select_mention(&mut self, index: usize) -> bool {
+        self.views.is_empty() && self.composer.select_mention(index)
     }
 
     pub(crate) fn show_selection_view(&mut self, model: PaneViewModel<SelectionViewModel>) {
