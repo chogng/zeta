@@ -12,7 +12,8 @@ on:
       - "zeta-rs/app-server-protocol/**"
       - "zeta-rs/app-server/**"
       - "zeta-rs/extensions/**"
-      - "zeta-rs/plugin-marketplace/**"
+      - "zeta-rs/marketplace-client/**"
+      - "zeta-rs/marketplace-manager/**"
       - "zeta-rs/plugins/**"
   push:
     branches: [main]
@@ -26,7 +27,8 @@ on:
       - "zeta-rs/app-server-protocol/**"
       - "zeta-rs/app-server/**"
       - "zeta-rs/extensions/**"
-      - "zeta-rs/plugin-marketplace/**"
+      - "zeta-rs/marketplace-client/**"
+      - "zeta-rs/marketplace-manager/**"
       - "zeta-rs/plugins/**"
 
 permissions:
@@ -41,9 +43,9 @@ jobs:
       - name: Install Rust stable
         run: rustup toolchain install stable --profile minimal --component clippy
       - name: Test Marketplace capability crates
-        run: cargo +stable test --locked -p zeta-plugins -p zeta-plugin-marketplace -p zeta-extensions -p zeta-app-server-protocol
+        run: cargo +stable test --locked -p zeta-plugins -p zeta-marketplace-client -p zeta-marketplace-manager -p zeta-extensions -p zeta-app-server-protocol
       - name: Lint Marketplace capability crates
-        run: cargo +stable clippy --locked -p zeta-plugins -p zeta-plugin-marketplace -p zeta-extensions -p zeta-app-server-protocol --all-targets --no-deps -- -D warnings
+        run: cargo +stable clippy --locked -p zeta-plugins -p zeta-marketplace-client -p zeta-marketplace-manager -p zeta-extensions -p zeta-app-server-protocol --all-targets --no-deps -- -D warnings
       - name: Check App Server integration
         run: |
           cargo +stable check --locked -p zeta-app-server

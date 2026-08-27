@@ -84,15 +84,33 @@ fn acquire_at(
     timeout: Duration,
 ) -> io::Result<Acquisition> {
     paths.prepare_directory()?;
-    let lock_file = OpenOptions::new()
-        .create(true)
-        .read(true)
-        .truncate(false)
-        .write(true)
-        .open(&paths.lock)?;
     let deadline = Instant::now()
         .checked_add(timeout)
         .ok_or_else(|| io::Error::other("single-instance acquisition deadline overflow"))?;
+    let lock_file = loop {
+        match OpenOptions::new()
+            .create(true)
+            .read(true)
+            .truncate(false)
+            .write(true)
+            .open(&paths.lock)
+        {
+            Ok(lock_file) => break lock_file,
+            Err(error) if retryable_lock_open_error(&error) => {
+                if Instant::now() >= deadline {
+                    return Err(error);
+                }
+                match forward(&paths.socket, event) {
+                    Ok(()) => return Ok(Acquisition::Forwarded),
+                    Err(error) if retryable_forward_error(&error) && Instant::now() < deadline => {
+                        thread::sleep(RETRY_INTERVAL);
+                    }
+                    Err(error) => return Err(error),
+                }
+            }
+            Err(error) => return Err(error),
+        }
+    };
     loop {
         match FileExt::try_lock_exclusive(&lock_file) {
             Ok(()) => return become_primary(lock_file, paths.socket),
@@ -206,6 +224,20 @@ fn retryable_forward_error(error: &io::Error) -> bool {
             | io::ErrorKind::TimedOut
             | io::ErrorKind::WouldBlock
     )
+}
+
+fn retryable_lock_open_error(error: &io::Error) -> bool {
+    #[cfg(windows)]
+    {
+        // Windows can reject opening a byte-range-locked file before fs2 can
+        // report the contention through try_lock_exclusive.
+        matches!(error.raw_os_error(), Some(32 | 33))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = error;
+        false
+    }
 }
 
 type Handler = dyn Fn(SecondInstance) -> bool + Send + Sync;

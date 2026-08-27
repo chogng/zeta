@@ -1,4 +1,4 @@
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+#[cfg(not(target_os = "macos"))]
 use super::APPLICATION_BADGE;
 use super::ApplicationBadgeRequest;
 use crate::services::SystemServiceError;

@@ -222,7 +222,8 @@ fn native_dependencies_stay_with_their_capability_owners() {
         let relative = path
             .strip_prefix(&source_root)
             .expect("zui source should remain below its root")
-            .to_string_lossy();
+            .to_string_lossy()
+            .replace('\\', "/");
         let source = fs::read_to_string(&path).expect("zui source should be readable");
         let imports_wgpu = source
             .match_indices("wgpu::")
@@ -251,7 +252,7 @@ fn native_dependencies_stay_with_their_capability_owners() {
                 "window/policy.rs",
                 "window/state.rs",
             ]
-            .contains(&relative.as_ref())
+            .contains(&relative.as_str())
         {
             violations.push(format!(
                 "{} imports winit outside app/input/window integration",
@@ -355,9 +356,9 @@ fn native_dependencies_stay_with_their_capability_owners() {
                 path.display()
             ));
         }
-        if (source.contains("zeta_icons::")
-            || source.contains("zeta_ui::")
-            || source.contains("app::"))
+        if ["zeta_icons", "zeta_ui", "app"]
+            .iter()
+            .any(|crate_name| imports_external_crate(&source, crate_name))
             && relative != "architecture_tests.rs"
         {
             violations.push(format!("{} imports a product owner", path.display()));
@@ -478,6 +479,20 @@ fn scan_file_forbidden(path: &Path, forbidden: &[&str], violations: &mut Vec<Str
             violations.push(format!("{} contains `{token}`", path.display()));
         }
     }
+}
+
+fn imports_external_crate(source: &str, crate_name: &str) -> bool {
+    let path = format!("{crate_name}::");
+    source.match_indices(&path).any(|(offset, _)| {
+        let prefix = &source[..offset];
+        !prefix.ends_with("crate::")
+            && !prefix.ends_with("self::")
+            && !prefix.ends_with("super::")
+            && !prefix
+                .as_bytes()
+                .last()
+                .is_some_and(|byte| byte.is_ascii_alphanumeric() || *byte == b'_')
+    })
 }
 
 fn production_rust_files(root: &Path) -> Vec<PathBuf> {

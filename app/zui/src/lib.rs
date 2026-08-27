@@ -37,35 +37,35 @@ pub use render::RendererError;
 pub use ui::*;
 
 #[cfg(feature = "native")]
-pub use app::App;
+pub use crate::app::App;
 #[cfg(feature = "native")]
-pub use app::AppContext;
+pub use crate::app::AppContext;
 #[cfg(feature = "native")]
-pub use app::AppDisconnected;
+pub use crate::app::AppDisconnected;
 #[cfg(feature = "native")]
-pub use app::AppProxy;
+pub use crate::app::AppProxy;
 #[cfg(feature = "native")]
-pub use app::AppProxy as EventLoopProxy;
+pub use crate::app::AppProxy as EventLoopProxy;
 #[cfg(feature = "native")]
-pub use app::Application;
+pub use crate::app::Application;
 #[cfg(feature = "native")]
-pub use app::ApplicationBuilder;
+pub use crate::app::ApplicationBuilder;
 #[cfg(feature = "native")]
-pub use app::ApplicationError;
+pub use crate::app::ApplicationError;
 #[cfg(feature = "native")]
-pub use app::ApplicationExit;
+pub use crate::app::ApplicationExit;
 #[cfg(feature = "native")]
-pub use app::ApplicationHandle;
+pub use crate::app::ApplicationHandle;
 #[cfg(feature = "native")]
-pub use app::ApplicationRunError;
+pub use crate::app::ApplicationRunError;
 #[cfg(feature = "native")]
-pub use app::ApplicationRunError as EventLoopError;
+pub use crate::app::ApplicationRunError as EventLoopError;
 #[cfg(feature = "native")]
-pub use app::ControlFlow;
+pub use crate::app::ControlFlow;
 #[cfg(feature = "native")]
-pub use app::ExitPolicy;
+pub use crate::app::ExitPolicy;
 #[cfg(feature = "native")]
-pub use app::WindowContext;
+pub use crate::app::WindowContext;
 #[cfg(feature = "native")]
 pub use render::RendererFactory;
 #[cfg(feature = "wgpu")]

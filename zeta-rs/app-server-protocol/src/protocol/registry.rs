@@ -1658,7 +1658,7 @@ macro_rules! host_methods {
             )+
         ];
 
-        #[allow(dead_code)]
+        #[allow(clippy::enum_variant_names, dead_code)]
         #[derive(JsonSchema)]
         #[serde(tag = "method", content = "params")]
         pub(crate) enum HostRequestSchema {
@@ -1668,7 +1668,7 @@ macro_rules! host_methods {
             )+
         }
 
-        #[allow(dead_code)]
+        #[allow(clippy::enum_variant_names, dead_code)]
         #[derive(JsonSchema)]
         #[serde(tag = "method", content = "result")]
         pub(crate) enum HostResultSchema {

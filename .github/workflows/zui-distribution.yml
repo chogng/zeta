@@ -9,7 +9,6 @@ on:
       - "app/zui/**"
       - "app/zui-demo/**"
   push:
-    branches: [main]
     tags: ["zui-v*"]
     paths:
       - ".github/workflows/zui-distribution.yml"
