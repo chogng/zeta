@@ -1,9 +1,0 @@
-load("//app:defs.bzl", "app_rust_library")
-
-app_rust_library(
-    name = "remote-ui",
-    crate_name = "zeta_remote_ui",
-    package_name = "app/remote-ui",
-    source_files = ["README.md"],
-    unit_tests = True,
-)

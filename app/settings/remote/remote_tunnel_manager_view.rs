@@ -33,18 +33,18 @@ use zui::ui::UiDispatch;
 use zui::ui::UiNode;
 use zui::ui::UiScene;
 
-use crate::remote_tunnel_manager::REMOTE_TUNNEL_ITEM_HEIGHT;
-use crate::remote_tunnel_manager::REMOTE_TUNNEL_LIST;
-use crate::remote_tunnel_manager::REMOTE_TUNNEL_MANAGER;
-use crate::remote_tunnel_manager::REMOTE_TUNNEL_MANAGER_CLOSE;
-use crate::remote_tunnel_manager::REMOTE_TUNNEL_OPEN;
-use crate::remote_tunnel_manager::REMOTE_TUNNEL_REMOTE_PORT;
-use crate::remote_tunnel_manager::REMOTE_TUNNEL_STATUS;
-use crate::remote_tunnel_manager::RemoteTunnelLifecycle;
-use crate::remote_tunnel_manager::RemoteTunnelManagerState;
-use crate::remote_tunnel_manager::remote_tunnel_item_id;
-use crate::remote_tunnel_manager::remote_tunnel_stop_id;
-use crate::style::RemoteUiStyle;
+use crate::remote::remote_tunnel_manager::REMOTE_TUNNEL_ITEM_HEIGHT;
+use crate::remote::remote_tunnel_manager::REMOTE_TUNNEL_LIST;
+use crate::remote::remote_tunnel_manager::REMOTE_TUNNEL_MANAGER;
+use crate::remote::remote_tunnel_manager::REMOTE_TUNNEL_MANAGER_CLOSE;
+use crate::remote::remote_tunnel_manager::REMOTE_TUNNEL_OPEN;
+use crate::remote::remote_tunnel_manager::REMOTE_TUNNEL_REMOTE_PORT;
+use crate::remote::remote_tunnel_manager::REMOTE_TUNNEL_STATUS;
+use crate::remote::remote_tunnel_manager::RemoteTunnelLifecycle;
+use crate::remote::remote_tunnel_manager::RemoteTunnelManagerState;
+use crate::remote::remote_tunnel_manager::remote_tunnel_item_id;
+use crate::remote::remote_tunnel_manager::remote_tunnel_stop_id;
+use crate::remote::style::RemoteUiStyle;
 
 const PANEL_WIDTH: f32 = 640.0;
 const PANEL_HEIGHT: f32 = 430.0;
@@ -390,7 +390,7 @@ mod tests {
 
     #[test]
     fn manager_exposes_port_input_and_tunnel_controls() {
-        let style = crate::test_style();
+        let style = crate::remote::test_style();
         let mut state = RemoteTunnelManagerState::default();
         state.open("build.example", None);
         state.start_succeeded(RemoteTunnelId::new(1), NonZeroU16::new(3_000).unwrap());
@@ -403,7 +403,7 @@ mod tests {
             style,
             &mut text_layout,
             &dispatch,
-            crate::interaction::REMOTE_UI_ROOT,
+            crate::remote::interaction::REMOTE_UI_ROOT,
         )
         .unwrap();
         let mut frame = UiFrame::<InteractionFrame>::new(style.surface);
@@ -465,7 +465,7 @@ fn button_region(
     }
 }
 
-fn tunnel_label(tunnel: &crate::remote_tunnel_manager::RemoteTunnelRecord) -> String {
+fn tunnel_label(tunnel: &crate::remote::remote_tunnel_manager::RemoteTunnelRecord) -> String {
     let local = tunnel
         .local_port()
         .map(|port| port.to_string())

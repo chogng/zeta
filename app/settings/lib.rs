@@ -1,14 +1,15 @@
-//! Product-level Settings page composition.
+//! Product-level Settings and Remote management presentation.
 //!
-//! This crate owns the Settings workbench's retained layout and presentation contract. It does
-//! not load or persist configuration and it does not know about a product window. Hosts provide
-//! feature snapshots, palette, and parent window identity, then execute the
-//! element activations emitted by the shared interaction frame.
+//! This crate owns retained layout, state, and presentation for the Settings workbench and Remote
+//! connection surfaces. It does not load or persist configuration, launch processes, or know about
+//! a product window. Hosts provide feature snapshots, connection data, palette, and parent window
+//! identity, then execute the actions emitted by the shared interaction frame.
 
 mod keybindings;
 mod navigation;
 mod page;
 mod pane;
+mod remote;
 mod sections;
 mod state;
 
@@ -23,6 +24,7 @@ pub use pane::{
     SettingsFeatureSnapshot, SettingsPaneDrawResult, SettingsPaneStyle, SettingsPaneView,
     draw_settings_pane,
 };
+pub use remote::*;
 pub use sections::{
     SETTINGS_SECTION_CONTENT, SettingsKeybindingRow, SettingsSectionPane, SettingsSectionStyle,
 };

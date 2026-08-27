@@ -7,7 +7,7 @@ use zui::ui::CornerRadii;
 use zui::ui::Edges;
 use zui::ui::TextStyle;
 
-use crate::style::RemoteUiStyle;
+use crate::remote::style::RemoteUiStyle;
 
 pub(crate) fn input_style(palette: RemoteUiStyle) -> InputBoxStyle {
     InputBoxStyle::new(

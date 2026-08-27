@@ -39,7 +39,6 @@ zeta-protocol = { workspace = true }
 zeta-remote = { workspace = true }
 zeta-remote-connections = { workspace = true }
 zeta-remote-host = { workspace = true }
-zeta-remote-ui = { workspace = true }
 zeta-settings = { workspace = true }
 zeta-server-host = { workspace = true }
 zeta-slash-commands = { workspace = true }

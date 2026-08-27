@@ -13,6 +13,9 @@ zeta-commands = { workspace = true }
 zeta-icons = { workspace = true }
 zeta-keybinding = { workspace = true }
 zeta-keybindings-host = { workspace = true }
+zeta-remote = { workspace = true }
+zeta-remote-connections = { workspace = true }
+zeta-remote-host = { workspace = true }
 zeta-ui-components = { workspace = true }
 zui = { workspace = true, default-features = false }
 

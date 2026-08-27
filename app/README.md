@@ -62,9 +62,8 @@ src/presentation/       Shell 界面、Workbench Tab 菜单适配、交互标识
 | --- | --- |
 | Editor | [`zeta-editor`](editor/README.md)、[`zeta-editor-host`](editor-host/README.md) |
 | Session Pane、Composer 与 App Server Session 运行时 | [`zeta-session`](session/README.md) |
-| Settings | [`zeta-settings`](settings/README.md) |
+| Settings 与 Remote UI | [`zeta-settings`](settings/README.md) |
 | Workspace UI | [`zeta-workspace-ui`](workspace-ui/README.md) |
-| Remote UI | [`zeta-remote-ui`](remote-ui/README.md) |
 | Terminal runtime 与 Pane 绑定 | [`zeta-terminal-workspace`](terminal-workspace/README.md)、[`TERMINAL.md`](TERMINAL.md) |
 | Workbench | [`zeta-workbench`](workbench/README.md) |
 | 命令与快捷键 | [`zeta-commands`](commands/README.md)、[`zeta-keybindings-host`](keybindings/README.md)；快捷键设置页面由 [`zeta-settings`](settings/README.md) 管 |

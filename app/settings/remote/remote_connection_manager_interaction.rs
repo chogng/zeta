@@ -11,8 +11,8 @@ use zui::ui::NodeAction;
 use zui::ui::Rect;
 use zui::ui::UiDispatch;
 
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_STATUS;
+use crate::remote::remote_connection_manager::REMOTE_CONNECTION_MANAGER;
+use crate::remote::remote_connection_manager::REMOTE_CONNECTION_MANAGER_STATUS;
 
 pub(crate) fn input_state(
     dispatch: &UiDispatch,

@@ -313,7 +313,6 @@ dependencies = [
  "zeta-remote",
  "zeta-remote-connections",
  "zeta-remote-host",
- "zeta-remote-ui",
  "zeta-server-host",
  "zeta-session",
  "zeta-settings",
@@ -11880,18 +11879,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-remote-ui"
-version = "0.1.0"
-dependencies = [
- "zeta-icons",
- "zeta-remote",
- "zeta-remote-connections",
- "zeta-remote-host",
- "zeta-ui-components",
- "zui",
-]
-
-[[package]]
 name = "zeta-rmcp-client"
 version = "0.1.0"
 dependencies = [
@@ -12001,6 +11988,9 @@ dependencies = [
  "zeta-icons",
  "zeta-keybinding",
  "zeta-keybindings-host",
+ "zeta-remote",
+ "zeta-remote-connections",
+ "zeta-remote-host",
  "zeta-ui-components",
  "zui",
 ]

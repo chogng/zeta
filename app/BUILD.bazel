@@ -36,7 +36,6 @@ filegroup(
         "//zeta-rs/keybinding:keybinding_sources",
         "//app/markdown:markdown_sources",
         "//app/keybindings:keybindings_sources",
-        "//app/remote-ui:remote-ui_sources",
         "//app/session:session_sources",
         "//app/settings:settings_sources",
         "//app/terminal-workspace:terminal-workspace_sources",

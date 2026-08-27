@@ -1,3 +1,3 @@
-//! Compatibility export for the Remote UI feature crate.
+//! Product wiring for the Remote connection manager view owned by Settings.
 
-pub(crate) use zeta_remote_ui::RemoteConnectionManager;
+pub(crate) use zeta_settings::RemoteConnectionManager;

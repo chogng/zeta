@@ -195,8 +195,8 @@ impl ShellPalette {
         )
     }
 
-    pub(crate) fn remote_ui_style(self) -> zeta_remote_ui::RemoteUiStyle {
-        zeta_remote_ui::RemoteUiStyle::new(
+    pub(crate) fn remote_ui_style(self) -> zeta_settings::RemoteUiStyle {
+        zeta_settings::RemoteUiStyle::new(
             self.surface,
             self.surface_raised,
             self.surface_hovered,

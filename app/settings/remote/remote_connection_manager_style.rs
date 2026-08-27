@@ -9,8 +9,8 @@ use zui::ui::Edges;
 use zui::ui::Rect;
 use zui::ui::TextStyle;
 
-use crate::remote_connection_manager::RemoteConnectionManagerField;
-use crate::style::RemoteUiStyle;
+use crate::remote::remote_connection_manager::RemoteConnectionManagerField;
+use crate::remote::style::RemoteUiStyle;
 
 pub(crate) const PANEL_WIDTH: f32 = 720.0;
 pub(crate) const PANEL_HEIGHT: f32 = 470.0;

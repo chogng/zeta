@@ -159,8 +159,7 @@ App Server Session 的连接 worker、订阅、命令队列和重连策略已经
 | `zeta-terminal-workspace` | Terminal runtime、Pane binding、每个 PaneInput 的滚动/指针/选择视图状态 | 平台事件转发和终端进程适配 |
 | `zeta-workspace-ui` | Files/Changes pane、目录树、文件搜索、分支菜单和路径选择器 | DTO 转换以及打开文件、加载目录、切换分支 |
 | `zeta-editor-host` | Editor Tab、文档/视口、保存冲突、查找替换、诊断、补全和自动滚动 | 文件与 LSP 请求、平台输入转发 |
-| `zeta-settings` | `SettingsState`、页面与 section UI、快捷键录制、feature 展示快照和交互 action | 配置与快捷键持久化、主题映射和平台事件转发 |
-| `zeta-remote-ui` | 连接列表、picker、连接管理和 Tunnel 状态/视图 | SSH/runtime/子进程启动、profile 和窗口事件 |
+| `zeta-settings` | `SettingsState`、页面与 section UI、快捷键录制、feature 展示快照和交互 action；连接列表、picker、连接管理和 Tunnel 状态/视图 | 配置与快捷键持久化、主题映射和平台事件转发；SSH/runtime/子进程启动、profile 和窗口事件 |
 
 所有新 crate 都在 `app/`，不进入 `zeta-rs`，也不依赖 `app` package。UI 能力通过宿主输入快照返回 typed action；`zeta-session` 直接持有 Session/Thread 的 App Server 请求和 worker。`shell_style` 只负责把产品主题映射为各 crate 的样式；稳定交互 ID 由对应能力 crate 自己拥有，避免反向依赖组合根。
 

@@ -9,6 +9,6 @@
 - zeta-workspace-ui：Files/SCM、目录树、搜索、路径选择
 - zeta-editor-host：编辑器 Tab、搜索、诊断、LSP 展示
 - zeta-terminal-workspace：终端 runtime、Pane binding、滚动、选择、指针和视图状态
-- zeta-remote-ui：连接管理、Picker、Tunnel 状态和 UI
+- zeta-settings：Settings、快捷键、连接管理、Picker、Tunnel 状态和 UI
 - zeta-workbench：TabPart、PanePart、布局、基础 UI 和跨能力生命周期入口
 - 考虑是否单个的ui界面都塞到workspace-ui里管理

@@ -44,7 +44,7 @@ use zui::ui::UiDispatch;
 use zui::ui::UiNode;
 use zui::ui::UiScene;
 
-use crate::style::RemoteUiStyle;
+use crate::remote::style::RemoteUiStyle;
 
 const REMOTE_CONNECTION_PICKER_SCOPE: u32 = 9;
 const REMOTE_CONNECTION_PICKER: ElementId = ElementId::scoped(REMOTE_CONNECTION_PICKER_SCOPE, 1);
@@ -491,7 +491,7 @@ mod tests {
                 connection("alpha", "build.example", "/work/frontend"),
             ],
             false,
-            Some(crate::interaction::REMOTE_UI_ROOT),
+            Some(crate::remote::interaction::REMOTE_UI_ROOT),
         );
 
         assert_eq!(
@@ -514,7 +514,10 @@ mod tests {
                 RemoteConnectionName::parse("zulu").unwrap()
             ))
         );
-        assert_eq!(state.dismiss(), Some(crate::interaction::REMOTE_UI_ROOT));
+        assert_eq!(
+            state.dismiss(),
+            Some(crate::remote::interaction::REMOTE_UI_ROOT)
+        );
     }
 
     #[test]
@@ -554,7 +557,7 @@ mod tests {
             false,
             None,
         );
-        let style = crate::test_style();
+        let style = crate::remote::test_style();
         let dispatch = UiDispatch::default();
         let mut text_layout = TextInputLayoutEngine::new();
         let picker = RemoteConnectionPicker::new(
@@ -564,7 +567,7 @@ mod tests {
             style,
             &mut text_layout,
             &dispatch,
-            crate::interaction::REMOTE_UI_ROOT,
+            crate::remote::interaction::REMOTE_UI_ROOT,
         )
         .unwrap();
         let mut frame = UiFrame::<InteractionFrame>::new(style.surface);

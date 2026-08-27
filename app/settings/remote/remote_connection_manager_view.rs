@@ -34,21 +34,21 @@ use zui::ui::UiDispatch;
 use zui::ui::UiNode;
 use zui::ui::UiScene;
 
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_CLOSE;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_CONNECT;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_DELETE;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_HOST;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_ITEM_HEIGHT;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_LIST;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_NAME;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_NEW;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_SAVE;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_WORKSPACE;
-use crate::remote_connection_manager::RemoteConnectionManagerField;
-use crate::remote_connection_manager::RemoteConnectionManagerState;
-use crate::remote_connection_manager::remote_connection_manager_item_id;
-use crate::style::RemoteUiStyle;
+use crate::remote::remote_connection_manager::REMOTE_CONNECTION_MANAGER;
+use crate::remote::remote_connection_manager::REMOTE_CONNECTION_MANAGER_CLOSE;
+use crate::remote::remote_connection_manager::REMOTE_CONNECTION_MANAGER_CONNECT;
+use crate::remote::remote_connection_manager::REMOTE_CONNECTION_MANAGER_DELETE;
+use crate::remote::remote_connection_manager::REMOTE_CONNECTION_MANAGER_HOST;
+use crate::remote::remote_connection_manager::REMOTE_CONNECTION_MANAGER_ITEM_HEIGHT;
+use crate::remote::remote_connection_manager::REMOTE_CONNECTION_MANAGER_LIST;
+use crate::remote::remote_connection_manager::REMOTE_CONNECTION_MANAGER_NAME;
+use crate::remote::remote_connection_manager::REMOTE_CONNECTION_MANAGER_NEW;
+use crate::remote::remote_connection_manager::REMOTE_CONNECTION_MANAGER_SAVE;
+use crate::remote::remote_connection_manager::REMOTE_CONNECTION_MANAGER_WORKSPACE;
+use crate::remote::remote_connection_manager::RemoteConnectionManagerField;
+use crate::remote::remote_connection_manager::RemoteConnectionManagerState;
+use crate::remote::remote_connection_manager::remote_connection_manager_item_id;
+use crate::remote::style::RemoteUiStyle;
 
 #[path = "remote_connection_manager_style.rs"]
 mod style;
@@ -498,7 +498,7 @@ mod tests {
 
     #[test]
     fn manager_exposes_form_list_and_action_accessibility() {
-        let style = crate::test_style();
+        let style = crate::remote::test_style();
         let mut state = RemoteConnectionManagerState::default();
         state.open(
             vec![RemoteConnectionEntry::new(
@@ -519,7 +519,7 @@ mod tests {
             style,
             &mut text_layout,
             &dispatch,
-            crate::interaction::REMOTE_UI_ROOT,
+            crate::remote::interaction::REMOTE_UI_ROOT,
         )
         .unwrap();
         let mut frame = UiFrame::<InteractionFrame>::new(style.surface);

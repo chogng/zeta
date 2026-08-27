@@ -1,3 +1,3 @@
-//! Compatibility export for the Remote UI feature crate.
+//! Product wiring for the Remote Tunnel manager view owned by Settings.
 
-pub(crate) use zeta_remote_ui::RemoteTunnelManager;
+pub(crate) use zeta_settings::RemoteTunnelManager;
