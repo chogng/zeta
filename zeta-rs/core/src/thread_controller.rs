@@ -1845,8 +1845,7 @@ fn make_goal(
     token_budget: Option<u64>,
     tokens_used: u64,
 ) -> Result<ThreadGoal, CoreError> {
-    if status.allows_usage_accounting()
-        && token_budget.is_some_and(|budget| tokens_used >= budget)
+    if status.allows_usage_accounting() && token_budget.is_some_and(|budget| tokens_used >= budget)
     {
         status = ThreadGoalStatus::BudgetLimited;
     }

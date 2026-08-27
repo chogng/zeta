@@ -82,7 +82,6 @@ impl StableTurnError {
             retryable: false,
         }
     }
-
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

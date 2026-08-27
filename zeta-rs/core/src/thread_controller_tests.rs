@@ -11,10 +11,10 @@ use zeta_history::StoredEvent;
 use zeta_protocol::{
     ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalDecision,
     ActionApprovalRequest, ActionApprovalResponse, AgentRequest, AgentResponse, CommandId,
-    ContextSourceRange, InteractionDeadline, PlanStep, PlanStepStatus, PlanUpdate, RequestId,
-    ModelUsage, RequestUserInput, RequestUserInputResponse, SessionId, StableTurnError,
-    StableTurnErrorCode, ThreadEvent, ThreadGoalStatus, ThreadId, ThreadItem, ToolCallId,
-    ToolName, TurnId, UserInput, UserInputQuestion,
+    ContextSourceRange, InteractionDeadline, ModelUsage, PlanStep, PlanStepStatus, PlanUpdate,
+    RequestId, RequestUserInput, RequestUserInputResponse, SessionId, StableTurnError,
+    StableTurnErrorCode, ThreadEvent, ThreadGoalStatus, ThreadId, ThreadItem, ToolCallId, ToolName,
+    TurnId, UserInput, UserInputQuestion,
 };
 
 struct OneShotActivation {
@@ -188,9 +188,11 @@ fn thread_goal_lifecycle_is_durable_and_unfinished_goals_cannot_be_replaced() {
     assert_eq!(created.status, ThreadGoalStatus::Active);
     assert_eq!(created.tokens_used, 0);
     assert_eq!(threads.get_goal(&thread).unwrap(), Some(created.clone()));
-    assert!(threads
-        .create_goal(&thread, "a duplicate objective".into(), None)
-        .is_err());
+    assert!(
+        threads
+            .create_goal(&thread, "a duplicate objective".into(), None)
+            .is_err()
+    );
 
     let paused = threads
         .set_goal(
@@ -205,9 +207,11 @@ fn thread_goal_lifecycle_is_durable_and_unfinished_goals_cannot_be_replaced() {
         .goal;
     assert_eq!(paused.goal_id, created.goal_id);
     assert_eq!(paused.status, ThreadGoalStatus::Paused);
-    assert!(threads
-        .create_goal(&thread, "still a duplicate".into(), None)
-        .is_err());
+    assert!(
+        threads
+            .create_goal(&thread, "still a duplicate".into(), None)
+            .is_err()
+    );
 
     let completed = threads
         .set_goal(

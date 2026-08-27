@@ -55,9 +55,7 @@ pub(crate) fn post_json_to_path(
 
 pub(crate) fn response_error(response: &zeta_client::ClientResponse) -> ApiError {
     match response.status() {
-        429 if is_usage_limited(&provider_error_detail(response.body())) => {
-            ApiError::UsageLimited
-        }
+        429 if is_usage_limited(&provider_error_detail(response.body())) => ApiError::UsageLimited,
         429 => ApiError::RateLimited {
             retry_after_ms: response
                 .retry_after()

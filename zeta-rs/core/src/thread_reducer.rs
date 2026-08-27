@@ -375,10 +375,7 @@ pub fn reduce_thread_event(
             snapshot.goal = Some(goal.clone());
             snapshot.goal_budget_limited_turn_id = None;
         }
-        ThreadEvent::GoalCleared {
-            thread_id,
-            goal_id,
-        } => {
+        ThreadEvent::GoalCleared { thread_id, goal_id } => {
             require_no_command(envelope)?;
             if thread_id != &snapshot.thread_id {
                 return Err(CoreError::Journal(

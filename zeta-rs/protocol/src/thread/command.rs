@@ -1,7 +1,6 @@
 use crate::{
     ActionApprovalResponse, ApprovalMode, DynamicToolResponse, FrozenSkillActivation, ModelRef,
-    RequestId, RequestUserInputResponse, ToolMode, ToolProfileSnapshot, TurnId,
-    UserInput,
+    RequestId, RequestUserInputResponse, ToolMode, ToolProfileSnapshot, TurnId, UserInput,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

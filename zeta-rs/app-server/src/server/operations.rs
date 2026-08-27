@@ -967,11 +967,13 @@ impl AppServer {
         let tool_mode = match requested_tool_mode {
             Some(tool_mode) => tool_mode,
             None => match self.config.as_ref() {
-                Some(config) => config
-                    .read_snapshot()
-                    .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?
-                    .values
-                    .tool_mode,
+                Some(config) => {
+                    config
+                        .read_snapshot()
+                        .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?
+                        .values
+                        .tool_mode
+                }
                 None => zeta_protocol::ToolMode::Direct,
             },
         };

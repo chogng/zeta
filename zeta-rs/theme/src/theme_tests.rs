@@ -67,9 +67,7 @@ fn embedded_entries_keep_one_token_contract_and_select_product_defaults() {
     let zeta_code = catalog
         .built_in_entry("zeta-code", ColorScheme::Light)
         .unwrap();
-    let app = catalog
-        .built_in_entry("app", ColorScheme::Light)
-        .unwrap();
+    let app = catalog.built_in_entry("app", ColorScheme::Light).unwrap();
 
     assert_eq!(zeta.id(), "zeta-light");
     assert_eq!(zeta_code.id(), "zeta-code-light");
@@ -88,14 +86,12 @@ fn embedded_entries_keep_one_token_contract_and_select_product_defaults() {
         Rgba::rgb(0, 96, 192)
     );
     assert_eq!(
-        app
-            .required_color(tokens::LIST_ACTIVE_SELECTION_BACKGROUND)
+        app.required_color(tokens::LIST_ACTIVE_SELECTION_BACKGROUND)
             .unwrap(),
         Rgba::rgb(235, 235, 237)
     );
     assert_eq!(
-        app
-            .required_color("list.activeSelectionForeground")
+        app.required_color("list.activeSelectionForeground")
             .unwrap(),
         app.required_color(tokens::FOREGROUND).unwrap()
     );

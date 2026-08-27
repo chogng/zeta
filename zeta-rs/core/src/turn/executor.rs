@@ -19,8 +19,8 @@ use crate::{
     ActionPolicyService, CompletedTurn, ContextAssembler, ContextCompactionRequest,
     ContextCompactionResult, ContextCompactionService, CoreError, HarnessInstructions,
     HarnessInstructionsProvider, HookService, ModelSelection, ModelService, ModelStreamSink,
-    NoHooks, NoThreadUpdates, NoTools, StartGoalTurnRequest, ThreadController,
-    ThreadUpdateSink, ToolService, TurnCompletedHookRequest,
+    NoHooks, NoThreadUpdates, NoTools, StartGoalTurnRequest, ThreadController, ThreadUpdateSink,
+    ToolService, TurnCompletedHookRequest,
 };
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -1140,11 +1140,8 @@ impl TurnExecutor {
         else {
             return Ok(false);
         };
-        let command_id = CommandId::new(format!(
-            "goal_continue_{}",
-            completed_turn.turn_id
-        ))
-        .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
+        let command_id = CommandId::new(format!("goal_continue_{}", completed_turn.turn_id))
+            .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
         let Some(start) = self.threads.start_goal_turn(
             thread_id,
             StartGoalTurnRequest {

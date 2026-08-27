@@ -70,12 +70,10 @@ impl ContextPlanner {
             Some(group) => estimate_items(&group.items),
             None if input.allow_empty_current_turn() => ContextTokenCount::ZERO,
             None => {
-                return Err(ContextPreparationError::UnsupportedContextShape(
-                    format!(
-                        "current Turn {} has no model-visible input",
-                        input.current_turn_id()
-                    ),
-                ));
+                return Err(ContextPreparationError::UnsupportedContextShape(format!(
+                    "current Turn {} has no model-visible input",
+                    input.current_turn_id()
+                )));
             }
         };
         let history_groups = groups
@@ -315,12 +313,10 @@ impl ContextPlanner {
             Some(current_group_index) => &groups[..current_group_index],
             None if input.allow_empty_current_turn() => groups.as_slice(),
             None => {
-                return Err(ContextPreparationError::UnsupportedContextShape(
-                    format!(
-                        "current Turn {} has no model-visible input",
-                        input.current_turn_id()
-                    ),
-                ));
+                return Err(ContextPreparationError::UnsupportedContextShape(format!(
+                    "current Turn {} has no model-visible input",
+                    input.current_turn_id()
+                )));
             }
         };
         if history_groups

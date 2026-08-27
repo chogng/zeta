@@ -426,9 +426,7 @@ impl ToolScheduler {
         let control_broker = self
             .code_mode
             .as_ref()
-            .filter(|broker| {
-                broker.owns_control_binding(call, call_binding(snapshot, item_id))
-            });
+            .filter(|broker| broker.owns_control_binding(call, call_binding(snapshot, item_id)));
         let (request, evidence) = match control_broker {
             Some(broker) => (broker.prepare_control(call)?, Vec::new()),
             None => (self.tools.prepare(call)?, self.tools.review_evidence(call)?),
@@ -525,13 +523,9 @@ impl ToolScheduler {
                 let control_call = call.clone();
                 let updates = Arc::clone(&self.updates);
                 let hooks = Arc::clone(&self.hooks);
-                orchestrator.execute_core_control(
-                    context,
-                    call,
-                    reviewed,
-                    authorization,
-                    || broker.execute(context, &control_call, updates, hooks),
-                )?
+                orchestrator.execute_core_control(context, call, reviewed, authorization, || {
+                    broker.execute(context, &control_call, updates, hooks)
+                })?
             }
             None => orchestrator.execute(context, call, reviewed, authorization)?,
         };
