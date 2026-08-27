@@ -6,7 +6,7 @@ use zeta_lsp::LanguageServerCommand;
 use crate::LanguageServerDefinition;
 use crate::LanguageServerProvider;
 use crate::LanguageServerProviderError;
-use crate::LanguageServerProviderLaunch;
+use crate::LspServerLaunch;
 use crate::provider::canonical_executable;
 
 /// A Marketplace-verified self-launching language-server capability.
@@ -60,11 +60,11 @@ impl LanguageServerProvider for DirectPackageLanguageServerProvider {
     fn definition(
         &self,
         workspace_root: &Path,
-        launch: LanguageServerProviderLaunch<'_>,
+        launch: LspServerLaunch<'_>,
     ) -> Result<LanguageServerDefinition, LanguageServerProviderError> {
         let executable = match launch {
-            LanguageServerProviderLaunch::Packaged => self.executable.clone(),
-            LanguageServerProviderLaunch::ExplicitExecutable(executable) => {
+            LspServerLaunch::Packaged => self.executable.clone(),
+            LspServerLaunch::ExplicitExecutable(executable) => {
                 canonical_executable(executable, "explicit language-server executable")?
             }
         };

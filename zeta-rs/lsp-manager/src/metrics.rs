@@ -26,6 +26,6 @@ pub struct LanguageRequestMetric {
 }
 
 /// Receives bounded operational measurements without source paths, positions, queries, or text.
-pub trait LanguageServiceMetricsSink: Send + Sync + 'static {
+pub trait LspRequestMetricsSink: Send + Sync + 'static {
     fn record(&self, metric: LanguageRequestMetric);
 }

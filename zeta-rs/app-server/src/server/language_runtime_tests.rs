@@ -6,20 +6,20 @@ use zeta_config::LanguageServerConfig;
 use zeta_config::LanguageServerId;
 use zeta_config::LanguageServerModeConfig;
 use zeta_config::LanguageServersConfig;
-use zeta_language_server_catalog::CSS_LANGUAGE_SERVER_ID;
-use zeta_language_server_catalog::CssLanguageServerProvider;
-use zeta_language_server_catalog::LanguageServerProviderRegistry;
-use zeta_language_server_catalog::ManagedNodeRuntime;
+use zeta_lsp_server_provider::CSS_LANGUAGE_SERVER_ID;
+use zeta_lsp_server_provider::CssLanguageServerProvider;
+use zeta_lsp_server_provider::LspServerProviders;
+use zeta_lsp_server_provider::ManagedNodeRuntime;
 
 use super::configured_provider_definitions;
 
 #[test]
 fn manually_injected_provider_requires_explicit_user_enablement() {
     let fixture = ProviderFixture::new();
-    let registry = fixture.registry();
+    let providers = fixture.providers();
     assert!(
         configured_provider_definitions(
-            &registry,
+            &providers,
             &LanguageServersConfig::default(),
             fixture.workspace.path(),
         )
@@ -29,27 +29,27 @@ fn manually_injected_provider_requires_explicit_user_enablement() {
 
     let configuration = configuration(LanguageServerModeConfig::Automatic, None);
     let definitions =
-        configured_provider_definitions(&registry, &configuration, fixture.workspace.path())
+        configured_provider_definitions(&providers, &configuration, fixture.workspace.path())
             .unwrap();
     assert_eq!(definitions.len(), 1);
     assert_eq!(definitions[0].name().as_str(), CSS_LANGUAGE_SERVER_ID);
 }
 
 #[test]
-fn configured_provider_definitions_preserve_native_override_semantics() {
+fn configured_provider_definitions_preserve_explicit_executable_override_semantics() {
     let fixture = ProviderFixture::new();
-    let native = fixture.root.path().join("native-css-server");
-    write_executable(&native);
+    let executable = fixture.root.path().join("explicit-css-server");
+    write_executable(&executable);
     let definitions = configured_provider_definitions(
-        &fixture.registry(),
-        &configuration(LanguageServerModeConfig::Enabled, Some(native.clone())),
+        &fixture.providers(),
+        &configuration(LanguageServerModeConfig::Enabled, Some(executable.clone())),
         fixture.workspace.path(),
     )
     .unwrap();
     let (_, command, _) = definitions.into_iter().next().unwrap().into_launch_parts();
     assert_eq!(
         command.program(),
-        fs::canonicalize(native).unwrap().as_os_str()
+        fs::canonicalize(executable).unwrap().as_os_str()
     );
     assert!(command.arguments().is_empty());
 }
@@ -87,7 +87,7 @@ impl ProviderFixture {
         }
     }
 
-    fn registry(&self) -> LanguageServerProviderRegistry {
+    fn providers(&self) -> LspServerProviders {
         let entrypoint = self.root.path().join("server/css-language-server");
         fs::create_dir_all(entrypoint.parent().unwrap()).unwrap();
         fs::write(&entrypoint, b"// server").unwrap();
@@ -96,7 +96,7 @@ impl ProviderFixture {
             ManagedNodeRuntime::from_path(&self.node).unwrap(),
         )
         .unwrap();
-        let mut registry = LanguageServerProviderRegistry::new();
+        let mut registry = LspServerProviders::new();
         registry.register(provider).unwrap();
         registry
     }

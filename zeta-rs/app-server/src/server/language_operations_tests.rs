@@ -1,11 +1,11 @@
 use zeta_app_server_protocol::protocol::language::LanguageCompletionInsertTextFormatDto;
 use zeta_app_server_protocol::protocol::language::LanguageCompletionTriggerKindDto;
-use zeta_language_service::LanguageCompletionInsertTextFormat;
-use zeta_language_service::LanguageCompletionItem;
-use zeta_language_service::LanguageCompletionItemKind;
-use zeta_language_service::LanguageCompletionTrigger;
-use zeta_language_service::LanguageTextEdit;
-use zeta_language_service::LanguageTextRange;
+use zeta_lsp_manager::LanguageCompletionInsertTextFormat;
+use zeta_lsp_manager::LanguageCompletionItem;
+use zeta_lsp_manager::LanguageCompletionItemKind;
+use zeta_lsp_manager::LanguageCompletionTrigger;
+use zeta_lsp_manager::LanguageTextEdit;
+use zeta_lsp_manager::LanguageTextRange;
 
 use super::completion_item_to_dto;
 use super::completion_trigger;

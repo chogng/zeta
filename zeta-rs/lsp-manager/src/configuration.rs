@@ -4,29 +4,29 @@ use crate::{LanguageServerDefinition, LanguageServerRestartPolicy};
 
 /// Product policy controlling whether configured language servers may run.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum LanguageServiceEnablement {
+pub enum LspManagerEnablement {
     /// Retain document snapshots without starting or contacting language servers.
     #[default]
     Disabled,
-    /// Start the caller-resolved server catalog and synchronize matching documents.
+    /// Start the caller-resolved server definitions and synchronize matching documents.
     Enabled,
 }
 
 /// Immutable product configuration consumed by one language-service supervisor.
 #[derive(Clone, Debug)]
-pub struct LanguageServiceConfiguration {
+pub struct LspManagerConfiguration {
     pub(crate) workspace_root: PathBuf,
-    pub(crate) enablement: LanguageServiceEnablement,
+    pub(crate) enablement: LspManagerEnablement,
     pub(crate) servers: Vec<LanguageServerDefinition>,
     pub(crate) restart_policy: LanguageServerRestartPolicy,
     pub(crate) generation: u64,
 }
 
-impl LanguageServiceConfiguration {
+impl LspManagerConfiguration {
     pub fn disabled(workspace_root: impl Into<PathBuf>) -> Self {
         Self {
             workspace_root: workspace_root.into(),
-            enablement: LanguageServiceEnablement::Disabled,
+            enablement: LspManagerEnablement::Disabled,
             servers: Vec::new(),
             restart_policy: LanguageServerRestartPolicy::standard(),
             generation: 0,
@@ -39,7 +39,7 @@ impl LanguageServiceConfiguration {
     ) -> Self {
         Self {
             workspace_root: workspace_root.into(),
-            enablement: LanguageServiceEnablement::Enabled,
+            enablement: LspManagerEnablement::Enabled,
             servers,
             restart_policy: LanguageServerRestartPolicy::standard(),
             generation: 0,
@@ -50,7 +50,7 @@ impl LanguageServiceConfiguration {
         &self.workspace_root
     }
 
-    pub const fn enablement(&self) -> LanguageServiceEnablement {
+    pub const fn enablement(&self) -> LspManagerEnablement {
         self.enablement
     }
 

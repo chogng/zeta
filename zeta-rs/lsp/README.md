@@ -1,10 +1,10 @@
 # `zeta-lsp`
 
 > 本 README 是低层 LSP 客户端运行时的 crate-level canonical contract。跨 crate 的产品语义、
-> 宿主职责和演进阶段见 [`docs/lsp.md`](../../docs/lsp.md)；Native 编辑器展示契约见
+> 宿主职责和演进阶段见 [`docs/lsp.md`](../../docs/lsp.md)；Desktop 编辑器展示契约见
 > [`zeta-editor`](../editor/README.md)，产品级启停与路由见
-> [`zeta-language-service`](../language-service/README.md)，server 发现与 resolved command 见
-> [`zeta-language-server-catalog`](../language-server-catalog/README.md)。
+> [`zeta-lsp-manager`](../lsp-manager/README.md)，server 发现与 resolved command 见
+> [`zeta-lsp-server-provider`](../lsp-server-provider/README.md)。
 
 `zeta-lsp` 负责启动或连接一个语言服务器、执行 LSP 生命周期、配对请求、同步打开文档的版本，
 并把诊断和服务端消息交给产品宿主。它不选择或安装服务器，不读取文件，不拥有工作区配置、
@@ -130,7 +130,7 @@ bazel test //zeta-rs/lsp:lsp-unit-tests
 
 修改 framing limit 或 envelope classification 时同步更新 transport tests；修改 capability
 advertisement 时同步检查服务端 request handler；修改 document policy 时同步检查版本顺序和
-Native position conversion；增加 server request 时必须先定义宿主 authority 和 failure behavior。
+Desktop position conversion；增加 server request 时必须先定义宿主 authority 和 failure behavior。
 
 当前限制：
 
@@ -141,13 +141,13 @@ Native position conversion；增加 server request 时必须先定义宿主 auth
 - Current：服务端 request 已实现 `workspace/configuration`、动态 capability register/unregister 与 work-done progress token 创建；
 - Current：支持 diagnostic client capability、动态注册、typed document pull 与 typed workspace pull request；
 - 当前限制：没有 diagnostic refresh/result-id cache、workspace edit、semantic token delta 或 file-operation registration；
-- Current：`zeta-language-service` 已作为 product host 使用 router，负责显式启停、resolved definition、
-  revision freshness 和 Native event-loop 接线；
-- Current：Native 通过独立 catalog 自动解析 PATH 中的 `rust-analyzer`；缺失时不启动 server；
-- Current：Native 已通过 App Server Config authority 接入持久化 mode/path 和 Settings UI；
-- Current：driver 会区分规范关闭和意外 transport close；`zeta-language-service` 消费该事实，执行
+- Current：`zeta-lsp-manager` 已作为 product host 使用 router，负责显式启停、resolved definition、
+  revision freshness 和 Desktop event-loop 接线；
+- Current：Desktop 通过独立 provider 自动解析 PATH 中的 `rust-analyzer`；缺失时不启动 server；
+- Current：Desktop 已通过 App Server Config authority 接入持久化 mode/path 和 Settings UI；
+- Current：driver 会区分规范关闭和意外 transport close；`zeta-lsp-manager` 消费该事实，执行
   有界指数退避、crash-loop gate、断连 route retirement 与 authoritative document replay；
-- Current：Native 已完成 diagnostics 下划线、hover detail 和 server runtime state 投影；语言请求结果
+- Current：Desktop 已完成 diagnostics 下划线、hover detail 和 server runtime state 投影；语言请求结果
   UI 仍未完成；
 - 当前限制：replacement host event gate 由调用方持有，router 不控制外部 callback queue；
 - Potential：更多 transport health facts 可以继续由本 crate 上报，但重启预算、安装路径和用户策略

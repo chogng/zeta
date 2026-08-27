@@ -59,8 +59,8 @@ zeta-tool-executor = { workspace = true }
 zeta-instructions = { workspace = true }
 zeta-keyring-store = { workspace = true }
 zeta-kimi = { workspace = true }
-zeta-language-server-catalog = { workspace = true }
-zeta-language-service = { workspace = true }
+zeta-lsp-server-provider = { workspace = true }
+zeta-lsp-manager = { workspace = true }
 zeta-login = { workspace = true }
 zeta-marketplace-client = { workspace = true }
 zeta-marketplace-manager = { workspace = true }

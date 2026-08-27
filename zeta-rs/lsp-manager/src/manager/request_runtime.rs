@@ -1,6 +1,43 @@
 //! Capability-gated request execution and revision-fresh result delivery.
 
 use super::*;
+
+struct CancellableLanguageServerClient {
+    client: LanguageServerClient,
+    cancellation: zeta_async_utils::CancellationToken,
+}
+
+impl CancellableLanguageServerClient {
+    fn new(
+        client: LanguageServerClient,
+        cancellation: zeta_async_utils::CancellationToken,
+    ) -> Self {
+        Self {
+            client,
+            cancellation,
+        }
+    }
+
+    async fn request<R>(
+        &self,
+        params: R::Params,
+    ) -> Result<R::Result, zeta_lsp::LanguageServerError>
+    where
+        R: zeta_lsp::lsp_types::request::Request,
+    {
+        self.client
+            .request_with_cancellation::<R>(params, &self.cancellation)
+            .await
+    }
+}
+
+impl std::ops::Deref for CancellableLanguageServerClient {
+    type Target = LanguageServerClient;
+
+    fn deref(&self) -> &Self::Target {
+        &self.client
+    }
+}
 use crate::document_features::{
     project_code_lenses, project_color_presentations, project_document_colors,
     project_document_links, project_document_symbols, project_folding_ranges, protocol_code_lens,
@@ -638,18 +675,28 @@ impl Supervisor {
                 .insert((server_name.clone(), server_epoch, kind));
         let started = Instant::now();
         let completion_server = server_name.clone();
-        let task = tokio::spawn(async move {
-            let result = execute_request(client, request, uri, position, text, encoding)
-                .await
-                .or_else(|message| {
-                    Ok(CompletedLanguageRequest::Failed {
-                        id: failure_id,
-                        kind: failure_kind,
-                        path: failure_path,
-                        revision: failure_revision,
-                        message,
-                    })
-                });
+        let cancellation = zeta_async_utils::CancellationSource::new();
+        let cancellation_token = cancellation.token();
+        let _ = tokio::spawn(async move {
+            let result = execute_request(
+                client,
+                request,
+                uri,
+                position,
+                text,
+                encoding,
+                cancellation_token,
+            )
+            .await
+            .or_else(|message| {
+                Ok(CompletedLanguageRequest::Failed {
+                    id: failure_id,
+                    kind: failure_kind,
+                    path: failure_path,
+                    revision: failure_revision,
+                    message,
+                })
+            });
             let _ = commands.send(SupervisorCommand::LanguageRequestCompleted {
                 request_id: failure_id,
                 server: completion_server,
@@ -661,7 +708,7 @@ impl Supervisor {
         self.in_flight_requests.insert(
             failure_id,
             InFlightLanguageRequest {
-                task,
+                cancellation,
                 kind,
                 server: server_name.clone(),
                 server_epoch,
@@ -684,6 +731,10 @@ impl Supervisor {
         let Some(tracking) = self.in_flight_requests.remove(&request_id) else {
             return;
         };
+        if tracking.cancellation.token().is_cancelled() {
+            self.record_request_metric(tracking, LanguageRequestMetricOutcome::Cancelled, 0);
+            return;
+        }
         if generation != self.generation
             || !self.servers.get(&server).is_some_and(|managed| {
                 managed.epoch == server_epoch && managed.phase == ManagedServerPhase::Ready
@@ -696,7 +747,7 @@ impl Supervisor {
             Ok(result) => result,
             Err(message) => {
                 self.record_request_metric(tracking, LanguageRequestMetricOutcome::Failed, 0);
-                self.emit(LanguageServiceEvent::ServerMessage {
+                self.emit_notification(LspManagerNotification::ServerMessage {
                     server: server.to_string(),
                     severity: LanguageServerMessageSeverity::Error,
                     source: super::LanguageServerMessageSource::Service,
@@ -722,81 +773,83 @@ impl Supervisor {
         self.record_request_metric(tracking, outcome, result_count);
         match result {
             CompletedLanguageRequest::Hover(result) => {
-                self.emit(LanguageServiceEvent::Hover(result))
+                self.emit_request_result(LspManagerRequestResult::Hover(result))
             }
             CompletedLanguageRequest::Completions(result) => {
-                self.emit(LanguageServiceEvent::Completions(result))
+                self.emit_request_result(LspManagerRequestResult::Completions(result))
             }
             CompletedLanguageRequest::CompletionDetails(result) => {
-                self.emit(LanguageServiceEvent::CompletionDetails(result))
+                self.emit_request_result(LspManagerRequestResult::CompletionDetails(result))
             }
             CompletedLanguageRequest::CommandResult(result) => {
-                self.emit(LanguageServiceEvent::CommandResult(result))
+                self.emit_request_result(LspManagerRequestResult::CommandResult(result))
             }
             CompletedLanguageRequest::Locations(result) => {
-                self.emit(LanguageServiceEvent::Locations(result))
+                self.emit_request_result(LspManagerRequestResult::Locations(result))
             }
             CompletedLanguageRequest::Hierarchy(result) => {
-                self.emit(LanguageServiceEvent::Hierarchy(result))
+                self.emit_request_result(LspManagerRequestResult::Hierarchy(result))
             }
             CompletedLanguageRequest::RenamePreparation(result) => {
-                self.emit(LanguageServiceEvent::RenamePreparation(result))
+                self.emit_request_result(LspManagerRequestResult::RenamePreparation(result))
             }
             CompletedLanguageRequest::WorkspaceEdit(result) => {
-                self.emit(LanguageServiceEvent::WorkspaceEdit(result))
+                self.emit_request_result(LspManagerRequestResult::WorkspaceEdit(result))
             }
             CompletedLanguageRequest::CodeActions(result) => {
-                self.emit(LanguageServiceEvent::CodeActions(result))
+                self.emit_request_result(LspManagerRequestResult::CodeActions(result))
             }
             CompletedLanguageRequest::FormattingEdits(result) => {
-                self.emit(LanguageServiceEvent::FormattingEdits(result))
+                self.emit_request_result(LspManagerRequestResult::FormattingEdits(result))
             }
             CompletedLanguageRequest::SignatureHelp(result) => {
-                self.emit(LanguageServiceEvent::SignatureHelp(result))
+                self.emit_request_result(LspManagerRequestResult::SignatureHelp(result))
             }
             CompletedLanguageRequest::InlayHints(result) => {
-                self.emit(LanguageServiceEvent::InlayHints(result))
+                self.emit_request_result(LspManagerRequestResult::InlayHints(result))
             }
             CompletedLanguageRequest::LinkedEditingRanges(result) => {
-                self.emit(LanguageServiceEvent::LinkedEditingRanges(result))
+                self.emit_request_result(LspManagerRequestResult::LinkedEditingRanges(result))
             }
             CompletedLanguageRequest::SemanticTokens(result) => {
-                self.emit(LanguageServiceEvent::SemanticTokens(result))
+                self.emit_request_result(LspManagerRequestResult::SemanticTokens(result))
             }
             CompletedLanguageRequest::DocumentSymbols(result) => {
-                self.emit(LanguageServiceEvent::DocumentSymbols(result))
+                self.emit_request_result(LspManagerRequestResult::DocumentSymbols(result))
             }
             CompletedLanguageRequest::CodeLenses(result) => {
-                self.emit(LanguageServiceEvent::CodeLenses(result))
+                self.emit_request_result(LspManagerRequestResult::CodeLenses(result))
             }
             CompletedLanguageRequest::DocumentLinks(result) => {
-                self.emit(LanguageServiceEvent::DocumentLinks(result))
+                self.emit_request_result(LspManagerRequestResult::DocumentLinks(result))
             }
             CompletedLanguageRequest::DocumentColors(result) => {
-                self.emit(LanguageServiceEvent::DocumentColors(result))
+                self.emit_request_result(LspManagerRequestResult::DocumentColors(result))
             }
             CompletedLanguageRequest::ColorPresentations(result) => {
-                self.emit(LanguageServiceEvent::ColorPresentations(result))
+                self.emit_request_result(LspManagerRequestResult::ColorPresentations(result))
             }
             CompletedLanguageRequest::FoldingRanges(result) => {
-                self.emit(LanguageServiceEvent::FoldingRanges(result))
+                self.emit_request_result(LspManagerRequestResult::FoldingRanges(result))
             }
             CompletedLanguageRequest::PulledDiagnostics(result) => {
                 if let LanguagePulledDiagnosticReport::Full(diagnostics) = &result.report {
-                    self.emit(LanguageServiceEvent::Diagnostics(LanguageDiagnostics::new(
-                        result.path.clone(),
-                        result.revision,
-                        diagnostics.clone(),
-                    )));
+                    self.emit_notification(LspManagerNotification::Diagnostics(
+                        LanguageDiagnostics::new(
+                            result.path.clone(),
+                            result.revision,
+                            diagnostics.clone(),
+                        ),
+                    ));
                 }
-                self.emit(LanguageServiceEvent::PulledDiagnostics(result));
+                self.emit_request_result(LspManagerRequestResult::PulledDiagnostics(result));
             }
             CompletedLanguageRequest::Empty {
                 id,
                 kind,
                 path,
                 revision,
-            } => self.emit(LanguageServiceEvent::RequestFailed {
+            } => self.emit_request_result(LspManagerRequestResult::RequestFailed {
                 request_id: id,
                 kind,
                 path,
@@ -809,7 +862,7 @@ impl Supervisor {
                 path,
                 revision,
                 message,
-            } => self.emit(LanguageServiceEvent::RequestFailed {
+            } => self.emit_request_result(LspManagerRequestResult::RequestFailed {
                 request_id: id,
                 kind,
                 path,
@@ -835,7 +888,7 @@ impl Supervisor {
 
     fn emit_request_failure(&self, request: &PendingLanguageRequest, message: &str) {
         self.record_rejected_request(request.kind());
-        self.emit(LanguageServiceEvent::RequestFailed {
+        self.emit_request_result(LspManagerRequestResult::RequestFailed {
             request_id: request.id(),
             kind: request.kind(),
             path: request.path().to_path_buf(),
@@ -848,14 +901,13 @@ impl Supervisor {
         let Some(tracking) = self.in_flight_requests.remove(&request_id) else {
             return;
         };
-        tracking.task.abort();
+        tracking.cancellation.cancel();
         self.record_request_metric(tracking, LanguageRequestMetricOutcome::Cancelled, 0);
     }
 
     pub(super) fn cancel_all_language_requests(&mut self) {
-        let requests = std::mem::take(&mut self.in_flight_requests);
-        for (_, tracking) in requests {
-            tracking.task.abort();
+        for (_, tracking) in std::mem::take(&mut self.in_flight_requests) {
+            tracking.cancellation.cancel();
             self.record_request_metric(tracking, LanguageRequestMetricOutcome::Cancelled, 0);
         }
     }
@@ -877,7 +929,7 @@ impl Supervisor {
         });
     }
 
-    fn record_request_metric(
+    pub(super) fn record_request_metric(
         &self,
         tracking: InFlightLanguageRequest,
         outcome: LanguageRequestMetricOutcome,
@@ -908,7 +960,9 @@ async fn execute_request(
     position: Option<zeta_lsp::lsp_types::Position>,
     text: String,
     encoding: PositionEncodingKind,
+    cancellation: zeta_async_utils::CancellationToken,
 ) -> Result<CompletedLanguageRequest, String> {
+    let client = CancellableLanguageServerClient::new(client, cancellation);
     match request {
         PendingLanguageRequest::Hover {
             id, path, revision, ..
@@ -1768,7 +1822,7 @@ impl Supervisor {
     ) {
         let Some((server, server_epoch)) = self.server_for_language(&language_id) else {
             self.record_rejected_request(LanguageRequestKind::WorkspaceSymbols);
-            self.emit(LanguageServiceEvent::WorkspaceSymbols(
+            self.emit_request_result(LspManagerRequestResult::WorkspaceSymbols(
                 LanguageWorkspaceSymbols {
                     request_id: id,
                     query,
@@ -1779,7 +1833,7 @@ impl Supervisor {
         };
         let Ok(client) = self.router.client_for_language(&language_id).cloned() else {
             self.record_rejected_request(LanguageRequestKind::WorkspaceSymbols);
-            self.emit(LanguageServiceEvent::WorkspaceSymbols(
+            self.emit_request_result(LspManagerRequestResult::WorkspaceSymbols(
                 LanguageWorkspaceSymbols {
                     request_id: id,
                     query,
@@ -1796,7 +1850,7 @@ impl Supervisor {
             Some(OneOf::Left(true)) | Some(OneOf::Right(_))
         ) {
             self.record_rejected_request(LanguageRequestKind::WorkspaceSymbols);
-            self.emit(LanguageServiceEvent::WorkspaceSymbols(
+            self.emit_request_result(LspManagerRequestResult::WorkspaceSymbols(
                 LanguageWorkspaceSymbols {
                     request_id: id,
                     query,
@@ -1815,7 +1869,10 @@ impl Supervisor {
                 .insert((server.clone(), server_epoch, kind));
         let started = Instant::now();
         let completion_server = server.clone();
-        let task = tokio::spawn(async move {
+        let cancellation = zeta_async_utils::CancellationSource::new();
+        let cancellation_token = cancellation.token();
+        let _ = tokio::spawn(async move {
+            let client = CancellableLanguageServerClient::new(client, cancellation_token);
             let result = client
                 .request::<WorkspaceSymbolRequest>(WorkspaceSymbolParams {
                     query: query.clone(),
@@ -1837,7 +1894,7 @@ impl Supervisor {
         self.in_flight_requests.insert(
             id,
             InFlightLanguageRequest {
-                task,
+                cancellation,
                 kind,
                 server,
                 server_epoch,
@@ -1861,6 +1918,10 @@ impl Supervisor {
         let Some(tracking) = self.in_flight_requests.remove(&id) else {
             return;
         };
+        if tracking.cancellation.token().is_cancelled() {
+            self.record_request_metric(tracking, LanguageRequestMetricOutcome::Cancelled, 0);
+            return;
+        }
         if generation != self.generation
             || !self.servers.get(&server).is_some_and(|managed| {
                 managed.epoch == server_epoch && managed.phase == ManagedServerPhase::Ready
@@ -1877,18 +1938,18 @@ impl Supervisor {
                     LanguageRequestMetricOutcome::Delivered,
                     result_count,
                 );
-                self.emit(LanguageServiceEvent::WorkspaceSymbols(result));
+                self.emit_request_result(LspManagerRequestResult::WorkspaceSymbols(result));
             }
             Err(message) => {
                 self.record_request_metric(tracking, LanguageRequestMetricOutcome::Failed, 0);
-                self.emit(LanguageServiceEvent::ServerMessage {
+                self.emit_notification(LspManagerNotification::ServerMessage {
                     server: server.to_string(),
                     severity: LanguageServerMessageSeverity::Error,
                     source: super::LanguageServerMessageSource::Service,
                     show: false,
                     message,
                 });
-                self.emit(LanguageServiceEvent::WorkspaceSymbols(
+                self.emit_request_result(LspManagerRequestResult::WorkspaceSymbols(
                     LanguageWorkspaceSymbols {
                         request_id: id,
                         query,
@@ -1930,7 +1991,7 @@ fn hierarchy_result(
 }
 
 async fn execute_locations<R>(
-    client: LanguageServerClient,
+    client: CancellableLanguageServerClient,
     text_document_position_params: TextDocumentPositionParams,
     id: LanguageRequestId,
     request_kind: LanguageRequestKind,

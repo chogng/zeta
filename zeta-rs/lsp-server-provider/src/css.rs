@@ -6,7 +6,7 @@ use crate::CSS_LANGUAGE_SERVER_ID;
 use crate::LanguageServerDefinition;
 use crate::LanguageServerProvider;
 use crate::LanguageServerProviderError;
-use crate::LanguageServerProviderLaunch;
+use crate::LspServerLaunch;
 use crate::ManagedNodeRuntime;
 use crate::provider::canonical_executable;
 use crate::provider::canonical_regular_file;
@@ -59,19 +59,16 @@ impl LanguageServerProvider for CssLanguageServerProvider {
     fn definition(
         &self,
         workspace_root: &Path,
-        launch: LanguageServerProviderLaunch<'_>,
+        launch: LspServerLaunch<'_>,
     ) -> Result<LanguageServerDefinition, LanguageServerProviderError> {
         let command = match launch {
-            LanguageServerProviderLaunch::Packaged => self
+            LspServerLaunch::Packaged => self
                 .node
                 .command_for_script(&self.entrypoint, workspace_root)?,
-            LanguageServerProviderLaunch::ExplicitExecutable(executable) => {
-                LanguageServerCommand::new(canonical_executable(
-                    executable,
-                    "explicit CSS language-server executable",
-                )?)
-                .with_current_dir(workspace_root)
-            }
+            LspServerLaunch::ExplicitExecutable(executable) => LanguageServerCommand::new(
+                canonical_executable(executable, "explicit CSS language-server executable")?,
+            )
+            .with_current_dir(workspace_root),
         };
         LanguageServerDefinition::new(
             CSS_LANGUAGE_SERVER_ID,

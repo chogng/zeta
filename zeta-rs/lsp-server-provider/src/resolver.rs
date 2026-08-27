@@ -5,25 +5,21 @@ use zeta_install_context::{HostExecutableName, InstallContext};
 use zeta_lsp::LanguageServerCommand;
 
 use crate::{
-    BASH_LANGUAGE_SERVER_ID, JSON_LANGUAGE_SERVER_ID, LanguageServerCatalogError,
-    LanguageServerDefinition, RUST_ANALYZER_SERVER_ID, TYPESCRIPT_LANGUAGE_SERVER_ID,
+    BASH_LANGUAGE_SERVER_ID, JSON_LANGUAGE_SERVER_ID, LanguageServerDefinition,
+    LspServerResolverError, RUST_ANALYZER_SERVER_ID, TYPESCRIPT_LANGUAGE_SERVER_ID,
 };
 
 /// Supplies frozen executable candidates without granting authority to start them.
 ///
 /// Implementations should preserve source precedence and must not perform process execution.
-/// The catalog validates and canonicalizes every returned candidate before producing a launch
+/// The resolver validates and canonicalizes every returned candidate before producing a launch
 /// definition.
 pub trait LanguageServerExecutableCandidates {
-    fn candidates(&self, executable_name: &str)
-    -> Result<Vec<PathBuf>, LanguageServerCatalogError>;
+    fn candidates(&self, executable_name: &str) -> Result<Vec<PathBuf>, LspServerResolverError>;
 }
 
 impl LanguageServerExecutableCandidates for InstallContext {
-    fn candidates(
-        &self,
-        executable_name: &str,
-    ) -> Result<Vec<PathBuf>, LanguageServerCatalogError> {
+    fn candidates(&self, executable_name: &str) -> Result<Vec<PathBuf>, LspServerResolverError> {
         let name = HostExecutableName::new(executable_name)?;
         Ok(self.host_path_candidates(&name))
     }
@@ -38,7 +34,7 @@ pub enum LanguageServerMode {
     Enabled,
 }
 
-/// Product policy governing whether catalog resolution may produce executable definitions.
+/// Product policy governing whether resolution may produce executable definitions.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum LanguageServerExecutionPolicy {
     #[default]
@@ -93,22 +89,22 @@ impl Default for LanguageServerPreference {
 
 /// Resolution state of one built-in server for the current workspace.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum LanguageServerCatalogState {
+pub enum LspServerAvailability {
     Disabled,
     ExecutionDisallowed,
     ExecutableUnavailable,
     Resolved { executable: PathBuf },
 }
 
-/// Product-visible catalog entry without any live runtime state.
+/// Product-visible resolution entry without any live runtime state.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct LanguageServerCatalogEntry {
+pub struct LspServerResolutionEntry {
     name: &'static str,
     mode: LanguageServerMode,
-    state: LanguageServerCatalogState,
+    state: LspServerAvailability,
 }
 
-impl LanguageServerCatalogEntry {
+impl LspServerResolutionEntry {
     pub const fn name(&self) -> &'static str {
         self.name
     }
@@ -117,24 +113,24 @@ impl LanguageServerCatalogEntry {
         self.mode
     }
 
-    pub fn state(&self) -> &LanguageServerCatalogState {
+    pub fn state(&self) -> &LspServerAvailability {
         &self.state
     }
 }
 
 /// Frozen resolved definitions and availability facts for one workspace.
 #[derive(Clone, Debug)]
-pub struct LanguageServerCatalogResolution {
+pub struct LspServerResolution {
     definitions: Vec<LanguageServerDefinition>,
-    entries: Vec<LanguageServerCatalogEntry>,
+    entries: Vec<LspServerResolutionEntry>,
 }
 
-impl LanguageServerCatalogResolution {
+impl LspServerResolution {
     pub fn definitions(&self) -> &[LanguageServerDefinition] {
         &self.definitions
     }
 
-    pub fn entries(&self) -> &[LanguageServerCatalogEntry] {
+    pub fn entries(&self) -> &[LspServerResolutionEntry] {
         &self.entries
     }
 
@@ -143,17 +139,17 @@ impl LanguageServerCatalogResolution {
     }
 }
 
-/// Built-in language-server catalog and its user-selected preferences.
+/// Built-in language-server resolver and its user-selected preferences.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct LanguageServerCatalog {
+pub struct LspServerResolver {
     rust_analyzer: LanguageServerPreference,
     json_language_server: LanguageServerPreference,
     bash_language_server: LanguageServerPreference,
     typescript_language_server: LanguageServerPreference,
 }
 
-impl LanguageServerCatalog {
-    /// Creates a catalog that cannot resolve a server until persisted configuration enables one.
+impl LspServerResolver {
+    /// Creates a resolver that cannot resolve a server until persisted configuration enables one.
     pub fn disabled() -> Self {
         Self {
             rust_analyzer: LanguageServerPreference::disabled(),
@@ -190,7 +186,7 @@ impl LanguageServerCatalog {
         executable_candidates: &dyn LanguageServerExecutableCandidates,
         execution_policy: LanguageServerExecutionPolicy,
         workspace_root: &Path,
-    ) -> Result<LanguageServerCatalogResolution, LanguageServerCatalogError> {
+    ) -> Result<LspServerResolution, LspServerResolverError> {
         let mut definitions = Vec::new();
         let rust_state = self.resolve_builtin(
             BuiltinServer::rust_analyzer(),
@@ -224,25 +220,25 @@ impl LanguageServerCatalog {
             workspace_root,
             &mut definitions,
         )?;
-        Ok(LanguageServerCatalogResolution {
+        Ok(LspServerResolution {
             definitions,
             entries: vec![
-                LanguageServerCatalogEntry {
+                LspServerResolutionEntry {
                     name: RUST_ANALYZER_SERVER_ID,
                     mode: self.rust_analyzer.mode,
                     state: rust_state,
                 },
-                LanguageServerCatalogEntry {
+                LspServerResolutionEntry {
                     name: TYPESCRIPT_LANGUAGE_SERVER_ID,
                     mode: self.typescript_language_server.mode,
                     state: typescript_state,
                 },
-                LanguageServerCatalogEntry {
+                LspServerResolutionEntry {
                     name: JSON_LANGUAGE_SERVER_ID,
                     mode: self.json_language_server.mode,
                     state: json_state,
                 },
-                LanguageServerCatalogEntry {
+                LspServerResolutionEntry {
                     name: BASH_LANGUAGE_SERVER_ID,
                     mode: self.bash_language_server.mode,
                     state: bash_state,
@@ -259,12 +255,12 @@ impl LanguageServerCatalog {
         execution_policy: LanguageServerExecutionPolicy,
         workspace_root: &Path,
         definitions: &mut Vec<LanguageServerDefinition>,
-    ) -> Result<LanguageServerCatalogState, LanguageServerCatalogError> {
+    ) -> Result<LspServerAvailability, LspServerResolverError> {
         if preference.mode == LanguageServerMode::Disabled {
-            return Ok(LanguageServerCatalogState::Disabled);
+            return Ok(LspServerAvailability::Disabled);
         }
         if execution_policy == LanguageServerExecutionPolicy::Disallowed {
-            return Ok(LanguageServerCatalogState::ExecutionDisallowed);
+            return Ok(LspServerAvailability::ExecutionDisallowed);
         }
         let executable = if let Some(explicit) = &preference.explicit_executable {
             valid_executable(explicit)
@@ -275,7 +271,7 @@ impl LanguageServerCatalog {
                 .find_map(|candidate| valid_executable(&candidate))
         };
         let Some(executable) = executable else {
-            return Ok(LanguageServerCatalogState::ExecutableUnavailable);
+            return Ok(LspServerAvailability::ExecutableUnavailable);
         };
         let command = LanguageServerCommand::new(executable.canonical.clone())
             .with_arguments(builtin.arguments)
@@ -287,7 +283,7 @@ impl LanguageServerCatalog {
             builtin.language_ids.iter().copied(),
             command,
         )?);
-        Ok(LanguageServerCatalogState::Resolved {
+        Ok(LspServerAvailability::Resolved {
             executable: executable.canonical,
         })
     }

@@ -1,7 +1,7 @@
-import { APP_SERVER_METHODS, type LanguageCloseParams, type LanguageCodeActionDto, type LanguageCodeActionsParams, type LanguageCodeLensDto, type LanguageColorDto, type LanguageColorPresentationsParams, type LanguageCommandDto, type LanguageCompletionsParams, type LanguageDocumentDiagnosticsParams, type LanguageDocumentFeaturesParams, type LanguageDocumentFormattingParams, type LanguageDocumentLinkDto, type LanguageExecuteCommandParams, type LanguageHierarchyItemDto, type LanguageHierarchyParams, type LanguageHoverParams, type LanguageInlayHintsParams, type LanguageLinkedEditingRangesParams, type LanguageLocationsParams, type LanguagePrepareRenameParams, type LanguageRangeFormattingParams, type LanguageRenameParams, type LanguageResolveCodeActionParams, type LanguageResolveCodeLensParams, type LanguageResolveCompletionParams, type LanguageResolveDocumentLinkParams, type LanguageSemanticTokensParams, type LanguageSignatureHelpParams, type LanguageSynchronizeParams, type LanguageWorkspaceDiagnosticsParams, type LanguageWorkspaceSymbolsParams } from "../../../../../generated/app-server/types.js";
+import { APP_SERVER_METHODS, type AppServerMethod, type AppServerMethodDefinition, type LanguageCloseParams, type LanguageCodeActionDto, type LanguageCodeActionsParams, type LanguageCodeLensDto, type LanguageColorDto, type LanguageColorPresentationsParams, type LanguageCommandDto, type LanguageCompletionsParams, type LanguageDocumentDiagnosticsParams, type LanguageDocumentFeaturesParams, type LanguageDocumentFormattingParams, type LanguageDocumentLinkDto, type LanguageExecuteCommandParams, type LanguageHierarchyItemDto, type LanguageHierarchyParams, type LanguageHoverParams, type LanguageInlayHintsParams, type LanguageLinkedEditingRangesParams, type LanguageLocationsParams, type LanguagePrepareRenameParams, type LanguageRangeFormattingParams, type LanguageRenameParams, type LanguageResolveCodeActionParams, type LanguageResolveCodeLensParams, type LanguageResolveCompletionParams, type LanguageResolveDocumentLinkParams, type LanguageSemanticTokensParams, type LanguageSignatureHelpParams, type LanguageSynchronizeParams, type LanguageWorkspaceDiagnosticsParams, type LanguageWorkspaceSymbolsParams, type MethodParams } from "../../../../../generated/app-server/types.js";
 import { VSBuffer } from "../../../base/common/buffer.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
-import { boolean, nonNegativeInteger, record, string } from "../../ipc/electron-main/ipcValidation.js";
+import { boolean, nonEmptyString, nonNegativeInteger, record, string } from "../../ipc/electron-main/ipcValidation.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
 
 const KINDS = new Set(["declaration", "definition", "implementation", "typeDefinition", "references"]);
@@ -9,37 +9,74 @@ const HIERARCHY_KINDS = new Set(["prepareCall", "incomingCalls", "outgoingCalls"
 const MAX_LANGUAGE_INPUT_BYTES = 10 * 1024 * 1024;
 
 export function languageIpcRoutes(supervisor: AppServerSupervisor): readonly IpcRoute<unknown, unknown>[] {
+	const cancellations = new Map<string, AbortController>();
 	return [
 		route({ channel: "zeta:language:synchronize", validate: languageSynchronizeParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/synchronize"], params) }),
 		route({ channel: "zeta:language:close", validate: languageCloseParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/close"], params) }),
-		route({ channel: "zeta:language:hover", validate: languageHoverParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/hover"], params) }),
-		route({ channel: "zeta:language:completions", validate: languageCompletionsParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/completions"], params) }),
-		route({ channel: "zeta:language:resolveCompletion", validate: languageResolveCompletionParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/resolveCompletion"], params) }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:hover", method: APP_SERVER_METHODS["language/hover"], validate: languageHoverParams }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:completions", method: APP_SERVER_METHODS["language/completions"], validate: languageCompletionsParams }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:resolveCompletion", method: APP_SERVER_METHODS["language/resolveCompletion"], validate: languageResolveCompletionParams }),
 		route({ channel: "zeta:language:executeCommand", validate: languageExecuteCommandParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/executeCommand"], params) }),
-		route({ channel: "zeta:language:documentDiagnostics", validate: languageDocumentDiagnosticsParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/documentDiagnostics"], params) }),
-		route({ channel: "zeta:language:workspaceDiagnostics", validate: languageWorkspaceDiagnosticsParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/workspaceDiagnostics"], params) }),
-		route({ channel: "zeta:language:formatDocument", validate: languageDocumentFormattingParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/formatDocument"], params) }),
-		route({ channel: "zeta:language:formatRange", validate: languageRangeFormattingParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/formatRange"], params) }),
-		route({ channel: "zeta:language:signatureHelp", validate: languageSignatureHelpParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/signatureHelp"], params) }),
-		route({ channel: "zeta:language:inlayHints", validate: languageInlayHintsParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/inlayHints"], params) }),
-		route({ channel: "zeta:language:linkedEditingRanges", validate: languageLinkedEditingRangesParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/linkedEditingRanges"], params) }),
-		route({ channel: "zeta:language:semanticTokens", validate: languageSemanticTokensParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/semanticTokens"], params) }),
-		route({ channel: "zeta:language:documentSymbols", validate: languageDocumentFeaturesParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/documentSymbols"], params) }),
-		route({ channel: "zeta:language:codeLenses", validate: languageDocumentFeaturesParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/codeLenses"], params) }),
-		route({ channel: "zeta:language:resolveCodeLens", validate: languageResolveCodeLensParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/resolveCodeLens"], params) }),
-		route({ channel: "zeta:language:documentLinks", validate: languageDocumentFeaturesParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/documentLinks"], params) }),
-		route({ channel: "zeta:language:resolveDocumentLink", validate: languageResolveDocumentLinkParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/resolveDocumentLink"], params) }),
-		route({ channel: "zeta:language:documentColors", validate: languageDocumentFeaturesParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/documentColors"], params) }),
-		route({ channel: "zeta:language:colorPresentations", validate: languageColorPresentationsParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/colorPresentations"], params) }),
-		route({ channel: "zeta:language:foldingRanges", validate: languageDocumentFeaturesParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/foldingRanges"], params) }),
-		route({ channel: "zeta:language:locations", validate: languageLocationsParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/locations"], params) }),
-		route({ channel: "zeta:language:hierarchy", validate: languageHierarchyParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/hierarchy"], params) }),
-		route({ channel: "zeta:language:workspaceSymbols", validate: languageWorkspaceSymbolsParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/workspaceSymbols"], params) }),
-		route({ channel: "zeta:language:prepareRename", validate: languagePrepareRenameParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/prepareRename"], params) }),
-		route({ channel: "zeta:language:rename", validate: languageRenameParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/rename"], params) }),
-		route({ channel: "zeta:language:codeActions", validate: languageCodeActionsParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/codeActions"], params) }),
-		route({ channel: "zeta:language:resolveCodeAction", validate: languageResolveCodeActionParams, invoke: params => supervisor.request(APP_SERVER_METHODS["language/resolveCodeAction"], params) }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:documentDiagnostics", method: APP_SERVER_METHODS["language/documentDiagnostics"], validate: languageDocumentDiagnosticsParams }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:workspaceDiagnostics", method: APP_SERVER_METHODS["language/workspaceDiagnostics"], validate: languageWorkspaceDiagnosticsParams }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:formatDocument", method: APP_SERVER_METHODS["language/formatDocument"], validate: languageDocumentFormattingParams }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:formatRange", method: APP_SERVER_METHODS["language/formatRange"], validate: languageRangeFormattingParams }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:signatureHelp", method: APP_SERVER_METHODS["language/signatureHelp"], validate: languageSignatureHelpParams }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:inlayHints", method: APP_SERVER_METHODS["language/inlayHints"], validate: languageInlayHintsParams }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:linkedEditingRanges", method: APP_SERVER_METHODS["language/linkedEditingRanges"], validate: languageLinkedEditingRangesParams }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:semanticTokens", method: APP_SERVER_METHODS["language/semanticTokens"], validate: languageSemanticTokensParams }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:documentSymbols", method: APP_SERVER_METHODS["language/documentSymbols"], validate: languageDocumentFeaturesParams }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:codeLenses", method: APP_SERVER_METHODS["language/codeLenses"], validate: languageDocumentFeaturesParams }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:resolveCodeLens", method: APP_SERVER_METHODS["language/resolveCodeLens"], validate: languageResolveCodeLensParams }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:documentLinks", method: APP_SERVER_METHODS["language/documentLinks"], validate: languageDocumentFeaturesParams }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:resolveDocumentLink", method: APP_SERVER_METHODS["language/resolveDocumentLink"], validate: languageResolveDocumentLinkParams }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:documentColors", method: APP_SERVER_METHODS["language/documentColors"], validate: languageDocumentFeaturesParams }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:colorPresentations", method: APP_SERVER_METHODS["language/colorPresentations"], validate: languageColorPresentationsParams }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:foldingRanges", method: APP_SERVER_METHODS["language/foldingRanges"], validate: languageDocumentFeaturesParams }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:locations", method: APP_SERVER_METHODS["language/locations"], validate: languageLocationsParams }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:hierarchy", method: APP_SERVER_METHODS["language/hierarchy"], validate: languageHierarchyParams }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:workspaceSymbols", method: APP_SERVER_METHODS["language/workspaceSymbols"], validate: languageWorkspaceSymbolsParams }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:prepareRename", method: APP_SERVER_METHODS["language/prepareRename"], validate: languagePrepareRenameParams }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:rename", method: APP_SERVER_METHODS["language/rename"], validate: languageRenameParams }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:codeActions", method: APP_SERVER_METHODS["language/codeActions"], validate: languageCodeActionsParams }),
+		cancellableRoute(supervisor, cancellations, { channel: "zeta:language:resolveCodeAction", method: APP_SERVER_METHODS["language/resolveCodeAction"], validate: languageResolveCodeActionParams }),
+		route({ channel: "zeta:language:cancel", validate: languageCancelParams, invoke: params => {
+			cancellations.get(params.requestId)?.abort();
+		} }),
 	];
+}
+
+interface LanguageRequestEnvelope<P> {
+	readonly requestId: string;
+	readonly params: P;
+}
+
+function cancellableRoute<M extends AppServerMethod>(
+	supervisor: AppServerSupervisor,
+	cancellations: Map<string, AbortController>,
+	definition: { readonly channel: string; readonly method: AppServerMethodDefinition<M>; readonly validate: (value: unknown) => MethodParams<M> },
+): IpcRoute<unknown, unknown> {
+	return route({
+		channel: definition.channel,
+		validate: value => languageRequestEnvelope(value, definition.validate),
+		invoke: request => {
+			const controller = new AbortController();
+			cancellations.set(request.requestId, controller);
+			return supervisor.request(definition.method, request.params, { signal: controller.signal }).finally(() => {
+				if (cancellations.get(request.requestId) === controller) cancellations.delete(request.requestId);
+			});
+		},
+	});
+}
+
+function languageRequestEnvelope<P>(value: unknown, validate: (value: unknown) => P): LanguageRequestEnvelope<P> {
+	const envelope = record(value, ["requestId", "params"]);
+	return { requestId: nonEmptyString(envelope.requestId, "requestId"), params: validate(envelope.params) };
+}
+
+function languageCancelParams(value: unknown): { readonly requestId: string } {
+	const params = record(value, ["requestId"]);
+	return { requestId: nonEmptyString(params.requestId, "requestId") };
 }
 
 function languageSynchronizeParams(value: unknown): LanguageSynchronizeParams {
@@ -48,8 +85,8 @@ function languageSynchronizeParams(value: unknown): LanguageSynchronizeParams {
 }
 
 function languageCloseParams(value: unknown): LanguageCloseParams {
-	const params = record(value, ["path"]);
-	return { path: string(params.path, "path") };
+	const params = record(value, ["path"], ["workspaceFolderId"]);
+	return { path: string(params.path, "path"), workspaceFolderId: optionalWorkspaceFolderId(params.workspaceFolderId) };
 }
 
 function languageHoverParams(value: unknown): LanguageHoverParams {
@@ -126,8 +163,8 @@ function languageDocumentDiagnosticsParams(value: unknown): LanguageDocumentDiag
 }
 
 function languageWorkspaceDiagnosticsParams(value: unknown): LanguageWorkspaceDiagnosticsParams {
-	const params = record(value, ["languageId"]);
-	return { languageId: string(params.languageId, "languageId") };
+	const params = record(value, ["languageId"], ["workspaceFolderId"]);
+	return { languageId: string(params.languageId, "languageId"), workspaceFolderId: optionalWorkspaceFolderId(params.workspaceFolderId) };
 }
 
 function languageSemanticTokensParams(value: unknown): LanguageSemanticTokensParams {
@@ -214,10 +251,10 @@ function languageResolveCodeActionParams(value: unknown): LanguageResolveCodeAct
 }
 
 function languageWorkspaceSymbolsParams(value: unknown): LanguageWorkspaceSymbolsParams {
-	const params = record(value, ["languageId", "query"]);
+	const params = record(value, ["languageId", "query"], ["workspaceFolderId"]);
 	const query = string(params.query, "query");
 	if (query.length > 1024) throw new Error("query must not exceed 1024 characters");
-	return { languageId: string(params.languageId, "languageId"), query };
+	return { languageId: string(params.languageId, "languageId"), query, workspaceFolderId: optionalWorkspaceFolderId(params.workspaceFolderId) };
 }
 
 function languageHierarchyParams(value: unknown): LanguageHierarchyParams {
@@ -250,10 +287,14 @@ function languageHierarchyItem(value: unknown): LanguageHierarchyItemDto {
 }
 
 function languageDocument(value: unknown): LanguageLocationsParams["document"] {
-	const document = record(value, ["path", "languageId", "revision", "text"]);
+	const document = record(value, ["path", "languageId", "revision", "text"], ["workspaceFolderId"]);
 	const text = string(document.text, "document.text");
 	if (VSBuffer.fromString(text).byteLength > MAX_LANGUAGE_INPUT_BYTES) throw new Error(`document.text must not exceed ${MAX_LANGUAGE_INPUT_BYTES} UTF-8 bytes`);
-	return { path: string(document.path, "document.path"), languageId: string(document.languageId, "document.languageId"), revision: nonNegativeInteger(document.revision, "document.revision"), text };
+	return { path: string(document.path, "document.path"), languageId: string(document.languageId, "document.languageId"), revision: nonNegativeInteger(document.revision, "document.revision"), text, workspaceFolderId: optionalWorkspaceFolderId(document.workspaceFolderId) };
+}
+
+function optionalWorkspaceFolderId(value: unknown): string | undefined {
+	return value === undefined ? undefined : nonEmptyString(value, "workspaceFolderId");
 }
 
 function languagePosition(value: unknown, field: string): LanguageLocationsParams["position"] {

@@ -1,5 +1,5 @@
 [package]
-name = "zeta-language-service"
+name = "zeta-lsp-manager"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -7,7 +7,7 @@ publish.workspace = true
 
 [lib]
 doctest = false
-name = "zeta_language_service"
+name = "zeta_lsp_manager"
 path = "src/lib.rs"
 
 [dependencies]
@@ -15,7 +15,8 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "sync", "time"] }
 url = { workspace = true }
-zeta-language-server-catalog = { workspace = true }
+zeta-async-utils = { workspace = true }
+zeta-lsp-server-provider = { workspace = true }
 zeta-lsp = { workspace = true }
 
 [dev-dependencies]

@@ -28,7 +28,7 @@ does not move those responsibilities into Workbench.
 ## LSP boundary
 
 The LSP client and server lifecycle live below the Renderer in
-`zeta-rs/lsp`, `zeta-rs/language-service`, and the App Server. This Workbench
+`zeta-rs/lsp`, `zeta-rs/lsp-manager`, and the App Server. This Workbench
 service owns only the frontend adapters in `browser/appServerLanguageProviders.ts`
 and `browser/appServerLanguageDiagnosticsService.ts`. The provider adapter exposes
 hover, completion, cross-file navigation, call/type hierarchy, workspace symbols,
@@ -50,7 +50,7 @@ authority and retain unopened resources in the same repository. Semantic tokens
 and the remaining LSP document features use editor-owned provider contracts.
 Formatting edits use the editor command/undo layer; parameter hints retain provider-selected active
 signatures and parameters; inlay hints remain non-mutating; linked ranges extend
-native input before commit so every synchronized change is one atomic undo step.
+editor input before commit so every synchronized change is one atomic undo step.
 Regardless of origin, revision gates, application semantics, and DOM projection
 stay editor-owned.
 

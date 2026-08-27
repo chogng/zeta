@@ -24,11 +24,12 @@ use zeta_app_server_protocol::protocol::registry::ClientMethod;
 use zeta_app_server_protocol::protocol::registry::client_method;
 use zeta_app_server_protocol::protocol::registry::client_method_definition;
 use zeta_app_server_protocol::rpc::{
-    JsonRpcFailure, JsonRpcId, JsonRpcRequest, JsonRpcSuccess, JsonRpcVersion,
+    JsonRpcFailure, JsonRpcId, JsonRpcNotification, JsonRpcRequest, JsonRpcSuccess, JsonRpcVersion,
 };
 use zeta_app_server_transport::DEFAULT_MAX_MESSAGE_BYTES;
 use zeta_app_server_transport::JsonlReader;
 use zeta_app_server_transport::JsonlWriter;
+use zeta_async_utils::CancellationToken;
 use zeta_config::ConfigStore;
 use zeta_core::{
     ActionPolicyService, AgentTreeLimits, CancelTurnInteractionRequest, CoreError, ModelService,
@@ -116,7 +117,7 @@ const CONNECTION_REQUEST_WORKERS: usize = 4;
 use crate::mcp_runtime::McpRuntimeIntents;
 use notification_queue::NotificationListener;
 use notification_queue::NotificationQueue;
-use request_serialization::RequestScheduler;
+use request_serialization::{RequestCancellationRegistry, RequestScheduler};
 use update_broker::UpdateBroker;
 use workspace_runtime::{LocalWorkspaceHost, WorkspaceRuntime};
 pub(crate) use workspace_runtime::{
@@ -155,6 +156,7 @@ pub struct AppServer {
     model: Arc<dyn ModelService>,
     model_catalog: Arc<dyn ModelCatalog>,
     request_scheduler: RequestScheduler,
+    request_cancellations: RequestCancellationRegistry,
     pub(super) resources: Arc<Mutex<ResourceStore>>,
     pub(super) attachment_uploads: Mutex<AttachmentUploadStore>,
     pub(super) collaboration: Mutex<collaboration_runtime::DocumentCollaborationStore>,
@@ -428,6 +430,7 @@ impl AppServer {
             model,
             model_catalog: unavailable_model_catalog(),
             request_scheduler: RequestScheduler::default(),
+            request_cancellations: RequestCancellationRegistry::default(),
             resources,
             attachment_uploads: Mutex::new(AttachmentUploadStore::default()),
             collaboration: Mutex::new(collaboration_runtime::DocumentCollaborationStore::default()),
@@ -503,12 +506,12 @@ impl AppServer {
     /// Installs immutable language-server providers prepared by the product composition root.
     pub fn with_language_server_providers(
         mut self,
-        providers: zeta_language_server_catalog::LanguageServerProviderRegistry,
+        providers: zeta_lsp_server_provider::LspServerProviders,
     ) -> Self {
         self.language
             .get_mut()
             .expect("new App Server language runtime mutex is not poisoned")
-            .set_provider_registry(providers);
+            .set_server_providers(providers);
         self
     }
 
@@ -516,11 +519,11 @@ impl AppServer {
         mut self,
         runtime: marketplace_language_runtime::MarketplaceLanguageRuntime,
     ) -> Result<Self, String> {
-        let providers = runtime.registry()?;
+        let providers = runtime.providers()?;
         self.language
             .get_mut()
             .map_err(|_| "new App Server language runtime mutex is poisoned".to_string())?
-            .set_provider_registry(providers);
+            .set_server_providers(providers);
         self.marketplace_language_runtime = Some(runtime);
         Ok(self)
     }
@@ -594,6 +597,8 @@ impl AppServer {
             return;
         }
         self.request_scheduler
+            .cancel_connection(connection.connection_id);
+        self.request_cancellations
             .cancel_connection(connection.connection_id);
         if let Ok(git) = self.git_runtime_service() {
             git.close_connection(connection.connection_id);
@@ -1271,6 +1276,25 @@ impl AppServer {
             .map_err(resource_error)
     }
 
+    fn handle_cancel_notification(&self, connection_id: u64, raw_request: &Value) -> bool {
+        if raw_request.get("method").and_then(Value::as_str) != Some("$/cancelRequest")
+            || raw_request
+                .as_object()
+                .is_some_and(|request| request.contains_key("id"))
+        {
+            return false;
+        }
+        if let Ok(notification) =
+            serde_json::from_value::<JsonRpcNotification<CancelRequestParams>>(raw_request.clone())
+        {
+            if notification.jsonrpc == JsonRpcVersion::V2 && notification.params.id > 0 {
+                self.request_cancellations
+                    .cancel(connection_id, notification.params.id);
+            }
+        }
+        true
+    }
+
     pub fn handle_json(&self, connection: &mut ConnectionState, raw: &str) -> String {
         let raw_request: Value = match serde_json::from_str(raw) {
             Ok(request) => request,
@@ -1282,6 +1306,9 @@ impl AppServer {
                 ));
             }
         };
+        if self.handle_cancel_notification(connection.connection_id, &raw_request) {
+            return String::new();
+        }
         let mut request = match serde_json::from_value::<JsonRpcRequest<Value>>(raw_request) {
             Ok(request)
                 if request.jsonrpc == JsonRpcVersion::V2
@@ -1336,13 +1363,19 @@ impl AppServer {
                 }
             }
         };
+        let cancellation = self
+            .request_cancellations
+            .start(connection.connection_id, request_id);
         let _permit = match serialization_scope {
-            Some(scope) => match self
-                .request_scheduler
-                .acquire(connection.connection_id, scope)
-            {
+            Some(scope) => match self.request_scheduler.acquire_with_cancellation(
+                connection.connection_id,
+                scope,
+                &cancellation,
+            ) {
                 Ok(permit) => Some(permit),
                 Err(_) => {
+                    self.request_cancellations
+                        .finish(connection.connection_id, request_id);
                     return serialize_response(error_response(
                         request.id,
                         -32800,
@@ -1352,11 +1385,26 @@ impl AppServer {
             },
             None => None,
         };
-        let response = match self.dispatch(connection, &mut request) {
-            Ok(result) => serde_json::to_value(JsonRpcSuccess::new(request.id, result))
-                .expect("JSON-RPC success response must serialize"),
-            Err(error) => error_response(request.id, error.code, error.message),
+        let response = if cancellation.is_cancelled() {
+            error_response(request.id, -32800, AppServerErrorName::RequestCancelled)
+        } else {
+            let response = match self.dispatch(connection, &mut request, &cancellation) {
+                Ok(result) => serde_json::to_value(JsonRpcSuccess::new(request.id.clone(), result))
+                    .expect("JSON-RPC success response must serialize"),
+                Err(error) => error_response(request.id.clone(), error.code, error.message),
+            };
+            if cancellation.is_cancelled() {
+                error_response(
+                    request.id.clone(),
+                    -32800,
+                    AppServerErrorName::RequestCancelled,
+                )
+            } else {
+                response
+            }
         };
+        self.request_cancellations
+            .finish(connection.connection_id, request_id);
         serialize_response(response)
     }
 
@@ -1424,12 +1472,14 @@ impl AppServer {
                                 let _dispatch = worker_activity.enter();
                                 let response = self.handle_json(&mut worker_connection, &line);
                                 line.zeroize();
-                                worker_tx.send(response).map_err(|_| {
-                                    std::io::Error::new(
-                                        std::io::ErrorKind::BrokenPipe,
-                                        "App Server outbound writer closed",
-                                    )
-                                })?;
+                                if !response.is_empty() {
+                                    worker_tx.send(response).map_err(|_| {
+                                        std::io::Error::new(
+                                            std::io::ErrorKind::BrokenPipe,
+                                            "App Server outbound writer closed",
+                                        )
+                                    })?;
+                                }
                             }
                         })?,
                 );
@@ -1442,6 +1492,12 @@ impl AppServer {
                             format!("invalid App Server inbound JSON: {error}"),
                         )
                     })?;
+                    if connection.is_initialized()
+                        && self.handle_cancel_notification(connection.connection_id, &envelope)
+                    {
+                        line.zeroize();
+                        continue;
+                    }
                     if envelope.get("method").is_none() {
                         let handled = self
                             .browser_host
@@ -1469,12 +1525,14 @@ impl AppServer {
                         let _dispatch = activity.enter();
                         let response = self.handle_json(&mut connection, &line);
                         line.zeroize();
-                        outbound_tx.send(response).map_err(|_| {
-                            std::io::Error::new(
-                                std::io::ErrorKind::BrokenPipe,
-                                "App Server outbound writer closed",
-                            )
-                        })?;
+                        if !response.is_empty() {
+                            outbound_tx.send(response).map_err(|_| {
+                                std::io::Error::new(
+                                    std::io::ErrorKind::BrokenPipe,
+                                    "App Server outbound writer closed",
+                                )
+                            })?;
+                        }
                     }
                 }
                 Ok::<(), std::io::Error>(())
@@ -1516,6 +1574,7 @@ impl AppServer {
         &self,
         connection: &mut ConnectionState,
         request: &mut JsonRpcRequest<Value>,
+        cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         if client_method(&request.method) == Some(ClientMethod::Initialize) {
             return self.initialize(connection, &request.params);
@@ -1741,72 +1800,88 @@ impl AppServer {
             Some(ClientMethod::SyntaxSelectionRanges) => {
                 self.syntax_selection_ranges(&request.params)
             }
-            Some(ClientMethod::LanguageSynchronize) => self.language_synchronize(&request.params),
-            Some(ClientMethod::LanguageClose) => self.language_close(&request.params),
-            Some(ClientMethod::LanguageHover) => self.language_hover(&request.params),
-            Some(ClientMethod::LanguageCompletions) => self.language_completions(&request.params),
+            Some(ClientMethod::LanguageSynchronize) => {
+                self.language_synchronize(&request.params, cancellation)
+            }
+            Some(ClientMethod::LanguageClose) => self.language_close(&request.params, cancellation),
+            Some(ClientMethod::LanguageHover) => self.language_hover(&request.params, cancellation),
+            Some(ClientMethod::LanguageCompletions) => {
+                self.language_completions(&request.params, cancellation)
+            }
             Some(ClientMethod::LanguageResolveCompletion) => {
-                self.language_resolve_completion(&request.params)
+                self.language_resolve_completion(&request.params, cancellation)
             }
             Some(ClientMethod::LanguageExecuteCommand) => {
-                self.language_execute_command(&request.params)
+                self.language_execute_command(&request.params, cancellation)
             }
             Some(ClientMethod::LanguageDocumentDiagnostics) => {
-                self.language_document_diagnostics(&request.params)
+                self.language_document_diagnostics(&request.params, cancellation)
             }
             Some(ClientMethod::LanguageWorkspaceDiagnostics) => {
-                self.language_workspace_diagnostics(&request.params)
+                self.language_workspace_diagnostics(&request.params, cancellation)
             }
             Some(ClientMethod::LanguageDocumentFormatting) => {
-                self.language_document_formatting(&request.params)
+                self.language_document_formatting(&request.params, cancellation)
             }
             Some(ClientMethod::LanguageRangeFormatting) => {
-                self.language_range_formatting(&request.params)
+                self.language_range_formatting(&request.params, cancellation)
             }
             Some(ClientMethod::LanguageSignatureHelp) => {
-                self.language_signature_help(&request.params)
+                self.language_signature_help(&request.params, cancellation)
             }
-            Some(ClientMethod::LanguageInlayHints) => self.language_inlay_hints(&request.params),
+            Some(ClientMethod::LanguageInlayHints) => {
+                self.language_inlay_hints(&request.params, cancellation)
+            }
             Some(ClientMethod::LanguageLinkedEditingRanges) => {
-                self.language_linked_editing_ranges(&request.params)
+                self.language_linked_editing_ranges(&request.params, cancellation)
             }
             Some(ClientMethod::LanguageSemanticTokens) => {
-                self.language_semantic_tokens(&request.params)
+                self.language_semantic_tokens(&request.params, cancellation)
             }
             Some(ClientMethod::LanguageDocumentSymbols) => {
-                self.language_document_symbols(&request.params)
+                self.language_document_symbols(&request.params, cancellation)
             }
-            Some(ClientMethod::LanguageCodeLenses) => self.language_code_lenses(&request.params),
+            Some(ClientMethod::LanguageCodeLenses) => {
+                self.language_code_lenses(&request.params, cancellation)
+            }
             Some(ClientMethod::LanguageResolveCodeLens) => {
-                self.language_resolve_code_lens(&request.params)
+                self.language_resolve_code_lens(&request.params, cancellation)
             }
             Some(ClientMethod::LanguageDocumentLinks) => {
-                self.language_document_links(&request.params)
+                self.language_document_links(&request.params, cancellation)
             }
             Some(ClientMethod::LanguageResolveDocumentLink) => {
-                self.language_resolve_document_link(&request.params)
+                self.language_resolve_document_link(&request.params, cancellation)
             }
             Some(ClientMethod::LanguageDocumentColors) => {
-                self.language_document_colors(&request.params)
+                self.language_document_colors(&request.params, cancellation)
             }
             Some(ClientMethod::LanguageColorPresentations) => {
-                self.language_color_presentations(&request.params)
+                self.language_color_presentations(&request.params, cancellation)
             }
             Some(ClientMethod::LanguageFoldingRanges) => {
-                self.language_folding_ranges(&request.params)
+                self.language_folding_ranges(&request.params, cancellation)
             }
-            Some(ClientMethod::LanguageLocations) => self.language_locations(&request.params),
-            Some(ClientMethod::LanguageHierarchy) => self.language_hierarchy(&request.params),
+            Some(ClientMethod::LanguageLocations) => {
+                self.language_locations(&request.params, cancellation)
+            }
+            Some(ClientMethod::LanguageHierarchy) => {
+                self.language_hierarchy(&request.params, cancellation)
+            }
             Some(ClientMethod::LanguageWorkspaceSymbols) => {
-                self.language_workspace_symbols(&request.params)
+                self.language_workspace_symbols(&request.params, cancellation)
             }
             Some(ClientMethod::LanguagePrepareRename) => {
-                self.language_prepare_rename(&request.params)
+                self.language_prepare_rename(&request.params, cancellation)
             }
-            Some(ClientMethod::LanguageRename) => self.language_rename(&request.params),
-            Some(ClientMethod::LanguageCodeActions) => self.language_code_actions(&request.params),
+            Some(ClientMethod::LanguageRename) => {
+                self.language_rename(&request.params, cancellation)
+            }
+            Some(ClientMethod::LanguageCodeActions) => {
+                self.language_code_actions(&request.params, cancellation)
+            }
             Some(ClientMethod::LanguageResolveCodeAction) => {
-                self.language_resolve_code_action(&request.params)
+                self.language_resolve_code_action(&request.params, cancellation)
             }
             Some(ClientMethod::FsWriteFile) => self.fs_write_file(&request.params),
             Some(ClientMethod::FsCreateFile) => self.fs_create_file(&request.params),
@@ -1961,6 +2036,12 @@ impl ThreadUpdateSink for AppServerThreadUpdates {
             None => {}
         }
     }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CancelRequestParams {
+    id: u64,
 }
 
 pub(super) struct RpcError {

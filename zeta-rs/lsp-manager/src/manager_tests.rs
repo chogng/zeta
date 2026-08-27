@@ -77,7 +77,7 @@ impl RecordingMetrics {
     }
 }
 
-impl LanguageServiceMetricsSink for RecordingMetrics {
+impl LspRequestMetricsSink for RecordingMetrics {
     fn record(&self, metric: LanguageRequestMetric) {
         self.metrics.lock().expect("metric lock").push(metric);
         self.changed.notify_all();
@@ -87,12 +87,12 @@ impl LanguageServiceMetricsSink for RecordingMetrics {
 #[test]
 fn disabled_service_retains_nonblocking_document_contract_without_starting_servers() {
     let workspace = tempfile::tempdir().expect("workspace");
-    let service = LanguageService::start(
-        LanguageServiceConfiguration::disabled(workspace.path()),
+    let service = LspManager::start(
+        LspManagerConfiguration::disabled(workspace.path()),
         Arc::new(NoopLanguageServiceEventSink),
     )
     .expect("start disabled language service");
-    let document = LanguageServiceDocument::new(
+    let document = LspDocumentSnapshot::new(
         "src/main.rs",
         "rust",
         LanguageDocumentRevision::INITIAL,
@@ -104,7 +104,7 @@ fn disabled_service_retains_nonblocking_document_contract_without_starting_serve
         .synchronize_document(document)
         .expect("queue document");
     service
-        .set_enablement(LanguageServiceEnablement::Disabled)
+        .set_enablement(LspManagerEnablement::Disabled)
         .expect("keep disabled");
     service.shutdown().expect("shutdown");
 }
@@ -114,7 +114,7 @@ async fn disabling_supervisor_aborts_pending_retry_tasks() {
     let workspace = tempfile::tempdir().expect("workspace");
     let (commands, _receiver) = tokio::sync::mpsc::unbounded_channel();
     let mut supervisor = Supervisor::new(
-        LanguageServiceConfiguration::disabled(workspace.path()),
+        LspManagerConfiguration::disabled(workspace.path()),
         Arc::new(NoopLanguageServiceEventSink),
         None,
         commands,
@@ -142,15 +142,15 @@ async fn disabling_supervisor_aborts_pending_retry_tasks() {
 fn request_facade_reports_missing_ready_capability_without_blocking_the_caller() {
     let workspace = tempfile::tempdir().expect("workspace");
     let sink = Arc::new(RecordingSink::default());
-    let service = LanguageService::start(
-        LanguageServiceConfiguration::disabled(workspace.path()),
+    let service = LspManager::start(
+        LspManagerConfiguration::disabled(workspace.path()),
         sink.clone(),
     )
     .expect("start disabled language service");
     let path = workspace.path().join("src/main.rs");
     service
         .synchronize_document(
-            LanguageServiceDocument::new(
+            LspDocumentSnapshot::new(
                 &path,
                 "rust",
                 LanguageDocumentRevision::INITIAL,
@@ -185,8 +185,8 @@ fn request_facade_reports_missing_ready_capability_without_blocking_the_caller()
 fn metrics_report_rejected_requests_without_source_or_query_payloads() {
     let workspace = tempfile::tempdir().expect("workspace");
     let metrics = Arc::new(RecordingMetrics::default());
-    let service = LanguageService::start_with_metrics(
-        LanguageServiceConfiguration::disabled(workspace.path()),
+    let service = LspManager::start_with_metrics(
+        LspManagerConfiguration::disabled(workspace.path()),
         Arc::new(NoopLanguageServiceEventSink),
         metrics.clone(),
     )
@@ -194,7 +194,7 @@ fn metrics_report_rejected_requests_without_source_or_query_payloads() {
     let path = workspace.path().join("src/main.rs");
     service
         .synchronize_document(
-            LanguageServiceDocument::new(
+            LspDocumentSnapshot::new(
                 &path,
                 "rust",
                 LanguageDocumentRevision::INITIAL,
@@ -223,9 +223,9 @@ async fn cancelling_an_in_flight_request_aborts_work_and_records_the_terminal_ou
     let workspace = tempfile::tempdir().expect("workspace");
     let (commands, _receiver) = tokio::sync::mpsc::unbounded_channel();
     let metrics = Arc::new(RecordingMetrics::default());
-    let metrics_sink: Arc<dyn LanguageServiceMetricsSink> = metrics.clone();
+    let metrics_sink: Arc<dyn LspRequestMetricsSink> = metrics.clone();
     let mut supervisor = Supervisor::new(
-        LanguageServiceConfiguration::disabled(workspace.path()),
+        LspManagerConfiguration::disabled(workspace.path()),
         Arc::new(NoopLanguageServiceEventSink),
         Some(metrics_sink),
         commands,
@@ -233,14 +233,20 @@ async fn cancelling_an_in_flight_request_aborts_work_and_records_the_terminal_ou
     let request_id = LanguageRequestId::new(9);
     let server = LanguageServerName::new("rust-analyzer").expect("server");
     let (finished, receiver) = tokio::sync::oneshot::channel();
-    let task = tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_secs(60)).await;
-        let _ = finished.send(());
+    let cancellation = zeta_async_utils::CancellationSource::new();
+    let cancellation_token = cancellation.token();
+    let _ = tokio::spawn(async move {
+        tokio::select! {
+            _ = tokio::time::sleep(Duration::from_secs(60)) => {
+                let _ = finished.send(());
+            }
+            _ = cancellation_token.cancelled() => {}
+        }
     });
     supervisor.in_flight_requests.insert(
         request_id,
         InFlightLanguageRequest {
-            task,
+            cancellation,
             kind: LanguageRequestKind::References,
             server,
             server_epoch: 3,
@@ -275,8 +281,8 @@ fn enabled_service_reports_resolved_command_start_failure_without_panicking() {
     )
     .expect("definition");
     let sink = Arc::new(RecordingSink::default());
-    let service = LanguageService::start(
-        LanguageServiceConfiguration::enabled(workspace.path(), vec![definition])
+    let service = LspManager::start(
+        LspManagerConfiguration::enabled(workspace.path(), vec![definition])
             .with_restart_policy(LanguageServerRestartPolicy::Never),
         sink.clone(),
     )
@@ -314,8 +320,8 @@ fn bounded_restart_policy_enters_crash_loop_after_exactly_its_retry_budget() {
         Duration::from_secs(60),
     );
     let sink = Arc::new(RecordingSink::default());
-    let service = LanguageService::start(
-        LanguageServiceConfiguration::enabled(workspace.path(), vec![definition])
+    let service = LspManager::start(
+        LspManagerConfiguration::enabled(workspace.path(), vec![definition])
             .with_restart_policy(policy),
         sink.clone(),
     )
@@ -401,8 +407,8 @@ fn disabling_during_backoff_cancels_the_pending_restart_generation() {
         Duration::from_secs(60),
     );
     let sink = Arc::new(RecordingSink::default());
-    let service = LanguageService::start(
-        LanguageServiceConfiguration::enabled(workspace.path(), vec![definition])
+    let service = LspManager::start(
+        LspManagerConfiguration::enabled(workspace.path(), vec![definition])
             .with_restart_policy(policy),
         sink.clone(),
     )
@@ -418,7 +424,7 @@ fn disabling_during_backoff_cancels_the_pending_restart_generation() {
     });
 
     service
-        .set_enablement(LanguageServiceEnablement::Disabled)
+        .set_enablement(LspManagerEnablement::Disabled)
         .expect("disable service");
     sink.wait_for(|event| {
         matches!(
@@ -456,7 +462,7 @@ async fn transport_close_during_starting_cannot_become_a_false_ready_server() {
         LanguageServerCommand::new("unused-in-this-state-machine-test"),
     )
     .expect("definition");
-    let configuration = LanguageServiceConfiguration::enabled(workspace.path(), vec![definition])
+    let configuration = LspManagerConfiguration::enabled(workspace.path(), vec![definition])
         .with_restart_policy(LanguageServerRestartPolicy::Never);
     let sink = Arc::new(RecordingSink::default());
     let (commands, _command_rx) = mpsc::unbounded_channel();
@@ -544,8 +550,8 @@ exit 42
         Duration::from_secs(60),
     );
     let sink = Arc::new(RecordingSink::default());
-    let service = LanguageService::start(
-        LanguageServiceConfiguration::enabled(workspace.path(), vec![definition])
+    let service = LspManager::start(
+        LspManagerConfiguration::enabled(workspace.path(), vec![definition])
             .with_restart_policy(policy),
         sink.clone(),
     )
@@ -561,7 +567,7 @@ exit 42
     });
     service
         .synchronize_document(
-            LanguageServiceDocument::new(
+            LspDocumentSnapshot::new(
                 workspace.path().join("src/main.rs"),
                 "rust",
                 LanguageDocumentRevision::INITIAL,
@@ -607,7 +613,7 @@ exit 42
 }
 
 #[test]
-fn catalog_rejects_ambiguous_language_routes_before_starting_a_thread() {
+fn definitions_reject_ambiguous_language_routes_before_starting_a_thread() {
     let workspace = tempfile::tempdir().expect("workspace");
     let first =
         LanguageServerDefinition::new("first", ["rust"], LanguageServerCommand::new("first"))
@@ -616,14 +622,14 @@ fn catalog_rejects_ambiguous_language_routes_before_starting_a_thread() {
         LanguageServerDefinition::new("second", ["rust"], LanguageServerCommand::new("second"))
             .expect("second");
 
-    let result = LanguageService::start(
-        LanguageServiceConfiguration::enabled(workspace.path(), vec![first, second]),
+    let result = LspManager::start(
+        LspManagerConfiguration::enabled(workspace.path(), vec![first, second]),
         Arc::new(NoopLanguageServiceEventSink),
     );
 
     assert!(matches!(
         result,
-        Err(LanguageServiceError::DuplicateLanguage(language)) if language == "rust"
+        Err(LspManagerError::DuplicateLanguage(language)) if language == "rust"
     ));
 }
 

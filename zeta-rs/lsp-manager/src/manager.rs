@@ -7,6 +7,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use tokio::sync::mpsc;
+use zeta_async_utils::CancellationSource;
 use zeta_lsp::lsp_types::{
     MessageType, NumberOrString, ProgressParamsValue, PublishDiagnosticsParams, Uri,
     WorkDoneProgress,
@@ -19,7 +20,7 @@ use zeta_lsp::{
 
 use crate::LanguageRequestMetric;
 use crate::LanguageRequestMetricOutcome;
-use crate::LanguageServiceMetricsSink;
+use crate::LspRequestMetricsSink;
 use crate::projection::project_diagnostic;
 use crate::restart::{RestartDecision, ServerRestartTracker};
 use crate::{
@@ -32,10 +33,10 @@ use crate::{
     LanguageHierarchyResult, LanguageHover, LanguageInlayHints, LanguageLinkedEditingRanges,
     LanguageLocationRange, LanguageLocations, LanguagePulledDiagnostics, LanguageRenamePreparation,
     LanguageRequestId, LanguageRequestKind, LanguageSemanticTokens, LanguageServerCapabilities,
-    LanguageServerDefinition, LanguageServiceConfiguration, LanguageServiceDocument,
-    LanguageServiceEnablement, LanguageServiceError, LanguageSignatureHelp,
-    LanguageSignatureHelpTrigger, LanguageTextRange, LanguageWorkspaceDiagnostics,
-    LanguageWorkspaceEditResult, LanguageWorkspaceSymbols,
+    LanguageServerDefinition, LanguageSignatureHelp, LanguageSignatureHelpTrigger,
+    LanguageTextRange, LanguageWorkspaceDiagnostics, LanguageWorkspaceEditResult,
+    LanguageWorkspaceSymbols, LspDocumentSnapshot, LspManagerConfiguration, LspManagerEnablement,
+    LspManagerError,
 };
 
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(15);
@@ -65,7 +66,7 @@ pub enum LanguageServerState {
 
 /// Document operation that failed after crossing the asynchronous service boundary.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum LanguageServiceDocumentOperation {
+pub enum LspDocumentOperation {
     Synchronize,
     Save,
     Close,
@@ -99,7 +100,108 @@ pub struct LanguageServerProgress {
     pub done: bool,
 }
 
+/// Push notifications produced by a server or by manager lifecycle transitions.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum LspManagerNotification {
+    ServerStateChanged {
+        server: String,
+        state: LanguageServerState,
+    },
+    Diagnostics(LanguageDiagnostics),
+    ServerMessage {
+        server: String,
+        severity: LanguageServerMessageSeverity,
+        source: LanguageServerMessageSource,
+        show: bool,
+        message: String,
+    },
+    ServerProgress(LanguageServerProgress),
+    CapabilitiesChanged {
+        server: String,
+        capabilities: LanguageServerCapabilities,
+    },
+    DocumentOperationFailed {
+        path: PathBuf,
+        operation: LspDocumentOperation,
+        message: String,
+    },
+}
+
+/// Result of one request issued through the manager.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum LspManagerRequestResult {
+    PulledDiagnostics(LanguagePulledDiagnostics),
+    Hover(LanguageHover),
+    Completions(LanguageCompletions),
+    CompletionDetails(LanguageCompletionDetails),
+    CommandResult(LanguageCommandResult),
+    Locations(LanguageLocations),
+    Hierarchy(LanguageHierarchyResult),
+    WorkspaceSymbols(LanguageWorkspaceSymbols),
+    WorkspaceDiagnostics(LanguageWorkspaceDiagnostics),
+    RenamePreparation(LanguageRenamePreparation),
+    WorkspaceEdit(LanguageWorkspaceEditResult),
+    CodeActions(LanguageCodeActions),
+    FormattingEdits(LanguageFormattingEdits),
+    SignatureHelp(LanguageSignatureHelp),
+    InlayHints(LanguageInlayHints),
+    LinkedEditingRanges(LanguageLinkedEditingRanges),
+    SemanticTokens(LanguageSemanticTokens),
+    DocumentSymbols(LanguageDocumentSymbols),
+    CodeLenses(LanguageCodeLenses),
+    DocumentLinks(LanguageDocumentLinks),
+    DocumentColors(LanguageDocumentColors),
+    ColorPresentations(LanguageColorPresentations),
+    FoldingRanges(LanguageFoldingRanges),
+    RequestFailed {
+        request_id: LanguageRequestId,
+        kind: LanguageRequestKind,
+        path: PathBuf,
+        revision: LanguageDocumentRevision,
+        message: String,
+    },
+}
+
+impl LspManagerRequestResult {
+    /// Returns the request identity shared by every result variant.
+    pub const fn request_id(&self) -> LanguageRequestId {
+        match self {
+            Self::PulledDiagnostics(result) => result.request_id,
+            Self::Hover(result) => result.request_id,
+            Self::Completions(result) => result.request_id,
+            Self::CompletionDetails(result) => result.request_id,
+            Self::CommandResult(result) => result.request_id,
+            Self::Locations(result) => result.request_id,
+            Self::Hierarchy(result) => result.request_id,
+            Self::WorkspaceSymbols(result) => result.request_id,
+            Self::WorkspaceDiagnostics(result) => result.request_id,
+            Self::RenamePreparation(result) => result.request_id,
+            Self::WorkspaceEdit(result) => result.request_id,
+            Self::CodeActions(result) => result.request_id,
+            Self::FormattingEdits(result) => result.request_id,
+            Self::SignatureHelp(result) => result.request_id,
+            Self::InlayHints(result) => result.request_id,
+            Self::LinkedEditingRanges(result) => result.request_id,
+            Self::SemanticTokens(result) => result.request_id,
+            Self::DocumentSymbols(result) => result.request_id,
+            Self::CodeLenses(result) => result.request_id,
+            Self::DocumentLinks(result) => result.request_id,
+            Self::DocumentColors(result) => result.request_id,
+            Self::ColorPresentations(result) => result.request_id,
+            Self::FoldingRanges(result) => result.request_id,
+            Self::RequestFailed { request_id, .. } => *request_id,
+        }
+    }
+}
+
 /// Product-level events emitted after protocol details and stale results have been resolved.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum LspManagerEvent {
+    Notification(LspManagerNotification),
+    RequestResult(LspManagerRequestResult),
+}
+
+/// Compatibility event shape for the old App integration.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum LanguageServiceEvent {
     ServerStateChanged {
@@ -122,7 +224,7 @@ pub enum LanguageServiceEvent {
     },
     DocumentOperationFailed {
         path: PathBuf,
-        operation: LanguageServiceDocumentOperation,
+        operation: LspDocumentOperation,
         message: String,
     },
     Hover(LanguageHover),
@@ -156,15 +258,259 @@ pub enum LanguageServiceEvent {
     },
 }
 
-/// Non-blocking destination for product-level language-service events.
+impl From<LspManagerEvent> for LanguageServiceEvent {
+    fn from(event: LspManagerEvent) -> Self {
+        match event {
+            LspManagerEvent::Notification(notification) => match notification {
+                LspManagerNotification::ServerStateChanged { server, state } => {
+                    Self::ServerStateChanged { server, state }
+                }
+                LspManagerNotification::Diagnostics(diagnostics) => Self::Diagnostics(diagnostics),
+                LspManagerNotification::ServerMessage {
+                    server,
+                    severity,
+                    source,
+                    show,
+                    message,
+                } => Self::ServerMessage {
+                    server,
+                    severity,
+                    source,
+                    show,
+                    message,
+                },
+                LspManagerNotification::ServerProgress(progress) => Self::ServerProgress(progress),
+                LspManagerNotification::CapabilitiesChanged {
+                    server,
+                    capabilities,
+                } => Self::CapabilitiesChanged {
+                    server,
+                    capabilities,
+                },
+                LspManagerNotification::DocumentOperationFailed {
+                    path,
+                    operation,
+                    message,
+                } => Self::DocumentOperationFailed {
+                    path,
+                    operation,
+                    message,
+                },
+            },
+            LspManagerEvent::RequestResult(result) => match result {
+                LspManagerRequestResult::PulledDiagnostics(result) => {
+                    Self::PulledDiagnostics(result)
+                }
+                LspManagerRequestResult::Hover(result) => Self::Hover(result),
+                LspManagerRequestResult::Completions(result) => Self::Completions(result),
+                LspManagerRequestResult::CompletionDetails(result) => {
+                    Self::CompletionDetails(result)
+                }
+                LspManagerRequestResult::CommandResult(result) => Self::CommandResult(result),
+                LspManagerRequestResult::Locations(result) => Self::Locations(result),
+                LspManagerRequestResult::Hierarchy(result) => Self::Hierarchy(result),
+                LspManagerRequestResult::WorkspaceSymbols(result) => Self::WorkspaceSymbols(result),
+                LspManagerRequestResult::WorkspaceDiagnostics(result) => {
+                    Self::WorkspaceDiagnostics(result)
+                }
+                LspManagerRequestResult::RenamePreparation(result) => {
+                    Self::RenamePreparation(result)
+                }
+                LspManagerRequestResult::WorkspaceEdit(result) => Self::WorkspaceEdit(result),
+                LspManagerRequestResult::CodeActions(result) => Self::CodeActions(result),
+                LspManagerRequestResult::FormattingEdits(result) => Self::FormattingEdits(result),
+                LspManagerRequestResult::SignatureHelp(result) => Self::SignatureHelp(result),
+                LspManagerRequestResult::InlayHints(result) => Self::InlayHints(result),
+                LspManagerRequestResult::LinkedEditingRanges(result) => {
+                    Self::LinkedEditingRanges(result)
+                }
+                LspManagerRequestResult::SemanticTokens(result) => Self::SemanticTokens(result),
+                LspManagerRequestResult::DocumentSymbols(result) => Self::DocumentSymbols(result),
+                LspManagerRequestResult::CodeLenses(result) => Self::CodeLenses(result),
+                LspManagerRequestResult::DocumentLinks(result) => Self::DocumentLinks(result),
+                LspManagerRequestResult::DocumentColors(result) => Self::DocumentColors(result),
+                LspManagerRequestResult::ColorPresentations(result) => {
+                    Self::ColorPresentations(result)
+                }
+                LspManagerRequestResult::FoldingRanges(result) => Self::FoldingRanges(result),
+                LspManagerRequestResult::RequestFailed {
+                    request_id,
+                    kind,
+                    path,
+                    revision,
+                    message,
+                } => Self::RequestFailed {
+                    request_id,
+                    kind,
+                    path,
+                    revision,
+                    message,
+                },
+            },
+        }
+    }
+}
+
+impl From<LanguageServiceEvent> for LspManagerEvent {
+    fn from(event: LanguageServiceEvent) -> Self {
+        match event {
+            LanguageServiceEvent::ServerStateChanged { server, state } => {
+                Self::Notification(LspManagerNotification::ServerStateChanged { server, state })
+            }
+            LanguageServiceEvent::Diagnostics(diagnostics) => {
+                Self::Notification(LspManagerNotification::Diagnostics(diagnostics))
+            }
+            LanguageServiceEvent::PulledDiagnostics(result) => {
+                Self::RequestResult(LspManagerRequestResult::PulledDiagnostics(result))
+            }
+            LanguageServiceEvent::ServerMessage {
+                server,
+                severity,
+                source,
+                show,
+                message,
+            } => Self::Notification(LspManagerNotification::ServerMessage {
+                server,
+                severity,
+                source,
+                show,
+                message,
+            }),
+            LanguageServiceEvent::ServerProgress(progress) => {
+                Self::Notification(LspManagerNotification::ServerProgress(progress))
+            }
+            LanguageServiceEvent::CapabilitiesChanged {
+                server,
+                capabilities,
+            } => Self::Notification(LspManagerNotification::CapabilitiesChanged {
+                server,
+                capabilities,
+            }),
+            LanguageServiceEvent::DocumentOperationFailed {
+                path,
+                operation,
+                message,
+            } => Self::Notification(LspManagerNotification::DocumentOperationFailed {
+                path,
+                operation,
+                message,
+            }),
+            LanguageServiceEvent::Hover(result) => {
+                Self::RequestResult(LspManagerRequestResult::Hover(result))
+            }
+            LanguageServiceEvent::Completions(result) => {
+                Self::RequestResult(LspManagerRequestResult::Completions(result))
+            }
+            LanguageServiceEvent::CompletionDetails(result) => {
+                Self::RequestResult(LspManagerRequestResult::CompletionDetails(result))
+            }
+            LanguageServiceEvent::CommandResult(result) => {
+                Self::RequestResult(LspManagerRequestResult::CommandResult(result))
+            }
+            LanguageServiceEvent::Locations(result) => {
+                Self::RequestResult(LspManagerRequestResult::Locations(result))
+            }
+            LanguageServiceEvent::Hierarchy(result) => {
+                Self::RequestResult(LspManagerRequestResult::Hierarchy(result))
+            }
+            LanguageServiceEvent::WorkspaceSymbols(result) => {
+                Self::RequestResult(LspManagerRequestResult::WorkspaceSymbols(result))
+            }
+            LanguageServiceEvent::WorkspaceDiagnostics(result) => {
+                Self::RequestResult(LspManagerRequestResult::WorkspaceDiagnostics(result))
+            }
+            LanguageServiceEvent::RenamePreparation(result) => {
+                Self::RequestResult(LspManagerRequestResult::RenamePreparation(result))
+            }
+            LanguageServiceEvent::WorkspaceEdit(result) => {
+                Self::RequestResult(LspManagerRequestResult::WorkspaceEdit(result))
+            }
+            LanguageServiceEvent::CodeActions(result) => {
+                Self::RequestResult(LspManagerRequestResult::CodeActions(result))
+            }
+            LanguageServiceEvent::FormattingEdits(result) => {
+                Self::RequestResult(LspManagerRequestResult::FormattingEdits(result))
+            }
+            LanguageServiceEvent::SignatureHelp(result) => {
+                Self::RequestResult(LspManagerRequestResult::SignatureHelp(result))
+            }
+            LanguageServiceEvent::InlayHints(result) => {
+                Self::RequestResult(LspManagerRequestResult::InlayHints(result))
+            }
+            LanguageServiceEvent::LinkedEditingRanges(result) => {
+                Self::RequestResult(LspManagerRequestResult::LinkedEditingRanges(result))
+            }
+            LanguageServiceEvent::SemanticTokens(result) => {
+                Self::RequestResult(LspManagerRequestResult::SemanticTokens(result))
+            }
+            LanguageServiceEvent::DocumentSymbols(result) => {
+                Self::RequestResult(LspManagerRequestResult::DocumentSymbols(result))
+            }
+            LanguageServiceEvent::CodeLenses(result) => {
+                Self::RequestResult(LspManagerRequestResult::CodeLenses(result))
+            }
+            LanguageServiceEvent::DocumentLinks(result) => {
+                Self::RequestResult(LspManagerRequestResult::DocumentLinks(result))
+            }
+            LanguageServiceEvent::DocumentColors(result) => {
+                Self::RequestResult(LspManagerRequestResult::DocumentColors(result))
+            }
+            LanguageServiceEvent::ColorPresentations(result) => {
+                Self::RequestResult(LspManagerRequestResult::ColorPresentations(result))
+            }
+            LanguageServiceEvent::FoldingRanges(result) => {
+                Self::RequestResult(LspManagerRequestResult::FoldingRanges(result))
+            }
+            LanguageServiceEvent::RequestFailed {
+                request_id,
+                kind,
+                path,
+                revision,
+                message,
+            } => Self::RequestResult(LspManagerRequestResult::RequestFailed {
+                request_id,
+                kind,
+                path,
+                revision,
+                message,
+            }),
+        }
+    }
+}
+
+/// Non-blocking destination for the manager's typed event stream.
+pub trait LspManagerEventSink: Send + Sync + 'static {
+    fn on_event(&self, event: LspManagerEvent);
+}
+
+/// Non-blocking destination for the compatibility event stream used by the old App host.
 ///
 /// Implementations are expected to enqueue the event into their UI or application event loop and
-/// return immediately. They must not call blocking language-service methods from this callback.
+/// return immediately. They must not call blocking manager methods from this callback.
 pub trait LanguageServiceEventSink: Send + Sync + 'static {
     fn on_event(&self, event: LanguageServiceEvent);
 }
 
-/// Event sink used by hosts that intentionally ignore language-service output.
+impl<T> LspManagerEventSink for T
+where
+    T: LanguageServiceEventSink,
+{
+    fn on_event(&self, event: LspManagerEvent) {
+        LanguageServiceEventSink::on_event(self, event.into());
+    }
+}
+
+struct LegacyEventSink {
+    sink: Arc<dyn LanguageServiceEventSink>,
+}
+
+impl LspManagerEventSink for LegacyEventSink {
+    fn on_event(&self, event: LspManagerEvent) {
+        self.sink.on_event(event.into());
+    }
+}
+
+/// Event sink used by hosts that intentionally ignore compatibility output.
 #[derive(Debug, Default)]
 pub struct NoopLanguageServiceEventSink;
 
@@ -172,49 +518,82 @@ impl LanguageServiceEventSink for NoopLanguageServiceEventSink {
     fn on_event(&self, _event: LanguageServiceEvent) {}
 }
 
+/// Event sink used by hosts that intentionally ignore manager output.
+#[derive(Debug, Default)]
+pub struct NoopLspManagerEventSink;
+
+impl LspManagerEventSink for NoopLspManagerEventSink {
+    fn on_event(&self, _event: LspManagerEvent) {}
+}
+
 /// Product-level language-service supervisor with a non-blocking document API.
 ///
 /// The supervisor thread owns the Tokio runtime, `zeta-lsp` clients, router, and document bindings.
 /// Callers retain authoritative text and send full snapshots whenever their revision changes.
-pub struct LanguageService {
+pub struct LspManager {
     commands: mpsc::UnboundedSender<SupervisorCommand>,
     thread: Option<JoinHandle<()>>,
     next_request_id: AtomicU64,
 }
 
-impl LanguageService {
+impl LspManager {
     pub fn start(
-        configuration: LanguageServiceConfiguration,
+        configuration: LspManagerConfiguration,
         events: Arc<dyn LanguageServiceEventSink>,
-    ) -> Result<Self, LanguageServiceError> {
+    ) -> Result<Self, LspManagerError> {
+        Self::start_inner(
+            configuration,
+            Arc::new(LegacyEventSink { sink: events }),
+            None,
+        )
+    }
+
+    /// Starts the manager with the typed notification/request-result event stream.
+    pub fn start_with_events(
+        configuration: LspManagerConfiguration,
+        events: Arc<dyn LspManagerEventSink>,
+    ) -> Result<Self, LspManagerError> {
         Self::start_inner(configuration, events, None)
     }
 
     /// Starts the service with content-free request metrics used to evaluate navigation caching.
     pub fn start_with_metrics(
-        configuration: LanguageServiceConfiguration,
+        configuration: LspManagerConfiguration,
         events: Arc<dyn LanguageServiceEventSink>,
-        metrics: Arc<dyn LanguageServiceMetricsSink>,
-    ) -> Result<Self, LanguageServiceError> {
+        metrics: Arc<dyn LspRequestMetricsSink>,
+    ) -> Result<Self, LspManagerError> {
+        Self::start_inner(
+            configuration,
+            Arc::new(LegacyEventSink { sink: events }),
+            Some(metrics),
+        )
+    }
+
+    /// Starts the manager with typed events and content-free request metrics.
+    pub fn start_with_events_and_metrics(
+        configuration: LspManagerConfiguration,
+        events: Arc<dyn LspManagerEventSink>,
+        metrics: Arc<dyn LspRequestMetricsSink>,
+    ) -> Result<Self, LspManagerError> {
         Self::start_inner(configuration, events, Some(metrics))
     }
 
     fn start_inner(
-        configuration: LanguageServiceConfiguration,
-        events: Arc<dyn LanguageServiceEventSink>,
-        metrics: Option<Arc<dyn LanguageServiceMetricsSink>>,
-    ) -> Result<Self, LanguageServiceError> {
-        validate_catalog(&configuration)?;
+        configuration: LspManagerConfiguration,
+        events: Arc<dyn LspManagerEventSink>,
+        metrics: Option<Arc<dyn LspRequestMetricsSink>>,
+    ) -> Result<Self, LspManagerError> {
+        validate_definitions(&configuration)?;
         let (commands, receiver) = mpsc::unbounded_channel();
         let (started_tx, started_rx) = std_mpsc::sync_channel(1);
         let thread_commands = commands.clone();
         let thread = std::thread::Builder::new()
-            .name("zeta-language-service".into())
+            .name("zeta-lsp-manager".into())
             .spawn(move || {
                 let runtime = tokio::runtime::Builder::new_multi_thread()
                     .worker_threads(2)
                     .enable_all()
-                    .thread_name("zeta-language-service-worker")
+                    .thread_name("zeta-lsp-manager-worker")
                     .build();
                 match runtime {
                     Ok(runtime) => {
@@ -229,7 +608,7 @@ impl LanguageService {
                     }
                 }
             })
-            .map_err(LanguageServiceError::RuntimeStart)?;
+            .map_err(LspManagerError::RuntimeStart)?;
         match started_rx.recv() {
             Ok(Ok(())) => Ok(Self {
                 commands,
@@ -238,42 +617,36 @@ impl LanguageService {
             }),
             Ok(Err(error)) => {
                 let _ = thread.join();
-                Err(LanguageServiceError::RuntimeStart(error))
+                Err(LspManagerError::RuntimeStart(error))
             }
             Err(_) => {
                 let _ = thread.join();
-                Err(LanguageServiceError::Closed)
+                Err(LspManagerError::Closed)
             }
         }
     }
 
     pub fn synchronize_document(
         &self,
-        document: LanguageServiceDocument,
-    ) -> Result<(), LanguageServiceError> {
+        document: LspDocumentSnapshot,
+    ) -> Result<(), LspManagerError> {
         self.send(SupervisorCommand::Synchronize(document))
     }
 
-    pub fn save_document(&self, path: impl Into<PathBuf>) -> Result<(), LanguageServiceError> {
+    pub fn save_document(&self, path: impl Into<PathBuf>) -> Result<(), LspManagerError> {
         self.send(SupervisorCommand::Save(path.into()))
     }
 
-    pub fn close_document(&self, path: impl Into<PathBuf>) -> Result<(), LanguageServiceError> {
+    pub fn close_document(&self, path: impl Into<PathBuf>) -> Result<(), LspManagerError> {
         self.send(SupervisorCommand::Close(path.into()))
     }
 
-    pub fn set_enablement(
-        &self,
-        enablement: LanguageServiceEnablement,
-    ) -> Result<(), LanguageServiceError> {
+    pub fn set_enablement(&self, enablement: LspManagerEnablement) -> Result<(), LspManagerError> {
         self.send(SupervisorCommand::SetEnablement(enablement))
     }
 
     /// Cancels one queued or in-flight request. Unknown or already completed IDs are a no-op.
-    pub fn cancel_request(
-        &self,
-        request_id: LanguageRequestId,
-    ) -> Result<(), LanguageServiceError> {
+    pub fn cancel_request(&self, request_id: LanguageRequestId) -> Result<(), LspManagerError> {
         self.send(SupervisorCommand::CancelLanguageRequest(request_id))
     }
 
@@ -282,7 +655,7 @@ impl LanguageService {
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
         position: LanguageDocumentPosition,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::Hover {
             id: self.next_request_id(),
             path: path.into(),
@@ -297,7 +670,7 @@ impl LanguageService {
         revision: LanguageDocumentRevision,
         position: LanguageDocumentPosition,
         trigger: LanguageCompletionTrigger,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::Completion {
             id: self.next_request_id(),
             path: path.into(),
@@ -312,7 +685,7 @@ impl LanguageService {
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
         provider_data: serde_json::Value,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::ResolveCompletion {
             id: self.next_request_id(),
             path: path.into(),
@@ -326,7 +699,7 @@ impl LanguageService {
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
         command: LanguageCommand,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::ExecuteCommand {
             id: self.next_request_id(),
             path: path.into(),
@@ -340,7 +713,7 @@ impl LanguageService {
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
         position: LanguageDocumentPosition,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::Definition {
             id: self.next_request_id(),
             path: path.into(),
@@ -354,7 +727,7 @@ impl LanguageService {
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
         position: LanguageDocumentPosition,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::Declaration {
             id: self.next_request_id(),
             path: path.into(),
@@ -368,7 +741,7 @@ impl LanguageService {
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
         position: LanguageDocumentPosition,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::Implementation {
             id: self.next_request_id(),
             path: path.into(),
@@ -382,7 +755,7 @@ impl LanguageService {
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
         position: LanguageDocumentPosition,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::TypeDefinition {
             id: self.next_request_id(),
             path: path.into(),
@@ -397,7 +770,7 @@ impl LanguageService {
         revision: LanguageDocumentRevision,
         position: LanguageDocumentPosition,
         include_declaration: bool,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::References {
             id: self.next_request_id(),
             path: path.into(),
@@ -412,7 +785,7 @@ impl LanguageService {
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
         position: LanguageDocumentPosition,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::PrepareCallHierarchy {
             id: self.next_request_id(),
             path: path.into(),
@@ -426,7 +799,7 @@ impl LanguageService {
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
         item: LanguageHierarchyItem,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::IncomingCalls {
             id: self.next_request_id(),
             path: path.into(),
@@ -440,7 +813,7 @@ impl LanguageService {
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
         item: LanguageHierarchyItem,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::OutgoingCalls {
             id: self.next_request_id(),
             path: path.into(),
@@ -454,7 +827,7 @@ impl LanguageService {
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
         position: LanguageDocumentPosition,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::PrepareTypeHierarchy {
             id: self.next_request_id(),
             path: path.into(),
@@ -468,7 +841,7 @@ impl LanguageService {
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
         item: LanguageHierarchyItem,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::Supertypes {
             id: self.next_request_id(),
             path: path.into(),
@@ -482,7 +855,7 @@ impl LanguageService {
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
         item: LanguageHierarchyItem,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::Subtypes {
             id: self.next_request_id(),
             path: path.into(),
@@ -495,7 +868,7 @@ impl LanguageService {
         &self,
         language_id: impl Into<String>,
         query: impl Into<String>,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         let id = self.next_request_id();
         self.send(SupervisorCommand::WorkspaceSymbols {
             id,
@@ -508,7 +881,7 @@ impl LanguageService {
     pub fn request_workspace_diagnostics(
         &self,
         language_id: impl Into<String>,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         let id = self.next_request_id();
         self.send(SupervisorCommand::WorkspaceDiagnostics {
             id,
@@ -522,7 +895,7 @@ impl LanguageService {
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
         position: LanguageDocumentPosition,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::PrepareRename {
             id: self.next_request_id(),
             path: path.into(),
@@ -537,7 +910,7 @@ impl LanguageService {
         revision: LanguageDocumentRevision,
         position: LanguageDocumentPosition,
         new_name: impl Into<String>,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::Rename {
             id: self.next_request_id(),
             path: path.into(),
@@ -554,7 +927,7 @@ impl LanguageService {
         range: LanguageLocationRange,
         diagnostics: Vec<LanguageDiagnostic>,
         only: Vec<String>,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::CodeActions {
             id: self.next_request_id(),
             path: path.into(),
@@ -570,7 +943,7 @@ impl LanguageService {
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
         provider_data: serde_json::Value,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::ResolveCodeAction {
             id: self.next_request_id(),
             path: path.into(),
@@ -584,7 +957,7 @@ impl LanguageService {
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
         options: LanguageFormattingOptions,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::DocumentFormatting {
             id: self.next_request_id(),
             path: path.into(),
@@ -599,7 +972,7 @@ impl LanguageService {
         revision: LanguageDocumentRevision,
         range: LanguageTextRange,
         options: LanguageFormattingOptions,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::RangeFormatting {
             id: self.next_request_id(),
             path: path.into(),
@@ -615,7 +988,7 @@ impl LanguageService {
         revision: LanguageDocumentRevision,
         position: LanguageDocumentPosition,
         trigger: LanguageSignatureHelpTrigger,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::SignatureHelp {
             id: self.next_request_id(),
             path: path.into(),
@@ -630,7 +1003,7 @@ impl LanguageService {
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
         range: LanguageTextRange,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::InlayHints {
             id: self.next_request_id(),
             path: path.into(),
@@ -644,7 +1017,7 @@ impl LanguageService {
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
         position: LanguageDocumentPosition,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::LinkedEditingRanges {
             id: self.next_request_id(),
             path: path.into(),
@@ -657,7 +1030,7 @@ impl LanguageService {
         &self,
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::SemanticTokens {
             id: self.next_request_id(),
             path: path.into(),
@@ -669,7 +1042,7 @@ impl LanguageService {
         &self,
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::DocumentSymbols {
             id: self.next_request_id(),
             path: path.into(),
@@ -681,7 +1054,7 @@ impl LanguageService {
         &self,
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::CodeLenses {
             id: self.next_request_id(),
             path: path.into(),
@@ -694,7 +1067,7 @@ impl LanguageService {
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
         lens: LanguageCodeLens,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::ResolveCodeLens {
             id: self.next_request_id(),
             path: path.into(),
@@ -707,7 +1080,7 @@ impl LanguageService {
         &self,
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::DocumentLinks {
             id: self.next_request_id(),
             path: path.into(),
@@ -720,7 +1093,7 @@ impl LanguageService {
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
         link: LanguageDocumentLink,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::ResolveDocumentLink {
             id: self.next_request_id(),
             path: path.into(),
@@ -733,7 +1106,7 @@ impl LanguageService {
         &self,
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::DocumentColors {
             id: self.next_request_id(),
             path: path.into(),
@@ -747,7 +1120,7 @@ impl LanguageService {
         revision: LanguageDocumentRevision,
         range: LanguageTextRange,
         color: LanguageColor,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::ColorPresentations {
             id: self.next_request_id(),
             path: path.into(),
@@ -761,7 +1134,7 @@ impl LanguageService {
         &self,
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::FoldingRanges {
             id: self.next_request_id(),
             path: path.into(),
@@ -773,7 +1146,7 @@ impl LanguageService {
         &self,
         path: impl Into<PathBuf>,
         revision: LanguageDocumentRevision,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         self.queue_request(PendingLanguageRequest::DocumentDiagnostics {
             id: self.next_request_id(),
             path: path.into(),
@@ -781,28 +1154,28 @@ impl LanguageService {
         })
     }
 
-    pub fn shutdown(mut self) -> Result<(), LanguageServiceError> {
+    pub fn shutdown(mut self) -> Result<(), LspManagerError> {
         let (completion, response) = std_mpsc::sync_channel(1);
         self.send(SupervisorCommand::Shutdown { completion })?;
         response
             .recv_timeout(SHUTDOWN_TIMEOUT)
-            .map_err(|_| LanguageServiceError::ShutdownTimeout)?;
+            .map_err(|_| LspManagerError::ShutdownTimeout)?;
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
         }
         Ok(())
     }
 
-    fn send(&self, command: SupervisorCommand) -> Result<(), LanguageServiceError> {
+    fn send(&self, command: SupervisorCommand) -> Result<(), LspManagerError> {
         self.commands
             .send(command)
-            .map_err(|_| LanguageServiceError::Closed)
+            .map_err(|_| LspManagerError::Closed)
     }
 
     fn queue_request(
         &self,
         request: PendingLanguageRequest,
-    ) -> Result<LanguageRequestId, LanguageServiceError> {
+    ) -> Result<LanguageRequestId, LspManagerError> {
         let id = request.id();
         self.send(SupervisorCommand::LanguageRequest(request))?;
         Ok(id)
@@ -813,7 +1186,7 @@ impl LanguageService {
     }
 }
 
-impl Drop for LanguageService {
+impl Drop for LspManager {
     fn drop(&mut self) {
         if self.thread.is_some() {
             let (completion, _) = std_mpsc::sync_channel(1);
@@ -825,10 +1198,10 @@ impl Drop for LanguageService {
 }
 
 enum SupervisorCommand {
-    Synchronize(LanguageServiceDocument),
+    Synchronize(LspDocumentSnapshot),
     Save(PathBuf),
     Close(PathBuf),
-    SetEnablement(LanguageServiceEnablement),
+    SetEnablement(LspManagerEnablement),
     ProtocolEvent {
         server: LanguageServerName,
         generation: u64,
@@ -887,7 +1260,7 @@ enum SupervisorCommand {
 }
 
 struct DocumentState {
-    document: LanguageServiceDocument,
+    document: LspDocumentSnapshot,
     uri: Uri,
     routed: bool,
 }
@@ -909,7 +1282,7 @@ struct ManagedServer {
 }
 
 struct InFlightLanguageRequest {
-    task: tokio::task::JoinHandle<()>,
+    cancellation: CancellationSource,
     kind: LanguageRequestKind,
     server: LanguageServerName,
     server_epoch: u64,
@@ -920,9 +1293,9 @@ struct InFlightLanguageRequest {
 }
 
 struct Supervisor {
-    configuration: LanguageServiceConfiguration,
-    events: Arc<dyn LanguageServiceEventSink>,
-    metrics: Option<Arc<dyn LanguageServiceMetricsSink>>,
+    configuration: LspManagerConfiguration,
+    events: Arc<dyn LspManagerEventSink>,
+    metrics: Option<Arc<dyn LspRequestMetricsSink>>,
     commands: mpsc::UnboundedSender<SupervisorCommand>,
     router: LanguageServerDocumentRouter,
     documents: BTreeMap<PathBuf, DocumentState>,
@@ -937,9 +1310,9 @@ struct Supervisor {
 
 impl Supervisor {
     fn new(
-        configuration: LanguageServiceConfiguration,
-        events: Arc<dyn LanguageServiceEventSink>,
-        metrics: Option<Arc<dyn LanguageServiceMetricsSink>>,
+        configuration: LspManagerConfiguration,
+        events: Arc<dyn LspManagerEventSink>,
+        metrics: Option<Arc<dyn LspRequestMetricsSink>>,
         commands: mpsc::UnboundedSender<SupervisorCommand>,
     ) -> Self {
         let servers = configuration
@@ -976,7 +1349,7 @@ impl Supervisor {
     }
 
     async fn run(mut self, mut commands: mpsc::UnboundedReceiver<SupervisorCommand>) {
-        if self.configuration.enablement == LanguageServiceEnablement::Enabled {
+        if self.configuration.enablement == LspManagerEnablement::Enabled {
             self.enable().await;
         }
         while let Some(command) = commands.recv().await {
@@ -1090,18 +1463,18 @@ impl Supervisor {
         self.disable().await;
     }
 
-    async fn set_enablement(&mut self, enablement: LanguageServiceEnablement) {
+    async fn set_enablement(&mut self, enablement: LspManagerEnablement) {
         if self.configuration.enablement == enablement {
             return;
         }
         self.configuration.enablement = enablement;
         match enablement {
-            LanguageServiceEnablement::Disabled => self.disable().await,
-            LanguageServiceEnablement::Enabled => self.enable().await,
+            LspManagerEnablement::Disabled => self.disable().await,
+            LspManagerEnablement::Enabled => self.enable().await,
         }
     }
 
-    async fn synchronize(&mut self, document: LanguageServiceDocument) {
+    async fn synchronize(&mut self, document: LspDocumentSnapshot) {
         let path = self.absolute_path(document.path());
         if let Some(current) = self.documents.get(&path)
             && document.revision() <= current.document.revision()
@@ -1114,7 +1487,7 @@ impl Supervisor {
             }
             self.emit_document_failure(
                 path,
-                LanguageServiceDocumentOperation::Synchronize,
+                LspDocumentOperation::Synchronize,
                 "document revision did not advance".into(),
             );
             return;
@@ -1124,7 +1497,7 @@ impl Supervisor {
             Err(error) => {
                 self.emit_document_failure(
                     path,
-                    LanguageServiceDocumentOperation::Synchronize,
+                    LspDocumentOperation::Synchronize,
                     error.to_string(),
                 );
                 return;
@@ -1150,7 +1523,7 @@ impl Supervisor {
                 routed: was_routed && !language_changed,
             },
         );
-        if self.configuration.enablement == LanguageServiceEnablement::Enabled {
+        if self.configuration.enablement == LspManagerEnablement::Enabled {
             self.route_current_document(&path).await;
         }
     }
@@ -1167,7 +1540,7 @@ impl Supervisor {
             Err(error) => {
                 self.emit_document_failure(
                     path.to_path_buf(),
-                    LanguageServiceDocumentOperation::Synchronize,
+                    LspDocumentOperation::Synchronize,
                     error.to_string(),
                 );
                 return;
@@ -1186,7 +1559,7 @@ impl Supervisor {
             }
             Err(error) => self.emit_document_failure(
                 path.to_path_buf(),
-                LanguageServiceDocumentOperation::Synchronize,
+                LspDocumentOperation::Synchronize,
                 error.to_string(),
             ),
         }
@@ -1201,11 +1574,7 @@ impl Supervisor {
             return;
         }
         if let Err(error) = self.router.save_document(&document.uri).await {
-            self.emit_document_failure(
-                path,
-                LanguageServiceDocumentOperation::Save,
-                error.to_string(),
-            );
+            self.emit_document_failure(path, LspDocumentOperation::Save, error.to_string());
         }
     }
 
@@ -1227,7 +1596,7 @@ impl Supervisor {
         if let Err(error) = self.router.close_document(&document.uri).await {
             self.emit_document_failure(
                 path.to_path_buf(),
-                LanguageServiceDocumentOperation::Close,
+                LspDocumentOperation::Close,
                 error.to_string(),
             );
         }
@@ -1308,7 +1677,7 @@ impl Supervisor {
                     }
                     WorkDoneProgress::End(progress) => (None, progress.message, None, true),
                 };
-                self.emit(LanguageServiceEvent::ServerProgress(
+                self.emit_notification(LspManagerNotification::ServerProgress(
                     LanguageServerProgress {
                         server: server.to_string(),
                         token: progress_token(progress.token),
@@ -1350,11 +1719,9 @@ impl Supervisor {
                 project_diagnostic(document.document.text(), diagnostic, encoding)
             })
             .collect();
-        self.emit(LanguageServiceEvent::Diagnostics(LanguageDiagnostics::new(
-            path.clone(),
-            document.document.revision(),
-            diagnostics,
-        )));
+        self.emit_notification(LspManagerNotification::Diagnostics(
+            LanguageDiagnostics::new(path.clone(), document.document.revision(), diagnostics),
+        ));
     }
 
     fn absolute_path(&self, path: &Path) -> PathBuf {
@@ -1376,7 +1743,7 @@ impl Supervisor {
     }
 
     fn emit_server_state(&self, server: &LanguageServerName, state: LanguageServerState) {
-        self.emit(LanguageServiceEvent::ServerStateChanged {
+        self.emit_notification(LspManagerNotification::ServerStateChanged {
             server: server.to_string(),
             state,
         });
@@ -1390,7 +1757,7 @@ impl Supervisor {
         show: bool,
         message: String,
     ) {
-        self.emit(LanguageServiceEvent::ServerMessage {
+        self.emit_notification(LspManagerNotification::ServerMessage {
             server: server.to_string(),
             severity: language_server_message_severity(message_type),
             source,
@@ -1403,7 +1770,7 @@ impl Supervisor {
         let Ok(client) = self.router.client_for_server(server) else {
             return;
         };
-        self.emit(LanguageServiceEvent::CapabilitiesChanged {
+        self.emit_notification(LspManagerNotification::CapabilitiesChanged {
             server: server.to_string(),
             capabilities: request_runtime::capability_snapshot(client, server_epoch),
         });
@@ -1412,18 +1779,26 @@ impl Supervisor {
     fn emit_document_failure(
         &self,
         path: PathBuf,
-        operation: LanguageServiceDocumentOperation,
+        operation: LspDocumentOperation,
         message: String,
     ) {
-        self.emit(LanguageServiceEvent::DocumentOperationFailed {
+        self.emit_notification(LspManagerNotification::DocumentOperationFailed {
             path,
             operation,
             message,
         });
     }
 
-    fn emit(&self, event: LanguageServiceEvent) {
-        self.events.on_event(event);
+    fn emit(&self, event: impl Into<LspManagerEvent>) {
+        self.events.on_event(event.into());
+    }
+
+    fn emit_notification(&self, notification: LspManagerNotification) {
+        self.emit(LspManagerEvent::Notification(notification));
+    }
+
+    fn emit_request_result(&self, result: LspManagerRequestResult) {
+        self.emit(LspManagerEvent::RequestResult(result));
     }
 }
 
@@ -1464,29 +1839,25 @@ impl LanguageServerHost for ProtocolEventBridge {
     }
 }
 
-fn validate_catalog(
-    configuration: &LanguageServiceConfiguration,
-) -> Result<(), LanguageServiceError> {
+fn validate_definitions(configuration: &LspManagerConfiguration) -> Result<(), LspManagerError> {
     let mut names = BTreeSet::new();
     let mut languages = BTreeSet::new();
     for definition in &configuration.servers {
         if !names.insert(definition.name().to_string()) {
-            return Err(LanguageServiceError::DuplicateServer(
+            return Err(LspManagerError::DuplicateServer(
                 definition.name().to_string(),
             ));
         }
         for language in definition.language_ids() {
             if !languages.insert(language.to_owned()) {
-                return Err(LanguageServiceError::DuplicateLanguage(language.to_owned()));
+                return Err(LspManagerError::DuplicateLanguage(language.to_owned()));
             }
         }
     }
     file_uri(&configuration.workspace_root).map(|_| ())
 }
 
-fn router_snapshot(
-    current: &DocumentState,
-) -> Result<LanguageDocumentSnapshot, LanguageServiceError> {
+fn router_snapshot(current: &DocumentState) -> Result<LanguageDocumentSnapshot, LspManagerError> {
     Ok(LanguageDocumentSnapshot::new(
         current.uri.clone(),
         current.document.language_id(),
@@ -1495,14 +1866,13 @@ fn router_snapshot(
     )?)
 }
 
-fn file_uri(path: &Path) -> Result<Uri, LanguageServiceError> {
-    let url = url::Url::from_file_path(path).map_err(|_| {
-        LanguageServiceError::InvalidDocumentUri(path.to_string_lossy().into_owned())
-    })?;
+fn file_uri(path: &Path) -> Result<Uri, LspManagerError> {
+    let url = url::Url::from_file_path(path)
+        .map_err(|_| LspManagerError::InvalidDocumentUri(path.to_string_lossy().into_owned()))?;
     Uri::from_str(url.as_str())
-        .map_err(|_| LanguageServiceError::InvalidDocumentUri(path.to_string_lossy().into_owned()))
+        .map_err(|_| LspManagerError::InvalidDocumentUri(path.to_string_lossy().into_owned()))
 }
 
 #[cfg(test)]
-#[path = "service_tests.rs"]
+#[path = "manager_tests.rs"]
 mod tests;

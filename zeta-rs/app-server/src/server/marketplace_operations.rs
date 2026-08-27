@@ -238,10 +238,10 @@ impl AppServer {
             extensions.list(ExtensionCatalogReload::Refresh);
         }
         if let Some(runtime) = &self.marketplace_language_runtime {
-            match runtime.registry() {
+            match runtime.providers() {
                 Ok(providers) => {
                     if let Ok(mut language) = self.language.lock() {
-                        language.set_provider_registry(providers);
+                        language.set_server_providers(providers);
                     }
                 }
                 Err(error) => {

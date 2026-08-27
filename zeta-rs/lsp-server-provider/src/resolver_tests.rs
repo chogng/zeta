@@ -6,10 +6,7 @@ use super::*;
 struct FixedCandidates(Vec<PathBuf>);
 
 impl LanguageServerExecutableCandidates for FixedCandidates {
-    fn candidates(
-        &self,
-        executable_name: &str,
-    ) -> Result<Vec<PathBuf>, LanguageServerCatalogError> {
+    fn candidates(&self, executable_name: &str) -> Result<Vec<PathBuf>, LspServerResolverError> {
         Ok(self
             .0
             .iter()
@@ -38,7 +35,7 @@ fn json_and_shell_builtins_resolve_with_canonical_routes_and_launch_arguments() 
         path
     });
 
-    let resolution = LanguageServerCatalog::default()
+    let resolution = LspServerResolver::default()
         .resolve(
             &FixedCandidates(executables.into()),
             LanguageServerExecutionPolicy::Allowed,
@@ -75,7 +72,7 @@ fn automatic_rust_analyzer_resolves_from_the_frozen_host_path() {
     make_executable(&executable);
     let candidates = FixedCandidates(vec![executable.clone()]);
 
-    let resolution = LanguageServerCatalog::default()
+    let resolution = LspServerResolver::default()
         .resolve(
             &candidates,
             LanguageServerExecutionPolicy::Allowed,
@@ -86,7 +83,7 @@ fn automatic_rust_analyzer_resolves_from_the_frozen_host_path() {
     assert_eq!(resolution.definitions().len(), 1);
     assert!(matches!(
         resolution.entries()[0].state(),
-        LanguageServerCatalogState::Resolved { executable: resolved }
+        LspServerAvailability::Resolved { executable: resolved }
             if resolved == &fs::canonicalize(executable).unwrap()
     ));
 }
@@ -103,7 +100,7 @@ fn rustup_proxy_keeps_the_rust_analyzer_launch_name_after_validation() {
     let rust_analyzer = directory.path().join("rust-analyzer");
     symlink(&rustup, &rust_analyzer).expect("rust-analyzer proxy");
 
-    let resolution = LanguageServerCatalog::default()
+    let resolution = LspServerResolver::default()
         .resolve(
             &FixedCandidates(vec![rust_analyzer.clone()]),
             LanguageServerExecutionPolicy::Allowed,
@@ -119,19 +116,19 @@ fn rustup_proxy_keeps_the_rust_analyzer_launch_name_after_validation() {
     assert_eq!(command.argv0(), Some(rust_analyzer.as_os_str()));
     assert!(matches!(
         resolution.entries()[0].state(),
-        LanguageServerCatalogState::Resolved { executable }
+        LspServerAvailability::Resolved { executable }
             if executable == &fs::canonicalize(&rustup).unwrap()
     ));
 }
 
 #[test]
-fn disabled_catalog_does_not_resolve_available_servers() {
+fn disabled_resolver_does_not_resolve_available_servers() {
     let directory = tempfile::tempdir().expect("directory");
     let executable = directory.path().join(executable_name());
     fs::write(&executable, b"test server").expect("executable");
     make_executable(&executable);
 
-    let resolution = LanguageServerCatalog::disabled()
+    let resolution = LspServerResolver::disabled()
         .resolve(
             &FixedCandidates(vec![executable]),
             LanguageServerExecutionPolicy::Allowed,
@@ -144,14 +141,14 @@ fn disabled_catalog_does_not_resolve_available_servers() {
         resolution
             .entries()
             .iter()
-            .all(|entry| entry.state() == &LanguageServerCatalogState::Disabled)
+            .all(|entry| entry.state() == &LspServerAvailability::Disabled)
     );
 }
 
 #[test]
 fn execution_policy_blocks_resolution_before_inspecting_candidates() {
     let candidates = FixedCandidates(vec![PathBuf::from("/does/not/exist")]);
-    let resolution = LanguageServerCatalog::default()
+    let resolution = LspServerResolver::default()
         .resolve(
             &candidates,
             LanguageServerExecutionPolicy::Disallowed,
@@ -162,7 +159,7 @@ fn execution_policy_blocks_resolution_before_inspecting_candidates() {
     assert!(resolution.definitions().is_empty());
     assert_eq!(
         resolution.entries()[0].state(),
-        &LanguageServerCatalogState::ExecutionDisallowed
+        &LspServerAvailability::ExecutionDisallowed
     );
 }
 
@@ -173,12 +170,12 @@ fn invalid_explicit_executable_is_authoritative_and_does_not_fall_back() {
     fs::write(&discovered, b"test server").expect("executable");
     make_executable(&discovered);
     let candidates = FixedCandidates(vec![discovered]);
-    let catalog = LanguageServerCatalog::new(
+    let resolver = LspServerResolver::new(
         LanguageServerPreference::enabled()
             .with_explicit_executable(directory.path().join("missing")),
     );
 
-    let resolution = catalog
+    let resolution = resolver
         .resolve(
             &candidates,
             LanguageServerExecutionPolicy::Allowed,
@@ -189,7 +186,7 @@ fn invalid_explicit_executable_is_authoritative_and_does_not_fall_back() {
     assert!(resolution.definitions().is_empty());
     assert_eq!(
         resolution.entries()[0].state(),
-        &LanguageServerCatalogState::ExecutableUnavailable
+        &LspServerAvailability::ExecutableUnavailable
     );
 }
 

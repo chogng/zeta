@@ -1,11 +1,11 @@
 use serde_json::Value;
 use zeta_lsp::{LanguageServerCommand, LanguageServerName, LanguageServerRoute};
 
-use crate::LanguageServerCatalogError;
+use crate::LspServerResolverError;
 
 /// One trusted and fully resolved language-server launch definition.
 ///
-/// Catalog resolvers construct this value only after selecting and validating an executable.
+/// Resolvers construct this value only after selecting and validating an executable.
 /// Runtime consumers should pass its command directly to the protocol runtime without performing
 /// another PATH lookup or changing its route.
 #[derive(Clone, Debug)]
@@ -20,7 +20,7 @@ impl LanguageServerDefinition {
         name: impl Into<String>,
         language_ids: I,
         command: LanguageServerCommand,
-    ) -> Result<Self, LanguageServerCatalogError>
+    ) -> Result<Self, LspServerResolverError>
     where
         I: IntoIterator<Item = S>,
         S: Into<String>,

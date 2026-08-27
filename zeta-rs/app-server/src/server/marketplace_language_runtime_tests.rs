@@ -11,9 +11,9 @@ use zeta_extensions::ExtensionCatalog;
 use zeta_extensions::ExtensionCatalogReload;
 use zeta_extensions::ExtensionRootKind;
 use zeta_extensions::ExtensionSourceKind;
-use zeta_language_server_catalog::LanguageServerProviderLaunch;
-use zeta_language_server_catalog::LanguageServerProviderRegistry;
-use zeta_language_server_catalog::ManagedNodeRuntime;
+use zeta_lsp_server_provider::LspServerLaunch;
+use zeta_lsp_server_provider::LspServerProviders;
+use zeta_lsp_server_provider::ManagedNodeRuntime;
 use zeta_marketplace_client::AcquireCapabilityRequest;
 use zeta_marketplace_client::ActivationSpec;
 use zeta_marketplace_client::AvailableCapability;
@@ -123,16 +123,16 @@ fn installed_language_package_projects_assets_and_packaged_server() {
     let runtime = MarketplaceLanguageRuntime::new(
         manager.clone(),
         Some(ManagedNodeRuntime::from_path(&node).unwrap()),
-        LanguageServerProviderRegistry::new(),
+        LspServerProviders::new(),
     );
-    let registry = runtime.registry().unwrap();
-    assert!(registry.contains("demo-language-server"));
-    assert!(registry.activation_enables("demo-language-server"));
-    let definition = registry
+    let providers = runtime.providers().unwrap();
+    assert!(providers.contains("demo-language-server"));
+    assert!(providers.activation_enables("demo-language-server"));
+    let definition = providers
         .definition(
             "demo-language-server",
             root.path(),
-            LanguageServerProviderLaunch::Packaged,
+            LspServerLaunch::Packaged,
         )
         .unwrap()
         .unwrap();

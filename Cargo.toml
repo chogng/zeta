@@ -57,8 +57,8 @@ members = [
     "zeta-rs/keybinding",
     "zeta-rs/keyring-store",
     "zeta-rs/kimi",
-    "zeta-rs/language-server-catalog",
-    "zeta-rs/language-service",
+    "zeta-rs/lsp-server-provider",
+    "zeta-rs/lsp-manager",
     "zeta-rs/login",
     "zeta-rs/marketplace-client",
     "zeta-rs/marketplace-manager",
@@ -316,8 +316,8 @@ zeta-keybinding = { path = "zeta-rs/keybinding" }
 zeta-composer = { path = "app/composer" }
 zeta-keybindings-host = { path = "app/native-keybindings" }
 app-keybinding-ui = { path = "app/keybinding-ui" }
-zeta-language-server-catalog = { path = "zeta-rs/language-server-catalog" }
-zeta-language-service = { path = "zeta-rs/language-service" }
+zeta-lsp-server-provider = { path = "zeta-rs/lsp-server-provider" }
+zeta-lsp-manager = { path = "zeta-rs/lsp-manager" }
 zeta-login = { path = "zeta-rs/login" }
 zeta-marketplace-client = { path = "zeta-rs/marketplace-client" }
 zeta-marketplace-manager = { path = "zeta-rs/marketplace-manager" }

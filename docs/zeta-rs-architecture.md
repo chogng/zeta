@@ -58,8 +58,8 @@ zeta-rs/
 ├── text-file/            # UTF-8 文件保存基线、磁盘版本与外部变化冲突；不拥有 editor 或 I/O
 ├── markdown/             # shared bounded CommonMark/GFM parsing；presentation 位于 app/
 ├── lsp/                  # LSP stdio lifecycle、request pairing、document sync 与 server events
-├── language-server-catalog/ # 内置 server、可信 executable resolution 与 availability；不启动进程
-├── language-service/     # 产品级 LSP 启停、文档路由、请求 facade 与 stale-result gate
+├── lsp-server-provider/  # 内置 server、可信 executable resolution 与 availability；不启动进程
+├── lsp-manager/          # 产品级 LSP 启停、文档路由、请求 facade 与 stale-result gate
 ├── install-context/      # runtime install method, package layout and resource candidates
 ├── apply-patch/          # concrete validated write executor
 ├── session-store/        # Session persistence port + envelope
@@ -197,36 +197,36 @@ pairing、deadline cancellation、文档同步版本、push diagnostics 与规�
 把一个 language ID 绑定到一个 initialized client，保存 editor revision / server incarnation /
 document version，并在显式 replacement 时重放当前全文。它不依赖 `zeta-editor` 或 app host，也不拥有
 server discovery、安装、workspace 配置、restart policy 或 UI projection。
-它会上报规范关闭之外的 transport-close 事实；`zeta-language-service` 用 generation/server epoch
+它会上报规范关闭之外的 transport-close 事实；`zeta-lsp-manager` 用 generation/server epoch
 隔离旧实例，拥有断连 route retirement、有限指数退避、crash-loop gate 和 authoritative snapshot
 重放。跨层所有权与当前阶段见 [`lsp.md`](lsp.md)，当前 API 和修改路径见
 [`lsp/README.md`](../zeta-rs/lsp/README.md)。
 
-`zeta-language-service` 把 fresh diagnostics 转换为 product-neutral UTF-8 document ranges；app
+`zeta-lsp-manager` 把 fresh diagnostics 转换为 product-neutral UTF-8 document ranges；app
 adapter 只负责转换到 `CodeEditorDiagnostic` 并按精确 editor revision 选择缓存，CodeEditor 自己
-完成跨行、soft-wrap 波浪线与命中，Native 在命中后绘制 hover detail。任何 LSP 类型进入 editor
+完成跨行、soft-wrap 波浪线与命中，Desktop 在命中后绘制 hover detail。任何 LSP 类型进入 editor
 crate，或 app 重新计算波浪线 geometry，都表示该边界发生漂移。
 
-`zeta-language-server-catalog` 当前拥有内置 Rust、JSON/JSONC、Shell server identity、
+`zeta-lsp-server-provider` 当前拥有内置 Rust、JSON/JSONC、Shell server identity、
 Automatic/Enabled/Disabled preference、execution policy gate、冻结 PATH candidate 校验、canonical
-executable 和 availability；App Server Config authority 分别持久化 mode/path，Native Settings UI 为三个
+executable 和 availability；App Server Config authority 分别持久化 mode/path，Desktop Settings UI 为三个
 server 保留独立 draft，并只提交 revision-safe typed command，
-再把权威 snapshot 映射进 catalog，并将 definition 交给 language-service。它不启动进程、不决定 workspace trust，也不
+再把权威 snapshot 映射进 resolver，并将 definition 交给 `zeta-lsp-manager`。它不启动进程、不决定 workspace trust，也不
 读取编辑器文档。crate contract 见
-[`language-server-catalog/README.md`](../zeta-rs/language-server-catalog/README.md)。
+[`lsp-server-provider/README.md`](../zeta-rs/lsp-server-provider/README.md)。
 
 `zeta-marketplace-manager` 统一拥有 Marketplace package 的本地 staging、整包 digest 复核、immutable
 artifact、安装/update/uninstall 状态、lease 与 opaque resource。Language 不再拥有第二套 distribution
 storage；App Server 的本地 Language adapter 只把 Manager-verified capability handle 组合进 Extension
-catalog 和 language-server provider registry，下载、安装与激活所有权仍然分离。
+catalog 和 `LspServerProviders` provider collection，下载、安装与激活所有权仍然分离。
 
-`zeta-language-service` 当前位于产品宿主与 `zeta-lsp` 之间，拥有显式 enablement、resolved
+`zeta-lsp-manager` 当前位于产品宿主与 `zeta-lsp` 之间，拥有显式 enablement、resolved
 definition 消费、非阻塞文档/request API、editor revision / LSP version freshness、位置编码转换、
 server generation 和 supervisor thread 生命周期。`app` 已把文件 open/change/save/close、workspace
 replacement、hover/completion/definition 和事件循环接到该层；PATH 中存在有效内置 server 时启用
 对应 route；config generation 变化时 app 重建服务并重放全部打开文档。它不读取文件、不依赖
 `zeta-editor`、不发现 executable，也不绘制 UI。crate contract 见
-[`language-service/README.md`](../zeta-rs/language-service/README.md)。
+[`lsp-manager/README.md`](../zeta-rs/lsp-manager/README.md)。
 
 `zeta-ui::ScrollState`、`ScrollMetrics`、`ScrollView` 与 `ScrollbarController` 提供
 domain-agnostic logical-pixel offset、clamp、viewport clip、内容坐标、同源 scrollbar

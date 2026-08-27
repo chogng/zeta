@@ -17,6 +17,7 @@ use lsp_types::{
 use tokio::io::{AsyncBufRead, AsyncReadExt, AsyncWrite, BufReader};
 use tokio::process::Child;
 use tokio::sync::Mutex;
+use zeta_async_utils::CancellationToken;
 
 use crate::capability::DynamicCapabilityRegistry;
 use crate::document::OpenDocument;
@@ -222,6 +223,22 @@ impl LanguageServerClient {
         self.inner
             .raw
             .request::<R>(params, self.inner.timeouts.request)
+            .await
+    }
+
+    /// Send one typed LSP request and cancel its exact protocol request when the token fires.
+    pub async fn request_with_cancellation<R>(
+        &self,
+        params: R::Params,
+        cancellation: &CancellationToken,
+    ) -> Result<R::Result, LanguageServerError>
+    where
+        R: Request,
+    {
+        self.require_ready()?;
+        self.inner
+            .raw
+            .request_with_cancellation::<R>(params, self.inner.timeouts.request, cancellation)
             .await
     }
 

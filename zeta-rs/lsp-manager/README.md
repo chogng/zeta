@@ -1,10 +1,10 @@
-# `zeta-language-service`
+# `zeta-lsp-manager`
 
 > 本 README 是产品级语言服务协调层的 crate-level canonical contract。底层协议运行时见
 > [`zeta-lsp`](../lsp/README.md)，跨 crate 的能力、产品语义和演进阶段见
 > [`docs/lsp.md`](../../docs/lsp.md)。
 
-`zeta-language-service` 位于产品宿主与 `zeta-lsp` 之间。它拥有语言服务启停、调用方已经解析并
+`zeta-lsp-manager` 位于产品宿主与 `zeta-lsp` 之间。它拥有语言服务启停、调用方已经解析并
 信任的 server definitions、文档快照路由、editor revision freshness、LSP position 到 UTF-8 byte range
 的转换，以及 supervisor thread 生命周期。它不读取文件、不拥有 mutable editor text、不发现或
 安装 executable，也不绘制诊断、补全或 hover UI。
@@ -13,26 +13,31 @@
 
 | API / type | 当前职责 | 明确不做 |
 | --- | --- | --- |
-| `LanguageService` | 提供非阻塞文档 API并拥有 supervisor thread、Tokio runtime、router 与 clients | 保存编辑器文本或直接修改 UI |
-| `LanguageServiceConfiguration` | 固定 workspace root、启用状态和 resolved server definitions | 读取设置、PATH 或安装目录 |
+| `LspManager` | 提供非阻塞文档 API并拥有 supervisor thread、Tokio runtime、router 与 clients | 保存编辑器文本或直接修改 UI |
+| `LspManagerConfiguration` | 固定 workspace root、启用状态和 resolved server definitions | 读取设置、PATH 或安装目录 |
 | `LanguageServerRestartPolicy` | 定义 Never 或有限指数退避、重启预算和 healthy-window reset | 发现 executable 或绘制错误 UI |
 | `LanguageServerState` | 向产品发布 Starting、Ready、BackingOff、CrashLoop、Failed、Stopped | 保存设置或作为协议状态 |
-| `zeta-language-server-catalog::LanguageServerDefinition` | catalog 委托的唯一 route、canonical command 与 initialize options | 在 runtime 内重新查询 PATH |
-| `LanguageServiceDocument` | 传递绝对路径、language ID、精确 editor revision 和 authoritative full text | 充当磁盘 revision 或文件缓存 |
+| `zeta-lsp-server-provider::LanguageServerDefinition` | resolver/provider 委托的唯一 route、canonical command 与 initialize options | 在 runtime 内重新查询 PATH |
+| `LspDocumentSnapshot` | 传递绝对路径、language ID、精确 editor revision 和 authoritative full text | 充当磁盘 revision 或文件缓存 |
 | `LanguageDiagnostics` | 绑定路径、精确 editor revision 和 product-neutral UTF-8 ranges | 保存 LSP URI、version 或 paint style |
 | `LanguageRequestId` / `LanguageDocumentPosition` | 非阻塞请求 identity 与 editor-owned UTF-8 source position；本地 service 或 Remote product adapter 在请求边界分配 identity | 暴露 LSP position encoding |
 | `LanguageHover` / `LanguageCompletions` / `LanguageDefinitions` | capability-gated、revision-fresh 的产品结果 | 绘制 popup、读取定义文件或持有 editor text |
-| `LanguageServiceEventSink` | 快速接收状态、诊断、消息和异步文档错误 | 在 callback 中阻塞或反向调用服务 |
-| `LanguageServiceMetricsSink` | 接收不含源码、路径、query 或 position 的请求结果指标 | 做 telemetry transport、保存用户内容或控制请求 |
+| `LspManagerEventSink` | 快速接收分开的通知与请求结果 | 在 callback 中阻塞或反向调用 manager |
+| `LspRequestMetricsSink` | 接收不含源码、路径、query 或 position 的请求结果指标 | 做 telemetry transport、保存用户内容或控制请求 |
 
-`LanguageServiceEnablement::Disabled` 会保留最新文档快照但不启动 server。调用方必须显式提供
-`Enabled` 和非歧义 catalog，服务才会把 resolved command 委托给 `zeta-lsp` 启动。
+`LspManagerEnablement::Disabled` 会保留最新文档快照但不启动 server。调用方必须显式提供
+`Enabled` 和非歧义 resolver/provider 结果，manager 才会把 resolved command 委托给 `zeta-lsp` 启动。
+
+manager 的事件流已经把两种语义分开：`LspManagerEvent::Notification` 只承载 server 状态、diagnostics、
+message、progress 和 capability 变化；`LspManagerEvent::RequestResult` 只承载带 request identity 的
+语言查询结果或失败。新代码统一使用 `Lsp*` API；`LanguageService*` 类型和旧的扁平事件 sink 只保留为
+App 迁移兼容层。
 
 ## 内部执行路径
 
 ```text
-Native / another product host
-  → LanguageService::synchronize_document(full snapshot)
+Desktop / another product host
+  → LspManager::synchronize_document(full snapshot)
   → SupervisorCommand::Synchronize
   → Supervisor
       ├─ validate monotonic LanguageDocumentRevision
@@ -44,7 +49,7 @@ LanguageServerEvent::PublishDiagnostics
   → ProtocolEventBridge
   → reject stale supervisor generation / LSP document version
   → projection::project_diagnostic(position encoding → UTF-8 byte range)
-  → LanguageServiceEvent::Diagnostics(editor revision)
+  → LspManagerEvent::Notification(Diagnostics(editor revision))
   → product event loop
 
 LanguageServerEvent::TransportClosed
@@ -71,8 +76,8 @@ request_hover / request_completions / request_definition
   用于拒绝已停用、已替换或已重启实例的迟到事件。
 - `ServerRestartTracker` 只计算连续失败、healthy-window reset 和 bounded backoff；`Supervisor` 拥有
   timer、route retirement、fresh launch 与 crash-loop 状态转换。
-- `validate_catalog` 在创建 thread 前拒绝重复 server name 和重复 language route。
-- `router_snapshot` 把产品文档转换为 `zeta-lsp` snapshot；协议类型不会泄漏到 Native adapter。
+- `validate_definitions` 在创建 thread 前拒绝重复 server name 和重复 language route。
+- `router_snapshot` 把产品文档转换为 `zeta-lsp` snapshot；协议类型不会泄漏到 Desktop adapter。
 - `projection::project_diagnostic` 根据 initialize 协商的位置编码生成 editor byte range。
 - `request_runtime` 拥有 capability gate、异步 request task 和三重 freshness gate；`requests` 只定义
   product-neutral input/result 与 UTF-8/UTF-16 projection。
@@ -87,7 +92,7 @@ ownership 漂移。
 
 - workspace root 必须能转换为绝对 file URI；文档必须有非空绝对路径和 language ID。
 - 同一路径只接受递增 editor revision；相同 revision 是无操作，旧 revision 产生异步文档错误。
-- 一个 language ID 只能路由到一个 server。catalog 歧义在 thread 启动前同步返回错误。
+- 一个 language ID 只能路由到一个 server。resolver 歧义在 thread 启动前同步返回错误。
 - 启用后异步启动 resolved command；单个 server 启动或 transport 失败按配置发布 `Failed`、
   `BackingOff` 或 `CrashLoop`，不会使 supervisor panic。
 - 默认策略最多重启五次，延迟从 250 ms 指数增长并封顶 4 s；连续 Ready 60 s 后下一次失败从新预算开始。
@@ -108,11 +113,11 @@ ownership 漂移。
 ## 测试、修改影响与当前限制
 
 ```bash
-cargo test --manifest-path Cargo.toml -p zeta-language-service
-cargo clippy --manifest-path Cargo.toml -p zeta-language-service --all-targets -- -D warnings
+cargo test --manifest-path Cargo.toml -p zeta-lsp-manager
+cargo clippy --manifest-path Cargo.toml -p zeta-lsp-manager --all-targets -- -D warnings
 ```
 
-测试覆盖禁用模式的文档生命周期、启动失败隔离、catalog 歧义校验、精确重启预算、backoff 期间
+测试覆盖禁用模式的文档生命周期、启动失败隔离、resolver 歧义校验、精确重启预算、backoff 期间
 禁用、真实 stdio server 初始化后崩溃、UTF-8/UTF-16/emoji/CRLF position conversion，以及拒绝、
 取消和 content-free metrics。
 修改 enable/disable、generation 或 epoch 规则时必须补充迟到 timer/event 测试；修改文档 binding
@@ -123,14 +128,14 @@ server 选定的位置编码。
 
 - ✅ 产品级 supervisor、resolved definition 消费、显式启停、文档路由和规范 shutdown；
 - ✅ diagnostics freshness 与 product-neutral byte-range projection；
-- ✅ Native 已通过独立 adapter 接入 editor open/change/save/close 和 workspace replacement；
-- ✅ Native 通过独立 catalog 自动解析 PATH 中的 Rust、JSON/JSONC 与 Shell server，不可用时保持 Disabled；
-- ✅ Native 消费 App Server Config snapshot，三个内置 server 均支持独立持久化 mode/path、Settings UI、
+- ✅ Desktop 已通过独立 adapter 接入 editor open/change/save/close 和 workspace replacement；
+- ✅ Desktop 通过独立 resolver 自动解析 PATH 中的 Rust、JSON/JSONC 与 Shell server，不可用时保持 Disabled；
+- ✅ Desktop 消费 App Server Config snapshot，三个内置 server 均支持独立持久化 mode/path、Settings UI、
   热重配和打开文档重放；
-- ✅ Native host 已把 neutral diagnostics 接入 CodeEditor decoration 与 hover detail；本 crate 仍不拥有 UI；
+- ✅ Desktop host 已把 neutral diagnostics 接入 CodeEditor decoration 与 hover detail；本 crate 仍不拥有 UI；
 - ✅ 意外 transport close、断连 route retirement、有限指数退避、healthy-window reset、crash-loop gate
   和 authoritative document replay；
-- ✅ Native Settings 显示 Starting、Ready、BackingOff、CrashLoop、Failed 和 Stopped，运行态不进入配置 authority；
+- ✅ Desktop Settings 显示 Starting、Ready、BackingOff、CrashLoop、Failed 和 Stopped，运行态不进入配置 authority；
 - ✅ hover/completion/resolve/command/navigation/hierarchy/rename/code-action/formatting/signature-help/inlay-hints/linked-editing 非阻塞 facade、capability gate、request identity 和 stale-result rejection；
 - ✅ Semantic Tokens、Document Symbols、CodeLens、Document Links、Document Colors 与 Folding 的 product-neutral projection 和 revision freshness；
 - ✅ 静态/动态 capability gate、dynamic registration 与 work-done progress 事件；
@@ -140,7 +145,7 @@ server 选定的位置编码。
 - ✅ request kind/server incarnation/configuration + service generation/cold-warm/latency/result-count 与
   delivered/empty/failed/cancelled/stale-discarded/rejected 指标；不记录路径、文本、query 或 position；
 - ✅ 显式 `cancel_request`、disable/reconfigure/shutdown 的 in-flight task cancellation；
-- ✅ Native pointer hover、latest-request gate、可滚动 completion window/安全 textEdit 接受，以及 F12
+- ✅ Desktop pointer hover、latest-request gate、可滚动 completion window/安全 textEdit 接受，以及 F12
   definition navigation；
 - ✅ Desktop 已把 completion resolve/commands、additional edits、semantic tokens 和文档特性接入现有 Editor contract；多 definition target 复用 Peek 列表；
 - 尚未完成：diagnostic result-id/partial-result/refresh；

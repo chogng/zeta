@@ -71,31 +71,32 @@ use zeta_app_server_protocol::protocol::language::LanguageWorkspaceEditEntryDto;
 use zeta_app_server_protocol::protocol::language::LanguageWorkspaceSymbolDto;
 use zeta_app_server_protocol::protocol::language::LanguageWorkspaceSymbolsParams;
 use zeta_app_server_protocol::protocol::language::LanguageWorkspaceSymbolsResult;
-use zeta_language_service::LanguageCodeAction;
-use zeta_language_service::LanguageCommand;
-use zeta_language_service::LanguageCompletionInsertTextFormat;
-use zeta_language_service::LanguageCompletionItem;
-use zeta_language_service::LanguageCompletionItemKind;
-use zeta_language_service::LanguageCompletionTrigger;
-use zeta_language_service::LanguageDiagnostic;
-use zeta_language_service::LanguageDiagnosticSeverity;
-use zeta_language_service::LanguageDocumentPosition;
-use zeta_language_service::LanguageDocumentRevision;
-use zeta_language_service::LanguageFormattingOptions;
-use zeta_language_service::LanguageHierarchyEntry;
-use zeta_language_service::LanguageHierarchyItem;
-use zeta_language_service::LanguageInlayHintKind;
-use zeta_language_service::LanguageLocationPosition;
-use zeta_language_service::LanguageLocationRange;
-use zeta_language_service::LanguageLocationTarget;
-use zeta_language_service::LanguagePositionEncoding;
-use zeta_language_service::LanguagePulledDiagnosticReport;
-use zeta_language_service::LanguageServiceDocument;
-use zeta_language_service::LanguageServiceEvent;
-use zeta_language_service::LanguageSignatureHelpTrigger;
-use zeta_language_service::LanguageTextRange;
-use zeta_language_service::LanguageWorkspaceEdit;
-use zeta_language_service::{
+use zeta_async_utils::CancellationToken;
+use zeta_lsp_manager::LanguageCodeAction;
+use zeta_lsp_manager::LanguageCommand;
+use zeta_lsp_manager::LanguageCompletionInsertTextFormat;
+use zeta_lsp_manager::LanguageCompletionItem;
+use zeta_lsp_manager::LanguageCompletionItemKind;
+use zeta_lsp_manager::LanguageCompletionTrigger;
+use zeta_lsp_manager::LanguageDiagnostic;
+use zeta_lsp_manager::LanguageDiagnosticSeverity;
+use zeta_lsp_manager::LanguageDocumentPosition;
+use zeta_lsp_manager::LanguageDocumentRevision;
+use zeta_lsp_manager::LanguageFormattingOptions;
+use zeta_lsp_manager::LanguageHierarchyEntry;
+use zeta_lsp_manager::LanguageHierarchyItem;
+use zeta_lsp_manager::LanguageInlayHintKind;
+use zeta_lsp_manager::LanguageLocationPosition;
+use zeta_lsp_manager::LanguageLocationRange;
+use zeta_lsp_manager::LanguageLocationTarget;
+use zeta_lsp_manager::LanguagePositionEncoding;
+use zeta_lsp_manager::LanguagePulledDiagnosticReport;
+use zeta_lsp_manager::LanguageSignatureHelpTrigger;
+use zeta_lsp_manager::LanguageTextRange;
+use zeta_lsp_manager::LanguageWorkspaceEdit;
+use zeta_lsp_manager::LspDocumentSnapshot;
+use zeta_lsp_manager::LspManagerRequestResult;
+use zeta_lsp_manager::{
     LanguageDeleteMode, LanguageExistingTargetBehavior, LanguageMissingTargetBehavior,
     LanguageWorkspaceEditEntry,
 };
@@ -134,18 +135,31 @@ fn diagnostic_severity_to_dto(
 }
 
 impl AppServer {
-    pub(super) fn language_synchronize(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn language_synchronize(
+        &self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
         let params: LanguageSynchronizeParams = decode(params)?;
         let workspace =
             self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
         let source_path = workspace
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
-        let _runtime = self.prepare_document_runtime(&workspace, &source_path, &params.document)?;
+        let _runtime = self.prepare_document_runtime(
+            &workspace,
+            &source_path,
+            &params.document,
+            cancellation,
+        )?;
         result(&())
     }
 
-    pub(super) fn language_close(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn language_close(
+        &self,
+        params: &Value,
+        _cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
         let params: LanguageCloseParams = decode(params)?;
         let workspace = self.language_workspace_root_for(params.workspace_folder_id.as_deref())?;
         let source_path = workspace
@@ -159,7 +173,11 @@ impl AppServer {
         result(&())
     }
 
-    pub(super) fn language_document_diagnostics(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn language_document_diagnostics(
+        &self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
         let params: LanguageDocumentDiagnosticsParams = decode(params)?;
         let workspace =
             self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
@@ -167,18 +185,22 @@ impl AppServer {
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let revision = LanguageDocumentRevision::new(params.document.revision);
-        let mut runtime =
-            self.prepare_document_runtime(&workspace, &source_path, &params.document)?;
+        let mut runtime = self.prepare_document_runtime(
+            &workspace,
+            &source_path,
+            &params.document,
+            cancellation,
+        )?;
         let request_id = runtime
-            .service()
+            .manager()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
             .request_document_diagnostics(&source_path, revision)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let (kind, diagnostics) = match runtime
-            .wait_for_request(request_id)
+            .wait_for_request(request_id, cancellation)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?
         {
-            LanguageServiceEvent::PulledDiagnostics(result) => match result.report {
+            LspManagerRequestResult::PulledDiagnostics(result) => match result.report {
                 LanguagePulledDiagnosticReport::Full(diagnostics) => {
                     (LanguageDiagnosticReportKindDto::Full, diagnostics)
                 }
@@ -186,7 +208,7 @@ impl AppServer {
                     (LanguageDiagnosticReportKindDto::Unchanged, Vec::new())
                 }
             },
-            LanguageServiceEvent::RequestFailed { .. } => {
+            LspManagerRequestResult::RequestFailed { .. } => {
                 return Err(language_error(AppServerErrorName::LanguageRequestFailed));
             }
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
@@ -201,7 +223,11 @@ impl AppServer {
         })
     }
 
-    pub(super) fn language_workspace_diagnostics(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn language_workspace_diagnostics(
+        &self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
         let params: LanguageWorkspaceDiagnosticsParams = decode(params)?;
         let workspace = self.language_workspace_root_for(params.workspace_folder_id.as_deref())?;
         let snapshot = self
@@ -228,10 +254,10 @@ impl AppServer {
             .request_workspace_diagnostics(language_id)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let response = match runtime
-            .wait_for_request(request_id)
+            .wait_for_request(request_id, cancellation)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?
         {
-            LanguageServiceEvent::WorkspaceDiagnostics(response) => response,
+            LspManagerRequestResult::WorkspaceDiagnostics(response) => response,
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         };
         if !response.supported {
@@ -288,6 +314,7 @@ impl AppServer {
         &self,
         document: &zeta_app_server_protocol::protocol::language::LanguageDocumentDto,
         position: LanguagePositionDto,
+        cancellation: &CancellationToken,
     ) -> Result<
         (
             zeta_workspace::WorkspaceRoot,
@@ -306,7 +333,8 @@ impl AppServer {
         let revision = LanguageDocumentRevision::new(document.revision);
         let position = utf8_position(&document.text, position)
             .ok_or_else(|| language_error(AppServerErrorName::LanguageRequestFailed))?;
-        let runtime = self.prepare_document_runtime(&workspace, &source_path, document)?;
+        let runtime =
+            self.prepare_document_runtime(&workspace, &source_path, document, cancellation)?;
         Ok((workspace, source_path, revision, position, runtime))
     }
 
@@ -315,10 +343,14 @@ impl AppServer {
         workspace: &zeta_workspace::WorkspaceRoot,
         source_path: &Path,
         document: &zeta_app_server_protocol::protocol::language::LanguageDocumentDto,
+        cancellation: &CancellationToken,
     ) -> Result<
         std::sync::MutexGuard<'_, super::language_runtime::AppServerLanguageRuntime>,
         RpcError,
     > {
+        if cancellation.is_cancelled() {
+            return Err(language_error(AppServerErrorName::RequestCancelled));
+        }
         let snapshot = self
             .config
             .as_ref()
@@ -326,7 +358,7 @@ impl AppServer {
             .read_snapshot()
             .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let revision = LanguageDocumentRevision::new(document.revision);
-        let service_document = LanguageServiceDocument::new(
+        let service_document = LspDocumentSnapshot::new(
             source_path,
             language_service_id(&document.language_id),
             revision,
@@ -350,27 +382,31 @@ impl AppServer {
         Ok(runtime)
     }
 
-    pub(super) fn language_hover(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn language_hover(
+        &self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
         let params: LanguageHoverParams = decode(params)?;
         let (_, source_path, revision, position, mut runtime) =
-            self.prepare_position_request(&params.document, params.position)?;
+            self.prepare_position_request(&params.document, params.position, cancellation)?;
         let service = runtime
-            .service()
+            .manager()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = service
             .request_hover(&source_path, revision, position)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let event = runtime
-            .wait_for_request(request_id)
+            .wait_for_request(request_id, cancellation)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let (contents, range) = match event {
-            LanguageServiceEvent::Hover(hover) => (
+            LspManagerRequestResult::Hover(hover) => (
                 Some(hover.contents),
                 hover.range.and_then(|range| {
                     byte_range_to_utf16(&params.document.text, range.byte_range())
                 }),
             ),
-            LanguageServiceEvent::RequestFailed { .. } => (None, None),
+            LspManagerRequestResult::RequestFailed { .. } => (None, None),
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         };
         result(&LanguageHoverResult {
@@ -380,7 +416,11 @@ impl AppServer {
         })
     }
 
-    pub(super) fn language_resolve_completion(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn language_resolve_completion(
+        &self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
         let params: LanguageResolveCompletionParams = decode(params)?;
         let workspace =
             self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
@@ -388,18 +428,22 @@ impl AppServer {
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let revision = LanguageDocumentRevision::new(params.document.revision);
-        let mut runtime =
-            self.prepare_document_runtime(&workspace, &source_path, &params.document)?;
+        let mut runtime = self.prepare_document_runtime(
+            &workspace,
+            &source_path,
+            &params.document,
+            cancellation,
+        )?;
         let request_id = runtime
-            .service()
+            .manager()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
             .request_resolve_completion(&source_path, revision, params.provider_data)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let details = match runtime
-            .wait_for_request(request_id)
+            .wait_for_request(request_id, cancellation)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?
         {
-            LanguageServiceEvent::CompletionDetails(details) => details,
+            LspManagerRequestResult::CompletionDetails(details) => details,
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         };
         result(&LanguageCompletionDetailsResult {
@@ -409,7 +453,11 @@ impl AppServer {
         })
     }
 
-    pub(super) fn language_execute_command(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn language_execute_command(
+        &self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
         let params: LanguageExecuteCommandParams = decode(params)?;
         let workspace =
             self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
@@ -417,10 +465,14 @@ impl AppServer {
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let revision = LanguageDocumentRevision::new(params.document.revision);
-        let mut runtime =
-            self.prepare_document_runtime(&workspace, &source_path, &params.document)?;
+        let mut runtime = self.prepare_document_runtime(
+            &workspace,
+            &source_path,
+            &params.document,
+            cancellation,
+        )?;
         let request_id = runtime
-            .service()
+            .manager()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
             .request_execute_command(
                 &source_path,
@@ -433,31 +485,35 @@ impl AppServer {
             )
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         match runtime
-            .wait_for_request(request_id)
+            .wait_for_request(request_id, cancellation)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?
         {
-            LanguageServiceEvent::CommandResult(_) => result(&()),
+            LspManagerRequestResult::CommandResult(_) => result(&()),
             _ => Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         }
     }
 
-    pub(super) fn language_completions(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn language_completions(
+        &self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
         let params: LanguageCompletionsParams = decode(params)?;
         let (_, source_path, revision, position, mut runtime) =
-            self.prepare_position_request(&params.document, params.position)?;
+            self.prepare_position_request(&params.document, params.position, cancellation)?;
         let trigger = completion_trigger(params.trigger_kind, params.trigger_character.as_deref())?;
         let service = runtime
-            .service()
+            .manager()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = service
             .request_completions(&source_path, revision, position, trigger)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let event = runtime
-            .wait_for_request(request_id)
+            .wait_for_request(request_id, cancellation)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let completions = match event {
-            LanguageServiceEvent::Completions(completions) => completions,
-            LanguageServiceEvent::RequestFailed { .. } => {
+            LspManagerRequestResult::Completions(completions) => completions,
+            LspManagerRequestResult::RequestFailed { .. } => {
                 return result(&LanguageCompletionsResult {
                     revision: params.document.revision,
                     is_incomplete: false,
@@ -480,17 +536,25 @@ impl AppServer {
         })
     }
 
-    pub(super) fn language_document_formatting(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn language_document_formatting(
+        &self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
         let params: LanguageDocumentFormattingParams = decode(params)?;
-        self.language_formatting(&params.document, None, params.options)
+        self.language_formatting(&params.document, None, params.options, cancellation)
     }
 
-    pub(super) fn language_range_formatting(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn language_range_formatting(
+        &self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
         let params: LanguageRangeFormattingParams = decode(params)?;
         let range = utf8_byte_range(&params.document.text, params.range)
             .map(LanguageTextRange::new)
             .ok_or_else(|| language_error(AppServerErrorName::LanguageRequestFailed))?;
-        self.language_formatting(&params.document, Some(range), params.options)
+        self.language_formatting(&params.document, Some(range), params.options, cancellation)
     }
 
     fn language_formatting(
@@ -498,6 +562,7 @@ impl AppServer {
         document: &zeta_app_server_protocol::protocol::language::LanguageDocumentDto,
         range: Option<LanguageTextRange>,
         options: LanguageFormattingOptionsDto,
+        cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let workspace =
             self.language_workspace_root_for(document.workspace_folder_id.as_deref())?;
@@ -505,9 +570,10 @@ impl AppServer {
             .resolve_existing(&document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let revision = LanguageDocumentRevision::new(document.revision);
-        let mut runtime = self.prepare_document_runtime(&workspace, &source_path, document)?;
+        let mut runtime =
+            self.prepare_document_runtime(&workspace, &source_path, document, cancellation)?;
         let service = runtime
-            .service()
+            .manager()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let options = LanguageFormattingOptions {
             tab_size: options.tab_size,
@@ -520,11 +586,11 @@ impl AppServer {
         }
         .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let event = runtime
-            .wait_for_request(request_id)
+            .wait_for_request(request_id, cancellation)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let edits = match event {
-            LanguageServiceEvent::FormattingEdits(result) => result.edits,
-            LanguageServiceEvent::RequestFailed { .. } => Vec::new(),
+            LspManagerRequestResult::FormattingEdits(result) => result.edits,
+            LspManagerRequestResult::RequestFailed { .. } => Vec::new(),
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         };
         let edits = edits
@@ -543,10 +609,14 @@ impl AppServer {
         })
     }
 
-    pub(super) fn language_signature_help(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn language_signature_help(
+        &self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
         let params: LanguageSignatureHelpParams = decode(params)?;
         let (_, source_path, revision, position, mut runtime) =
-            self.prepare_position_request(&params.document, params.position)?;
+            self.prepare_position_request(&params.document, params.position, cancellation)?;
         let trigger = match (params.trigger_kind, params.trigger_character) {
             (LanguageSignatureHelpTriggerKindDto::Invoke, None) => {
                 LanguageSignatureHelpTrigger::Invoked
@@ -562,17 +632,17 @@ impl AppServer {
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         };
         let service = runtime
-            .service()
+            .manager()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = service
             .request_signature_help(&source_path, revision, position, trigger)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let event = runtime
-            .wait_for_request(request_id)
+            .wait_for_request(request_id, cancellation)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let help = match event {
-            LanguageServiceEvent::SignatureHelp(help) => Some(help),
-            LanguageServiceEvent::RequestFailed { .. } => None,
+            LspManagerRequestResult::SignatureHelp(help) => Some(help),
+            LspManagerRequestResult::RequestFailed { .. } => None,
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         };
         let (signatures, active_signature) = help.map_or_else(
@@ -605,7 +675,11 @@ impl AppServer {
         })
     }
 
-    pub(super) fn language_inlay_hints(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn language_inlay_hints(
+        &self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
         let params: LanguageInlayHintsParams = decode(params)?;
         let workspace =
             self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
@@ -616,20 +690,24 @@ impl AppServer {
         let range = utf8_byte_range(&params.document.text, params.range)
             .map(LanguageTextRange::new)
             .ok_or_else(|| language_error(AppServerErrorName::LanguageRequestFailed))?;
-        let mut runtime =
-            self.prepare_document_runtime(&workspace, &source_path, &params.document)?;
+        let mut runtime = self.prepare_document_runtime(
+            &workspace,
+            &source_path,
+            &params.document,
+            cancellation,
+        )?;
         let service = runtime
-            .service()
+            .manager()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = service
             .request_inlay_hints(&source_path, revision, range)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let event = runtime
-            .wait_for_request(request_id)
+            .wait_for_request(request_id, cancellation)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let hints = match event {
-            LanguageServiceEvent::InlayHints(result) => result.hints,
-            LanguageServiceEvent::RequestFailed { .. } => Vec::new(),
+            LspManagerRequestResult::InlayHints(result) => result.hints,
+            LspManagerRequestResult::RequestFailed { .. } => Vec::new(),
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         };
         let hints = hints
@@ -665,21 +743,25 @@ impl AppServer {
         })
     }
 
-    pub(super) fn language_linked_editing_ranges(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn language_linked_editing_ranges(
+        &self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
         let params: LanguageLinkedEditingRangesParams = decode(params)?;
         let (_, source_path, revision, position, mut runtime) =
-            self.prepare_position_request(&params.document, params.position)?;
+            self.prepare_position_request(&params.document, params.position, cancellation)?;
         let service = runtime
-            .service()
+            .manager()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = service
             .request_linked_editing_ranges(&source_path, revision, position)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let event = runtime
-            .wait_for_request(request_id)
+            .wait_for_request(request_id, cancellation)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let (ranges, word_pattern) = match event {
-            LanguageServiceEvent::LinkedEditingRanges(result) => {
+            LspManagerRequestResult::LinkedEditingRanges(result) => {
                 let ranges = result
                     .ranges
                     .into_iter()
@@ -691,7 +773,7 @@ impl AppServer {
                     .collect::<Result<Vec<_>, RpcError>>()?;
                 (ranges, result.word_pattern)
             }
-            LanguageServiceEvent::RequestFailed { .. } => (Vec::new(), None),
+            LspManagerRequestResult::RequestFailed { .. } => (Vec::new(), None),
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         };
         result(&LanguageLinkedEditingRangesResult {
@@ -701,7 +783,11 @@ impl AppServer {
         })
     }
 
-    pub(super) fn language_semantic_tokens(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn language_semantic_tokens(
+        &self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
         let params: LanguageSemanticTokensParams = decode(params)?;
         let workspace =
             self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
@@ -709,20 +795,24 @@ impl AppServer {
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let revision = LanguageDocumentRevision::new(params.document.revision);
-        let mut runtime =
-            self.prepare_document_runtime(&workspace, &source_path, &params.document)?;
+        let mut runtime = self.prepare_document_runtime(
+            &workspace,
+            &source_path,
+            &params.document,
+            cancellation,
+        )?;
         let service = runtime
-            .service()
+            .manager()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = service
             .request_semantic_tokens(&source_path, revision)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let event = runtime
-            .wait_for_request(request_id)
+            .wait_for_request(request_id, cancellation)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let (result_id, tokens) = match event {
-            LanguageServiceEvent::SemanticTokens(result) => (result.result_id, result.tokens),
-            LanguageServiceEvent::RequestFailed { .. } => (None, Vec::new()),
+            LspManagerRequestResult::SemanticTokens(result) => (result.result_id, result.tokens),
+            LspManagerRequestResult::RequestFailed { .. } => (None, Vec::new()),
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         };
         let tokens = tokens
@@ -743,7 +833,11 @@ impl AppServer {
         })
     }
 
-    pub(super) fn language_locations(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn language_locations(
+        &self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
         let params: LanguageLocationsParams = decode(params)?;
         let workspace =
             self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
@@ -759,7 +853,7 @@ impl AppServer {
             .read_snapshot()
             .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let revision = LanguageDocumentRevision::new(params.document.revision);
-        let document = LanguageServiceDocument::new(
+        let document = LspDocumentSnapshot::new(
             &source_path,
             language_service_id(&params.document.language_id),
             revision,
@@ -781,7 +875,7 @@ impl AppServer {
             )
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let service = runtime
-            .service()
+            .manager()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = match params.kind {
             LanguageLocationKindDto::Declaration => {
@@ -805,11 +899,11 @@ impl AppServer {
         }
         .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let event = runtime
-            .wait_for_request(request_id)
+            .wait_for_request(request_id, cancellation)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let locations = match event {
-            LanguageServiceEvent::Locations(locations) => locations,
-            LanguageServiceEvent::RequestFailed { .. } => {
+            LspManagerRequestResult::Locations(locations) => locations,
+            LspManagerRequestResult::RequestFailed { .. } => {
                 return Err(language_error(AppServerErrorName::LanguageRequestFailed));
             }
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
@@ -844,7 +938,11 @@ impl AppServer {
         })
     }
 
-    pub(super) fn language_hierarchy(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn language_hierarchy(
+        &self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
         let params: LanguageHierarchyParams = decode(params)?;
         let workspace =
             self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
@@ -865,7 +963,7 @@ impl AppServer {
             .read_snapshot()
             .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let revision = LanguageDocumentRevision::new(params.document.revision);
-        let document = LanguageServiceDocument::new(
+        let document = LspDocumentSnapshot::new(
             &source_path,
             language_service_id(&params.document.language_id),
             revision,
@@ -891,7 +989,7 @@ impl AppServer {
             )
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let service = runtime
-            .service()
+            .manager()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = match (params.kind, position, item) {
             (LanguageHierarchyKindDto::PrepareCall, Some(position), None) => {
@@ -916,10 +1014,10 @@ impl AppServer {
         }
         .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let event = runtime
-            .wait_for_request(request_id)
+            .wait_for_request(request_id, cancellation)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let hierarchy = match event {
-            LanguageServiceEvent::Hierarchy(hierarchy) => hierarchy,
+            LspManagerRequestResult::Hierarchy(hierarchy) => hierarchy,
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         };
         let file_system =
@@ -943,7 +1041,11 @@ impl AppServer {
         })
     }
 
-    pub(super) fn language_workspace_symbols(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn language_workspace_symbols(
+        &self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
         let params: LanguageWorkspaceSymbolsParams = decode(params)?;
         let workspace = self.language_workspace_root_for(params.workspace_folder_id.as_deref())?;
         let snapshot = self
@@ -970,10 +1072,10 @@ impl AppServer {
             .request_workspace_symbols(language_id, &params.query)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let event = runtime
-            .wait_for_request(request_id)
+            .wait_for_request(request_id, cancellation)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let response = match event {
-            LanguageServiceEvent::WorkspaceSymbols(response) => response,
+            LspManagerRequestResult::WorkspaceSymbols(response) => response,
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         };
         let file_system = self.file_system_service_for(params.workspace_folder_id.as_deref())?;
@@ -1004,22 +1106,26 @@ impl AppServer {
         result(&LanguageWorkspaceSymbolsResult { symbols })
     }
 
-    pub(super) fn language_prepare_rename(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn language_prepare_rename(
+        &self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
         let params: LanguagePrepareRenameParams = decode(params)?;
         let (workspace, source_path, revision, position, mut runtime) =
-            self.prepare_position_request(&params.document, params.position)?;
+            self.prepare_position_request(&params.document, params.position, cancellation)?;
         let service = runtime
-            .service()
+            .manager()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = service
             .request_prepare_rename(&source_path, revision, position)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let event = runtime
-            .wait_for_request(request_id)
+            .wait_for_request(request_id, cancellation)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let preparation = match event {
-            LanguageServiceEvent::RenamePreparation(preparation) => preparation,
-            LanguageServiceEvent::RequestFailed { .. } => {
+            LspManagerRequestResult::RenamePreparation(preparation) => preparation,
+            LspManagerRequestResult::RequestFailed { .. } => {
                 return result(&LanguagePrepareRenameResult { preparation: None });
             }
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
@@ -1037,21 +1143,25 @@ impl AppServer {
         result(&LanguagePrepareRenameResult { preparation })
     }
 
-    pub(super) fn language_rename(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn language_rename(
+        &self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
         let params: LanguageRenameParams = decode(params)?;
         let (workspace, source_path, revision, position, mut runtime) =
-            self.prepare_position_request(&params.document, params.position)?;
+            self.prepare_position_request(&params.document, params.position, cancellation)?;
         let service = runtime
-            .service()
+            .manager()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = service
             .request_rename(&source_path, revision, position, params.new_name)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let event = runtime
-            .wait_for_request(request_id)
+            .wait_for_request(request_id, cancellation)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let edit = match event {
-            LanguageServiceEvent::WorkspaceEdit(result) => result.edit,
+            LspManagerRequestResult::WorkspaceEdit(result) => result.edit,
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         };
         result(&workspace_edit_to_dto(
@@ -1064,7 +1174,11 @@ impl AppServer {
         )?)
     }
 
-    pub(super) fn language_code_actions(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn language_code_actions(
+        &self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
         let params: LanguageCodeActionsParams = decode(params)?;
         let workspace =
             self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
@@ -1072,8 +1186,12 @@ impl AppServer {
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let revision = LanguageDocumentRevision::new(params.document.revision);
-        let mut runtime =
-            self.prepare_document_runtime(&workspace, &source_path, &params.document)?;
+        let mut runtime = self.prepare_document_runtime(
+            &workspace,
+            &source_path,
+            &params.document,
+            cancellation,
+        )?;
         let diagnostics = params
             .diagnostics
             .into_iter()
@@ -1105,16 +1223,16 @@ impl AppServer {
             .collect();
         let range = service_range(params.range);
         let service = runtime
-            .service()
+            .manager()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = service
             .request_code_actions(&source_path, revision, range, diagnostics, params.only)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let event = runtime
-            .wait_for_request(request_id)
+            .wait_for_request(request_id, cancellation)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let actions = match event {
-            LanguageServiceEvent::CodeActions(actions) => actions.actions,
+            LspManagerRequestResult::CodeActions(actions) => actions.actions,
             _ => return Err(language_error(AppServerErrorName::LanguageRequestFailed)),
         };
         let file_system =
@@ -1136,7 +1254,11 @@ impl AppServer {
         })
     }
 
-    pub(super) fn language_resolve_code_action(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn language_resolve_code_action(
+        &self,
+        params: &Value,
+        cancellation: &CancellationToken,
+    ) -> Result<Value, RpcError> {
         let params: LanguageResolveCodeActionParams = decode(params)?;
         let workspace =
             self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
@@ -1144,19 +1266,23 @@ impl AppServer {
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let revision = LanguageDocumentRevision::new(params.document.revision);
-        let mut runtime =
-            self.prepare_document_runtime(&workspace, &source_path, &params.document)?;
+        let mut runtime = self.prepare_document_runtime(
+            &workspace,
+            &source_path,
+            &params.document,
+            cancellation,
+        )?;
         let service = runtime
-            .service()
+            .manager()
             .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
         let request_id = service
             .request_resolve_code_action(&source_path, revision, params.provider_data)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let event = runtime
-            .wait_for_request(request_id)
+            .wait_for_request(request_id, cancellation)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
         let action = match event {
-            LanguageServiceEvent::CodeActions(actions) => actions
+            LspManagerRequestResult::CodeActions(actions) => actions
                 .actions
                 .into_iter()
                 .next()

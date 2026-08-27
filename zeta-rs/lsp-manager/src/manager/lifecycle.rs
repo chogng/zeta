@@ -37,9 +37,8 @@ impl Supervisor {
             server_epoch,
             commands: self.commands.clone(),
         });
-        let mut options =
-            LanguageServerOptions::new("zeta-language-service", env!("CARGO_PKG_VERSION"))
-                .with_host(bridge);
+        let mut options = LanguageServerOptions::new("zeta-lsp-manager", env!("CARGO_PKG_VERSION"))
+            .with_host(bridge);
         if let Ok(root_uri) = file_uri(&self.configuration.workspace_root) {
             options = options.with_root_uri(root_uri);
         }
@@ -187,7 +186,7 @@ impl Supervisor {
                 retry_after,
             } => {
                 server.phase = ManagedServerPhase::BackingOff;
-                self.emit(LanguageServiceEvent::ServerMessage {
+                self.emit_notification(LspManagerNotification::ServerMessage {
                     server: name.to_string(),
                     severity: LanguageServerMessageSeverity::Error,
                     source: LanguageServerMessageSource::Service,
@@ -262,11 +261,13 @@ impl Supervisor {
         let languages = server.definition.language_ids().collect::<BTreeSet<_>>();
         for (path, document) in &self.documents {
             if languages.contains(document.document.language_id()) {
-                self.emit(LanguageServiceEvent::Diagnostics(LanguageDiagnostics::new(
-                    path.clone(),
-                    document.document.revision(),
-                    Vec::new(),
-                )));
+                self.emit_notification(LspManagerNotification::Diagnostics(
+                    LanguageDiagnostics::new(
+                        path.clone(),
+                        document.document.revision(),
+                        Vec::new(),
+                    ),
+                ));
             }
         }
     }
@@ -296,7 +297,7 @@ impl Supervisor {
             .collect::<Vec<_>>();
         let router = std::mem::take(&mut self.router);
         for failure in router.shutdown().await {
-            self.emit(LanguageServiceEvent::ServerMessage {
+            self.emit_notification(LspManagerNotification::ServerMessage {
                 server: failure.server.to_string(),
                 severity: LanguageServerMessageSeverity::Error,
                 source: super::LanguageServerMessageSource::Service,

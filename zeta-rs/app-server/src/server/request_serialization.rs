@@ -6,6 +6,7 @@ use std::sync::Mutex;
 
 use zeta_app_server_protocol::protocol::registry::ClientRequestSerializationScope;
 use zeta_app_server_protocol::protocol::registry::SerializationAccess;
+use zeta_async_utils::{CancellationSource, CancellationToken};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 enum RequestSerializationKey {
@@ -101,13 +102,17 @@ impl Waiter {
         self.ready.notify_one();
     }
 
-    fn wait(&self) -> WaiterState {
+    fn wait(&self, cancellation: &CancellationToken) -> WaiterState {
         let mut state = lock(&self.state);
         while *state == WaiterState::Pending {
+            if cancellation.is_cancelled() {
+                return WaiterState::Cancelled;
+            }
             state = self
                 .ready
-                .wait(state)
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
+                .wait_timeout(state, std::time::Duration::from_millis(25))
+                .map(|(state, _)| state)
+                .unwrap_or_else(|error| error.into_inner().0);
         }
         *state
     }
@@ -125,10 +130,21 @@ pub(super) struct RequestScheduler {
 }
 
 impl RequestScheduler {
+    #[cfg(test)]
     pub(super) fn acquire(
         &self,
         connection_id: u64,
         scope: ClientRequestSerializationScope,
+    ) -> Result<RequestPermit, ConnectionClosed> {
+        let cancellation = CancellationSource::new();
+        self.acquire_with_cancellation(connection_id, scope, &cancellation.token())
+    }
+
+    pub(super) fn acquire_with_cancellation(
+        &self,
+        connection_id: u64,
+        scope: ClientRequestSerializationScope,
+        cancellation: &CancellationToken,
     ) -> Result<RequestPermit, ConnectionClosed> {
         let (key, access) = RequestSerializationKey::from_scope(connection_id, scope);
         let waiter = {
@@ -147,8 +163,20 @@ impl RequestScheduler {
             }
         };
 
-        if waiter.is_some_and(|waiter| waiter.wait() == WaiterState::Cancelled) {
-            return Err(ConnectionClosed);
+        if let Some(waiter) = waiter {
+            if waiter.wait(cancellation) == WaiterState::Cancelled {
+                let mut state = lock(&self.state);
+                if let Some(queue) = state.queues.get_mut(&key) {
+                    queue
+                        .waiting
+                        .retain(|candidate| !Arc::ptr_eq(candidate, &waiter));
+                    if queue.active == Active::None && queue.waiting.is_empty() {
+                        state.queues.remove(&key);
+                    }
+                }
+                waiter.complete(WaiterState::Cancelled);
+                return Err(ConnectionClosed);
+            }
         }
         Ok(RequestPermit {
             scheduler: self.clone(),
@@ -224,6 +252,64 @@ impl RequestScheduler {
             .values()
             .map(|queue| queue.waiting.len())
             .sum()
+    }
+}
+
+#[derive(Clone, Default)]
+pub(super) struct RequestCancellationRegistry {
+    state: Arc<Mutex<CancellationRegistryState>>,
+}
+
+#[derive(Default)]
+struct CancellationRegistryState {
+    active: HashMap<(u64, u64), CancellationSource>,
+    cancelled_before_start: std::collections::BTreeSet<(u64, u64)>,
+}
+
+impl RequestCancellationRegistry {
+    pub(super) fn start(&self, connection_id: u64, request_id: u64) -> CancellationToken {
+        let source = CancellationSource::new();
+        let token = source.token();
+        let mut state = lock(&self.state);
+        if state
+            .cancelled_before_start
+            .remove(&(connection_id, request_id))
+        {
+            source.cancel();
+        }
+        state.active.insert((connection_id, request_id), source);
+        token
+    }
+
+    pub(super) fn cancel(&self, connection_id: u64, request_id: u64) {
+        let mut state = lock(&self.state);
+        if let Some(source) = state.active.get(&(connection_id, request_id)) {
+            source.cancel();
+        } else {
+            state
+                .cancelled_before_start
+                .insert((connection_id, request_id));
+        }
+    }
+
+    pub(super) fn finish(&self, connection_id: u64, request_id: u64) {
+        let mut state = lock(&self.state);
+        state.active.remove(&(connection_id, request_id));
+        state
+            .cancelled_before_start
+            .remove(&(connection_id, request_id));
+    }
+
+    pub(super) fn cancel_connection(&self, connection_id: u64) {
+        let mut state = lock(&self.state);
+        for ((active_connection_id, _), source) in &state.active {
+            if *active_connection_id == connection_id {
+                source.cancel();
+            }
+        }
+        state
+            .cancelled_before_start
+            .retain(|(active_connection_id, _)| *active_connection_id != connection_id);
     }
 }
 

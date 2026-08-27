@@ -1,6 +1,6 @@
 /// Construction, validation, queue, or shutdown failure at the product language-service boundary.
 #[derive(Debug, thiserror::Error)]
-pub enum LanguageServiceError {
+pub enum LspManagerError {
     #[error("language-service document path must not be empty")]
     InvalidDocumentPath,
     #[error("invalid language ID `{0}`")]

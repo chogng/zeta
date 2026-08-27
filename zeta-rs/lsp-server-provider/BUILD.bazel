@@ -1,0 +1,6 @@
+load("//:defs.bzl", "zeta_rust_crate")
+
+zeta_rust_crate(
+    name = "lsp-server-provider",
+    crate_name = "zeta_lsp_server_provider",
+)

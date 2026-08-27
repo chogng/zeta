@@ -36,7 +36,7 @@ Zeta 不用一个巨型数据库同时冒充语法树、语言服务器、搜索
 | --- | --- | --- |
 | 单文档增量 parse、token、fold、document symbol、parse diagnostic | `zeta-syntax` | Current |
 | 打开文档的文本、selection、undo/redo 与 Editor revision | Stanza / `zeta-editor` | Current |
-| completion、definition、references、hierarchy、workspace symbol 等精确语义 | `zeta-language-service` + `zeta-lsp` | Current |
+| completion、definition、references、hierarchy、workspace symbol 等精确语义 | `zeta-lsp-manager` + `zeta-lsp` | Current |
 | Workspace scan、ignore、结构辅助切块、source/chunk identity、SQLite FTS | `zeta-code-index` | Current |
 | embedding cache、vector recall、optional rerank | `zeta-code-index-semantic` | Current |
 | lexical/semantic/optional remote 融合、源码复核与 byte budget | `zeta-code-retrieval` | Current |
@@ -44,7 +44,7 @@ Zeta 不用一个巨型数据库同时冒充语法树、语言服务器、搜索
 | 持久化本地 symbol projection、overlay symbol 与 fuzzy matcher | `zeta-symbol-index` | Current |
 | CodeIndex 未保存 Buffer overlay、dirty suppression 与 save handoff | `zeta-code-index` + App Server | Current |
 | Workspace Symbol staged aggregation、取消、dedupe 与 accept-time hash verification | Desktop | Current |
-| 语言请求取消与隐私安全指标 | `zeta-language-service` + App Server sink | Current |
+| 语言请求取消与隐私安全指标 | `zeta-lsp-manager` + App Server sink | Current |
 | references/navigation semantic cache | 无 | 未安装；等待指标门禁 |
 | SCIP、occurrence/edge graph 与跨语言 resolver | 无 | 尚未完成 |
 | revision-bound structural selection scopes + Smart Select | `zeta-syntax` + Stanza | Current；mutation 尚未完成 |
@@ -89,7 +89,7 @@ flowchart TD
     Overlay --> Index
     Overlay --> Symbols
 
-    Lsp["zeta-language-service<br/>精确语言语义"] --> WorkspaceSymbols["Workspace Symbol aggregator"]
+    Lsp["zeta-lsp-manager<br/>精确语言语义"] --> WorkspaceSymbols["Workspace Symbol aggregator"]
     Symbols --> WorkspaceSymbols
     WorkspaceSymbols --> UI["Ctrl/Cmd+T"]
 
@@ -116,7 +116,7 @@ flowchart TD
 | `zeta-syntax` | grammar/query、增量 tree、revision-bound syntax facts | 文件扫描、SQLite、LSP semantic identity |
 | `zeta-code-index` | Workspace scan、ignore、读取、source/chunk identity、磁盘与未来 overlay chunk authority | symbol graph、模型选择、最终 AI 排名 |
 | `zeta-symbol-index` | verified source 与 dirty overlay 的声明 projection、持久化复用、本地 exact/fuzzy symbol search | 自主扫描文件、LSP request、跨语言猜测 |
-| `zeta-language-service` | server route/incarnation、document freshness、精确 LSP 请求 | 本地 symbol database、AI retrieval |
+| `zeta-lsp-manager` | server route/incarnation、document freshness、精确 LSP 请求 | 本地 symbol database、AI retrieval |
 | `zeta-code-index-semantic` | 模型输入、embedding persistence、vector recall、rerank 与来源内排序 | scan、chunk、跨来源融合 |
 | `zeta-code-retrieval` | 多来源候选融合、identity dedupe、current-source verification 与内容预算 | 模型 transport、Workspace grant、Editor state |
 | Potential `zeta-code-graph` | semantic symbol、occurrence、typed edge、evidence/confidence | filesystem authority、UI、模型调用 |
@@ -332,7 +332,7 @@ generation 不会发布，接受结果前以 SHA-256 对当前文件进行复核
 ### P4：导航指标与可选会话缓存（指标已完成；缓存 gated）
 
 - 记录 request kind、server incarnation、cold/warm latency、结果数、取消率与配置 generation。
-- 只有指标证明重复请求成本显著时，增加 `zeta-language-service` 内存 cache。
+- 只有指标证明重复请求成本显著时，增加 `zeta-lsp-manager` 内存 cache。
 - cache key 至少绑定 server incarnation、semantic config generation、request kind、source revision、
   position 和请求选项。
 - server replacement、配置变化或相关 document revision 变化时失效。

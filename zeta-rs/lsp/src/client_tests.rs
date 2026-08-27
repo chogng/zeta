@@ -10,6 +10,7 @@ use lsp_types::{
 use serde_json::{Value, json};
 use tokio::io::{AsyncWrite, BufReader};
 use tokio::sync::{Notify, oneshot};
+use zeta_async_utils::CancellationSource;
 
 use super::*;
 use crate::protocol::{
@@ -397,6 +398,78 @@ async fn request_timeout_sends_protocol_cancellation() {
     assert!(matches!(
         error,
         LanguageServerError::Timeout { operation, .. } if operation == "textDocument/hover"
+    ));
+    client.shutdown().await.expect("shutdown language server");
+    server.await.expect("server task");
+}
+
+#[tokio::test]
+async fn request_cancellation_sends_protocol_cancellation() {
+    let (client_stream, server_stream) = tokio::io::duplex(16 * 1024);
+    let (client_reader, client_writer) = tokio::io::split(client_stream);
+    let (server_reader, server_writer) = tokio::io::split(server_stream);
+    let (hover_seen_tx, hover_seen_rx) = oneshot::channel();
+    let server = tokio::spawn(async move {
+        let mut reader = BufReader::new(server_reader);
+        let mut writer = server_writer;
+        let initialize = read_json(&mut reader).await;
+        respond(
+            &mut writer,
+            initialize["id"].clone(),
+            json!({ "capabilities": { "hoverProvider": true } }),
+        )
+        .await;
+        assert_eq!(read_json(&mut reader).await["method"], "initialized");
+
+        let hover = read_json(&mut reader).await;
+        assert_eq!(hover["method"], "textDocument/hover");
+        hover_seen_tx
+            .send(hover["id"].clone())
+            .expect("signal hover");
+        let cancellation = read_json(&mut reader).await;
+        assert_eq!(cancellation["method"], "$/cancelRequest");
+        assert_eq!(cancellation["params"]["id"], hover["id"]);
+
+        let shutdown = read_json(&mut reader).await;
+        respond(&mut writer, shutdown["id"].clone(), Value::Null).await;
+        assert_eq!(read_json(&mut reader).await["method"], "exit");
+    });
+    let client = LanguageServerClient::connect(
+        BufReader::new(client_reader),
+        client_writer,
+        LanguageServerOptions::new("zeta-lsp-test", "0"),
+    )
+    .await
+    .expect("initialize language server");
+    let uri = Uri::from_str("file:///workspace/main.rs").expect("document URI");
+    let cancellation = CancellationSource::new();
+    let request_client = client.clone();
+    let request_token = cancellation.token();
+    let request = tokio::spawn(async move {
+        request_client
+            .request_with_cancellation::<HoverRequest>(
+                HoverParams {
+                    text_document_position_params: TextDocumentPositionParams {
+                        text_document: TextDocumentIdentifier { uri },
+                        position: Position::new(0, 0),
+                    },
+                    work_done_progress_params: WorkDoneProgressParams::default(),
+                },
+                &request_token,
+            )
+            .await
+    });
+    hover_seen_rx
+        .await
+        .expect("hover request should reach server");
+    cancellation.cancel();
+    let error = request
+        .await
+        .expect("request task")
+        .expect_err("hover should be cancelled");
+    assert!(matches!(
+        error,
+        LanguageServerError::Cancelled { operation } if operation == "textDocument/hover"
     ));
     client.shutdown().await.expect("shutdown language server");
     server.await.expect("server task");

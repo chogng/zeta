@@ -1,7 +1,7 @@
-//! Product-level language-service coordination above the protocol-only `zeta-lsp` runtime.
+//! Product-level LSP coordination above the protocol-only `zeta-lsp` runtime.
 //!
 //! This crate owns enablement, resolved server definition consumption, document snapshot routing,
-//! diagnostic freshness, position conversion, and service-thread lifecycle. It does not own
+//! diagnostic freshness, position conversion, and manager-thread lifecycle. It does not own
 //! editor text, filesystem access, UI presentation, executable discovery, installation, or trust.
 
 mod capabilities;
@@ -10,30 +10,37 @@ mod diagnostics;
 mod document;
 mod document_features;
 mod error;
+mod manager;
 mod metrics;
 mod projection;
 mod requests;
 mod restart;
 mod semantic_tokens;
-mod service;
 mod workspace_diagnostics;
 
 pub use capabilities::{LanguageServerCapabilities, LanguageServerFeature};
-pub use configuration::{LanguageServiceConfiguration, LanguageServiceEnablement};
+pub use configuration::{LspManagerConfiguration, LspManagerEnablement};
 pub use diagnostics::{
     LanguageDiagnostic, LanguageDiagnosticSeverity, LanguageDiagnostics, LanguageTextRange,
 };
-pub use document::{LanguageDocumentRevision, LanguageServiceDocument};
+pub use document::{LanguageDocumentRevision, LspDocumentSnapshot};
 pub use document_features::{
     LanguageCodeLens, LanguageCodeLenses, LanguageColor, LanguageColorPresentation,
     LanguageColorPresentations, LanguageCommand, LanguageDocumentColor, LanguageDocumentColors,
     LanguageDocumentLink, LanguageDocumentLinks, LanguageDocumentSymbol, LanguageDocumentSymbols,
     LanguageFoldingRange, LanguageFoldingRangeKind, LanguageFoldingRanges,
 };
-pub use error::LanguageServiceError;
+pub use error::LspManagerError;
+pub use manager::{
+    LanguageServerMessageSeverity, LanguageServerMessageSource, LanguageServerProgress,
+    LanguageServerState, LanguageServiceEvent, LanguageServiceEventSink, LspDocumentOperation,
+    LspManager, LspManagerEvent, LspManagerEventSink, LspManagerNotification,
+    LspManagerRequestResult, NoopLanguageServiceEventSink, NoopLspManagerEventSink,
+};
 pub use metrics::LanguageRequestMetric;
 pub use metrics::LanguageRequestMetricOutcome;
-pub use metrics::LanguageServiceMetricsSink;
+pub use metrics::LspRequestMetricsSink;
+pub use metrics::LspRequestMetricsSink as LanguageServiceMetricsSink;
 pub use requests::{
     LanguageCodeAction, LanguageCodeActions, LanguageCommandResult, LanguageCompletionDetails,
     LanguageCompletionInsertTextFormat, LanguageCompletionItem, LanguageCompletionItemKind,
@@ -52,10 +59,23 @@ pub use requests::{
 };
 pub use restart::LanguageServerRestartPolicy;
 pub use semantic_tokens::{LanguageSemanticToken, LanguageSemanticTokens};
-pub use service::{
-    LanguageServerMessageSeverity, LanguageServerMessageSource, LanguageServerProgress,
-    LanguageServerState, LanguageService, LanguageServiceDocumentOperation, LanguageServiceEvent,
-    LanguageServiceEventSink, NoopLanguageServiceEventSink,
-};
 pub use workspace_diagnostics::{LanguageWorkspaceDiagnostic, LanguageWorkspaceDiagnostics};
-pub use zeta_language_server_catalog::LanguageServerDefinition;
+pub use zeta_lsp_server_provider::LanguageServerDefinition;
+
+/// Compatibility name for the pre-LSP manager configuration.
+pub type LanguageServiceConfiguration = LspManagerConfiguration;
+
+/// Compatibility name for the pre-LSP manager enablement policy.
+pub type LanguageServiceEnablement = LspManagerEnablement;
+
+/// Compatibility name for the pre-LSP document snapshot.
+pub type LanguageServiceDocument = LspDocumentSnapshot;
+
+/// Compatibility name for the pre-LSP manager error.
+pub type LanguageServiceError = LspManagerError;
+
+/// Compatibility name for the pre-LSP document operation.
+pub type LanguageServiceDocumentOperation = LspDocumentOperation;
+
+/// Compatibility name for the pre-LSP manager.
+pub type LanguageService = LspManager;

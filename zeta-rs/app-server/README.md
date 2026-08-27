@@ -39,7 +39,7 @@ JSONL / in-process caller
    ├─ optional CloudCodeIndexController → zeta-code-index-cloud + host provider registry
    ├─ request-scoped CodeRetrievalService → symbol/lexical/semantic/remote RRF + verification + budget
    ├─ optional TerminalService → zeta-utils-pty
-   ├─ optional LanguageServerProviderRegistry → zeta-language-service → zeta-lsp
+   ├─ optional LspServerProviders → zeta-lsp-manager → zeta-lsp
    ├─ optional MarketplaceManager → local installation state + remote client
    │                              → Skill/MCP/Connector/Theme/Language/Editor Extension consumers
    ├─ reloadable MCP Tool generation + status/OAuth/form interaction → zeta-mcp-extension → zeta-mcp
@@ -86,10 +86,10 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 | `AppServer::with_file_system_watcher` | 监听可信 workspace root 并发布相对路径 invalidation hint |
 | `AppServer::with_git_root` | 冻结 workspace root，开启 Git status/mutation、watcher 与 revision notification |
 | `AppServer::with_workspace_search` | 注入 workspace root 与冻结的 ripgrep executable，构造外部内容搜索服务 |
-| `AppServer::with_language_server_providers` | 注入已验证、已安装的 provider registry；activation confirmation 启用 packaged route，显式 Config `Disabled` 仍可关闭 |
+| `AppServer::with_language_server_providers` | 注入 `LspServerProviders` provider collection；activation confirmation 启用 packaged route，显式 Config `Disabled` 仍可关闭 |
 | `AppServer::with_marketplace_manager_client` | 持有 Zeta 本地 Manager 的 typed business client，广告 `marketplace` capability 并投影通用 package/capability RPC |
 | `AppServer::with_local_marketplace_manager` | 除业务 RPC 外，绑定只在进程内可见的 verified capability source；不会向 transport 暴露 host path |
-| `AppServer::with_marketplace_language_runtime` | 将通用 Marketplace 已验证的 Language/Executable capability 投影为本地 language-server provider registry；不拥有发现、下载或安装 |
+| `AppServer::with_marketplace_language_runtime` | 将通用 Marketplace 已验证的 Language/Executable capability 投影为本地 `LspServerProviders` collection；不拥有发现、下载或安装 |
 | `AppServer::with_marketplace_editor_extension_admission` | 注入 Marketplace executable 的产品 enable/grant generation、通知与 drain authority；安装本身不会执行代码 |
 | `AppServer::with_extension_host_runtime` | 将 legacy Plugin 与已授权 Marketplace executable 规范化为同一 deployment fleet；Host 不解析 package manifest |
 | `AppServer::with_code_index_storage_root` | 配置按 root identity 分隔的 persistent index cache |
@@ -107,7 +107,7 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 | `LocalProfileRuntime` | 单进程、单 profile 的 Session/Thread projection、Config 与跨 Workspace Session notification authority |
 | `LocalAppServerOptions` | user profile root + SessionStateMode + optional Workspace/Connector/language-provider runtime + validated slash catalog + built-in Skill root selection + optional model operation client/MCP OAuth providers |
 | `LocalAppServerOptions::with_profile_runtime` | 在 profile daemon 内复用 durable authority，同时为连接组合独立 Workspace runtime |
-| `LocalAppServerOptions::with_language_server_providers` | 在 local App Server 启动前注入额外 provider registry；receipt registry 由 composition 自动合并 |
+| `LocalAppServerOptions::with_language_server_providers` | 在 local App Server 启动前注入额外 `LspServerProviders`；receipt providers 由 composition 自动合并 |
 | `LocalAppServerOptions::with_marketplace_registry` | 组合进程内 Zeta Manager 与 product-pinned HTTPS/TUF registry client |
 | `LocalAppServerOptions::with_marketplace_manager_client` | 注入由外部 supervisor 或测试拥有的 Manager client |
 | `LocalAppServerOptions::with_mcp_oauth_providers` | 把 exact MCP server ID → provider adapter 注入使用共享 SecretStore 的 OAuth service |
@@ -217,10 +217,10 @@ src/
 │       ├── code_index_runtime.rs  # generation lifecycle、watcher reconcile 与 stale gate
 │       ├── cloud_code_index_operations.rs # preview/grant/sync/revoke DTO 与稳定错误映射
 │       ├── terminal_operations.rs # terminal RPC decode、ownership 与稳定错误映射
-│       ├── language_runtime.rs   # config + built-in/provider definitions → shared language-service
+│       ├── language_runtime.rs   # workspace state + provider definitions → shared LSP manager
 │       ├── marketplace_operations.rs # Manager business RPC、稳定错误与 connection-owned lease
 │       ├── marketplace_projection.rs # Manager contract → App Server DTO 的无路径机械投影
-│       ├── marketplace_language_runtime.rs # 已验证 Language/Executable capability → provider registry
+│       ├── marketplace_language_runtime.rs # 已验证 Language/Executable capability → LspServerProviders
 │       ├── marketplace_extension_sources.rs # 已验证 Language capability → Extension catalog source
 │       ├── marketplace_skill_sources.rs # 已验证 Skill capability → Skill catalog source
 │       ├── request_serialization.rs # cross-connection scope FIFO/shared-read scheduler
@@ -290,7 +290,7 @@ src/
 | `CloudCodeIndexController` | external crate | root-bound grant、publication/deletion lifecycle 与 provider port | App Server 不复制 consent state 或允许 provider 直接读 Workspace |
 | `cloud_code_index_operations::project_status` | private | cloud lifecycle + grant → stable protocol DTO | 不回传 credential、绝对路径或 provider error text |
 | `TerminalService` | crate-private | 持有 `ExecuteProcess` 的 `TrustedWorkspace`、Tokio runtime、PTY session map 与 1 MiB output ring | 不从 client path 自行授予 process authority |
-| `AppServerLanguageRuntime::configured_provider_definitions` | private | 只对 Config 显式启用的已注册 provider 生成 definition，并保留 authoritative native override | 不下载包、不自己启动 child、不复制 restart policy |
+| `AppServerLanguageRuntime::configured_provider_definitions` | private | 只对 Config 显式启用的已注册 provider 生成 definition，并保留 authoritative host override | 不下载包、不自己启动 child、不复制 restart policy |
 | `TerminalEnvironment` | crate-private | 二次过滤 host environment、规范化 Windows key、固定 `TERM`/`COLORTERM`/`TERM_PROGRAM` | 不继承凭据或接受 client mutation |
 | `TerminalProfileCatalog` | crate-private | 冻结可信 Shell Profile、program 与 `TerminalEnvironment` | external DTO 不暴露 executable/args/environment |
 | `TerminalService::create` | crate-private | 将 default/profile ID 解析到 catalog 并启动 workspace-rooted PTY | client 不能提交 executable/environment |
@@ -584,7 +584,7 @@ External package lifecycle + legacy Plugin compatibility + Hook declaration
 
 Language-server preference
 └─ config/read + languageServer/configure|remove
-   ├─ App Server 持久化 mode/path，并负责 catalog resolution 与 LSP runtime
+   ├─ App Server 持久化 mode/path，并负责 resolver resolution 与 LSP manager
    └─ language/hover|completions|locations|hierarchy|workspaceSymbols
       + language/prepareRename|rename|codeActions|resolveCodeAction
       + language/synchronize|close and revision-bound language/diagnostics notifications

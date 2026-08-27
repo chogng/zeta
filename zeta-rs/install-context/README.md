@@ -78,7 +78,7 @@ host composition
    ├─ bundled_resource_directory("skills")
       └─ zeta-skills controlled BuiltIn source validation
    ├─ Desktop host declaration or bundled_resource("node/bin/node[.exe]")
-      └─ zeta-language-server-catalog::ManagedNodeRuntime validation and selection
+      └─ zeta-lsp-server-provider::ManagedNodeRuntime validation and selection
    └─ bundled_resource("product-services/product-services.json")
       └─ zeta-cli → LocalProductServicesConfig trust validation
 ```

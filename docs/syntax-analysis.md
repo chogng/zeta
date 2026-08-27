@@ -25,7 +25,7 @@
 | Stanza parser facts | `zeta-rs/syntax` via bounded `platform/syntax` adapter | ✅ JavaScript/JSX、TypeScript/TSX、JSON/JSONC、Rust、Shell token/diagnostic/symbol/folding |
 | App Server syntax RPC | bounded stateless analysis | ✅；仅异步 facts，不拥有 editor revision 或输入热路径 |
 | Stanza Smart Select | Stanza selection/history + `zeta-syntax` on-demand scopes | ✅ expand/shrink；revision-bound、可取消、stale-safe，parser 失败时 lexical fallback |
-| completion、type、definition/reference、rename | `zeta-lsp` + language server，经编辑器 language feature 接入 | ✅ Code 主路径；语言覆盖由 catalog 决定 |
+| completion、type、definition/reference、rename | `zeta-lsp` + language server，经编辑器 language feature 接入 | ✅ Code 主路径；语言覆盖由 provider collection 决定 |
 | workspace code chunk index | `zeta-code-index` 消费 `zeta-syntax` declaration facts | ✅ 本地 lexical retrieval；不是统一 semantic symbol graph |
 | workspace symbol/reference capability | `zeta-lsp` + App Server language runtime | ✅ workspace symbols 与按需 references 已接通；持久化全局 semantic graph 仍属于可选 index 演进，不属于单个 editor document |
 

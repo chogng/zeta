@@ -2,10 +2,10 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use serde::Deserialize;
-use zeta_language_server_catalog::DirectPackageLanguageServerProvider;
-use zeta_language_server_catalog::LanguageServerProviderRegistry;
-use zeta_language_server_catalog::ManagedNodeRuntime;
-use zeta_language_server_catalog::NodePackageLanguageServerProvider;
+use zeta_lsp_server_provider::DirectPackageLanguageServerProvider;
+use zeta_lsp_server_provider::LspServerProviders;
+use zeta_lsp_server_provider::ManagedNodeRuntime;
+use zeta_lsp_server_provider::NodePackageLanguageServerProvider;
 use zeta_marketplace_client::CapabilityKind;
 use zeta_marketplace_manager::LocalCapabilitySource;
 use zeta_marketplace_manager::MarketplaceManager;
@@ -14,14 +14,14 @@ use zeta_marketplace_manager::MarketplaceManager;
 pub(crate) struct MarketplaceLanguageRuntime {
     manager: Arc<MarketplaceManager>,
     node: Option<ManagedNodeRuntime>,
-    base: LanguageServerProviderRegistry,
+    base: LspServerProviders,
 }
 
 impl MarketplaceLanguageRuntime {
     pub(crate) fn new(
         manager: Arc<MarketplaceManager>,
         node: Option<ManagedNodeRuntime>,
-        base: LanguageServerProviderRegistry,
+        base: LspServerProviders,
     ) -> Self {
         Self {
             manager,
@@ -30,7 +30,7 @@ impl MarketplaceLanguageRuntime {
         }
     }
 
-    pub(crate) fn registry(&self) -> Result<LanguageServerProviderRegistry, String> {
+    pub(crate) fn providers(&self) -> Result<LspServerProviders, String> {
         let assets = self
             .manager
             .local_capability_sources(CapabilityKind::Language)
@@ -43,7 +43,7 @@ impl MarketplaceLanguageRuntime {
         for source in assets {
             languages_by_digest.insert(source.package().digest.clone(), language_ids(&source)?);
         }
-        let mut registry = self.base.clone();
+        let mut providers = self.base.clone();
         for executable in executables {
             let Some(available_languages) = languages_by_digest.get(&executable.package().digest)
             else {
@@ -75,7 +75,7 @@ impl MarketplaceLanguageRuntime {
                         node,
                     )
                     .map_err(|error| error.to_string())?;
-                    registry
+                    providers
                         .register_packaged(provider)
                         .map_err(|error| error.to_string())?;
                 }
@@ -86,7 +86,7 @@ impl MarketplaceLanguageRuntime {
                         executable.host_path(),
                     )
                     .map_err(|error| error.to_string())?;
-                    registry
+                    providers
                         .register_packaged(provider)
                         .map_err(|error| error.to_string())?;
                 }
@@ -98,7 +98,7 @@ impl MarketplaceLanguageRuntime {
                 }
             }
         }
-        Ok(registry)
+        Ok(providers)
     }
 }
 

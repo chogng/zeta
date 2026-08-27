@@ -44,7 +44,7 @@ use zeta_extensions::ExtensionRoot;
 use zeta_install_context::InstallContext;
 use zeta_keyring_store::KeyringSecretStore;
 use zeta_kimi::KimiOAuth;
-use zeta_language_server_catalog::ManagedNodeRuntime;
+use zeta_lsp_server_provider::ManagedNodeRuntime;
 use zeta_login::InteractiveLoginDriver;
 use zeta_login::LoginService;
 use zeta_mcp_extension::ConnectorMcpRuntimeProvider;
@@ -197,7 +197,7 @@ pub struct LocalAppServerOptions {
     mcp_oauth_providers: Vec<(McpServerId, Arc<dyn McpOAuthProvider>)>,
     marketplace_manager_client: Option<Arc<dyn zeta_marketplace_client::MarketplaceServiceClient>>,
     local_marketplace_manager: Option<Arc<zeta_marketplace_manager::MarketplaceManager>>,
-    language_server_providers: zeta_language_server_catalog::LanguageServerProviderRegistry,
+    language_server_providers: zeta_lsp_server_provider::LspServerProviders,
     product_services: Option<crate::LocalProductServicesConfig>,
     profile_runtime: Option<Arc<LocalProfileRuntime>>,
 }
@@ -226,7 +226,7 @@ impl LocalAppServerOptions {
             marketplace_manager_client: None,
             local_marketplace_manager: None,
             language_server_providers:
-                zeta_language_server_catalog::LanguageServerProviderRegistry::new(),
+                zeta_lsp_server_provider::LspServerProviders::new(),
             product_services: None,
             profile_runtime: None,
         }
@@ -371,7 +371,7 @@ impl LocalAppServerOptions {
     /// Installs exact, already materialized language-server providers for this App Server.
     pub fn with_language_server_providers(
         mut self,
-        providers: zeta_language_server_catalog::LanguageServerProviderRegistry,
+        providers: zeta_lsp_server_provider::LspServerProviders,
     ) -> Self {
         self.language_server_providers = providers;
         self
@@ -1040,7 +1040,7 @@ pub fn open_local_app_server_with_code_index_providers(
         )
     });
     if let Some(runtime) = &marketplace_language_runtime {
-        options.language_server_providers = runtime.registry().map_err(OpenAppServerError)?;
+        options.language_server_providers = runtime.providers().map_err(OpenAppServerError)?;
     }
     if let (Some(runtime), Some(services)) = (&mut connector_runtime, product_services) {
         configure_product_connector_oauth(runtime, services.connector_oauth)?;

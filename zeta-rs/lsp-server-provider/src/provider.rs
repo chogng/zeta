@@ -7,9 +7,9 @@ use std::sync::Arc;
 
 use crate::LanguageServerDefinition;
 
-/// Selects the package-managed server or one authoritative native executable override.
+/// Selects the package-managed server or one authoritative host executable override.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum LanguageServerProviderLaunch<'a> {
+pub enum LspServerLaunch<'a> {
     Packaged,
     ExplicitExecutable(&'a Path),
 }
@@ -30,18 +30,18 @@ pub trait LanguageServerProvider: Send + Sync {
     fn definition(
         &self,
         workspace_root: &Path,
-        launch: LanguageServerProviderLaunch<'_>,
+        launch: LspServerLaunch<'_>,
     ) -> Result<LanguageServerDefinition, LanguageServerProviderError>;
 }
 
 /// Frozen product registry of installed language-server providers.
 #[derive(Clone, Default)]
-pub struct LanguageServerProviderRegistry {
+pub struct LspServerProviders {
     providers: BTreeMap<String, Arc<dyn LanguageServerProvider>>,
     activation_enabled: std::collections::BTreeSet<String>,
 }
 
-impl LanguageServerProviderRegistry {
+impl LspServerProviders {
     /// Creates an empty product composition registry.
     pub fn new() -> Self {
         Self::default()
@@ -121,7 +121,7 @@ impl LanguageServerProviderRegistry {
         &self,
         id: &str,
         workspace_root: &Path,
-        launch: LanguageServerProviderLaunch<'_>,
+        launch: LspServerLaunch<'_>,
     ) -> Result<Option<LanguageServerDefinition>, LanguageServerProviderError> {
         self.providers
             .get(id)
@@ -142,10 +142,10 @@ impl LanguageServerProviderRegistry {
     }
 }
 
-impl fmt::Debug for LanguageServerProviderRegistry {
+impl fmt::Debug for LspServerProviders {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .debug_struct("LanguageServerProviderRegistry")
+            .debug_struct("LspServerProviders")
             .field("provider_ids", &self.providers.keys().collect::<Vec<_>>())
             .field("activation_enabled", &self.activation_enabled)
             .finish()
@@ -167,11 +167,11 @@ pub enum LanguageServerProviderError {
     #[error("language-server provider '{0}' is registered more than once")]
     DuplicateProvider(String),
     #[error(transparent)]
-    InvalidDefinition(Box<crate::LanguageServerCatalogError>),
+    InvalidDefinition(Box<crate::LspServerResolverError>),
 }
 
-impl From<crate::LanguageServerCatalogError> for LanguageServerProviderError {
-    fn from(error: crate::LanguageServerCatalogError) -> Self {
+impl From<crate::LspServerResolverError> for LanguageServerProviderError {
+    fn from(error: crate::LspServerResolverError) -> Self {
         Self::InvalidDefinition(Box::new(error))
     }
 }

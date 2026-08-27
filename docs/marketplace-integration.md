@@ -138,7 +138,7 @@ Marketplace 或必须常驻的 Plugin runtime。
 | `mcp` | MCP composition | HTTPS 或 package-relative stdio transport；调用持有 capability lease | OAuth、审批、Tool policy |
 | `connector` | Connector authority | 绑定同 digest 内 exact MCP，credential 由 Connector domain 注入 | 登录、SecretStore、连接状态 |
 | Theme package 的 `asset` | `zeta-extensions` → Workbench Theme | 规范化为 Theme capability，并把 portable theme manifest 转成 host declarative manifest 后进入共享 Extension catalog | Theme 选择与应用 |
-| Language package 的 `asset` + `executable` | `zeta-extensions` + language provider registry | editor assets 与 LSP route 分别消费同一安装 | 文档路由、LSP lifecycle |
+| Language package 的 `asset` + `executable` | `zeta-extensions` + `LspServerProviders` | editor assets 与 LSP route 分别消费同一安装 | 文档路由、LSP lifecycle |
 | `localization` | `platform/languagePacks` → `workbench/services/localization` | 读取静态 locale catalog，按 locale 和 catalog contract 应用；选择与 lookup 保持在 client/window | 文案提取、产品 bundle 设计与 UI 重建 |
 | `executable` + 可选 `zeta/editor-extensions.json` | Editor Extension source/admission → Host | Zeta consumer sidecar 绑定 exact executable；admission generation/lease 与 Manager lease 同时成立 | enable/grant、Workspace trust、进程隔离 |
 

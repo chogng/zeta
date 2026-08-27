@@ -308,8 +308,8 @@ dependencies = [
  "zeta-install-context",
  "zeta-keybinding",
  "zeta-keybindings-host",
- "zeta-language-server-catalog",
- "zeta-language-service",
+ "zeta-lsp-manager",
+ "zeta-lsp-server-provider",
  "zeta-protocol",
  "zeta-remote",
  "zeta-remote-connections",
@@ -10621,8 +10621,8 @@ dependencies = [
  "zeta-instructions",
  "zeta-keyring-store",
  "zeta-kimi",
- "zeta-language-server-catalog",
- "zeta-language-service",
+ "zeta-lsp-manager",
+ "zeta-lsp-server-provider",
  "zeta-linux-sandbox",
  "zeta-login",
  "zeta-marketplace-client",
@@ -11259,7 +11259,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-language-server-catalog"
+name = "zeta-lsp-server-provider"
 version = "0.1.0"
 dependencies = [
  "serde_json",
@@ -11270,7 +11270,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-language-service"
+name = "zeta-lsp-manager"
 version = "0.1.0"
 dependencies = [
  "serde_json",
@@ -11278,8 +11278,9 @@ dependencies = [
  "thiserror 2.0.19",
  "tokio",
  "url",
- "zeta-language-server-catalog",
+ "zeta-async-utils",
  "zeta-lsp",
+ "zeta-lsp-server-provider",
 ]
 
 [[package]]
@@ -11305,6 +11306,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.19",
  "tokio",
+ "zeta-async-utils",
 ]
 
 [[package]]

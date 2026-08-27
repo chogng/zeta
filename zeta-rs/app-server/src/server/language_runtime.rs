@@ -7,30 +7,33 @@ use std::sync::mpsc;
 use std::time::Duration;
 use std::time::Instant;
 
+use zeta_async_utils::CancellationToken;
 use zeta_config::LanguageServerConfig;
 use zeta_config::LanguageServerModeConfig;
 use zeta_config::LanguageServersConfig;
 use zeta_install_context::InstallContext;
-use zeta_language_server_catalog::BASH_LANGUAGE_SERVER_ID;
-use zeta_language_server_catalog::JSON_LANGUAGE_SERVER_ID;
-use zeta_language_server_catalog::LanguageServerCatalog;
-use zeta_language_server_catalog::LanguageServerExecutionPolicy;
-use zeta_language_server_catalog::LanguageServerPreference;
-use zeta_language_server_catalog::LanguageServerProviderLaunch;
-use zeta_language_server_catalog::LanguageServerProviderRegistry;
-use zeta_language_server_catalog::RUST_ANALYZER_SERVER_ID;
-use zeta_language_server_catalog::TYPESCRIPT_LANGUAGE_SERVER_ID;
-use zeta_language_service::LanguageRequestId;
-use zeta_language_service::LanguageRequestMetric;
-use zeta_language_service::LanguageServerMessageSeverity;
-use zeta_language_service::LanguageServerMessageSource;
-use zeta_language_service::LanguageServerState;
-use zeta_language_service::LanguageService;
-use zeta_language_service::LanguageServiceConfiguration;
-use zeta_language_service::LanguageServiceDocument;
-use zeta_language_service::LanguageServiceEvent;
-use zeta_language_service::LanguageServiceEventSink;
-use zeta_language_service::LanguageServiceMetricsSink;
+use zeta_lsp_manager::LanguageRequestId;
+use zeta_lsp_manager::LanguageRequestMetric;
+use zeta_lsp_manager::LanguageServerMessageSeverity;
+use zeta_lsp_manager::LanguageServerMessageSource;
+use zeta_lsp_manager::LanguageServerState;
+use zeta_lsp_manager::LspDocumentSnapshot;
+use zeta_lsp_manager::LspManager;
+use zeta_lsp_manager::LspManagerConfiguration;
+use zeta_lsp_manager::LspManagerEvent;
+use zeta_lsp_manager::LspManagerEventSink;
+use zeta_lsp_manager::LspManagerNotification;
+use zeta_lsp_manager::LspManagerRequestResult;
+use zeta_lsp_manager::LspRequestMetricsSink;
+use zeta_lsp_server_provider::BASH_LANGUAGE_SERVER_ID;
+use zeta_lsp_server_provider::JSON_LANGUAGE_SERVER_ID;
+use zeta_lsp_server_provider::LanguageServerExecutionPolicy;
+use zeta_lsp_server_provider::LanguageServerPreference;
+use zeta_lsp_server_provider::LspServerLaunch;
+use zeta_lsp_server_provider::LspServerProviders;
+use zeta_lsp_server_provider::LspServerResolver;
+use zeta_lsp_server_provider::RUST_ANALYZER_SERVER_ID;
+use zeta_lsp_server_provider::TYPESCRIPT_LANGUAGE_SERVER_ID;
 
 use zeta_app_server_protocol::protocol::language::LanguageDiagnosticsNotification;
 use zeta_app_server_protocol::protocol::language::LanguageServerMessageNotification;
@@ -48,10 +51,10 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 struct AppServerLanguageMetrics;
 
-impl LanguageServiceMetricsSink for AppServerLanguageMetrics {
+impl LspRequestMetricsSink for AppServerLanguageMetrics {
     fn record(&self, metric: LanguageRequestMetric) {
         log::debug!(
-            target: "zeta_language_service",
+            target: "zeta_lsp_manager",
             "request completed: kind={:?} server={} incarnation={} config_generation={} service_generation={} cold={} elapsed_ms={} results={} outcome={:?}",
             metric.kind,
             metric.server.as_deref().unwrap_or("none"),
@@ -67,23 +70,25 @@ impl LanguageServiceMetricsSink for AppServerLanguageMetrics {
 }
 
 struct AppServerLanguageEventSink {
-    sender: mpsc::Sender<LanguageServiceEvent>,
+    sender: mpsc::Sender<LspManagerEvent>,
     diagnostics: Arc<LanguageDiagnosticPublisher>,
 }
 
-impl LanguageServiceEventSink for AppServerLanguageEventSink {
-    fn on_event(&self, event: LanguageServiceEvent) {
-        if let LanguageServiceEvent::Diagnostics(diagnostics) = &event {
+impl LspManagerEventSink for AppServerLanguageEventSink {
+    fn on_event(&self, event: LspManagerEvent) {
+        if let LspManagerEvent::Notification(LspManagerNotification::Diagnostics(diagnostics)) =
+            &event
+        {
             self.diagnostics.publish(diagnostics);
             return;
         }
-        if let LanguageServiceEvent::ServerMessage {
+        if let LspManagerEvent::Notification(LspManagerNotification::ServerMessage {
             server,
             severity,
             source,
             show,
             message,
-        } = &event
+        }) = &event
         {
             self.diagnostics.updates.publish_language_server_message(
                 LanguageServerMessageNotification {
@@ -118,7 +123,9 @@ impl LanguageServiceEventSink for AppServerLanguageEventSink {
             );
             return;
         }
-        if let LanguageServiceEvent::ServerProgress(progress) = &event {
+        if let LspManagerEvent::Notification(LspManagerNotification::ServerProgress(progress)) =
+            &event
+        {
             self.diagnostics.updates.publish_language_server_progress(
                 LanguageServerProgressNotification {
                     workspace_folder_id: self.diagnostics.workspace_folder_id.clone(),
@@ -132,7 +139,11 @@ impl LanguageServiceEventSink for AppServerLanguageEventSink {
             );
             return;
         }
-        if let LanguageServiceEvent::ServerStateChanged { server, state } = &event {
+        if let LspManagerEvent::Notification(LspManagerNotification::ServerStateChanged {
+            server,
+            state,
+        }) = &event
+        {
             self.diagnostics.updates.publish_language_server_state(
                 LanguageServerStateNotification {
                     workspace_folder_id: self.diagnostics.workspace_folder_id.clone(),
@@ -173,7 +184,7 @@ fn language_server_state_to_dto(state: &LanguageServerState) -> LanguageServerSt
 #[derive(Clone)]
 struct AppServerLanguageDocumentSnapshot {
     relative_path: PathBuf,
-    revision: zeta_language_service::LanguageDocumentRevision,
+    revision: zeta_lsp_manager::LanguageDocumentRevision,
     text: String,
 }
 
@@ -184,7 +195,7 @@ struct LanguageDiagnosticPublisher {
 }
 
 impl LanguageDiagnosticPublisher {
-    fn publish(&self, diagnostics: &zeta_language_service::LanguageDiagnostics) {
+    fn publish(&self, diagnostics: &zeta_lsp_manager::LanguageDiagnostics) {
         let snapshot = self
             .documents
             .lock()
@@ -211,17 +222,34 @@ impl LanguageDiagnosticPublisher {
     }
 }
 
-pub(super) struct AppServerLanguageRuntime {
-    pub(super) service: Option<LanguageService>,
-    receiver: Option<mpsc::Receiver<LanguageServiceEvent>>,
+struct AppServerLanguageWorkspaceState {
     documents: Arc<Mutex<BTreeMap<PathBuf, AppServerLanguageDocumentSnapshot>>>,
-    updates: Arc<UpdateBroker>,
-    workspace_root: Option<PathBuf>,
+    root: Option<PathBuf>,
     config_generation: Option<u64>,
     language_servers: BTreeMap<String, String>,
     server_states: BTreeMap<String, LanguageServerState>,
-    providers: LanguageServerProviderRegistry,
     workspace_folder_id: Option<String>,
+}
+
+impl Default for AppServerLanguageWorkspaceState {
+    fn default() -> Self {
+        Self {
+            documents: Arc::new(Mutex::new(BTreeMap::new())),
+            root: None,
+            config_generation: None,
+            language_servers: BTreeMap::new(),
+            server_states: BTreeMap::new(),
+            workspace_folder_id: None,
+        }
+    }
+}
+
+pub(super) struct AppServerLanguageRuntime {
+    pub(super) manager: Option<LspManager>,
+    receiver: Option<mpsc::Receiver<LspManagerEvent>>,
+    updates: Arc<UpdateBroker>,
+    workspace: AppServerLanguageWorkspaceState,
+    providers: LspServerProviders,
     workspace_runtimes: BTreeMap<PathBuf, Box<AppServerLanguageRuntime>>,
     active_workspace_root: Option<PathBuf>,
 }
@@ -229,22 +257,17 @@ pub(super) struct AppServerLanguageRuntime {
 impl AppServerLanguageRuntime {
     pub(super) fn new(updates: Arc<UpdateBroker>) -> Self {
         Self {
-            service: None,
+            manager: None,
             receiver: None,
-            documents: Arc::new(Mutex::new(BTreeMap::new())),
             updates,
-            workspace_root: None,
-            config_generation: None,
-            language_servers: BTreeMap::new(),
-            server_states: BTreeMap::new(),
-            providers: LanguageServerProviderRegistry::new(),
-            workspace_folder_id: None,
+            workspace: AppServerLanguageWorkspaceState::default(),
+            providers: LspServerProviders::new(),
             workspace_runtimes: BTreeMap::new(),
             active_workspace_root: None,
         }
     }
 
-    pub(super) fn set_provider_registry(&mut self, providers: LanguageServerProviderRegistry) {
+    pub(super) fn set_server_providers(&mut self, providers: LspServerProviders) {
         self.shutdown();
         self.providers = providers;
     }
@@ -260,8 +283,8 @@ impl AppServerLanguageRuntime {
         config_generation: u64,
         configuration: &LanguageServersConfig,
         language_id: &str,
-    ) -> Result<&LanguageService, String> {
-        if self.workspace_root.is_some() && self.workspace_root.as_deref() != Some(workspace_root) {
+    ) -> Result<&LspManager, String> {
+        if self.workspace.root.is_some() && self.workspace.root.as_deref() != Some(workspace_root) {
             self.active_workspace_root = Some(workspace_root.to_path_buf());
             let runtime = self
                 .workspace_runtimes
@@ -280,78 +303,78 @@ impl AppServerLanguageRuntime {
             );
         }
         self.active_workspace_root = None;
-        self.workspace_folder_id = workspace_folder_id.map(str::to_owned);
-        if self.workspace_root.as_deref() != Some(workspace_root)
-            || self.config_generation != Some(config_generation)
+        self.workspace.workspace_folder_id = workspace_folder_id.map(str::to_owned);
+        if self.workspace.root.as_deref() != Some(workspace_root)
+            || self.workspace.config_generation != Some(config_generation)
         {
             self.restart(workspace_root, config_generation, configuration)?;
         }
         self.wait_until_ready(language_id)?;
-        self.service
+        self.manager
             .as_ref()
             .ok_or_else(|| "language service is unavailable".into())
     }
 
-    pub(super) fn service(&self) -> Option<&LanguageService> {
+    pub(super) fn manager(&self) -> Option<&LspManager> {
         match &self.active_workspace_root {
             Some(root) => self
                 .workspace_runtimes
                 .get(root)
-                .and_then(|runtime| runtime.service()),
-            None => self.service.as_ref(),
+                .and_then(|runtime| runtime.manager()),
+            None => self.manager.as_ref(),
         }
     }
 
     pub(super) fn wait_for_request(
         &mut self,
         request_id: LanguageRequestId,
-    ) -> Result<LanguageServiceEvent, String> {
+        cancellation: &CancellationToken,
+    ) -> Result<LspManagerRequestResult, String> {
         if let Some(root) = self.active_workspace_root.clone() {
             return self
                 .workspace_runtimes
                 .get_mut(&root)
                 .ok_or_else(|| String::from("language workspace runtime is unavailable"))?
-                .wait_for_request(request_id);
+                .wait_for_request(request_id, cancellation);
         }
         let deadline = Instant::now() + REQUEST_TIMEOUT;
         loop {
-            let event = self.recv_until(deadline)?;
-            let matches = match &event {
-                LanguageServiceEvent::Hover(result) => result.request_id == request_id,
-                LanguageServiceEvent::Completions(result) => result.request_id == request_id,
-                LanguageServiceEvent::CompletionDetails(result) => result.request_id == request_id,
-                LanguageServiceEvent::CommandResult(result) => result.request_id == request_id,
-                LanguageServiceEvent::Locations(result) => result.request_id == request_id,
-                LanguageServiceEvent::Hierarchy(result) => result.request_id == request_id,
-                LanguageServiceEvent::WorkspaceSymbols(result) => result.request_id == request_id,
-                LanguageServiceEvent::WorkspaceDiagnostics(result) => {
-                    result.request_id == request_id
+            if cancellation.is_cancelled() {
+                if let Some(manager) = self.manager() {
+                    let _ = manager.cancel_request(request_id);
                 }
-                LanguageServiceEvent::RenamePreparation(result) => result.request_id == request_id,
-                LanguageServiceEvent::WorkspaceEdit(result) => result.request_id == request_id,
-                LanguageServiceEvent::CodeActions(result) => result.request_id == request_id,
-                LanguageServiceEvent::FormattingEdits(result) => result.request_id == request_id,
-                LanguageServiceEvent::SignatureHelp(result) => result.request_id == request_id,
-                LanguageServiceEvent::InlayHints(result) => result.request_id == request_id,
-                LanguageServiceEvent::LinkedEditingRanges(result) => {
-                    result.request_id == request_id
-                }
-                LanguageServiceEvent::SemanticTokens(result) => result.request_id == request_id,
-                LanguageServiceEvent::DocumentSymbols(result) => result.request_id == request_id,
-                LanguageServiceEvent::CodeLenses(result) => result.request_id == request_id,
-                LanguageServiceEvent::DocumentLinks(result) => result.request_id == request_id,
-                LanguageServiceEvent::DocumentColors(result) => result.request_id == request_id,
-                LanguageServiceEvent::ColorPresentations(result) => result.request_id == request_id,
-                LanguageServiceEvent::FoldingRanges(result) => result.request_id == request_id,
-                LanguageServiceEvent::PulledDiagnostics(result) => result.request_id == request_id,
-                LanguageServiceEvent::RequestFailed {
-                    request_id: failed, ..
-                } => *failed == request_id,
-                _ => false,
+                return Err("language request cancelled".into());
+            }
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                return Err("language service request timed out".into());
+            }
+            let event = self
+                .receiver
+                .as_ref()
+                .ok_or_else(|| String::from("language service event channel is unavailable"))?
+                .recv_timeout(remaining.min(Duration::from_millis(25)))
+                .map_err(|error| match error {
+                    mpsc::RecvTimeoutError::Timeout => String::new(),
+                    mpsc::RecvTimeoutError::Disconnected => {
+                        String::from("language service event channel is unavailable")
+                    }
+                });
+            let event = match event {
+                Ok(event) => event,
+                Err(message) if message.is_empty() => continue,
+                Err(message) => return Err(message),
             };
+            let matches = matches!(
+                &event,
+                LspManagerEvent::RequestResult(result) if result.request_id() == request_id
+            );
             self.accept_state(&event);
             if matches {
-                return Ok(event);
+                let LspManagerEvent::RequestResult(result) = event else {
+                    unreachable!("request result match must contain a request result")
+                };
+                return Ok(result);
             }
         }
     }
@@ -363,7 +386,7 @@ impl AppServerLanguageRuntime {
         config_generation: u64,
         configuration: &LanguageServersConfig,
         relative_path: &Path,
-        document: LanguageServiceDocument,
+        document: LspDocumentSnapshot,
     ) -> Result<(), String> {
         let language_id = document.language_id().to_owned();
         self.ensure(
@@ -386,9 +409,10 @@ impl AppServerLanguageRuntime {
     fn synchronize_selected_document(
         &mut self,
         relative_path: &Path,
-        document: LanguageServiceDocument,
+        document: LspDocumentSnapshot,
     ) -> Result<(), String> {
-        self.documents
+        self.workspace
+            .documents
             .lock()
             .map_err(|_| String::from("language document snapshots are unavailable"))?
             .insert(
@@ -399,7 +423,7 @@ impl AppServerLanguageRuntime {
                     text: document.text().to_owned(),
                 },
             );
-        self.service
+        self.manager
             .as_ref()
             .ok_or_else(|| String::from("language service is unavailable"))?
             .synchronize_document(document)
@@ -411,7 +435,7 @@ impl AppServerLanguageRuntime {
         workspace_root: &Path,
         path: &Path,
     ) -> Result<(), String> {
-        if self.workspace_root.as_deref() != Some(workspace_root) {
+        if self.workspace.root.as_deref() != Some(workspace_root) {
             return self
                 .workspace_runtimes
                 .get_mut(workspace_root)
@@ -421,12 +445,13 @@ impl AppServerLanguageRuntime {
     }
 
     fn close_selected_document(&mut self, path: &Path) -> Result<(), String> {
-        self.documents
+        self.workspace
+            .documents
             .lock()
             .map_err(|_| String::from("language document snapshots are unavailable"))?
             .remove(path);
-        if let Some(service) = &self.service {
-            service
+        if let Some(manager) = &self.manager {
+            manager
                 .close_document(path)
                 .map_err(|error| error.to_string())?;
         }
@@ -440,15 +465,14 @@ impl AppServerLanguageRuntime {
         configuration: &LanguageServersConfig,
     ) -> Result<(), String> {
         self.shutdown_selected();
-        let catalog =
-            LanguageServerCatalog::new(preference(configuration, RUST_ANALYZER_SERVER_ID))
-                .with_json_language_server(preference(configuration, JSON_LANGUAGE_SERVER_ID))
-                .with_bash_language_server(preference(configuration, BASH_LANGUAGE_SERVER_ID))
-                .with_typescript_language_server(preference(
-                    configuration,
-                    TYPESCRIPT_LANGUAGE_SERVER_ID,
-                ));
-        let resolution = catalog
+        let resolver = LspServerResolver::new(preference(configuration, RUST_ANALYZER_SERVER_ID))
+            .with_json_language_server(preference(configuration, JSON_LANGUAGE_SERVER_ID))
+            .with_bash_language_server(preference(configuration, BASH_LANGUAGE_SERVER_ID))
+            .with_typescript_language_server(preference(
+                configuration,
+                TYPESCRIPT_LANGUAGE_SERVER_ID,
+            ));
+        let resolution = resolver
             .resolve(
                 &InstallContext::current(),
                 LanguageServerExecutionPolicy::Allowed,
@@ -461,7 +485,7 @@ impl AppServerLanguageRuntime {
             configuration,
             workspace_root,
         )?);
-        self.language_servers = definitions
+        self.workspace.language_servers = definitions
             .iter()
             .flat_map(|definition| {
                 let server = definition.name().to_string();
@@ -474,35 +498,36 @@ impl AppServerLanguageRuntime {
             return Err("no configured language-server executable is available".into());
         }
         let (sender, receiver) = mpsc::channel();
-        let service = LanguageService::start_with_metrics(
-            LanguageServiceConfiguration::enabled(workspace_root, definitions)
+        let manager = LspManager::start_with_events_and_metrics(
+            LspManagerConfiguration::enabled(workspace_root, definitions)
                 .with_generation(config_generation),
             Arc::new(AppServerLanguageEventSink {
                 sender,
                 diagnostics: Arc::new(LanguageDiagnosticPublisher {
-                    documents: Arc::clone(&self.documents),
+                    documents: Arc::clone(&self.workspace.documents),
                     updates: Arc::clone(&self.updates),
-                    workspace_folder_id: self.workspace_folder_id.clone(),
+                    workspace_folder_id: self.workspace.workspace_folder_id.clone(),
                 }),
             }),
             Arc::new(AppServerLanguageMetrics),
         )
         .map_err(|error| error.to_string())?;
-        self.service = Some(service);
+        self.manager = Some(manager);
         self.receiver = Some(receiver);
-        self.workspace_root = Some(workspace_root.to_path_buf());
-        self.config_generation = Some(config_generation);
+        self.workspace.root = Some(workspace_root.to_path_buf());
+        self.workspace.config_generation = Some(config_generation);
         Ok(())
     }
 
     fn wait_until_ready(&mut self, language_id: &str) -> Result<(), String> {
         let server = self
+            .workspace
             .language_servers
             .get(language_id)
             .cloned()
             .ok_or_else(|| format!("no language server is available for '{language_id}'"))?;
         if matches!(
-            self.server_states.get(&server),
+            self.workspace.server_states.get(&server),
             Some(LanguageServerState::Ready)
         ) {
             return Ok(());
@@ -511,7 +536,7 @@ impl AppServerLanguageRuntime {
         loop {
             let event = self.recv_until(deadline)?;
             self.accept_state(&event);
-            match self.server_states.get(&server) {
+            match self.workspace.server_states.get(&server) {
                 Some(LanguageServerState::Ready) => return Ok(()),
                 Some(LanguageServerState::Failed(message)) => return Err(message.clone()),
                 Some(LanguageServerState::CrashLoop { message, .. }) => return Err(message.clone()),
@@ -520,7 +545,7 @@ impl AppServerLanguageRuntime {
         }
     }
 
-    fn recv_until(&self, deadline: Instant) -> Result<LanguageServiceEvent, String> {
+    fn recv_until(&self, deadline: Instant) -> Result<LspManagerEvent, String> {
         let remaining = deadline.saturating_duration_since(Instant::now());
         if remaining.is_zero() {
             return Err("language service request timed out".into());
@@ -532,9 +557,15 @@ impl AppServerLanguageRuntime {
             .map_err(|_| "language service request timed out".into())
     }
 
-    fn accept_state(&mut self, event: &LanguageServiceEvent) {
-        if let LanguageServiceEvent::ServerStateChanged { server, state } = event {
-            self.server_states.insert(server.clone(), state.clone());
+    fn accept_state(&mut self, event: &LspManagerEvent) {
+        if let LspManagerEvent::Notification(LspManagerNotification::ServerStateChanged {
+            server,
+            state,
+        }) = event
+        {
+            self.workspace
+                .server_states
+                .insert(server.clone(), state.clone());
         }
     }
 
@@ -545,25 +576,25 @@ impl AppServerLanguageRuntime {
     }
 
     fn shutdown_selected(&mut self) {
-        if let Ok(mut documents) = self.documents.lock() {
+        if let Ok(mut documents) = self.workspace.documents.lock() {
             documents.clear();
         }
-        if let Some(service) = self.service.take() {
-            let _ = service.shutdown();
+        if let Some(manager) = self.manager.take() {
+            let _ = manager.shutdown();
         }
         self.receiver = None;
-        self.workspace_root = None;
-        self.config_generation = None;
-        self.language_servers.clear();
-        self.server_states.clear();
+        self.workspace.root = None;
+        self.workspace.config_generation = None;
+        self.workspace.language_servers.clear();
+        self.workspace.server_states.clear();
     }
 }
 
 fn configured_provider_definitions(
-    providers: &LanguageServerProviderRegistry,
+    providers: &LspServerProviders,
     configuration: &LanguageServersConfig,
     workspace_root: &Path,
-) -> Result<Vec<zeta_language_service::LanguageServerDefinition>, String> {
+) -> Result<Vec<zeta_lsp_manager::LanguageServerDefinition>, String> {
     let mut definitions = Vec::new();
     for server_id in providers.ids() {
         let config = configuration
@@ -579,8 +610,8 @@ fn configured_provider_definitions(
         let launch = config
             .and_then(|config| config.executable.as_deref())
             .map_or(
-                LanguageServerProviderLaunch::Packaged,
-                LanguageServerProviderLaunch::ExplicitExecutable,
+                LspServerLaunch::Packaged,
+                LspServerLaunch::ExplicitExecutable,
             );
         if let Some(definition) = providers
             .definition(server_id, workspace_root, launch)

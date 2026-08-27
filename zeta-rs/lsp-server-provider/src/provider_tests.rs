@@ -8,8 +8,8 @@ use crate::CSS_LANGUAGE_SERVER_ID;
 use crate::CssLanguageServerProvider;
 use crate::DirectPackageLanguageServerProvider;
 use crate::LanguageServerProviderError;
-use crate::LanguageServerProviderLaunch;
-use crate::LanguageServerProviderRegistry;
+use crate::LspServerLaunch;
+use crate::LspServerProviders;
 use crate::ManagedNodeRuntime;
 use crate::ManagedNodeRuntimeSource;
 
@@ -21,14 +21,14 @@ fn css_provider_uses_managed_node_and_a_clean_environment() {
         provider.node_runtime().source(),
         ManagedNodeRuntimeSource::PackagedNode
     );
-    let mut registry = LanguageServerProviderRegistry::new();
+    let mut registry = LspServerProviders::new();
     registry.register(provider).unwrap();
 
     let definition = registry
         .definition(
             CSS_LANGUAGE_SERVER_ID,
             fixture.workspace.path(),
-            LanguageServerProviderLaunch::Packaged,
+            LspServerLaunch::Packaged,
         )
         .unwrap()
         .unwrap();
@@ -75,14 +75,14 @@ fn css_provider_uses_electron_only_for_the_language_server_child() {
         provider.node_runtime().source(),
         ManagedNodeRuntimeSource::ElectronRunAsNode
     );
-    let mut registry = LanguageServerProviderRegistry::new();
+    let mut registry = LspServerProviders::new();
     registry.register(provider).unwrap();
 
     let definition = registry
         .definition(
             CSS_LANGUAGE_SERVER_ID,
             fixture.workspace.path(),
-            LanguageServerProviderLaunch::Packaged,
+            LspServerLaunch::Packaged,
         )
         .unwrap()
         .unwrap();
@@ -101,26 +101,26 @@ fn css_provider_uses_electron_only_for_the_language_server_child() {
 }
 
 #[test]
-fn css_provider_accepts_an_authoritative_native_override() {
+fn css_provider_accepts_an_authoritative_executable_override() {
     let fixture = ProviderFixture::new();
     let provider = fixture.provider();
-    let native = fixture.root.path().join("native-css-server");
-    write_executable(&native);
-    let mut registry = LanguageServerProviderRegistry::new();
+    let executable = fixture.root.path().join("explicit-css-server");
+    write_executable(&executable);
+    let mut registry = LspServerProviders::new();
     registry.register(provider).unwrap();
 
     let definition = registry
         .definition(
             CSS_LANGUAGE_SERVER_ID,
             fixture.workspace.path(),
-            LanguageServerProviderLaunch::ExplicitExecutable(&native),
+            LspServerLaunch::ExplicitExecutable(&executable),
         )
         .unwrap()
         .unwrap();
     let (_, command, _) = definition.into_launch_parts();
     assert_eq!(
         command.program(),
-        fs::canonicalize(native).unwrap().as_os_str()
+        fs::canonicalize(executable).unwrap().as_os_str()
     );
     assert!(command.arguments().is_empty());
     assert_eq!(
@@ -132,7 +132,7 @@ fn css_provider_accepts_an_authoritative_native_override() {
 #[test]
 fn registry_rejects_duplicate_provider_identity() {
     let fixture = ProviderFixture::new();
-    let mut registry = LanguageServerProviderRegistry::new();
+    let mut registry = LspServerProviders::new();
     registry.register(fixture.provider()).unwrap();
     let error = registry.register(fixture.provider()).unwrap_err();
     assert!(matches!(
@@ -144,7 +144,7 @@ fn registry_rejects_duplicate_provider_identity() {
 #[test]
 fn packaged_registry_retains_user_enablement() {
     let fixture = ProviderFixture::new();
-    let mut registry = LanguageServerProviderRegistry::new();
+    let mut registry = LspServerProviders::new();
     registry.register_packaged(fixture.provider()).unwrap();
 
     assert!(registry.contains(CSS_LANGUAGE_SERVER_ID));
@@ -162,14 +162,14 @@ fn direct_package_provider_launches_the_verified_executable() {
         &direct,
     )
     .unwrap();
-    let mut registry = LanguageServerProviderRegistry::new();
+    let mut registry = LspServerProviders::new();
     registry.register_packaged(provider).unwrap();
 
     let definition = registry
         .definition(
             "demo-language-server",
             fixture.workspace.path(),
-            LanguageServerProviderLaunch::Packaged,
+            LspServerLaunch::Packaged,
         )
         .unwrap()
         .unwrap();

@@ -17,6 +17,8 @@ pub enum LanguageServerError {
         operation: String,
         duration: Duration,
     },
+    #[error("language server request {operation} was cancelled")]
+    Cancelled { operation: String },
     #[error("language server rejected {method} with {code}: {message}")]
     Response {
         method: String,

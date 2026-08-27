@@ -22,7 +22,7 @@ Native UI 的 crate 从共享 workspace 中分离。
 | Button、Tree、List、Editor/Workspace pane presentation | `app/ui`、`editor`、`features/workspace` | app-owned modules and crates in root workspace | 已迁入 app |
 | Renderer、wgpu、winit | 历史 `app/renderer`、`wgpu`、`winit` | private `app/zui` modules | 已收入单一 `zui` crate |
 | App Server、Core、Protocol、Session、File/Git、Diff、Terminal model | `zeta-rs/*` | `zeta-rs` | 保留 |
-| 纯 Rust editor transaction、syntax、language service | `zeta-rs/editor-core`、`syntax`、`language-service` | `zeta-rs` | 保留；presentation 与底层分离 |
+| 纯 Rust editor transaction、syntax、LSP manager | `zeta-rs/editor-core`、`syntax`、`lsp-manager` | `zeta-rs` | 保留；presentation 与底层分离 |
 
 `zeta-rs` 的“共享”按宿主无关的 Rust 语义和 backend contract 判断，不要求 Electron TypeScript 直接
 链接 Rust crate；Electron 通过 App Server protocol 使用同一套 authority。只有产品布局、窗口、GPU、
