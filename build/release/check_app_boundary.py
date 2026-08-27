@@ -15,7 +15,7 @@ EXPECTED_APP_MEMBERS = {
     "app/icons",
     "app/keybinding-ui",
     "app/markdown",
-    "app/native-keybindings",
+    "app/keybindings",
     "app/settings",
     "app/ui",
     "app/zui",

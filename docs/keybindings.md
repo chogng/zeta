@@ -1,7 +1,7 @@
 # 三端快捷键系统
 
 > 文档所有权：本文是 Zeta、App 与 Zeta Code 共享快捷键语义、端侧输入边界和演进顺序的 canonical 架构文档。
-> 实现细节分别由 [`zeta-keybinding`](../zeta-rs/keybinding/README.md)、[`zeta-keybindings-host`](../app/native-keybindings/README.md)、[`zeta-code` TUI](../zeta-code/tui/README.md) 和 [Zeta 浏览器基础](../zeta-ts/docs/browser-foundation.md)维护。
+> 实现细节分别由 [`zeta-keybinding`](../zeta-rs/keybinding/README.md)、[`zeta-keybindings-host`](../app/keybindings/README.md)、[`zeta-code` TUI](../zeta-code/tui/README.md) 和 [Zeta 浏览器基础](../zeta-ts/docs/browser-foundation.md)维护。
 > 状态：共享 Rust 核心与用户资源编译器、Zeta Code `AppKeymap`/用户资源、App、Zeta TypeScript 输入链路和跨语言 conformance 向量均为 Current。
 
 ## 快速理解
@@ -218,7 +218,7 @@ CLI 把 active profile root 显式交给 TUI；TUI 启动时加载产品资源�
 
 迁移已经按一个 source of truth 原则完成首个纵切：纯 core 已移动，App UI 已拆出，Zeta Code 根级 Keymap 已接入，旧 `app/keybinding` 模块已删除。adapter 只能单向转换，不保留两套 Resolver。
 
-共享 core 可用 `bazel test //zeta-rs/keybinding:keybinding-unit-tests` 在三端平台验证。App host 与 UI 另有 `native-keybindings-unit-tests` 和 `keybinding-ui-unit-tests` Bazel 目标。Windows Bazel 通过仓库拥有的 `rules_rs` 兼容补丁使用 gnullvm-hosted Rust tools，使 `rustc`、过程宏 DLL 和 hermetic LLVM/MinGW linker 使用同一 ABI；三个目标在 Windows、Linux 与 macOS 都实际运行，不再使用平台跳过。
+共享 core 可用 `bazel test //zeta-rs/keybinding:keybinding-unit-tests` 在三端平台验证。App host 与 UI 另有 `//app/keybindings:keybindings-unit-tests` 和 `//app/keybinding-ui:keybinding-ui-unit-tests` Bazel 目标。Windows Bazel 通过仓库拥有的 `rules_rs` 兼容补丁使用 gnullvm-hosted Rust tools，使 `rustc`、过程宏 DLL 和 hermetic LLVM/MinGW linker 使用同一 ABI；三个目标在 Windows、Linux 与 macOS 都实际运行，不再使用平台跳过。
 
 ## 9. 长期不变量
 

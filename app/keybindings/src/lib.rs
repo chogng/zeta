@@ -19,5 +19,5 @@ pub use resource::binding_diagnostics;
 pub use resource::compile_user_bindings;
 
 #[cfg(test)]
-#[path = "native_keybindings_tests.rs"]
+#[path = "keybindings_tests.rs"]
 mod tests;

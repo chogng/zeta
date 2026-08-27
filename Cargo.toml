@@ -128,7 +128,7 @@ members = [
     "app/icons",
     "app/keybinding-ui",
     "app/markdown",
-    "app/native-keybindings",
+    "app/keybindings",
     "app/remote-ui",
     "app/session-ui",
     "app/settings",
@@ -340,7 +340,7 @@ zeta-keyring-store = { path = "zeta-rs/keyring-store" }
 zeta-kimi = { path = "zeta-rs/kimi" }
 zeta-keybinding = { path = "zeta-rs/keybinding" }
 zeta-composer = { path = "app/composer" }
-zeta-keybindings-host = { path = "app/native-keybindings" }
+zeta-keybindings-host = { path = "app/keybindings" }
 app-keybinding-ui = { path = "app/keybinding-ui" }
 zeta-lsp-server-provider = { path = "zeta-rs/lsp-server-provider" }
 zeta-lsp-manager = { path = "zeta-rs/lsp-manager" }

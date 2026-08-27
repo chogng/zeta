@@ -1,6 +1,6 @@
 # `zeta-keybindings-host`
 
-`zeta-keybindings-host` owns the reusable native-host layer around the generic
+`zeta-keybindings-host` owns the reusable application-host layer around the generic
 [`zeta-keybinding`](../../zeta-rs/keybinding/README.md) model. It standardizes platform key
 events, owns chord timeout state, and validates/polls the JSON user binding
 resource without knowing a product's commands or window lifecycle.
