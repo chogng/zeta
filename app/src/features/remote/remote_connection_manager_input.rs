@@ -3,8 +3,6 @@ use std::time::Instant;
 use zeta_remote_connections::RemoteConnectionCatalog;
 use zeta_remote_connections::RemoteConnectionName;
 use zeta_remote_connections::RemoteConnectionSaveMode;
-use zeta_ui::Point;
-use zeta_ui::TextInputCommand;
 use zui::input::ElementState;
 use zui::input::Key;
 use zui::input::KeyEvent;
@@ -16,6 +14,8 @@ use zui::ui::DispatchOutcome;
 use zui::ui::ElementId;
 use zui::ui::FocusDirection;
 use zui::ui::NavigationAxis;
+use zui::ui::Point;
+use zui::ui::TextInputCommand;
 
 use crate::NativeApp;
 use crate::app_server::local_profile_root;

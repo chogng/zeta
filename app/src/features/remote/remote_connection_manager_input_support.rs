@@ -1,5 +1,5 @@
-use zeta_ui::ScrollCommand;
-use zeta_ui::ScrollDelta;
+use zeta_ui_components::ScrollCommand;
+use zeta_ui_components::ScrollDelta;
 use zui::input::MouseScrollDelta;
 use zui::ui::ElementId;
 

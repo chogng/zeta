@@ -2,7 +2,7 @@ use super::draw_info_bar;
 use crate::shell_interaction::COMPOSER_INFO_BAR;
 use crate::shell_style::SHELL_PALETTE;
 use zeta_composer::ComposerRoute;
-use zeta_ui::{Color, Rect};
+use zui::ui::{Color, Rect};
 use zui::ui::{InteractionFrame, UiDispatch, UiFrame};
 
 #[test]
@@ -62,7 +62,7 @@ fn info_bar_paints_agent_and_shell_triggers_as_keycaps() {
         );
         let inspected_label = scene
             .inspection()
-            .target_at(zeta_ui::Point::new(
+            .target_at(zui::ui::Point::new(
                 bounds.origin.x + 100.0,
                 bounds.origin.y + 12.0,
             ))

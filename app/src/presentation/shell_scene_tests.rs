@@ -33,17 +33,17 @@ use zeta_editor::CodeEditorStyle;
 use zeta_settings::SettingsPageSection;
 use zeta_terminal::{GridSize, ScreenBuffer, TerminalCore};
 use zeta_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSnapshot};
-use zeta_ui::TabContainerState;
-use zeta_ui::{
-    CaretVisibility, Color, Edges, Point, Rect, ScrollbarPresentation, TextInputCommand,
-    TextInputLayoutEngine, UiScene,
-};
+use zeta_ui_components::ScrollbarPresentation;
 use zeta_workbench_controller::{
     InspectorPartState, PaneBinding, PaneHost, PaneHostScope, PaneInput, PanePart,
     PaneSplitDirection, TabInputKey, TabPart,
 };
+use zeta_workbench_ui::TabContainerState;
 use zui::runtime::AccessibilityNode;
 use zui::ui::{AccessibilityRole, CursorFeedback, DispatchInvalidation, UiDispatch, UiIntent};
+use zui::ui::{
+    CaretVisibility, Color, Edges, Point, Rect, TextInputCommand, TextInputLayoutEngine, UiScene,
+};
 use zui::window::WindowControlInsets;
 
 fn viewport() -> LogicalViewport {
@@ -856,7 +856,7 @@ fn workspace_pane_defaults_to_files_in_the_main_workbench_with_navigation_and_ac
             .iter()
             .find(|node| node.id == WORKSPACE_PANE)
             .map(|node| node.bounds),
-        Some(zeta_ui::Rect::from_xywh(0.0, 32.0, 1000.0, 668.0))
+        Some(zui::ui::Rect::from_xywh(0.0, 32.0, 1000.0, 668.0))
     );
     assert_eq!(workspace_pane.role, AccessibilityRole::Group);
     assert_eq!(workspace_pane.label, "Workspace pane");
@@ -867,16 +867,16 @@ fn workspace_pane_defaults_to_files_in_the_main_workbench_with_navigation_and_ac
     assert!(resize_handle.is_none());
     assert_eq!(
         toolbar.bounds,
-        zeta_ui::Rect::from_xywh(0.0, 32.0, 1000.0, 36.0)
+        zui::ui::Rect::from_xywh(0.0, 32.0, 1000.0, 36.0)
     );
     assert_eq!(
         navigation.bounds,
-        zeta_ui::Rect::from_xywh(0.0, 32.0, 128.0, 36.0)
+        zui::ui::Rect::from_xywh(0.0, 32.0, 128.0, 36.0)
     );
     assert_eq!(navigation.parent, Some(WORKSPACE_PANE_TOOLBAR));
     assert_eq!(
         explorer.bounds,
-        zeta_ui::Rect::from_xywh(0.0, 68.0, 1000.0, 632.0)
+        zui::ui::Rect::from_xywh(0.0, 68.0, 1000.0, 632.0)
     );
     for id in [
         AGENT_CHANGES,

@@ -1,8 +1,8 @@
 use std::time::Instant;
 
 use zeta_terminal::{KeyModifiers, TerminalCore, TerminalKey};
-use zeta_ui::{TextInputCompositionCursor, TextInputCompositionEvent};
 use zui::input::Ime;
+use zui::ui::{TextInputCompositionCursor, TextInputCompositionEvent};
 use zui::window::ImeCursorArea;
 
 use crate::NativeApp;

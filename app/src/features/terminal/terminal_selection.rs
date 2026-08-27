@@ -1,8 +1,8 @@
 use unicode_width::UnicodeWidthChar;
 use zeta_terminal::{ScreenBuffer, TerminalMousePosition};
-use zeta_ui::{Color, PaintRect, Rect, UiScene};
 use zui::input::ElementState;
 use zui::services::{ClipboardError, ClipboardHandle};
+use zui::ui::{Color, PaintRect, Rect, UiScene};
 
 use crate::NativeApp;
 use crate::terminal_projection::visible_text_lines;

@@ -1,9 +1,10 @@
 use zeta_app_server_protocol::protocol::config::LanguageServerModeDto;
-use zeta_ui::{
-    Border, ButtonBackgrounds, ButtonStyle, Color, CornerRadii, Edges, InputBoxStateColors,
-    InputBoxStyle, Rect, Size, SwitchColors, SwitchStateColors, SwitchStyle, TextStyle,
+use zeta_ui_components::{
+    ButtonBackgrounds, ButtonStyle, InputBoxStateColors, InputBoxStyle, SwitchColors,
+    SwitchStateColors, SwitchStyle,
 };
 use zui::ui::ElementId;
+use zui::ui::{Border, Color, CornerRadii, Edges, Rect, Size, TextStyle};
 
 use crate::language_server_settings::{
     LANGUAGE_SERVER_BASH, LANGUAGE_SERVER_JSON, LANGUAGE_SERVER_MODE_AUTOMATIC,

@@ -2,8 +2,8 @@ use std::{ops::Range, time::Instant};
 
 use zeta_editor::{CodeEditorCommand, CodeEditorPosition, CodeEditorSelectionMode};
 use zeta_language_service::LanguageRequestKind;
-use zeta_ui::TextInputCompositionEvent;
 use zui::input::{ElementState, Key, KeyEvent, MouseScrollDelta, NamedKey};
+use zui::ui::TextInputCompositionEvent;
 
 use crate::NativeApp;
 use crate::file_editor_auto_scroll::{FileEditorAutoScrollDirection, FileEditorAutoScrollState};
@@ -366,7 +366,7 @@ impl NativeApp {
             }
             return true;
         }
-        let point = zeta_ui::Point::new(
+        let point = zui::ui::Point::new(
             point.x.clamp(
                 editor_bounds.origin.x,
                 (editor_bounds.right() - 1.0).max(editor_bounds.origin.x),
@@ -421,7 +421,7 @@ impl NativeApp {
         };
         let Some(position) = self
             .file_editor_pane()
-            .and_then(|pane| pane.text_position_at(zeta_ui::Point::new(x, y)))
+            .and_then(|pane| pane.text_position_at(zui::ui::Point::new(x, y)))
         else {
             return false;
         };

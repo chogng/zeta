@@ -3,10 +3,13 @@ use std::collections::BTreeMap;
 use app_keybinding_ui::KeyboardShortcuts;
 use app_keybinding_ui::paint_chord_hint;
 use zeta_terminal::{GridSize, ScreenBuffer, TerminalColor, TerminalCore, TerminalMousePosition};
-use zeta_ui::{
-    Border, CaretVisibility, Color, CornerRadii, FontFamily, FontWeight, InteractionRegion,
-    PaintRect, Rect, Sash, SashOrientation, SashState, SashStyle, SceneCheckpoint, ScrollMetrics,
-    ScrollbarPresentation, SplitViewOrientation, SplitViewResizeSnapshot, TextBlock,
+use zeta_ui_components::{
+    InteractionRegion, Sash, SashOrientation, SashState, SashStyle, ScrollMetrics,
+    ScrollbarPresentation,
+};
+use zui::ui::{
+    Border, CaretVisibility, Color, CornerRadii, FontFamily, FontWeight, PaintRect, Rect,
+    SceneCheckpoint, SplitViewOrientation, SplitViewResizeSnapshot, TextBlock,
     TextInputLayoutEngine, TextStyle, UiScene,
 };
 
@@ -61,14 +64,14 @@ use crate::workspace_path_picker::{WorkspacePathPicker, WorkspacePathPickerState
 use crate::workspace_surface::WorkspaceSurfaceKind;
 use zeta_composer::Composer;
 use zeta_composer::ComposerPanelLayout;
-use zeta_ui::{
-    TITLEBAR_HEIGHT, TabContainer, TabContainerPlacement, TabContainerState, TabContainerToolbar,
-    Titlebar, TitlebarInsets, WorkbenchTab, WorkbenchTabGroup, tab_input_element_id,
-    workbench_tab_groups,
-};
 use zeta_workbench_controller::{
     InspectorPartState, PaneBinding, PaneGroupId as PaneId, PaneInputKind, PaneMount, PanePart,
     PaneSplitId, TabGroupId, TabInput, TabInputKey, TabPart,
+};
+use zeta_workbench_ui::{
+    TITLEBAR_HEIGHT, TabContainer, TabContainerPlacement, TabContainerState, TabContainerToolbar,
+    Titlebar, TitlebarInsets, WorkbenchTab, WorkbenchTabGroup, tab_input_element_id,
+    workbench_tab_groups,
 };
 
 type PaneViewMount<'a> = PaneMount<'a, PaneBinding>;
@@ -267,9 +270,9 @@ impl ShellPresentation {
     pub(crate) fn remove_retained_fragment(
         &mut self,
         id: ElementId,
-    ) -> Result<(), zeta_ui::SceneFragmentError> {
+    ) -> Result<(), zui::ui::SceneFragmentError> {
         let Some(checkpoint) = self.retained_fragments.get(&id).cloned() else {
-            return Err(zeta_ui::SceneFragmentError::Missing(id));
+            return Err(zui::ui::SceneFragmentError::Missing(id));
         };
         self.scene_mut().remove_fragment(id)?;
         self.interaction_frame_mut().restore(checkpoint.interaction);
@@ -375,7 +378,7 @@ pub(crate) struct ShellPresentationModel<'a> {
     pub(crate) theme_scheme: zeta_theme::ColorScheme,
     pub(crate) theme_follows_system: bool,
     pub(crate) window_control_insets: WindowControlInsets,
-    pub(crate) pointer_position: Option<zeta_ui::Point>,
+    pub(crate) pointer_position: Option<zui::ui::Point>,
 }
 
 #[derive(Clone, Copy)]
@@ -410,7 +413,7 @@ struct FileEditorPresentationView<'a> {
     style: &'a CodeEditorStyle,
     caret_visibility: CaretVisibility,
     dispatch: &'a UiDispatch,
-    pointer_position: Option<zeta_ui::Point>,
+    pointer_position: Option<zui::ui::Point>,
 }
 
 #[derive(Clone, Copy)]
@@ -982,7 +985,7 @@ pub(crate) fn terminal_mouse_position_for_viewport(
     active_screen: ScreenBuffer,
     tab_container: TabContainerState,
     inspector_part: InspectorPartState,
-    point: zeta_ui::Point,
+    point: zui::ui::Point,
 ) -> Option<TerminalMousePosition> {
     let layout = ShellLayout::for_viewport(viewport, tab_container, inspector_part)?;
     let bounds = terminal_content_bounds(layout, active_screen);
@@ -1002,7 +1005,7 @@ pub(crate) fn terminal_pane_mouse_position_for_viewport(
     tab_container: TabContainerState,
     inspector_part: InspectorPartState,
     group: &PanePart,
-    point: zeta_ui::Point,
+    point: zui::ui::Point,
 ) -> Option<(PaneId, TerminalMousePosition)> {
     let Some(layout) = ShellLayout::for_viewport(viewport, tab_container, inspector_part) else {
         return None;
@@ -1068,7 +1071,7 @@ fn draw_workspace_pane(
         let search_caret = context.with_component(&toolbar, |context, _| {
             context.scene_mut().draw_rect(
                 PaintRect::new(toolbar_bounds, palette.surface_raised).with_border(Border::new(
-                    zeta_ui::Edges::new(0.0, 0.0, 1.0, 0.0),
+                    zui::ui::Edges::new(0.0, 0.0, 1.0, 0.0),
                     palette.border,
                 )),
             );
@@ -1191,7 +1194,7 @@ fn draw_workspace_surface(scene: &mut UiScene, bounds: Rect, palette: ShellPalet
 fn draw_inspector_border(scene: &mut UiScene, bounds: Rect, palette: ShellPalette) {
     scene.draw_rect(
         PaintRect::new(bounds, Color::TRANSPARENT).with_border(Border::new(
-            zeta_ui::Edges::new(0.0, 0.0, 0.0, 1.0),
+            zui::ui::Edges::new(0.0, 0.0, 0.0, 1.0),
             palette.border,
         )),
     );
@@ -1208,7 +1211,7 @@ fn draw_tab_container(
         .scene_mut()
         .draw_rect(
             PaintRect::new(bounds, palette.surface_raised).with_border(Border::new(
-                zeta_ui::Edges::new(0.0, 1.0, 0.0, 0.0),
+                zui::ui::Edges::new(0.0, 1.0, 0.0, 0.0),
                 palette.border,
             )),
         );
@@ -1625,7 +1628,7 @@ pub(crate) fn terminal_pane_sash_for_viewport(
     tab_container: TabContainerState,
     inspector_part: InspectorPartState,
     group: &PanePart,
-    point: zeta_ui::Point,
+    point: zui::ui::Point,
 ) -> Option<(PaneSplitId, SplitViewOrientation, SplitViewResizeSnapshot)> {
     let layout = ShellLayout::for_viewport(viewport, tab_container, inspector_part)?;
     let pane_geometry =

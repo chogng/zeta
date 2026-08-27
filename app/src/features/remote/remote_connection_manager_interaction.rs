@@ -1,14 +1,14 @@
-use zeta_ui::CaretVisibility;
-use zeta_ui::InputBoxState;
-use zeta_ui::InteractionRegion;
-use zeta_ui::Rect;
+use zeta_ui_components::InputBoxState;
+use zeta_ui_components::InteractionRegion;
 use zui::ui::AccessibilityRole;
+use zui::ui::CaretVisibility;
 use zui::ui::CursorFeedback;
 use zui::ui::ElementId;
 use zui::ui::FocusBehavior;
 use zui::ui::NavigationAxis;
 use zui::ui::NavigationGroupId;
 use zui::ui::NodeAction;
+use zui::ui::Rect;
 use zui::ui::UiDispatch;
 
 use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER;

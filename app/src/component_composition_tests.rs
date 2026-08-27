@@ -43,7 +43,13 @@ fn zui_backend_neutral_modules_remain_platform_independent() {
             if is_test_source(path) {
                 return;
             }
-            for forbidden in ["wgpu::", "winit::", "glyphon::", "zeta_ui::"] {
+            for forbidden in [
+                "wgpu::",
+                "winit::",
+                "glyphon::",
+                "zeta_ui_components::",
+                "zeta_workbench_ui::",
+            ] {
                 if source.contains(forbidden) {
                     violations.push(format!("{} contains `{forbidden}`", path.display()));
                 }
@@ -70,7 +76,12 @@ fn public_zui_facade_owns_native_framework_composition() {
             "zui must directly own its {required} implementation dependency"
         );
     }
-    for forbidden in ["zeta-ui =", "zeta-terminal =", "zeta-app-server"] {
+    for forbidden in [
+        "zeta-ui-components =",
+        "zeta-workbench-ui =",
+        "zeta-terminal =",
+        "zeta-app-server",
+    ] {
         assert!(
             !manifest
                 .lines()
@@ -81,16 +92,48 @@ fn public_zui_facade_owns_native_framework_composition() {
 }
 
 #[test]
-fn components_depend_on_zui_while_backends_stay_internal_modules() {
+fn ui_crates_have_one_way_dependencies_while_backends_stay_internal_modules() {
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let ui_manifest = fs::read_to_string(workspace.join("ui").join("Cargo.toml"))
-        .expect("ui manifest should be readable");
     assert!(
-        ui_manifest
+        !workspace.join("ui").exists(),
+        "the mixed app/ui crate must not return; use ui-components and workbench-ui"
+    );
+    let components_root = workspace.join("ui-components");
+    let components_manifest = fs::read_to_string(components_root.join("Cargo.toml"))
+        .expect("UI components manifest should be readable");
+    assert!(
+        components_manifest
             .lines()
             .any(|line| line.trim_start().starts_with("zui =")),
         "components must consume the public zui facade"
     );
+    for forbidden in [
+        "zeta-workbench =",
+        "zeta-workbench-layout =",
+        "zeta-workbench-ui =",
+    ] {
+        assert!(
+            !components_manifest
+                .lines()
+                .any(|line| line.trim_start().starts_with(forbidden)),
+            "generic components must not depend on {forbidden}"
+        );
+    }
+    let workbench_manifest = fs::read_to_string(workspace.join("workbench-ui").join("Cargo.toml"))
+        .expect("Workbench UI manifest should be readable");
+    for required in [
+        "zeta-ui-components =",
+        "zeta-workbench =",
+        "zeta-workbench-layout =",
+        "zui =",
+    ] {
+        assert!(
+            workbench_manifest
+                .lines()
+                .any(|line| line.trim_start().starts_with(required)),
+            "Workbench UI must directly depend on {required}"
+        );
+    }
     for retired_crate in ["icon", "renderer", "wgpu", "winit", "zui-core"] {
         assert!(
             !workspace.join(retired_crate).exists(),
@@ -122,30 +165,30 @@ fn components_depend_on_zui_while_backends_stay_internal_modules() {
         );
     }
 
-    let ui_facade = fs::read_to_string(workspace.join("ui").join("src").join("lib.rs"))
-        .expect("zeta-ui facade should be readable");
+    let components_root = fs::read_to_string(components_root.join("src").join("lib.rs"))
+        .expect("UI components root should be readable");
     assert!(
-        ui_facade.contains("pub use zui::ui::*;"),
-        "zeta-ui must expose only zui's backend-neutral UI capability"
+        !components_root.contains("pub use zui::ui"),
+        "UI components must not re-export the zui framework contract"
     );
     assert!(
-        !ui_facade.contains("pub use zui::*;"),
-        "zeta-ui must not flatten application, renderer, service, or window capabilities"
+        !components_root.contains("pub use zui::*;"),
+        "UI components must not flatten application, renderer, service, or window capabilities"
     );
 }
 
 #[test]
 fn component_crate_remains_graphics_backend_neutral() {
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let ui_root = workspace.join("ui");
-    let manifest =
-        fs::read_to_string(ui_root.join("Cargo.toml")).expect("ui manifest should be readable");
+    let ui_root = workspace.join("ui-components");
+    let manifest = fs::read_to_string(ui_root.join("Cargo.toml"))
+        .expect("UI components manifest should be readable");
     for forbidden in ["wgpu", "glyphon"] {
         assert!(
             !manifest
                 .lines()
                 .any(|line| line.trim_start().starts_with(forbidden)),
-            "zeta-ui must not depend on {forbidden}; graphics backends consume zui scenes"
+            "zeta-ui-components must not depend on {forbidden}; graphics backends consume zui scenes"
         );
     }
 
@@ -159,7 +202,7 @@ fn component_crate_remains_graphics_backend_neutral() {
     });
     assert!(
         violations.is_empty(),
-        "zeta-ui components must remain graphics-backend neutral:\n{}",
+        "zeta-ui-components must remain graphics-backend neutral:\n{}",
         violations.join("\n")
     );
 }
@@ -232,7 +275,8 @@ fn app_app_server_adapter_owns_the_zeta_rs_client_boundary() {
     );
 
     for relative_manifest in [
-        "ui/Cargo.toml",
+        "ui-components/Cargo.toml",
+        "workbench-ui/Cargo.toml",
         "zui/Cargo.toml",
         "composer/Cargo.toml",
         "editor/Cargo.toml",

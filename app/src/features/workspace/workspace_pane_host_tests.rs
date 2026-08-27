@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use super::WorkspacePaneHost;
 use crate::workspace_context::WorkspaceContext;
 use zeta_app_server_protocol::protocol::fs::{FsFileType, FsReadDirectoryEntry};
-use zeta_ui::Size;
+use zui::ui::Size;
 
 static NEXT_WORKSPACE_ID: AtomicU64 = AtomicU64::new(0);
 

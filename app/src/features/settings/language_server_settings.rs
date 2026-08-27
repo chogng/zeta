@@ -1,16 +1,19 @@
 use std::time::Duration;
 
 use zeta_language_service::LanguageServerState;
-use zeta_ui::{
-    Border, Button, ButtonSelection, ButtonState, CaretVisibility, Color, Component,
-    ComponentContext, ComponentElement, ComputedElement, CornerRadii, Element, FontWeight,
-    InputBox, InputBoxState, InteractionRegion, PaintRect, Rect, Switch, SwitchState, TextBlock,
-    TextInputLayoutEngine, TextStyle, UiScene,
+use zeta_ui_components::{
+    Button, ButtonSelection, ButtonState, InputBox, InputBoxState, InteractionRegion, Switch,
+    SwitchState,
 };
 use zui::ui::{
     AccessibilityRole, AccessibilitySelection, AnimationEasing, AnimationKey, AnimationProperty,
     CursorFeedback, DispatchInvalidation, ElementId, FocusBehavior, FrameInvalidation,
     NavigationAxis, NavigationGroupId, NodeAction, ScalarAnimationSpec, UiDispatch, UiNode,
+};
+use zui::ui::{
+    Border, CaretVisibility, Color, Component, ComponentContext, ComponentElement, ComputedElement,
+    CornerRadii, Element, FontWeight, PaintRect, Rect, TextBlock, TextInputLayoutEngine, TextStyle,
+    UiScene,
 };
 
 use crate::shell_interaction::WINDOW;
@@ -44,10 +47,10 @@ pub(crate) const SWITCH_ANIMATION_KEY: AnimationKey =
     AnimationKey::new(LANGUAGE_SERVER_SWITCH, AnimationProperty::TranslateX);
 const SWITCH_ANIMATION_DURATION: Duration = Duration::from_millis(140);
 
-pub(crate) const fn switch_animation_target(selection: zeta_ui::SwitchSelection) -> f32 {
+pub(crate) const fn switch_animation_target(selection: zeta_ui_components::SwitchSelection) -> f32 {
     match selection {
-        zeta_ui::SwitchSelection::Off => 0.0,
-        zeta_ui::SwitchSelection::On => 1.0,
+        zeta_ui_components::SwitchSelection::Off => 0.0,
+        zeta_ui_components::SwitchSelection::On => 1.0,
     }
 }
 

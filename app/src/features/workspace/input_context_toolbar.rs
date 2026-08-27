@@ -1,11 +1,13 @@
 use zeta_icons::icons;
+use zeta_ui_components::{
+    ActionBar, ActionBarButton, ActionBarItem, ActionBarOrientation, ActionBarStyle,
+    ButtonBackgrounds, ButtonState, ButtonStyle, InteractionRegion,
+};
 #[cfg(test)]
-use zeta_ui::Point;
-use zeta_ui::{
-    ActionBar, ActionBarButton, ActionBarItem, ActionBarOrientation, ActionBarStyle, Border,
-    ButtonBackgrounds, ButtonState, ButtonStyle, Component, ComponentContext, ComponentElement,
-    ComputedElement, CornerRadii, Edges, Element, InteractionRegion, Rect, Size,
-    TextInputLayoutEngine, TextStyle, UiScene,
+use zui::ui::Point;
+use zui::ui::{
+    Border, Component, ComponentContext, ComponentElement, ComputedElement, CornerRadii, Edges,
+    Element, Rect, Size, TextInputLayoutEngine, TextStyle, UiScene,
 };
 
 use crate::shell_interaction::{COMPOSER_PANEL, CONTEXT_TOOLBAR, ContextAction};

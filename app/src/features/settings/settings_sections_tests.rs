@@ -7,8 +7,8 @@ use crate::shell_style::SHELL_PALETTE;
 use crate::workspace_context::WorkspaceContext;
 use crate::workspace_surface::WorkspaceSurfaceKind;
 use zeta_settings::SettingsPageSection;
-use zeta_ui::Rect;
 use zui::ui::InteractionFrame;
+use zui::ui::Rect;
 use zui::ui::UiDispatch;
 use zui::ui::UiFrame;
 

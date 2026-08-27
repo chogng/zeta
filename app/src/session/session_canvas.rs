@@ -4,18 +4,17 @@ use crate::shell_interaction::MAIN_SURFACE;
 use crate::shell_style::ShellPalette;
 use crate::thread_projection::ThreadProjection;
 use crate::workspace_context::WorkspaceContext;
-use zeta_ui::Component;
-use zeta_ui::ComponentContext;
-use zeta_ui::ComponentElement;
-use zeta_ui::ComputedElement;
-use zeta_ui::UiScene;
+use zui::ui::Component;
+use zui::ui::ComponentContext;
+use zui::ui::ComponentElement;
+use zui::ui::ComputedElement;
 use zui::ui::UiNode;
 
 pub(crate) use zeta_session_ui::SessionCanvasLayout;
 
 /// Adapts product workspace metadata and the shell palette to the Session UI header.
 pub(crate) struct SessionHeader<'a> {
-    bounds: zeta_ui::Rect,
+    bounds: zui::ui::Rect,
     title: &'a str,
     projection: &'a ThreadProjection,
     metadata: String,
@@ -24,7 +23,7 @@ pub(crate) struct SessionHeader<'a> {
 
 impl<'a> SessionHeader<'a> {
     pub(crate) fn new(
-        bounds: zeta_ui::Rect,
+        bounds: zui::ui::Rect,
         title: &'a str,
         projection: &'a ThreadProjection,
         workspace: &WorkspaceContext,
@@ -80,9 +79,5 @@ impl Component for SessionHeader<'_> {
 
     fn compose(&self, context: &mut ComponentContext<'_, '_>, element: &ComputedElement) {
         self.inner().compose(context, element)
-    }
-
-    fn paint(&self, scene: &mut UiScene) {
-        self.inner().paint(scene)
     }
 }

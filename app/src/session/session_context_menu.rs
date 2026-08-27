@@ -3,22 +3,21 @@
 use crate::NativeApp;
 use crate::shell_interaction::{SessionContextMenuAction, WINDOW, session_tab_index};
 use crate::shell_style::ShellPalette;
-use zeta_ui::Component;
-use zeta_ui::ComponentContext;
-use zeta_ui::ComponentElement;
-use zeta_ui::ComputedElement;
-use zeta_ui::Point;
-use zeta_ui::UiScene;
 use zui::input::ElementState;
 use zui::input::Key;
 use zui::input::KeyEvent;
 use zui::input::MouseButton;
 use zui::input::NamedKey;
+use zui::ui::Component;
+use zui::ui::ComponentContext;
+use zui::ui::ComponentElement;
+use zui::ui::ComputedElement;
 use zui::ui::DispatchInvalidation;
 use zui::ui::DispatchOutcome;
 use zui::ui::FocusDirection;
 use zui::ui::InteractionFrame;
 use zui::ui::NavigationAxis;
+use zui::ui::Point;
 use zui::ui::UiDispatch;
 use zui::ui::UiNode;
 
@@ -31,7 +30,7 @@ pub(crate) struct SessionContextMenu {
 
 impl SessionContextMenu {
     pub(crate) fn new(
-        viewport: zeta_ui::Rect,
+        viewport: zui::ui::Rect,
         state: &SessionContextMenuState,
         palette: ShellPalette,
         dispatch: &UiDispatch,
@@ -61,10 +60,6 @@ impl Component for SessionContextMenu {
 
     fn compose(&self, context: &mut ComponentContext<'_, '_>, element: &ComputedElement) {
         self.inner.compose(context, element)
-    }
-
-    fn paint(&self, scene: &mut UiScene) {
-        self.inner.paint(scene)
     }
 }
 

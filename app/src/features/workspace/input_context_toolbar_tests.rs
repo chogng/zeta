@@ -2,7 +2,7 @@ use super::InputContextToolbar;
 use crate::shell_interaction::ContextAction;
 use crate::shell_style::SHELL_PALETTE;
 use crate::workspace_context::WorkspaceContext;
-use zeta_ui::{Component, Point, Rect, TextInputLayoutEngine, UiScene};
+use zui::ui::{Component, Point, Rect, TextInputLayoutEngine, UiScene};
 use zui::ui::{InteractionFrame, UiDispatch, UiFrame};
 
 #[test]

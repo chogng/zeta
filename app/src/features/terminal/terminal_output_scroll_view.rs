@@ -1,9 +1,9 @@
 use std::ops::Range;
 
-use zeta_ui::{
-    Point, Rect, ScrollAxis, ScrollCommand, ScrollState, ScrollView, ScrollViewport,
-    ScrollbarPresentation, Size, UiScene,
+use zeta_ui_components::{
+    ScrollAxis, ScrollCommand, ScrollState, ScrollView, ScrollViewport, ScrollbarPresentation,
 };
+use zui::ui::{Point, Rect, Size, UiScene};
 
 use crate::shell_style::ShellPalette;
 use crate::terminal_projection::block_view_range;
@@ -80,7 +80,7 @@ impl TerminalOutputScrollView {
         })
     }
 
-    fn metrics(self) -> zeta_ui::ScrollMetrics {
+    fn metrics(self) -> zeta_ui_components::ScrollMetrics {
         let rendered_height = self.line_count as f32 * self.line_height;
         let content_height = if self.line_count > self.line_capacity {
             let unused_viewport_height =
@@ -89,7 +89,7 @@ impl TerminalOutputScrollView {
         } else {
             rendered_height.min(self.bounds.size.height)
         };
-        zeta_ui::ScrollMetrics::new(
+        zeta_ui_components::ScrollMetrics::new(
             self.bounds.size,
             Size::new(self.bounds.size.width, content_height),
         )

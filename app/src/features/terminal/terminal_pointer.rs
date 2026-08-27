@@ -157,7 +157,7 @@ impl TerminalPointer {
 impl NativeApp {
     pub(crate) fn terminal_pane_hit(
         &self,
-        point: zeta_ui::Point,
+        point: zui::ui::Point,
     ) -> Option<(PaneId, TerminalMousePosition)> {
         let tab_key = self.workbench.workbench().tab_part().active_tab_key()?;
         let layout = self.workbench.workbench().pane_part(tab_key)?;
@@ -171,7 +171,7 @@ impl NativeApp {
         )
     }
 
-    pub(crate) fn activate_terminal_pane_at(&mut self, point: zeta_ui::Point) -> bool {
+    pub(crate) fn activate_terminal_pane_at(&mut self, point: zui::ui::Point) -> bool {
         let Some((pane, _position)) = self.terminal_pane_hit(point) else {
             return false;
         };
@@ -189,7 +189,7 @@ impl NativeApp {
 
     pub(crate) fn terminal_mouse_position(
         &self,
-        point: zeta_ui::Point,
+        point: zui::ui::Point,
     ) -> Option<TerminalMousePosition> {
         if !self.workspace_surface.is_terminal() {
             return None;

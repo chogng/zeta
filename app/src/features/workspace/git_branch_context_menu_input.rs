@@ -1,7 +1,7 @@
 use std::time::Instant;
 
-use zeta_ui::Point;
 use zui::input::{ElementState, Key, KeyEvent, MouseButton, NamedKey};
+use zui::ui::Point;
 use zui::ui::{
     DispatchInvalidation, DispatchOutcome, ElementId, FocusDirection, InteractionFrame,
     NavigationAxis, UiDispatch,
@@ -205,7 +205,7 @@ impl NativeApp {
                     match read_clipboard_text(&self.clipboard) {
                         Ok(text) => self
                             .git_branch_context_menu
-                            .apply_search(zeta_ui::TextInputCommand::Insert(text)),
+                            .apply_search(zui::ui::TextInputCommand::Insert(text)),
                         Err(error) => eprintln!("could not paste Git branch search text: {error}"),
                     }
                     self.git_branch_search_changed();

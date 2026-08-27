@@ -4,8 +4,8 @@ use super::{
 use crate::remote_connection_manager::RemoteConnectionManagerField;
 use crate::workspace_surface::WorkspaceSurfaceKind;
 use zeta_terminal::{GridSize, TerminalCore};
-use zeta_ui::{TextInputCompositionCursor, TextInputCompositionEvent};
 use zui::input::Ime;
+use zui::ui::{TextInputCompositionCursor, TextInputCompositionEvent};
 
 #[test]
 fn target_requires_an_active_window_and_the_appropriate_editable_surface() {

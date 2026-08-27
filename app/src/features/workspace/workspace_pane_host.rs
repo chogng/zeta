@@ -8,13 +8,13 @@ use crate::workspace_panes::WorkspacePaneAction;
 use crate::workspace_panes::WorkspacePaneState;
 use zeta_app_server_protocol::protocol::fs::FsReadDirectoryEntry;
 use zeta_editor::MultiDiffEditorStyle;
-use zeta_ui::Point;
-use zeta_ui::Rect;
-use zeta_ui::Size;
-use zeta_ui::TextInput;
-use zeta_ui::TextInputCommand;
-use zeta_ui::TextInputCompositionEvent;
 use zui::ui::ElementId;
+use zui::ui::Point;
+use zui::ui::Rect;
+use zui::ui::Size;
+use zui::ui::TextInput;
+use zui::ui::TextInputCommand;
+use zui::ui::TextInputCompositionEvent;
 
 use crate::workspace_context::WorkspaceContext;
 use crate::workspace_panes::ScrollbarPointerOutcome;
@@ -22,7 +22,7 @@ use crate::workspace_panes::ScrollbarPointerOutcome;
 #[cfg(test)]
 use crate::workspace_panes::FilesTreeRow;
 #[cfg(test)]
-use zeta_ui::ScrollState;
+use zeta_ui_components::ScrollState;
 
 pub(crate) use crate::workspace_panes::WorkspacePaneView;
 

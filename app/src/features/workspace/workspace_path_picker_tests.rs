@@ -7,11 +7,9 @@ use super::{
 };
 use crate::shell_interaction::COMPOSER;
 use crate::shell_style::SHELL_PALETTE;
-use zeta_ui::{
-    CaretVisibility, Point, Rect, ScrollAxis, ScrollCommand, TextInputCommand,
-    TextInputLayoutEngine,
-};
+use zeta_ui_components::{ScrollAxis, ScrollCommand};
 use zui::ui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
+use zui::ui::{CaretVisibility, Point, Rect, TextInputCommand, TextInputLayoutEngine};
 
 static NEXT_PICKER_ID: AtomicU64 = AtomicU64::new(0);
 

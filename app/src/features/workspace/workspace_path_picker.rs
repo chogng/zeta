@@ -1,16 +1,19 @@
 use std::path::{Path, PathBuf};
 
-use zeta_ui::{
-    ButtonBackgrounds, ButtonState, ButtonStyle, CaretVisibility, Component, ComponentContext,
-    ComponentElement, ComputedElement, ContextViewAnchorPosition, ContextViewPlacement,
-    CornerRadii, Dropdown, DropdownItem, DropdownScrollConfiguration, DropdownSelection,
-    DropdownStyle, Edges, Element, InputBoxState, InteractionRegion, Rect, ScrollAxis,
-    ScrollCommand, ScrollMetrics, ScrollState, SearchBox, Size, TextInput, TextInputCommand,
-    TextInputCompositionEvent, TextInputLayoutEngine, TextStyle, UiScene,
+use zeta_ui_components::{
+    ButtonBackgrounds, ButtonState, ButtonStyle, ContextViewAnchorPosition, ContextViewPlacement,
+    Dropdown, DropdownItem, DropdownScrollConfiguration, DropdownSelection, DropdownStyle,
+    InputBoxState, InteractionRegion, ScrollAxis, ScrollCommand, ScrollMetrics, ScrollState,
+    SearchBox,
 };
 use zui::ui::{
     AccessibilityRole, AccessibilitySelection, CursorFeedback, ElementId, FocusBehavior,
     NavigationAxis, NavigationGroupId, NodeAction, UiDispatch, UiNode,
+};
+use zui::ui::{
+    CaretVisibility, Component, ComponentContext, ComponentElement, ComputedElement, CornerRadii,
+    Edges, Element, Rect, Size, TextInput, TextInputCommand, TextInputCompositionEvent,
+    TextInputLayoutEngine, TextStyle, UiScene,
 };
 
 use crate::shell_interaction::WINDOW;
@@ -292,7 +295,7 @@ impl WorkspacePathPicker {
     ) -> Option<Self> {
         let open = state.open.as_ref()?;
         let items = state.items();
-        let resting_backgrounds = ButtonBackgrounds::new(zeta_ui::Color::TRANSPARENT);
+        let resting_backgrounds = ButtonBackgrounds::new(zui::ui::Color::TRANSPARENT);
         let selected_backgrounds = ButtonBackgrounds::new(palette.session_tab_highlight)
             .with_hovered(palette.session_tab_highlight)
             .with_focused(palette.session_tab_highlight)

@@ -9,16 +9,16 @@ use zeta_editor::{
 use zeta_icons::icons;
 use zeta_settings::SettingsPageStyle;
 use zeta_theme::{ThemeError, ThemeSnapshot, tokens};
-use zeta_ui::ActionBarSeparatorStyle;
-use zeta_ui::ActionBarStyle;
-use zeta_ui::Border;
-use zeta_ui::ButtonBackgrounds;
-use zeta_ui::ButtonStyle;
-use zeta_ui::WorkbenchUiStyle;
-use zeta_ui::{
-    Color, CornerRadii, Edges, FontFamily, FontWeight, InputBoxStateColors, InputBoxStyle,
-    ScrollViewStyle, ScrollbarStyle, SearchBoxStyle, TextStyle,
+use zeta_ui_components::ActionBarSeparatorStyle;
+use zeta_ui_components::ActionBarStyle;
+use zeta_ui_components::ButtonBackgrounds;
+use zeta_ui_components::ButtonStyle;
+use zeta_ui_components::{
+    InputBoxStateColors, InputBoxStyle, ScrollViewStyle, ScrollbarStyle, SearchBoxStyle,
 };
+use zeta_workbench_ui::WorkbenchUiStyle;
+use zui::ui::Border;
+use zui::ui::{Color, CornerRadii, Edges, FontFamily, FontWeight, TextStyle};
 
 #[derive(Clone, Copy)]
 pub(crate) struct ShellPalette {
@@ -291,7 +291,7 @@ impl ShellPalette {
         .with_border(Border::uniform(1.0, self.border))
         .with_corner_radii(CornerRadii::uniform(5.0))
         .with_padding(Edges::new(6.0, 10.0, 6.0, 10.0));
-        let action_bar = ActionBarStyle::new(action_button, zeta_ui::Size::new(108.0, 32.0))
+        let action_bar = ActionBarStyle::new(action_button, zui::ui::Size::new(108.0, 32.0))
             .with_gap(6.0)
             .with_separator_style(
                 ActionBarSeparatorStyle::new(self.border)

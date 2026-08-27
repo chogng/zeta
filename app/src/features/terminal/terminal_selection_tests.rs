@@ -1,7 +1,7 @@
 use super::{TerminalSelection, TerminalSelectionRange, paint_terminal_selection, selected_text};
 use zeta_terminal::{ScreenBuffer, TerminalMousePosition};
-use zeta_ui::{Color, Rect, UiScene};
 use zui::input::ElementState;
+use zui::ui::{Color, Rect, UiScene};
 
 fn position(row: u16, col: u16) -> TerminalMousePosition {
     TerminalMousePosition::new(row, col)

@@ -4,7 +4,7 @@ use super::{
     TerminalScroll, composer_interaction_scroll_command, file_list_scroll_pixels,
     multi_diff_scroll_pixels,
 };
-use zeta_ui::{ScrollCommand, ScrollDelta};
+use zeta_ui_components::{ScrollCommand, ScrollDelta};
 use zui::input::{MouseScrollDelta, PhysicalPosition};
 
 #[test]

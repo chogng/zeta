@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use zeta_ui::{ScrollCommand, ScrollDelta, ScrollbarController, ScrollbarPresentation};
+use zeta_ui_components::{ScrollCommand, ScrollDelta, ScrollbarController, ScrollbarPresentation};
 use zui::input::MouseScrollDelta;
 
 use crate::NativeApp;

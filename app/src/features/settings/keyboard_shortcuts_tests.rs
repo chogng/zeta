@@ -8,7 +8,7 @@ use zeta_keybinding::Chord;
 use zeta_keybinding::HostPlatform;
 use zeta_keybinding::ShortcutModifiers;
 use zeta_keybinding::serialize_key_sequence;
-use zeta_ui::{Color, Point, Rect, UiScene};
+use zui::ui::{Color, Point, Rect, UiScene};
 use zui::ui::{InteractionFrame, UiDispatch, UiFrame};
 
 #[test]

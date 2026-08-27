@@ -1,6 +1,7 @@
 use super::TerminalOutputScrollView;
 use crate::shell_style::SHELL_PALETTE;
-use zeta_ui::{Point, Rect, ScrollbarPresentation};
+use zeta_ui_components::ScrollbarPresentation;
+use zui::ui::{Point, Rect};
 
 #[test]
 fn bottom_relative_history_maps_to_scroll_view_content_coordinates() {

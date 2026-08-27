@@ -4,12 +4,12 @@ use super::{SessionContextMenu, SessionContextMenuState, update_session_context_
 use crate::shell_interaction::{COMPOSER, SESSION_CONTEXT_MENU, SessionContextMenuAction};
 use crate::shell_style::SHELL_PALETTE;
 use zeta_protocol::SessionId;
-use zeta_ui::{Color, Edges, Point, Rect};
 use zeta_workbench_controller::TabInputKey;
 use zui::ui::{
     AccessibilityRole, AccessibilitySelection, CursorFeedback, FocusBehavior, InteractionFrame,
     UiDispatch, UiFrame, UiNode,
 };
+use zui::ui::{Color, Edges, Point, Rect};
 
 fn session_tab() -> TabInputKey {
     TabInputKey::session(SessionId::new("session-1").expect("test session ID is non-empty"))
@@ -31,7 +31,7 @@ fn context_menu_places_four_vertical_actions_beside_the_pointer() {
 
     assert_eq!(state.target_tab(), Some(&target));
     assert_eq!(menu.bounds().origin, Point::new(80.0, 123.0));
-    assert_eq!(menu.bounds().size, zeta_ui::Size::new(164.0, 124.0));
+    assert_eq!(menu.bounds().size, zui::ui::Size::new(164.0, 124.0));
     assert_eq!(
         menu.item_bounds(0).unwrap().origin,
         Point::new(menu.bounds().origin.x + 2.0, menu.bounds().origin.y + 2.0)

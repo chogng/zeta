@@ -1,9 +1,8 @@
 use std::time::Instant;
 
 use zeta_remote_connections::RemoteConnectionCatalog;
-use zeta_ui::Point;
-use zeta_ui::ScrollCommand;
-use zeta_ui::ScrollDelta;
+use zeta_ui_components::ScrollCommand;
+use zeta_ui_components::ScrollDelta;
 use zui::input::ElementState;
 use zui::input::Key;
 use zui::input::KeyEvent;
@@ -16,6 +15,7 @@ use zui::ui::ElementId;
 use zui::ui::FocusDirection;
 use zui::ui::InteractionFrame;
 use zui::ui::NavigationAxis;
+use zui::ui::Point;
 use zui::ui::UiDispatch;
 
 use crate::NativeApp;
@@ -256,7 +256,7 @@ impl NativeApp {
                     match read_clipboard_text(&self.clipboard) {
                         Ok(text) => self
                             .remote_connection_picker
-                            .apply_search(zeta_ui::TextInputCommand::Insert(text)),
+                            .apply_search(zui::ui::TextInputCommand::Insert(text)),
                         Err(error) => {
                             eprintln!("could not paste Remote connection search text: {error}")
                         }

@@ -7,8 +7,8 @@ use zeta_app_server_protocol::protocol::config::{
 use zeta_language_server_catalog::{
     BASH_LANGUAGE_SERVER_ID, JSON_LANGUAGE_SERVER_ID, RUST_ANALYZER_SERVER_ID,
 };
-use zeta_ui::SwitchSelection;
-use zeta_ui::{TextInput, TextInputCommand, TextInputCompositionEvent};
+use zeta_ui_components::SwitchSelection;
+use zui::ui::{TextInput, TextInputCommand, TextInputCompositionEvent};
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub(crate) enum LanguageServerSettingsTarget {

@@ -1,7 +1,8 @@
 use std::time::Instant;
 
-use zeta_ui::{Point, ScrollCommand, ScrollDelta};
+use zeta_ui_components::{ScrollCommand, ScrollDelta};
 use zui::input::{ElementState, Key, KeyEvent, MouseButton, MouseScrollDelta, NamedKey};
+use zui::ui::Point;
 use zui::ui::{
     DispatchInvalidation, DispatchOutcome, ElementId, FocusDirection, InteractionFrame,
     NavigationAxis, UiDispatch,
@@ -289,7 +290,7 @@ impl NativeApp {
                     match read_clipboard_text(&self.clipboard) {
                         Ok(text) => self
                             .workspace_path_picker
-                            .apply_search(zeta_ui::TextInputCommand::Insert(text)),
+                            .apply_search(zui::ui::TextInputCommand::Insert(text)),
                         Err(error) => {
                             eprintln!("could not paste workspace folder search text: {error}")
                         }

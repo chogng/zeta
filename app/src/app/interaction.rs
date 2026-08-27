@@ -379,7 +379,7 @@ impl NativeApp {
         }
     }
 
-    pub(super) fn multi_diff_bounds(&self) -> Option<zeta_ui::Rect> {
+    pub(super) fn multi_diff_bounds(&self) -> Option<zui::ui::Rect> {
         self.presentation
             .as_ref()?
             .element_bounds(shell_interaction::MULTI_DIFF_EDITOR)

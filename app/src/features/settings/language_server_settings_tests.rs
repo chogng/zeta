@@ -8,10 +8,10 @@ use zeta_app_server_protocol::protocol::config::{
 };
 use zeta_language_server_catalog::{JSON_LANGUAGE_SERVER_ID, RUST_ANALYZER_SERVER_ID};
 use zeta_language_service::LanguageServerState;
-use zeta_ui::SwitchSelection;
-use zeta_ui::TextInputCommand;
-use zeta_ui::{CaretVisibility, Rect, TextInputLayoutEngine};
+use zeta_ui_components::SwitchSelection;
+use zui::ui::TextInputCommand;
 use zui::ui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
+use zui::ui::{CaretVisibility, Rect, TextInputLayoutEngine};
 
 use super::{
     LANGUAGE_SERVER_EXECUTABLE_INPUT, LANGUAGE_SERVER_SETTINGS_SAVE, LANGUAGE_SERVER_SWITCH,

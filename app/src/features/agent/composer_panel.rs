@@ -7,14 +7,14 @@ use zeta_composer::ComposerPanelLayout;
 use zeta_composer::ComposerRoute;
 use zeta_composer::INTERACTION_ROW_HEIGHT;
 use zeta_composer::interaction_list_bounds;
-use zeta_ui::{
-    Border, CaretVisibility, Color, ComponentContext, CornerRadii, Edges, FontFamily, FontWeight,
-    InteractionRegion, KeycapSequence, KeycapStyle, ListView, PaintRect, Point, Rect, ScrollState,
-    Size, TextBlock, TextInputLayoutEngine, TextStyle,
-};
+use zeta_ui_components::{InteractionRegion, KeycapSequence, KeycapStyle, ListView, ScrollState};
 use zui::ui::{
     AccessibilityRole, AccessibilitySelection, CursorFeedback, FocusBehavior, NodeAction,
     UiDispatch,
+};
+use zui::ui::{
+    Border, CaretVisibility, Color, ComponentContext, CornerRadii, Edges, FontFamily, FontWeight,
+    PaintRect, Point, Rect, Size, TextBlock, TextInputLayoutEngine, TextStyle,
 };
 
 use crate::input_context_toolbar::InputContextToolbar;

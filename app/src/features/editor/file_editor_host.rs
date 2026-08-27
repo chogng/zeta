@@ -10,7 +10,7 @@ use zeta_editor::{
 use zeta_text_file::{
     TextFileDiskVersion, TextFileLifecycle, TextFileSaveRequest, TextFileSnapshot, TextFileStatus,
 };
-use zeta_ui::TextInputCompositionEvent;
+use zui::ui::TextInputCompositionEvent;
 
 /// Whether a close request can proceed without losing editor-owned text.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

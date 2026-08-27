@@ -7,7 +7,7 @@ use zeta_text_file::{
 };
 
 use super::*;
-use zeta_ui::TextInputCompositionEvent;
+use zui::ui::TextInputCompositionEvent;
 
 fn version(modified_at_millis: u64) -> TextFileDiskVersion {
     TextFileDiskVersion::new(

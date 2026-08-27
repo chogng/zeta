@@ -191,7 +191,8 @@ fn backend_neutral_sources_do_not_absorb_native_or_product_owners() {
         "wgpu::",
         "winit::",
         "zeta_icons::",
-        "zeta_ui::",
+        "zeta_ui_components::",
+        "zeta_workbench_ui::",
         "app::",
     ];
     let mut violations = Vec::new();
@@ -356,9 +357,14 @@ fn native_dependencies_stay_with_their_capability_owners() {
                 path.display()
             ));
         }
-        if ["zeta_icons", "zeta_ui", "app"]
-            .iter()
-            .any(|crate_name| imports_external_crate(&source, crate_name))
+        if [
+            "zeta_icons",
+            "zeta_ui_components",
+            "zeta_workbench_ui",
+            "app",
+        ]
+        .iter()
+        .any(|crate_name| imports_external_crate(&source, crate_name))
             && relative != "architecture_tests.rs"
         {
             violations.push(format!("{} imports a product owner", path.display()));

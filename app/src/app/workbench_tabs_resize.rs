@@ -2,9 +2,9 @@ use std::time::Instant;
 
 use crate::NativeApp;
 use crate::shell_interaction::TAB_CONTAINER_RESIZE_HANDLE;
-use zeta_ui::Point;
 use zui::input::ElementState;
 use zui::ui::DispatchInvalidation;
+use zui::ui::Point;
 
 impl NativeApp {
     pub(super) fn route_tab_container_resize_move(&mut self, point: Point) -> bool {

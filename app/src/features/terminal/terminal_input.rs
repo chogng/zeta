@@ -5,14 +5,14 @@ use zeta_editor::CodeEditorSelectionMode;
 use zeta_terminal::KeyModifiers;
 use zeta_terminal::TerminalCore;
 use zeta_terminal::TerminalKey;
-use zeta_ui::TextInputCommand;
-use zeta_ui::TextInputSelectionMode;
 use zui::input::ElementState;
 use zui::input::Key;
 use zui::input::KeyEvent;
 use zui::input::ModifiersState;
 use zui::input::NamedKey;
 use zui::services::ClipboardHandle;
+use zui::ui::TextInputCommand;
+use zui::ui::TextInputSelectionMode;
 
 use crate::NativeApp;
 use crate::keybindings::{

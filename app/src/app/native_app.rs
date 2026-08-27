@@ -46,17 +46,15 @@ use zeta_protocol::SessionId;
 use zeta_settings::SettingsPageSection;
 use zeta_terminal::{BlockStatus, GridSize, ScreenBuffer};
 use zeta_theme::{ColorScheme, ThemeLoadOptions, ThemeLoader, ThemeSurface, default_device_root};
-use zeta_ui::{
-    CaretBlinkAdvance, CaretBlinkController, Point, TabContainerState, TextInputLayoutEngine,
-};
-use zeta_ui::{
-    Resizable, SashOrientation, SashPointerPresence, SplitViewOrientation, SplitViewResizeSnapshot,
-};
+use zeta_ui_components::{Resizable, SashOrientation, SashPointerPresence};
 use zeta_workbench_controller::{
     InspectorPartState, PaneBinding, PaneGroupId as PaneId, PaneHostScope, PaneInput,
     PaneInputKind, PaneSplitDirection, PaneSplitId, TabInputKey, WorkbenchController,
 };
 use zeta_workbench_layout::LogicalViewport;
+use zeta_workbench_ui::TabContainerState;
+use zui::ui::{CaretBlinkAdvance, CaretBlinkController, Point, TextInputLayoutEngine};
+use zui::ui::{SplitViewOrientation, SplitViewResizeSnapshot};
 
 type TerminalWorkspace =
     zeta_terminal_workspace::TerminalWorkspace<TerminalSession, TerminalSessionEvent>;

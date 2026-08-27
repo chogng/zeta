@@ -1,17 +1,17 @@
 use std::ops::Range;
 use zui::ui::ElementId;
 
-pub(crate) use zeta_ui::{
+use zeta_workbench_controller::{PaneGroupId as PaneId, PaneSplitId};
+pub(crate) use zeta_workbench_ui::{
     ADD_SESSION, FIRST_TAB_CONTAINER_SESSION_TAB, SESSION_SEARCH_INPUT, TAB_CONTAINER_SETTINGS_TAB,
     TAB_CONTAINER_TOGGLE, TITLEBAR_SETTINGS_TAB, WINDOW, WORKSPACE_PANE_TOGGLE, session_tab_id,
     titlebar_session_tab_id,
 };
 #[cfg(test)]
-pub(crate) use zeta_ui::{
+pub(crate) use zeta_workbench_ui::{
     FIRST_TITLEBAR_SESSION_TAB, TAB_CONTAINER_ACTION_BAR, TAB_CONTAINER_LIST,
     TAB_CONTAINER_TOOLBAR, TITLEBAR, TITLEBAR_TAB_LIST,
 };
-use zeta_workbench_controller::{PaneGroupId as PaneId, PaneSplitId};
 
 #[cfg(test)]
 pub(crate) use zeta_session_ui::interaction::SESSION_CONTEXT_MENU;

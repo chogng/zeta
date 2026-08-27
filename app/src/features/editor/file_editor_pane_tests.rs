@@ -2,7 +2,7 @@ use zeta_editor::{
     CodeEditorCommand, CodeEditorDiagnostic, CodeEditorDiagnosticSeverity, CodeEditorStyle,
 };
 use zeta_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSnapshot};
-use zeta_ui::{
+use zui::ui::{
     CaretVisibility, Color, Component, Rect, TextInputCommand, TextInputLayoutEngine, UiScene,
 };
 
@@ -90,7 +90,7 @@ fn pane_paints_editor_diagnostics_and_hover_details() {
         CaretVisibility::Visible,
     )
     .with_diagnostics(&diagnostics)
-    .with_pointer_position(Some(zeta_ui::Point::new(80.0, 42.0)));
+    .with_pointer_position(Some(zui::ui::Point::new(80.0, 42.0)));
     let mut scene = UiScene::new(Color::WHITE);
 
     pane.paint(&mut scene);
@@ -182,7 +182,7 @@ fn pane_registers_tabs_and_the_active_document_as_native_interactions() {
     );
     let editor_target = scene
         .inspection()
-        .target_at(zeta_ui::Point::new(100.0, 42.0))
+        .target_at(zui::ui::Point::new(100.0, 42.0))
         .expect("active editor should be inspectable");
     let ancestry = scene
         .inspection()
@@ -193,7 +193,7 @@ fn pane_registers_tabs_and_the_active_document_as_native_interactions() {
     assert!(ancestry.contains(&"FileEditorPane"));
     assert!(ancestry.contains(&"FileEditorDocument"));
     assert!(
-        pane.text_position_at(zeta_ui::Point::new(100.0, 42.0))
+        pane.text_position_at(zui::ui::Point::new(100.0, 42.0))
             .is_some()
     );
 }

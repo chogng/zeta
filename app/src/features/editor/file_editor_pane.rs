@@ -3,9 +3,10 @@ use zeta_editor::{
     CodeEditorLineWrapping, CodeEditorNavigation, CodeEditorPosition, CodeEditorStyle,
 };
 use zeta_text_file::TextFileStatus;
-use zeta_ui::{
-    CaretVisibility, Component, ComponentElement, Element, InputBoxState, PaintRect, Rect,
-    SearchBox, TextBlock, TextInputLayoutEngine, TextStyle, UiScene,
+use zeta_ui_components::{InputBoxState, SearchBox};
+use zui::ui::{
+    CaretVisibility, Component, ComponentElement, Element, PaintRect, Rect, TextBlock,
+    TextInputLayoutEngine, TextStyle, UiScene,
 };
 
 use crate::file_editor_diagnostics::FileEditorDiagnosticTooltip;
@@ -86,7 +87,7 @@ pub(crate) struct FileEditorPane<'a> {
     language_hover: Option<&'a zeta_language_service::LanguageHover>,
     language_completions: Option<&'a zeta_language_service::LanguageCompletions>,
     completion_selection: usize,
-    pointer_position: Option<zeta_ui::Point>,
+    pointer_position: Option<zui::ui::Point>,
 }
 
 impl<'a> FileEditorPane<'a> {
@@ -142,7 +143,7 @@ impl<'a> FileEditorPane<'a> {
 
     pub(crate) const fn with_pointer_position(
         mut self,
-        pointer_position: Option<zeta_ui::Point>,
+        pointer_position: Option<zui::ui::Point>,
     ) -> Self {
         self.pointer_position = pointer_position;
         self
@@ -165,7 +166,7 @@ impl<'a> FileEditorPane<'a> {
 
     pub(crate) fn diagnostic_range_at(
         &self,
-        point: zeta_ui::Point,
+        point: zui::ui::Point,
     ) -> Option<std::ops::Range<usize>> {
         self.editor()?
             .diagnostic_at(point)
@@ -233,7 +234,7 @@ impl<'a> FileEditorPane<'a> {
         self.editor()?.caret_bounds()
     }
 
-    pub(crate) fn text_position_at(&self, point: zeta_ui::Point) -> Option<CodeEditorPosition> {
+    pub(crate) fn text_position_at(&self, point: zui::ui::Point) -> Option<CodeEditorPosition> {
         self.editor()?.text_position_at(point)
     }
 
@@ -454,7 +455,7 @@ impl Component for FileEditorPane<'_> {
             .with_identity(FILE_EDITOR_PANE)
     }
 
-    fn interaction_node(&self, element: &zeta_ui::ComputedElement) -> Option<UiNode> {
+    fn interaction_node(&self, element: &zui::ui::ComputedElement) -> Option<UiNode> {
         Some(
             UiNode::new(
                 FILE_EDITOR_PANE,
@@ -468,8 +469,8 @@ impl Component for FileEditorPane<'_> {
 
     fn compose(
         &self,
-        context: &mut zeta_ui::ComponentContext<'_, '_>,
-        _element: &zeta_ui::ComputedElement,
+        context: &mut zui::ui::ComponentContext<'_, '_>,
+        _element: &zui::ui::ComputedElement,
     ) {
         for region in interaction::child_interaction_regions(self) {
             context.draw_component(&region);
@@ -512,11 +513,11 @@ impl Component for FileEditorPane<'_> {
                     };
                     scene.draw_text(TextBlock::new(
                         format!("{}{suffix}", tab.label()),
-                        zeta_ui::Point::new(
+                        zui::ui::Point::new(
                             bounds.origin.x + TAB_HORIZONTAL_PADDING,
                             bounds.origin.y + 7.0,
                         ),
-                        zeta_ui::Size::new(
+                        zui::ui::Size::new(
                             (bounds.size.width - TAB_HORIZONTAL_PADDING * 2.0 - TAB_CLOSE_SIZE)
                                 .max(1.0),
                             18.0,
@@ -533,11 +534,11 @@ impl Component for FileEditorPane<'_> {
                     ));
                     scene.draw_text(TextBlock::new(
                         "×",
-                        zeta_ui::Point::new(
+                        zui::ui::Point::new(
                             self.tab_close_bounds(index).origin.x + 5.0,
                             self.tab_close_bounds(index).origin.y + 1.0,
                         ),
-                        zeta_ui::Size::new(TAB_CLOSE_SIZE - 6.0, 18.0),
+                        zui::ui::Size::new(TAB_CLOSE_SIZE - 6.0, 18.0),
                         TextStyle::new(14.0, self.palette.text_muted).with_line_height(18.0),
                     ));
                 }
@@ -567,11 +568,11 @@ impl Component for FileEditorPane<'_> {
                     let summary_bounds = self.search_summary_bounds();
                     scene.draw_text(TextBlock::new(
                         summary,
-                        zeta_ui::Point::new(
+                        zui::ui::Point::new(
                             summary_bounds.origin.x + 4.0,
                             summary_bounds.origin.y + 4.0,
                         ),
-                        zeta_ui::Size::new(summary_bounds.size.width - 8.0, 18.0),
+                        zui::ui::Size::new(summary_bounds.size.width - 8.0, 18.0),
                         TextStyle::new(11.0, self.palette.text_muted).with_line_height(18.0),
                     ));
                     for action in self.search_actions() {
@@ -579,8 +580,8 @@ impl Component for FileEditorPane<'_> {
                         scene.draw_rect(PaintRect::new(bounds, self.palette.surface));
                         scene.draw_text(TextBlock::new(
                             action.label(),
-                            zeta_ui::Point::new(bounds.origin.x + 7.0, bounds.origin.y + 3.0),
-                            zeta_ui::Size::new(bounds.size.width - 14.0, 18.0),
+                            zui::ui::Point::new(bounds.origin.x + 7.0, bounds.origin.y + 3.0),
+                            zui::ui::Size::new(bounds.size.width - 14.0, 18.0),
                             TextStyle::new(11.0, self.palette.text).with_line_height(18.0),
                         ));
                     }
@@ -609,8 +610,8 @@ impl Component for FileEditorPane<'_> {
                         + notice.actions.len().saturating_sub(1) as f32 * NOTICE_ACTION_GAP;
                     scene.draw_text(TextBlock::new(
                         notice.message,
-                        zeta_ui::Point::new(bounds.origin.x + 10.0, bounds.origin.y + 9.0),
-                        zeta_ui::Size::new(
+                        zui::ui::Point::new(bounds.origin.x + 10.0, bounds.origin.y + 9.0),
+                        zui::ui::Size::new(
                             (bounds.size.width - action_width - 28.0).max(1.0),
                             18.0,
                         ),
@@ -621,11 +622,11 @@ impl Component for FileEditorPane<'_> {
                         scene.draw_rect(PaintRect::new(action_bounds, self.palette.surface));
                         scene.draw_text(TextBlock::new(
                             action.label(),
-                            zeta_ui::Point::new(
+                            zui::ui::Point::new(
                                 action_bounds.origin.x + 10.0,
                                 action_bounds.origin.y + 3.0,
                             ),
-                            zeta_ui::Size::new(action_bounds.size.width - 20.0, 18.0),
+                            zui::ui::Size::new(action_bounds.size.width - 20.0, 18.0),
                             TextStyle::new(12.0, self.palette.text).with_line_height(18.0),
                         ));
                     }
@@ -667,7 +668,7 @@ impl Component for FileEditorPane<'_> {
                 {
                     scene.draw_component(&LanguageCompletionPopover::new(
                         self.editor_bounds(),
-                        zeta_ui::Point::new(caret.origin.x, caret.bottom()),
+                        zui::ui::Point::new(caret.origin.x, caret.bottom()),
                         completions,
                         self.completion_selection,
                         self.palette.editor_overlay_style(),
