@@ -2,6 +2,17 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
+			"name": "Run app (watch)",
+			"type": "node-terminal",
+			"request": "launch",
+			"command": "just app-dev",
+			"cwd": "${workspaceFolder}",
+			"presentation": {
+				"group": "app",
+				"order": 1
+			}
+		},
+		{
 			"name": "Stanza Editor - Standalone",
 			"type": "chrome",
 			"request": "launch",

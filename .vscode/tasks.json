@@ -2,6 +2,25 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
+			"label": "Run app (watch)",
+			"type": "shell",
+			"command": "just app-dev",
+			"isBackground": true,
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"group": "app",
+				"clear": true
+			},
+			"runOptions": {
+				"instanceLimit": 1
+			}
+		},
+		{
 			"label": "Launch Stanza Vite",
 			"type": "shell",
 			"command": "corepack pnpm run dev:stanza",
