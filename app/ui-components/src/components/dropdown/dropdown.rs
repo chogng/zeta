@@ -7,7 +7,7 @@ use crate::{
 };
 
 use super::{
-    ActionBar, ActionBarButton, ActionBarItem, ActionBarOrientation, ActionBarStyle,
+    ActionBar, ActionBarItem, ActionBarOrientation, ActionBarStyle, ActionViewItem,
     ButtonSelection, ButtonState, ButtonStyle,
 };
 
@@ -307,8 +307,8 @@ impl Dropdown {
             .enumerate()
             .map(|(local_index, item)| {
                 let index = range.start + local_index;
-                ActionBarItem::Button(
-                    ActionBarButton::label(item.label.clone(), item.state).with_selection(
+                ActionBarItem::Action(
+                    ActionViewItem::label(item.label.clone(), item.state).with_selection(
                         if selected_index == Some(index) {
                             ButtonSelection::Selected
                         } else {

@@ -34,8 +34,8 @@ mod tab_list;
 mod tree_view;
 
 pub use action_bar::{
-    ActionBar, ActionBarButton, ActionBarItem, ActionBarOrientation, ActionBarSeparatorStyle,
-    ActionBarStyle,
+    ActionBar, ActionBarItem, ActionBarOrientation, ActionBarSeparatorStyle, ActionBarStyle,
+    ActionViewItem,
 };
 pub use button::{Button, ButtonBackgrounds, ButtonSelection, ButtonState, ButtonStyle};
 pub use context_menu::{ContextMenu, ContextMenuItem, ContextMenuSelection, ContextMenuStyle};

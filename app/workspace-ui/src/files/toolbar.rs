@@ -1,6 +1,6 @@
 use zeta_icons::icons;
 use zeta_ui_components::{
-    ActionBar, ActionBarButton, ActionBarItem, ActionBarOrientation, ActionBarStyle,
+    ActionBar, ActionBarItem, ActionBarOrientation, ActionBarStyle, ActionViewItem,
     ButtonSelection, ButtonState, InteractionRegion, SearchBox,
 };
 use zui::ui::{
@@ -68,16 +68,16 @@ impl FilesToolbar {
             action_bounds,
             ActionBarOrientation::Horizontal,
             vec![
-                ActionBarItem::Button(
-                    ActionBarButton::icon_and_label(
+                ActionBarItem::Action(
+                    ActionViewItem::icon_and_label(
                         icons::REFRESH,
                         distance,
                         state(AGENT_FILES_REFRESH),
                     )
                     .with_main_axis_extent(ACTION_SIZE + STATUS_WIDTH),
                 ),
-                ActionBarItem::Button(
-                    ActionBarButton::icon(icons::SEARCH, "Search files", state(AGENT_FILES_SEARCH))
+                ActionBarItem::Action(
+                    ActionViewItem::icon(icons::SEARCH, "Search files", state(AGENT_FILES_SEARCH))
                         .with_selection(if files.search_visible() {
                             ButtonSelection::Selected
                         } else {

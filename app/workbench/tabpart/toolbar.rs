@@ -1,7 +1,7 @@
 //! Session search and creation controls for body-mounted Workbench tabs.
 
 use crate::{
-    ActionBar, ActionBarButton, ActionBarItem, ActionBarOrientation, ActionBarStyle,
+    ActionBar, ActionBarItem, ActionBarOrientation, ActionBarStyle, ActionViewItem,
     ButtonBackgrounds, ButtonState, ButtonStyle, CaretVisibility, Component, ComponentContext,
     ComponentElement, ComputedElement, ContextMenu, ContextMenuItem, ContextMenuStyle,
     ContextViewAnchorAlignment, ContextViewPlacement, CornerRadii, Edges, Element,
@@ -97,12 +97,12 @@ impl TabContainerToolbar {
             action_bounds,
             ActionBarOrientation::Horizontal,
             vec![
-                ActionBarItem::Button(ActionBarButton::icon(
+                ActionBarItem::Action(ActionViewItem::icon(
                     icons::SETTINGS,
                     "Configure tab layout",
                     layout_button_state,
                 )),
-                ActionBarItem::Button(ActionBarButton::icon(
+                ActionBarItem::Action(ActionViewItem::icon(
                     style.add_icon,
                     "Add new session",
                     add_button_state,

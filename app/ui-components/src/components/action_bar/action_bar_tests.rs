@@ -1,6 +1,6 @@
 use super::{
-    ActionBar, ActionBarButton, ActionBarItem, ActionBarOrientation, ActionBarSeparatorStyle,
-    ActionBarStyle,
+    ActionBar, ActionBarItem, ActionBarOrientation, ActionBarSeparatorStyle, ActionBarStyle,
+    ActionViewItem,
 };
 use zui::ui::{Icon, IconDefinition, IconId};
 
@@ -45,13 +45,13 @@ fn horizontal_action_bar_owns_button_and_separator_geometry() {
         Rect::from_xywh(10.0, 5.0, 100.0, 20.0),
         ActionBarOrientation::Horizontal,
         vec![
-            ActionBarItem::Button(ActionBarButton::icon(
+            ActionBarItem::Action(ActionViewItem::icon(
                 TEST_ICON,
                 "Files",
                 ButtonState::Resting,
             )),
             ActionBarItem::Separator,
-            ActionBarItem::Button(ActionBarButton::label("Open", ButtonState::Hovered)),
+            ActionBarItem::Action(ActionViewItem::label("Open", ButtonState::Hovered)),
         ],
         test_style(),
     );
@@ -76,12 +76,12 @@ fn action_bar_paints_button_variants_and_noninteractive_separator() {
         Rect::from_xywh(0.0, 0.0, 100.0, 20.0),
         ActionBarOrientation::Horizontal,
         vec![
-            ActionBarItem::Button(
-                ActionBarButton::icon(TEST_ICON, "Files", ButtonState::Resting)
+            ActionBarItem::Action(
+                ActionViewItem::icon(TEST_ICON, "Files", ButtonState::Resting)
                     .with_selection(ButtonSelection::Selected),
             ),
             ActionBarItem::Separator,
-            ActionBarItem::Button(ActionBarButton::icon_and_label(
+            ActionBarItem::Action(ActionViewItem::icon_and_label(
                 TEST_ICON,
                 "Add",
                 ButtonState::Disabled,
@@ -113,8 +113,8 @@ fn vertical_action_bar_maps_item_extent_to_the_vertical_axis() {
         Rect::from_xywh(3.0, 7.0, 24.0, 80.0),
         ActionBarOrientation::Vertical,
         vec![
-            ActionBarItem::Button(ActionBarButton::label("One", ButtonState::Resting)),
-            ActionBarItem::Button(ActionBarButton::label("Two", ButtonState::Pressed)),
+            ActionBarItem::Action(ActionViewItem::label("One", ButtonState::Resting)),
+            ActionBarItem::Action(ActionViewItem::label("Two", ButtonState::Pressed)),
         ],
         test_style(),
     );
@@ -135,9 +135,9 @@ fn action_bar_inspection_reports_the_resolved_item_gap() {
         Rect::from_xywh(0.0, 0.0, 100.0, 20.0),
         ActionBarOrientation::Horizontal,
         vec![
-            ActionBarItem::Button(ActionBarButton::label("One", ButtonState::Resting)),
+            ActionBarItem::Action(ActionViewItem::label("One", ButtonState::Resting)),
             ActionBarItem::Separator,
-            ActionBarItem::Button(ActionBarButton::label("Two", ButtonState::Resting)),
+            ActionBarItem::Action(ActionViewItem::label("Two", ButtonState::Resting)),
         ],
         test_style(),
     );
@@ -162,16 +162,16 @@ fn action_bar_inspection_reports_the_resolved_item_gap() {
 }
 
 #[test]
-fn action_buttons_can_override_their_main_axis_extent() {
+fn action_view_items_can_override_their_main_axis_extent() {
     let action_bar = ActionBar::new(
         Rect::from_xywh(10.0, 5.0, 140.0, 20.0),
         ActionBarOrientation::Horizontal,
         vec![
-            ActionBarItem::Button(
-                ActionBarButton::label("Short", ButtonState::Resting).with_main_axis_extent(40.0),
+            ActionBarItem::Action(
+                ActionViewItem::label("Short", ButtonState::Resting).with_main_axis_extent(40.0),
             ),
-            ActionBarItem::Button(
-                ActionBarButton::label("Long", ButtonState::Resting).with_main_axis_extent(72.0),
+            ActionBarItem::Action(
+                ActionViewItem::label("Long", ButtonState::Resting).with_main_axis_extent(72.0),
             ),
         ],
         test_style(),

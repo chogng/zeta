@@ -1,5 +1,5 @@
 use zeta_ui_components::{
-    ActionBar, ActionBarButton, ActionBarItem, ActionBarOrientation, ActionBarStyle,
+    ActionBar, ActionBarItem, ActionBarOrientation, ActionBarStyle, ActionViewItem,
     ButtonSelection, ButtonState, InteractionRegion,
 };
 use zui::ui::{
@@ -54,15 +54,13 @@ impl WorkspacePaneNavigation {
                 } else {
                     ButtonState::Resting
                 };
-                ActionBarItem::Button(
-                    ActionBarButton::label(action.label(), state).with_selection(
-                        if action.view() == selected {
-                            ButtonSelection::Selected
-                        } else {
-                            ButtonSelection::Unselected
-                        },
-                    ),
-                )
+                ActionBarItem::Action(ActionViewItem::label(action.label(), state).with_selection(
+                    if action.view() == selected {
+                        ButtonSelection::Selected
+                    } else {
+                        ButtonSelection::Unselected
+                    },
+                ))
             })
             .collect();
         Self {

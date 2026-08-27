@@ -1,10 +1,10 @@
 //! Minimal host proving that the reusable UI stack can run without app product state.
 
 use zeta_ui_components::ActionBar;
-use zeta_ui_components::ActionBarButton;
 use zeta_ui_components::ActionBarItem;
 use zeta_ui_components::ActionBarOrientation;
 use zeta_ui_components::ActionBarStyle;
+use zeta_ui_components::ActionViewItem;
 use zeta_ui_components::ButtonBackgrounds;
 use zeta_ui_components::ButtonState;
 use zeta_ui_components::ButtonStyle;
@@ -108,7 +108,7 @@ fn demo_action_bar(ready: bool) -> ActionBar {
     ActionBar::new(
         Rect::from_xywh(16.0, 16.0, 220.0, 32.0),
         ActionBarOrientation::Horizontal,
-        vec![ActionBarItem::Button(ActionBarButton::icon_and_label(
+        vec![ActionBarItem::Action(ActionViewItem::icon_and_label(
             DEMO_ICON,
             if ready { "Ready" } else { "Open" },
             ButtonState::Resting,

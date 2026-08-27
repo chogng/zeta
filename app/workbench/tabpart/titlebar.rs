@@ -1,6 +1,6 @@
 use super::WorkbenchUiStyle;
 use crate::{
-    ActionBar, ActionBarButton, ActionBarItem, ActionBarOrientation, ActionBarStyle, Border,
+    ActionBar, ActionBarItem, ActionBarOrientation, ActionBarStyle, ActionViewItem, Border,
     ButtonBackgrounds, ButtonState, ButtonStyle, Component, ComponentContext, ComponentElement,
     ComputedElement, CornerRadii, Edges, Element, InteractionRegion, PaintRect, Rect, Size,
     TextStyle, UiScene,
@@ -131,7 +131,7 @@ impl<'a> Titlebar<'a> {
         let left_action_bar = ActionBar::new(
             tab_container_toggle_bounds,
             ActionBarOrientation::Horizontal,
-            vec![ActionBarItem::Button(ActionBarButton::icon(
+            vec![ActionBarItem::Action(ActionViewItem::icon(
                 tab_container_toggle_icon,
                 tab_container_toggle_label,
                 tab_container_toggle_state,
@@ -141,7 +141,7 @@ impl<'a> Titlebar<'a> {
         let right_action_bar = ActionBar::new(
             workspace_toggle_bounds,
             ActionBarOrientation::Horizontal,
-            vec![ActionBarItem::Button(ActionBarButton::icon(
+            vec![ActionBarItem::Action(ActionViewItem::icon(
                 workspace_toggle_icon,
                 workspace_toggle_label,
                 workspace_toggle_state,

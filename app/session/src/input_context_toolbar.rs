@@ -1,6 +1,6 @@
 use zeta_icons::icons;
 use zeta_ui_components::{
-    ActionBar, ActionBarButton, ActionBarItem, ActionBarOrientation, ActionBarStyle,
+    ActionBar, ActionBarItem, ActionBarOrientation, ActionBarStyle, ActionViewItem,
     ButtonBackgrounds, ButtonState, ButtonStyle, InteractionRegion,
 };
 #[cfg(test)]
@@ -80,8 +80,8 @@ impl InputContextToolbar {
             } else {
                 ButtonState::Resting
             };
-            ActionBarItem::Button(
-                ActionBarButton::icon_and_label(icon, label, state)
+            ActionBarItem::Action(
+                ActionViewItem::icon_and_label(icon, label, state)
                     .with_main_axis_extent(item_widths[index] * scale),
             )
         };

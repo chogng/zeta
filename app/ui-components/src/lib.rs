@@ -5,8 +5,8 @@ use zui::ui::*;
 mod components;
 
 pub use components::{
-    ActionBar, ActionBarButton, ActionBarItem, ActionBarOrientation, ActionBarSeparatorStyle,
-    ActionBarStyle, Button, ButtonBackgrounds, ButtonSelection, ButtonState, ButtonStyle,
+    ActionBar, ActionBarItem, ActionBarOrientation, ActionBarSeparatorStyle, ActionBarStyle,
+    ActionViewItem, Button, ButtonBackgrounds, ButtonSelection, ButtonState, ButtonStyle,
     ContextMenu, ContextMenuItem, ContextMenuSelection, ContextMenuStyle, ContextView,
     ContextViewAnchorAlignment, ContextViewAnchorAxis, ContextViewAnchorPosition,
     ContextViewLayout, ContextViewPlacement, ContextViewStyle, Dropdown, DropdownItem,

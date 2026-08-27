@@ -15,7 +15,7 @@ pub enum ActionBarOrientation {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-enum ActionBarButtonContent {
+enum ActionViewItemContent {
     Label(String),
     Icon {
         icon: Icon,
@@ -27,19 +27,19 @@ enum ActionBarButtonContent {
     },
 }
 
-/// Presentation data for one runnable button inside an [`ActionBar`].
+/// Presentation for one runnable action inside an [`ActionBar`].
 #[derive(Clone, Debug, PartialEq)]
-pub struct ActionBarButton {
-    content: ActionBarButtonContent,
+pub struct ActionViewItem {
+    content: ActionViewItemContent,
     state: ButtonState,
     selection: ButtonSelection,
     main_axis_extent: Option<f32>,
 }
 
-impl ActionBarButton {
+impl ActionViewItem {
     pub fn label(label: impl Into<String>, state: ButtonState) -> Self {
         Self {
-            content: ActionBarButtonContent::Label(label.into()),
+            content: ActionViewItemContent::Label(label.into()),
             state,
             selection: ButtonSelection::Unselected,
             main_axis_extent: None,
@@ -48,7 +48,7 @@ impl ActionBarButton {
 
     pub fn icon(icon: Icon, accessible_label: impl Into<String>, state: ButtonState) -> Self {
         Self {
-            content: ActionBarButtonContent::Icon {
+            content: ActionViewItemContent::Icon {
                 icon,
                 accessible_label: accessible_label.into(),
             },
@@ -60,7 +60,7 @@ impl ActionBarButton {
 
     pub fn icon_and_label(icon: Icon, label: impl Into<String>, state: ButtonState) -> Self {
         Self {
-            content: ActionBarButtonContent::IconAndLabel {
+            content: ActionViewItemContent::IconAndLabel {
                 icon,
                 label: label.into(),
             },
@@ -87,10 +87,10 @@ impl ActionBarButton {
 
     fn paint(&self, bounds: Rect, style: &ButtonStyle, scene: &mut UiScene) {
         let button = match &self.content {
-            ActionBarButtonContent::Label(label) => {
+            ActionViewItemContent::Label(label) => {
                 Button::new(bounds, label.clone(), self.state, style.clone())
             }
-            ActionBarButtonContent::Icon {
+            ActionViewItemContent::Icon {
                 icon,
                 accessible_label,
             } => Button::icon(
@@ -100,7 +100,7 @@ impl ActionBarButton {
                 self.state,
                 style.clone(),
             ),
-            ActionBarButtonContent::IconAndLabel { icon, label } => {
+            ActionViewItemContent::IconAndLabel { icon, label } => {
                 Button::icon_and_label(bounds, *icon, label.clone(), self.state, style.clone())
             }
         }
@@ -112,7 +112,7 @@ impl ActionBarButton {
 /// One visual representation in an [`ActionBar`].
 #[derive(Clone, Debug, PartialEq)]
 pub enum ActionBarItem {
-    Button(ActionBarButton),
+    Action(ActionViewItem),
     Separator,
 }
 
@@ -206,24 +206,24 @@ impl ActionBar {
         self.bounds
     }
 
-    /// Returns the visual bounds for a button item, or `None` for a separator or missing item.
+    /// Returns the visual bounds for an action view item, or `None` for a separator or missing item.
     pub fn item_bounds(&self, index: usize) -> Option<Rect> {
         let item = self.items.get(index)?;
         match item {
-            ActionBarItem::Button(_) => Some(self.slot_bounds(index)),
+            ActionBarItem::Action(_) => Some(self.slot_bounds(index)),
             ActionBarItem::Separator => None,
         }
     }
 
-    /// Returns enabled button bounds, or `None` for disabled, separator, or missing items.
+    /// Returns enabled action bounds, or `None` for disabled, separator, or missing items.
     pub fn interactive_item_bounds(&self, index: usize) -> Option<Rect> {
-        let ActionBarItem::Button(button) = self.items.get(index)? else {
+        let ActionBarItem::Action(view_item) = self.items.get(index)? else {
             return None;
         };
-        button.is_enabled().then(|| self.slot_bounds(index))
+        view_item.is_enabled().then(|| self.slot_bounds(index))
     }
 
-    /// Returns the first enabled button containing `point`.
+    /// Returns the first enabled action containing `point`.
     pub fn hit_test(&self, point: Point) -> Option<usize> {
         self.items.iter().enumerate().find_map(|(index, _)| {
             self.interactive_item_bounds(index)?
@@ -245,11 +245,11 @@ impl ActionBar {
     fn item_extent(&self, item: &ActionBarItem) -> f32 {
         match (self.orientation, item) {
             (_, ActionBarItem::Separator) => self.style.separator_style.extent.max(0.0),
-            (ActionBarOrientation::Horizontal, ActionBarItem::Button(button)) => button
+            (ActionBarOrientation::Horizontal, ActionBarItem::Action(view_item)) => view_item
                 .main_axis_extent
                 .unwrap_or(self.style.item_size.width)
                 .max(0.0),
-            (ActionBarOrientation::Vertical, ActionBarItem::Button(button)) => button
+            (ActionBarOrientation::Vertical, ActionBarItem::Action(view_item)) => view_item
                 .main_axis_extent
                 .unwrap_or(self.style.item_size.height)
                 .max(0.0),
@@ -302,8 +302,8 @@ impl ActionBar {
                     continue;
                 };
                 match item {
-                    ActionBarItem::Button(button) => {
-                        button.paint(slot, &self.style.button_style, scene);
+                    ActionBarItem::Action(view_item) => {
+                        view_item.paint(slot, &self.style.button_style, scene);
                     }
                     ActionBarItem::Separator => {
                         scene.draw_rect(PaintRect::new(

@@ -79,7 +79,7 @@ zeta-ui-components -X→ App Server / workspace / product state
 | `components::switch::{Switch, SwitchState, SwitchSelection}` | public | 根据 host 投影的交互、on/off 状态和动画采样进度绘制 centered track 与 thumb；不拥有值、时钟或输入 |
 | `components::switch::{SwitchColors, SwitchStateColors, SwitchStyle}` | public | 定义 on/off、交互状态、track/thumb 几何、边框和圆角；动画规格属于 `zui` binding |
 | `components::action_bar::ActionBar` | public | 在 caller bounds 内排列和绘制 action representation，并公开同源 visual/interactive bounds 与 hit-test |
-| `components::action_bar::{ActionBarItem, ActionBarButton}` | public | 分别表达 Button/Separator representation 与单个 Button 的 presentation data；Button 可命名覆盖 main-axis extent |
+| `components::action_bar::{ActionBarItem, ActionViewItem}` | public | `ActionBarItem` 组合可执行项与 Separator；`ActionViewItem` 表达单个动作的展示、状态和可由界面指定的主轴尺寸 |
 | `components::action_bar::{ActionBarStyle, ActionBarSeparatorStyle, ActionBarOrientation}` | public | 定义 item size、gap、separator metrics、共享 Button style 与排列轴 |
 | `components::tab_list::{Tab, TabState, TabSelection}` | public | 表达无产品 identity/content 的 Tab surface 交互与选中 presentation |
 | `components::tab_list::{TabList, TabListStyle, TabListOrientation}` | public | 横向或纵向排列 Tab surface，拥有 item size/gap，并公开同源 tab bounds |
@@ -151,7 +151,7 @@ host
           ├─ ListView → ScrollView + fixed/variable-extent visible/overscan item projection
           ├─ TreeView → fixed ListView + depth/disclosure/content item projection
           ├─ ActionBar → item bounds
-          │   ├─ ActionBarButton → Button → icon/text primitives
+          │   ├─ ActionViewItem → Button → icon/text primitives
           │   └─ Separator → rect primitive
           ├─ TabList → Tab bounds → state/selection surface rect
           ├─ Button state/style → IconLabel → icon/text primitives
@@ -247,14 +247,7 @@ items，计算 depth indentation 与 disclosure/content bounds；它不读取 ch
 Terminal 从底部计数和输出增长锚定不属于通用 `ScrollState`；Native 的
 `TerminalOutputScrollView` 只负责把该产品状态适配为 `ScrollView` 的顶部相对内容坐标。
 
-`ActionBar` 接收 caller-provided outer bounds，用 `Element::row/column` 声明 Button/Separator 的
-方向、间距和 item fixed size；zui element layout 生成的 `ComputedElement` 同时驱动 paint、
-`item_bounds`/hit-test 与自动 inspection。默认 item extent 来自共享 style；label 长度不同的正式 Toolbar 可以通过
-`ActionBarButton::with_main_axis_extent` 覆盖单项主轴尺寸。`ActionBar::item_bounds` 暴露 visual
-bounds；`ActionBar::interactive_item_bounds` 与
-`ActionBar::hit_test` 复用相同几何并排除 disabled Button 和 Separator。Host 必须把返回的 item
-index 映射到自己的 action identity 和命令。ActionBar 不持有 callback、命令、hover/focus
-state 或 product action registry。
+`ActionBar` 接收 caller-provided outer bounds，用 `Element::row/column` 声明 `ActionViewItem`/Separator 的方向、间距和 item fixed size；zui element layout 生成的 `ComputedElement` 同时驱动 paint、`item_bounds`/hit-test 与自动 inspection。默认 item extent 来自调用界面提供的共享 style；需要不同尺寸的正式 Toolbar 可以通过 `ActionViewItem::with_main_axis_extent` 覆盖单项主轴尺寸。`ActionBar::item_bounds` 暴露 visual bounds；`ActionBar::interactive_item_bounds` 与 `ActionBar::hit_test` 复用相同几何并排除 disabled action 和 Separator。Host 必须把返回的 item index 映射到自己的 action identity 和命令。ActionBar 不持有 callback、命令、hover/focus state 或 product action registry。
 `TabList` 同样用 Element pipeline 消费 caller-provided bounds、排列轴、Tab presentation 和 style。
 `TabList::tab_bounds` 是 host 注册命中范围和组合 label/icon/status content 的唯一几何来源；
 `TabList` 不持有 tab identity、activation、focus、accessibility、关闭动作或对应 tabpanel。
@@ -369,9 +362,4 @@ validation 测试属于具体 backend crate。
 - `FontWeight` 与 `FontStyle` 只有常用 semantic variants；
 - CoreText 只做 catalog，不做 shaping/raster，也没有 app font registration；
 
-扩展点：出现第二个需要 secondary action/overflow 的真实消费者后，可以在 `ActionBar` 上组合
-独立 `ToolBar`；出现 Dropdown 或 custom representation 后，再增加对应 `ActionBarItem`
-variant，不为单一 Button 增加纯转发 wrapper。出现真实编辑器/终端消费者后，还可以分别增加
-可增长或可回收的图标图集、保留式段落缓存、平台字体注册、RGBA 图像/路径
-primitives 与统一 display list。是否采用 CoreText shaping 应由跨平台 metrics/fallback
-一致性测试决定，不是当前 API 的既定承诺。
+扩展点：出现第二个需要 secondary action/overflow 的真实消费者后，可以在 `ActionBar` 上组合独立 `ToolBar`；出现 Dropdown 或 custom representation 后，再扩展 `ActionViewItem` 的具体展示，不把产品 action identity、命令或 callback 下沉到通用控件。出现真实编辑器/终端消费者后，还可以分别增加可增长或可回收的图标图集、保留式段落缓存、平台字体注册、RGBA 图像/路径 primitives 与统一 display list。是否采用 CoreText shaping 应由跨平台 metrics/fallback 一致性测试决定，不是当前 API 的既定承诺。
