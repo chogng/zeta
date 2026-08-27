@@ -20,8 +20,8 @@ use zui::ui::UiFrame;
 
 use super::{
     SETTINGS_CLOSE, SETTINGS_NAV_APPEARANCE, SETTINGS_NAV_BACK, SETTINGS_NAV_GENERAL,
-    SETTINGS_NAV_KEYBINDINGS, SETTINGS_PAGE, SETTINGS_SEARCH_INPUT, SettingsPage,
-    SettingsPageLayout, SettingsPageMode, SettingsPageSection, SettingsPageStyle,
+    SETTINGS_NAV_KEYBINDINGS, SETTINGS_NAV_REMOTE, SETTINGS_PAGE, SETTINGS_SEARCH_INPUT,
+    SettingsPage, SettingsPageLayout, SettingsPageMode, SettingsPageSection, SettingsPageStyle,
 };
 
 fn style() -> SettingsPageStyle {
@@ -92,6 +92,7 @@ fn page_registers_host_boundary_and_sections() {
         SETTINGS_NAV_GENERAL,
         SETTINGS_NAV_APPEARANCE,
         SETTINGS_NAV_KEYBINDINGS,
+        SETTINGS_NAV_REMOTE,
     ] {
         let node = frame.interaction().node(id).expect("section node");
         assert_eq!(node.action(), zui::ui::NodeAction::Activate);
@@ -100,6 +101,35 @@ fn page_registers_host_boundary_and_sections() {
         nodes
             .iter()
             .all(|node| { node.id != SETTINGS_PAGE || node.role == AccessibilityRole::Group })
+    );
+}
+
+#[test]
+fn remote_section_is_projected_to_the_navigation_semantics() {
+    let dispatch = UiDispatch::default();
+    let input = zui::ui::TextInput::default();
+    let mut text_layout = TextInputLayoutEngine::new();
+    let page = SettingsPage::new_with_header_height_and_section(
+        zui::ui::Rect::from_xywh(0.0, 0.0, 1_000.0, 700.0),
+        32.0,
+        &input,
+        CaretVisibility::Visible,
+        style(),
+        SettingsPageSection::Remote,
+        &dispatch,
+        &mut text_layout,
+    );
+
+    let mut frame = UiFrame::<InteractionFrame>::new(zui::ui::Color::WHITE);
+    frame.draw_component(&page);
+
+    assert_eq!(
+        frame
+            .interaction()
+            .node(SETTINGS_NAV_REMOTE)
+            .expect("Remote navigation node")
+            .selection(),
+        AccessibilitySelection::Selected
     );
 }
 

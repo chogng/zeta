@@ -1,7 +1,7 @@
 # `zeta-settings`
 
-1. 根级 `lib.rs` 是 crate 入口；Settings 页面包含 General、Appearance 和 Keybindings，Remote 连接选择、连接管理与 Tunnel 管理位于 `remote.rs` 和 `remote/`。
-2. Settings 功能接收只读展示快照并返回 `SettingsActivation`；Remote 功能接收连接目录和 Tunnel 生命周期事件并返回对应操作，二者都不持久化配置或启动进程。
-3. 产品宿主只映射主题和工作区信息、转发平台输入并执行持久化或启动操作；配置权威、SSH/runtime、子进程、窗口生命周期和传输留在各自 crate。
+1. 根级 `lib.rs` 是 crate 入口；Settings 页面包含 General、Appearance、Keybindings 和 Remote，Remote 页面直接承载连接列表、Name/SSH Host/Workspace 输入框及 Save/Delete/Connect 操作。
+2. `zeta-settings` 只拥有输入、焦点、布局和展示状态并返回类型化请求；Remote 目标校验、连接目录、持久化、SSH/runtime 与 Tunnel 生命周期由 `zeta-rs/remote*` 提供。
+3. 产品宿主只映射主题和工作区信息、转发平台输入，并把 UI 请求交给对应 `zeta-rs` 能力；进程、窗口和平台事件仍由宿主组合。
 
 验证：`just test zeta-settings`。

@@ -208,10 +208,17 @@ impl NativeApp {
         match self.settings.activate(id) {
             zeta_settings::SettingsActivation::Ignored => false,
             zeta_settings::SettingsActivation::Changed => {
+                if self.settings.section() != zeta_settings::SettingsPageSection::Remote
+                    && self.remote_connection_manager.is_settings()
+                {
+                    self.dismiss_remote_connection_manager();
+                    return true;
+                }
                 self.rebuild_presentation();
                 self.request_redraw();
                 true
             }
+            zeta_settings::SettingsActivation::OpenRemote => self.open_remote_connection_settings(),
             zeta_settings::SettingsActivation::Close => {
                 self.close_settings_tab();
                 true

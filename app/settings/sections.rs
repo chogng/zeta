@@ -151,6 +151,7 @@ impl<'a> SettingsSectionPane<'a> {
             SettingsPageSection::General => self.paint_general(scene),
             SettingsPageSection::Appearance => self.paint_appearance(scene),
             SettingsPageSection::Keybindings => self.paint_keybindings(scene),
+            SettingsPageSection::Remote => {}
         });
     }
 
@@ -405,6 +406,7 @@ impl SettingsSectionPane<'_> {
             SettingsPageSection::General => "General settings",
             SettingsPageSection::Appearance => "Appearance settings",
             SettingsPageSection::Keybindings => "Keybinding settings",
+            SettingsPageSection::Remote => "Remote settings",
         }
     }
 }

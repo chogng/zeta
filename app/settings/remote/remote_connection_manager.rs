@@ -77,9 +77,16 @@ struct ManagerStatus {
     error: bool,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RemoteConnectionManagerSurface {
+    Dialog,
+    Settings,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 struct OpenRemoteConnectionManager {
     connections: Vec<RemoteConnectionEntry>,
+    surface: RemoteConnectionManagerSurface,
     restore_focus: Option<ElementId>,
     original: Option<RemoteConnectionName>,
     dirty: bool,
@@ -101,12 +108,31 @@ pub struct RemoteConnectionManagerState {
 impl RemoteConnectionManagerState {
     pub fn open(
         &mut self,
+        connections: Vec<RemoteConnectionEntry>,
+        restore_focus: Option<ElementId>,
+    ) {
+        self.open_on_surface(
+            connections,
+            RemoteConnectionManagerSurface::Dialog,
+            restore_focus,
+        );
+    }
+
+    /// Opens the connection editor as the persistent Remote Settings section.
+    pub fn open_settings(&mut self, connections: Vec<RemoteConnectionEntry>) {
+        self.open_on_surface(connections, RemoteConnectionManagerSurface::Settings, None);
+    }
+
+    fn open_on_surface(
+        &mut self,
         mut connections: Vec<RemoteConnectionEntry>,
+        surface: RemoteConnectionManagerSurface,
         restore_focus: Option<ElementId>,
     ) {
         connections.sort_by(|left, right| left.name().cmp(right.name()));
         self.open = Some(OpenRemoteConnectionManager {
             connections,
+            surface,
             restore_focus,
             original: None,
             dirty: false,
@@ -124,6 +150,20 @@ impl RemoteConnectionManagerState {
 
     pub const fn is_open(&self) -> bool {
         self.open.is_some()
+    }
+
+    /// Returns whether the editor currently owns a modal dialog boundary.
+    pub fn is_dialog(&self) -> bool {
+        self.open
+            .as_ref()
+            .is_some_and(|open| open.surface == RemoteConnectionManagerSurface::Dialog)
+    }
+
+    /// Returns whether the editor is mounted in the Remote Settings section.
+    pub fn is_settings(&self) -> bool {
+        self.open
+            .as_ref()
+            .is_some_and(|open| open.surface == RemoteConnectionManagerSurface::Settings)
     }
 
     pub fn dismiss(&mut self) -> Option<ElementId> {
@@ -583,6 +623,19 @@ mod tests {
         state.delete_succeeded(&name("staging"));
         assert!(state.connections().is_empty());
         assert!(state.selected_name().is_none());
+    }
+
+    #[test]
+    fn settings_and_dialog_surfaces_are_explicit_and_mutually_exclusive() {
+        let mut state = RemoteConnectionManagerState::default();
+
+        state.open_settings(Vec::new());
+        assert!(state.is_settings());
+        assert!(!state.is_dialog());
+
+        state.open(Vec::new(), None);
+        assert!(state.is_dialog());
+        assert!(!state.is_settings());
     }
 
     #[test]

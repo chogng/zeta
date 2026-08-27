@@ -42,6 +42,30 @@ use support::is_remote_connection_manager_element;
 use support::remote_connection_manager_scroll_command;
 
 impl NativeApp {
+    pub(super) fn open_remote_connection_settings(&mut self) -> bool {
+        if self.remote_connection_manager.is_settings() {
+            self.rebuild_and_focus_remote_connection_manager();
+            return true;
+        }
+        self.dismiss_remote_tunnel_manager();
+        let catalog = RemoteConnectionCatalog::from_profile_root(local_profile_root());
+        let connections = match catalog.connections() {
+            Ok(connections) => connections,
+            Err(error) => {
+                self.remote_connection_manager.open_settings(Vec::new());
+                self.remote_connection_manager.save_failed(format!(
+                    "Could not load Remote connections from `{}`: {error}",
+                    catalog.path().display()
+                ));
+                self.rebuild_and_focus_remote_connection_manager();
+                return true;
+            }
+        };
+        self.remote_connection_manager.open_settings(connections);
+        self.rebuild_and_focus_remote_connection_manager();
+        true
+    }
+
     pub(super) fn open_remote_connection_manager(&mut self, restore_focus: Option<ElementId>) {
         self.open_remote_connection_manager_selected(restore_focus, None);
     }
@@ -137,6 +161,9 @@ impl NativeApp {
         if !self.remote_connection_manager.is_open() {
             return false;
         }
+        if self.remote_connection_manager.is_settings() {
+            return false;
+        }
         let outcome = self
             .presentation
             .as_ref()
@@ -156,6 +183,9 @@ impl NativeApp {
         button: MouseButton,
     ) -> bool {
         if !self.remote_connection_manager.is_open() {
+            return false;
+        }
+        if self.remote_connection_manager.is_settings() {
             return false;
         }
         if button != MouseButton::Left {
@@ -191,26 +221,31 @@ impl NativeApp {
         if !self.remote_connection_manager.is_open() {
             return false;
         }
+        let embedded = self.remote_connection_manager.is_settings();
         let Some(presentation) = self.presentation.as_ref() else {
-            return true;
+            return !embedded;
         };
         let Some(viewport) = presentation.remote_connection_manager_list_viewport else {
-            return true;
+            return !embedded;
         };
         if !self
             .cursor_position
             .is_some_and(|point| viewport.contains(point))
         {
-            return true;
+            return !embedded;
         }
         let Some(metrics) = presentation.remote_connection_manager_scroll_metrics else {
-            return true;
+            return !embedded;
         };
         if self
             .remote_connection_manager
             .apply_scroll(remote_connection_manager_scroll_command(delta), metrics)
         {
-            self.rebuild_overlay_on_next_redraw();
+            if embedded {
+                self.rebuild_presentation_on_next_redraw();
+            } else {
+                self.rebuild_overlay_on_next_redraw();
+            }
         }
         true
     }
@@ -219,7 +254,20 @@ impl NativeApp {
         if !self.remote_connection_manager.is_open() {
             return false;
         }
+        let embedded = self.remote_connection_manager.is_settings();
+        let manager_has_focus = self.ui_dispatch.focused().is_some_and(|id| {
+            is_remote_connection_manager_element(
+                id,
+                self.remote_connection_manager.connections().len(),
+            )
+        });
+        if embedded && !manager_has_focus {
+            return false;
+        }
         if event.logical_key == Key::Named(NamedKey::Escape) {
+            if embedded {
+                return false;
+            }
             self.dismiss_remote_connection_manager();
             return true;
         }

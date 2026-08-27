@@ -1,7 +1,8 @@
 //! Remote connection and Tunnel state plus product presentation.
 //!
-//! Profile storage, runtime installation, child processes, and window event routing remain in
-//! the app host. The public API here is limited to resolved style, typed state, and UI actions.
+//! Target validation, profile storage, runtime installation, SSH, and Tunnel lifecycle remain in
+//! the `zeta-rs/remote*` crates. The public API here is limited to resolved style, typed UI state,
+//! and requests that the product host forwards to those capabilities.
 
 mod interaction;
 mod remote_connection_manager;

@@ -21,8 +21,8 @@ pub use keybindings::{
 pub use page::SettingsPage;
 pub use pane::{
     AppearanceSettingsSnapshot, GeneralSettingsSnapshot, KeybindingSettingsSnapshot,
-    SettingsFeatureSnapshot, SettingsPaneDrawResult, SettingsPaneStyle, SettingsPaneView,
-    draw_settings_pane,
+    RemoteSettingsSnapshot, SettingsFeatureSnapshot, SettingsPaneDrawResult, SettingsPaneStyle,
+    SettingsPaneView, draw_settings_pane,
 };
 pub use remote::*;
 pub use sections::{
@@ -67,6 +67,8 @@ pub const SETTINGS_CLOSE: ElementId = ElementId::scoped(SETTINGS_SCOPE, 3);
 pub const SETTINGS_NAV_BACK: ElementId = ElementId::scoped(SETTINGS_SCOPE, 4);
 /// General application and workspace preferences.
 pub const SETTINGS_NAV_GENERAL: ElementId = ElementId::scoped(SETTINGS_SCOPE, 5);
+/// Remote workspace, connection, and Tunnel overview.
+pub const SETTINGS_NAV_REMOTE: ElementId = ElementId::scoped(SETTINGS_SCOPE, 6);
 /// Appearance and theme preferences.
 pub const SETTINGS_NAV_APPEARANCE: ElementId = ElementId::scoped(SETTINGS_SCOPE, 7);
 /// Keyboard shortcut preferences.
@@ -82,6 +84,8 @@ pub enum SettingsPageSection {
     Appearance,
     /// Keyboard shortcut preferences.
     Keybindings,
+    /// Remote workspace, connection, and Tunnel overview.
+    Remote,
 }
 
 impl SettingsPageSection {
@@ -90,6 +94,7 @@ impl SettingsPageSection {
             Self::General => 1,
             Self::Appearance => 2,
             Self::Keybindings => 3,
+            Self::Remote => 4,
         }
     }
 }

@@ -4,6 +4,7 @@ use super::SettingsActivation;
 use super::SettingsState;
 use crate::SETTINGS_NAV_APPEARANCE;
 use crate::SETTINGS_NAV_GENERAL;
+use crate::SETTINGS_NAV_REMOTE;
 use crate::SettingsPageSection;
 use crate::keyboard_shortcut_row_element;
 
@@ -15,6 +16,17 @@ fn opening_shortcuts_selects_the_section_and_owns_the_recorder() {
 
     assert_eq!(settings.section(), SettingsPageSection::Keybindings);
     assert!(settings.keyboard_shortcuts().is_visible());
+}
+
+#[test]
+fn activation_selects_the_remote_section() {
+    let mut settings = SettingsState::default();
+
+    assert_eq!(
+        settings.activate(SETTINGS_NAV_REMOTE),
+        SettingsActivation::OpenRemote
+    );
+    assert_eq!(settings.section(), SettingsPageSection::Remote);
 }
 
 #[test]

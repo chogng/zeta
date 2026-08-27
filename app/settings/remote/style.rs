@@ -5,7 +5,7 @@ use zeta_ui_components::{InputBoxStateColors, InputBoxStyle, ScrollViewStyle, Se
 use zui::ui::{CornerRadii, Edges, TextStyle};
 
 /// Colors and shared component styles needed by Remote overlays.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RemoteUiStyle {
     pub surface: zui::ui::Color,
     pub surface_raised: zui::ui::Color,

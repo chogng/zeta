@@ -4,6 +4,7 @@ use super::SETTINGS_NAV_APPEARANCE;
 use super::SETTINGS_NAV_BACK;
 use super::SETTINGS_NAV_GENERAL;
 use super::SETTINGS_NAV_KEYBINDINGS;
+use super::SETTINGS_NAV_REMOTE;
 use super::SettingsPageLayout;
 use super::SettingsPageSection;
 
@@ -20,7 +21,7 @@ pub(super) fn navigation_buttons(
     section: SettingsPageSection,
     dispatch: &UiDispatch,
     style: &ButtonStyle,
-) -> [Button; 4] {
+) -> [Button; 5] {
     [
         navigation_button(
             layout.navigation_bounds(0),
@@ -55,6 +56,15 @@ pub(super) fn navigation_buttons(
             icons::COMMAND,
             "Keybindings",
             section == SettingsPageSection::Keybindings,
+            dispatch,
+            style,
+        ),
+        navigation_button(
+            layout.navigation_bounds(4),
+            SETTINGS_NAV_REMOTE,
+            icons::REMOTE,
+            "Remote",
+            section == SettingsPageSection::Remote,
             dispatch,
             style,
         ),

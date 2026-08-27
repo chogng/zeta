@@ -79,6 +79,7 @@ use interaction::status_region;
 pub struct RemoteConnectionManager<'a> {
     viewport: Rect,
     panel: Rect,
+    modal: bool,
     state: &'a RemoteConnectionManagerState,
     palette: RemoteUiStyle,
     dispatch: &'a UiDispatch,
@@ -99,7 +100,7 @@ impl<'a> RemoteConnectionManager<'a> {
         dispatch: &'a UiDispatch,
         parent: ElementId,
     ) -> Option<Self> {
-        if !state.is_open() {
+        if !state.is_dialog() {
             return None;
         }
         let width = PANEL_WIDTH.min((viewport.size.width - PANEL_MARGIN * 2.0).max(1.0));
@@ -110,6 +111,64 @@ impl<'a> RemoteConnectionManager<'a> {
             width,
             height,
         );
+        Some(Self::build(
+            viewport,
+            panel,
+            true,
+            state,
+            caret_visibility,
+            palette,
+            text_layout,
+            dispatch,
+            parent,
+        ))
+    }
+
+    /// Creates the non-modal connection editor mounted by the Remote Settings section.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_settings(
+        panel: Rect,
+        state: &'a RemoteConnectionManagerState,
+        caret_visibility: CaretVisibility,
+        palette: RemoteUiStyle,
+        text_layout: &mut TextInputLayoutEngine,
+        dispatch: &'a UiDispatch,
+        parent: ElementId,
+    ) -> Option<Self> {
+        if !state.is_settings() {
+            return None;
+        }
+        let panel = Rect::from_xywh(
+            panel.origin.x,
+            panel.origin.y,
+            PANEL_WIDTH.min(panel.size.width.max(1.0)),
+            PANEL_HEIGHT.min(panel.size.height.max(1.0)),
+        );
+        Some(Self::build(
+            panel,
+            panel,
+            false,
+            state,
+            caret_visibility,
+            palette,
+            text_layout,
+            dispatch,
+            parent,
+        ))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn build(
+        viewport: Rect,
+        panel: Rect,
+        modal: bool,
+        state: &'a RemoteConnectionManagerState,
+        caret_visibility: CaretVisibility,
+        palette: RemoteUiStyle,
+        text_layout: &mut TextInputLayoutEngine,
+        dispatch: &'a UiDispatch,
+        parent: ElementId,
+    ) -> Self {
         let list = ListView::new(
             list_bounds(panel),
             state.connections().len(),
@@ -146,9 +205,10 @@ impl<'a> RemoteConnectionManager<'a> {
             state.input(RemoteConnectionManagerField::Workspace),
             text_layout,
         );
-        Some(Self {
+        Self {
             viewport,
             panel,
+            modal,
             state,
             palette,
             dispatch,
@@ -157,7 +217,7 @@ impl<'a> RemoteConnectionManager<'a> {
             name_input,
             host_input,
             workspace_input,
-        })
+        }
     }
 
     pub fn caret_bounds(&self, field: RemoteConnectionManagerField) -> Option<Rect> {
@@ -192,7 +252,9 @@ impl<'a> RemoteConnectionManager<'a> {
                 "Saved Remote connections",
             )
             .with_parent(REMOTE_CONNECTION_MANAGER),
-            button_region(
+        ];
+        if self.modal {
+            regions.push(button_region(
                 REMOTE_CONNECTION_MANAGER_CLOSE,
                 close_bounds(self.panel),
                 if self.state.is_launching() {
@@ -202,7 +264,9 @@ impl<'a> RemoteConnectionManager<'a> {
                 },
                 navigation,
                 true,
-            ),
+            ));
+        }
+        regions.extend([
             button_region(
                 REMOTE_CONNECTION_MANAGER_NEW,
                 new_bounds(self.panel),
@@ -254,7 +318,7 @@ impl<'a> RemoteConnectionManager<'a> {
                 navigation,
                 self.state.can_connect(),
             ),
-        ];
+        ]);
         for index in self.list.visible_range() {
             let Some(bounds) = self.list.item_bounds(index) else {
                 continue;
@@ -308,7 +372,9 @@ impl<'a> RemoteConnectionManager<'a> {
     }
 
     fn paint_content(&self, scene: &mut UiScene) {
-        scene.draw_rect(PaintRect::new(self.viewport, Color::rgba(0, 0, 0, 76)));
+        if self.modal {
+            scene.draw_rect(PaintRect::new(self.viewport, Color::rgba(0, 0, 0, 76)));
+        }
         scene.draw_rect(
             PaintRect::new(self.panel, self.palette.surface)
                 .with_border(Border::uniform(1.0, self.palette.border))
@@ -407,14 +473,7 @@ impl<'a> RemoteConnectionManager<'a> {
                 .with_line_height(18.0),
             );
         }
-        for (id, bounds, label, enabled, primary) in [
-            (
-                REMOTE_CONNECTION_MANAGER_CLOSE,
-                close_bounds(self.panel),
-                "×",
-                true,
-                false,
-            ),
+        let mut actions = vec![
             (
                 REMOTE_CONNECTION_MANAGER_NEW,
                 new_bounds(self.panel),
@@ -443,7 +502,20 @@ impl<'a> RemoteConnectionManager<'a> {
                 self.state.can_connect(),
                 true,
             ),
-        ] {
+        ];
+        if self.modal {
+            actions.insert(
+                0,
+                (
+                    REMOTE_CONNECTION_MANAGER_CLOSE,
+                    close_bounds(self.panel),
+                    "×",
+                    true,
+                    false,
+                ),
+            );
+        }
+        for (id, bounds, label, enabled, primary) in actions {
             scene.draw_component(&Button::new(
                 bounds,
                 label,
@@ -474,7 +546,9 @@ impl Component for RemoteConnectionManager<'_> {
     }
 
     fn compose(&self, context: &mut ComponentContext<'_, '_>, _element: &ComputedElement) {
-        context.set_modal_root(REMOTE_CONNECTION_MANAGER);
+        if self.modal {
+            context.set_modal_root(REMOTE_CONNECTION_MANAGER);
+        }
         for region in self.interaction_regions() {
             context.draw_component(&region);
         }
@@ -536,6 +610,73 @@ mod tests {
             node.id == REMOTE_CONNECTION_MANAGER_SAVE && node.role == AccessibilityRole::Button
         }));
         assert!(manager.panel_bounds().size.width <= 720.0);
+    }
+
+    #[test]
+    fn settings_surface_embeds_inputs_without_a_modal_close_action() {
+        let style = crate::remote::test_style();
+        let mut state = RemoteConnectionManagerState::default();
+        state.open_settings(vec![RemoteConnectionEntry::new(
+            RemoteConnectionName::parse("build").unwrap(),
+            SshTarget::new(
+                SshHost::parse("build.example").unwrap(),
+                RemoteWorkspacePath::parse("/srv/project").unwrap(),
+            ),
+        )]);
+        let dispatch = UiDispatch::default();
+        let mut text_layout = TextInputLayoutEngine::new();
+        let panel = Rect::from_xywh(250.0, 80.0, 720.0, 470.0);
+        let manager = RemoteConnectionManager::new_settings(
+            panel,
+            &state,
+            CaretVisibility::Visible,
+            style,
+            &mut text_layout,
+            &dispatch,
+            crate::SETTINGS_PAGE,
+        )
+        .unwrap();
+        let mut frame = UiFrame::<InteractionFrame>::new(style.surface);
+        let host_id = ElementId::scoped(99, 1);
+        let host = InteractionRegion::new(
+            "SettingsSibling",
+            host_id,
+            Rect::from_xywh(0.0, 0.0, 100.0, 40.0),
+            AccessibilityRole::Button,
+            "Settings sibling",
+        )
+        .with_focus(FocusBehavior::TabStop)
+        .with_action(NodeAction::Activate);
+
+        frame.draw_component(&host);
+        frame.draw_component(&manager);
+
+        assert_eq!(manager.panel_bounds(), panel);
+        assert!(frame.interaction().focus_order().any(|id| id == host_id));
+        assert!(
+            frame
+                .interaction()
+                .node(REMOTE_CONNECTION_MANAGER_NAME)
+                .is_some()
+        );
+        assert!(
+            frame
+                .interaction()
+                .node(REMOTE_CONNECTION_MANAGER_HOST)
+                .is_some()
+        );
+        assert!(
+            frame
+                .interaction()
+                .node(REMOTE_CONNECTION_MANAGER_WORKSPACE)
+                .is_some()
+        );
+        assert!(
+            frame
+                .interaction()
+                .node(REMOTE_CONNECTION_MANAGER_CLOSE)
+                .is_none()
+        );
     }
 }
 

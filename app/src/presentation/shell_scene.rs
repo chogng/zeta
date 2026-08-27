@@ -66,6 +66,7 @@ use zeta_editor::CodeEditorStyle;
 use zeta_settings::AppearanceSettingsSnapshot;
 use zeta_settings::GeneralSettingsSnapshot;
 use zeta_settings::KeybindingSettingsSnapshot;
+use zeta_settings::RemoteSettingsSnapshot;
 use zeta_settings::SettingsFeatureSnapshot;
 use zeta_settings::SettingsPaneStyle;
 use zeta_settings::SettingsPaneView;
@@ -255,6 +256,8 @@ struct ShellBaseCheckpoint {
     scene: SceneCheckpoint,
     interaction: InteractionFrameCheckpoint,
     ime_cursor_area: Option<Rect>,
+    remote_connection_manager_scroll_metrics: Option<ScrollMetrics>,
+    remote_connection_manager_list_viewport: Option<Rect>,
 }
 
 struct ShellOverlayPresentation {
@@ -369,6 +372,7 @@ struct MainPresentationView<'a> {
     workspace_surface: WorkspaceSurfaceKind,
     active_tab_input: Option<&'a TabInputKey>,
     settings: &'a SettingsState,
+    remote_connection_manager: &'a RemoteConnectionManagerState,
     session_title: &'a str,
     session_pane: &'a SessionPaneState,
     session_pane_context: &'a SessionPaneContext,
@@ -385,6 +389,8 @@ struct MainPresentationView<'a> {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct MainDrawResult {
     ime_cursor_area: Option<Rect>,
+    remote_connection_manager_scroll_metrics: Option<ScrollMetrics>,
+    remote_connection_manager_list_viewport: Option<Rect>,
 }
 
 #[cfg(test)]
@@ -568,6 +574,7 @@ fn build_shell_presentation_with_bindings(
                 workspace_surface: model.workspace_surface,
                 active_tab_input: model.active_tab_input,
                 settings: model.settings,
+                remote_connection_manager: model.remote_connection_manager,
                 session_title,
                 session_pane: model.session_pane,
                 session_pane_context: &session_pane_context,
@@ -633,6 +640,9 @@ fn build_shell_presentation_with_bindings(
         scene: frame.scene().checkpoint(),
         interaction: frame.interaction().checkpoint(),
         ime_cursor_area,
+        remote_connection_manager_scroll_metrics: main_draw
+            .remote_connection_manager_scroll_metrics,
+        remote_connection_manager_list_viewport: main_draw.remote_connection_manager_list_viewport,
     };
     let overlay = draw_shell_overlays(&mut frame, viewport, &model, text_layout, ime_cursor_area);
     ShellPresentation {
@@ -642,8 +652,12 @@ fn build_shell_presentation_with_bindings(
         workspace_path_picker_item_viewport: overlay.workspace_path_picker_item_viewport,
         remote_connection_picker_scroll_metrics: overlay.remote_connection_picker_scroll_metrics,
         remote_connection_picker_item_viewport: overlay.remote_connection_picker_item_viewport,
-        remote_connection_manager_scroll_metrics: overlay.remote_connection_manager_scroll_metrics,
-        remote_connection_manager_list_viewport: overlay.remote_connection_manager_list_viewport,
+        remote_connection_manager_scroll_metrics: overlay
+            .remote_connection_manager_scroll_metrics
+            .or(main_draw.remote_connection_manager_scroll_metrics),
+        remote_connection_manager_list_viewport: overlay
+            .remote_connection_manager_list_viewport
+            .or(main_draw.remote_connection_manager_list_viewport),
         remote_tunnel_manager_scroll_metrics: overlay.remote_tunnel_manager_scroll_metrics,
         remote_tunnel_manager_list_viewport: overlay.remote_tunnel_manager_list_viewport,
         base_checkpoint: Some(base_checkpoint),
@@ -679,10 +693,12 @@ pub(crate) fn rebuild_shell_overlays(
         overlay.remote_connection_picker_scroll_metrics;
     presentation.remote_connection_picker_item_viewport =
         overlay.remote_connection_picker_item_viewport;
-    presentation.remote_connection_manager_scroll_metrics =
-        overlay.remote_connection_manager_scroll_metrics;
-    presentation.remote_connection_manager_list_viewport =
-        overlay.remote_connection_manager_list_viewport;
+    presentation.remote_connection_manager_scroll_metrics = overlay
+        .remote_connection_manager_scroll_metrics
+        .or(base.remote_connection_manager_scroll_metrics);
+    presentation.remote_connection_manager_list_viewport = overlay
+        .remote_connection_manager_list_viewport
+        .or(base.remote_connection_manager_list_viewport);
     presentation.remote_tunnel_manager_scroll_metrics =
         overlay.remote_tunnel_manager_scroll_metrics;
     presentation.remote_tunnel_manager_list_viewport = overlay.remote_tunnel_manager_list_viewport;
@@ -1241,6 +1257,8 @@ fn draw_main(
             .draw_rect(PaintRect::new(layout.main(), palette.background));
         context.with_clip(layout.main(), |context| {
             let mut ime_cursor_area = None;
+            let mut remote_connection_manager_scroll_metrics = None;
+            let mut remote_connection_manager_list_viewport = None;
             if view
                 .active_tab_input
                 .is_some_and(|input| input.is_settings())
@@ -1283,6 +1301,9 @@ fn draw_main(
                                 keybinding_rows: &keybinding_rows,
                                 keybinding_diagnostics: view.keybinding_diagnostics,
                             },
+                            remote: RemoteSettingsSnapshot {
+                                connection_manager: view.remote_connection_manager,
+                            },
                         },
                         caret_visibility: view.caret_visibility,
                         dispatch: view.dispatch,
@@ -1290,10 +1311,13 @@ fn draw_main(
                     SettingsPaneStyle::new(
                         palette.settings_page_style(),
                         palette.settings_section_style(),
+                        palette.remote_ui_style(),
                     ),
                     text_layout,
                 );
                 ime_cursor_area = draw.ime_cursor_area;
+                remote_connection_manager_scroll_metrics = draw.remote_connection_scroll_metrics;
+                remote_connection_manager_list_viewport = draw.remote_connection_list_viewport;
             } else {
                 let workspace_pane_active =
                     !matches!(view.workspace_surface, WorkspaceSurfaceKind::Editor)
@@ -1433,7 +1457,11 @@ fn draw_main(
                     WorkspaceSurfaceKind::Agent | WorkspaceSurfaceKind::Editor => ime_cursor_area,
                 }
             };
-            MainDrawResult { ime_cursor_area }
+            MainDrawResult {
+                ime_cursor_area,
+                remote_connection_manager_scroll_metrics,
+                remote_connection_manager_list_viewport,
+            }
         })
     })
 }

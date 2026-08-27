@@ -19,6 +19,7 @@ use crate::SETTINGS_NAV_APPEARANCE;
 use crate::SETTINGS_NAV_BACK;
 use crate::SETTINGS_NAV_GENERAL;
 use crate::SETTINGS_NAV_KEYBINDINGS;
+use crate::SETTINGS_NAV_REMOTE;
 use crate::SettingsPageSection;
 use crate::keybindings::ShortcutCommit;
 use crate::keybindings::command_for_keyboard_shortcut_row;
@@ -27,6 +28,7 @@ use crate::keybindings::command_for_keyboard_shortcut_row;
 pub enum SettingsActivation {
     Ignored,
     Changed,
+    OpenRemote,
     Close,
 }
 
@@ -101,6 +103,10 @@ impl SettingsState {
             SETTINGS_NAV_GENERAL => self.select(SettingsPageSection::General),
             SETTINGS_NAV_APPEARANCE => self.select(SettingsPageSection::Appearance),
             SETTINGS_NAV_KEYBINDINGS => self.select(SettingsPageSection::Keybindings),
+            SETTINGS_NAV_REMOTE => {
+                self.section = SettingsPageSection::Remote;
+                SettingsActivation::OpenRemote
+            }
             KEYBOARD_SHORTCUTS_CLOSE if self.keyboard_shortcuts.is_visible() => {
                 self.keyboard_shortcuts.close();
                 SettingsActivation::Changed
