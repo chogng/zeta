@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Emitter } from "../../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../../base/common/lifecycle.js";
 import type { DebugEvaluateContext, DebugSessionState, IDebugConfiguration, IDebugEvaluateResult, IDebugService, IDebugSession } from "../../common/debugService.js";
 import { DebugConsoleService } from "../../browser/debugConsoleService.js";
 
@@ -25,14 +25,14 @@ test("DebugConsoleService captures output while hidden, evaluates, and retains t
 	assert.equal(consoleService.activeSession?.output, "");
 });
 
-class FakeDebugService extends DisposableOwner {
-	private readonly sessionEmitter = this.own(new Emitter<IDebugSession | undefined>());
+class FakeDebugService extends Disposable {
+	private readonly sessionEmitter = this._register(new Emitter<IDebugSession | undefined>());
 	readonly onDidChangeSession = this.sessionEmitter.event;
 	sessions: readonly IDebugSession[] = Object.freeze([]);
 	session: IDebugSession | undefined;
 
 	addSession(): FakeDebugSession {
-		const session = this.own(new FakeDebugSession());
+		const session = this._register(new FakeDebugSession());
 		this.sessions = Object.freeze([session]);
 		this.session = session;
 		this.sessionEmitter.fire(session);
@@ -51,9 +51,9 @@ class FakeDebugService extends DisposableOwner {
 	}
 }
 
-class FakeDebugSession extends DisposableOwner implements IDebugSession {
-	private readonly stateEmitter = this.own(new Emitter<DebugSessionState>());
-	private readonly outputEmitter = this.own(new Emitter<string>());
+class FakeDebugSession extends Disposable implements IDebugSession {
+	private readonly stateEmitter = this._register(new Emitter<DebugSessionState>());
+	private readonly outputEmitter = this._register(new Emitter<string>());
 	readonly id = "debug-1";
 	readonly configuration: IDebugConfiguration = Object.freeze({ id: "one", name: "One", type: "demo", request: "launch", adapter: Object.freeze({ program: "adapter", arguments: Object.freeze([]) }), arguments: Object.freeze({}) });
 	readonly capabilities = Object.freeze({ supportsRestart: true, supportsTerminate: true, exceptionBreakpointFilters: Object.freeze([]) });

@@ -1,4 +1,4 @@
-import { DisposableOwner, type IDisposable } from "../../../../../base/common/lifecycle.js";
+import { Disposable, type IDisposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { NativeEditContextObject } from "./nativeEditContext.js";
 
 const CONTROL_BOUNDS_COLOR = "blue";
@@ -15,7 +15,7 @@ export interface DebugNativeEditContextOptions {
  * It deliberately implements the same narrow local contract as the adapter,
  * so production code never needs to depend on browser-private fields.
  */
-export class DebugEditContext extends DisposableOwner implements NativeEditContextObject {
+export class DebugEditContext extends Disposable implements NativeEditContextObject {
 	private debugging: boolean;
 	private controlBounds: DOMRect | undefined;
 	private selectionBounds: DOMRect | undefined;
@@ -28,7 +28,7 @@ export class DebugEditContext extends DisposableOwner implements NativeEditConte
 	) {
 		super();
 		this.debugging = options.enabled ?? true;
-		this.defer(() => this.clearMarkers());
+		this._register(toDisposable(() => this.clearMarkers()));
 	}
 
 	get text(): string {

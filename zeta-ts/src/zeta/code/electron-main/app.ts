@@ -3,7 +3,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, screen, type Event as Electr
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { isCancellationError } from "../../base/common/cancellation.js";
-import { DisposableOwner, DisposableStore, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { assertDefined } from "../../base/common/types.js";
 import { DisposableTracker, installDisposableTracker } from "../../base/common/disposableTracker.js";
 import { ZetaApplicationName } from '../common/application.js';
@@ -137,7 +137,7 @@ interface PendingWindowLaunch {
 /**
  * Owns the Electron application's persistent services, Workbench windows, IPC, and shutdown.
  */
-export class ZetaApplication extends DisposableOwner {
+export class ZetaApplication extends Disposable {
 	private defaultModeId: WorkbenchModeId;
 	private readonly rendererRoot: string;
 	private readonly appServerStartupMode: AppServerStartupMode;
@@ -169,18 +169,18 @@ export class ZetaApplication extends DisposableOwner {
 		this.ipcRouteContributions = options.ipcRouteContributions ?? [];
 		this.disposableTracker = disposableTracker;
 		this.tracking = tracking;
-		this.trustedIpcRouter = this.own(new TrustedIpcRouter(ipcMain));
-		this.nativeKeyboardLayout = this.own(new NativeKeyboardLayoutMainService());
+		this.trustedIpcRouter = this._register(new TrustedIpcRouter(ipcMain));
+		this.nativeKeyboardLayout = this._register(new NativeKeyboardLayoutMainService());
 		this.profileRoot = localProfileRoot();
 
 		app.on("before-quit", this.onBeforeQuit);
 		app.on("will-quit", this.onWillQuit);
 		app.on("accessibility-support-changed", this.onAccessibilitySupportChanged);
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			app.removeListener("before-quit", this.onBeforeQuit);
 			app.removeListener("will-quit", this.onWillQuit);
 			app.removeListener("accessibility-support-changed", this.onAccessibilitySupportChanged);
-		});
+		}));
 	}
 
 	static create(options: ZetaApplicationOptions): ZetaApplication {
@@ -336,7 +336,7 @@ export class ZetaApplication extends DisposableOwner {
 	}
 
 	private async performOpenWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesMainService): Promise<WorkbenchWindowRecord | undefined> {
-		const resources = this.own(new DisposableStore());
+		const resources = this._register(new DisposableStore());
 		try {
 			const resolvedWorkspace = await workspaces.resolveWorkspace(workspace);
 			const workspaceContext = resources.add(new WorkspaceContextMainService(workspace, resolvedWorkspace));
@@ -552,9 +552,9 @@ export class ZetaApplication extends DisposableOwner {
 			focus: () => focusElectronWindow(window),
 		};
 		this.workbenchWindows.add(record);
-		resources.defer(() => {
+		resources.add(toDisposable(() => {
 			if (!window.isDestroyed()) window.destroy();
-		});
+		}));
 		const onFocus = (): void => {
 			if (!window.isDestroyed()) this.workbenchWindows.activate(record.id);
 		};
@@ -563,7 +563,7 @@ export class ZetaApplication extends DisposableOwner {
 		window.once("closed", () => {
 			this.closeSessionsWindow(record);
 			this.workbenchWindows.remove(record.id);
-			if (!resources.disposed) resources.dispose();
+			if (!resources.isDisposed) resources.dispose();
 		});
 		window.once("ready-to-show", () => {
 			if (window.isDestroyed()) {

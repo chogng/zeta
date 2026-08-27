@@ -1,16 +1,16 @@
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { type TabFocus } from "../../../browser/config/tabFocus.js";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 /** Controls whether Tab is routed to editor text insertion or browser focus traversal. */
-export class ToggleTabFocusModeController extends DisposableOwner {
+export class ToggleTabFocusModeController extends Disposable {
 	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly tabFocus: TabFocus) {
 		super();
-		this.own(this.tabFocus.onDidChange(() => this.updateState()));
-		this.own(addDisposableListener(input, "keydown", event => this.handleToggle(event), true));
-		this.own(addDisposableListener(input, "keydown", event => {
+		this._register(this.tabFocus.onDidChange(() => this.updateState()));
+		this._register(addDisposableListener(input, "keydown", event => this.handleToggle(event), true));
+		this._register(addDisposableListener(input, "keydown", event => {
 			if (this.tabFocus.isEnabled && !event.defaultPrevented && !event.isComposing && event.key === "Tab" && !event.ctrlKey && !event.altKey && !event.metaKey) {
 				event.stopImmediatePropagation();
 			}
@@ -38,6 +38,6 @@ registerEditorContribution({
 	id: "editor.contrib.toggleTabFocusMode",
 	install: context => {
 		if (context.kind !== "text") return;
-		context.own(new ToggleTabFocusModeController(context.view.element, context.viewport, context.tabFocus));
+		context.register(new ToggleTabFocusModeController(context.view.element, context.viewport, context.tabFocus));
 	},
 });

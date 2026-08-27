@@ -8,7 +8,7 @@ import {
 	physicalKey,
 	resolveKeybinding,
 } from "../../../../../base/common/keybindings.js";
-import { DisposableStore } from "../../../../../base/common/lifecycle.js";
+import { DisposableStore, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { Emitter } from "../../../../../base/common/event.js";
 import { OperatingSystem } from "../../../../../base/common/platform.js";
 import { KeyCode, NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE, ScanCode, ScanCodeUtils } from "../../../../../base/common/keyCodes.js";
@@ -138,7 +138,7 @@ test("when expressions preserve boolean precedence and comparisons", () => {
 test("browser service executes chords and restores IME state", async () => {
 	using registrations = new DisposableStore();
 	const dom = new JSDOM("<!doctype html><body></body>");
-	registrations.defer(() => dom.window.close());
+	registrations.add(toDisposable(() => dom.window.close()));
 	const registry = new KeybindingRegistry();
 	const commands = new CommandRegistry();
 	const contexts = registrations.add(new ContextKeyService());
@@ -201,7 +201,7 @@ test("browser service executes chords and restores IME state", async () => {
 test("browser service dispatches Ctrl+Shift+P with a shifted key value", async () => {
 	using registrations = new DisposableStore();
 	const dom = new JSDOM("<!doctype html><body></body>");
-	registrations.defer(() => dom.window.close());
+	registrations.add(toDisposable(() => dom.window.close()));
 	const registry = new KeybindingRegistry();
 	const commands = new CommandRegistry();
 	const contexts = registrations.add(new ContextKeyService());
@@ -243,7 +243,7 @@ test("browser service dispatches Ctrl+Shift+P with a shifted key value", async (
 test("keyboard shortcut troubleshooting traces native, mapped, and resolved events", async () => {
 	using registrations = new DisposableStore();
 	const dom = new JSDOM("<!doctype html><body></body>");
-	registrations.defer(() => dom.window.close());
+	registrations.add(toDisposable(() => dom.window.close()));
 	const registry = new KeybindingRegistry();
 	const commands = new CommandRegistry();
 	const contexts = registrations.add(new ContextKeyService());
@@ -300,7 +300,7 @@ test("browser keyboard layouts provide physical key labels", async () => {
 test("single modifier bindings dispatch on keyup only when the modifier was unused", async () => {
 	using registrations = new DisposableStore();
 	const dom = new JSDOM("<!doctype html><body></body>");
-	registrations.defer(() => dom.window.close());
+	registrations.add(toDisposable(() => dom.window.close()));
 	const registry = new KeybindingRegistry();
 	const commands = new CommandRegistry();
 	const contexts = registrations.add(new ContextKeyService());

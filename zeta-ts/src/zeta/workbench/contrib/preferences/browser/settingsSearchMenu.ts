@@ -1,7 +1,7 @@
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
-import { DisposableOwner } from '../../../../base/common/lifecycle.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import { lxiconsLibrary } from '../../../../base/common/lxiconsLibrary.js';
 
 export interface SettingsSearchMenuOptions {
@@ -12,13 +12,13 @@ export interface SettingsSearchMenuOptions {
 }
 
 /** Owns filter actions for the Settings search input. */
-export class SettingsSearchMenu extends DisposableOwner {
+export class SettingsSearchMenu extends Disposable {
 	public readonly domNode: HTMLButtonElement;
 	private readonly button: Button;
 
 	constructor(container: HTMLElement, private readonly options: SettingsSearchMenuOptions) {
 		super();
-		this.button = this.own(new Button(container, {
+		this.button = this._register(new Button(container, {
 			label: '',
 			icon: lxiconsLibrary.filter,
 			ariaLabel: 'Filter Settings',

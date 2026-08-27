@@ -1,6 +1,6 @@
 import "./media/codeAction.css";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
-import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
@@ -12,9 +12,9 @@ import { type CodeActionService, type LanguageCodeAction } from "../common/codeA
 import { type LanguageWorkspaceEdit } from "../../../common/languages/languageWorkspaceEdit.js";
 
 /** Owns the editor-local code-action picker and routes selected edits through cursor commands. */
-export class CodeActionController extends DisposableOwner {
+export class CodeActionController extends Disposable {
 	private readonly element: HTMLDivElement;
-	private readonly actionListeners = this.own(new ResettableDisposableGroup());
+	private readonly actionListeners = this._register(new DisposableStore());
 	private request: AbortController | undefined;
 	private actions: readonly LanguageCodeAction[] = [];
 	private actionRange: TextRange | undefined;
@@ -29,18 +29,18 @@ export class CodeActionController extends DisposableOwner {
 		this.element.hidden = true;
 		this.element.setAttribute("role", "menu");
 		viewport.element.append(this.element);
-		this.defer(() => this.element.remove());
-		this.own(addDisposableListener(input, "keydown", event => {
+		this._register(toDisposable(() => this.element.remove()));
+		this._register(addDisposableListener(input, "keydown", event => {
 			if (event.defaultPrevented || event.isComposing || event.altKey || (!event.ctrlKey && !event.metaKey) || event.key !== ".") return;
 			stopEvent(event);
 			void this.open();
 		}));
-		this.own(addDisposableListener(this.element, "keydown", event => {
+		this._register(addDisposableListener(this.element, "keydown", event => {
 			if (event.key !== "Escape") return;
 			stopEvent(event);
 			this.close();
 		}));
-		this.own(viewport.textModel.onDidChange(() => this.close()));
+		this._register(viewport.textModel.onDidChange(() => this.close()));
 	}
 
 	private async open(): Promise<void> {

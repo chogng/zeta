@@ -1,11 +1,11 @@
-import { DisposableOwner } from '../../../../base/common/lifecycle.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { IEditorService } from '../../editor/common/editorService.js';
 import type { IPreferencesService } from '../common/preferences.js';
 import { createPreferencesEditorInput, createUserSettingsEditorInput } from '../common/preferencesEditorInput.js';
 import { createKeyboardShortcutsEditorInput } from './keybindingsEditorInput.js';
 
 /** Routes browser Preferences entry points through the Workbench Editor Service. */
-export class PreferencesService extends DisposableOwner implements IPreferencesService {
+export class PreferencesService extends Disposable implements IPreferencesService {
 	constructor(private readonly resolveEditorService?: () => IEditorService) {
 		super();
 	}

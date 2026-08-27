@@ -1,17 +1,17 @@
 import "./sessionsControls.css";
 import "./sessionsList.css";
 import { addDisposableListener, h } from "../../../base/browser/dom.js";
-import { DisposableOwner, ResettableDisposableGroup } from "../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
 import type { ISessionsViewService } from "../../services/view/common/sessionsViewService.js";
 import type { ISessionsManagementService } from "../../services/sessions/common/sessionsManagementService.js";
 
 /** Session picker owned by the dedicated Sessions Workbench sidebar. */
-export class SessionsList extends DisposableOwner {
+export class SessionsList extends Disposable {
 	readonly domNode: HTMLElement;
 	private readonly heading: HTMLHeadingElement;
 	private readonly newSessionButton: HTMLButtonElement;
 	private readonly list: HTMLDivElement;
-	private readonly itemListeners = this.own(new ResettableDisposableGroup());
+	private readonly itemListeners = this._register(new DisposableStore());
 	private readonly sessionService: ISessionsManagementService;
 	private readonly viewService: ISessionsViewService;
 
@@ -32,9 +32,9 @@ export class SessionsList extends DisposableOwner {
 		this.list.className = "zeta-sessions-list-items";
 		this.domNode.append(this.heading, this.newSessionButton, this.list);
 		container.append(this.domNode);
-		this.defer(() => this.domNode.remove());
-		this.own(addDisposableListener(this.newSessionButton, "click", () => viewService.openNewSession(newSessionLabel)));
-		this.own(viewService.onDidChange(() => this.render()));
+		this._register(toDisposable(() => this.domNode.remove()));
+		this._register(addDisposableListener(this.newSessionButton, "click", () => viewService.openNewSession(newSessionLabel)));
+		this._register(viewService.onDidChange(() => this.render()));
 		this.render();
 	}
 

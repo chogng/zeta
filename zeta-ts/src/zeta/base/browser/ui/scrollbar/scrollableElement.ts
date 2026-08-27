@@ -4,7 +4,7 @@ import { StandardWheelEvent } from "../../mouseEvent.js";
 import { observeResize } from "../../observer.js";
 import { disposableWindowTimeout } from "../../scheduler.js";
 import { Emitter, type Event } from "../../../common/event.js";
-import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../common/lifecycle.js";
+import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../common/lifecycle.js";
 import type { ScrollbarAxis } from "./abstractScrollbar.js";
 import { HorizontalScrollbar } from "./horizontalScrollbar.js";
 import {
@@ -66,7 +66,7 @@ let nextScrollableId = 1;
  * reveal, and accessibility behavior. The native bars are hidden and mirrored
  * by stable DOM tracks whose visibility and interaction are controlled here.
  */
-export class ScrollableElement extends DisposableOwner {
+export class ScrollableElement extends Disposable {
 	readonly element: HTMLDivElement;
 	readonly scrollableElement: HTMLDivElement;
 	readonly contentElement: HTMLDivElement;
@@ -80,7 +80,7 @@ export class ScrollableElement extends DisposableOwner {
 	private readonly onDidScrollEmitter: Emitter<ScrollableScrollEvent>;
 	private _state = initialState;
 	private pendingReveal: Element | undefined;
-	private readonly scrollActivityTimeout = this.own(new DisposableSlot<IDisposable>());
+	private readonly scrollActivityTimeout = this._register(new MutableDisposable<IDisposable>());
 
 	constructor(container: HTMLElement, options: ScrollableElementOptions = {}) {
 		super();
@@ -91,14 +91,14 @@ export class ScrollableElement extends DisposableOwner {
 		const viewport = h(ownerDocument, "div");
 		const content = h(ownerDocument, "div");
 		viewport.id = `zeta-scrollable-${nextScrollableId++}`;
-		const horizontal = this.own(new HorizontalScrollbar(element, {
+		const horizontal = this._register(new HorizontalScrollbar(element, {
 			viewport,
 			trackClickBehavior: this.options.trackClickBehavior,
 			getMetrics: () => this.axisMetrics("horizontal"),
 			setPosition: (position) =>
 				this.setAxisPosition("horizontal", position),
 		}));
-		const vertical = this.own(new VerticalScrollbar(element, {
+		const vertical = this._register(new VerticalScrollbar(element, {
 			viewport,
 			trackClickBehavior: this.options.trackClickBehavior,
 			getMetrics: () => this.axisMetrics("vertical"),
@@ -113,7 +113,7 @@ export class ScrollableElement extends DisposableOwner {
 		this.vertical = vertical;
 		this.corner = corner;
 		this.cornerNode = new FastDomNode(corner);
-		this.onDidScrollEmitter = this.own(new Emitter<ScrollableScrollEvent>());
+		this.onDidScrollEmitter = this._register(new Emitter<ScrollableScrollEvent>());
 		this.onDidScroll = this.onDidScrollEmitter.event;
 
 		element.className = "zeta-scrollable-element zeta-scrollbar";
@@ -141,21 +141,21 @@ export class ScrollableElement extends DisposableOwner {
 		);
 		container.append(element);
 
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.pendingReveal = undefined;
 			element.remove();
-		});
-		this.own(addDisposableListener(viewport, "scroll", () =>
+		}));
+		this._register(addDisposableListener(viewport, "scroll", () =>
 			this.handleNativeScroll(),
 		));
-		this.own(addDisposableListener(viewport, "wheel", (event: WheelEvent) =>
+		this._register(addDisposableListener(viewport, "wheel", (event: WheelEvent) =>
 			this.handleWheel(event),
 		{ passive: false }));
-		this.own(addDisposableListener(element, "keydown", (event: KeyboardEvent) =>
+		this._register(addDisposableListener(element, "keydown", (event: KeyboardEvent) =>
 			this.handleContainerKeydown(event),
 		));
 
-		this.own(observeResize([element, content], () => this.layout()));
+		this._register(observeResize([element, content], () => this.layout()));
 		this.layout();
 	}
 
@@ -488,10 +488,10 @@ export class ScrollableElement extends DisposableOwner {
 	private showScrollbars(): void {
 		const targetWindow = ownerWindow(this.element);
 		this.element.classList.add("zeta-scrollbar-scrolling");
-		this.scrollActivityTimeout.replace(disposableWindowTimeout(targetWindow, () => {
+		this.scrollActivityTimeout.value = disposableWindowTimeout(targetWindow, () => {
 			this.scrollActivityTimeout.clear();
 			this.element.classList.remove("zeta-scrollbar-scrolling");
-		}, 700));
+		}, 700);
 	}
 }
 

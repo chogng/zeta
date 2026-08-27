@@ -1,5 +1,5 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type LanguageDiagnostic } from "../../../common/languages/languageResults.js";
@@ -8,14 +8,14 @@ import { type TextPosition } from "../../../common/core/text.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 /** Moves the primary selection through current-version diagnostics with F8. */
-export class DiagnosticNavigationController extends DisposableOwner {
+export class DiagnosticNavigationController extends Disposable {
 	constructor(input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly diagnostics: TextDecorationCollection<LanguageDiagnostic>) {
 		super();
 		if (viewport.textModel !== selections.textModel || diagnostics.textModel !== selections.textModel) {
 			this.dispose();
 			throw new TypeError("Stanza diagnostic navigation dependencies must share one text model");
 		}
-		this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
+		this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
 	}
 
 	private handleKeydown(event: KeyboardEvent): void {

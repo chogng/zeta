@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { Emitter } from "../../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../../base/common/lifecycle.js";
 import type { RemoteConnectionState } from "../../../../../platform/remote/common/remote.js";
 import type { RemoteAgentConnection } from "../../../../../platform/remote/common/remoteAgentApi.js";
 import type { IRemoteTunnelService } from "../../../../../platform/remote/common/remoteTunnelService.js";
@@ -126,8 +126,8 @@ test("Remote Ports does not let an initial list overwrite a newer tunnel event",
 	}
 });
 
-class TestRemoteTunnelService extends DisposableOwner implements IRemoteTunnelService {
-	private readonly changeEmitter = this.own(new Emitter<RemoteTunnelChange>());
+class TestRemoteTunnelService extends Disposable implements IRemoteTunnelService {
+	private readonly changeEmitter = this._register(new Emitter<RemoteTunnelChange>());
 	private readonly tunnels = new Map<string, RemoteTunnel>();
 	private initialList: Promise<readonly RemoteTunnel[]> | undefined;
 	readonly openedPorts: number[] = [];
@@ -177,9 +177,9 @@ class TestRemoteTunnelService extends DisposableOwner implements IRemoteTunnelSe
 	}
 }
 
-class TestRemoteAgentService extends DisposableOwner implements IRemoteAgentService {
-	private readonly stateEmitter = this.own(new Emitter<RemoteConnectionState>());
-	private readonly connectionEmitter = this.own(new Emitter<RemoteAgentConnection>());
+class TestRemoteAgentService extends Disposable implements IRemoteAgentService {
+	private readonly stateEmitter = this._register(new Emitter<RemoteConnectionState>());
+	private readonly connectionEmitter = this._register(new Emitter<RemoteAgentConnection>());
 	readonly onDidChangeConnectionState = this.stateEmitter.event;
 	readonly onDidChangeConnection = this.connectionEmitter.event;
 

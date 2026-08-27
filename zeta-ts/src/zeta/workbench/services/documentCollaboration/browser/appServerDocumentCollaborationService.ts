@@ -1,6 +1,6 @@
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Emitter } from "../../../../base/common/event.js";
-import { DisposableOwner, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { getOrSet } from "../../../../base/common/map.js";
 import { allSelection, nodeSelection, textSelection, type DocumentSelection } from "../../../../editor/common/core/documentSelection.js";
 import type { DocumentNode } from "../../../../editor/common/model/document.js";
@@ -24,7 +24,7 @@ import type { DocumentCollaborationSnapshot as AppServerDocumentCollaborationSna
 import type { DocumentCollaborationUpdate as AppServerDocumentCollaborationUpdate } from "../../../../../../generated/app-server/types.js";
 
 /** App Server transport adapter for Stanza's server-ordered collaboration contract. */
-export class AppServerDocumentCollaborationService extends DisposableOwner implements IDocumentCollaborationService {
+export class AppServerDocumentCollaborationService extends Disposable implements IDocumentCollaborationService {
 	private readonly connections = new Map<string, Set<AppServerDocumentCollaborationConnection>>();
 
 	constructor(private readonly api: IDocumentCollaborationApi, events: IServerEventApi) {
@@ -38,7 +38,7 @@ export class AppServerDocumentCollaborationService extends DisposableOwner imple
 				else connection.acceptPresence(event.params);
 			}
 		});
-		this.defer(() => subscription.dispose());
+		this._register(toDisposable(() => subscription.dispose()));
 	}
 
 	async open(input: DocumentCollaborationOpenInput, signal: AbortSignal): Promise<DocumentCollaborationConnection> {
@@ -100,11 +100,11 @@ export class AppServerDocumentCollaborationService extends DisposableOwner imple
 	}
 }
 
-class AppServerDocumentCollaborationConnection extends DisposableOwner implements DocumentCollaborationConnection {
-	private readonly updateEmitter = this.own(new Emitter<DocumentCollaborationRemoteEnvelope>());
-	private readonly snapshotEmitter = this.own(new Emitter<DocumentCollaborationSnapshot>());
-	private readonly presenceEmitter = this.own(new Emitter<readonly DocumentCollaborationPresence[]>());
-	private readonly failureEmitter = this.own(new Emitter<Error>());
+class AppServerDocumentCollaborationConnection extends Disposable implements DocumentCollaborationConnection {
+	private readonly updateEmitter = this._register(new Emitter<DocumentCollaborationRemoteEnvelope>());
+	private readonly snapshotEmitter = this._register(new Emitter<DocumentCollaborationSnapshot>());
+	private readonly presenceEmitter = this._register(new Emitter<readonly DocumentCollaborationPresence[]>());
+	private readonly failureEmitter = this._register(new Emitter<Error>());
 	private _presenceGeneration = 0;
 	private _currentPresence: readonly DocumentCollaborationPresence[] = [];
 
@@ -116,10 +116,10 @@ class AppServerDocumentCollaborationConnection extends DisposableOwner implement
 	constructor(private readonly service: AppServerDocumentCollaborationService, readonly schema: DocumentCollaborationConnection["schema"], readonly clientId: string, readonly initialSnapshot: DocumentCollaborationSnapshot) {
 		super();
 		this.roomId = initialSnapshot.roomId;
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			void service.updatePresence(this, undefined, new AbortController().signal).catch(() => undefined);
 			service.remove(this);
-		});
+		}));
 	}
 
 	readonly roomId: string;

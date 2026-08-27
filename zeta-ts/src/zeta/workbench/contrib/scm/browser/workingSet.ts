@@ -1,4 +1,4 @@
-import { DisposableOwner, ResettableDisposableGroup } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
 import { StorageScope, StorageTarget, type IStorageService } from '../../../../platform/storage/common/storage.js';
 import type { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
@@ -27,8 +27,8 @@ export interface ScmWorkingSetControllerOptions {
 }
 
 /** Saves and restores editor tabs when the active Git branch changes. */
-export class ScmWorkingSetController extends DisposableOwner {
-	private readonly enabledResources = this.own(new ResettableDisposableGroup());
+export class ScmWorkingSetController extends Disposable {
+	private readonly enabledResources = this._register(new DisposableStore());
 	private readonly repositoryWorkingSets = new Map<string, RepositoryWorkingSets>();
 	private statusQueue = Promise.resolve();
 	private lastStatusIdentity: string | undefined;
@@ -36,7 +36,7 @@ export class ScmWorkingSetController extends DisposableOwner {
 
 	constructor(private readonly options: ScmWorkingSetControllerOptions) {
 		super();
-		this.own(options.configurationService.onDidChangeConfiguration(event => {
+		this._register(options.configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(ScmConfiguration.workingSetsEnabled)) this.configure();
 		}));
 		this.configure();

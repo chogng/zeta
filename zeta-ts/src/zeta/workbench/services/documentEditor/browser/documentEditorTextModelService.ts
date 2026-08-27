@@ -1,5 +1,5 @@
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { TextModel } from "../../../../editor/common/model/textModel.js";
 import type { ITextModelService, TextModelBlockInput, TextModelWorkingCopyReference } from "../../../../editor/common/services/textModelService.js";
 import type { ITextFileService } from "../../textfile/common/textFileService.js";
@@ -8,7 +8,7 @@ import { DocumentWorkingCopy } from "./documentWorkingCopy.js";
 import { parseDocument } from "./documentWorkingCopy.js";
 
 /** Workbench persistence adapter for a TextModel opened by the document editor. */
-export class DocumentEditorTextModelService extends DisposableOwner implements ITextModelService<TextModelBlockInput, TextModelWorkingCopyReference> {
+export class DocumentEditorTextModelService extends Disposable implements ITextModelService<TextModelBlockInput, TextModelWorkingCopyReference> {
 	constructor(private readonly textFiles: ITextFileService, private readonly workingCopyService?: IWorkingCopyService) {
 		super();
 		if (!textFiles || typeof textFiles.resolve !== "function" || typeof textFiles.save !== "function") {
@@ -40,7 +40,7 @@ export class DocumentEditorTextModelService extends DisposableOwner implements I
 	}
 }
 
-class TextModelWorkingCopyReferenceImpl extends DisposableOwner implements TextModelWorkingCopyReference {
+class TextModelWorkingCopyReferenceImpl extends Disposable implements TextModelWorkingCopyReference {
 	readonly resource;
 	readonly model;
 	readonly onDidChangeDirty;
@@ -51,8 +51,8 @@ class TextModelWorkingCopyReferenceImpl extends DisposableOwner implements TextM
 
 	constructor(model: TextModel, private readonly workingCopy: DocumentWorkingCopy) {
 		super();
-		this.model = this.own(model);
-		this.workingCopy = this.own(workingCopy);
+		this.model = this._register(model);
+		this.workingCopy = this._register(workingCopy);
 		this.resource = workingCopy.resource;
 		this.onDidChangeDirty = workingCopy.onDidChangeDirty;
 		this.onDidChangeExternalChange = workingCopy.onDidChangeExternalChange;

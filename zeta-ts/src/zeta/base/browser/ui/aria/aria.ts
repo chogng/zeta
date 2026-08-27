@@ -1,7 +1,9 @@
 import {
-	DisposableOwner,
-	DisposableSlot,
+	Disposable,
+	MutableDisposable,
 	type IDisposable,
+
+	toDisposable,
 } from "../../../common/lifecycle.js";
 import { scheduleAtNextAnimationFrame } from "../../scheduler.js";
 import { h } from "../../dom.js";
@@ -84,11 +86,11 @@ export function setRole(
  *
  * Callers should create one region per UI root and dispose it with that root.
  */
-export class AriaLiveRegion extends DisposableOwner {
+export class AriaLiveRegion extends Disposable {
 	private readonly root: HTMLDivElement;
 	private readonly polite: readonly [HTMLDivElement, HTMLDivElement];
 	private readonly assertive: readonly [HTMLDivElement, HTMLDivElement];
-	private readonly pending = this.own(new DisposableSlot<IDisposable>());
+	private readonly pending = this._register(new MutableDisposable<IDisposable>());
 	private politeIndex = 0;
 	private assertiveIndex = 0;
 
@@ -106,7 +108,7 @@ export class AriaLiveRegion extends DisposableOwner {
 		];
 		this.root.append(...this.polite, ...this.assertive);
 		ownerDocument.body.append(this.root);
-		this.defer(() => this.root.remove());
+		this._register(toDisposable(() => this.root.remove()));
 	}
 
 	status(message: string): void {
@@ -139,13 +141,13 @@ export class AriaLiveRegion extends DisposableOwner {
 		alternate.textContent = "";
 		const targetWindow = target.ownerDocument.defaultView;
 		if (!targetWindow) return;
-		this.pending.replace(scheduleAtNextAnimationFrame(
+		this.pending.value = scheduleAtNextAnimationFrame(
 			targetWindow,
 			() => {
 				this.pending.clear();
 				target.textContent = message.slice(0, maximumMessageLength);
 			},
-		));
+		);
 	}
 
 	clear(): void {

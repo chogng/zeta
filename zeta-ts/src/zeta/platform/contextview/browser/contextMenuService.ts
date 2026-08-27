@@ -1,8 +1,10 @@
 import { Emitter } from "../../../base/common/event.js";
 import { isNode } from "../../../base/browser/dom.js";
 import {
-	DisposableOwner,
-	DisposableSlot,
+	Disposable,
+	MutableDisposable,
+
+	toDisposable,
 } from "../../../base/common/lifecycle.js";
 import type { IRectangle } from "../../../base/common/layout.js";
 import {
@@ -23,11 +25,11 @@ import {
 import type { IContextViewService } from "./contextView.js";
 
 /** HTML implementation used by web, Windows, and Linux workbenches. */
-export class BrowserContextMenuService extends DisposableOwner
+export class BrowserContextMenuService extends Disposable
 	implements IContextMenuService {
-	private readonly _onDidShowContextMenu = this.own(new Emitter<void>());
-	private readonly _onDidHideContextMenu = this.own(new Emitter<void>());
-	private readonly activeMenu = this.own(new DisposableSlot<Menu>());
+	private readonly _onDidShowContextMenu = this._register(new Emitter<void>());
+	private readonly _onDidHideContextMenu = this._register(new Emitter<void>());
+	private readonly activeMenu = this._register(new MutableDisposable<Menu>());
 	private readonly contextViewService: IContextViewService;
 	private readonly menuService: IMenuService;
 	private readonly keybindingService: IKeybindingService;
@@ -48,7 +50,7 @@ export class BrowserContextMenuService extends DisposableOwner
 		this.menuService = menuService;
 		this.keybindingService = keybindingService;
 		this.contextViewService = contextViewService;
-		this.defer(() => this.hideContextMenu());
+		this._register(toDisposable(() => this.hideContextMenu()));
 	}
 
 	showContextMenu(options: ContextMenuOptions): void {
@@ -74,7 +76,7 @@ export class BrowserContextMenuService extends DisposableOwner
 				this.contextViewService.hide();
 			},
 		});
-		this.activeMenu.replace(menu);
+		this.activeMenu.value = menu;
 		const shown = this.contextViewService.show({
 			anchor: toContextViewAnchor(options.anchor),
 			content: menu.element,

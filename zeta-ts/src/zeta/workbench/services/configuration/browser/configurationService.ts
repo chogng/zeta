@@ -1,7 +1,7 @@
 import { Emitter } from "../../../../base/common/event.js";
 import { editJsonObjectProperty } from '../../../../base/common/json.js';
 import {
-	DisposableOwner,
+	Disposable,
 	toDisposable,
 } from "../../../../base/common/lifecycle.js";
 import { configurationValues, emptyConfigurationDocument, type IConfigurationApi, type IConfigurationDocument, type IConfigurationSnapshot, validateConfigurationDocument, validateConfigurationSnapshot } from "../../../../platform/configuration/common/configurationIpc.js";
@@ -25,14 +25,14 @@ export interface WorkbenchConfigurationServiceOptions {
  * values fall back atomically to their defaults without mutating the source.
  */
 export class WorkbenchConfigurationService
-	extends DisposableOwner
+	extends Disposable
 	implements IConfigurationService, IConfigurationResourceService {
 	private readonly api: IConfigurationApi | undefined;
 	private readonly registry: ConfigurationRegistry;
 	private readonly onError: (error: unknown) => void;
 	private readonly _onDidChangeConfiguration =
-		this.own(new Emitter<IConfigurationChangeEvent>());
-	private readonly resourceChangeEmitter = this.own(new Emitter<IConfigurationResourceSnapshot>());
+		this._register(new Emitter<IConfigurationChangeEvent>());
+	private readonly resourceChangeEmitter = this._register(new Emitter<IConfigurationResourceSnapshot>());
 	private readonly values = new Map<IConfigurationKey<unknown>, unknown>();
 	private revision = 0;
 	private document = emptyConfigurationDocument();
@@ -62,7 +62,7 @@ export class WorkbenchConfigurationService
 					this.onError(error);
 				}
 			});
-			this.own(toDisposable(() => subscription.dispose()));
+			this._register(toDisposable(() => subscription.dispose()));
 		}
 	}
 

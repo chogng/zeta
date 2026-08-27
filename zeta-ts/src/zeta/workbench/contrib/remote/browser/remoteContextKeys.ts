@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type IContextKey, type IContextKeyService, RawContextKey } from "../../../../platform/contextkey/common/contextkey.js";
 import type { RemoteConnectionState } from "../../../../platform/remote/common/remote.js";
 import type { IRemoteConnectionService } from "../../../../platform/remote/common/remoteConnectionService.js";
@@ -18,7 +18,7 @@ export interface RemoteContextKeysOptions {
 }
 
 /** Projects the host-owned connection kind into action enablement without exposing transport state. */
-export class RemoteContextKeys extends DisposableOwner implements IWorkbenchContribution {
+export class RemoteContextKeys extends Disposable implements IWorkbenchContribution {
 	static readonly ID = "workbench.contrib.remoteContextKeys";
 
 	private readonly connectionKind: IContextKey<RemoteConnectionKind>;
@@ -33,10 +33,10 @@ export class RemoteContextKeys extends DisposableOwner implements IWorkbenchCont
 		this.connectionKind.set(options.remoteAgentService.connection?.kind ?? "unknown");
 		this.connectionState.set(options.remoteAgentService.connectionState ?? "unknown");
 		this.connectionsAvailable.set(options.remoteConnectionService.available);
-		this.own(options.remoteAgentService.onDidChangeConnection(connection => this.connectionKind.set(connection.kind)));
-		this.own(options.remoteAgentService.onDidChangeConnectionState(state => this.connectionState.set(state)));
-		this.defer(() => this.connectionKind.reset());
-		this.defer(() => this.connectionState.reset());
-		this.defer(() => this.connectionsAvailable.reset());
+		this._register(options.remoteAgentService.onDidChangeConnection(connection => this.connectionKind.set(connection.kind)));
+		this._register(options.remoteAgentService.onDidChangeConnectionState(state => this.connectionState.set(state)));
+		this._register(toDisposable(() => this.connectionKind.reset()));
+		this._register(toDisposable(() => this.connectionState.reset()));
+		this._register(toDisposable(() => this.connectionsAvailable.reset()));
 	}
 }

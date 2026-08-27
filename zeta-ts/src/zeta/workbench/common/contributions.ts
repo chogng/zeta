@@ -1,5 +1,5 @@
 import {
-	DisposableOwner,
+	Disposable,
 	type IDisposable,
 	toDisposable,
 } from "../../base/common/lifecycle.js";
@@ -112,7 +112,7 @@ export type WorkbenchContributionErrorHandler = (
  * Owns the contribution instances of one workbench window and advances their
  * startup phases monotonically.
  */
-export class WorkbenchContributionHost extends DisposableOwner {
+export class WorkbenchContributionHost extends Disposable {
 	private readonly accessor: ServicesAccessor;
 	private readonly registrations:
 		readonly IWorkbenchContributionRegistration[];
@@ -157,7 +157,7 @@ export class WorkbenchContributionHost extends DisposableOwner {
 			}
 			this.instantiated.add(registration.id);
 			try {
-				this.own(registration.factory(this.accessor));
+				this._register(registration.factory(this.accessor));
 			} catch (error) {
 				this.onError(error, registration.id);
 			}

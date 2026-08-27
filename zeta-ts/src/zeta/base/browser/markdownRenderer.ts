@@ -5,7 +5,7 @@ import {
 	sanitizeHtmlToFragment,
 } from "./domSanitize.js";
 import { Checkbox } from "./ui/toggle/toggle.js";
-import { DisposableOwner, DisposableStore, ResettableDisposableGroup } from "../common/lifecycle.js";
+import { Disposable, DisposableStore, toDisposable } from "../common/lifecycle.js";
 
 export interface MarkdownElementOptions {
 	readonly ownerDocument: Document;
@@ -83,11 +83,11 @@ const SAFE_DATA_IMAGE =
  * Parser output is always treated as untrusted and passed through DOMPurify
  * before it enters the document.
  */
-export class MarkdownElement extends DisposableOwner {
+export class MarkdownElement extends Disposable {
 	private readonly ownerDocument: Document;
 	private readonly breaks: boolean;
 	private readonly linkHandler: ((href: string) => void) | undefined;
-	private readonly checkboxControls = this.own(new ResettableDisposableGroup());
+	private readonly checkboxControls = this._register(new DisposableStore());
 	private active = true;
 
 	readonly element: HTMLElement;
@@ -99,7 +99,7 @@ export class MarkdownElement extends DisposableOwner {
 		this.linkHandler = options.linkHandler;
 		this.element = h(options.ownerDocument, "div");
 		this.element.className = "zeta-markdown";
-		this.own(addDisposableListener<MouseEvent>(
+		this._register(addDisposableListener<MouseEvent>(
 			this.element,
 			"click",
 			(event) => {
@@ -111,10 +111,10 @@ export class MarkdownElement extends DisposableOwner {
 				if (href) this.linkHandler?.(href);
 			},
 		));
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.active = false;
 			this.element.remove();
-		});
+		}));
 		this.setMarkdown(options.markdown ?? "");
 	}
 

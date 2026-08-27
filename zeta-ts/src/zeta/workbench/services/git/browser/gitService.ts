@@ -1,6 +1,6 @@
 import type { GitHeadDto, GitRepositoryChangeDto, GitRepositoryDto, GitStatusResult } from "../../../../../../generated/app-server/types.js";
 import { Emitter } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { URI } from "../../../../base/common/uri.js";
 import type { IAppServerApi, IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { IGitApi } from "../../../../platform/git/common/gitApi.js";
@@ -16,12 +16,12 @@ export interface GitServiceOptions {
 }
 
 /** App Server-backed implementation of the frontend Git repository collection. */
-export class GitService extends DisposableOwner implements IGitService {
-	private readonly _onDidChangeStatus = this.own(new Emitter<GitStatus>());
-	private readonly _onDidChangeRepositoryStatus = this.own(new Emitter<GitStatus>());
-	private readonly _onDidChangeRepositories = this.own(new Emitter<readonly GitRepository[]>());
-	private readonly _onDidChangeActiveRepository = this.own(new Emitter<GitRepository | undefined>());
-	private readonly _onDidBecomeReady = this.own(new Emitter<void>());
+export class GitService extends Disposable implements IGitService {
+	private readonly _onDidChangeStatus = this._register(new Emitter<GitStatus>());
+	private readonly _onDidChangeRepositoryStatus = this._register(new Emitter<GitStatus>());
+	private readonly _onDidChangeRepositories = this._register(new Emitter<readonly GitRepository[]>());
+	private readonly _onDidChangeActiveRepository = this._register(new Emitter<GitRepository | undefined>());
+	private readonly _onDidBecomeReady = this._register(new Emitter<void>());
 	private readonly api: IGitApi;
 	private repositoryList: readonly GitRepository[] = Object.freeze([]);
 	private activeRepositoryId: string | undefined;
@@ -55,12 +55,12 @@ export class GitService extends DisposableOwner implements IGitService {
 			}
 			this.acceptStatus(toGitStatus(event.params.status, repository));
 		});
-		this.defer(() => events.dispose());
+		this._register(toDisposable(() => events.dispose()));
 		const connection = options.appServerApi.onConnectionState(state => {
 			if (state === "ready" && this.hasWorkspaceFolder()) void this.refreshRepositories().catch(() => undefined);
 		});
-		this.defer(() => connection.dispose());
-		this.own(options.workspaceContext.onDidChangeWorkspace(({ workspace }) => {
+		this._register(toDisposable(() => connection.dispose()));
+		this._register(options.workspaceContext.onDidChangeWorkspace(({ workspace }) => {
 			this.clearRepositories();
 			if (workspace.folders.length > 0) void this.refreshRepositories().catch(() => undefined);
 		}));

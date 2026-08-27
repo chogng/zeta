@@ -1,7 +1,7 @@
 import { addDisposableListener } from '../../../base/browser/dom.js';
 import { getWindow } from '../../../base/browser/window.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
-import { DisposableOwner, type IDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
 
 export interface PointerTrackingHandlers {
 	readonly onMove: (event: PointerEvent) => void;
@@ -15,9 +15,9 @@ export interface PointerTrackingHandlers {
  * sessions. It deliberately does not decide what a pointer gesture means.
  */
 /** Owns browser Pointer dispatch, capture, and one-window drag sessions. */
-export class PointerHandler extends DisposableOwner {
-	private readonly pointerDownEmitter = this.own(new Emitter<PointerEvent>());
-	private readonly contextMenuEmitter = this.own(new Emitter<MouseEvent>());
+export class PointerHandler extends Disposable {
+	private readonly pointerDownEmitter = this._register(new Emitter<PointerEvent>());
+	private readonly contextMenuEmitter = this._register(new Emitter<MouseEvent>());
 
 	readonly onDidPointerDown: Event<PointerEvent> = this.pointerDownEmitter.event;
 	readonly onDidContextMenu: Event<MouseEvent> = this.contextMenuEmitter.event;
@@ -26,12 +26,12 @@ export class PointerHandler extends DisposableOwner {
 	constructor(readonly element: HTMLElement) {
 		super();
 		this.targetWindow = getWindow(element);
-		this.own(addDisposableListener<PointerEvent>(
+		this._register(addDisposableListener<PointerEvent>(
 			element,
 			'pointerdown',
 			event => this.pointerDownEmitter.fire(event),
 		));
-		this.own(addDisposableListener<MouseEvent>(
+		this._register(addDisposableListener<MouseEvent>(
 			element,
 			'contextmenu',
 			event => this.contextMenuEmitter.fire(event),
@@ -62,15 +62,15 @@ export class PointerHandler extends DisposableOwner {
 	}
 }
 
-class PointerTrackingSession extends DisposableOwner {
+class PointerTrackingSession extends Disposable {
 	constructor(
 		targetWindow: Window,
 		handlers: PointerTrackingHandlers,
 	) {
 		super();
-		this.own(addDisposableListener<PointerEvent>(targetWindow, 'pointermove', handlers.onMove));
-		this.own(addDisposableListener<PointerEvent>(targetWindow, 'pointerup', handlers.onUp));
-		this.own(addDisposableListener<PointerEvent>(targetWindow, 'pointercancel', handlers.onCancel));
-		this.own(addDisposableListener(targetWindow, 'blur', handlers.onBlur, { once: true }));
+		this._register(addDisposableListener<PointerEvent>(targetWindow, 'pointermove', handlers.onMove));
+		this._register(addDisposableListener<PointerEvent>(targetWindow, 'pointerup', handlers.onUp));
+		this._register(addDisposableListener<PointerEvent>(targetWindow, 'pointercancel', handlers.onCancel));
+		this._register(addDisposableListener(targetWindow, 'blur', handlers.onBlur, { once: true }));
 	}
 }

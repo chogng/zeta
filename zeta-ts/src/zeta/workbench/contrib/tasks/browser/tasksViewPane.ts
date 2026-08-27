@@ -20,7 +20,7 @@ export class TasksViewPane extends ViewPane {
 	constructor(container: HTMLElement, options: IViewPaneOptions, private readonly taskService: ITaskService, private readonly viewsService: IViewsService, private readonly terminalService: ITerminalService) {
 		super(container, options);
 		this.contentElement.classList.add("zeta-tasks");
-		this.titleActions = this.own(new ActionBar(this.headerActionsElement, { ariaLabel: "Tasks actions" }));
+		this.titleActions = this._register(new ActionBar(this.headerActionsElement, { ariaLabel: "Tasks actions" }));
 		this.titleActions.element.classList.add("zeta-toolbar");
 		this.statusElement = h(container.ownerDocument, "div");
 		this.statusElement.className = "zeta-tasks-status";
@@ -29,10 +29,10 @@ export class TasksViewPane extends ViewPane {
 		this.listElement.className = "zeta-tasks-list";
 		this.listElement.setAttribute("aria-label", "Workspace tasks");
 		this.contentElement.append(this.statusElement, this.listElement);
-		this.own(addDisposableListener(this.listElement, "click", event => this.activate(event)));
-		this.own(taskService.onDidChangeTasks(() => this.render()));
-		this.own(taskService.onDidStartTask(() => this.render()));
-		this.own(taskService.onDidChangeTaskRun(() => this.render()));
+		this._register(addDisposableListener(this.listElement, "click", event => this.activate(event)));
+		this._register(taskService.onDidChangeTasks(() => this.render()));
+		this._register(taskService.onDidStartTask(() => this.render()));
+		this._register(taskService.onDidChangeTaskRun(() => this.render()));
 		this.render();
 		this.refresh();
 	}

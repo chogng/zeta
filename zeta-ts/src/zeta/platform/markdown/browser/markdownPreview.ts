@@ -9,7 +9,9 @@ import {
 	type Event,
 } from "../../../base/common/event.js";
 import {
-	DisposableOwner,
+	Disposable,
+
+	toDisposable,
 } from "../../../base/common/lifecycle.js";
 import {
 	WebviewElement,
@@ -103,10 +105,10 @@ const LINK_BRIDGE_SCRIPT = `
 /**
  * Renders a full Markdown document inside the opaque-origin iframe boundary.
  */
-export class MarkdownPreview extends DisposableOwner {
+export class MarkdownPreview extends Disposable {
 	private readonly ownerDocument: Document;
 	private readonly webview: WebviewElement;
-	private readonly _onDidOpenLink = this.own(new Emitter<string>());
+	private readonly _onDidOpenLink = this._register(new Emitter<string>());
 	private active = true;
 
 	readonly element: HTMLIFrameElement;
@@ -115,17 +117,17 @@ export class MarkdownPreview extends DisposableOwner {
 	constructor(container: HTMLElement, options: MarkdownPreviewOptions = {}) {
 		super();
 		this.ownerDocument = container.ownerDocument;
-		this.webview = this.own(new WebviewElement(container, {
+		this.webview = this._register(new WebviewElement(container, {
 			title: options.title ?? "Markdown preview",
 		}));
 		this.element = this.webview.element;
-		this.own(this.webview.onDidMessage((message) => {
+		this._register(this.webview.onDidMessage((message) => {
 			const openLink = validateOpenLinkMessage(message);
 			if (openLink) this._onDidOpenLink.fire(openLink.href);
 		}));
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.active = false;
-		});
+		}));
 		this.setMarkdown(options.markdown ?? "");
 	}
 

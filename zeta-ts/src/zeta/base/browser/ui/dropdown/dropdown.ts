@@ -1,6 +1,6 @@
 import { Emitter } from "../../../common/event.js";
 import type { Icon } from "../../../common/icon.js";
-import { DisposableOwner } from "../../../common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../common/lifecycle.js";
 import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
 import { addDisposableListener, stopEvent, h } from "../../dom.js";
 import { setAriaAttribute } from "../aria/aria.js";
@@ -32,13 +32,13 @@ export interface DropdownVisibilityChangeEvent {
 let dropdownId = 0;
 
 /** A button that owns the visibility lifecycle of an anchored popup. */
-export class Dropdown extends DisposableOwner {
+export class Dropdown extends Disposable {
 	readonly element: HTMLDivElement;
 	readonly button: HTMLButtonElement;
 	private readonly label: HTMLSpanElement;
 	private readonly content: DropdownContent;
 	private readonly contextView: IContextViewProvider;
-	private readonly _onDidChangeVisibility = this.own(
+	private readonly _onDidChangeVisibility = this._register(
 		new Emitter<DropdownVisibilityChangeEvent>(),
 	);
 	readonly onDidChangeVisibility = this._onDidChangeVisibility.event;
@@ -52,7 +52,7 @@ export class Dropdown extends DisposableOwner {
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, "div");
 		this.element = element;
-		this.defer(() => element.remove());
+		this._register(toDisposable(() => element.remove()));
 		element.className = "zeta-dropdown";
 		container.append(element);
 
@@ -78,10 +78,10 @@ export class Dropdown extends DisposableOwner {
 		element.append(button);
 
 		this.contextView = options.contextViewProvider ??
-			this.own(new ContextView(ownerDocument.body));
-		this.defer(() => this.hide());
-		this.own(addDisposableListener(button, "click", () => this.toggle()));
-		this.own(addDisposableListener(button, "keydown", (event) => {
+			this._register(new ContextView(ownerDocument.body));
+		this._register(toDisposable(() => this.hide()));
+		this._register(addDisposableListener(button, "click", () => this.toggle()));
+		this._register(addDisposableListener(button, "keydown", (event) => {
 			if (
 				event.key !== "ArrowDown" &&
 				event.key !== "ArrowUp" &&

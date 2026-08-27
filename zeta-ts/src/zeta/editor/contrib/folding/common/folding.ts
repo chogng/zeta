@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
 import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languages/languageFeatureRegistry.js";
@@ -22,7 +22,7 @@ export interface LanguageFoldingRangeProvider extends LanguageFeatureProviderMet
 }
 
 /** Owns versioned language-server folding requests independently of browser projection state. */
-export class FoldingRangeService extends DisposableOwner {
+export class FoldingRangeService extends Disposable {
 	constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureProviderRegistry<LanguageFoldingRangeProvider>, private readonly resource?: URI) {
 		super();
 	}

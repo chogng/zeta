@@ -1,16 +1,16 @@
 import "./media/hover.css";
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { disposableWindowTimeout } from "../../../../base/browser/scheduler.js";
-import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type HoverService, type LanguageHover } from "../common/hover.js";
 import { type TextPosition } from "../../../common/core/text.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 /** Projects provider-backed hover content into an editor-local, non-modal widget. */
-export class HoverController extends DisposableOwner {
+export class HoverController extends Disposable {
 	private readonly element: HTMLDivElement;
 	private request: AbortController | undefined;
-	private readonly timer = this.own(new DisposableSlot<IDisposable>());
+	private readonly timer = this._register(new MutableDisposable<IDisposable>());
 
 	constructor(private readonly viewport: EditorViewport, private readonly service: HoverService, private readonly languageId: string) {
 		super();
@@ -19,11 +19,11 @@ export class HoverController extends DisposableOwner {
 		this.element.hidden = true;
 		this.element.setAttribute("role", "tooltip");
 		viewport.element.append(this.element);
-		this.defer(() => { this.cancelRequest(); this.element.remove(); });
-		this.own(addDisposableListener<PointerEvent>(viewport.element, "pointermove", event => this.schedule(event)));
-		this.own(addDisposableListener(viewport.element, "pointerleave", () => this.hide()));
-		this.own(addDisposableListener(viewport.element, "scroll", () => this.hide()));
-		this.own(viewport.textModel.onDidChange(() => this.hide()));
+		this._register(toDisposable(() => { this.cancelRequest(); this.element.remove(); }));
+		this._register(addDisposableListener<PointerEvent>(viewport.element, "pointermove", event => this.schedule(event)));
+		this._register(addDisposableListener(viewport.element, "pointerleave", () => this.hide()));
+		this._register(addDisposableListener(viewport.element, "scroll", () => this.hide()));
+		this._register(viewport.textModel.onDidChange(() => this.hide()));
 	}
 
 	private schedule(event: PointerEvent): void {
@@ -36,10 +36,10 @@ export class HoverController extends DisposableOwner {
 		this.timer.clear();
 		const targetWindow = this.element.ownerDocument.defaultView;
 		if (!targetWindow) return;
-		this.timer.replace(disposableWindowTimeout(targetWindow, () => {
+		this.timer.value = disposableWindowTimeout(targetWindow, () => {
 			this.timer.clear();
 			void this.show(target.position);
-		}, 300));
+		}, 300);
 	}
 
 	private async show(position: TextPosition): Promise<void> {

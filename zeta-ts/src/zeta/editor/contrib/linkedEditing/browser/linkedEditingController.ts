@@ -3,7 +3,7 @@ import { registerEditorContribution } from "../../../browser/editorExtensions.js
 import { type EditorView } from "../../../browser/view.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
-import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { extendEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
@@ -12,8 +12,8 @@ import { TrackedRangeStickiness, type TrackedRange } from "../../../common/model
 import { type LinkedEditingService } from "../common/linkedEditing.js";
 
 /** Synchronizes provider-declared linked ranges through one atomic native-input transaction. */
-export class LinkedEditingController extends DisposableOwner {
-	private readonly ranges = this.own(new ResettableDisposableGroup());
+export class LinkedEditingController extends Disposable {
+	private readonly ranges = this._register(new DisposableStore());
 	private trackedRanges: readonly TrackedRange[] = [];
 	private active = false;
 	private activationScheduled = false;
@@ -23,10 +23,10 @@ export class LinkedEditingController extends DisposableOwner {
 	constructor(private readonly view: EditorView, private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: LinkedEditingService, private readonly languageId: string, private readonly defaultWordPattern: () => RegExp | undefined, private readonly onError: (error: unknown) => void = error => console.error("Stanza linked editing failed", error)) {
 		super();
 		if (viewport.textModel !== selections.textModel || service.textModel !== selections.textModel) throw new TypeError("Stanza linked editing dependencies must share a text model");
-		this.own(addDisposableListener(input, "keydown", event => { if (event.defaultPrevented || event.isComposing || !event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.altKey || event.key.toLowerCase() !== "l") return; stopEvent(event); void this.activate(); }, true));
-		this.own(addDisposableListener(input, "keydown", event => { if (event.key !== "Escape" || !this.active) return; stopEvent(event); this.clear(); }, true));
-		this.own(view.registerCommandTransformer(command => this.extendCommand(command)));
-		this.own(selections.onDidChange(() => this.scheduleActivation()));
+		this._register(addDisposableListener(input, "keydown", event => { if (event.defaultPrevented || event.isComposing || !event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.altKey || event.key.toLowerCase() !== "l") return; stopEvent(event); void this.activate(); }, true));
+		this._register(addDisposableListener(input, "keydown", event => { if (event.key !== "Escape" || !this.active) return; stopEvent(event); this.clear(); }, true));
+		this._register(view.registerCommandTransformer(command => this.extendCommand(command)));
+		this._register(selections.onDidChange(() => this.scheduleActivation()));
 		this.scheduleActivation();
 	}
 
@@ -43,7 +43,11 @@ export class LinkedEditingController extends DisposableOwner {
 			const expectedText = this.viewport.textModel.getTextInRange(result.ranges[0]!);
 			if (result.ranges.some(range => this.viewport.textModel.getTextInRange(range) !== expectedText)) { this.clear(); return; }
 			this.ranges.clear();
-			this.trackedRanges = result.ranges.map(range => this.ranges.adopt(this.viewport.textModel.trackRange(range, TrackedRangeStickiness.NeverGrowsAtEdges), candidate => candidate.dispose()));
+			this.trackedRanges = result.ranges.map(range => {
+				const trackedRange = this.viewport.textModel.trackRange(range, TrackedRangeStickiness.NeverGrowsAtEdges);
+				this.ranges.add(toDisposable(() => trackedRange.dispose()));
+				return trackedRange;
+			});
 			this.wordPattern = result.wordPattern ?? this.defaultWordPattern();
 			this.active = true;
 			this.viewport.element.classList.add("linked-editing-active");
@@ -115,6 +119,6 @@ function matchesEntirePattern(pattern: RegExp, value: string): boolean {
 
 registerEditorContribution({ id: "editor.contrib.linkedEditing", install: context => {
 	if (context.kind !== "text") return;
-	const service = context.own(context.languageFeaturesService.createLinkedEditingService(context.model, context.options.input.resource));
-	context.own(new LinkedEditingController(context.view, context.view.element, context.viewport, context.selections, service, context.languageId, () => context.configurations.getLanguageConfiguration(context.languageId).wordPattern, context.onLanguageError));
+	const service = context.register(context.languageFeaturesService.createLinkedEditingService(context.model, context.options.input.resource));
+	context.register(new LinkedEditingController(context.view, context.view.element, context.viewport, context.selections, service, context.languageId, () => context.configurations.getLanguageConfiguration(context.languageId).wordPattern, context.onLanguageError));
 } });

@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import type { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
@@ -17,7 +17,7 @@ import type { IChatContextPickService } from "../../../../services/chat/common/c
 import type { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
 
 /** Owns the content and interaction state for one local or durable Chat tab. */
-export class ChatPane extends DisposableOwner {
+export class ChatPane extends Disposable {
 	readonly element: HTMLElement;
 	private readonly model: ChatPaneModel;
 	private readonly listWidget: ChatListWidget;
@@ -36,11 +36,11 @@ export class ChatPane extends DisposableOwner {
 		this.element.hidden = true;
 		container.append(this.element);
 		this.sessionService = sessionService;
-		this.model = this.own(new ChatPaneModel(chatService, selection, sessionService));
+		this.model = this._register(new ChatPaneModel(chatService, selection, sessionService));
 		this.goalElement = h(ownerDocument, "div");
 		this.goalElement.className = "zeta-chat-goal";
 		this.goalElement.hidden = true;
-		this.listWidget = this.own(new ChatListWidget(this.element, {
+		this.listWidget = this._register(new ChatListWidget(this.element, {
 			onDidRequestErrorAction: (action) => void this.handleTurnErrorAction(action).catch(() => undefined),
 		}));
 		const inputDelegate: ChatInputDelegate = {
@@ -51,10 +51,10 @@ export class ChatPane extends DisposableOwner {
 			selectModel: (model) => this.model.selectModel(model),
 			resolveInteraction: (response) => this.model.resolveInteraction(response),
 		};
-		this.inputPart = this.own(new ChatInputPart(this.element, inputDelegate, contextMenuService, contextViewService, contextPickService, quickInputService));
+		this.inputPart = this._register(new ChatInputPart(this.element, inputDelegate, contextMenuService, contextViewService, contextPickService, quickInputService));
 		this.element.append(this.goalElement, this.listWidget.element, this.inputPart.element);
-		this.own(this.model.onDidChange(() => this.render()));
-		this.defer(() => this.element.remove());
+		this._register(this.model.onDidChange(() => this.render()));
+		this._register(toDisposable(() => this.element.remove()));
 		this.render();
 	}
 

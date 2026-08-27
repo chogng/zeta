@@ -1,6 +1,6 @@
 import { BrowserWindow } from "electron/main";
 import type { WebPreferences } from "electron/main";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { DisposableStore } from "../../../base/common/lifecycle.js";
 import { normalizeEntryUrl } from "../../ipc/electron-main/trustedIpcRouter.js";
 import type { TrustedIpcRouter } from "../../ipc/electron-main/trustedIpcRouter.js";
@@ -24,17 +24,17 @@ export interface ElectronRemoteRuntimeInstallWindowOptions {
 }
 
 /** Owns the trusted, pre-Workbench progress window for one SSH startup gate. */
-export class ElectronRemoteRuntimeInstallWindow extends DisposableOwner {
+export class ElectronRemoteRuntimeInstallWindow extends Disposable {
 	private window: BrowserWindow | undefined;
 
 	constructor(private readonly options: ElectronRemoteRuntimeInstallWindowOptions) {
 		super();
-		this.own(options.progress.onDidChange(state => this.sync(state)));
-		this.defer(() => {
+		this._register(options.progress.onDidChange(state => this.sync(state)));
+		this._register(toDisposable(() => {
 			const window = this.window;
 			this.window = undefined;
 			if (window && !window.isDestroyed()) window.destroy();
-		});
+		}));
 	}
 
 	private sync(state: RemoteRuntimeInstallProgressState | undefined): void {
@@ -80,7 +80,7 @@ export class ElectronRemoteRuntimeInstallWindow extends DisposableOwner {
 		window.once("ready-to-show", () => {
 			if (!window.isDestroyed() && this.options.progress.getState()) window.show();
 		});
-		const windowResources = this.own(new DisposableStore());
+		const windowResources = this._register(new DisposableStore());
 		windowResources.add(this.options.trustedIpcRouter.register(
 			{
 				webContents: window.webContents,

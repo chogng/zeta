@@ -1,7 +1,7 @@
 import { type IDimension } from "../../base/browser/geometry.js";
 import { isNonEmptyArray } from "../../base/common/arrays.js";
 import { type Event } from "../../base/common/event.js";
-import { DisposableOwner, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
+import { Disposable, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { isFiniteNumber, isSafeInteger } from "../../base/common/numbers.js";
 import { type ISyntaxApi } from "../../platform/syntax/common/syntaxApi.js";
 import { type EditorResourceInput } from "../common/editorResource.js";
@@ -163,7 +163,7 @@ export interface IEditorBrowser extends IDisposable {
 }
 
 /** Browser composition root for the line editor. */
-export class EditorBrowser extends DisposableOwner implements IEditorBrowser {
+export class EditorBrowser extends Disposable implements IEditorBrowser {
 	private readonly modelReference: TextModelReference;
 	private readonly onSave: (() => Promise<void | boolean>) | undefined;
 	private readonly onRevert: (() => Promise<void>) | undefined;
@@ -179,18 +179,18 @@ export class EditorBrowser extends DisposableOwner implements IEditorBrowser {
 		try {
 			validateOptions(options);
 			const configuration = resolveEditorConfiguration(options);
-			const tabFocus = options.tabFocus ?? this.own(new TabFocus());
+			const tabFocus = options.tabFocus ?? this._register(new TabFocus());
 			const languageId = options.languageId;
 			const onLanguageError = options.onLanguageError ?? reportLanguageError;
 			this.onSave = options.onSave;
 			this.onRevert = options.onRevert;
-			if (options.languageSupport) this.own(options.languageSupport);
-			const modelReference = this.modelReference = this.own(options.modelReference);
+			if (options.languageSupport) this._register(options.languageSupport);
+			const modelReference = this.modelReference = this._register(options.modelReference);
 			const model = modelReference.model;
 			this.onDidChange = listener => model.onDidChange(() => listener());
-			const languageFeaturesService = options.languageFeaturesService ?? this.own(new LanguageFeaturesService());
+			const languageFeaturesService = options.languageFeaturesService ?? this._register(new LanguageFeaturesService());
 			const configurations = languageFeaturesService.configurations;
-			this.selections = this.own(new EditorSelectionController(
+			this.selections = this._register(new EditorSelectionController(
 				model,
 				TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))),
 				{ readOnly: options.input.readOnly },
@@ -206,7 +206,7 @@ export class EditorBrowser extends DisposableOwner implements IEditorBrowser {
 				contributionCapabilities.set(capability.id, value);
 			};
 			const decorationSources: DecorationSource[] = [];
-			for (const source of options.decorationSources ?? []) decorationSources.push(this.own(source));
+			for (const source of options.decorationSources ?? []) decorationSources.push(this._register(source));
 			const lineGutterDecorations: EditorLineGutterDecoration[] = [...(options.lineGutterDecorations ?? [])];
 			let lineProjection: { readonly visibilitySource: EditorLineVisibilitySource; readonly gutterDecoration?: EditorLineGutterDecoration } | undefined;
 			let semanticTokenSource: SemanticTokenSource | undefined;
@@ -250,11 +250,11 @@ export class EditorBrowser extends DisposableOwner implements IEditorBrowser {
 						if (languageEditing) throw new Error("Text editor language editing is already configured");
 						languageEditing = adapter;
 					},
-					own: value => this.own(value),
+					register: value => this._register(value),
 				});
 			}
 			const ariaLabel = editorLabel(options.input);
-			this.codeEditor = this.own(new CodeEditorWidget({
+			this.codeEditor = this._register(new CodeEditorWidget({
 				container: options.container,
 				model,
 				selectionController: this.selections,
@@ -299,7 +299,7 @@ export class EditorBrowser extends DisposableOwner implements IEditorBrowser {
 			}));
 			this.viewport = this.codeEditor.viewport;
 			this.view = this.codeEditor.view;
-			this.own(modelReference.onDidChangeExternalChange(() => {
+			this._register(modelReference.onDidChangeExternalChange(() => {
 				if (modelReference.hasExternalChange) this.codeEditor.announceAccessibilityStatus("File changed on disk. Local edits are preserved.");
 			}));
 			const installContext: TextEditorContributionContext = {
@@ -324,7 +324,7 @@ export class EditorBrowser extends DisposableOwner implements IEditorBrowser {
 						if (index >= 0) this.beforeSaveHooks.splice(index, 1);
 					});
 				},
-				own: value => this.own(value),
+				register: value => this._register(value),
 			};
 			for (const contribution of selectedContributions) contribution.install?.(installContext);
 			const runtimeContributions = selectedContributions.flatMap(contribution => contribution.runtime ? [{

@@ -40,7 +40,7 @@ export class SessionsPart extends WorkbenchPart {
 		this.heading = h(ownerDocument, "h1");
 		this.description = h(ownerDocument, "p");
 		header.append(this.heading, this.description);
-		this.chat = this.own(new SessionsChatView(this.contentDomNode, {
+		this.chat = this._register(new SessionsChatView(this.contentDomNode, {
 			chatService: options.chatService,
 			sessionService: options.sessionService,
 			contextMenuService: options.contextMenuService,

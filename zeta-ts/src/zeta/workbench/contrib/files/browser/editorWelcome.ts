@@ -2,7 +2,7 @@ import "./media/editorWelcome.css";
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { appendIcon } from "../../../../base/browser/ui/icon/icon.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
-import { DisposableOwner, DisposableSlot, DisposableStore } from "../../../../base/common/lifecycle.js";
+import { Disposable, MutableDisposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 
 const MAX_VISIBLE_RECENT_PROJECTS = 5;
 
@@ -38,9 +38,9 @@ interface WelcomeCardOptions {
 }
 
 /** Renders the empty-editor landing page used when no document is open. */
-export class EditorWelcome extends DisposableOwner {
+export class EditorWelcome extends Disposable {
 	readonly element: HTMLElement;
-	private readonly recentDisposables = this.own(new DisposableSlot<DisposableStore>());
+	private readonly recentDisposables = this._register(new MutableDisposable<DisposableStore>());
 	private readonly recentSection: HTMLElement;
 	private recentProjects: readonly IEditorWelcomeProject[];
 	private showAllRecentProjects = false;
@@ -58,7 +58,7 @@ export class EditorWelcome extends DisposableOwner {
 		this.element.setAttribute("role", "region");
 		this.element.setAttribute("aria-label", "Welcome");
 		container.append(this.element);
-		this.defer(() => this.element.remove());
+		this._register(toDisposable(() => this.element.remove()));
 
 		const scroll = h(ownerDocument, "div");
 		scroll.className = "zeta-editor-group-welcome-scroll";
@@ -157,7 +157,7 @@ export class EditorWelcome extends DisposableOwner {
 			card.classList.add("is-disabled");
 			card.title = `${options.label} is not available yet`;
 		} else {
-			this.own(addDisposableListener(card, "click", () => this.run(options.action)));
+			this._register(addDisposableListener(card, "click", () => this.run(options.action)));
 		}
 
 		const icon = h(ownerDocument, "span");
@@ -203,13 +203,13 @@ export class EditorWelcome extends DisposableOwner {
 			? "Show less"
 			: `View all (${projects.length})`;
 		if (!viewAll.disabled) {
-			this.recentDisposables.replace(new DisposableStore());
+			this.recentDisposables.value = new DisposableStore();
 			this.recentDisposables.value?.add(addDisposableListener(viewAll, "click", () => {
 				this.showAllRecentProjects = !this.showAllRecentProjects;
 				this.renderRecentProjects(section);
 			}));
 		} else {
-			this.recentDisposables.replace(new DisposableStore());
+			this.recentDisposables.value = new DisposableStore();
 		}
 		heading.append(viewAll);
 		section.replaceChildren(heading);

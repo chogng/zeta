@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { assertSyntaxRequest, SyntaxProviderRegistry, type SyntaxProviderRequest, type SyntaxRequest, type RegisteredSyntaxProvider } from "./syntaxProviders.js";
 import { LanguageRequestCoordinator, type LanguageRequestOptions, type LanguageRequestOutcome, type LanguageWorker, type LanguageWorkerRequest } from "../languageRequestCoordinator.js";
 import { LanguageResultAcceptance } from "../languageResultStore.js";
@@ -42,7 +42,7 @@ export interface SyntaxRequestOutcomes {
 }
 
 /** Runs token and diagnostic lanes over one reusable snapshot worker. */
-export class SyntaxService extends DisposableOwner {
+export class SyntaxService extends Disposable {
 	readonly tokens: ReturnType<typeof createLanguageTokenStore>;
 	readonly diagnostics: ReturnType<typeof createLanguageDiagnosticStore>;
 	private readonly coordinator: LanguageRequestCoordinator<SyntaxLane, SyntaxRequest, SyntaxResult>;
@@ -73,14 +73,14 @@ export class SyntaxService extends DisposableOwner {
 			this.dispose();
 			throw new TypeError("A custom syntax worker owns its provider error policy");
 		}
-		this.tokens = this.own(createLanguageTokenStore(model));
-		this.diagnostics = this.own(createLanguageDiagnosticStore(model));
+		this.tokens = this._register(createLanguageTokenStore(model));
+		this.diagnostics = this._register(createLanguageDiagnosticStore(model));
 		const createFallbackWorker = options.workerFactory ?? (() => new SyntaxProviderWorker(registry, options.onProviderError));
 		const workerDecorator = options.workerDecorator;
 		const createWorker = workerDecorator
 			? () => workerDecorator(createFallbackWorker())
 			: createFallbackWorker;
-		this.coordinator = this.own(new LanguageRequestCoordinator(
+		this.coordinator = this._register(new LanguageRequestCoordinator(
 			model,
 			createWorker,
 		));

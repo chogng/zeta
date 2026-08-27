@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type ExtensionDebugAdapterContribution } from "./extensionManifest.js";
 
 export interface ExtensionDebugAdapterDefinition extends ExtensionDebugAdapterContribution {
@@ -14,16 +14,16 @@ export interface ExtensionDebugAdapterSource {
 }
 
 /** Immutable declarative adapter catalog rebuilt with each extension generation. */
-export class ExtensionDebugAdapterRegistry extends DisposableOwner implements ExtensionDebugAdapterSource {
-	private readonly changeEmitter = this.own(new Emitter<readonly ExtensionDebugAdapterDefinition[]>());
+export class ExtensionDebugAdapterRegistry extends Disposable implements ExtensionDebugAdapterSource {
+	private readonly changeEmitter = this._register(new Emitter<readonly ExtensionDebugAdapterDefinition[]>());
 	private definitionsValue: readonly ExtensionDebugAdapterDefinition[] = Object.freeze([]);
 	readonly onDidChange: Event<readonly ExtensionDebugAdapterDefinition[]> = this.changeEmitter.event;
 
 	constructor() {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.definitionsValue = Object.freeze([]);
-		});
+		}));
 	}
 
 	get definitions(): readonly ExtensionDebugAdapterDefinition[] { return this.definitionsValue; }

@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../common/event.js";
-import { DisposableOwner } from "../../../common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../common/lifecycle.js";
 import { addDisposableListener, h, text as createText } from "../../dom.js";
 
 export interface ToggleOptions {
@@ -13,11 +13,11 @@ export interface ToggleOptions {
 }
 
 /** A reusable two-state boolean control shared by checkbox and switch presentations. */
-export class Toggle extends DisposableOwner {
+export class Toggle extends Disposable {
 	readonly element: HTMLLabelElement;
 	readonly input: HTMLInputElement;
 	protected readonly contentElement: HTMLSpanElement | undefined;
-	private readonly _onDidChange = this.own(new Emitter<boolean>());
+	private readonly _onDidChange = this._register(new Emitter<boolean>());
 	private enabledState: boolean;
 	private busyState = false;
 	readonly onDidChange: Event<boolean> = this._onDidChange.event;
@@ -27,7 +27,7 @@ export class Toggle extends DisposableOwner {
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, "label");
 		this.element = element;
-		this.defer(() => element.remove());
+		this._register(toDisposable(() => element.remove()));
 		element.className = "zeta-toggle";
 
 		const input = h(ownerDocument, "input");
@@ -56,7 +56,7 @@ export class Toggle extends DisposableOwner {
 		if (options.contentPlacement === "before-control") element.classList.add("zeta-toggle-content-before-control");
 		container.append(element);
 
-		this.own(addDisposableListener(input, "change", () => {
+		this._register(addDisposableListener(input, "change", () => {
 			this.syncState();
 			this._onDidChange.fire(input.checked);
 			options.onChange?.(input.checked);

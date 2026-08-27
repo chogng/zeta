@@ -1,5 +1,5 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { clamp } from "../../../../base/common/numbers.js";
 import { type EditorScrollPosition } from "../../../common/viewModel.js";
 import { type EditorViewportLayout } from "../../../common/viewLayout/viewLayout.js";
@@ -11,7 +11,7 @@ import { type EditorViewportLayout } from "../../../common/viewLayout/viewLayout
  * pointer's vertical position to canonical scroll state and continues that
  * mapping while the pointer is dragged outside the narrow minimap element.
  */
-export class MinimapNavigationController extends DisposableOwner {
+export class MinimapNavigationController extends Disposable {
 	private pointerId: number | undefined;
 
 	constructor(
@@ -21,11 +21,11 @@ export class MinimapNavigationController extends DisposableOwner {
 	) {
 		super();
 		const ownerDocument = element.ownerDocument;
-		this.own(addDisposableListener<PointerEvent>(element, "pointerdown", event => this.begin(event)));
-		this.own(addDisposableListener<PointerEvent>(ownerDocument, "pointermove", event => this.move(event)));
-		this.own(addDisposableListener<PointerEvent>(ownerDocument, "pointerup", event => this.end(event)));
-		this.own(addDisposableListener<PointerEvent>(ownerDocument, "pointercancel", event => this.end(event)));
-		this.defer(() => this.element.classList.remove("dragging"));
+		this._register(addDisposableListener<PointerEvent>(element, "pointerdown", event => this.begin(event)));
+		this._register(addDisposableListener<PointerEvent>(ownerDocument, "pointermove", event => this.move(event)));
+		this._register(addDisposableListener<PointerEvent>(ownerDocument, "pointerup", event => this.end(event)));
+		this._register(addDisposableListener<PointerEvent>(ownerDocument, "pointercancel", event => this.end(event)));
+		this._register(toDisposable(() => this.element.classList.remove("dragging")));
 	}
 
 	private begin(event: PointerEvent): void {

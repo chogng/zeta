@@ -1,16 +1,16 @@
-import { DisposableOwner, toDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { normalizeLanguageWorkspaceEdit, type LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
 import { type IWorkspaceEditService, type WorkspaceEditResult } from "../../../services/language/common/workspaceEditService.js";
 import { type BulkEditApplyOptions, type BulkEditPreviewHandler, type BulkEditResult, IBulkEditService } from "../common/bulkEdit.js";
 
 /** Adds Workbench preview policy to the ordered workspace-edit transaction. */
-export class BrowserBulkEditService extends DisposableOwner implements IBulkEditService {
+export class BrowserBulkEditService extends Disposable implements IBulkEditService {
 	private previewHandler: BulkEditPreviewHandler | undefined;
 
 	constructor(private readonly workspaceEdits: IWorkspaceEditService) {
 		super();
 		if (!workspaceEdits || typeof workspaceEdits.apply !== "function") throw new TypeError("Bulk edit service requires a workspace edit applier");
-		this.defer(() => { this.previewHandler = undefined; });
+		this._register(toDisposable(() => { this.previewHandler = undefined; }));
 	}
 
 	hasPreviewHandler(): boolean {

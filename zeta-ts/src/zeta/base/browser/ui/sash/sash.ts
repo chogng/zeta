@@ -2,7 +2,7 @@ import { addDisposableListener, h } from "../../dom.js";
 import { ManagedStyleSheet } from "../../domStylesheets.js";
 import { disposableWindowTimeout } from "../../scheduler.js";
 import { getWindow } from "../../window.js";
-import { type IDisposable, DisposableSlot, DisposableOwner, ResettableDisposableGroup, toDisposable } from "../../../common/lifecycle.js";
+import { type IDisposable, MutableDisposable, Disposable, DisposableStore, toDisposable } from "../../../common/lifecycle.js";
 import { isFiniteNumber } from "../../../common/numbers.js";
 
 export type SashOrientation = "vertical" | "horizontal";
@@ -54,7 +54,7 @@ let nextSashSettingsBindingId = 1;
  * Projects Sash settings onto one DOM subtree and restores prior values when
  * disposed.
  */
-export class SashSettingsBinding extends DisposableOwner {
+export class SashSettingsBinding extends Disposable {
 	private readonly scopeClass: string;
 	private readonly styleSheet: ManagedStyleSheet;
 
@@ -63,8 +63,8 @@ export class SashSettingsBinding extends DisposableOwner {
 		this.scopeClass =
 			`zeta-sash-settings-${nextSashSettingsBindingId++}`;
 		container.classList.add(this.scopeClass);
-		this.defer(() => container.classList.remove(this.scopeClass));
-		this.styleSheet = this.own(new ManagedStyleSheet(
+		this._register(toDisposable(() => container.classList.remove(this.scopeClass)));
+		this.styleSheet = this._register(new ManagedStyleSheet(
 			container.ownerDocument,
 		));
 	}
@@ -84,7 +84,7 @@ export class SashSettingsBinding extends DisposableOwner {
 }
 
 /** A draggable and keyboard-operable separator owned by a layout control. */
-export class Sash extends DisposableOwner {
+export class Sash extends Disposable {
 	readonly element: HTMLDivElement;
 	private _state = SashState.Enabled;
 	private readonly startListeners = new Set<() => void>();
@@ -92,12 +92,12 @@ export class Sash extends DisposableOwner {
 	private readonly resetListeners = new Set<() => void>();
 	private readonly endListeners = new Set<() => void>();
 	private readonly stateListeners = new Set<(state: SashState) => void>();
-	private readonly dragListeners: ResettableDisposableGroup;
-	private readonly hoverTimer: DisposableSlot<IDisposable>;
-	private readonly orthogonalStartListener: DisposableSlot<IDisposable>;
-	private readonly orthogonalEndListener: DisposableSlot<IDisposable>;
-	private readonly orthogonalStartResources: ResettableDisposableGroup;
-	private readonly orthogonalEndResources: ResettableDisposableGroup;
+	private readonly dragListeners: DisposableStore;
+	private readonly hoverTimer: MutableDisposable<IDisposable>;
+	private readonly orthogonalStartListener: MutableDisposable<IDisposable>;
+	private readonly orthogonalEndListener: MutableDisposable<IDisposable>;
+	private readonly orthogonalStartResources: DisposableStore;
+	private readonly orthogonalEndResources: DisposableStore;
 	private _orthogonalStartSash: Sash | undefined;
 	private _orthogonalEndSash: Sash | undefined;
 	private _linkedSash: Sash | undefined;
@@ -111,7 +111,7 @@ export class Sash extends DisposableOwner {
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, "div");
 		this.element = element;
-		this.defer(() => element.remove());
+		this._register(toDisposable(() => element.remove()));
 		element.className = `zeta-sash zeta-sash-${orientation}`;
 		if (presentation?.type === "inset") {
 			assertPositiveFinite(presentation.gap, "inset gap");
@@ -123,13 +123,13 @@ export class Sash extends DisposableOwner {
 		element.setAttribute("aria-disabled", "false");
 		element.tabIndex = 0;
 		container.append(element);
-		this.dragListeners = this.own(new ResettableDisposableGroup());
-		this.hoverTimer = this.own(new DisposableSlot<IDisposable>());
-		this.orthogonalStartListener = this.own(new DisposableSlot<IDisposable>());
-		this.orthogonalEndListener = this.own(new DisposableSlot<IDisposable>());
-		this.orthogonalStartResources = this.own(new ResettableDisposableGroup());
-		this.orthogonalEndResources = this.own(new ResettableDisposableGroup());
-		this.own(toDisposable(() => {
+		this.dragListeners = this._register(new DisposableStore());
+		this.hoverTimer = this._register(new MutableDisposable<IDisposable>());
+		this.orthogonalStartListener = this._register(new MutableDisposable<IDisposable>());
+		this.orthogonalEndListener = this._register(new MutableDisposable<IDisposable>());
+		this.orthogonalStartResources = this._register(new DisposableStore());
+		this.orthogonalEndResources = this._register(new DisposableStore());
+		this._register(toDisposable(() => {
 			const linkedSash = this._linkedSash;
 			this._linkedSash = undefined;
 			if (linkedSash?.linkedSash === this) linkedSash.linkedSash = undefined;
@@ -139,19 +139,19 @@ export class Sash extends DisposableOwner {
 			this.endListeners.clear();
 			this.stateListeners.clear();
 		}));
-		this.own(addDisposableListener(element, "pointerdown", (event: PointerEvent) =>
+		this._register(addDisposableListener(element, "pointerdown", (event: PointerEvent) =>
 			this.beginDrag(event),
 		));
-		this.own(addDisposableListener(element, "keydown", (event: KeyboardEvent) =>
+		this._register(addDisposableListener(element, "keydown", (event: KeyboardEvent) =>
 			this.handleKeydown(event),
 		));
-		this.own(addDisposableListener(element, "pointerenter", () =>
+		this._register(addDisposableListener(element, "pointerenter", () =>
 			this.beginHover(),
 		));
-		this.own(addDisposableListener(element, "pointerleave", () =>
+		this._register(addDisposableListener(element, "pointerleave", () =>
 			this.endHover(),
 		));
-		this.own(addDisposableListener(element, "dblclick", () => this.reset()));
+		this._register(addDisposableListener(element, "dblclick", () => this.reset()));
 	}
 
 	onDidStart(listener: () => void): IDisposable {
@@ -305,9 +305,9 @@ export class Sash extends DisposableOwner {
 			return;
 		}
 		const targetWindow = getWindow(this.element);
-		this.hoverTimer.replace(disposableWindowTimeout(targetWindow, () => {
+		this.hoverTimer.value = disposableWindowTimeout(targetWindow, () => {
 			this.element.classList.add("zeta-sash-hover");
-		}, delay));
+		}, delay);
 	}
 
 	private endHover(fromLinkedSash = false): void {
@@ -340,10 +340,10 @@ export class Sash extends DisposableOwner {
 		if (current === sash) return;
 		if (edge === "start") {
 			this._orthogonalStartSash = sash;
-			this.orthogonalStartListener.replace(sash?.onDidChangeState(() => this.updateOrthogonalHandle("start")));
+			this.orthogonalStartListener.value = sash?.onDidChangeState(() => this.updateOrthogonalHandle("start"));
 		} else {
 			this._orthogonalEndSash = sash;
-			this.orthogonalEndListener.replace(sash?.onDidChangeState(() => this.updateOrthogonalHandle("end")));
+			this.orthogonalEndListener.value = sash?.onDidChangeState(() => this.updateOrthogonalHandle("end"));
 		}
 		this.updateOrthogonalHandle(edge);
 	}

@@ -1,5 +1,5 @@
 import { isNonEmptyArray } from "../../../base/common/arrays.js";
-import { DisposableOwner, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import { assertLanguageId, assertLanguageSelector } from "./languageId.js";
 
 /** Minimal metadata shared by all provider registries owned by the language layer. */
@@ -19,13 +19,13 @@ interface OwnedLanguageFeatureProvider<TProvider> {
 }
 
 /** Reusable registry for language providers without Workbench or transport dependencies. */
-export class LanguageFeatureProviderRegistry<TProvider extends LanguageFeatureProviderMetadata> extends DisposableOwner {
+export class LanguageFeatureProviderRegistry<TProvider extends LanguageFeatureProviderMetadata> extends Disposable {
 	private readonly providers = new Map<number, OwnedLanguageFeatureProvider<TProvider>>();
 	private nextProviderHandle = 1;
 
 	constructor() {
 		super();
-		this.defer(() => this.providers.clear());
+		this._register(toDisposable(() => this.providers.clear()));
 	}
 
 	register(provider: TProvider): IDisposable {

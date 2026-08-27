@@ -3,7 +3,7 @@ import { cloneDocumentStyles } from "../../../../base/browser/domStylesheets.js"
 import { Dimension, type IDimension } from "../../../../base/browser/geometry.js";
 import { getWindowId, registerWindow } from "../../../../base/browser/window.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableMap, DisposableOwner, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { DisposableMap, Disposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 
 export interface AuxiliaryWindowOpenOptions {
@@ -38,10 +38,10 @@ export interface IAuxiliaryWindowService extends Disposable {
 export const IAuxiliaryWindowService = createServiceIdentifier<IAuxiliaryWindowService>("auxiliaryWindowService");
 
 /** Browser implementation used by both the web and Electron renderer workbenches. */
-export class BrowserAuxiliaryWindowService extends DisposableOwner implements IAuxiliaryWindowService {
-	private readonly windows = this.own(new DisposableMap<number, BrowserAuxiliaryWindow>());
-	private readonly windowListeners = this.own(new DisposableMap<number, IDisposable>());
-	private readonly openEmitter = this.own(new Emitter<IAuxiliaryWindow>());
+export class BrowserAuxiliaryWindowService extends Disposable implements IAuxiliaryWindowService {
+	private readonly windows = this._register(new DisposableMap<number, BrowserAuxiliaryWindow>());
+	private readonly windowListeners = this._register(new DisposableMap<number, IDisposable>());
+	private readonly openEmitter = this._register(new Emitter<IAuxiliaryWindow>());
 	readonly onDidOpenWindow: Event<IAuxiliaryWindow> = this.openEmitter.event;
 
 	constructor(private readonly opener: Window) {
@@ -84,10 +84,10 @@ export class BrowserAuxiliaryWindowService extends DisposableOwner implements IA
 	}
 }
 
-class BrowserAuxiliaryWindow extends DisposableOwner implements IAuxiliaryWindow {
-	private readonly layoutEmitter = this.own(new Emitter<IDimension>());
-	private readonly beforeUnloadEmitter = this.own(new Emitter<AuxiliaryWindowBeforeUnloadEvent>());
-	private readonly closeEmitter = this.own(new Emitter<void>());
+class BrowserAuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
+	private readonly layoutEmitter = this._register(new Emitter<IDimension>());
+	private readonly beforeUnloadEmitter = this._register(new Emitter<AuxiliaryWindowBeforeUnloadEvent>());
+	private readonly closeEmitter = this._register(new Emitter<void>());
 	readonly onDidLayout = this.layoutEmitter.event;
 	readonly onBeforeUnload = this.beforeUnloadEmitter.event;
 	readonly onDidClose = this.closeEmitter.event;
@@ -97,11 +97,11 @@ class BrowserAuxiliaryWindow extends DisposableOwner implements IAuxiliaryWindow
 
 	constructor(sourceWindow: Window, readonly window: Window, title: string) {
 		super();
-		this.own(registerWindow(window));
+		this._register(registerWindow(window));
 		const id = getWindowId(window);
 		if (id === undefined) throw new Error("Auxiliary window registration did not produce an identity");
 		this.id = id;
-		this.own(cloneDocumentStyles(sourceWindow.document, window.document));
+		this._register(cloneDocumentStyles(sourceWindow.document, window.document));
 		window.document.title = title;
 		window.document.body.replaceChildren();
 		window.document.documentElement.classList.add("zeta-auxiliary-window");
@@ -110,16 +110,16 @@ class BrowserAuxiliaryWindow extends DisposableOwner implements IAuxiliaryWindow
 		this.container.className = "zeta-auxiliary-window-container";
 		this.container.setAttribute("aria-label", title);
 		window.document.body.append(this.container);
-		this.own(addDisposableListener(window, "resize", () => this.layout()));
-		this.own(addDisposableListener(window, "beforeunload", event => this.handleBeforeUnload(event as BeforeUnloadEvent)));
-		this.own(addDisposableListener(window, "unload", () => this.publishClosed()));
-		this.defer(() => {
+		this._register(addDisposableListener(window, "resize", () => this.layout()));
+		this._register(addDisposableListener(window, "beforeunload", event => this.handleBeforeUnload(event as BeforeUnloadEvent)));
+		this._register(addDisposableListener(window, "unload", () => this.publishClosed()));
+		this._register(toDisposable(() => {
 			this.container.remove();
 			window.document.documentElement.classList.remove("zeta-auxiliary-window");
 			window.document.body.classList.remove("zeta-auxiliary-window-body");
 			if (!this.closed && !window.closed) window.close();
 			this.publishClosed();
-		});
+		}));
 	}
 
 	layout(): void {

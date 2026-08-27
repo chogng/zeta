@@ -2,7 +2,7 @@ import { Dimension, getClientArea, type IDimension } from "../../../base/browser
 import { observeElementSize } from "../../../base/browser/observer.js";
 import { type BrowserWindow, getWindow } from "../../../base/browser/window.js";
 import { type Event, Emitter } from "../../../base/common/event.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable } from "../../../base/common/lifecycle.js";
 import type { ILayoutContainerEvent, ILayoutOffsetInfo, ILayoutService } from "../common/layoutService.js";
 
 const NoLayoutOffset: ILayoutOffsetInfo = Object.freeze({
@@ -23,16 +23,16 @@ export interface BrowserLayoutServiceOptions {
  * deliberately does not know about Sidebar, Panel, Editor, or Grid topology.
  */
 export class BrowserLayoutService
-	extends DisposableOwner
+	extends Disposable
 	implements ILayoutService {
 	private readonly root: HTMLElement;
 	private readonly targetWindow: BrowserWindow;
 	private readonly getOffset: () => ILayoutOffsetInfo;
 	private readonly focusPrimary: () => void;
-	private readonly _onDidLayoutMainContainer = this.own(new Emitter<IDimension>());
-	private readonly _onDidLayoutContainer = this.own(new Emitter<ILayoutContainerEvent>());
-	private readonly _onDidLayoutActiveContainer = this.own(new Emitter<IDimension>());
-	private readonly _onDidChangeActiveContainer = this.own(new Emitter<void>());
+	private readonly _onDidLayoutMainContainer = this._register(new Emitter<IDimension>());
+	private readonly _onDidLayoutContainer = this._register(new Emitter<ILayoutContainerEvent>());
+	private readonly _onDidLayoutActiveContainer = this._register(new Emitter<IDimension>());
+	private readonly _onDidChangeActiveContainer = this._register(new Emitter<void>());
 	private dimension: Dimension;
 
 	readonly onDidLayoutMainContainer: Event<IDimension> =
@@ -52,7 +52,7 @@ export class BrowserLayoutService
 		this.focusPrimary = options.focus ?? (() => undefined);
 		this.dimension = getClientArea(this.root);
 
-		this.own(observeElementSize(this.root, size => this.layout(size)));
+		this._register(observeElementSize(this.root, size => this.layout(size)));
 	}
 
 	get mainContainerDimension(): IDimension {

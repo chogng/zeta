@@ -1,6 +1,6 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { EditorCursorNavigationCommand, EditorCursorNavigationMode, navigateEditorCursors } from "../../../common/cursor/cursorNavigation.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
@@ -8,17 +8,17 @@ import { type TextPosition } from "../../../common/core/text.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 /** Owns the editor-local anchor used by keyboard range expansion. */
-export class AnchorSelectController extends DisposableOwner {
+export class AnchorSelectController extends Disposable {
 	private anchor: TextPosition | undefined;
 
 	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly wordPattern?: () => RegExp | undefined) {
 		super();
 		if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza anchor selection dependencies must share a text model");
-		this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event), true));
-		this.own(selections.onDidChange(() => {
+		this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event), true));
+		this._register(selections.onDidChange(() => {
 			if (this.anchor && !this.selections.selections.primary.range.containsPosition(this.anchor)) this.anchor = undefined;
 		}));
-		this.defer(() => { this.anchor = undefined; });
+		this._register(toDisposable(() => { this.anchor = undefined; }));
 	}
 
 	get active(): boolean { return this.anchor !== undefined; }
@@ -53,7 +53,7 @@ registerEditorContribution({
 	id: "editor.contrib.anchorSelect",
 	install: context => {
 		if (context.kind !== "text") return;
-		context.own(new AnchorSelectController(context.view.element, context.viewport, context.selections, () => context.configurations.getLanguageConfiguration(context.languageId).wordPattern));
+		context.register(new AnchorSelectController(context.view.element, context.viewport, context.selections, () => context.configurations.getLanguageConfiguration(context.languageId).wordPattern));
 	},
 });
 

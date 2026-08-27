@@ -2,7 +2,7 @@ import "./menubarControl.css";
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { Button } from "../../../../base/browser/ui/button/button.js";
 import { SubmenuAction } from "../../../../base/common/actions.js";
-import { DisposableOwner, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { MenuId } from "../../../../platform/actions/common/actions.js";
 import type { IMenu, IMenuService } from "../../../../platform/actions/common/menuService.js";
@@ -15,9 +15,9 @@ export interface IMenubarControl extends IDisposable {
 }
 
 /** Compact application-menu trigger used by web, Windows, and Linux. */
-export class BrowserMenubarControl extends DisposableOwner
+export class BrowserMenubarControl extends Disposable
 	implements IMenubarControl {
-	private readonly menu: IMenu & Disposable;
+	private readonly menu: IMenu & IDisposable;
 	private readonly contextMenuService: IContextMenuService;
 	private readonly button: Button;
 	private active = false;
@@ -38,17 +38,17 @@ export class BrowserMenubarControl extends DisposableOwner
 		const applicationMenuLabel = () => localize(localizationService, { bundle: "zeta.regions", key: "applicationMenu" }, "Application menu");
 		this.domNode.setAttribute("aria-label", applicationMenuLabel());
 		container.append(this.domNode);
-		this.defer(() => this.domNode.remove());
+		this._register(toDisposable(() => this.domNode.remove()));
 
-		this.menu = this.own(menuService.createMenu(MenuId.MenubarMainMenu));
-		this.button = this.own(new Button(this.domNode, {
+		this.menu = this._register(menuService.createMenu(MenuId.MenubarMainMenu));
+		this.button = this._register(new Button(this.domNode, {
 			label: applicationMenuLabel(),
 			title: applicationMenuLabel(),
 			icon: lxiconsLibrary.menu,
 			onClick: () => this.toggleMenu(),
 		}));
 		this.button.domNode.setAttribute("aria-label", applicationMenuLabel());
-		if (localizationService) this.own(localizationService.onDidChange(() => {
+		if (localizationService) this._register(localizationService.onDidChange(() => {
 			const label = applicationMenuLabel();
 			this.domNode.setAttribute("aria-label", label);
 			this.button.domNode.setAttribute("aria-label", label);
@@ -58,10 +58,10 @@ export class BrowserMenubarControl extends DisposableOwner
 		this.button.toggleClassName("zeta-menubar-item", true);
 		this.button.domNode.setAttribute("aria-haspopup", "menu");
 		this.button.domNode.setAttribute("aria-expanded", "false");
-		this.own(this.menu.onDidChange(() => {
+		this._register(this.menu.onDidChange(() => {
 			if (this.active) this.contextMenuService.hideContextMenu();
 		}));
-		this.own(addDisposableListener(
+		this._register(addDisposableListener(
 			this.button.domNode,
 			"keydown",
 			(event: KeyboardEvent) => {
@@ -84,9 +84,9 @@ export class BrowserMenubarControl extends DisposableOwner
 				event.stopPropagation();
 			},
 		));
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			if (this.active) this.contextMenuService.hideContextMenu();
-		});
+		}));
 	}
 
 	private toggleMenu(): void {

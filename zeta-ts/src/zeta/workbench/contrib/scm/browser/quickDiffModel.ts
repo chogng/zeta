@@ -1,5 +1,5 @@
 import { Emitter } from '../../../../base/common/event.js';
-import { DisposableOwner, DisposableSlot, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { RustDiffComputationService } from '../../../../editor/browser/services/rustDiffComputationService.js';
 import { DiffModel } from '../../../../editor/common/diff/diffModel.js';
@@ -16,16 +16,16 @@ interface SharedModelEntry {
 }
 
 /** Reference-counted owner of Quick Diff models shared by decorations and editor controllers. */
-export class QuickDiffModelService extends DisposableOwner implements IQuickDiffModelService {
+export class QuickDiffModelService extends Disposable implements IQuickDiffModelService {
 	private readonly entries = new WeakMap<TextModel, SharedModelEntry>();
 	private readonly liveEntries = new Set<SharedModelEntry>();
 
 	constructor(private readonly quickDiffService: IQuickDiffService) {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			for (const entry of this.liveEntries) entry.quickDiffModel.dispose();
 			this.liveEntries.clear();
-		});
+		}));
 	}
 
 	createModelReference(resource: URI, model: TextModel, diffApi: IDiffApi): QuickDiffModelReference {
@@ -59,10 +59,10 @@ export class QuickDiffModelService extends DisposableOwner implements IQuickDiff
 }
 
 /** Shared resource model that owns provider originals and live DiffModels. */
-export class QuickDiffModel extends DisposableOwner implements IQuickDiffModel {
-	private readonly changeEmitter = this.own(new Emitter<QuickDiffModelState>());
+export class QuickDiffModel extends Disposable implements IQuickDiffModel {
+	private readonly changeEmitter = this._register(new Emitter<QuickDiffModelState>());
 	private readonly computationService: RustDiffComputationService;
-	private readonly comparisonStore = this.own(new DisposableSlot<DisposableStore>());
+	private readonly comparisonStore = this._register(new MutableDisposable<DisposableStore>());
 	private activeRequest: AbortController | undefined;
 	private requestGeneration = 0;
 	private _state: QuickDiffModelState = Object.freeze({ loading: true, comparisons: Object.freeze([]), changes: Object.freeze([]) });
@@ -71,14 +71,14 @@ export class QuickDiffModel extends DisposableOwner implements IQuickDiffModel {
 
 	constructor(private readonly resource: URI, private readonly modified: TextModel, diffApi: IDiffApi, private readonly quickDiffService: IQuickDiffService) {
 		super();
-		this.computationService = this.own(new RustDiffComputationService(diffApi));
-		this.own(quickDiffService.onDidChange(changedResource => {
+		this.computationService = this._register(new RustDiffComputationService(diffApi));
+		this._register(quickDiffService.onDidChange(changedResource => {
 			if (!changedResource || changedResource.toString() === resource.toString()) void this.refresh();
 		}));
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.activeRequest?.abort('quickDiffModelDisposed');
 			this.activeRequest = undefined;
-		});
+		}));
 		void this.refresh();
 	}
 
@@ -110,7 +110,7 @@ export class QuickDiffModel extends DisposableOwner implements IQuickDiffModel {
 				store.dispose();
 				throw error;
 			}
-			this.comparisonStore.replace(store);
+			this.comparisonStore.value = store;
 			this._state = Object.freeze({ loading: false, comparisons: Object.freeze(comparisons), changes: Object.freeze([]) });
 			this.rebuildChanges();
 		} catch (error) {

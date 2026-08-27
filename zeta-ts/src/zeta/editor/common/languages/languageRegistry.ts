@@ -1,6 +1,6 @@
 import { CharCode } from "../../../base/common/charCode.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableOwner, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import { escapeRegExpCharacters } from "../../../base/common/strings.js";
 import { assertLanguageId } from "./languageId.js";
 import type { TextResourceLanguageInput } from "../../../platform/language/common/textResourceLanguage.js";
@@ -43,8 +43,8 @@ interface RegisteredLanguageDescription {
 }
 
 /** Resolves declarative language associations without owning extension resources. */
-export class LanguageRegistry extends DisposableOwner {
-	private readonly changeEmitter = this.own(new Emitter<LanguageDescriptionChangeEvent>());
+export class LanguageRegistry extends Disposable {
+	private readonly changeEmitter = this._register(new Emitter<LanguageDescriptionChangeEvent>());
 	private readonly descriptions = new Map<string, RegisteredLanguageDescription[]>();
 	private nextOrder = 1;
 
@@ -52,9 +52,9 @@ export class LanguageRegistry extends DisposableOwner {
 
 	constructor() {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.descriptions.clear();
-		});
+		}));
 	}
 
 	register(description: LanguageDescription, options: LanguageRegistrationOptions = {}): IDisposable {

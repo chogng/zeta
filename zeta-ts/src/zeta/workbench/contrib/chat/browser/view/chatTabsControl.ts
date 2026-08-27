@@ -1,5 +1,5 @@
 import type { TabListDropPosition } from "../../../../../base/browser/ui/tablist/tabList.js";
-import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { h } from "../../../../../base/browser/dom.js";
 
 export interface ChatTab {
@@ -18,7 +18,7 @@ export interface ChatTabsDelegate {
 }
 
 /** Common lifecycle contract implemented by each Chat tab presentation mode. */
-export abstract class ChatTabsControl extends DisposableOwner {
+export abstract class ChatTabsControl extends Disposable {
 	readonly element: HTMLDivElement;
 
 	protected constructor(container: HTMLElement, presentation: ChatTabsPresentation) {
@@ -27,7 +27,7 @@ export abstract class ChatTabsControl extends DisposableOwner {
 		this.element.className = "zeta-chat-tabs-control";
 		this.element.classList.add(`zeta-chat-tabs-${presentation}`);
 		container.append(this.element);
-		this.defer(() => this.element.remove());
+		this._register(toDisposable(() => this.element.remove()));
 	}
 
 	abstract setTabs(entries: readonly ChatTab[], activeTabId: string | undefined): ReadonlyMap<string, string>;

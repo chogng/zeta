@@ -1,6 +1,6 @@
 import { Separator, type IAction } from "../../../common/actions.js";
 import type { Icon } from "../../../common/icon.js";
-import { DisposableOwner } from "../../../common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../common/lifecycle.js";
 import { assertDefined } from "../../../common/types.js";
 import { addDisposableListener, h } from "../../dom.js";
 import { setAriaAttribute } from "../aria/aria.js";
@@ -25,7 +25,7 @@ export interface ActionViewItemOptions {
  * Implementations render into the container owned by their host and own the
  * resources they create for that representation.
  */
-export abstract class ActionViewItem extends DisposableOwner {
+export abstract class ActionViewItem extends Disposable {
 	protected constructor(
 		readonly action: IAction,
 		private readonly actionViewItemOptions: ActionViewItemOptions = {},
@@ -46,7 +46,7 @@ export abstract class ActionViewItem extends DisposableOwner {
 
 	/** Creates a Button using the shared delay group for adjacent actions. */
 	protected createButton(container: HTMLElement, options: ButtonOptions): Button {
-		return this.own(new Button(container, {
+		return this._register(new Button(container, {
 			...options,
 			hoverGroupId: options.hoverGroupId ?? ActionHoverGroupId,
 			hoverAnchorPosition: options.hoverAnchorPosition ?? this.actionViewItemOptions.hoverAnchorPosition,
@@ -55,7 +55,7 @@ export abstract class ActionViewItem extends DisposableOwner {
 
 	/** Installs an action tooltip for view items that render a custom target. */
 	protected setupHover(target: HTMLElement, content: string): IManagedHover {
-		return this.own(getHoverDelegate().setupHover({
+		return this._register(getHoverDelegate().setupHover({
 			target,
 			content,
 			groupId: ActionHoverGroupId,
@@ -146,9 +146,9 @@ export class LabelActionViewItem extends ActionViewItem {
 		label.className = "zeta-action-label-text";
 		label.textContent = this.options.label ?? this.action.label;
 		button.append(label);
-		this.own(addDisposableListener(button, "click", () => this.action.run()));
+		this._register(addDisposableListener(button, "click", () => this.action.run()));
 		this.setupHover(button, this.options.tooltip ?? this.action.tooltip);
-		this.defer(() => button.remove());
+		this._register(toDisposable(() => button.remove()));
 		this.button = button;
 		container.append(button);
 	}

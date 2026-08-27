@@ -1,6 +1,6 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { EditorFoldingModel } from "./foldingModel.js";
 import { type EditorFoldingRegion } from "./foldingRanges.js";
@@ -25,7 +25,7 @@ export interface FoldingControllerOptions {
 }
 
 /** Routes local VS Code fold chords and gutter controls through Stanza's folding model. */
-export class FoldingController extends DisposableOwner {
+export class FoldingController extends Disposable {
 	private readonly targetOperatingSystem: OperatingSystem;
 	private awaitingChord = false;
 
@@ -42,8 +42,8 @@ export class FoldingController extends DisposableOwner {
 			if (viewport.textModel !== selections.textModel || viewport.textModel !== folding.model) {
 				throw new TypeError("Stanza folding dependencies must share one text model");
 			}
-			this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
-			this.own(addDisposableListener(viewport.element, "pointerdown", event => this.handleGutterPointerDown(event)));
+			this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
+			this._register(addDisposableListener(viewport.element, "pointerdown", event => this.handleGutterPointerDown(event)));
 		} catch (error) {
 			this.dispose();
 			throw error;

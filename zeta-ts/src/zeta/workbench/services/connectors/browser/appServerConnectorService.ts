@@ -1,12 +1,12 @@
 import type { ConnectorConnectionStateDto, ConnectorDto } from "../../../../../../generated/app-server/types.js";
 import { Emitter } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { IConnectorApi } from "../../../../platform/connectors/common/connectorApi.js";
 import type { ConnectorCatalogView, ConnectorState, ConnectorView, IConnectorService } from "../../../../platform/connectors/common/connectorService.js";
 
-export class AppServerConnectorService extends DisposableOwner implements IConnectorService {
-	private readonly _onDidChange = this.own(new Emitter<number>());
+export class AppServerConnectorService extends Disposable implements IConnectorService {
+	private readonly _onDidChange = this._register(new Emitter<number>());
 	readonly onDidChange = this._onDidChange.event;
 
 	constructor(private readonly api: IConnectorApi, events: IServerEventApi) {
@@ -14,7 +14,7 @@ export class AppServerConnectorService extends DisposableOwner implements IConne
 		const subscription = events.subscribe(event => {
 			if (event.method === "connector/changed") this._onDidChange.fire(event.params.generation);
 		});
-		this.defer(() => subscription.dispose());
+		this._register(toDisposable(() => subscription.dispose()));
 	}
 
 	async list(): Promise<ConnectorCatalogView> {

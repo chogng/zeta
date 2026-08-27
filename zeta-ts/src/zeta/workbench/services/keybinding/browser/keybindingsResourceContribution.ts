@@ -1,7 +1,7 @@
 import {
 	combinedDisposable,
-	DisposableOwner,
-	DisposableSlot,
+	Disposable,
+	MutableDisposable,
 	type IDisposable,
 } from "../../../../base/common/lifecycle.js";
 import { parseKeybinding } from "../../../../base/common/keybindingParser.js";
@@ -35,11 +35,11 @@ export interface KeybindingsResourceContributionOptions {
  * A failed replacement disposes its partial registrations and preserves the
  * last complete rule set.
  */
-export class KeybindingsResourceContribution extends DisposableOwner {
+export class KeybindingsResourceContribution extends Disposable {
 	private readonly service: IKeybindingsResourceService;
 	private readonly registry: KeybindingRegistry;
 	private readonly operatingSystem: HostOperatingSystem;
-	private readonly registration = this.own(new DisposableSlot<IDisposable>());
+	private readonly registration = this._register(new MutableDisposable<IDisposable>());
 
 	constructor(options: KeybindingsResourceContributionOptions) {
 		super();
@@ -47,7 +47,7 @@ export class KeybindingsResourceContribution extends DisposableOwner {
 		this.registry = options.registry ?? KeybindingsRegistry;
 		this.operatingSystem = options.operatingSystem ?? environment.os;
 		this.reload(this.service.getKeybindings());
-		this.own(this.service.onDidChangeKeybindings((bindings) => {
+		this._register(this.service.onDidChangeKeybindings((bindings) => {
 			this.reload(bindings);
 		}));
 	}
@@ -85,7 +85,7 @@ export class KeybindingsResourceContribution extends DisposableOwner {
 			}
 			throw error;
 		}
-		this.registration.replace(combineRegistrations(registrations));
+		this.registration.value = combineRegistrations(registrations);
 	}
 }
 

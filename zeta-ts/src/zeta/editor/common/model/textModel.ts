@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { canCoalesceHistoryEdits, canReplaceHistoryEdits, coalesceHistoryUndoEdits, normalizeInverseEdits, replaceHistoryUndoEdits, type OffsetTextEdit } from "./historyCoalescing.js";
 import type { TextBuffer } from "./textBuffer.js";
 import { createTextBuffer } from "./textBufferFactory.js";
@@ -78,14 +78,14 @@ const DEFAULT_HISTORY_TEXT_UNITS = 16 * 1_024 * 1_024;
  * Logical line identity and rich semantic stores remain part of this same model and version.
  * The model has no DOM, URI, persistence, language, or presentation dependency.
  */
-export class TextModel extends DisposableOwner {
-	private readonly changeEmitter = this.own(new Emitter<TextModelChange>());
-	private readonly trackedRanges = this.own(new TrackedRangeCollection(
+export class TextModel extends Disposable {
+	private readonly changeEmitter = this._register(new Emitter<TextModelChange>());
+	private readonly trackedRanges = this._register(new TrackedRangeCollection(
 		offset => this.positionAt(offset),
 	));
 	private readonly history: TextModelHistory;
 	private readonly maintenance: TextModelMaintenanceOptions | undefined;
-	private readonly pendingMaintenance = this.own(new DisposableSlot<IDisposable>());
+	private readonly pendingMaintenance = this._register(new MutableDisposable<IDisposable>());
 	private buffer: TextBuffer;
 	private readonly blockState: TextModelBlockState | undefined;
 	private readonly lineIdGenerator: () => LineId;
@@ -134,7 +134,7 @@ export class TextModel extends DisposableOwner {
 			this.lineMetadata = Object.freeze({});
 		}
 		this.largeFile = classifyTextModelSize(this.buffer.length, this.buffer.lineCount);
-		this.blockState = options.blocks && blockDocument ? this.own(new TextModelBlockState(
+		this.blockState = options.blocks && blockDocument ? this._register(new TextModelBlockState(
 			options.blocks.schema,
 			blockDocument,
 			options.blocks,
@@ -144,10 +144,10 @@ export class TextModel extends DisposableOwner {
 				publishTextChange: change => this.changeEmitter.fire(change),
 			},
 		)) : undefined;
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.history.dispose();
 			this.buffer = createTextBuffer("");
-		});
+		}));
 	}
 
 	/** Creates one TextModel from schema-backed document content. */
@@ -666,7 +666,7 @@ export class TextModel extends DisposableOwner {
 			pending.dispose();
 			return;
 		}
-		this.pendingMaintenance.replace(pending);
+		this.pendingMaintenance.value = pending;
 	}
 
 	private prepareEdits(edits: readonly OffsetEdit[]): PreparedEdit[] {

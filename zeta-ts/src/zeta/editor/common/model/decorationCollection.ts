@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { TextRange } from "../core/text.js";
 import { TextModel } from "./textModel.js";
 import { TrackedRangeStickiness, type TrackedRange } from "./trackedRange.js";
@@ -49,9 +49,9 @@ let nextTextDecorationId = 1;
  * language semantics, diagnostics, and search-match policy stay outside this
  * collection.
  */
-export class TextDecorationCollection<TMetadata> extends DisposableOwner {
+export class TextDecorationCollection<TMetadata> extends Disposable {
 	private readonly changeEmitter =
-		this.own(new Emitter<TextDecorationChange<TMetadata>>());
+		this._register(new Emitter<TextDecorationChange<TMetadata>>());
 	private readonly entries =
 		new Map<TextDecorationId, DecorationEntry<TMetadata>>();
 
@@ -60,13 +60,13 @@ export class TextDecorationCollection<TMetadata> extends DisposableOwner {
 
 	constructor(private readonly model: TextModel) {
 		super();
-		this.own(model.onDidChange(() => this.acceptModelChange()));
-		this.defer(() => {
+		this._register(model.onDidChange(() => this.acceptModelChange()));
+		this._register(toDisposable(() => {
 			for (const entry of this.entries.values()) {
 				entry.trackedRange.dispose();
 			}
 			this.entries.clear();
-		});
+		}));
 	}
 
 	get size(): number {

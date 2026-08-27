@@ -1,5 +1,5 @@
 import { Emitter, type Event } from '../../../base/common/event.js';
-import { DisposableOwner, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import type { JsonSchema } from '../../../base/common/jsonSchema.js';
 import type { URI } from '../../../base/common/uri.js';
 
@@ -9,19 +9,19 @@ export interface JsonSchemaChangeEvent {
 }
 
 /** Owns JSON schemas and exact resource associations independently of language features. */
-export class JsonSchemaRegistry extends DisposableOwner {
+export class JsonSchemaRegistry extends Disposable {
 	private readonly schemas = new Map<string, JsonSchema>();
 	private readonly associations = new Map<string, string>();
-	private readonly changeEmitter = this.own(new Emitter<JsonSchemaChangeEvent>());
+	private readonly changeEmitter = this._register(new Emitter<JsonSchemaChangeEvent>());
 
 	public readonly onDidChange: Event<JsonSchemaChangeEvent> = this.changeEmitter.event;
 
 	constructor() {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.associations.clear();
 			this.schemas.clear();
-		});
+		}));
 	}
 
 	public registerSchema(schemaId: string, schema: JsonSchema): IDisposable {

@@ -1,7 +1,9 @@
 import { isNode } from "../../../base/browser/dom.js";
 import { Emitter } from "../../../base/common/event.js";
 import {
-	DisposableOwner,
+	Disposable,
+
+	toDisposable,
 } from "../../../base/common/lifecycle.js";
 import {
 	type IAction,
@@ -29,10 +31,10 @@ import {
 } from "../browser/contextMenu.js";
 
 /** macOS implementation backed by Electron's native Menu. */
-export class NativeContextMenuService extends DisposableOwner
+export class NativeContextMenuService extends Disposable
 	implements IContextMenuService {
-	private readonly _onDidShowContextMenu = this.own(new Emitter<void>());
-	private readonly _onDidHideContextMenu = this.own(new Emitter<void>());
+	private readonly _onDidShowContextMenu = this._register(new Emitter<void>());
+	private readonly _onDidHideContextMenu = this._register(new Emitter<void>());
 	private readonly api: INativeContextMenuApi;
 	private readonly menuService: IMenuService;
 	private readonly keybindingService: IKeybindingService;
@@ -50,7 +52,7 @@ export class NativeContextMenuService extends DisposableOwner
 		this.api = api;
 		this.menuService = menuService;
 		this.keybindingService = keybindingService;
-		this.defer(() => this.hideContextMenu());
+		this._register(toDisposable(() => this.hideContextMenu()));
 	}
 
 	showContextMenu(options: ContextMenuOptions): void {

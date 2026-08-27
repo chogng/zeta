@@ -3,7 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { Emitter } from "../../../../base/common/event.js";
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from "../../../../base/common/layout.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import type { IConfigurationChangeEvent, IConfigurationKey, IConfigurationService } from "../../../configuration/common/configurationService.js";
 import type { IContextMenuService } from "../../../contextview/browser/contextMenu.js";
 import { h } from "../../../../base/browser/dom.js";
@@ -157,9 +157,9 @@ class TestConfigurationService implements IConfigurationService {
 	async reload(): Promise<void> {}
 }
 
-class TestContextMenuService extends DisposableOwner implements IContextMenuService {
-	private readonly _onDidShowContextMenu = this.own(new Emitter<void>());
-	private readonly _onDidHideContextMenu = this.own(new Emitter<void>());
+class TestContextMenuService extends Disposable implements IContextMenuService {
+	private readonly _onDidShowContextMenu = this._register(new Emitter<void>());
+	private readonly _onDidHideContextMenu = this._register(new Emitter<void>());
 	readonly onDidShowContextMenu = this._onDidShowContextMenu.event;
 	readonly onDidHideContextMenu = this._onDidHideContextMenu.event;
 

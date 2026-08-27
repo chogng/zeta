@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../common/event.js";
-import { DisposableOwner } from "../../../common/lifecycle.js";
+import { Disposable } from "../../../common/lifecycle.js";
 import { TreeVisibility, type AbstractTreeNode, type IndexTreeLocation, type TreeElement, type TreeFilter, type TreeFilterResult } from "./tree.js";
 
 export type IndexTreeModelChangeKind = "structure" | "collapse" | "filter" | "rerender";
@@ -47,9 +47,9 @@ interface MutableIndexTreeNode<T> {
 }
 
 /** Canonical index-addressed hierarchy and flattened visible-node projection. */
-export class IndexTreeModel<T> extends DisposableOwner {
-	private readonly _onDidChange = this.own(new Emitter<IndexTreeModelChangeEvent<T>>());
-	private readonly _onDidChangeCollapseState = this.own(new Emitter<IndexTreeModelCollapseStateChangeEvent<T>>());
+export class IndexTreeModel<T> extends Disposable {
+	private readonly _onDidChange = this._register(new Emitter<IndexTreeModelChangeEvent<T>>());
+	private readonly _onDidChangeCollapseState = this._register(new Emitter<IndexTreeModelCollapseStateChangeEvent<T>>());
 	private readonly root: MutableIndexTreeNode<T>;
 	private readonly defaultCollapseState: "collapsed" | "expanded";
 	private readonly identityProvider: IndexTreeIdentityProvider<T> | undefined;

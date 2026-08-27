@@ -21,7 +21,7 @@ export class MultiChatTabsControl extends ChatTabsControl {
 		super(container, presentation);
 		this.idPrefix = idPrefix;
 		this.element.classList.add("zeta-multi-chat-tabs-control");
-		this.tabList = this.own(new TabList(this.element, {
+		this.tabList = this._register(new TabList(this.element, {
 			ariaLabel: "Open chats",
 			presentation: "inset",
 			draggable: true,

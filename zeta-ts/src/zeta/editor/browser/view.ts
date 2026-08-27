@@ -2,7 +2,7 @@ import { type Event } from '../../base/common/event.js';
 import { getClientArea, type IDimension } from '../../base/browser/geometry.js';
 import { addDisposableListener, h } from '../../base/browser/dom.js';
 import { FastDomNode } from '../../base/browser/fastDomNode.js';
-import { DisposableOwner, type IDisposable } from '../../base/common/lifecycle.js';
+import { Disposable, type IDisposable, toDisposable } from '../../base/common/lifecycle.js';
 import { runWhenWindowIdle } from '../../base/browser/scheduler.js';
 import { type ISize } from '../../base/common/layout.js';
 import { clamp, isFiniteNumber, isNonNegativeSafeInteger } from '../../base/common/numbers.js';
@@ -86,7 +86,7 @@ export interface EditorViewOptions {
  * View owns DOM projection and rendering; feature contributions own
  * policies such as completion.
  */
-export class EditorView extends DisposableOwner {
+export class EditorView extends Disposable {
 	readonly ownerId: string;
 	readonly viewport: View;
 	readonly selectionController: EditorSelectionController;
@@ -121,7 +121,7 @@ export class EditorView extends DisposableOwner {
 			this.ownerId = options?.ownerId === undefined ? nextEditorViewId() : validateOwnerId(options.ownerId);
 			this.viewport = existingViewport
 				? existingViewport
-				: this.own(new View({
+				: this._register(new View({
 					...options!.viewport,
 					container: options!.container,
 					model: options!.model,
@@ -148,7 +148,7 @@ export class EditorView extends DisposableOwner {
 			// Language editing is contribution-owned. The view only borrows the adapter
 			// while ViewController invokes it for the current input command.
 			const languageEditing = viewOptions.languageEditing;
-			this.editContext = this.own(createEditContext(this.viewport.element, {
+			this.editContext = this._register(createEditContext(this.viewport.element, {
 				ariaLabel: viewOptions.ariaLabel,
 				readOnly: selectionController.readOnly,
 				textDirection: this.viewport.editorTextDirection,
@@ -160,12 +160,12 @@ export class EditorView extends DisposableOwner {
 			this.textArea = this.editContext instanceof TextAreaEditContext
 				? this.editContext.element
 				: undefined;
-			this.compositionController = this.own(new CompositionController(
+			this.compositionController = this._register(new CompositionController(
 				this.editContext,
 				this.viewport,
 				selectionController,
 			));
-			this.viewController = this.own(new ViewController(
+			this.viewController = this._register(new ViewController(
 				this.viewport,
 				selectionController,
 				{ languageEditing, wordPattern: viewOptions.wordPattern, userInputEvents: this.userInputEvents },
@@ -175,12 +175,12 @@ export class EditorView extends DisposableOwner {
 			this.onWillTextUpdate = this.editContext.onWillTextUpdate;
 			this.onWillKeydown = this.editContext.onWillKeydown;
 			this.onDidEdit = this.viewController.onDidEdit;
-			this.own(this.viewController.onDidChangeOvertype(overtyping => {
+			this._register(this.viewController.onDidChangeOvertype(overtyping => {
 				this.viewport.element.classList.toggle('overtype', overtyping);
 			}));
 
 			if (this.editContext instanceof NativeEditContext) {
-				this.own(new ScreenReaderSupport({
+				this._register(new ScreenReaderSupport({
 					element: this.editContext.element,
 					model: this.viewport.textModel,
 					viewport: this.viewport,
@@ -195,33 +195,33 @@ export class EditorView extends DisposableOwner {
 					isComposing: () => this.compositionController.composing,
 				}));
 			}
-			this.own(this.compositionController.onDidChange(composing => {
+			this._register(this.compositionController.onDidChange(composing => {
 				if (!composing) this.synchronizeEditContext();
 			}));
 			if (this.editContext instanceof TextAreaEditContext) {
-				this.own(new TextAreaAccessibilityController(
+				this._register(new TextAreaAccessibilityController(
 					this.editContext,
 					this.viewport,
 					selectionController,
 					this.compositionController,
 				));
 			}
-			this.defer(() => {
+			this._register(toDisposable(() => {
 				this.viewport.element.classList.remove('input-focused');
 				this.viewport.element.classList.remove('overtype');
-			});
-			this.own(addDisposableListener(this.viewport.element, 'focus', event => {
+			}));
+			this._register(addDisposableListener(this.viewport.element, 'focus', event => {
 				if (event.target === this.viewport.element) this.focus();
 			}));
-			this.own(this.editContext.onDidFocus(() => {
+			this._register(this.editContext.onDidFocus(() => {
 				this.viewport.element.classList.add('input-focused');
 			}));
-			this.own(this.editContext.onDidBlur(() => {
+			this._register(this.editContext.onDidBlur(() => {
 				this.viewport.element.classList.remove('input-focused');
 				this.editContext.clear();
 			}));
-			this.own(selectionController.onDidChange(() => this.synchronizeEditContext()));
-			this.own(this.viewport.textModel.onDidChange(() => this.synchronizeEditContext()));
+			this._register(selectionController.onDidChange(() => this.synchronizeEditContext()));
+			this._register(this.viewport.textModel.onDidChange(() => this.synchronizeEditContext()));
 			this.synchronizeEditContext();
 			this.editContext.connect();
 		} catch (error) {
@@ -396,7 +396,7 @@ export interface EditorContentPosition {
  * measurement inputs, and ordered visual-part lifecycle; individual parts own
  * their projected DOM and canvas surfaces.
  */
-export class View extends DisposableOwner {
+export class View extends Disposable {
 	readonly element: HTMLDivElement;
 	readonly onDidChangeLayout: Event<EditorViewportChange>;
 	private readonly model: TextModel;
@@ -436,7 +436,7 @@ export class View extends DisposableOwner {
 		const ownerDocument = options.container.ownerDocument;
 		this.model = options.model;
 		this.element = h(ownerDocument, "div");
-		this.elementSizeObserver = this.own(new ElementSizeObserver(this.element));
+		this.elementSizeObserver = this._register(new ElementSizeObserver(this.element));
 		this.contentElement = h(ownerDocument, "div");
 		this.contentNode = new FastDomNode(this.contentElement);
 		this.textMetricsElement = h(ownerDocument, "span");
@@ -480,7 +480,7 @@ export class View extends DisposableOwner {
 			this.dispose();
 			throw error;
 		}
-		this.lineGutterDecoration = options.lineGutterDecoration ? this.own(options.lineGutterDecoration) : undefined;
+		this.lineGutterDecoration = options.lineGutterDecoration ? this._register(options.lineGutterDecoration) : undefined;
 		this.element.className = "stanza-editor";
 		this.element.classList.add(`stanza-editor-${this.presentation}`);
 		this.element.classList.add(`stanza-editor-focus-owner-${this.focusOutlineOwner}`);
@@ -508,11 +508,11 @@ export class View extends DisposableOwner {
 		this.accessibilityStatusElement.setAttribute("aria-atomic", "true");
 		this.element.append(this.contentElement, this.textMetricsElement, this.accessibilityStatusElement);
 		options.container.append(this.element);
-		this.defer(() => this.element.remove());
+		this._register(toDisposable(() => this.element.remove()));
 		this.textMeasurer =
 			options.textMeasurer ??
 			new DomTextMeasurer(this.textMetricsElement);
-		this.lineWidths = this.own(new LineWidthIndex(
+		this.lineWidths = this._register(new LineWidthIndex(
 			this.model,
 			this.textMeasurer,
 			{
@@ -526,7 +526,7 @@ export class View extends DisposableOwner {
 				},
 			},
 		));
-		this.viewModelLines = this.own(new ViewModelLines(
+		this.viewModelLines = this._register(new ViewModelLines(
 			this.model,
 			new DOMLineBreaksComputer(this.textMeasurer, this.indentation.tabSize),
 			{
@@ -542,7 +542,7 @@ export class View extends DisposableOwner {
 				visibilitySource: options.lineVisibilitySource,
 			},
 		));
-		const viewport = this.own(new ViewLayout(this.model, {
+		const viewport = this._register(new ViewLayout(this.model, {
 			lineHeight: options.lineHeight,
 			overscanLineCount: options.overscanLineCount,
 			lineSource: this.viewModelLines.lineSource,
@@ -554,8 +554,8 @@ export class View extends DisposableOwner {
 			() => viewport.layout,
 			layout => this.createRenderingContext(layout),
 		);
-		this.viewParts = this.own(new EditorViewPartCollection());
-		this.viewLinesPart = this.own(new ViewLinesPart({
+		this.viewParts = this._register(new EditorViewPartCollection());
+		this.viewLinesPart = this._register(new ViewLinesPart({
 			host: this.contentElement,
 			model: this.model,
 			readVisualProjection: () => this.visualProjection,
@@ -581,7 +581,7 @@ export class View extends DisposableOwner {
 			readVisualProjection: () => this.visualProjection,
 			readRenderedLines: () => this.viewLinesPart.renderedLines,
 		}));
-		this.viewOverlays = this.own(new ViewOverlays(this.viewContext, {
+		this.viewOverlays = this._register(new ViewOverlays(this.viewContext, {
 			contentElement: this.contentElement,
 			model: this.model,
 			selectionController: this.selectionController,
@@ -631,16 +631,16 @@ export class View extends DisposableOwner {
 			overviewRulerPart.domNode,
 			scrollDecorationPart.domNode,
 		);
-		this.own(this.viewModelLines.onDidChange(() => this.project(viewport.layout)));
-		if (this.lineGutterDecoration) this.own(this.lineGutterDecoration.onDidChange(() => this.project(viewport.layout)));
-		this.own(this.viewOverlays.onDidChangeDecorations(() => this.project(viewport.layout)));
+		this._register(this.viewModelLines.onDidChange(() => this.project(viewport.layout)));
+		if (this.lineGutterDecoration) this._register(this.lineGutterDecoration.onDidChange(() => this.project(viewport.layout)));
+		this._register(this.viewOverlays.onDidChangeDecorations(() => this.project(viewport.layout)));
 		viewport.setContentWidth(this.measuredContentWidth);
 
-		this.own(viewport.onDidChange(({ layout }) => this.project(layout)));
-		this.own(this.lineWidths.onDidChange(() => {
+		this._register(viewport.onDidChange(({ layout }) => this.project(layout)));
+		this._register(this.lineWidths.onDidChange(() => {
 			viewport.setContentWidth(this.measuredContentWidth);
 		}));
-		this.own(addDisposableListener(this.element, "scroll", () => {
+		this._register(addDisposableListener(this.element, "scroll", () => {
 			const scrollPosition = {
 				left: this.element.scrollLeft,
 				top: this.element.scrollTop,
@@ -648,13 +648,13 @@ export class View extends DisposableOwner {
 			const layout = viewport.setScrollPosition(scrollPosition);
 			this.syncScrollPosition(layout);
 		}));
-		this.own(this.model.onDidChange(change => {
+		this._register(this.model.onDidChange(change => {
 			this.lineWidths.applyModelChange(change);
 			if (this.softWrapping) this.updateWrapWidth(this.viewport.layout.viewportSize.width);
 			viewport.setContentWidth(this.measuredContentWidth);
 		}));
 		if (this.selectionController) {
-			this.own(this.selectionController.onDidChange(() => {
+			this._register(this.selectionController.onDidChange(() => {
 				const context = this.createRenderingContext(viewport.layout);
 				this.viewOverlays.renderSelection(context);
 				this.updateAccessibilityStatus();
@@ -663,18 +663,18 @@ export class View extends DisposableOwner {
 		}
 		const semanticTokenSource = options.semanticTokenSource;
 		if (semanticTokenSource) {
-			this.own(semanticTokenSource.onDidChange(() => {
+			this._register(semanticTokenSource.onDidChange(() => {
 				this.viewLinesPart.renderVisibleLineText();
 			}));
 		}
 		const fontSet = ownerDocument.fonts;
 		if (fontSet) {
-			this.own(addDisposableListener(fontSet, "loadingdone", () => {
+			this._register(addDisposableListener(fontSet, "loadingdone", () => {
 				this.refreshFontMetrics();
 			}));
 		}
 
-		this.own(this.elementSizeObserver.onDidChange(() => this.layout()));
+		this._register(this.elementSizeObserver.onDidChange(() => this.layout()));
 		this.elementSizeObserver.startObserving();
 
 		this.project(viewport.layout);

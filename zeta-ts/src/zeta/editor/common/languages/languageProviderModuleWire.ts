@@ -1,6 +1,6 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { toError } from "../../../base/common/errors.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { assertLanguageProviderModuleId, assertLanguageProviderModuleState, LanguageProviderModuleHost, LanguageProviderModuleRegistry, LanguageProviderModuleState, normalizeLanguageProviderModuleCatalog, type LanguageProviderModuleCatalog, type LanguageProviderModuleController, type LanguageProviderModuleStateChange } from "./languageProviderModules.js";
 import { type LanguageWorkerWirePort } from "./languageWorkerWire.js";
 
@@ -10,8 +10,8 @@ export interface LanguageProviderModuleWireDescriptor {
 }
 
 /** Renderer-side controller for one named Worker provider-module channel. */
-export class LanguageProviderModuleWireClient extends DisposableOwner implements LanguageProviderModuleController {
-	private readonly catalogEmitter = this.own(new Emitter<LanguageProviderModuleCatalog>());
+export class LanguageProviderModuleWireClient extends Disposable implements LanguageProviderModuleController {
+	private readonly catalogEmitter = this._register(new Emitter<LanguageProviderModuleCatalog>());
 	private readonly pending = new Map<number, PendingModuleRequest>();
 	private readonly catalogWaiters = new Set<ModuleCatalogWaiter>();
 	private catalog: LanguageProviderModuleCatalog = EMPTY_MODULE_CATALOG;
@@ -30,13 +30,13 @@ export class LanguageProviderModuleWireClient extends DisposableOwner implements
 		assertPort(port);
 		assertDescriptor(descriptor);
 		if (typeof invalidateWorker !== "function") throw new TypeError("Provider module wire client requires an invalidation callback");
-		this.own(port.onMessage(message => this.receive(message)));
-		this.defer(() => {
+		this._register(port.onMessage(message => this.receive(message)));
+		this._register(toDisposable(() => {
 			this.catalog = EMPTY_MODULE_CATALOG;
 			this.catalogReady = false;
 			this.failPending(new ReferenceError("LanguageProviderModuleWireClient is already disposed"));
 			this.catalogEmitter.fire(this.catalog);
-		});
+		}));
 	}
 
 	get moduleCatalog(): LanguageProviderModuleCatalog {
@@ -161,7 +161,7 @@ export class LanguageProviderModuleWireClient extends DisposableOwner implements
 }
 
 /** Worker-side activation dispatcher and module-catalog publisher. */
-export class LanguageProviderModuleWireServer<TProvider> extends DisposableOwner {
+export class LanguageProviderModuleWireServer<TProvider> extends Disposable {
 
 	constructor(
 		private readonly port: LanguageWorkerWirePort,
@@ -175,8 +175,8 @@ export class LanguageProviderModuleWireServer<TProvider> extends DisposableOwner
 		if (!(modules instanceof LanguageProviderModuleRegistry) || !(host instanceof LanguageProviderModuleHost)) {
 			throw new TypeError("Provider module wire server requires its registry and host");
 		}
-		this.own(port.onMessage(message => this.receive(message)));
-		this.own(modules.onDidChangeModuleCatalog(catalog => this.publishCatalog(catalog)));
+		this._register(port.onMessage(message => this.receive(message)));
+		this._register(modules.onDidChangeModuleCatalog(catalog => this.publishCatalog(catalog)));
 		try {
 			this.publishCatalog(modules.moduleCatalog);
 		} catch (error) {

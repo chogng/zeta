@@ -1,5 +1,5 @@
 import { Emitter } from "../../../common/event.js";
-import { DisposableOwner, ResettableDisposableGroup, toDisposable } from "../../../common/lifecycle.js";
+import { Disposable, DisposableStore, toDisposable } from "../../../common/lifecycle.js";
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, type IRectangle, layout2d } from "../../../common/layout.js";
 import { addDisposableListener, isHTMLElement, isNode, h } from "../../dom.js";
 import { getActiveElement, restoreFocus } from "../../focus.js";
@@ -62,13 +62,13 @@ export interface IContextViewProvider {
 
 /** An anchored, transient host for menus, hovers, and other overlays. */
 export class ContextView
-	extends DisposableOwner
+	extends Disposable
 	implements IContextViewProvider
 {
 	readonly element: HTMLDivElement;
-	private readonly _onDidHide = this.own(new Emitter<ContextViewHideReason>());
+	private readonly _onDidHide = this._register(new Emitter<ContextViewHideReason>());
 	readonly onDidHide = this._onDidHide.event;
-	private readonly visibleListeners = this.own(new ResettableDisposableGroup());
+	private readonly visibleListeners = this._register(new DisposableStore());
 	private restoreFocusTo: HTMLElement | undefined;
 	private options: ContextViewOptions | undefined;
 
@@ -77,11 +77,11 @@ export class ContextView
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, "div");
 		this.element = element;
-		this.defer(() => element.remove());
+		this._register(toDisposable(() => element.remove()));
 		element.className = "zeta-context-view";
 		element.hidden = true;
 		container.append(element);
-		this.defer(() => this.hide());
+		this._register(toDisposable(() => this.hide()));
 	}
 
 	get visible(): boolean {

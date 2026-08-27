@@ -1,5 +1,5 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { resolveEditorIndentationOptions, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from "../../../common/editorIndentation.js";
@@ -13,7 +13,7 @@ export interface LineOperationsControllerOptions {
 }
 
 /** Routes VS Code-compatible physical-line operation and indentation chords locally. */
-export class LineOperationsController extends DisposableOwner {
+export class LineOperationsController extends Disposable {
 	private readonly targetOperatingSystem: OperatingSystem;
 	private readonly indentation: ResolvedEditorIndentationOptions;
 
@@ -30,7 +30,7 @@ export class LineOperationsController extends DisposableOwner {
 			if (viewport.textModel !== selections.textModel) {
 				throw new TypeError("Stanza line operation dependencies must share one text model");
 			}
-			this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
+			this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
 		} catch (error) {
 			this.dispose();
 			throw error;

@@ -4,7 +4,7 @@ import test from "node:test";
 import * as onigurumaNamespace from "vscode-oniguruma";
 import { type IOnigLib } from "vscode-textmate";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
-import { DisposableOwner, DisposableStore } from "../../../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { SyntaxProviderModuleHost, SyntaxProviderModuleRegistry } from "../../../../../editor/common/languages/syntax/syntaxProviderModules.js";
 import { SyntaxProviderModuleWireServer } from "../../../../../editor/common/languages/syntax/syntaxProviderModuleWire.js";
 import { SyntaxProviderRegistry, type SyntaxProviderRequest } from "../../../../../editor/common/languages/syntax/syntaxProviders.js";
@@ -205,9 +205,9 @@ function createPortPair(): readonly [MemoryWirePort, MemoryWirePort] {
 	return [first, second];
 }
 
-class TestWirePort extends DisposableOwner implements MemoryWirePort {
-	private readonly messageEmitter = this.own(new Emitter<unknown>());
-	private readonly failureEmitter = this.own(new Emitter<unknown>());
+class TestWirePort extends Disposable implements MemoryWirePort {
+	private readonly messageEmitter = this._register(new Emitter<unknown>());
+	private readonly failureEmitter = this._register(new Emitter<unknown>());
 	private peer: TestWirePort | undefined;
 
 	readonly sentMessages: unknown[] = [];
@@ -216,9 +216,9 @@ class TestWirePort extends DisposableOwner implements MemoryWirePort {
 
 	constructor() {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.peer = undefined;
-		});
+		}));
 	}
 
 	connect(peer: TestWirePort): void {

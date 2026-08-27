@@ -1,5 +1,5 @@
 import type { Event } from "../../../common/event.js";
-import { DisposableOwner } from "../../../common/lifecycle.js";
+import { Disposable } from "../../../common/lifecycle.js";
 import type { ListScrolling } from "../list/list.js";
 import { ObjectTree, type ObjectTreeAcceptEvent, type ObjectTreeCollapseStateChangeEvent, type ObjectTreeFocusChangeEvent, type ObjectTreePointerEvent, type ObjectTreeSelectionChangeEvent } from "./objectTree.js";
 import type { ObjectTreeElement, ObjectTreeIdentityProvider, ObjectTreeNode } from "./objectTreeModel.js";
@@ -28,7 +28,7 @@ export interface DataTreeOptions<T> {
 }
 
 /** Synchronous data-source adapter over `ObjectTree`. */
-export class DataTree<TInput, T> extends DisposableOwner {
+export class DataTree<TInput, T> extends Disposable {
 	readonly element: HTMLDivElement;
 	private readonly tree: ObjectTree<T>;
 	private readonly generatedIds = new Map<T, string>();
@@ -44,7 +44,7 @@ export class DataTree<TInput, T> extends DisposableOwner {
 
 	constructor(container: HTMLElement, private readonly dataSource: TreeDataSource<TInput, T>, private readonly options: DataTreeOptions<T>) {
 		super();
-		this.tree = this.own(new ObjectTree<T>(container, {
+		this.tree = this._register(new ObjectTree<T>(container, {
 			ariaLabel: options.ariaLabel,
 			scrolling: options.scrolling,
 			indent: options.indent,

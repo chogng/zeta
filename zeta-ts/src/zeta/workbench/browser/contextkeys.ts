@@ -1,4 +1,4 @@
-import { DisposableOwner } from '../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
 import type { IContextKey, IContextKeyService } from '../../platform/contextkey/common/contextkey.js';
 import { IsLinuxContext, IsMacContext, IsNativeContext, IsWebContext, IsWindowsContext } from '../../platform/contextkey/common/contextkeys.js';
 import { type IWorkspaceContextService, workbenchStateToString } from '../../platform/workspace/common/workspace.js';
@@ -9,7 +9,7 @@ import type { IWorkbenchLayoutService, WorkbenchPartId } from '../services/layou
 import type { IWorkingCopyService } from '../services/workingCopy/common/workingCopyService.js';
 
 /** Projects window-wide service state into Workbench context keys. */
-export class WorkbenchContextKeysHandler extends DisposableOwner {
+export class WorkbenchContextKeysHandler extends Disposable {
 	constructor(
 		private readonly contextKeyService: IContextKeyService,
 		private readonly workspaceContextService: IWorkspaceContextService,
@@ -36,7 +36,7 @@ export class WorkbenchContextKeysHandler extends DisposableOwner {
 			IsWebContext.bindTo(contextKeyService),
 			IsNativeContext.bindTo(contextKeyService),
 		]);
-		this.defer(() => resetContextKeys(contextKeyService, keys));
+		this._register(toDisposable(() => resetContextKeys(contextKeyService, keys)));
 	}
 
 	private bindWorkspaceKeys(contextKeyService: IContextKeyService, workspaceContextService: IWorkspaceContextService): void {
@@ -46,17 +46,17 @@ export class WorkbenchContextKeysHandler extends DisposableOwner {
 			updateWorkspaceKeys(workbenchState, workspaceFolderCount, workspaceContextService);
 			return { workbenchState, workspaceFolderCount };
 		});
-		this.own(workspaceContextService.onDidChangeWorkspace(() => {
+		this._register(workspaceContextService.onDidChangeWorkspace(() => {
 			contextKeyService.bufferChangeEvents(() => updateWorkspaceKeys(keys.workbenchState, keys.workspaceFolderCount, workspaceContextService));
 		}));
-		this.defer(() => resetContextKeys(contextKeyService, Object.values(keys)));
+		this._register(toDisposable(() => resetContextKeys(contextKeyService, Object.values(keys))));
 	}
 
 	private bindWorkingCopyKeys(contextKeyService: IContextKeyService, workingCopyService: IWorkingCopyService): void {
 		const dirtyWorkingCopies = DirtyWorkingCopiesContext.bindTo(contextKeyService);
 		dirtyWorkingCopies.set(workingCopyService.hasDirtyWorkingCopies);
-		this.own(workingCopyService.onDidChangeDirty(() => dirtyWorkingCopies.set(workingCopyService.hasDirtyWorkingCopies)));
-		this.defer(() => dirtyWorkingCopies.reset());
+		this._register(workingCopyService.onDidChangeDirty(() => dirtyWorkingCopies.set(workingCopyService.hasDirtyWorkingCopies)));
+		this._register(toDisposable(() => dirtyWorkingCopies.reset()));
 	}
 
 	private bindLayoutKeys(contextKeyService: IContextKeyService, layoutService: IWorkbenchLayoutService): void {
@@ -75,13 +75,13 @@ export class WorkbenchContextKeysHandler extends DisposableOwner {
 			panelMaximized.set(layoutService.isPanelMaximized());
 		});
 		updateAll();
-		this.own(layoutService.onDidChangePartVisibility(event => {
+		this._register(layoutService.onDidChangePartVisibility(event => {
 			contextKeyService.bufferChangeEvents(() => {
 				visibilityKeys.get(event.partId)?.set(event.visible);
 				panelMaximized.set(layoutService.isPanelMaximized());
 			});
 		}));
-		this.defer(() => resetContextKeys(contextKeyService, [...visibilityKeys.values(), panelMaximized]));
+		this._register(toDisposable(() => resetContextKeys(contextKeyService, [...visibilityKeys.values(), panelMaximized])));
 	}
 
 	private bindEditorKeys(contextKeyService: IContextKeyService, editorGroupsService: IEditorGroupsService, editorService: IEditorService): void {
@@ -103,13 +103,13 @@ export class WorkbenchContextKeysHandler extends DisposableOwner {
 			keys.editorsVisible.set(editorService.visibleEditors.length > 0);
 		});
 		update();
-		this.own(editorGroupsService.onDidChangeGroups(update));
-		this.own(editorService.onDidActiveEditorChange(update));
-		this.own(editorService.onDidVisibleEditorsChange(update));
+		this._register(editorGroupsService.onDidChangeGroups(update));
+		this._register(editorService.onDidActiveEditorChange(update));
+		this._register(editorService.onDidVisibleEditorsChange(update));
 		void editorGroupsService.whenReady.then(() => {
 			if (!this.isDisposed) update();
 		});
-		this.defer(() => resetContextKeys(contextKeyService, Object.values(keys)));
+		this._register(toDisposable(() => resetContextKeys(contextKeyService, Object.values(keys))));
 	}
 }
 

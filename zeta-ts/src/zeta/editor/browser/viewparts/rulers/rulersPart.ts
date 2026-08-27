@@ -1,6 +1,7 @@
 import "./rulers.css";
 import { h, reset, fragment as createFragment } from "../../../../base/browser/dom.js";
 import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
+import { toDisposable } from "../../../../base/common/lifecycle.js";
 import { type TextMeasurer } from "../../config/fontMeasurements.js";
 import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
 
@@ -31,7 +32,9 @@ export class RulersPart extends EditorViewPart {
 		this.textMeasurer = options.textMeasurer;
 		this.readTextLeft = options.readTextLeft;
 		this.rulers = Object.freeze([...(options.rulers ?? [])].map(validateRuler));
-		this.domNode = this.adopt(h(options.host.ownerDocument, "div"), domNode => domNode.remove());
+		const domNode = h(options.host.ownerDocument, "div");
+		this._register(toDisposable(() => domNode.remove()));
+		this.domNode = domNode;
 		this.root = new FastDomNode(this.domNode);
 		this.root.setClassName("stanza-editor-rulers");
 		this.domNode.setAttribute("role", "presentation");

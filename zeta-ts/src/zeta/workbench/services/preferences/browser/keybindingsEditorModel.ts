@@ -1,7 +1,7 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { getKeybindingLabel } from '../../../../base/common/keybindingLabels.js';
 import { serializeKeybinding } from '../../../../base/common/keybindingParser.js';
-import { DisposableOwner } from '../../../../base/common/lifecycle.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import { CommandsRegistry, type CommandId, type CommandRegistry } from '../../../../platform/commands/common/commands.js';
 import type { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { KeybindingRuleKind, KeybindingsRegistry, KeybindingSource, type KeybindingRegistry } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
@@ -29,10 +29,10 @@ export interface KeyboardShortcutsEditorModelOptions {
 }
 
 /** Builds stable, searchable rows and owns mutations of the user keybindings resource. */
-export class KeyboardShortcutsEditorModel extends DisposableOwner {
+export class KeyboardShortcutsEditorModel extends Disposable {
 	private readonly commandRegistry: CommandRegistry;
 	private readonly keybindingRegistry: KeybindingRegistry;
-	private readonly _onDidChange = this.own(new Emitter<readonly KeyboardShortcutItem[]>());
+	private readonly _onDidChange = this._register(new Emitter<readonly KeyboardShortcutItem[]>());
 	private query = '';
 	private allItems: readonly KeyboardShortcutItem[] = [];
 
@@ -43,9 +43,9 @@ export class KeyboardShortcutsEditorModel extends DisposableOwner {
 		this.commandRegistry = options.commandRegistry ?? CommandsRegistry;
 		this.keybindingRegistry = options.keybindingRegistry ?? KeybindingsRegistry;
 		this.refresh();
-		this.own(options.resourceService.onDidChangeKeybindings(() => this.refresh()));
-		this.own(this.keybindingRegistry.onDidChangeKeybindings(() => this.refresh()));
-		this.own(options.keybindingService.onDidUpdateKeybindings(() => this.refresh()));
+		this._register(options.resourceService.onDidChangeKeybindings(() => this.refresh()));
+		this._register(this.keybindingRegistry.onDidChangeKeybindings(() => this.refresh()));
+		this._register(options.keybindingService.onDidUpdateKeybindings(() => this.refresh()));
 	}
 
 	public get items(): readonly KeyboardShortcutItem[] {

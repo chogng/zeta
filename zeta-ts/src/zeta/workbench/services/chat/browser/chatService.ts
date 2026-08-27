@@ -1,6 +1,6 @@
 import type { AgentResponse as AgentResponseDto, InputItem, SkillRef as SkillRefDto, Thread as ThreadDto, ThreadUpdateEnvelope as ThreadUpdateEnvelopeDto } from "../../../../../../generated/app-server/types.js";
 import { Emitter } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../base/common/uuid.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import type { IAppServerApi, IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
@@ -21,12 +21,12 @@ export interface ChatServiceOptions {
 }
 
 /** App Server-backed implementation of the frontend Chat service. */
-export class ChatService extends DisposableOwner implements IChatService {
-	private readonly _onDidUpdateThread = this.own(new Emitter<ThreadUpdateEnvelope>());
-	private readonly _onDidUpdateGoal = this.own(new Emitter<ThreadGoalUpdate>());
-	private readonly _onDidBecomeReady = this.own(new Emitter<void>());
-	private readonly _onDidChangeModels = this.own(new Emitter<void>());
-	private readonly _onDidChangeSkills = this.own(new Emitter<void>());
+export class ChatService extends Disposable implements IChatService {
+	private readonly _onDidUpdateThread = this._register(new Emitter<ThreadUpdateEnvelope>());
+	private readonly _onDidUpdateGoal = this._register(new Emitter<ThreadGoalUpdate>());
+	private readonly _onDidBecomeReady = this._register(new Emitter<void>());
+	private readonly _onDidChangeModels = this._register(new Emitter<void>());
+	private readonly _onDidChangeSkills = this._register(new Emitter<void>());
 	private readonly hiddenModels = new Map<string, ModelRef>();
 	private modelCatalog: readonly ModelCatalogEntry[] = [];
 	private modelCatalogLoad: Promise<readonly ModelCatalogEntry[]> | undefined;
@@ -46,17 +46,17 @@ export class ChatService extends DisposableOwner implements IChatService {
 			if (event.method === "thread/goal/cleared") this._onDidUpdateGoal.fire({ threadId: event.params.threadId });
 			if (event.method === "skills/changed") this._onDidChangeSkills.fire();
 		});
-		this.defer(() => events.dispose());
+		this._register(toDisposable(() => events.dispose()));
 		const connection = options.appServerApi.onConnectionState((state) => {
 			if (state !== "ready") return;
 			const refresh = this.refreshModels();
 			this._onDidBecomeReady.fire();
 			void refresh.catch(() => undefined);
 		});
-		this.defer(() => connection.dispose());
+		this._register(toDisposable(() => connection.dispose()));
 		this.acceptHiddenModels(options.configurationService?.getValue(ModelCatalogConfiguration.hiddenModels) ?? []);
 		if (options.configurationService) {
-			this.own(options.configurationService.onDidChangeConfiguration((event) => {
+			this._register(options.configurationService.onDidChangeConfiguration((event) => {
 				if (!event.affectsConfiguration(ModelCatalogConfiguration.hiddenModels)) return;
 				this.acceptHiddenModels(options.configurationService!.getValue(ModelCatalogConfiguration.hiddenModels));
 			}));

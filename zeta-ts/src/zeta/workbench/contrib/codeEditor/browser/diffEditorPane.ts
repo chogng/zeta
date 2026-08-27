@@ -1,7 +1,7 @@
 import "./media/diffEditorPane.css";
 import { type IDimension } from "../../../../base/browser/geometry.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
-import { DisposableOwner, DisposableSlot } from "../../../../base/common/lifecycle.js";
+import { Disposable, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { assertDefined } from "../../../../base/common/types.js";
 import { type IEditorPane } from "../../../browser/parts/editor/editorPane.js";
 import { EditorPaneVisibility } from "../../../browser/parts/editor/editorPane.js";
@@ -29,9 +29,9 @@ export interface DiffEditorPaneOptions {
 }
 
 /** Workbench pane that acquires two text references for a read-only comparison. */
-export class DiffEditorPane extends DisposableOwner implements IEditorPane {
+export class DiffEditorPane extends Disposable implements IEditorPane {
 	readonly id = DIFF_EDITOR_ID;
-	private readonly session = this.own(new DisposableSlot<DiffEditorPaneSession>());
+	private readonly session = this._register(new MutableDisposable<DiffEditorPaneSession>());
 	private readonly modelService: ITextModelService;
 	private container: HTMLDivElement | undefined;
 	private dimension: IDimension = { width: 0, height: 0 };
@@ -59,10 +59,10 @@ export class DiffEditorPane extends DisposableOwner implements IEditorPane {
 		container.className = "stanza-diff-editor-pane";
 		parent.append(container);
 		this.container = container;
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			container.remove();
 			this.container = undefined;
-		});
+		}));
 	}
 
 	async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
@@ -88,7 +88,7 @@ export class DiffEditorPane extends DisposableOwner implements IEditorPane {
 			}
 			throw error;
 		}
-		this.session.replace(next);
+		this.session.value = next;
 		next.layout(this.dimension);
 	}
 
@@ -117,24 +117,24 @@ export class DiffEditorPane extends DisposableOwner implements IEditorPane {
 	}
 }
 
-class DiffEditorPaneSession extends DisposableOwner {
+class DiffEditorPaneSession extends Disposable {
 	readonly editor: DiffEditorWidget;
 
 	constructor(container: HTMLElement, original: TextModelReference, modified: TextModelReference, originalLabel: string | undefined, modifiedLabel: string | undefined, options: DiffEditorPaneOptions) {
 		super();
-		this.own(original);
-		this.own(modified);
+		this._register(original);
+		this._register(modified);
 		const computationService = options.createComputationService();
 		if (!computationService || typeof computationService.compute !== "function") {
 			throw new TypeError("Diff editor pane factory returned an invalid Rust diff computation service");
 		}
-		this.own(computationService);
-		const model = this.own(new DiffModel({
+		this._register(computationService);
+		const model = this._register(new DiffModel({
 			original: original.model,
 			modified: modified.model,
 			computationService,
 		}));
-		this.editor = this.own(new DiffEditorWidget({
+		this.editor = this._register(new DiffEditorWidget({
 			container,
 			model,
 			lineHeight: options.lineHeight,
@@ -147,7 +147,7 @@ class DiffEditorPaneSession extends DisposableOwner {
 			originalAriaLabel: originalLabel,
 			modifiedAriaLabel: modifiedLabel,
 		}));
-		if (options.breadcrumbs !== false) this.own(new DiffEditorBreadcrumbsController(this.editor, model));
+		if (options.breadcrumbs !== false) this._register(new DiffEditorBreadcrumbsController(this.editor, model));
 	}
 
 	layout(dimension: IDimension): void {

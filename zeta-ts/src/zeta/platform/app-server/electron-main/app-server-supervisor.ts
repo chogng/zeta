@@ -8,7 +8,7 @@ import type {
 } from "../../../../../generated/app-server/types.js";
 import type { AppServerConnectionState } from "../common/appServerApi.js";
 import {
-	DisposableSlot,
+	MutableDisposable,
 	type IDisposable,
 	markAsDisposed,
 	setDisposableOwner,
@@ -49,7 +49,7 @@ export class AppServerSupervisor implements IDisposable {
 	private readonly stateListeners = new Set<StateListener>();
 	private readonly notificationListeners = new Set<NotificationListener>();
 	private readonly requestHandlers = new Map<string, RegisteredRequestHandler>();
-	private readonly sessionNotification = new DisposableSlot<IDisposable>();
+	private readonly sessionNotification = new MutableDisposable<IDisposable>();
 	private readonly maxRestartAttempts: number;
 	private readonly initialRestartDelayMs: number;
 	private readonly maxRestartDelayMs: number;
@@ -233,7 +233,7 @@ export class AppServerSupervisor implements IDisposable {
 		setDisposableOwner(session, this);
 		this.session = session;
 		this.activateRequestHandlers(session);
-		this.sessionNotification.replace(session.onAnyNotification((notification) => {
+		this.sessionNotification.value = session.onAnyNotification((notification) => {
 			if (this.session !== session) return;
 			for (const listener of this.notificationListeners) {
 				try {
@@ -242,7 +242,7 @@ export class AppServerSupervisor implements IDisposable {
 					// One host consumer cannot prevent delivery to other notification consumers.
 				}
 			}
-		}));
+		});
 		this.setState("initializing");
 		try {
 			await session.initialize();

@@ -1,7 +1,7 @@
 import "./media/inlineCompletions.css";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { TextRange } from "../../../common/core/text.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
@@ -9,7 +9,7 @@ import { type InlineCompletionsService, type LanguageInlineCompletionItem } from
 import { type EditorViewport } from "../../../browser/view.js";
 
 /** Owns ghost-text projection and explicit acceptance of one inline completion. */
-export class InlineCompletionsController extends DisposableOwner {
+export class InlineCompletionsController extends Disposable {
 	private readonly element: HTMLSpanElement;
 	private request: AbortController | undefined;
 	private item: LanguageInlineCompletionItem | undefined;
@@ -20,20 +20,20 @@ export class InlineCompletionsController extends DisposableOwner {
 		element.className = "stanza-editor-inline-completion";
 		element.hidden = true;
 		viewport.element.append(element);
-		this.defer(() => element.remove());
-		this.own(addDisposableListener(input, "keydown", event => {
+		this._register(toDisposable(() => element.remove()));
+		this._register(addDisposableListener(input, "keydown", event => {
 			if (event.defaultPrevented || event.isComposing || !event.ctrlKey || !event.altKey || event.key !== " ") return;
 			stopEvent(event);
 			void this.refresh("explicit");
 		}));
-		this.own(addDisposableListener(input, "keydown", event => {
+		this._register(addDisposableListener(input, "keydown", event => {
 			if (event.defaultPrevented || event.isComposing || !this.item || event.key !== "Enter" || !event.altKey) return;
 			stopEvent(event);
 			this.accept();
 		}));
-		this.own(selections.onDidChange(() => this.clear()));
-		this.own(viewport.onDidChangeLayout(() => this.render()));
-		this.own(viewport.textModel.onDidChange(() => this.clear()));
+		this._register(selections.onDidChange(() => this.clear()));
+		this._register(viewport.onDidChangeLayout(() => this.render()));
+		this._register(viewport.textModel.onDidChange(() => this.clear()));
 	}
 
 	private async refresh(triggerKind: "automatic" | "explicit"): Promise<void> {
@@ -88,6 +88,6 @@ export class InlineCompletionsController extends DisposableOwner {
 
 registerEditorContribution({ id: "editor.contrib.inlineCompletions", install: context => {
 	if (context.kind !== "text" || context.options.inlineCompletions === false) return;
-	const service = context.own(context.languageFeaturesService.createInlineCompletionsService(context.model));
-	context.own(new InlineCompletionsController(context.view.element, context.viewport, context.selections, service, context.languageId, context.onLanguageError));
+	const service = context.register(context.languageFeaturesService.createInlineCompletionsService(context.model));
+	context.register(new InlineCompletionsController(context.view.element, context.viewport, context.selections, service, context.languageId, context.onLanguageError));
 } });

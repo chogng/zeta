@@ -1,7 +1,7 @@
 import { addDisposableListener, isNode, h } from "../../dom.js";
 import { DataTransfers } from "../../dnd.js";
 import { Emitter, type Event } from "../../../common/event.js";
-import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../common/lifecycle.js";
+import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../common/lifecycle.js";
 import { isFiniteNumber } from "../../../common/numbers.js";
 import { disposableWindowTimeout, scheduleAtNextAnimationFrame } from "../../scheduler.js";
 import { setAriaAttribute, setRole } from "../aria/aria.js";
@@ -22,9 +22,9 @@ export interface ListViewOptions<T> {
 }
 
 /** Low-level flat row view that owns DOM, sizing, scrolling, and DnD. */
-export class ListView<T> extends DisposableOwner {
+export class ListView<T> extends Disposable {
 	readonly element: HTMLDivElement;
-	private readonly _onDidScroll = this.own(new Emitter<number>());
+	private readonly _onDidScroll = this._register(new Emitter<number>());
 	private readonly heightOverrides = new Map<string, number>();
 	private _items: readonly T[] = [];
 
@@ -41,9 +41,9 @@ export class ListView<T> extends DisposableOwner {
 		if (options.domFocusable === true) this.element.tabIndex = 0;
 		this.element.style.overflow = options.scrolling === "external" ? "visible" : "auto";
 		container.append(this.element);
-		this.defer(() => this.element.remove());
-		this.own(addDisposableListener(this.element, "scroll", () => this._onDidScroll.fire(this.element.scrollTop)));
-		if (options.dnd) this.own(new ListViewDragAndDrop(this, options.dnd, options.getDragElements ?? ((item) => [item])));
+		this._register(toDisposable(() => this.element.remove()));
+		this._register(addDisposableListener(this.element, "scroll", () => this._onDidScroll.fire(this.element.scrollTop)));
+		if (options.dnd) this._register(new ListViewDragAndDrop(this, options.dnd, options.getDragElements ?? ((item) => [item])));
 	}
 
 	get items(): readonly T[] { return this._items; }
@@ -152,29 +152,29 @@ interface ActiveListDragSession {
 
 let activeListDragSession: ActiveListDragSession | undefined;
 
-class ListViewDragAndDrop<T> extends DisposableOwner {
+class ListViewDragAndDrop<T> extends Disposable {
 	private currentData: MutableDragAndDropData<T> | undefined;
 	private canDrop = false;
 	private feedbackIndexes: readonly number[] = [];
 	private feedbackPosition: DragOverPosition = ListDragOverPosition.Over;
 	private sourceRow: HTMLElement | undefined;
-	private readonly dragLeave = this.own(new DisposableSlot<IDisposable>());
-	private readonly autoScroll = this.own(new DisposableSlot<IDisposable>());
+	private readonly dragLeave = this._register(new MutableDisposable<IDisposable>());
+	private readonly autoScroll = this._register(new MutableDisposable<IDisposable>());
 	private dragPointerY: number | undefined;
 
 	constructor(private readonly view: ListView<T>, private readonly dnd: ListDragAndDrop<T>, private readonly getDragElements: (item: T, index: number) => readonly T[]) {
 		super();
-		this.own(addDisposableListener(view.element, "dragstart", (event: DragEvent) => this.onDragStart(event)));
-		this.own(addDisposableListener(view.element, "dragover", (event: DragEvent) => this.onDragOver(event)));
-		this.own(addDisposableListener(view.element, "dragleave", (event: DragEvent) => this.onDragLeave(event)));
-		this.own(addDisposableListener(view.element, "drop", (event: DragEvent) => this.onDrop(event)));
-		this.own(addDisposableListener(view.element, "dragend", (event: DragEvent) => this.onDragEnd(event)));
-		this.defer(() => {
+		this._register(addDisposableListener(view.element, "dragstart", (event: DragEvent) => this.onDragStart(event)));
+		this._register(addDisposableListener(view.element, "dragover", (event: DragEvent) => this.onDragOver(event)));
+		this._register(addDisposableListener(view.element, "dragleave", (event: DragEvent) => this.onDragLeave(event)));
+		this._register(addDisposableListener(view.element, "drop", (event: DragEvent) => this.onDrop(event)));
+		this._register(addDisposableListener(view.element, "dragend", (event: DragEvent) => this.onDragEnd(event)));
+		this._register(toDisposable(() => {
 			this.cancelDragLeave();
 			this.stopAutoScroll();
 			this.clearFeedback();
 			this.clearActiveSession();
-		});
+		}));
 	}
 
 	private onDragStart(event: DragEvent): void {
@@ -227,10 +227,10 @@ class ListViewDragAndDrop<T> extends DisposableOwner {
 			this.finishDragLeave(event);
 			return;
 		}
-		this.dragLeave.replace(disposableWindowTimeout(ownerWindow, () => {
+		this.dragLeave.value = disposableWindowTimeout(ownerWindow, () => {
 			this.dragLeave.clear();
 			this.finishDragLeave(event);
-		}, 100));
+		}, 100);
 	}
 
 	private finishDragLeave(event: DragEvent): void {
@@ -355,7 +355,7 @@ class ListViewDragAndDrop<T> extends DisposableOwner {
 			element.scrollTop += Math.max(-14, Math.min(14, delta));
 			this.scheduleAutoScroll();
 		};
-		this.autoScroll.replace(scheduleAtNextAnimationFrame(ownerWindow, callback));
+		this.autoScroll.value = scheduleAtNextAnimationFrame(ownerWindow, callback);
 	}
 
 	private stopAutoScroll(): void {

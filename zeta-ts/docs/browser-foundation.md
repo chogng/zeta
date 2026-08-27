@@ -33,6 +33,15 @@ base/common
 Browser foundation modules may depend on `base/common`, but must not import
 from UI, platform, or workbench modules.
 
+## Lifecycle ownership
+
+Browser helpers return or own an `IDisposable`. Composite browser objects extend
+`Disposable` and register listeners, observers, timers, and child resources
+through `_register()`. A reusable clear-and-rebuild scope uses
+`DisposableStore.clear()`; a single replaceable resource uses
+`MutableDisposable.value`. Callback cleanup is adapted with `toDisposable()` so
+the owner retains both explicit and `using` disposal semantics.
+
 ## Modules
 
 | Module | Responsibility |

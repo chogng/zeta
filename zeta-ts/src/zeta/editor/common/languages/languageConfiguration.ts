@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableOwner, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import { assertLanguageId } from "./languageId.js";
 
 export interface LanguageCharacterPair {
@@ -142,8 +142,8 @@ interface NormalizedLanguageConfiguration {
 export const DEFAULT_LANGUAGE_AUTO_CLOSE_BEFORE = "\"'`;:.,=}])> \n\t";
 
 /** Caller-owned registry for composable language editing rules. */
-export class LanguageConfigurationRegistry extends DisposableOwner implements LanguageConfigurationSource {
-	private readonly changeEmitter = this.own(new Emitter<LanguageConfigurationChangeEvent>());
+export class LanguageConfigurationRegistry extends Disposable implements LanguageConfigurationSource {
+	private readonly changeEmitter = this._register(new Emitter<LanguageConfigurationChangeEvent>());
 	private readonly contributions = new Map<string, LanguageConfigurationContribution[]>();
 	private readonly revisions = new Map<string, number>();
 	private readonly resolved = new Map<string, ResolvedLanguageConfiguration>();
@@ -153,11 +153,11 @@ export class LanguageConfigurationRegistry extends DisposableOwner implements La
 
 	constructor() {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.contributions.clear();
 			this.revisions.clear();
 			this.resolved.clear();
-		});
+		}));
 	}
 
 	register(languageId: string, configuration: LanguageConfiguration, options: LanguageConfigurationRegistrationOptions = {}): IDisposable {

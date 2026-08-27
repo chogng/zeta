@@ -4,7 +4,9 @@ import {
 	type Event,
 } from "../../../base/common/event.js";
 import {
-	DisposableOwner,
+	Disposable,
+
+	toDisposable,
 } from "../../../base/common/lifecycle.js";
 
 export interface WebviewElementOptions {
@@ -42,8 +44,8 @@ let webviewInstanceCounter = 0;
  * function, but no same-origin access, navigation, forms, downloads, network
  * connections, Electron APIs, or Zeta renderer capabilities.
  */
-export class WebviewElement extends DisposableOwner {
-	private readonly _onDidMessage = this.own(new Emitter<unknown>());
+export class WebviewElement extends Disposable {
+	private readonly _onDidMessage = this._register(new Emitter<unknown>());
 	private readonly channel: string;
 	private active = true;
 
@@ -84,7 +86,7 @@ export class WebviewElement extends DisposableOwner {
 		);
 		container.append(element);
 
-		this.own(addDisposableListener<MessageEvent>(
+		this._register(addDisposableListener<MessageEvent>(
 			targetWindow,
 			"message",
 			(event) => {
@@ -93,11 +95,11 @@ export class WebviewElement extends DisposableOwner {
 				if (envelope) this._onDidMessage.fire(envelope.message);
 			},
 		));
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.active = false;
 			element.srcdoc = "";
 			element.remove();
-		});
+		}));
 	}
 
 	/** Replaces the complete sandbox document body. */

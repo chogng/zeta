@@ -1,6 +1,6 @@
 import { type IDimension } from "../../geometry.js";
 import { type Event } from "../../../common/event.js";
-import { DisposableOwner } from "../../../common/lifecycle.js";
+import { Disposable } from "../../../common/lifecycle.js";
 import { GridView, type GridLocation, type GridViewDescriptor, type GridViewOptions, type GridViewSizing, type ISerializableView as ISerializableGridView, type IView as IGridView, type IViewDeserializer, type SerializedGridViewDescriptor } from "./gridview.js";
 
 /** A view hosted by the identity-addressed {@link Grid}. */
@@ -42,7 +42,7 @@ export const Sizing = {
  * Grid keeps common call sites independent of GridLocation while GridView owns
  * the indexed tree and nested SplitViews.
  */
-export class Grid<TView extends IView = IView> extends DisposableOwner {
+export class Grid<TView extends IView = IView> extends Disposable {
 	protected readonly gridview: GridView;
 	private readonly views = new Set<TView>();
 
@@ -67,11 +67,11 @@ export class Grid<TView extends IView = IView> extends DisposableOwner {
 	constructor(containerOrGridView: HTMLElement | GridView, ...descriptorAndOptions: [] | [descriptor: GridDescriptor<TView>, options?: GridOptions]) {
 		super();
 		if (containerOrGridView instanceof GridView) {
-			this.gridview = this.own(containerOrGridView);
+			this.gridview = this._register(containerOrGridView);
 		} else {
 			const descriptor = descriptorAndOptions[0];
 			if (!descriptor) throw new TypeError("Grid descriptor is required");
-			this.gridview = this.own(new GridView(containerOrGridView, descriptor, descriptorAndOptions[1] ?? {}));
+			this.gridview = this._register(new GridView(containerOrGridView, descriptor, descriptorAndOptions[1] ?? {}));
 		}
 		for (const view of this.gridview.getViews()) {
 			this.views.add(view as TView);

@@ -11,5 +11,5 @@ registerEditorContribution({ id: "editor.contrib.tokenization", configure: conte
 	context.setSemanticTokenSource(source);
 }, install: context => {
 	if (context.kind !== "text") return;
-	context.own(new TokenizationController(context.viewport, context.getCapability(TextEditorCapability.tokenization)));
+	context.register(new TokenizationController(context.viewport, context.getCapability(TextEditorCapability.tokenization)));
 } });

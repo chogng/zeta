@@ -1,7 +1,9 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import {
-	DisposableOwner,
+	Disposable,
 	type IDisposable,
+
+	toDisposable,
 } from "../../../../base/common/lifecycle.js";
 import {
 	type ContextKeyChangeEvent,
@@ -69,16 +71,16 @@ export interface ViewDescriptorServiceOptions {
  * Owns the runtime models for all view containers in one workbench window.
  */
 export class ViewDescriptorService
-	extends DisposableOwner
+	extends Disposable
 	implements IViewDescriptorService {
 	private readonly contextKeyService: IContextKeyService;
 	private readonly registry: WorkbenchViewRegistry;
 	private readonly models = new Map<string, ViewContainerModel>();
 	private readonly containerOrders = new Map<ViewContainerLocation, string[]>();
 	private readonly _onDidChangeViewContainers =
-		this.own(new Emitter<IViewContainersChangeEvent>());
+		this._register(new Emitter<IViewContainersChangeEvent>());
 	private readonly _onDidChangeViewContainerOrder =
-		this.own(new Emitter<ViewContainerLocation>());
+		this._register(new Emitter<ViewContainerLocation>());
 
 	readonly onDidChangeViewContainers =
 		this._onDidChangeViewContainers.event;
@@ -92,21 +94,21 @@ export class ViewDescriptorService
 		for (const container of this.registry.getViewContainers()) {
 			this.addContainer(container);
 		}
-		this.own(this.registry.onDidRegisterViewContainer((container) => {
+		this._register(this.registry.onDidRegisterViewContainer((container) => {
 			this.addContainer(container);
 			this._onDidChangeViewContainers.fire({
 				added: [container],
 				removed: [],
 			});
 		}));
-		this.own(this.registry.onDidDeregisterViewContainer((container) => {
+		this._register(this.registry.onDidDeregisterViewContainer((container) => {
 			this.removeContainer(container);
 			this._onDidChangeViewContainers.fire({
 				added: [],
 				removed: [container],
 			});
 		}));
-		this.defer(() => this.models.clear());
+		this._register(toDisposable(() => this.models.clear()));
 	}
 
 	getViewContainers(
@@ -160,7 +162,7 @@ export class ViewDescriptorService
 		if (this.models.has(container.id)) return;
 		this.models.set(
 			container.id,
-			this.own(new ViewContainerModel(
+			this._register(new ViewContainerModel(
 				container,
 				this.registry,
 				this.contextKeyService,
@@ -181,7 +183,7 @@ function sameContainerOrder(first: readonly string[], second: readonly string[])
 }
 
 class ViewContainerModel
-	extends DisposableOwner
+	extends Disposable
 	implements IViewContainerModel {
 	private readonly registry: WorkbenchViewRegistry;
 	private readonly contextKeyService: IContextKeyService;
@@ -189,11 +191,11 @@ class ViewContainerModel
 	private readonly visibilityContextKeys =
 		new Map<string, IContextKey<boolean>>();
 	private readonly _onDidChangeAllViewDescriptors =
-		this.own(new Emitter<IViewDescriptorsChangeEvent>());
+		this._register(new Emitter<IViewDescriptorsChangeEvent>());
 	private readonly _onDidChangeActiveViewDescriptors =
-		this.own(new Emitter<IViewDescriptorsChangeEvent>());
+		this._register(new Emitter<IViewDescriptorsChangeEvent>());
 	private readonly _onDidChangeVisibleViewDescriptors =
-		this.own(new Emitter<IViewDescriptorsChangeEvent>());
+		this._register(new Emitter<IViewDescriptorsChangeEvent>());
 	private _allViewDescriptors: readonly IViewDescriptor[] = [];
 	private _activeViewDescriptors: readonly IViewDescriptor[] = [];
 	private _visibleViewDescriptors: readonly IViewDescriptor[] = [];
@@ -213,20 +215,20 @@ class ViewContainerModel
 		super();
 		this.registry = registry;
 		this.contextKeyService = contextKeyService;
-		this.own(this.registry.onDidRegisterViews((event) => {
+		this._register(this.registry.onDidRegisterViews((event) => {
 			if (event.container.id === this.viewContainer.id) this.recompute();
 		}));
-		this.own(this.registry.onDidDeregisterViews((event) => {
+		this._register(this.registry.onDidDeregisterViews((event) => {
 			if (event.container.id === this.viewContainer.id) this.recompute();
 		}));
-		this.own(this.contextKeyService.onDidChangeContext((event) => {
+		this._register(this.contextKeyService.onDidChangeContext((event) => {
 			if (this.affectsActiveViews(event)) this.recompute();
 		}));
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			for (const key of this.visibilityContextKeys.values()) key.reset();
 			this.visibilityContextKeys.clear();
 			this.visibility.clear();
-		});
+		}));
 		this.recompute();
 	}
 

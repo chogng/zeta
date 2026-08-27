@@ -1,7 +1,7 @@
 import { existsSync, lstatSync, mkdirSync, readFileSync, statSync, watch } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
-import { DisposableOwner, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
 import type { LocalAppServerProcessLauncher } from "../../app-server/electron-main/localAppServerProcessLauncher.js";
 
@@ -19,7 +19,7 @@ export interface DevelopmentServerHostReloaderOptions {
 }
 
 /** Restarts one local App Server connection when a complete Rust generation is published. */
-export class DevelopmentServerHostReloader extends DisposableOwner {
+export class DevelopmentServerHostReloader extends Disposable {
 	private readonly debounceMs: number;
 	private readonly readGeneration: (generationFile: string) => Promise<string | undefined>;
 	private readonly log: (message: string, error?: unknown) => void;
@@ -32,13 +32,13 @@ export class DevelopmentServerHostReloader extends DisposableOwner {
 		this.debounceMs = positiveInteger(options.debounceMs, 200, "debounceMs");
 		this.readGeneration = options.readGeneration ?? readDevelopmentServerHostGeneration;
 		this.log = options.log ?? ((message, error) => error === undefined ? console.info(message) : console.error(message, error));
-		this.own((options.watchGeneration ?? watchGenerationFile)(options.generationFile, () => this.schedule()));
-		this.own(options.supervisor.onStateChange(state => {
+		this._register((options.watchGeneration ?? watchGenerationFile)(options.generationFile, () => this.schedule()));
+		this._register(options.supervisor.onStateChange(state => {
 			if (this.pendingExecutable && isStableState(state)) void this.ensureDrain().catch(error => this.log("[server-host] Development restart failed", error));
 		}));
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			if (this.timeout) clearTimeout(this.timeout);
-		});
+		}));
 	}
 
 	/** Applies the newest published generation and resolves after any queued restart. */

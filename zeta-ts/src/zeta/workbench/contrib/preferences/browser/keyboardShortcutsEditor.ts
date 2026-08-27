@@ -7,7 +7,7 @@ import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { getKeybindingLabel, KeybindingLabelStyle } from '../../../../base/common/keybindingLabels.js';
-import { DisposableOwner } from '../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { commandActionLabel } from '../../../../platform/action/common/action.js';
 import { isMenuItem, MenuId, MenusRegistry } from '../../../../platform/actions/common/actions.js';
 import type { CommandId } from '../../../../platform/commands/common/commands.js';
@@ -30,7 +30,7 @@ interface KeyboardShortcutsEditorOptions {
 }
 
 /** A tab-hosted editor for searching and updating the active keybindings resource. */
-export class KeyboardShortcutsEditor extends DisposableOwner implements IEditorPane {
+export class KeyboardShortcutsEditor extends Disposable implements IEditorPane {
 	public readonly id = KeyboardShortcutsEditorId;
 	private readonly model: KeyboardShortcutsEditorModel;
 	private readonly rows = new Map<string, KeyboardShortcutRow>();
@@ -53,16 +53,16 @@ export class KeyboardShortcutsEditor extends DisposableOwner implements IEditorP
 
 	constructor(private readonly options: KeyboardShortcutsEditorOptions) {
 		super();
-		this.model = this.own(new KeyboardShortcutsEditorModel({
+		this.model = this._register(new KeyboardShortcutsEditorModel({
 			keybindingService: options.keybindingService,
 			resourceService: options.keybindingsResourceService,
 			commandLabel: commandLabel,
 		}));
-		this.own(this.model.onDidChange(items => this.renderRows(items)));
-		this.defer(() => {
+		this._register(this.model.onDidChange(items => this.renderRows(items)));
+		this._register(toDisposable(() => {
 			for (const row of this.rows.values()) row.dispose();
 			this.rows.clear();
-		});
+		}));
 	}
 
 	public create(parent: HTMLElement): void {
@@ -73,9 +73,9 @@ export class KeyboardShortcutsEditor extends DisposableOwner implements IEditorP
 		container.setAttribute('aria-label', 'Keyboard Shortcuts');
 		parent.append(container);
 		this.container = container;
-		this.defer(() => container.remove());
+		this._register(toDisposable(() => container.remove()));
 
-		this.scopedContext = this.own(this.options.contextKeyService.createScoped(container));
+		this.scopedContext = this._register(this.options.contextKeyService.createScoped(container));
 		this.recordingContext = KeybindingContextKeys.isRecording.bindTo(this.scopedContext);
 
 		const header = h(ownerDocument, 'header');
@@ -88,7 +88,7 @@ export class KeyboardShortcutsEditor extends DisposableOwner implements IEditorP
 
 		const toolbar = h(ownerDocument, 'div');
 		toolbar.className = 'zeta-keybindings-toolbar';
-		this.searchInput = this.own(new InputBox(toolbar, {
+		this.searchInput = this._register(new InputBox(toolbar, {
 			type: 'search',
 			placeholder: 'Search keybindings',
 			ariaLabel: 'Search keybindings',
@@ -97,7 +97,7 @@ export class KeyboardShortcutsEditor extends DisposableOwner implements IEditorP
 		this.count = h(ownerDocument, 'span');
 		this.count.className = 'zeta-keybindings-count';
 		toolbar.append(this.searchInput.element, this.count);
-		this.own(this.searchInput.onDidChange(value => this.model.setQuery(value)));
+		this._register(this.searchInput.onDidChange(value => this.model.setQuery(value)));
 
 		this.recorder = this.createRecorder(ownerDocument);
 		this.status = h(ownerDocument, 'p');
@@ -107,7 +107,7 @@ export class KeyboardShortcutsEditor extends DisposableOwner implements IEditorP
 
 		const scrollHost = h(ownerDocument, 'div');
 		scrollHost.className = 'zeta-keybindings-scroll-host';
-		this.scrollable = this.own(new ScrollableElement(scrollHost, {
+		this.scrollable = this._register(new ScrollableElement(scrollHost, {
 			direction: 'vertical',
 			vertical: 'auto',
 			tabIndex: -1,
@@ -167,7 +167,7 @@ export class KeyboardShortcutsEditor extends DisposableOwner implements IEditorP
 		fields.className = 'zeta-keybindings-recorder-fields';
 		const keyField = h(ownerDocument, 'label');
 		keyField.textContent = 'Keybinding';
-		this.keyInput = this.own(new InputBox(keyField, {
+		this.keyInput = this._register(new InputBox(keyField, {
 			placeholder: 'Press the desired key combination',
 			ariaLabel: 'Record keybinding',
 			presentation: 'field',
@@ -177,7 +177,7 @@ export class KeyboardShortcutsEditor extends DisposableOwner implements IEditorP
 		keyField.append(this.keyInput.element);
 		const whenField = h(ownerDocument, 'label');
 		whenField.textContent = 'When';
-		this.whenInput = this.own(new InputBox(whenField, {
+		this.whenInput = this._register(new InputBox(whenField, {
 			placeholder: 'Optional context expression',
 			ariaLabel: 'Keybinding when condition',
 			presentation: 'field',
@@ -187,20 +187,20 @@ export class KeyboardShortcutsEditor extends DisposableOwner implements IEditorP
 
 		const actions = h(ownerDocument, 'div');
 		actions.className = 'zeta-keybindings-recorder-actions';
-		this.saveButton = this.own(new Button(actions, {
+		this.saveButton = this._register(new Button(actions, {
 			label: 'Save',
 			presentation: 'primary',
 			onClick: () => void this.saveEditingItem(),
 		}));
 		this.saveButton.toggleClassName('zeta-keybindings-save', true);
-		const cancel = this.own(new Button(actions, {
+		const cancel = this._register(new Button(actions, {
 			label: 'Cancel',
 			presentation: 'secondary',
 			onClick: () => this.closeRecorder(),
 		}));
 		cancel.toggleClassName('zeta-keybindings-cancel', true);
 		recorder.append(this.recorderTitle, fields, actions);
-		this.own(this.keyInput.onKeyDown(event => this.recordKeybinding(event)));
+		this._register(this.keyInput.onKeyDown(event => this.recordKeybinding(event)));
 		return recorder;
 	}
 
@@ -303,7 +303,7 @@ export class KeyboardShortcutsEditor extends DisposableOwner implements IEditorP
 	}
 }
 
-class KeyboardShortcutRow extends DisposableOwner {
+class KeyboardShortcutRow extends Disposable {
 	public readonly element: HTMLDivElement;
 	private item: KeyboardShortcutItem;
 	private readonly command: HTMLSpanElement;
@@ -334,7 +334,7 @@ class KeyboardShortcutRow extends DisposableOwner {
 		const actions = h(ownerDocument, 'div');
 		actions.className = 'zeta-keybindings-row-actions';
 		actions.setAttribute('role', 'cell');
-		const edit = this.own(new Button(actions, {
+		const edit = this._register(new Button(actions, {
 			label: item.source === 'user' ? 'Edit' : 'Add',
 			title: item.source === 'user' ? 'Edit keybinding' : 'Add keybinding',
 			presentation: 'secondary',
@@ -343,7 +343,7 @@ class KeyboardShortcutRow extends DisposableOwner {
 		}));
 		edit.toggleClassName('zeta-keybindings-row-action', true);
 		if (item.source === 'user') {
-			const remove = this.own(new Button(actions, {
+			const remove = this._register(new Button(actions, {
 				label: 'Remove',
 				title: 'Remove keybinding',
 				presentation: 'danger',
@@ -354,7 +354,7 @@ class KeyboardShortcutRow extends DisposableOwner {
 		}
 		this.element.append(commandCell, this.key, this.when, this.source, actions);
 		container.append(this.element);
-		this.defer(() => this.element.remove());
+		this._register(toDisposable(() => this.element.remove()));
 		this.update(item);
 	}
 

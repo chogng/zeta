@@ -1,6 +1,6 @@
 import { arraysEqual } from "../../../base/common/arrays.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { type VersionedLanguageResult } from "../languages/languageRequestCoordinator.js";
 import { LanguageResultStoreChangeReason, type VersionedLanguageResultStore } from "../languages/languageResultStore.js";
 import { getLanguageTokenResultDelta, type LanguageToken, type LanguageTokenResult, type LanguageTokenResultDelta, type LanguageTokenResultSplice } from "./languageTokens.js";
@@ -85,8 +85,8 @@ interface ReusedLineCandidate {
  * columns, so moved suffixes reuse semantic state and materialize absolute
  * ranges only when queried.
  */
-export class LanguageTokenLineIndex extends DisposableOwner {
-	private readonly changeEmitter = this.own(new Emitter<LanguageTokenLineIndexChange>());
+export class LanguageTokenLineIndex extends Disposable {
+	private readonly changeEmitter = this._register(new Emitter<LanguageTokenLineIndexChange>());
 	private readonly model: TextModel;
 	private state: LanguageTokenIndexState = EMPTY_STATE;
 	private invalidatedBase: LanguageTokenIndexBase | undefined;
@@ -102,11 +102,11 @@ export class LanguageTokenLineIndex extends DisposableOwner {
 		this.indexedModelVersion = initialResult?.modelVersion ?? this.model.version;
 		this.indexedRequestId = initialResult?.requestId;
 		this.state = initialResult ? buildState(initialResult.value.tokens) : EMPTY_STATE;
-		this.own(store.onDidChange(change => this.acceptStoreChange(change.reason, change.modelVersion, change.result)));
-		this.defer(() => {
+		this._register(store.onDidChange(change => this.acceptStoreChange(change.reason, change.modelVersion, change.result)));
+		this._register(toDisposable(() => {
 			this.state = EMPTY_STATE;
 			this.invalidatedBase = undefined;
-		});
+		}));
 	}
 
 	get textModel(): TextModel {

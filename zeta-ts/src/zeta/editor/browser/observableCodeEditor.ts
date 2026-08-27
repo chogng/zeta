@@ -1,6 +1,6 @@
 import { addDisposableListener } from '../../base/browser/dom.js';
 import { type Event, Emitter } from '../../base/common/event.js';
-import { DisposableOwner } from '../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
 import {
 	constObservable,
 	derived,
@@ -35,7 +35,7 @@ const observableEditorCache = new WeakMap<CodeEditorWidget, ObservableCodeEditor
  * EditContext, and viewport. It does not create a second text model, scroll
  * owner, or DOM projection.
  */
-export class ObservableCodeEditor extends DisposableOwner {
+export class ObservableCodeEditor extends Disposable {
 	private readonly modelState: ObservableState<TextModel>;
 	private readonly versionState: ObservableState<number>;
 	private readonly selectionsState: ObservableState<TextSelectionSet>;
@@ -89,21 +89,21 @@ export class ObservableCodeEditor extends DisposableOwner {
 	private constructor(editor: CodeEditorWidget) {
 		super();
 		this.editor = editor;
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			if (observableEditorCache.get(editor) === this) observableEditorCache.delete(editor);
-		});
+		}));
 
 		const selectionController = editor.view.selectionController;
 		const model = editor.viewport.textModel;
-		this.modelState = this.own(new ObservableState(model));
-		this.versionState = this.own(new ObservableState(model.version));
-		this.selectionsState = this.own(new ObservableState(selectionController.selections));
-		this.focusState = this.own(new ObservableState(readFocus(editor.element)));
-		this.textFocusState = this.own(new ObservableState(readFocus(editor.view.editContext.element)));
-		this.compositionState = this.own(new ObservableState(editor.view.compositionController.composing));
-		this.layoutState = this.own(new ObservableState(editor.viewport.currentLayout));
-		this.typeChannel = this.own(new ObservableChannel(''));
-		this.pasteChannel = this.own(new ObservableChannel<IClipboardPasteEvent | undefined>(undefined));
+		this.modelState = this._register(new ObservableState(model));
+		this.versionState = this._register(new ObservableState(model.version));
+		this.selectionsState = this._register(new ObservableState(selectionController.selections));
+		this.focusState = this._register(new ObservableState(readFocus(editor.element)));
+		this.textFocusState = this._register(new ObservableState(readFocus(editor.view.editContext.element)));
+		this.compositionState = this._register(new ObservableState(editor.view.compositionController.composing));
+		this.layoutState = this._register(new ObservableState(editor.viewport.currentLayout));
+		this.typeChannel = this._register(new ObservableChannel(''));
+		this.pasteChannel = this._register(new ObservableChannel<IClipboardPasteEvent | undefined>(undefined));
 
 		this.model = this.modelState;
 		this.isReadonly = constObservable(selectionController.readOnly);
@@ -120,7 +120,7 @@ export class ObservableCodeEditor extends DisposableOwner {
 			this.versionId.read(reader);
 			return this.model.read(reader).getText();
 		});
-		this.value = this.own(new SettableDerivedObservable(valueSource, (value, suppliedTransaction) => {
+		this.value = this._register(new SettableDerivedObservable(valueSource, (value, suppliedTransaction) => {
 			const update = (): void => {
 				const currentModel = this.modelState.get();
 				if (currentModel.getText() !== value) currentModel.reset(value);
@@ -157,32 +157,32 @@ export class ObservableCodeEditor extends DisposableOwner {
 			return editor.element;
 		});
 
-		this.own(model.onDidChange(() => this.runInTransaction(transaction => this.synchronizeState(transaction))));
-		this.own(selectionController.onDidChange(() => this.runInTransaction(transaction => this.synchronizeState(transaction))));
-		this.own(editor.viewport.onDidChangeLayout(change => this.runInTransaction(transaction => {
+		this._register(model.onDidChange(() => this.runInTransaction(transaction => this.synchronizeState(transaction))));
+		this._register(selectionController.onDidChange(() => this.runInTransaction(transaction => this.synchronizeState(transaction))));
+		this._register(editor.viewport.onDidChangeLayout(change => this.runInTransaction(transaction => {
 			this.layoutState.set(change.layout, transaction);
 			this.synchronizeState(transaction);
 		})));
-		this.own(editor.view.onDidEdit(event => this.runInTransaction(transaction => {
+		this._register(editor.view.onDidEdit(event => this.runInTransaction(transaction => {
 			this.synchronizeState(transaction);
 			if (event.insertedText !== undefined) this.typeChannel.emit(event.insertedText, transaction);
 		})));
-		this.own(editor.view.editContext.onWillPaste(event => this.runInTransaction(transaction => {
+		this._register(editor.view.editContext.onWillPaste(event => this.runInTransaction(transaction => {
 			this.pasteChannel.emit(event, transaction);
 		})));
-		this.own(editor.view.compositionController.onDidChange(composing => this.runInTransaction(transaction => {
+		this._register(editor.view.compositionController.onDidChange(composing => this.runInTransaction(transaction => {
 			this.compositionState.set(composing, transaction);
 		})));
-		this.own(editor.view.editContext.onDidFocus(() => this.runInTransaction(transaction => {
+		this._register(editor.view.editContext.onDidFocus(() => this.runInTransaction(transaction => {
 			this.focusState.set(true, transaction);
 			this.textFocusState.set(true, transaction);
 		})));
-		this.own(editor.view.editContext.onDidBlur(() => this.runInTransaction(transaction => {
+		this._register(editor.view.editContext.onDidBlur(() => this.runInTransaction(transaction => {
 			this.focusState.set(readFocus(editor.element), transaction);
 			this.textFocusState.set(false, transaction);
 		})));
-		this.own(addDisposableListener(editor.element, 'focusin', () => this.refreshFocusState()));
-		this.own(addDisposableListener(editor.element, 'focusout', () => this.refreshFocusState()));
+		this._register(addDisposableListener(editor.element, 'focusin', () => this.refreshFocusState()));
+		this._register(addDisposableListener(editor.element, 'focusout', () => this.refreshFocusState()));
 	}
 
 	/** Batches state notifications caused by synchronous editor work. */
@@ -330,7 +330,7 @@ export class ObservableCodeEditor extends DisposableOwner {
 	}
 }
 
-class ObservableState<T> extends DisposableOwner implements ISettableObservable<T> {
+class ObservableState<T> extends Disposable implements ISettableObservable<T> {
 	private readonly emitter: Emitter<T>;
 	private value: T;
 
@@ -339,7 +339,7 @@ class ObservableState<T> extends DisposableOwner implements ISettableObservable<
 	public constructor(initialValue: T) {
 		super();
 		this.value = initialValue;
-		this.emitter = this.own(new Emitter<T>());
+		this.emitter = this._register(new Emitter<T>());
 		this.onDidChange = this.emitter.event;
 	}
 
@@ -371,7 +371,7 @@ class ObservableState<T> extends DisposableOwner implements ISettableObservable<
 	}
 }
 
-class ObservableChannel<T> extends DisposableOwner implements IObservable<T> {
+class ObservableChannel<T> extends Disposable implements IObservable<T> {
 	private readonly emitter: Emitter<T>;
 	private value: T;
 
@@ -380,7 +380,7 @@ class ObservableChannel<T> extends DisposableOwner implements IObservable<T> {
 	public constructor(initialValue: T) {
 		super();
 		this.value = initialValue;
-		this.emitter = this.own(new Emitter<T>());
+		this.emitter = this._register(new Emitter<T>());
 		this.onDidChange = this.emitter.event;
 	}
 
@@ -403,7 +403,7 @@ class ObservableChannel<T> extends DisposableOwner implements IObservable<T> {
 	}
 }
 
-class SettableDerivedObservable<T> extends DisposableOwner implements ISettableObservable<T> {
+class SettableDerivedObservable<T> extends Disposable implements ISettableObservable<T> {
 	public constructor(
 		private readonly source: IObservable<T>,
 		private readonly setter: (value: T, transaction: ITransaction | undefined) => void,

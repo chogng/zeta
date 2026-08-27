@@ -1,5 +1,5 @@
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { isWindows } from "../../../../base/common/platform.js";
 import { EditorClipboardPasteMode, EditorEmptySelectionClipboardPolicy, getEditorClipboardEntries, type EditorClipboardEntry } from "../common/clipboard.js";
 import { createClipboardCutCommand } from "../../../common/cursor/cursorDeleteOperations.js";
@@ -60,7 +60,7 @@ interface ClipboardPasteData {
 /**
  * Routes native clipboard events through Stanza's selection-aware commands.
  */
-export class ClipboardController extends DisposableOwner {
+export class ClipboardController extends Disposable {
 	private readonly lineEnding: ClipboardLineEnding;
 	private readonly emptySelectionPolicy: EditorEmptySelectionClipboardPolicy;
 	private readonly semanticTokens: SemanticTokenSource | undefined;
@@ -117,25 +117,25 @@ export class ClipboardController extends DisposableOwner {
 		this.systemTextReader = options.systemTextReader ?? createStanzaBrowserClipboardSystemTextReader(this.element.ownerDocument);
 		this.richTextReader = options.richTextReader ?? createStanzaBrowserClipboardRichTextReader(this.element.ownerDocument);
 		this.richTextWriter = options.richTextWriter ?? createStanzaBrowserClipboardRichTextWriter(this.element.ownerDocument);
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.asynchronousPasteRequest += 1;
-		});
+		}));
 		if (editContext) {
-			this.own(editContext.onWillCopy(event => this.handleCopy(event)));
-			this.own(editContext.onWillCut(event => this.handleCut(event)));
-			this.own(editContext.onWillPaste(event => this.handlePaste(event)));
+			this._register(editContext.onWillCopy(event => this.handleCopy(event)));
+			this._register(editContext.onWillCut(event => this.handleCut(event)));
+			this._register(editContext.onWillPaste(event => this.handlePaste(event)));
 		} else {
-			this.own(addDisposableListener<ClipboardEvent>(
+			this._register(addDisposableListener<ClipboardEvent>(
 				this.element,
 				"copy",
 				event => this.handleCopy(createClipboardCopyEvent(event, false)),
 			));
-			this.own(addDisposableListener<ClipboardEvent>(
+			this._register(addDisposableListener<ClipboardEvent>(
 				this.element,
 				"cut",
 				event => this.handleCut(createClipboardCopyEvent(event, true)),
 			));
-			this.own(addDisposableListener<ClipboardEvent>(
+			this._register(addDisposableListener<ClipboardEvent>(
 				this.element,
 				"paste",
 				event => this.handlePaste(createClipboardPasteEvent(event)),

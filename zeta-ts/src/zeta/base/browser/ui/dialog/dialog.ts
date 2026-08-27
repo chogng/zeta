@@ -1,5 +1,5 @@
 import { addDisposableListener, h } from "../../dom.js";
-import { DisposableOwner } from "../../../common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../common/lifecycle.js";
 import {
 	focusFirst,
 	trapTabFocus,
@@ -14,7 +14,7 @@ export interface DialogOptions {
 }
 
 /** A modal dialog backed by the browser's native dialog element. */
-export class Dialog extends DisposableOwner {
+export class Dialog extends Disposable {
 	readonly element: HTMLDialogElement;
 	private resolve: ((result: string) => void) | undefined;
 	private shown = false;
@@ -24,7 +24,7 @@ export class Dialog extends DisposableOwner {
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, "dialog");
 		this.element = element;
-		this.defer(() => element.remove());
+		this._register(toDisposable(() => element.remove()));
 		element.className = "zeta-dialog";
 		const heading = h(ownerDocument, "h2");
 		heading.className = "zeta-dialog-title";
@@ -40,14 +40,14 @@ export class Dialog extends DisposableOwner {
 		}
 		element.append(heading, body);
 		container.append(element);
-		this.own(addDisposableListener(element, "close", () => {
+		this._register(addDisposableListener(element, "close", () => {
 			this.finish(element.returnValue);
 		}));
-		this.own(trapTabFocus(element));
-		this.defer(() => {
+		this._register(trapTabFocus(element));
+		this._register(toDisposable(() => {
 			if (element.open) element.close();
 			this.finish("");
-		});
+		}));
 	}
 
 	show(): Promise<string> {

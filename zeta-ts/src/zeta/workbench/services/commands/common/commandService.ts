@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import {
 	type CommandId,
 	type CommandRegistry,
@@ -13,12 +13,12 @@ import type {
 
 /** Executes registered commands with the services of one Workbench window. */
 export class CommandService
-	extends DisposableOwner
+	extends Disposable
 	implements ICommandService {
 	private readonly accessor: ServicesAccessor;
 	private readonly registry: CommandRegistry;
-	private readonly _onWillExecuteCommand = this.own(new Emitter<ICommandEvent>());
-	private readonly _onDidExecuteCommand = this.own(new Emitter<ICommandEvent>());
+	private readonly _onWillExecuteCommand = this._register(new Emitter<ICommandEvent>());
+	private readonly _onDidExecuteCommand = this._register(new Emitter<ICommandEvent>());
 
 	readonly onWillExecuteCommand: Event<ICommandEvent> =
 		this._onWillExecuteCommand.event;

@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable } from "../../../base/common/lifecycle.js";
 import type { IAnyWorkspaceIdentifier, ISingleFolderWorkspaceIdentifier } from "../../workspace/common/workspace.js";
 import type { WorkspaceContextMainService, WorkspacesMainService } from "./workspacesMainService.js";
 
@@ -118,13 +118,13 @@ interface IRuntimeSwitchResult {
  * Renderer projection is deliberately outside this service and reacts to the
  * committed identity through the application assembly boundary.
  */
-export class WorkspaceTransitionMainService extends DisposableOwner {
+export class WorkspaceTransitionMainService extends Disposable {
 	private readonly workspaces: WorkspacesMainService;
 	private readonly context: WorkspaceContextMainService;
 	private readonly runtime: IWorkspaceRuntimeSwitcher;
 	private readonly classifyRuntimeError: (error: unknown) => WorkspaceTransitionFailureKind;
 	private readonly recovery: IWorkspaceTransitionRecoveryRouter;
-	private readonly _onDidChangeState = this.own(new Emitter<WorkspaceTransitionState>());
+	private readonly _onDidChangeState = this._register(new Emitter<WorkspaceTransitionState>());
 	private transitionQueue: Promise<void> = Promise.resolve();
 	private nextTransitionId = 1;
 	private _state: WorkspaceTransitionState = { phase: WorkspaceTransitionPhase.Idle };

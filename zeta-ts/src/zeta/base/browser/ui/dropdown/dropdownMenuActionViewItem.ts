@@ -23,7 +23,7 @@ export type DropdownMenuActions =
 export class DropdownMenuActionViewItem extends ActionViewItem {
 	private readonly actions: DropdownMenuActions;
 	private readonly contextMenuProvider: IContextMenuProvider;
-	private readonly _onDidChangeVisibility = this.own(new Emitter<boolean>());
+	private readonly _onDidChangeVisibility = this._register(new Emitter<boolean>());
 	readonly onDidChangeVisibility = this._onDidChangeVisibility.event;
 	private button: Button | undefined;
 	private visible = false;
@@ -59,7 +59,7 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 		indicator.className = "zeta-dropdown-menu-indicator";
 		appendIcon(lxiconsLibrary.dropdownIndicator, indicator);
 		button.domNode.append(indicator);
-		this.own(addDisposableListener(button.domNode, "keydown", (event) => {
+		this._register(addDisposableListener(button.domNode, "keydown", (event) => {
 			if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
 			stopEvent(event);
 			this.show();

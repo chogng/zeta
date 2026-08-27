@@ -1,18 +1,18 @@
 import { Emitter, type Event } from '../../../../base/common/event.js';
-import { DisposableOwner } from '../../../../base/common/lifecycle.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { IEditorPart } from "../../../browser/parts/editor/editorPart.js";
 import type { EditorInput, EditorOpenOptions, EditorOpenTarget, IEditorService } from "../common/editorService.js";
 import type { IEditorGroupsService } from '../common/editorGroupsService.js';
 import type { EditorGroupId, EditorGroupState, EditorPartChangeEvent, EditorPartState } from "../common/editorState.js";
 
 /** Projects the Editor Part into the resource-oriented Workbench editor contract. */
-export class BrowserEditorService extends DisposableOwner implements IEditorService, IEditorGroupsService {
-	private readonly activeEditorChangeEmitter = this.own(new Emitter<void>());
-	private readonly visibleEditorsChangeEmitter = this.own(new Emitter<void>());
-	private readonly groupsChangeEmitter = this.own(new Emitter<void>());
-	private readonly groupAddEmitter = this.own(new Emitter<EditorGroupState>());
-	private readonly groupRemoveEmitter = this.own(new Emitter<EditorGroupId>());
-	private readonly groupActivateEmitter = this.own(new Emitter<EditorGroupState>());
+export class BrowserEditorService extends Disposable implements IEditorService, IEditorGroupsService {
+	private readonly activeEditorChangeEmitter = this._register(new Emitter<void>());
+	private readonly visibleEditorsChangeEmitter = this._register(new Emitter<void>());
+	private readonly groupsChangeEmitter = this._register(new Emitter<void>());
+	private readonly groupAddEmitter = this._register(new Emitter<EditorGroupState>());
+	private readonly groupRemoveEmitter = this._register(new Emitter<EditorGroupId>());
+	private readonly groupActivateEmitter = this._register(new Emitter<EditorGroupState>());
 	private activeEditorSignature: string;
 	private visibleEditorSignature: string;
 
@@ -28,7 +28,7 @@ export class BrowserEditorService extends DisposableOwner implements IEditorServ
 		super();
 		this.activeEditorSignature = this.getActiveEditorSignature();
 		this.visibleEditorSignature = this.getVisibleEditorSignature();
-		this.own(editorPart.onDidChangeEditors(event => this.publishState(event)));
+		this._register(editorPart.onDidChangeEditors(event => this.publishState(event)));
 	}
 
 	get onDidChangeEditors(): Event<EditorPartChangeEvent> {

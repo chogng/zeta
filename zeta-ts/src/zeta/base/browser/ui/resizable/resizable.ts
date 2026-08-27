@@ -1,7 +1,7 @@
 import { Dimension, type IDimension } from "../../geometry.js";
 import { observeElementSize } from "../../observer.js";
 import { type Event, Emitter } from "../../../common/event.js";
-import { DisposableOwner, type IDisposable } from "../../../common/lifecycle.js";
+import { Disposable, type IDisposable, toDisposable } from "../../../common/lifecycle.js";
 import { clamp, isFiniteNumber } from "../../../common/numbers.js";
 import { Sash, SashState } from "../sash/sash.js";
 import { h } from "../../dom.js";
@@ -27,12 +27,12 @@ export interface IResizeEvent {
 }
 
 /** A four-edge resize surface for floating or otherwise independently sized UI. */
-export class ResizableHTMLElement extends DisposableOwner {
+export class ResizableHTMLElement extends Disposable {
 	readonly domNode: HTMLDivElement;
 
-	private readonly _onDidWillResize = this.own(new Emitter<void>());
+	private readonly _onDidWillResize = this._register(new Emitter<void>());
 	readonly onDidWillResize: Event<void> = this._onDidWillResize.event;
-	private readonly _onDidResize = this.own(new Emitter<IResizeEvent>());
+	private readonly _onDidResize = this._register(new Emitter<IResizeEvent>());
 	readonly onDidResize: Event<IResizeEvent> = this._onDidResize.event;
 
 	private readonly northSash: Sash;
@@ -53,13 +53,13 @@ export class ResizableHTMLElement extends DisposableOwner {
 		const ownerDocument = container.ownerDocument;
 		this.domNode = h(ownerDocument, "div");
 		this.domNode.className = "zeta-resizable";
-		this.defer(() => this.domNode.remove());
+		this._register(toDisposable(() => this.domNode.remove()));
 
 		container.append(this.domNode);
-		this.northSash = this.own(new Sash(this.domNode, "horizontal"));
-		this.eastSash = this.own(new Sash(this.domNode, "vertical"));
-		this.southSash = this.own(new Sash(this.domNode, "horizontal"));
-		this.westSash = this.own(new Sash(this.domNode, "vertical"));
+		this.northSash = this._register(new Sash(this.domNode, "horizontal"));
+		this.eastSash = this._register(new Sash(this.domNode, "vertical"));
+		this.southSash = this._register(new Sash(this.domNode, "horizontal"));
+		this.westSash = this._register(new Sash(this.domNode, "vertical"));
 
 		this.connectSash(this.northSash, "north");
 		this.connectSash(this.eastSash, "east");
@@ -135,14 +135,14 @@ export class ResizableHTMLElement extends DisposableOwner {
 	}
 
 	private connectSash(sash: Sash, edge: "north" | "east" | "south" | "west"): void {
-		this.own(sash.onDidStart(() => {
+		this._register(sash.onDidStart(() => {
 			if (this.resizeStart !== undefined) return;
 			this._onDidWillResize.fire();
 			this.resizeStart = this._size;
 			this.deltaX = 0;
 			this.deltaY = 0;
 		}));
-		this.own(sash.onDidChange((event) => {
+		this._register(sash.onDidChange((event) => {
 			if (this.resizeStart === undefined) return;
 			if (edge === "east") this.deltaX = event.delta;
 			if (edge === "west") this.deltaX = -event.delta;
@@ -158,7 +158,7 @@ export class ResizableHTMLElement extends DisposableOwner {
 				[edge]: true,
 			});
 		}));
-		this.own(sash.onDidReset(() => {
+		this._register(sash.onDidReset(() => {
 			if (this.preferredSize === undefined) return;
 			const height = edge === "north" || edge === "south"
 				? this.preferredSize.height
@@ -169,7 +169,7 @@ export class ResizableHTMLElement extends DisposableOwner {
 			this.layout(height, width);
 			this._onDidResize.fire({ dimension: this._size, done: true });
 		}));
-		this.own(sash.onDidEnd(() => {
+		this._register(sash.onDidEnd(() => {
 			if (this.resizeStart === undefined) return;
 			this.resizeStart = undefined;
 			this.deltaX = 0;
@@ -191,7 +191,7 @@ export class ResizableHTMLElement extends DisposableOwner {
 }
 
 /** Compatibility wrapper for callers that use the browser-native resize surface. */
-export class Resizable extends DisposableOwner {
+export class Resizable extends Disposable {
 	readonly element: HTMLDivElement;
 
 	constructor(container: HTMLElement, onResize?: (size: IDimension) => void) {
@@ -201,9 +201,9 @@ export class Resizable extends DisposableOwner {
 		this.element.className = "zeta-resizable";
 		this.element.style.resize = "both";
 		this.element.style.overflow = "auto";
-		this.defer(() => this.element.remove());
+		this._register(toDisposable(() => this.element.remove()));
 		container.append(this.element);
-		this.own(observeElementSize(this.element, (size) => onResize?.(size)));
+		this._register(observeElementSize(this.element, (size) => onResize?.(size)));
 	}
 }
 

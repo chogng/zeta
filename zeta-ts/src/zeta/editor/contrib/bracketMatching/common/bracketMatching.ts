@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type LanguageStructuralBracketSource } from "../../../common/languages/languageLexicalContext.js";
 import { LanguageLexicalContextIndex } from "../../../common/languages/languageLexicalContext.js";
 import { type LanguageConfigurationSource } from "../../../common/languages/languageConfiguration.js";
@@ -21,7 +21,7 @@ interface BracketLocation {
 }
 
 /** Finds configured structural bracket pairs while excluding lexical string/comment spans. */
-export class LanguageBracketMatcher extends DisposableOwner {
+export class LanguageBracketMatcher extends Disposable {
 	readonly textModel: TextModel;
 	private readonly maxScanLineCount: number;
 
@@ -45,7 +45,7 @@ export class LanguageBracketMatcher extends DisposableOwner {
 		super();
 		try {
 			this.textModel = textModel;
-			const brackets = typeof bracketsOrLanguageId === "string" ? this.own(new LanguageLexicalContextIndex(textModel, bracketsOrLanguageId, configurationsOrOptions as LanguageConfigurationSource)) : bracketsOrLanguageId;
+			const brackets = typeof bracketsOrLanguageId === "string" ? this._register(new LanguageLexicalContextIndex(textModel, bracketsOrLanguageId, configurationsOrOptions as LanguageConfigurationSource)) : bracketsOrLanguageId;
 			const options = typeof bracketsOrLanguageId === "string" ? legacyOptions : configurationsOrOptions as LanguageBracketMatcherOptions;
 			this.brackets = brackets;
 			if (brackets.textModel !== textModel) throw new TypeError("Language bracket matcher requires a structural source for its text model");

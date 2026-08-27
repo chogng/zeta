@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableOwner, DisposableStore } from "../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
 import { SyntaxProviderRegistry, type SyntaxRequest } from "../../common/languages/syntax/syntaxProviders.js";
 import { SYNTAX_TOKEN_LANE, SyntaxProviderWorker, SyntaxService, type SyntaxLane, type SyntaxResult, type SyntaxWorker } from "../../common/languages/syntax/syntaxService.js";
 import { syntaxWireCodec } from "../../common/languages/syntax/syntaxWire.js";
@@ -235,9 +235,9 @@ function createPortPair(): readonly [MemorySyntaxPort, MemorySyntaxPort] {
 	return [first, second];
 }
 
-class MemorySyntaxPort extends DisposableOwner implements LanguageWorkerWireClientPort {
-	private readonly messageEmitter = this.own(new Emitter<unknown>());
-	private readonly failureEmitter = this.own(new Emitter<unknown>());
+class MemorySyntaxPort extends Disposable implements LanguageWorkerWireClientPort {
+	private readonly messageEmitter = this._register(new Emitter<unknown>());
+	private readonly failureEmitter = this._register(new Emitter<unknown>());
 	private peer: MemorySyntaxPort | undefined;
 
 	readonly sentMessages: unknown[] = [];
@@ -246,9 +246,9 @@ class MemorySyntaxPort extends DisposableOwner implements LanguageWorkerWireClie
 
 	constructor() {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.peer = undefined;
-		});
+		}));
 	}
 
 	connect(peer: MemorySyntaxPort): void {
@@ -268,7 +268,7 @@ class MemorySyntaxPort extends DisposableOwner implements LanguageWorkerWireClie
 	}
 }
 
-class FailingSyntaxWorker extends DisposableOwner implements SyntaxWorker {
+class FailingSyntaxWorker extends Disposable implements SyntaxWorker {
 	async run(_request: LanguageWorkerRequest<SyntaxLane, SyntaxRequest>): Promise<SyntaxResult> {
 		throw new Error("syntax worker failed");
 	}

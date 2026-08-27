@@ -1,6 +1,6 @@
 import { VSBuffer } from "../../../../base/common/buffer.js";
 import { Emitter } from "../../../../base/common/event.js";
-import { DisposableOwner, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { TextPosition, TextRange } from "../../../../editor/common/core/text.js";
 import { LanguageDiagnosticSeverity, type LanguageDiagnostic } from "../../../../editor/common/languages/languageResults.js";
@@ -43,12 +43,12 @@ interface PublishedDiagnostics {
 }
 
 /** Synchronizes open Code models and aggregates current diagnostics by revision. */
-export class AppServerLanguageDiagnosticsService extends DisposableOwner implements ILanguageDiagnosticsService {
+export class AppServerLanguageDiagnosticsService extends Disposable implements ILanguageDiagnosticsService {
 	private readonly entries = new Map<string, LanguageDocumentEntry>();
 	private readonly serverSnapshots = new Map<string, LanguageDiagnosticSnapshot>();
 	private readonly workspaceServerKeys = new Set<string>();
 	private readonly publishedDiagnostics = new Map<number, PublishedDiagnostics>();
-	private readonly changeEmitter = this.own(new Emitter<URI>());
+	private readonly changeEmitter = this._register(new Emitter<URI>());
 	private nextPublisherId = 1;
 	private workspaceDiagnosticsQueued = false;
 	private trustRefreshQueued = false;
@@ -65,8 +65,8 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
 			if (event.method === "language/diagnostics") this.acceptDiagnostics(event.params);
 			if (event.method === "config/changed") this.queueTrustRefresh();
 		});
-		this.defer(() => subscription.dispose());
-		this.own(workspace.onDidChangeWorkspace(({ workspace: nextWorkspace }) => {
+		this._register(toDisposable(() => subscription.dispose()));
+		this._register(workspace.onDidChangeWorkspace(({ workspace: nextWorkspace }) => {
 			this.workspaceTrusted = this.workspaceTrust === undefined;
 			for (const entry of this.entries.values()) {
 				if (entry.timer !== undefined) clearTimeout(entry.timer);
@@ -77,7 +77,7 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
 			this.clearServerDiagnostics();
 			if (nextWorkspace.folders.length > 0) this.queueTrustRefresh();
 		}));
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.alive = false;
 			for (const entry of this.entries.values()) {
 				if (entry.timer !== undefined) clearTimeout(entry.timer);
@@ -87,7 +87,7 @@ export class AppServerLanguageDiagnosticsService extends DisposableOwner impleme
 			this.serverSnapshots.clear();
 			this.workspaceServerKeys.clear();
 			this.publishedDiagnostics.clear();
-		});
+		}));
 		this.queueTrustRefresh();
 	}
 

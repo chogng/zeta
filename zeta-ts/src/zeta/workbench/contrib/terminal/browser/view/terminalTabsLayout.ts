@@ -1,6 +1,6 @@
 import { SplitView, type ISplitViewView } from "../../../../../base/browser/ui/splitview/splitview.js";
 import { h } from "../../../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../../base/common/lifecycle.js";
 
 const TerminalTabsListSizes = {
 	narrow: 46,
@@ -14,7 +14,7 @@ const TERMINAL_VIEW_INDEX = 0;
 const TABS_VIEW_INDEX = 1;
 
 /** Owns the VS Code-style horizontal split between terminal widgets and their right-side instance list. */
-export class TerminalTabsLayout extends DisposableOwner {
+export class TerminalTabsLayout extends Disposable {
 	readonly element: HTMLElement;
 	private readonly splitView: SplitView;
 	private readonly tabsElement: HTMLElement;
@@ -24,13 +24,13 @@ export class TerminalTabsLayout extends DisposableOwner {
 		super();
 		this.tabsElement = tabsElement;
 		const host = h(widgetsElement.ownerDocument, "div");
-		this.splitView = this.own(new SplitView(host, "horizontal"));
+		this.splitView = this._register(new SplitView(host, "horizontal"));
 		this.element = this.splitView.element;
 		this.element.classList.add("zeta-terminal-tabs-layout");
 		this.splitView.addView(splitViewItem(widgetsElement, MIN_TERMINAL_WIDTH, Number.POSITIVE_INFINITY, "high"), { type: "distribute" });
 		this.splitView.addView(splitViewItem(tabsElement, TerminalTabsListSizes.narrow, TerminalTabsListSizes.maximum, "low"), TerminalTabsListSizes.default);
 		this.splitView.getSash(TERMINAL_VIEW_INDEX)?.element.setAttribute("aria-label", "Resize terminal instance list");
-		this.own(this.splitView.onDidChangeViewSizes(() => this.updateTabsWidth()));
+		this._register(this.splitView.onDidChangeViewSizes(() => this.updateTabsWidth()));
 		this.updateTabsWidth();
 	}
 

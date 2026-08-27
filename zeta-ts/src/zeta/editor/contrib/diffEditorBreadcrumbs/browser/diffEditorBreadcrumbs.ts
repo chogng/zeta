@@ -1,12 +1,12 @@
 import "./media/diffEditorBreadcrumbs.css";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { LineDiffKind, type LineDiffRow } from "../../../common/diff/lineDiff.js";
 import { type DiffModel } from "../../../common/diff/diffModel.js";
 import { type DiffEditorWidget } from "../../../browser/widget/diffEditor/diffEditorWidget.js";
 import { h } from "../../../../base/browser/dom.js";
 
 /** Adds compact changed-hunk navigation to the Stanza diff editor without touching diff computation. */
-export class DiffEditorBreadcrumbsController extends DisposableOwner {
+export class DiffEditorBreadcrumbsController extends Disposable {
 	private readonly element: HTMLElement;
 
 	constructor(private readonly editor: DiffEditorWidget, private readonly model: DiffModel) {
@@ -16,8 +16,8 @@ export class DiffEditorBreadcrumbsController extends DisposableOwner {
 		this.element.className = "stanza-diff-editor-breadcrumbs";
 		this.element.setAttribute("aria-label", "Diff changes");
 		editor.element.append(this.element);
-		this.defer(() => this.element.remove());
-		this.own(model.onDidChange(() => this.render()));
+		this._register(toDisposable(() => this.element.remove()));
+		this._register(model.onDidChange(() => this.render()));
 		this.render();
 	}
 

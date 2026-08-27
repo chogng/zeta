@@ -29,12 +29,12 @@ export class TestingViewPane extends ViewPane {
 		this.profilesElement.className = "zeta-testing-list";
 		this.profilesElement.setAttribute("aria-label", "Test profiles");
 		this.contentElement.append(controls, this.statusElement, this.profilesElement);
-		this.own(addDisposableListener(runAll, "click", () => this.runAll()));
-		this.own(addDisposableListener(refresh, "click", () => this.refresh()));
-		this.own(addDisposableListener(this.profilesElement, "click", event => this.activate(event)));
-		this.own(testingService.onDidChangeProfiles(() => this.render()));
-		this.own(testingService.onDidStartRun(() => this.render()));
-		this.own(testingService.onDidChangeRun(() => this.render()));
+		this._register(addDisposableListener(runAll, "click", () => this.runAll()));
+		this._register(addDisposableListener(refresh, "click", () => this.refresh()));
+		this._register(addDisposableListener(this.profilesElement, "click", event => this.activate(event)));
+		this._register(testingService.onDidChangeProfiles(() => this.render()));
+		this._register(testingService.onDidStartRun(() => this.render()));
+		this._register(testingService.onDidChangeRun(() => this.render()));
 		this.render();
 		this.refresh();
 	}

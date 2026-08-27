@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
 import { type IWorkingCopyBackupService, type WorkingCopyBackup } from "../common/workingCopyBackupService.js";
 
@@ -19,7 +19,7 @@ const DATABASE_VERSION = 1;
 const STORE_NAME = "backups";
 
 /** IndexedDB-backed working-copy backups shared by browser and Electron renderers. */
-export class IndexedDbWorkingCopyBackupService extends DisposableOwner implements IWorkingCopyBackupService {
+export class IndexedDbWorkingCopyBackupService extends Disposable implements IWorkingCopyBackupService {
 	private readonly database: Promise<IDBDatabase | undefined>;
 	private readonly fallback = new Map<string, StoredBackup>();
 
@@ -27,7 +27,7 @@ export class IndexedDbWorkingCopyBackupService extends DisposableOwner implement
 		super();
 		if (!workspaceId.trim()) throw new TypeError("Working-copy backup service requires a workspace id");
 		this.database = factory ? openDatabase(factory) : Promise.resolve(undefined);
-		this.defer(() => { void this.database.then(database => database?.close()).catch(() => undefined); });
+		this._register(toDisposable(() => { void this.database.then(database => database?.close()).catch(() => undefined); }));
 	}
 
 	async list(): Promise<readonly WorkingCopyBackup[]> {

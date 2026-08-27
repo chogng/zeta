@@ -1,5 +1,5 @@
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
-import { DisposableOwner, DisposableSlot } from "../../../../base/common/lifecycle.js";
+import { Disposable, MutableDisposable } from "../../../../base/common/lifecycle.js";
 import type { IWorkbenchContribution } from "../../../common/contributions.js";
 import type { GitHead, GitStatus, IGitService } from "../../../services/git/common/gitService.js";
 import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
@@ -16,20 +16,20 @@ export interface ScmStatusContributionOptions {
 }
 
 /** Projects the active Git branch and upstream state into the status bar. */
-export class ScmStatusContribution extends DisposableOwner implements IWorkbenchContribution {
-	private readonly branch = this.own(new DisposableSlot<IStatusbarEntryAccessor>());
-	private readonly sync = this.own(new DisposableSlot<IStatusbarEntryAccessor>());
+export class ScmStatusContribution extends Disposable implements IWorkbenchContribution {
+	private readonly branch = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
+	private readonly sync = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	private readonly retiredGitStreams = new Set<string>();
 	private gitStatus: GitStatus | undefined;
 	private refreshRevision = 0;
 
 	constructor(private readonly options: ScmStatusContributionOptions) {
 		super();
-		this.own(options.gitService.onDidChangeStatus(status => {
+		this._register(options.gitService.onDidChangeStatus(status => {
 			this.refreshRevision += 1;
 			this.acceptStatus(status);
 		}));
-		this.own(options.gitService.onDidBecomeReady(() => this.refresh()));
+		this._register(options.gitService.onDidBecomeReady(() => this.refresh()));
 		this.refresh();
 	}
 
@@ -55,12 +55,12 @@ export class ScmStatusContribution extends DisposableOwner implements IWorkbench
 		this.updateOrAdd(this.sync, syncEntry(status.head, focusGit), "zeta.status.git.sync", SyncPriority);
 	}
 
-	private updateOrAdd(slot: DisposableSlot<IStatusbarEntryAccessor>, entry: IStatusbarEntry, id: string, priority: number): void {
+	private updateOrAdd(slot: MutableDisposable<IStatusbarEntryAccessor>, entry: IStatusbarEntry, id: string, priority: number): void {
 		if (slot.value) {
 			slot.value.update(entry);
 			return;
 		}
-		slot.replace(this.options.statusbarService.addEntry(entry, { id, alignment: StatusbarAlignment.Left, priority, compactGroup: ScmCompactGroup }));
+		slot.value = this.options.statusbarService.addEntry(entry, { id, alignment: StatusbarAlignment.Left, priority, compactGroup: ScmCompactGroup });
 	}
 }
 

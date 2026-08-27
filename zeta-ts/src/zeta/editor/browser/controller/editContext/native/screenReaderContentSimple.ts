@@ -1,9 +1,9 @@
 import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { clampScreenReaderOffset, domOffsetAtPoint, domPointAtOffset, modelOffsetAtContentOffset, type NativeScreenReaderContent, type ScreenReaderContentLayout, type ScreenReaderContentState } from "./screenReaderUtils.js";
 
 /** Plain-text screen-reader projection used by the native EditContext. */
-export class SimpleScreenReaderContent extends DisposableOwner implements NativeScreenReaderContent {
+export class SimpleScreenReaderContent extends Disposable implements NativeScreenReaderContent {
 	readonly element: HTMLDivElement;
 	protected state: ScreenReaderContentState | undefined;
 
@@ -13,8 +13,8 @@ export class SimpleScreenReaderContent extends DisposableOwner implements Native
 		this.element.className = "stanza-native-screen-reader-content";
 		this.element.setAttribute("aria-hidden", "true");
 		host.append(this.element);
-		this.defer(() => this.element.remove());
-		this.own(addDisposableListener(this.element, "mousedown", event => event.preventDefault()));
+		this._register(toDisposable(() => this.element.remove()));
+		this._register(addDisposableListener(this.element, "mousedown", event => event.preventDefault()));
 	}
 
 	getState(): ScreenReaderContentState | undefined {

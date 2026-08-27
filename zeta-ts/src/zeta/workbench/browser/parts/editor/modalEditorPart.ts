@@ -5,7 +5,7 @@ import { Dimension, type IDimension } from '../../../../base/browser/geometry.js
 import { observeElementSize } from '../../../../base/browser/observer.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
-import { DisposableMap, DisposableOwner, DisposableSlot } from '../../../../base/common/lifecycle.js';
+import { DisposableMap, Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { lxiconsLibrary } from '../../../../base/common/lxiconsLibrary.js';
 import type { EditorInput, EditorOpenOptions } from '../../../services/editor/common/editorService.js';
 import { EditorOpenSupersededError } from './editorGroup.js';
@@ -27,16 +27,16 @@ interface ModalEditorEntry {
 let nextModalEditorId = 1;
 
 /** Owns the single Editor Pane presented above the Workbench. */
-export class ModalEditorPart extends DisposableOwner {
+export class ModalEditorPart extends Disposable {
 	public readonly domNode: HTMLElement;
 	public readonly onDidRequestClose: Event<EditorInput>;
 
-	private readonly active = this.own(new DisposableSlot<ModalEditorPaneInstance>());
+	private readonly active = this._register(new MutableDisposable<ModalEditorPaneInstance>());
 	private readonly closeButton: Button;
 	private readonly contentDomNode: HTMLDivElement;
 	private readonly hostDomNode: HTMLDivElement;
-	private readonly pending = this.own(new DisposableMap<number, ModalEditorPaneInstance>());
-	private readonly requestCloseEmitter = this.own(new Emitter<EditorInput>());
+	private readonly pending = this._register(new DisposableMap<number, ModalEditorPaneInstance>());
+	private readonly requestCloseEmitter = this._register(new Emitter<EditorInput>());
 	private readonly titleDomNode: HTMLHeadingElement;
 	private currentEntry: ModalEditorEntry | undefined;
 	private dimension: IDimension = Dimension.Zero;
@@ -63,7 +63,7 @@ export class ModalEditorPart extends DisposableOwner {
 		this.titleDomNode.className = 'zeta-modal-editor-title';
 		this.titleDomNode.id = `zeta-modal-editor-title-${nextModalEditorId++}`;
 		this.domNode.setAttribute('aria-labelledby', this.titleDomNode.id);
-		this.closeButton = this.own(new Button(headerDomNode, {
+		this.closeButton = this._register(new Button(headerDomNode, {
 			label: 'Close editor',
 			icon: lxiconsLibrary.close,
 			onClick: () => this.requestClose(),
@@ -78,22 +78,22 @@ export class ModalEditorPart extends DisposableOwner {
 		options.container.append(this.hostDomNode);
 
 		this.onDidRequestClose = this.requestCloseEmitter.event;
-		this.own(observeElementSize(this.contentDomNode, size => this.layout(size)));
-		this.own(trapTabFocus(this.domNode));
-		this.own(addDisposableListener(this.hostDomNode, 'mousedown', event => {
+		this._register(observeElementSize(this.contentDomNode, size => this.layout(size)));
+		this._register(trapTabFocus(this.domNode));
+		this._register(addDisposableListener(this.hostDomNode, 'mousedown', event => {
 			if (event.target !== this.hostDomNode) return;
 			stopEvent(event);
 			this.requestClose();
 		}));
-		this.own(addDisposableListener(this.domNode, 'keydown', event => {
+		this._register(addDisposableListener(this.domNode, 'keydown', event => {
 			if (event.defaultPrevented || event.isComposing || event.key !== 'Escape') return;
 			stopEvent(event);
 			this.requestClose();
 		}));
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.hide();
 			this.hostDomNode.remove();
-		});
+		}));
 	}
 
 	public get activeInput(): EditorInput | undefined {
@@ -142,7 +142,7 @@ export class ModalEditorPart extends DisposableOwner {
 		const committed = this.pending.deleteAndLeak(sequence);
 		if (!committed) throw new EditorOpenSupersededError(input);
 		this.active.value?.setVisible(EditorPaneVisibility.Hidden);
-		this.active.replace(committed);
+		this.active.value = committed;
 		this.currentEntry = { input, instance: committed };
 		this.contentDomNode.replaceChildren(committed.domNode);
 		this.updateTitle(input);
@@ -219,7 +219,7 @@ export class ModalEditorPart extends DisposableOwner {
 	}
 }
 
-class ModalEditorPaneInstance extends DisposableOwner {
+class ModalEditorPaneInstance extends Disposable {
 	public readonly domNode: HTMLDivElement;
 	public readonly signal: AbortSignal;
 
@@ -233,11 +233,11 @@ class ModalEditorPaneInstance extends DisposableOwner {
 		this.domNode.className = 'zeta-modal-editor-pane-host';
 		this.domNode.hidden = true;
 		container.append(this.domNode);
-		this.defer(() => this.domNode.remove());
-		this.own(pane);
-		this.defer(() => pane.clearInput());
-		this.defer(() => pane.setVisible(EditorPaneVisibility.Hidden));
-		this.defer(() => abortController.abort());
+		this._register(toDisposable(() => this.domNode.remove()));
+		this._register(pane);
+		this._register(toDisposable(() => pane.clearInput()));
+		this._register(toDisposable(() => pane.setVisible(EditorPaneVisibility.Hidden)));
+		this._register(toDisposable(() => abortController.abort()));
 	}
 
 	public setVisible(visibility: EditorPaneVisibility): void {

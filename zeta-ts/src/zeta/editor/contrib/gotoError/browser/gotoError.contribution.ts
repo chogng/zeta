@@ -7,5 +7,5 @@ registerEditorContribution({ id: "editor.contrib.gotoError", configure: context 
 	context.addDecorationSource(createStanzaLanguageDiagnosticSource(context.getCapability(TextEditorCapability.diagnosticDecorations)));
 }, install: context => {
 	if (context.kind !== "text") return;
-	context.own(new DiagnosticNavigationController(context.view.element, context.viewport, context.selections, context.getCapability(TextEditorCapability.diagnosticDecorations)));
+	context.register(new DiagnosticNavigationController(context.view.element, context.viewport, context.selections, context.getCapability(TextEditorCapability.diagnosticDecorations)));
 } });

@@ -1,5 +1,5 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { createToggleBlockCommentCommand } from "../common/blockCommentCommands.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type LanguageConfigurationSource } from "../../../common/languages/languageConfiguration.js";
@@ -13,7 +13,7 @@ export interface BlockCommentControllerOptions {
 }
 
 /** Routes the platform block-comment shortcut through Stanza's local command model. */
-export class BlockCommentController extends DisposableOwner {
+export class BlockCommentController extends Disposable {
 	constructor(
 		input: HTMLElement,
 		private readonly viewport: EditorViewport,
@@ -26,7 +26,7 @@ export class BlockCommentController extends DisposableOwner {
 			if (viewport.textModel !== selections.textModel) {
 				throw new TypeError("Stanza block comment dependencies must share one text model");
 			}
-			this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
+			this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
 		} catch (error) {
 			this.dispose();
 			throw error;

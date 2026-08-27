@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { Emitter } from "../../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { type EditorInput, type IEditorService } from "../../../../services/editor/common/editorService.js";
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
@@ -70,12 +70,12 @@ test("Debug view opens an authority-qualified Remote stack source", async () => 
 	}
 });
 
-class FakeDebugService extends DisposableOwner implements IDebugService {
-	private readonly configurationEmitter = this.own(new Emitter<readonly IDebugConfiguration[]>());
-	private readonly breakpointEmitter = this.own(new Emitter<readonly IDebugBreakpoint[]>());
-	private readonly watchEmitter = this.own(new Emitter<readonly string[]>());
-	private readonly exceptionEmitter = this.own(new Emitter<readonly string[]>());
-	private readonly sessionEmitter = this.own(new Emitter<IDebugSession | undefined>());
+class FakeDebugService extends Disposable implements IDebugService {
+	private readonly configurationEmitter = this._register(new Emitter<readonly IDebugConfiguration[]>());
+	private readonly breakpointEmitter = this._register(new Emitter<readonly IDebugBreakpoint[]>());
+	private readonly watchEmitter = this._register(new Emitter<readonly string[]>());
+	private readonly exceptionEmitter = this._register(new Emitter<readonly string[]>());
+	private readonly sessionEmitter = this._register(new Emitter<IDebugSession | undefined>());
 	readonly configurations = Object.freeze([configuration("One")]);
 	readonly compounds: readonly IDebugCompound[] = Object.freeze([]);
 	readonly breakpoints: readonly IDebugBreakpoint[] = Object.freeze([]);
@@ -88,7 +88,7 @@ class FakeDebugService extends DisposableOwner implements IDebugService {
 	readonly onDidChangeWatchExpressions = this.watchEmitter.event;
 	readonly onDidChangeExceptionBreakpoints = this.exceptionEmitter.event;
 	readonly onDidChangeSession = this.sessionEmitter.event;
-	constructor(source: IDebugSource = { name: "generated.ts", sourceReference: 33 }) { super(); this.sessions = Object.freeze([this.own(new FakeDebugSession("session-one", "One", source)), this.own(new FakeDebugSession("session-two", "Two", source))]); }
+	constructor(source: IDebugSource = { name: "generated.ts", sourceReference: 33 }) { super(); this.sessions = Object.freeze([this._register(new FakeDebugSession("session-one", "One", source)), this._register(new FakeDebugSession("session-two", "Two", source))]); }
 	async refresh() { return this.configurations; }
 	async start() { return this.sessions[0]!; }
 	async startCompound() { return this.sessions; }
@@ -104,9 +104,9 @@ class FakeDebugService extends DisposableOwner implements IDebugService {
 	activate(session: IDebugSession): void { this.session = session; this.sessionEmitter.fire(session); }
 }
 
-class FakeDebugSession extends DisposableOwner implements IDebugSession {
-	private readonly stateEmitter = this.own(new Emitter<DebugSessionState>());
-	private readonly outputEmitter = this.own(new Emitter<string>());
+class FakeDebugSession extends Disposable implements IDebugSession {
+	private readonly stateEmitter = this._register(new Emitter<DebugSessionState>());
+	private readonly outputEmitter = this._register(new Emitter<string>());
 	private selectedThread = 1;
 	readonly configuration: IDebugConfiguration;
 	readonly capabilities = Object.freeze({ supportsRestart: true, supportsTerminate: true, exceptionBreakpointFilters: Object.freeze([{ filter: "uncaught", label: "Uncaught", default: true }, { filter: "caught", label: "Caught", default: false }]) });

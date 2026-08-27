@@ -1,6 +1,6 @@
 import { isNonEmptyArray } from "../../../base/common/arrays.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableMap, DisposableOwner, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
+import { DisposableMap, Disposable, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 
 export interface LanguageProviderModule<TProvider> {
 	readonly id: string;
@@ -48,8 +48,8 @@ interface RegisteredProviderModule<TProvider> {
 }
 
 /** Caller-owned named provider definitions available in one Worker realm. */
-export class LanguageProviderModuleRegistry<TProvider> extends DisposableOwner {
-	private readonly catalogEmitter = this.own(new Emitter<LanguageProviderModuleCatalog>());
+export class LanguageProviderModuleRegistry<TProvider> extends Disposable {
+	private readonly catalogEmitter = this._register(new Emitter<LanguageProviderModuleCatalog>());
 	private readonly modules = new Map<string, RegisteredProviderModule<TProvider>>();
 	private catalog: LanguageProviderModuleCatalog = EMPTY_MODULE_CATALOG;
 
@@ -57,11 +57,11 @@ export class LanguageProviderModuleRegistry<TProvider> extends DisposableOwner {
 
 	constructor() {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			const changed = this.modules.size > 0;
 			this.modules.clear();
 			if (changed) this.updateCatalog();
-		});
+		}));
 	}
 
 	get moduleCatalog(): LanguageProviderModuleCatalog {
@@ -102,8 +102,8 @@ export class LanguageProviderModuleRegistry<TProvider> extends DisposableOwner {
 }
 
 /** Owns serialized module activation and atomic provider-registration batches. */
-export class LanguageProviderModuleHost<TProvider> extends DisposableOwner {
-	private readonly active = this.own(new DisposableMap<string, IDisposable>());
+export class LanguageProviderModuleHost<TProvider> extends Disposable {
+	private readonly active = this._register(new DisposableMap<string, IDisposable>());
 	private readonly operationTails = new Map<string, Promise<void>>();
 
 	constructor(
@@ -111,7 +111,7 @@ export class LanguageProviderModuleHost<TProvider> extends DisposableOwner {
 		private readonly providers: LanguageProviderBatchRegistry<TProvider>,
 	) {
 		super();
-		this.own(modules.onDidChangeModuleCatalog(catalog => {
+		this._register(modules.onDidChangeModuleCatalog(catalog => {
 			const available = new Set(catalog.modules.map(module => module.id));
 			for (const [moduleId] of this.active) {
 				if (!available.has(moduleId)) {

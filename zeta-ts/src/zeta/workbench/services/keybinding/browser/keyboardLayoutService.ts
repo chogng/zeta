@@ -1,6 +1,6 @@
 import { Emitter } from '../../../../base/common/event.js';
 import type { KeybindingEvent } from '../../../../base/common/keybindings.js';
-import { DisposableOwner } from '../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { operatingSystem, OperatingSystem } from '../../../../base/common/platform.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
 import { KeyboardConfiguration } from '../../../../platform/keyboardLayout/common/keyboardConfiguration.js';
@@ -57,8 +57,8 @@ export interface BrowserKeyboardLayoutServiceOptions {
 }
 
 /** Owns browser layout discovery and publishes immutable mapper snapshots. */
-export class BrowserKeyboardLayoutService extends DisposableOwner implements IKeyboardLayoutService {
-	private readonly _onDidChangeKeyboardLayout = this.own(new Emitter<void>());
+export class BrowserKeyboardLayoutService extends Disposable implements IKeyboardLayoutService {
+	private readonly _onDidChangeKeyboardLayout = this._register(new Emitter<void>());
 	private readonly navigator: NavigatorWithKeyboard;
 	private readonly operatingSystem: OperatingSystem;
 	private readonly configurationService: IConfigurationService | undefined;
@@ -98,9 +98,9 @@ export class BrowserKeyboardLayoutService extends DisposableOwner implements IKe
 		this.mapping = options.layout?.mapping;
 		this.layout = options.layout?.layout ?? this.fallbackLayout();
 		this.mapper = this.createMapper();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.mapping = undefined;
-		});
+		}));
 		this.listenForLayoutChanges();
 		this.listenForProvidedLayoutChanges();
 		this.listenForConfigurationChanges();
@@ -244,7 +244,7 @@ export class BrowserKeyboardLayoutService extends DisposableOwner implements IKe
 			void this.refreshKeyboardLayout();
 		};
 		keyboard.addEventListener('layoutchange', handleLayoutChange);
-		this.defer(() => keyboard.removeEventListener?.('layoutchange', handleLayoutChange));
+		this._register(toDisposable(() => keyboard.removeEventListener?.('layoutchange', handleLayoutChange)));
 	}
 
 	private listenForProvidedLayoutChanges(): void {
@@ -252,7 +252,7 @@ export class BrowserKeyboardLayoutService extends DisposableOwner implements IKe
 			if (!provider) {
 				continue;
 			}
-			this.own(provider.onDidChangeKeyboardLayout(() => {
+			this._register(provider.onDidChangeKeyboardLayout(() => {
 				void this.refreshKeyboardLayout();
 			}));
 		}
@@ -262,7 +262,7 @@ export class BrowserKeyboardLayoutService extends DisposableOwner implements IKe
 		if (!this.configurationService) {
 			return;
 		}
-		this.own(this.configurationService.onDidChangeConfiguration((event) => {
+		this._register(this.configurationService.onDidChangeConfiguration((event) => {
 			const mapperChanged = event.affectsConfiguration(KeyboardConfiguration.dispatch) ||
 				event.affectsConfiguration(KeyboardConfiguration.mapAltGrToCtrlAlt);
 			if (mapperChanged) {

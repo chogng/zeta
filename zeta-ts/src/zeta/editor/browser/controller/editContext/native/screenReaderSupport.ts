@@ -1,5 +1,5 @@
 import { addDisposableListener } from "../../../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { type Event } from "../../../../../base/common/event.js";
 import { IME } from "../../../../../base/common/ime.js";
 import { type IAccessibilityService } from "../../../../../platform/accessibility/common/accessibility.js";
@@ -36,7 +36,7 @@ export interface NativeScreenReaderSupportOptions {
  * exposes a bounded, paged source-text mirror when accessibility optimization
  * is on and keeps that mirror aligned with the viewport's active cursor.
  */
-export class ScreenReaderSupport extends DisposableOwner {
+export class ScreenReaderSupport extends Disposable {
 	private readonly content: NativeScreenReaderContent;
 	private focused = false;
 	private syncScheduled = false;
@@ -44,8 +44,8 @@ export class ScreenReaderSupport extends DisposableOwner {
 
 	constructor(private readonly options: NativeScreenReaderSupportOptions) {
 		super();
-		this.defer(() => this.resetNativeScreenReaderLayout());
-		this.content = this.own(options.renderRichContent
+		this._register(toDisposable(() => this.resetNativeScreenReaderLayout()));
+		this.content = this._register(options.renderRichContent
 			? new RichScreenReaderContent(options.element, {
 				model: options.model,
 				semanticTokenSource: options.semanticTokenSource,
@@ -53,26 +53,26 @@ export class ScreenReaderSupport extends DisposableOwner {
 			})
 			: new SimpleScreenReaderContent(options.element));
 		if (options.onDidFocus) {
-			this.own(options.onDidFocus(() => this.handleFocusChange(true)));
+			this._register(options.onDidFocus(() => this.handleFocusChange(true)));
 		} else {
-			this.own(addDisposableListener(options.element, "focus", () => this.handleFocusChange(true)));
+			this._register(addDisposableListener(options.element, "focus", () => this.handleFocusChange(true)));
 		}
 		if (options.onDidBlur) {
-			this.own(options.onDidBlur(() => this.handleFocusChange(false)));
+			this._register(options.onDidBlur(() => this.handleFocusChange(false)));
 		} else {
-			this.own(addDisposableListener(options.element, "blur", () => this.handleFocusChange(false)));
+			this._register(addDisposableListener(options.element, "blur", () => this.handleFocusChange(false)));
 		}
-		this.own(addDisposableListener(options.element, "cut", () => this.onWillCut()));
-		this.own(addDisposableListener(options.element, "paste", () => this.onWillPaste()));
-		this.own(addDisposableListener(options.element.ownerDocument, "selectionchange", () => this.acceptDomSelection()));
-		this.own(options.model.onDidChange(() => this.scheduleSynchronization()));
-		this.own(options.selectionController.onDidChange(() => this.scheduleSynchronization()));
-		this.own(options.viewport.onDidChangeLayout(() => this.layoutContent()));
+		this._register(addDisposableListener(options.element, "cut", () => this.onWillCut()));
+		this._register(addDisposableListener(options.element, "paste", () => this.onWillPaste()));
+		this._register(addDisposableListener(options.element.ownerDocument, "selectionchange", () => this.acceptDomSelection()));
+		this._register(options.model.onDidChange(() => this.scheduleSynchronization()));
+		this._register(options.selectionController.onDidChange(() => this.scheduleSynchronization()));
+		this._register(options.viewport.onDidChangeLayout(() => this.layoutContent()));
 		if (options.semanticTokenSource) {
-			this.own(options.semanticTokenSource.onDidChange(() => this.scheduleSynchronization()));
+			this._register(options.semanticTokenSource.onDidChange(() => this.scheduleSynchronization()));
 		}
 		if (options.accessibilityService) {
-			this.own(options.accessibilityService.onDidChangeScreenReaderOptimized(() => this.scheduleSynchronization()));
+			this._register(options.accessibilityService.onDidChangeScreenReaderOptimized(() => this.scheduleSynchronization()));
 		}
 		this.scheduleSynchronization();
 	}

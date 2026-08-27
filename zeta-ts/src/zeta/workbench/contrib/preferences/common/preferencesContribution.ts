@@ -1,4 +1,4 @@
-import { DisposableOwner } from '../../../../base/common/lifecycle.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import { IConfigurationResourceService } from '../../../../platform/configuration/common/configurationResourceService.js';
 import { ConfigurationSchemaId, createConfigurationSchema } from '../../../../platform/configuration/common/configurationSchema.js';
 import { IFileSystemProviderService } from '../../../../platform/files/common/fileSystemProviderService.js';
@@ -8,7 +8,7 @@ import { UserSettingsResource } from '../../../services/preferences/common/prefe
 import { SettingsFileSystemProvider } from './settingsFilesystemProvider.js';
 
 /** Owns Preferences resources that must exist before an editor resolves them. */
-export class PreferencesContribution extends DisposableOwner {
+export class PreferencesContribution extends Disposable {
 	public static readonly ID = 'workbench.contrib.preferences';
 
 	public static create(accessor: ServicesAccessor): PreferencesContribution {
@@ -23,9 +23,9 @@ export class PreferencesContribution extends DisposableOwner {
 		configurationResourceService: IConfigurationResourceService,
 	) {
 		super();
-		const provider = this.own(new SettingsFileSystemProvider(configurationResourceService));
-		this.own(fileSystemProviders.registerProvider(SettingsFileSystemProvider.scheme, provider));
-		this.own(JsonSchemasRegistry.registerSchema(ConfigurationSchemaId, createConfigurationSchema()));
-		this.own(JsonSchemasRegistry.registerAssociation(UserSettingsResource, ConfigurationSchemaId));
+		const provider = this._register(new SettingsFileSystemProvider(configurationResourceService));
+		this._register(fileSystemProviders.registerProvider(SettingsFileSystemProvider.scheme, provider));
+		this._register(JsonSchemasRegistry.registerSchema(ConfigurationSchemaId, createConfigurationSchema()));
+		this._register(JsonSchemasRegistry.registerAssociation(UserSettingsResource, ConfigurationSchemaId));
 	}
 }

@@ -4,15 +4,16 @@ import {
 	AbstractDisposable,
 	AsyncDisposableStore,
 	DisposableMap,
-	DisposableSlot,
+	MutableDisposable,
 	DisposableStore,
-	ResettableDisposableGroup,
-	DisposableOwner,
+	Disposable,
+	type IDisposable,
 	noneDisposable,
 	toDisposable,
 } from "../../common/lifecycle.js";
 
 test("noneDisposable is a reusable no-op", () => {
+	assert.equal(Disposable.None, noneDisposable);
 	noneDisposable.dispose();
 	noneDisposable[Symbol.dispose]();
 	assert.equal(Object.isFrozen(noneDisposable), true);
@@ -25,9 +26,11 @@ test("AsyncDisposableStore shares one cleanup operation", async () => {
 	});
 	let cleanupCalls = 0;
 	const store = new AsyncDisposableStore();
-	store.defer(async () => {
-		cleanupCalls += 1;
-		await gate;
+	store.add({
+		async [Symbol.asyncDispose](): Promise<void> {
+			cleanupCalls += 1;
+			await gate;
+		},
 	});
 	const first = store.disposeAsync();
 	const second = store[Symbol.asyncDispose]();
@@ -93,13 +96,12 @@ test("a disposed store rejects resources without taking ownership", () => {
 	resource.dispose();
 });
 
-test("DisposableStore supports adopted values and deferred cleanup", () => {
+test("DisposableStore owns callback cleanup through toDisposable", () => {
 	const released: string[] = [];
 	const store = new DisposableStore();
-	const value = store.adopt("value", (current) => released.push(current));
-	store.defer(() => released.push("deferred"));
+	store.add(toDisposable(() => released.push("value")));
+	store.add(toDisposable(() => released.push("deferred")));
 
-	assert.equal(value, "value");
 	store.dispose();
 	assert.deepEqual(released, ["deferred", "value"]);
 });
@@ -145,13 +147,13 @@ test("DisposableStore attempts every cleanup and preserves suppressed errors", (
 		(error: unknown) => error instanceof SuppressedError,
 	);
 	assert.deepEqual(released, [2, 1]);
-	assert.equal(store.disposed, true);
+	assert.equal(store.isDisposed, true);
 });
 
-test("DisposableOwner owns standard Disposable resources", () => {
-	class Owner extends DisposableOwner {
-		take<T extends Disposable>(resource: T): T {
-			return this.own(resource);
+test("Disposable owns standard Disposable resources", () => {
+	class Owner extends Disposable {
+		take<T extends IDisposable>(resource: T): T {
+			return this._register(resource);
 		}
 	}
 
@@ -160,38 +162,79 @@ test("DisposableOwner owns standard Disposable resources", () => {
 	owner.take(toDisposable(() => {
 		disposed = true;
 	}));
+	owner[Symbol.dispose]();
 	owner.dispose();
 
 	assert.equal(disposed, true);
+	assert.equal(owner.isDisposed, true);
+	const rejected = toDisposable(() => undefined);
+	assert.throws(
+		() => owner.take(rejected),
+		ReferenceError,
+	);
+	rejected.dispose();
 });
 
-test("DisposableSlot releases replaced and current values", () => {
+test("MutableDisposable releases replaced and current values", () => {
 	const released: number[] = [];
-	const slot = new DisposableSlot();
-	slot.replace(toDisposable(() => released.push(1)));
-	slot.replace(toDisposable(() => released.push(2)));
+	const slot = new MutableDisposable();
+	slot.value = toDisposable(() => released.push(1));
+	slot.value = toDisposable(() => released.push(2));
 
 	assert.deepEqual(released, [1]);
 	slot.dispose();
 	assert.deepEqual(released, [1, 2]);
 });
 
-test("a disposed DisposableSlot rejects values without taking ownership", () => {
-	const slot = new DisposableSlot();
+test("a disposed MutableDisposable ignores values without taking ownership", () => {
+	const slot = new MutableDisposable();
 	slot.dispose();
 	let disposed = false;
 	const resource = toDisposable(() => {
 		disposed = true;
 	});
 
-	assert.throws(() => slot.replace(resource), ReferenceError);
+	slot.value = resource;
 	assert.equal(disposed, false);
 	resource.dispose();
 });
 
-test("ResettableDisposableGroup clears, rebuilds, and then closes", () => {
+test("MutableDisposable can leak its current value without disposing it", () => {
+	let disposed = false;
+	const slot = new MutableDisposable();
+	const resource = toDisposable(() => {
+		disposed = true;
+	});
+	slot.value = resource;
+
+	assert.equal(slot.clearAndLeak(), resource);
+	assert.equal(slot.value, undefined);
+	assert.equal(disposed, false);
+	resource.dispose();
+	assert.equal(disposed, true);
+});
+
+test("MutableDisposable clears its value and releases it only once", () => {
+	let cleanupCalls = 0;
+	const slot = new MutableDisposable();
+	const resource = toDisposable(() => {
+		cleanupCalls += 1;
+	});
+
+	slot.value = resource;
+	slot.value = resource;
+	slot.clear();
+	slot.clear();
+	slot.dispose();
+	slot.dispose();
+
+	assert.equal(slot.value, undefined);
+	assert.equal(cleanupCalls, 1);
+});
+
+test("DisposableStore clears, rebuilds, and then closes", () => {
 	const released: number[] = [];
-	const group = new ResettableDisposableGroup();
+	const group = new DisposableStore();
 	group.add(toDisposable(() => released.push(1)));
 	group.clear();
 	group.add(toDisposable(() => released.push(2)));
@@ -226,7 +269,7 @@ test("AsyncDisposableStore closes registration when disposal starts", async () =
 	const disposal = store.disposeAsync();
 	const rejected = toDisposable(() => undefined);
 
-	assert.equal(store.disposed, true);
+	assert.equal(store.isDisposed, true);
 	assert.throws(() => store.add(rejected), ReferenceError);
 	rejected.dispose();
 	await disposal;

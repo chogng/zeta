@@ -1,7 +1,7 @@
 import '../viewparts/viewLines/viewLines.css';
 import { h, reset, fragment as createFragment } from '../../../base/browser/dom.js';
 import { FastDomNode } from '../../../base/browser/fastDomNode.js';
-import { DisposableOwner } from '../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { type EditorVisualLine, type EditorVisualLineProjection } from '../../common/viewModel/modelLineProjection.js';
 import { type EditorLineRange } from '../../common/viewModel.js';
 import { type ViewportData } from '../../common/viewLayout/viewLinesViewportData.js';
@@ -26,7 +26,7 @@ export interface ViewLayerOptions<TLine> {
  * Content-specific rendering belongs to the ViewLines part; overlays consume
  * the stable line objects exposed by this layer.
  */
-export class ViewLayer<TLine> extends DisposableOwner {
+export class ViewLayer<TLine> extends Disposable {
 	readonly domNode: HTMLDivElement;
 	private readonly root: FastDomNode<HTMLDivElement>;
 	private readonly readVisualProjection: () => EditorVisualLineProjection;
@@ -43,7 +43,9 @@ export class ViewLayer<TLine> extends DisposableOwner {
 		this.readVisualProjection = options.readVisualProjection;
 		this.readProjectionRevision = options.readProjectionRevision;
 		this.lineRenderer = options.lineRenderer;
-		this.domNode = this.adopt(h(options.host.ownerDocument, 'div'), domNode => domNode.remove());
+		const domNode = h(options.host.ownerDocument, 'div');
+		this._register(toDisposable(() => domNode.remove()));
+		this.domNode = domNode;
 		this.root = new FastDomNode(this.domNode);
 		this.root.setClassName('stanza-editor-lines');
 	}

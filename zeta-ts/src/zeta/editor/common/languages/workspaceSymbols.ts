@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable } from "../../../base/common/lifecycle.js";
 import { type URI } from "../../../base/common/uri.js";
 import { type TextRange } from "../core/text.js";
 import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "./languageFeatureRegistry.js";
@@ -20,7 +20,7 @@ export interface LanguageWorkspaceSymbolProvider extends LanguageFeatureProvider
 }
 
 /** Aggregates workspace symbol providers independently from one editor model. */
-export class WorkspaceSymbolService extends DisposableOwner {
+export class WorkspaceSymbolService extends Disposable {
 	constructor(private readonly providers: LanguageFeatureProviderRegistry<LanguageWorkspaceSymbolProvider>) {
 		super();
 	}

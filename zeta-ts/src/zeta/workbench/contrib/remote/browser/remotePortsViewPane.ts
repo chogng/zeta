@@ -1,3 +1,4 @@
+import { toDisposable } from "../../../../base/common/lifecycle.js";
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { ActionBar } from "../../../../base/browser/ui/actionbar/actionbar.js";
 import type { IAction } from "../../../../base/common/actions.js";
@@ -48,7 +49,7 @@ export class RemotePortsViewPane extends ViewPane {
 		this.portInput.step = "1";
 		this.portInput.placeholder = "3000";
 		this.portInput.required = true;
-		this.titleActions = this.own(new ActionBar(this.headerActionsElement, { ariaLabel: "Ports actions" }));
+		this.titleActions = this._register(new ActionBar(this.headerActionsElement, { ariaLabel: "Ports actions" }));
 		this.titleActions.element.classList.add("zeta-toolbar");
 		this.forwardButton = h(container.ownerDocument, "button");
 		this.forwardButton.className = "zeta-remote-ports-forward";
@@ -67,13 +68,13 @@ export class RemotePortsViewPane extends ViewPane {
 		this.listElement.setAttribute("aria-label", "Forwarded ports");
 		this.contentElement.append(this.formElement, this.statusElement, this.listElement);
 
-		this.own(addDisposableListener(this.formElement, "submit", event => this.forward(event)));
-		this.own(addDisposableListener(this.stopAllButton, "click", () => this.stopAll()));
-		this.own(addDisposableListener(this.listElement, "click", event => this.activate(event)));
+		this._register(addDisposableListener(this.formElement, "submit", event => this.forward(event)));
+		this._register(addDisposableListener(this.stopAllButton, "click", () => this.stopAll()));
+		this._register(addDisposableListener(this.listElement, "click", event => this.activate(event)));
 		const tunnelSubscription = tunnelService.onDidChange(change => this.acceptTunnelChange(change));
-		this.defer(() => tunnelSubscription.dispose());
-		this.own(remoteAgentService.onDidChangeConnection(connection => this.acceptConnection(connection)));
-		this.own(remoteAgentService.onDidChangeConnectionState(() => this.render()));
+		this._register(toDisposable(() => tunnelSubscription.dispose()));
+		this._register(remoteAgentService.onDidChangeConnection(connection => this.acceptConnection(connection)));
+		this._register(remoteAgentService.onDidChangeConnectionState(() => this.render()));
 		this.render();
 		this.refresh();
 	}

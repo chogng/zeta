@@ -4,7 +4,7 @@ import {
 	type BrowserWindow,
 	type MenuItemConstructorOptions,
 } from "electron/main";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type {
 	IpcRoute,
 } from "../../ipc/electron-main/trustedIpcRouter.js";
@@ -17,13 +17,13 @@ import {
 } from "../common/nativeMenubar.js";
 
 /** Owns the macOS application menu synchronized from one workbench window. */
-export class NativeMenubarMainService extends DisposableOwner {
+export class NativeMenubarMainService extends Disposable {
 	private readonly window: BrowserWindow;
 
 	constructor(window: BrowserWindow) {
 		super();
 		this.window = window;
-		this.defer(() => Menu.setApplicationMenu(null));
+		this._register(toDisposable(() => Menu.setApplicationMenu(null)));
 	}
 
 	update(data: INativeMenubarData): void {

@@ -48,6 +48,6 @@ registerEditorContribution({
 	id: EditorCoreCommandId.selectAll,
 	install: context => {
 		if (context.kind !== "text") return;
-		context.own(installCoreTextEditorCommands(context.view.element, context.viewport, context.selections));
+		context.register(installCoreTextEditorCommands(context.view.element, context.viewport, context.selections));
 	},
 });

@@ -1,5 +1,5 @@
 import "./media/stickyScroll.css";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { TextPosition } from "../../../common/core/text.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { type EditorFoldingModel } from "../../folding/browser/foldingModel.js";
@@ -7,7 +7,7 @@ import { buildStickyScrollEntries } from "../common/stickyScrollModel.js";
 import { h } from "../../../../base/browser/dom.js";
 
 /** Projects folding ancestors above the viewport as an accessible sticky header stack. */
-export class StickyScrollController extends DisposableOwner {
+export class StickyScrollController extends Disposable {
 	private readonly element: HTMLDivElement;
 
 	constructor(private readonly viewport: EditorViewport, private readonly folding: EditorFoldingModel) {
@@ -17,9 +17,9 @@ export class StickyScrollController extends DisposableOwner {
 		this.element.className = "stanza-editor-sticky-scroll";
 		this.element.setAttribute("aria-label", "Sticky section headers");
 		viewport.element.append(this.element);
-		this.defer(() => this.element.remove());
-		this.own(viewport.onDidChangeLayout(() => this.render()));
-		this.own(folding.onDidChange(() => this.render()));
+		this._register(toDisposable(() => this.element.remove()));
+		this._register(viewport.onDidChangeLayout(() => this.render()));
+		this._register(folding.onDidChange(() => this.render()));
 		this.render();
 	}
 

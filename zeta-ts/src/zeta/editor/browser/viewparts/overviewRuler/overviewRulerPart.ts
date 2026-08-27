@@ -1,6 +1,7 @@
 import "./overviewRuler.css";
 import { h, reset, fragment as createFragment } from "../../../../base/browser/dom.js";
 import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
+import { toDisposable } from "../../../../base/common/lifecycle.js";
 import { type DiagnosticOverviewMarker } from "./diagnosticOverviewMarkers.js";
 import { type DiffOverviewMarker } from "./diffOverviewMarkers.js";
 import { MINIMAP_WIDTH } from "../minimap/minimapPresentation.js";
@@ -34,7 +35,9 @@ export class OverviewRulerPart extends EditorViewPart {
 		this.readLineCount = options.readLineCount;
 		this.readMarkers = options.readMarkers;
 		this.readMarkersRevision = options.readMarkersRevision;
-		this.domNode = this.adopt(h(options.host.ownerDocument, "div"), domNode => domNode.remove());
+		const domNode = h(options.host.ownerDocument, "div");
+		this._register(toDisposable(() => domNode.remove()));
+		this.domNode = domNode;
 		this.root = new FastDomNode(this.domNode);
 		this.root.setClassName("stanza-editor-overview-ruler");
 		this.domNode.setAttribute("aria-hidden", "true");

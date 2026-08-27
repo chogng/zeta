@@ -1,6 +1,6 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { createFormattingCommand, type FormatService, type LanguageFormattingOptions } from "../common/formatCommands.js";
@@ -11,7 +11,7 @@ export interface FormatControllerOptions {
 }
 
 /** Routes the editor format shortcut into the Stanza formatting service and command layer. */
-export class FormatController extends DisposableOwner {
+export class FormatController extends Disposable {
 	private readonly options: LanguageFormattingOptions;
 	private readonly onError: (error: unknown) => void;
 
@@ -20,7 +20,7 @@ export class FormatController extends DisposableOwner {
 		if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza format dependencies must share one text model");
 		this.options = options.formattingOptions ?? { tabSize: 4, insertSpaces: true };
 		this.onError = options.onError ?? (error => console.error("Stanza formatting failed", error));
-		this.own(addDisposableListener(input, "keydown", event => {
+		this._register(addDisposableListener(input, "keydown", event => {
 			if (event.defaultPrevented || event.isComposing || event.altKey || (!event.ctrlKey && !event.metaKey) || !event.shiftKey || event.key.toLowerCase() !== "i") return;
 			stopEvent(event);
 			void this.formatDocument();
@@ -40,10 +40,10 @@ export class FormatController extends DisposableOwner {
 
 registerEditorContribution({ id: "editor.contrib.format", install: context => {
 	if (context.kind !== "text") return;
-	const service = context.own(context.languageFeaturesService.createFormatService(context.model, context.options.input.resource));
-	const controller = context.own(new FormatController(context.view.element, context.viewport, context.selections, service, context.languageId, {
+	const service = context.register(context.languageFeaturesService.createFormatService(context.model, context.options.input.resource));
+	const controller = context.register(new FormatController(context.view.element, context.viewport, context.selections, service, context.languageId, {
 		formattingOptions: { tabSize: context.options.indentation?.tabSize ?? 4, insertSpaces: context.options.indentation?.kind !== "tabs" },
 		onError: context.onLanguageError,
 	}));
-	if (context.options.formatOnSave) context.own(context.registerBeforeSave(() => controller.formatDocument()));
+	if (context.options.formatOnSave) context.register(context.registerBeforeSave(() => controller.formatDocument()));
 } });

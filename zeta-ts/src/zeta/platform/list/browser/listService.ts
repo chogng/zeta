@@ -2,7 +2,7 @@ import { AsyncDataTree, type AsyncDataTreeOptions } from "../../../base/browser/
 import { ObjectTree, type ObjectTreeAcceptEvent, type ObjectTreeOptions, type ObjectTreePointerEvent, type ObjectTreeSelectionChangeEvent } from "../../../base/browser/ui/tree/objectTree.js";
 import type { AsyncTreeDataSource } from "../../../base/browser/ui/tree/tree.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable } from "../../../base/common/lifecycle.js";
 import type { IConfigurationService } from "../../configuration/common/configurationService.js";
 import type { EditorActivationOptions } from "../../editor/common/editor.js";
 import { ListConfiguration } from "../common/listConfiguration.js";
@@ -31,7 +31,7 @@ export class WorkbenchObjectTree<T> extends ObjectTree<T> {
 	constructor(container: HTMLElement, options: WorkbenchObjectTreeOptions<T>) {
 		const { configurationService, openOnSingleClick, ...treeOptions } = options;
 		super(container, treeOptions);
-		this.navigator = this.own(new TreeResourceNavigator(this, configurationService, openOnSingleClick));
+		this.navigator = this._register(new TreeResourceNavigator(this, configurationService, openOnSingleClick));
 		this.onDidOpen = this.navigator.onDidOpen;
 	}
 }
@@ -47,7 +47,7 @@ export class WorkbenchAsyncDataTree<TInput, T> extends AsyncDataTree<TInput, T> 
 	constructor(container: HTMLElement, dataSource: AsyncTreeDataSource<TInput, T>, options: WorkbenchAsyncDataTreeOptions<T>) {
 		const { configurationService, openOnSingleClick, ...treeOptions } = options;
 		super(container, dataSource, treeOptions);
-		this.navigator = this.own(new TreeResourceNavigator(this, configurationService, openOnSingleClick));
+		this.navigator = this._register(new TreeResourceNavigator(this, configurationService, openOnSingleClick));
 		this.onDidOpen = this.navigator.onDidOpen;
 	}
 }
@@ -60,17 +60,17 @@ interface ResourceNavigationTree<T> {
 }
 
 /** Shared interaction policy behind every Platform List resource-capable wrapper. */
-class TreeResourceNavigator<T> extends DisposableOwner {
-	private readonly _onDidOpen = this.own(new Emitter<ResourceOpenEvent<T>>());
+class TreeResourceNavigator<T> extends Disposable {
+	private readonly _onDidOpen = this._register(new Emitter<ResourceOpenEvent<T>>());
 
 	readonly onDidOpen: Event<ResourceOpenEvent<T>> = this._onDidOpen.event;
 
 	constructor(tree: ResourceNavigationTree<T>, private readonly configurationService: IConfigurationService, private readonly openOnSingleClick: boolean | undefined) {
 		super();
-		this.own(tree.onPointer((event) => this.onPointer(event)));
-		this.own(tree.onDidDoubleClick((event) => this.onDoubleClick(event)));
-		this.own(tree.onDidAccept((event) => this.onAccept(event)));
-		this.own(tree.onDidChangeSelection((event) => this.onSelection(event)));
+		this._register(tree.onPointer((event) => this.onPointer(event)));
+		this._register(tree.onDidDoubleClick((event) => this.onDoubleClick(event)));
+		this._register(tree.onDidAccept((event) => this.onAccept(event)));
+		this._register(tree.onDidChangeSelection((event) => this.onSelection(event)));
 	}
 
 	private onPointer(event: ObjectTreePointerEvent<T>): void {

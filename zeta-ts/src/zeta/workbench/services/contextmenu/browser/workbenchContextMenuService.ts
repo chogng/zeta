@@ -1,5 +1,5 @@
 import type { Event } from "../../../../base/common/event.js";
-import { DisposableOwner, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
 import { type ContextMenuOptions, type IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
 import type { IContextViewService } from "../../../../platform/contextview/browser/contextView.js";
@@ -16,7 +16,7 @@ export interface WorkbenchContextMenuServiceOptions {
 export type WorkbenchContextMenuServiceFactory = (options: WorkbenchContextMenuServiceOptions) => IContextMenuService & IDisposable;
 
 /** Owns the host-selected context-menu implementation for one Workbench window. */
-export class WorkbenchContextMenuService extends DisposableOwner implements IContextMenuService {
+export class WorkbenchContextMenuService extends Disposable implements IContextMenuService {
 	private readonly implementation: IContextMenuService;
 
 	readonly onDidShowContextMenu: Event<void>;
@@ -24,7 +24,7 @@ export class WorkbenchContextMenuService extends DisposableOwner implements ICon
 
 	constructor(implementation: IContextMenuService & IDisposable) {
 		super();
-		this.implementation = this.own(implementation);
+		this.implementation = this._register(implementation);
 		this.onDidShowContextMenu = implementation.onDidShowContextMenu;
 		this.onDidHideContextMenu = implementation.onDidHideContextMenu;
 	}

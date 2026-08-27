@@ -1,6 +1,6 @@
 import { Emitter } from "../../../base/common/event.js";
 import type { Event } from "../../../base/common/event.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { createSshRemoteAuthority } from "../common/remote.js";
 import type { RemoteRuntimeInstallProgress } from "../common/remoteRuntimeInstallProgress.js";
 import type { RemoteRuntimeInstallProgressState } from "../common/remoteRuntimeInstallProgress.js";
@@ -19,18 +19,18 @@ interface ActiveInstallOperation {
 }
 
 /** Owns one cancellable, credential-free Remote runtime installation projection. */
-export class RemoteRuntimeInstallProgressMainService extends DisposableOwner {
-	private readonly changeEmitter = this.own(new Emitter<RemoteRuntimeInstallProgressState | undefined>());
+export class RemoteRuntimeInstallProgressMainService extends Disposable {
+	private readonly changeEmitter = this._register(new Emitter<RemoteRuntimeInstallProgressState | undefined>());
 	private active: ActiveInstallOperation | undefined;
 
 	readonly onDidChange: Event<RemoteRuntimeInstallProgressState | undefined> = this.changeEmitter.event;
 
 	constructor() {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.cancel();
 			this.active = undefined;
-		});
+		}));
 	}
 
 	getState(): RemoteRuntimeInstallProgressState | undefined {

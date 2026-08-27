@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
@@ -58,8 +58,8 @@ export interface LanguageCompletionSessionOptions {
  * The controller observes but does not own its result store, selection
  * controller, or text model.
  */
-export class LanguageCompletionSessionController extends DisposableOwner {
-	private readonly changeEmitter = this.own(new Emitter<LanguageCompletionSessionChange>());
+export class LanguageCompletionSessionController extends Disposable {
+	private readonly changeEmitter = this._register(new Emitter<LanguageCompletionSessionChange>());
 	private currentState: LanguageCompletionSessionState | undefined;
 	private readonly resolver: LanguageCompletionItemResolver | undefined;
 	private readonly onResolveError: (error: unknown) => void;
@@ -96,20 +96,20 @@ export class LanguageCompletionSessionController extends DisposableOwner {
 			this.onDidAccept = options.onDidAccept;
 			this.snippetVariables = options.snippetVariables;
 			this.currentState = this.createState(store.result);
-			this.own(store.onDidChange(change => {
+			this._register(store.onDidChange(change => {
 				if (!this.accepting) this.replaceState(change.result, LanguageCompletionSessionChangeReason.Store);
 			}));
-			this.own(selectionController.onDidChange(() => {
+			this._register(selectionController.onDidChange(() => {
 				if (!this.accepting) this.close(LanguageCompletionSessionChangeReason.Selection);
 			}));
-			this.defer(() => {
+			this._register(toDisposable(() => {
 				this.cancelResolution("sessionDisposed");
 				this.snippetSession?.dispose();
 				this.snippetSession = undefined;
 				const hadState = this.currentState !== undefined;
 				this.currentState = undefined;
 				if (hadState) this.fire(LanguageCompletionSessionChangeReason.Cancelled);
-			});
+			}));
 			this.startResolution();
 		} catch (error) {
 			this.dispose();

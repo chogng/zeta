@@ -13,8 +13,8 @@ export type { SyntaxFeaturesOptions, LanguageCompletionFeaturesOptions } from ".
 export class LanguageFeaturesService extends EditorLanguageFeaturesService implements ILanguageFeaturesService {
 	constructor() {
 		super();
-		this.own(this.registerCompletionProvider(createJsonCompletionProvider()));
-		this.own(this.registerHoverProvider(createJsonHoverProvider()));
-		this.own(this.registerFormattingProvider(createJsonFormattingProvider()));
+		this._register(this.registerCompletionProvider(createJsonCompletionProvider()));
+		this._register(this.registerHoverProvider(createJsonHoverProvider()));
+		this._register(this.registerFormattingProvider(createJsonFormattingProvider()));
 	}
 }

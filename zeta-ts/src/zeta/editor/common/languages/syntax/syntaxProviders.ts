@@ -1,5 +1,5 @@
 import { isNonEmptyArray } from "../../../../base/common/arrays.js";
-import { DisposableOwner, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { assertLanguageId, assertLanguageSelector } from "../languageId.js";
 import { type LanguageDiagnosticResult, type LanguageTokenResult } from "../languageResults.js";
 import { type LanguageWorkerDocumentSynchronization } from "../languageWorkerDocumentMirror.js";
@@ -33,14 +33,14 @@ export interface RegisteredSyntaxProvider {
 }
 
 /** Caller-owned registry for snapshot tokenization and diagnostic providers. */
-export class SyntaxProviderRegistry extends DisposableOwner {
+export class SyntaxProviderRegistry extends Disposable {
 	private readonly providers = new Map<string, RegisteredSyntaxProvider>();
 
 	constructor() {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.providers.clear();
-		});
+		}));
 	}
 
 	register(provider: SyntaxProvider): IDisposable {

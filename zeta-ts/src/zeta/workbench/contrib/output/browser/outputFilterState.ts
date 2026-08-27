@@ -1,5 +1,5 @@
 import { Emitter } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import type { IStorageService } from "../../../../platform/storage/common/storage.js";
 import { StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
 import type { IOutputEntry, OutputEntrySeverity } from "../../../services/output/common/outputService.js";
@@ -16,8 +16,8 @@ interface StoredOutputFilterState {
 }
 
 /** View-owned, workspace-persistent filtering for all Output channels. */
-export class OutputFilterState extends DisposableOwner {
-	private readonly changeEmitter = this.own(new Emitter<void>());
+export class OutputFilterState extends Disposable {
+	private readonly changeEmitter = this._register(new Emitter<void>());
 	private readonly hiddenSeverities = new Set<OutputEntrySeverity>();
 	private readonly hiddenCategories = new Set<string>();
 	private _text = "";

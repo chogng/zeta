@@ -1,5 +1,5 @@
 import { Emitter, type Event } from '../../../base/common/event.js';
-import { DisposableOwner, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { type EditorEditCommand } from '../../common/commands/editorEditCommand.js';
 import { createBackspaceCommand, createDeleteForwardCommand, createDeleteToLineEndCommand, createDeleteToLineStartCommand } from '../../common/cursor/cursorDeleteOperations.js';
 import { createDeleteWordBackwardCommand, createDeleteWordForwardCommand } from '../../common/cursor/cursorWordOperations.js';
@@ -60,9 +60,9 @@ export interface ViewControllerOptions {
  * adapters normalize raw events, while this class owns command execution,
  * command transformation, overtype, and contribution-facing edit events.
  */
-export class ViewController extends DisposableOwner {
-	private readonly didChangeOvertypeEmitter = this.own(new Emitter<boolean>());
-	private readonly didEditEmitter = this.own(new Emitter<EditorViewDidEditEvent>());
+export class ViewController extends Disposable {
+	private readonly didChangeOvertypeEmitter = this._register(new Emitter<boolean>());
+	private readonly didEditEmitter = this._register(new Emitter<EditorViewDidEditEvent>());
 	private readonly commandTransformers: EditorCommandTransformer[] = [];
 	private readonly languageEditing: EditorLanguageEditingAdapter | undefined;
 	private readonly wordPattern: (() => RegExp | undefined) | undefined;

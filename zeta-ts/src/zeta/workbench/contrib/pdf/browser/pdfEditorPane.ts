@@ -4,7 +4,7 @@ import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.
 import type { IAction } from "../../../../base/common/actions.js";
 import { Separator } from "../../../../base/common/actions.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
-import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { clamp } from "../../../../base/common/numbers.js";
 import { assertDefined } from "../../../../base/common/types.js";
@@ -47,12 +47,12 @@ type ActiveAnnotation = ActiveHighlight | ActiveInk;
  * The PDF itself stays immutable. Annotations persist in a versioned companion file through
  * {@link IPdfAnnotationStore}, so document loading and review metadata remain independently owned.
  */
-export class PdfEditorPane extends DisposableOwner implements IEditorPane {
+export class PdfEditorPane extends Disposable implements IEditorPane {
 	readonly id = PDF_EDITOR_ID;
 
-	private readonly annotationModel = this.own(new PdfAnnotationModel());
-	private readonly annotationInteractions = this.own(new ResettableDisposableGroup());
-	private readonly sidebarInteractions = this.own(new ResettableDisposableGroup());
+	private readonly annotationModel = this._register(new PdfAnnotationModel());
+	private readonly annotationInteractions = this._register(new DisposableStore());
+	private readonly sidebarInteractions = this._register(new DisposableStore());
 	private container: HTMLDivElement | undefined;
 	private toolbar: ToolBar | undefined;
 	private pages: HTMLDivElement | undefined;
@@ -78,8 +78,8 @@ export class PdfEditorPane extends DisposableOwner implements IEditorPane {
 		private readonly renderer: IPdfRenderer,
 	) {
 		super();
-		this.own(this.annotationModel.onDidChange(() => this.onAnnotationsChanged()));
-		this.defer(() => {
+		this._register(this.annotationModel.onDidChange(() => this.onAnnotationsChanged()));
+		this._register(toDisposable(() => {
 			this.clearInput();
 			this.container?.remove();
 			this.container = undefined;
@@ -91,7 +91,7 @@ export class PdfEditorPane extends DisposableOwner implements IEditorPane {
 			this.annotationTextLabel = undefined;
 			this.colorInput = undefined;
 			this.statusElement = undefined;
-		});
+		}));
 	}
 
 	create(parent: HTMLElement): void {
@@ -102,7 +102,7 @@ export class PdfEditorPane extends DisposableOwner implements IEditorPane {
 		container.setAttribute("role", "region");
 		container.setAttribute("aria-label", "PDF reader");
 
-		const toolbar = this.own(new ToolBar(container, {
+		const toolbar = this._register(new ToolBar(container, {
 			ariaLabel: "PDF annotation actions",
 			contextMenuProvider: noSecondaryContextMenuProvider,
 			highlightToggledItems: true,
@@ -164,13 +164,13 @@ export class PdfEditorPane extends DisposableOwner implements IEditorPane {
 		this.annotationTextLabel = annotationTextLabel;
 		this.colorInput = colorInput;
 		this.statusElement = status;
-		this.own(addDisposableListener(colorInput, "input", () => {
+		this._register(addDisposableListener(colorInput, "input", () => {
 			this.color = colorInput.value.toLowerCase();
 		}));
-		this.own(addDisposableListener(annotationText, "input", () => {
+		this._register(addDisposableListener(annotationText, "input", () => {
 			this.noteDraft = annotationText.value;
 		}));
-		this.own(addDisposableListener(annotationText, "change", () => this.commitSelectedNote()));
+		this._register(addDisposableListener(annotationText, "change", () => this.commitSelectedNote()));
 		this.renderToolbar();
 		this.renderSidebar();
 	}

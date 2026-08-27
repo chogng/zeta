@@ -64,9 +64,9 @@ export class MenuWorkbenchToolBar extends WorkbenchToolBar {
 	) {
 		super(container, contextMenuProvider, options);
 		this.menuOptions = options.menuOptions;
-		const menu = this.own(menuService.createMenu(menuId, options.contextKeyService));
+		const menu = this._register(menuService.createMenu(menuId, options.contextKeyService));
 		this.menu = menu;
-		this.own(menu.onDidChange((event) => this.update(event)));
+		this._register(menu.onDidChange((event) => this.update(event)));
 		this.update();
 	}
 

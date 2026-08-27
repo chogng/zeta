@@ -1,4 +1,4 @@
-import { DisposableOwner } from '../../../../../base/common/lifecycle.js';
+import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { type EditorSelectionController } from '../../../../common/cursor/editorSelectionController.js';
 import { TextSelection, TextSelectionSet } from '../../../../common/core/selection.js';
 import { TextRange } from '../../../../common/core/text.js';
@@ -13,7 +13,7 @@ const ACCESSIBILITY_LINES_PER_PAGE = 500;
 const MAXIMUM_ACCESSIBLE_INPUT_TEXT_UNITS = 32 * 1_024;
 
 /** Mirrors the active editor window into the native input for assistive technology. */
-export class TextAreaAccessibilityController extends DisposableOwner {
+export class TextAreaAccessibilityController extends Disposable {
 	private accessibleInputSyncScheduled = false;
 	private accessibleInputState = TextAreaState.EMPTY;
 	private accessibleScreenReaderContentState: ISimpleScreenReaderContentState | undefined;
@@ -27,16 +27,16 @@ export class TextAreaAccessibilityController extends DisposableOwner {
 		private readonly compositionController: CompositionController,
 	) {
 		super();
-		this.own(input.onDidFocus(() => this.synchronizeAccessibleInput()));
-		this.own(input.onDidBlur(() => {
+		this._register(input.onDidFocus(() => this.synchronizeAccessibleInput()));
+		this._register(input.onDidBlur(() => {
 			this.accessibleInputState = TextAreaState.EMPTY;
 			this.accessibleScreenReaderContentState = undefined;
 			this.accessibleInputStartOffset = 0;
 		}));
-		this.own(input.onDidSelect(() => this.acceptAccessibleSelection()));
-		this.own(viewport.textModel.onDidChange(() => this.scheduleAccessibleInputSynchronization()));
-		this.own(selectionController.onDidChange(() => this.scheduleAccessibleInputSynchronization()));
-		this.own(compositionController.onDidChange(() => this.scheduleAccessibleInputSynchronization()));
+		this._register(input.onDidSelect(() => this.acceptAccessibleSelection()));
+		this._register(viewport.textModel.onDidChange(() => this.scheduleAccessibleInputSynchronization()));
+		this._register(selectionController.onDidChange(() => this.scheduleAccessibleInputSynchronization()));
+		this._register(compositionController.onDidChange(() => this.scheduleAccessibleInputSynchronization()));
 	}
 
 	synchronizeAccessibleInput(): void {

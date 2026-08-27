@@ -1,4 +1,4 @@
-import { DisposableOwner } from '../../../../base/common/lifecycle.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
 import type { ILifecycleService } from '../../../../platform/lifecycle/common/lifecycleService.js';
 import { WorkbenchModeRegistry, type WorkbenchModeId } from '../../../common/workbenchMode.js';
@@ -13,7 +13,7 @@ export interface WorkbenchModeServiceOptions {
 }
 
 /** Persists a mode choice, flushes the Workbench, and asks its host to reload the window. */
-export class WorkbenchModeService extends DisposableOwner implements IWorkbenchModeService {
+export class WorkbenchModeService extends Disposable implements IWorkbenchModeService {
 	public readonly currentModeId: WorkbenchModeId;
 	public readonly availableModes: readonly WorkbenchModeOption[] = Object.freeze(WorkbenchModeRegistry.definitions.map(({ id, label }) => Object.freeze({ id, label })));
 	private readonly configurationService: IConfigurationService;

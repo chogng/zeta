@@ -1,6 +1,6 @@
 import { type Event } from "../../../base/common/event.js";
 import {
-	DisposableOwner,
+	Disposable,
 } from "../../../base/common/lifecycle.js";
 import type {
 	IpcRoute,
@@ -27,14 +27,14 @@ export interface KeybindingsResourceMainServiceOptions {
 /**
  * Owns the active profile's `keybindings.json` in Electron main.
  */
-export class KeybindingsResourceMainService extends DisposableOwner {
+export class KeybindingsResourceMainService extends Disposable {
 	private readonly resource: RevisionedJsonFile<readonly IKeybindingEntry[]>;
 
 	private constructor(
 		resource: RevisionedJsonFile<readonly IKeybindingEntry[]>,
 	) {
 		super();
-		this.resource = this.own(resource);
+		this.resource = this._register(resource);
 	}
 
 	static async create(

@@ -1,16 +1,16 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import type { DocumentCollaborationConnection } from "../../../../editor/common/services/documentCollaborationService.js";
 import type { DocumentCollaborationOpenInput } from "../../../../editor/common/services/documentCollaborationService.js";
 import type { IDocumentCollaborationService } from "../../../../editor/common/services/documentCollaborationService.js";
 import { RemoteDocumentCollaborationService } from "./remoteDocumentCollaborationService.js";
 
 /** Routes Stanza collaboration to the local App Server or an explicit remote host. */
-export class DocumentCollaborationService extends DisposableOwner implements IDocumentCollaborationService {
-	private readonly remote = this.own(new RemoteDocumentCollaborationService());
+export class DocumentCollaborationService extends Disposable implements IDocumentCollaborationService {
+	private readonly remote = this._register(new RemoteDocumentCollaborationService());
 
 	constructor(private readonly appServer: IDocumentCollaborationService | undefined) {
 		super();
-		if (appServer) this.own(appServer);
+		if (appServer) this._register(appServer);
 	}
 
 	open(input: DocumentCollaborationOpenInput, signal: AbortSignal): Promise<DocumentCollaborationConnection> {

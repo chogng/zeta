@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { type LanguageConfigurationSource, type ResolvedLanguageConfiguration } from "./languageConfiguration.js";
 import { assertLanguageId } from "./languageId.js";
 import { createLanguageLexicalLineScanner } from "./languageLexicalConfiguration.js";
@@ -33,7 +33,7 @@ export interface LanguageStructuralBracketSource extends LanguageLexicalContextS
  * The index borrows its model and configuration source. It scans lazily to the
  * requested line and invalidates the affected suffix after model changes.
  */
-export class LanguageLexicalContextIndex extends DisposableOwner implements LanguageStructuralBracketSource {
+export class LanguageLexicalContextIndex extends Disposable implements LanguageStructuralBracketSource {
 	private configuration: ResolvedLanguageConfiguration | undefined;
 	private scanner: LanguageLexicalLineScanner | undefined;
 	private bracketTokens: readonly string[] = Object.freeze([]);
@@ -46,13 +46,13 @@ export class LanguageLexicalContextIndex extends DisposableOwner implements Lang
 			this.dispose();
 			throw new TypeError("Language lexical context requires a configuration source");
 		}
-		this.own(textModel.onDidChange(change => this.acceptModelChange(change)));
-		this.defer(() => {
+		this._register(textModel.onDidChange(change => this.acceptModelChange(change)));
+		this._register(toDisposable(() => {
 			this.configuration = undefined;
 			this.scanner = undefined;
 			this.bracketTokens = Object.freeze([]);
 			this.lineResults = [];
-		});
+		}));
 	}
 
 	getStructuralLineContent(lineIndex: number, startColumn = 0, endColumn?: number): string {

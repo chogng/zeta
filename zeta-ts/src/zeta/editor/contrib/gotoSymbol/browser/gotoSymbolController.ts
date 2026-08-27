@@ -1,17 +1,17 @@
 import "./media/gotoSymbol.css";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
-import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type GotoSymbolService, type LanguageSymbolMatch } from "../common/gotoSymbol.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 /** Owns editor-local document-symbol quick navigation (Ctrl/Cmd+Shift+O). */
-export class GotoSymbolController extends DisposableOwner {
+export class GotoSymbolController extends Disposable {
 	private readonly element: HTMLDivElement;
 	private readonly queryInput: HTMLInputElement;
 	private readonly list: HTMLDivElement;
-	private readonly itemListeners = this.own(new ResettableDisposableGroup());
+	private readonly itemListeners = this._register(new DisposableStore());
 	private request: AbortController | undefined;
 	private matches: readonly LanguageSymbolMatch[] = [];
 
@@ -33,22 +33,22 @@ export class GotoSymbolController extends DisposableOwner {
 		this.list.setAttribute("role", "listbox");
 		this.element.append(this.queryInput, this.list);
 		viewport.element.append(this.element);
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.request?.abort();
 			this.element.remove();
-		});
-		this.own(addDisposableListener(input, "keydown", event => {
+		}));
+		this._register(addDisposableListener(input, "keydown", event => {
 			if (event.defaultPrevented || event.isComposing || event.altKey || !event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.key.toLowerCase() !== "o") return;
 			stopEvent(event);
 			this.open();
 		}));
-		this.own(addDisposableListener(this.element, "keydown", event => {
+		this._register(addDisposableListener(this.element, "keydown", event => {
 			if (event.key !== "Escape") return;
 			stopEvent(event);
 			this.close();
 		}));
-		this.own(addDisposableListener(this.queryInput, "input", () => void this.refresh()));
-		this.own(viewport.onDidChangeLayout(() => this.position()));
+		this._register(addDisposableListener(this.queryInput, "input", () => void this.refresh()));
+		this._register(viewport.onDidChangeLayout(() => this.position()));
 	}
 
 	private open(): void {

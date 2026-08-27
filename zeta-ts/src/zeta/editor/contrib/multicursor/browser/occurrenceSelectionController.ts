@@ -1,5 +1,5 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { addOccurrenceSelection, EditorOccurrenceDirection, selectAllOccurrences } from "../common/occurrenceSelection.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type EditorViewport } from "../../../browser/view.js";
@@ -9,7 +9,7 @@ export interface OccurrenceSelectionControllerOptions {
 }
 
 /** Routes VS Code-compatible occurrence-selection shortcuts through Stanza's common model. */
-export class OccurrenceSelectionController extends DisposableOwner {
+export class OccurrenceSelectionController extends Disposable {
 	constructor(
 		input: HTMLElement,
 		private readonly viewport: EditorViewport,
@@ -25,7 +25,7 @@ export class OccurrenceSelectionController extends DisposableOwner {
 				throw new TypeError("Stanza occurrence word pattern resolver must be a function");
 			}
 			this.wordPattern = options.wordPattern;
-			this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
+			this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
 		} catch (error) {
 			this.dispose();
 			throw error;

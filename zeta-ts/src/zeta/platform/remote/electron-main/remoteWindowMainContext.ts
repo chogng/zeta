@@ -1,5 +1,5 @@
 import type { Event } from "../../../base/common/event.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { IDisposable } from "../../../base/common/lifecycle.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
@@ -49,7 +49,7 @@ export interface RemoteWindowMainContextOptions {
  * changes, closes SSH forwards when the Workspace changes, and keeps runtime
  * rollback scoped to the supervisor backing this exact window.
  */
-export class RemoteWindowMainContext extends DisposableOwner {
+export class RemoteWindowMainContext extends Disposable {
 	readonly ipcRoutes: readonly IpcRoute<unknown, unknown>[];
 
 	constructor(private readonly options: RemoteWindowMainContextOptions) {
@@ -60,13 +60,13 @@ export class RemoteWindowMainContext extends DisposableOwner {
 			...remoteConnectionIpcRoutes(options.connections),
 			...remoteTunnelIpcRoutes(options.tunnels),
 		]);
-		this.own(options.tunnels);
+		this._register(options.tunnels);
 		const tunnelChanges = options.tunnels.onDidChange(change => options.host.send(REMOTE_TUNNEL_CHANGED_CHANNEL, change));
-		this.defer(() => tunnelChanges.dispose());
-		this.own(options.workspaceContext.onDidChangeWorkspace(() => {
+		this._register(toDisposable(() => tunnelChanges.dispose()));
+		this._register(options.workspaceContext.onDidChangeWorkspace(() => {
 			void options.tunnels.closeAll().catch(error => this.reportError("Failed to close Remote tunnels after Workspace change", error));
 		}));
-		this.own(options.supervisor.onStateChange(() => {
+		this._register(options.supervisor.onStateChange(() => {
 			options.host.send(REMOTE_AGENT_CONNECTION_CHANGED_CHANNEL, remoteAgentConnection(options.supervisor, options.workspaceContext.getWorkspace()));
 		}));
 	}

@@ -3,7 +3,7 @@ import { h } from '../../../../base/browser/dom.js';
 import type { IDimension } from '../../../../base/browser/geometry.js';
 import type { IContextViewProvider } from '../../../../base/browser/ui/contextview/contextview.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
-import { DisposableOwner } from '../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import type { IConfigurationKey, IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
 import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
@@ -20,7 +20,7 @@ import { TOCTree, TOCTreeModel, type SettingsTOCEntry, type SettingsTOCOpenEntry
 export const SettingsEditorPaneId = 'workbench.preferences.settings';
 
 /** Owns the Configuration Registry-backed Settings navigation and setting widgets. */
-export class SettingsEditorPane extends DisposableOwner implements IPreferencesEditorPane {
+export class SettingsEditorPane extends Disposable implements IPreferencesEditorPane {
 	private readonly content: HTMLElement;
 	private readonly contentDescription: HTMLParagraphElement;
 	private readonly contentHeading: HTMLHeadingElement;
@@ -49,9 +49,9 @@ export class SettingsEditorPane extends DisposableOwner implements IPreferencesE
 		super();
 		this.configurationService = configurationService;
 		this.localizationService = localizationService;
-		this.settingsModel = this.own(new SettingsEditorModel(new DefaultSettings().all));
+		this.settingsModel = this._register(new SettingsEditorModel(new DefaultSettings().all));
 		const settingsLayout = createSettingsLayout(this.settingsModel.settings);
-		const preferencesRenderer = this.own(new PreferencesRenderer(container, {
+		const preferencesRenderer = this._register(new PreferencesRenderer(container, {
 			clipboardService,
 			configurationService,
 			contextMenuProvider,
@@ -66,14 +66,14 @@ export class SettingsEditorPane extends DisposableOwner implements IPreferencesE
 		const navigation = h(ownerDocument, 'nav');
 		navigation.className = 'zeta-settings-sidebar';
 		navigation.setAttribute('aria-label', 'Settings categories');
-		this.navigationScrollable = this.own(new ScrollableElement(navigation, {
+		this.navigationScrollable = this._register(new ScrollableElement(navigation, {
 			direction: 'vertical',
 			vertical: 'auto',
 			tabIndex: -1,
 			wheel: { consume: 'when-scrolling' },
 		}));
 		this.navigationScrollable.element.classList.add('zeta-settings-sidebar-scrollable');
-		this.tocTree = this.own(new TOCTree(this.navigationScrollable.contentElement, new TOCTreeModel(settingsLayout), {
+		this.tocTree = this._register(new TOCTree(this.navigationScrollable.contentElement, new TOCTreeModel(settingsLayout), {
 			ariaLabel: this.localized('chrome.categories', 'Settings categories'),
 			categoryLabel: category => this.localizedCategoryLabel(category),
 			categoryDescription: category => this.localizedCategoryDescription(category),
@@ -91,7 +91,7 @@ export class SettingsEditorPane extends DisposableOwner implements IPreferencesE
 		this.content.className = 'zeta-settings-page';
 		this.content.dataset.settingsContainer = '';
 		this.content.tabIndex = -1;
-		this.contentScrollable = this.own(new ScrollableElement(this.content, {
+		this.contentScrollable = this._register(new ScrollableElement(this.content, {
 			direction: 'vertical',
 			vertical: 'auto',
 			tabIndex: -1,
@@ -121,10 +121,10 @@ export class SettingsEditorPane extends DisposableOwner implements IPreferencesE
 		const initialCategory = SettingsCategories[0];
 		if (!initialCategory) throw new Error('Settings requires at least one category');
 		this.activeCategory = initialCategory;
-		this.treeModel = this.own(new SettingsTreeModel<ISetting>());
+		this.treeModel = this._register(new SettingsTreeModel<ISetting>());
 		this.treeModel.setChildren(settingsRootNodes(settingsLayout));
 		this.treeModel.setNavigationTarget(initialCategory.id);
-		this.settingsTree = this.own(new SettingsTree(settingsContent, {
+		this.settingsTree = this._register(new SettingsTree(settingsContent, {
 			model: this.treeModel,
 			rootClassName: 'zeta-settings-content-tree',
 			groupClassName: 'zeta-configuration-settings-group zeta-settings-content-group',
@@ -136,24 +136,24 @@ export class SettingsEditorPane extends DisposableOwner implements IPreferencesE
 		}));
 		this.renderCategory(initialCategory);
 
-		this.own(this.localizationService.onDidChange(() => this.updateLocalizedChrome()));
-		this.own(configurationService.onDidChangeConfiguration(() => this.treeModel.refreshQuery()));
-		this.own(this.settingsModel.onDidChangeStatus(status => {
+		this._register(this.localizationService.onDidChange(() => this.updateLocalizedChrome()));
+		this._register(configurationService.onDidChangeConfiguration(() => this.treeModel.refreshQuery()));
+		this._register(this.settingsModel.onDidChangeStatus(status => {
 			this.contentStatus.textContent = status.message;
 			this.contentStatus.classList.toggle('is-error', status.isError);
 			this.contentStatus.hidden = !status.message;
 		}));
-		this.own(this.tocTree.onDidOpen(entry => this.openNavigationEntry(entry)));
-		this.own(this.tocTree.onDidChangeFind(({ pattern, matches }) => {
+		this._register(this.tocTree.onDidOpen(entry => this.openNavigationEntry(entry)));
+		this._register(this.tocTree.onDidChangeFind(({ pattern, matches }) => {
 			this.navigationEmpty.hidden = !pattern || matches.length !== 0;
 		}));
-		this.own(this.tocTree.onDidChangeCollapseState(({ element, collapsed }) => {
+		this._register(this.tocTree.onDidChangeCollapseState(({ element, collapsed }) => {
 			if (element.kind !== 'group') return;
 			const containsActiveCategory = element.group.categories.some(category => category.id === this.activeCategory.id);
 			const activeId = this.activeNavigationTarget?.id ?? this.activeCategory.id;
 			this.tocTree.setSelection([containsActiveCategory && collapsed ? element.id : activeId]);
 		}));
-		this.defer(() => this.element.remove());
+		this._register(toDisposable(() => this.element.remove()));
 	}
 
 	getDomNode(): HTMLElement {

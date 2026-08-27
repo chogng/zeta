@@ -1,7 +1,7 @@
 import "./media/gotoLineWidget.css";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { parseStanzaGotoLocation, type GotoLocationParseResult } from "../../../common/commands/gotoLocation.js";
 import { EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
@@ -14,7 +14,7 @@ export interface GotoLineControllerOptions {
 }
 
 /** Owns Stanza's local Go to Line/Column dialog and platform G shortcut. */
-export class GotoLineController extends DisposableOwner {
+export class GotoLineController extends Disposable {
 	readonly element: HTMLDivElement;
 	readonly input: HTMLInputElement;
 	private readonly status: HTMLSpanElement;
@@ -50,12 +50,12 @@ export class GotoLineController extends DisposableOwner {
 		this.status.setAttribute("aria-live", "polite");
 		this.element.append(this.input, this.status);
 		viewport.element.append(this.element);
-		this.defer(() => this.element.remove());
-		this.own(addDisposableListener(editorInput, "keydown", event => this.handleEditorKeydown(event)));
-		this.own(addDisposableListener(this.element, "keydown", event => this.handleWidgetKeydown(event)));
-		this.own(addDisposableListener(this.input, "input", () => this.preview()));
-		this.own(viewport.onDidChangeLayout(() => this.position()));
-		this.own(viewport.textModel.onDidChange(() => {
+		this._register(toDisposable(() => this.element.remove()));
+		this._register(addDisposableListener(editorInput, "keydown", event => this.handleEditorKeydown(event)));
+		this._register(addDisposableListener(this.element, "keydown", event => this.handleWidgetKeydown(event)));
+		this._register(addDisposableListener(this.input, "input", () => this.preview()));
+		this._register(viewport.onDidChangeLayout(() => this.position()));
+		this._register(viewport.textModel.onDidChange(() => {
 			if (this.visible) this.preview();
 		}));
 	}
@@ -138,7 +138,7 @@ registerEditorContribution({
 	id: "editor.contrib.quickAccess",
 	install: context => {
 		if (context.kind !== "text") return;
-		context.own(new GotoLineController(context.view.element, context.viewport, context.selections));
+		context.register(new GotoLineController(context.view.element, context.viewport, context.selections));
 	},
 });
 

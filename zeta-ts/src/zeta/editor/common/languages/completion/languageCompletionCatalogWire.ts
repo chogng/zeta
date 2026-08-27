@@ -1,6 +1,6 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { raceCancellation } from "../../../../base/common/cancellation.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { LanguageCompletionProviderRegistry, normalizeLanguageCompletionProviderCatalog, type LanguageCompletionProviderCatalog, type LanguageCompletionProviderCatalogSource, type LanguageCompletionRequest } from "./languageCompletionProviders.js";
 import { LanguageCompletionProviderModuleState, type LanguageCompletionProviderModuleCatalog, type LanguageCompletionProviderModuleController, type LanguageCompletionProviderModuleStateChange } from "./languageCompletionProviderModules.js";
 import { LanguageCompletionProviderModuleWireClient } from "./languageCompletionProviderModuleWire.js";
@@ -17,8 +17,8 @@ const CATALOG_PROTOCOL = "zeta.language.completion-provider-catalog";
 const CATALOG_PROTOCOL_VERSION = 1;
 
 /** Completion worker client with a provider-catalog side channel. */
-export class LanguageCompletionCatalogWorkerClient extends DisposableOwner implements LanguageCompletionWorker, LanguageWorkerModelSynchronizer, LanguageCompletionProviderCatalogSource, LanguageCompletionProviderModuleController, LanguageCompletionItemResolver {
-	private readonly catalogEmitter = this.own(new Emitter<LanguageCompletionProviderCatalog>());
+export class LanguageCompletionCatalogWorkerClient extends Disposable implements LanguageCompletionWorker, LanguageWorkerModelSynchronizer, LanguageCompletionProviderCatalogSource, LanguageCompletionProviderModuleController, LanguageCompletionItemResolver {
+	private readonly catalogEmitter = this._register(new Emitter<LanguageCompletionProviderCatalog>());
 	private readonly waiters = new Set<CatalogWaiter>();
 	private readonly worker: LanguageWorkerWireClient<LanguageCompletionLane, LanguageCompletionRequest, LanguageCompletionResult>;
 	private readonly modules: LanguageCompletionProviderModuleWireClient;
@@ -35,22 +35,22 @@ export class LanguageCompletionCatalogWorkerClient extends DisposableOwner imple
 	constructor(port: LanguageWorkerWireClientPort, options: LanguageCompletionCatalogWorkerClientOptions = {}) {
 		super();
 		const requiredProviderModules = normalizeRequiredLanguageProviderModules(options.requiredProviderModules);
-		this.worker = this.own(new LanguageWorkerWireClient(port, languageCompletionWireCodec));
-		this.modules = this.own(new LanguageCompletionProviderModuleWireClient(port, error => this.worker.invalidate(error)));
-		this.resolver = this.own(new LanguageCompletionResolveWireClient(port, error => this.worker.invalidate(error)));
+		this.worker = this._register(new LanguageWorkerWireClient(port, languageCompletionWireCodec));
+		this.modules = this._register(new LanguageCompletionProviderModuleWireClient(port, error => this.worker.invalidate(error)));
+		this.resolver = this._register(new LanguageCompletionResolveWireClient(port, error => this.worker.invalidate(error)));
 		this.onDidChangeModuleCatalog = this.modules.onDidChangeModuleCatalog;
-		this.own(port.onMessage(message => this.receive(message)));
-		this.own(this.worker.onDidFail(error => {
+		this._register(port.onMessage(message => this.receive(message)));
+		this._register(this.worker.onDidFail(error => {
 			this.modules.invalidate(error);
 			this.resolver.invalidate(error);
 			this.fail(error);
 		}));
 		this.moduleReadiness = this.activateRequiredModules(requiredProviderModules);
 		void this.moduleReadiness.catch(() => undefined);
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.clearCatalog();
 			this.failWaiters(new ReferenceError("LanguageCompletionCatalogWorkerClient is already disposed"));
-		});
+		}));
 	}
 
 	get providerCatalogReady(): boolean {
@@ -182,7 +182,7 @@ export interface LanguageCompletionCatalogWorkerClientOptions {
 }
 
 /** Publishes the actual Worker registry snapshot and every later revision. */
-export class LanguageCompletionCatalogWirePublisher extends DisposableOwner {
+export class LanguageCompletionCatalogWirePublisher extends Disposable {
 	constructor(port: LanguageWorkerWirePort, registry: LanguageCompletionProviderRegistry) {
 		super();
 		assertPort(port);
@@ -197,7 +197,7 @@ export class LanguageCompletionCatalogWirePublisher extends DisposableOwner {
 				catalog,
 			}));
 		};
-		this.own(registry.onDidChangeProviderCatalog(publish));
+		this._register(registry.onDidChangeProviderCatalog(publish));
 		try {
 			publish(registry.providerCatalog);
 		} catch (error) {

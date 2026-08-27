@@ -1,6 +1,6 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { type JsonValue } from "../../../../base/common/jsonValue.js";
-import { DisposableOwner, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
 import { type IDebugAdapterProcessService } from "../../../../platform/debug/common/debugAdapterProcessService.js";
 import { FileNotFoundError, type IFileService } from "../../../../platform/files/common/files.js";
@@ -37,12 +37,12 @@ interface DebugSessionRecord {
 const EMPTY_STATE: PersistedDebugState = Object.freeze({ version: 1, breakpoints: Object.freeze([]), watchExpressions: Object.freeze([]), exceptionBreakpoints: Object.freeze({}) });
 
 /** Workspace Debug composition over generic DAP processes. */
-export class DebugService extends DisposableOwner implements IDebugService {
-	private readonly configurationsEmitter = this.own(new Emitter<readonly IDebugConfiguration[]>());
-	private readonly breakpointsEmitter = this.own(new Emitter<readonly IDebugBreakpoint[]>());
-	private readonly watchExpressionsEmitter = this.own(new Emitter<readonly string[]>());
-	private readonly exceptionBreakpointsEmitter = this.own(new Emitter<readonly string[]>());
-	private readonly sessionEmitter = this.own(new Emitter<IDebugSession | undefined>());
+export class DebugService extends Disposable implements IDebugService {
+	private readonly configurationsEmitter = this._register(new Emitter<readonly IDebugConfiguration[]>());
+	private readonly breakpointsEmitter = this._register(new Emitter<readonly IDebugBreakpoint[]>());
+	private readonly watchExpressionsEmitter = this._register(new Emitter<readonly string[]>());
+	private readonly exceptionBreakpointsEmitter = this._register(new Emitter<readonly string[]>());
+	private readonly sessionEmitter = this._register(new Emitter<IDebugSession | undefined>());
 	private readonly stateMemento: Memento<PersistedDebugState>;
 	private readonly sessionRecords = new Map<string, DebugSessionRecord>();
 	private readonly completedPostTasks = new Set<string>();
@@ -62,13 +62,13 @@ export class DebugService extends DisposableOwner implements IDebugService {
 
 	constructor(private readonly files: IFileService, private readonly workspace: IWorkspaceContextService, private readonly processes: IDebugAdapterProcessService | undefined, private readonly terminals: ITerminalService, storage: IStorageService, private readonly tasks: ITaskService, private readonly adapters: DebugAdapterFactorySource = DebugAdapterFactoriesRegistry, private readonly logService?: ILogService) {
 		super();
-		this.stateMemento = this.own(new Memento(storage, { id: "debug.workspace", scope: StorageScope.WORKSPACE, target: StorageTarget.USER, defaultValue: () => EMPTY_STATE, parse: parsePersistedDebugState, serialize: serializePersistedDebugState }));
+		this.stateMemento = this._register(new Memento(storage, { id: "debug.workspace", scope: StorageScope.WORKSPACE, target: StorageTarget.USER, defaultValue: () => EMPTY_STATE, parse: parsePersistedDebugState, serialize: serializePersistedDebugState }));
 		this.restoreState(this.stateMemento.state);
-		this.own(this.stateMemento.onDidChange(event => { if (event.external) this.restoreState(event.state); }));
-		this.own(files.onDidChangeFiles(event => { if (event.resources === undefined || event.resources.some(resource => /\/\.vscode\/launch\.json$/i.test(resource.path))) void this.refresh().catch(error => this.reportError(error)); }));
-		this.own(adapters.onDidChange(() => { this.setLaunchDocument(Object.freeze([]), Object.freeze([])); void this.refresh().catch(error => this.reportError(error)); }));
-		this.own(workspace.onDidChangeWorkspace(() => { this.refreshGeneration += 1; this.setLaunchDocument(Object.freeze([]), Object.freeze([])); void this.stopAll(); }));
-		this.defer(() => { for (const record of this.sessionRecords.values()) record.listener.dispose(); this.sessionRecords.clear(); });
+		this._register(this.stateMemento.onDidChange(event => { if (event.external) this.restoreState(event.state); }));
+		this._register(files.onDidChangeFiles(event => { if (event.resources === undefined || event.resources.some(resource => /\/\.vscode\/launch\.json$/i.test(resource.path))) void this.refresh().catch(error => this.reportError(error)); }));
+		this._register(adapters.onDidChange(() => { this.setLaunchDocument(Object.freeze([]), Object.freeze([])); void this.refresh().catch(error => this.reportError(error)); }));
+		this._register(workspace.onDidChangeWorkspace(() => { this.refreshGeneration += 1; this.setLaunchDocument(Object.freeze([]), Object.freeze([])); void this.stopAll(); }));
+		this._register(toDisposable(() => { for (const record of this.sessionRecords.values()) record.listener.dispose(); this.sessionRecords.clear(); }));
 	}
 
 	get configurations() { return this.currentConfigurations; }
@@ -143,7 +143,7 @@ export class DebugService extends DisposableOwner implements IDebugService {
 		}
 		if (current.stopAll) {
 			let stopping = false;
-			for (const session of started) this.own(session.onDidChangeState(state => {
+			for (const session of started) this._register(session.onDidChangeState(state => {
 				if (stopping || (state !== "terminated" && state !== "error")) return;
 				stopping = true;
 				void Promise.allSettled(started.filter(candidate => candidate !== session).map(candidate => this.stop(candidate)));

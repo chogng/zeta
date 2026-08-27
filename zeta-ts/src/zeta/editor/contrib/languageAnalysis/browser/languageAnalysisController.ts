@@ -1,10 +1,10 @@
 import { isCancellationError } from "../../../../base/common/cancellation.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type Event } from "../../../../base/common/event.js";
 import { type SyntaxService } from "../../../common/languages/syntax/syntaxService.js";
 
 /** Schedules syntax lanes while the selected Workbench mode's language support changes. */
-export class LanguageAnalysisController extends DisposableOwner {
+export class LanguageAnalysisController extends Disposable {
 	private requestGeneration = 0;
 
 	constructor(
@@ -19,11 +19,11 @@ export class LanguageAnalysisController extends DisposableOwner {
 			const requestGeneration = ++this.requestGeneration;
 			queueMicrotask(() => void this.requestAnalysis(requestGeneration, whenLanguageSupportReady));
 		};
-		this.own(syntaxService.tokens.textModel.onDidChange(scheduleAnalysis));
-		if (onDidChangeLanguageSupport) this.own(onDidChangeLanguageSupport(scheduleAnalysis));
-		this.defer(() => {
+		this._register(syntaxService.tokens.textModel.onDidChange(scheduleAnalysis));
+		if (onDidChangeLanguageSupport) this._register(onDidChangeLanguageSupport(scheduleAnalysis));
+		this._register(toDisposable(() => {
 			this.requestGeneration += 1;
-		});
+		}));
 		scheduleAnalysis();
 	}
 

@@ -1,6 +1,6 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { toError } from "../../../base/common/errors.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { type TextModel } from "../model/textModel.js";
 import { type DiffComputationDocument, type IDiffComputationService } from "./diffComputationService.js";
 import { type LineDiff } from "./lineDiff.js";
@@ -41,8 +41,8 @@ export type DiffModelState = DiffModelLoadingState | DiffModelReadyState | DiffM
  * TextModel or the computation service. A result becomes visible only when
  * both source versions still match the request that produced it.
  */
-export class DiffModel extends DisposableOwner {
-	private readonly changeEmitter = this.own(new Emitter<DiffModelState>());
+export class DiffModel extends Disposable {
+	private readonly changeEmitter = this._register(new Emitter<DiffModelState>());
 	private activeRequest: AbortController | undefined;
 	private requestGeneration = 0;
 	private _state: DiffModelState;
@@ -57,12 +57,12 @@ export class DiffModel extends DisposableOwner {
 			originalVersion: options.original.version,
 			modifiedVersion: options.modified.version,
 		});
-		this.own(options.original.onDidChange(() => this.refresh()));
-		this.own(options.modified.onDidChange(() => this.refresh()));
-		this.defer(() => {
+		this._register(options.original.onDidChange(() => this.refresh()));
+		this._register(options.modified.onDidChange(() => this.refresh()));
+		this._register(toDisposable(() => {
 			this.activeRequest?.abort("diffModelDisposed");
 			this.activeRequest = undefined;
-		});
+		}));
 		this.refresh();
 	}
 

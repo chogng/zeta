@@ -1,11 +1,11 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { type LanguageWorkerWireClientPort } from "../../common/languages/languageWorkerWire.js";
 
 /** Owns one browser Worker and adapts it to the editor's structural wire port. */
-export class BrowserLanguageWorkerPort extends DisposableOwner implements LanguageWorkerWireClientPort {
-	private readonly messageEmitter = this.own(new Emitter<unknown>());
-	private readonly failureEmitter = this.own(new Emitter<unknown>());
+export class BrowserLanguageWorkerPort extends Disposable implements LanguageWorkerWireClientPort {
+	private readonly messageEmitter = this._register(new Emitter<unknown>());
+	private readonly failureEmitter = this._register(new Emitter<unknown>());
 
 	readonly onMessage: Event<unknown> = this.messageEmitter.event;
 	readonly onFailure: Event<unknown> = this.failureEmitter.event;
@@ -18,12 +18,12 @@ export class BrowserLanguageWorkerPort extends DisposableOwner implements Langua
 		worker.addEventListener("message", onMessage);
 		worker.addEventListener("error", onError);
 		worker.addEventListener("messageerror", onMessageError);
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			worker.removeEventListener("message", onMessage);
 			worker.removeEventListener("error", onError);
 			worker.removeEventListener("messageerror", onMessageError);
 			worker.terminate();
-		});
+		}));
 	}
 
 	send(message: unknown): void {

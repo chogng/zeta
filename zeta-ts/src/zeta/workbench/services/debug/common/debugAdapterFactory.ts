@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 
 export interface DebugAdapterExecutable {
 	readonly program: string;
@@ -31,8 +31,8 @@ interface OwnedDebugAdapterFactory {
 }
 
 /** Canonical multi-producer Debug Adapter factory registry. */
-export class DebugAdapterFactoryRegistry extends DisposableOwner implements DebugAdapterFactorySource {
-	private readonly changeEmitter = this.own(new Emitter<readonly DebugAdapterFactory[]>());
+export class DebugAdapterFactoryRegistry extends Disposable implements DebugAdapterFactorySource {
+	private readonly changeEmitter = this._register(new Emitter<readonly DebugAdapterFactory[]>());
 	private readonly entries = new Map<string, OwnedDebugAdapterFactory>();
 	private factoriesValue: readonly DebugAdapterFactory[] = Object.freeze([]);
 
@@ -40,10 +40,10 @@ export class DebugAdapterFactoryRegistry extends DisposableOwner implements Debu
 
 	constructor() {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.entries.clear();
 			this.factoriesValue = Object.freeze([]);
-		});
+		}));
 	}
 
 	get factories(): readonly DebugAdapterFactory[] {

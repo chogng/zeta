@@ -1,5 +1,5 @@
 import { addDisposableListener } from '../../../../base/browser/dom.js';
-import { DisposableMap, DisposableOwner, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableMap, Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { runWhenWindowIdle, scheduleAtNextAnimationFrame } from '../../../../base/browser/scheduler.js';
 import { getWindow } from '../../../../base/browser/window.js';
 import { type EditorSelectionController } from '../../../common/cursor/editorSelectionController.js';
@@ -52,8 +52,8 @@ export function getCodeEditorContributions(): readonly CodeEditorContributionDes
 }
 
 /** Owns one CodeEditorWidget's contribution instances and their staged creation. */
-export class CodeEditorContributions extends DisposableOwner {
-	private readonly instances = this.own(new DisposableMap<string, CodeEditorContribution>());
+export class CodeEditorContributions extends Disposable {
+	private readonly instances = this._register(new DisposableMap<string, CodeEditorContribution>());
 	private readonly pending = new Map<string, PendingCodeEditorContribution>();
 	private readonly completedInstantiation = new Set<CodeEditorContributionInstantiation>();
 	private instantiationService: IInstantiationService | undefined;
@@ -61,7 +61,7 @@ export class CodeEditorContributions extends DisposableOwner {
 
 	constructor() {
 		super();
-		this.defer(() => this.pending.clear());
+		this._register(toDisposable(() => this.pending.clear()));
 	}
 
 	initialize(
@@ -76,16 +76,16 @@ export class CodeEditorContributions extends DisposableOwner {
 		if (typeof onError === 'function') this.onError = onError;
 		this.instantiationService = instantiationService;
 		this.add(context, descriptions);
-		this.own(addDisposableListener(context.viewport.element, 'pointerdown', () => this.onBeforeInteractionEvent(), true));
-		this.own(addDisposableListener(context.viewport.element, 'wheel', () => this.onBeforeInteractionEvent(), true));
-		this.own(addDisposableListener(context.viewport.element, 'contextmenu', () => this.onBeforeInteractionEvent(), true));
+		this._register(addDisposableListener(context.viewport.element, 'pointerdown', () => this.onBeforeInteractionEvent(), true));
+		this._register(addDisposableListener(context.viewport.element, 'wheel', () => this.onBeforeInteractionEvent(), true));
+		this._register(addDisposableListener(context.viewport.element, 'contextmenu', () => this.onBeforeInteractionEvent(), true));
 		for (const type of ['keydown', 'beforeinput', 'compositionstart', 'paste', 'cut'] as const) {
-			this.own(addDisposableListener(context.view.element, type, () => this.onBeforeInteractionEvent(), true));
+			this._register(addDisposableListener(context.view.element, type, () => this.onBeforeInteractionEvent(), true));
 		}
 
 		const targetWindow = getWindow(context.viewport.element);
-		this.own(scheduleAtNextAnimationFrame(targetWindow, () => this.instantiateSome(CodeEditorContributionInstantiation.AfterFirstRender)));
-		this.own(runWhenWindowIdle(targetWindow, () => this.instantiateSome(CodeEditorContributionInstantiation.Eventually), { timeoutMs: 5_000 }));
+		this._register(scheduleAtNextAnimationFrame(targetWindow, () => this.instantiateSome(CodeEditorContributionInstantiation.AfterFirstRender)));
+		this._register(runWhenWindowIdle(targetWindow, () => this.instantiateSome(CodeEditorContributionInstantiation.Eventually), { timeoutMs: 5_000 }));
 	}
 
 	/** Adds another contribution group that shares this widget's instantiation phases and lifetime. */

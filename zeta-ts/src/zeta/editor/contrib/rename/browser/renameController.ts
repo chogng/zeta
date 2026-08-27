@@ -1,7 +1,7 @@
 import "./media/rename.css";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
@@ -10,7 +10,7 @@ import { type RenameService } from "../common/rename.js";
 import { type LanguageWorkspaceEdit } from "../../../common/languages/languageWorkspaceEdit.js";
 
 /** Owns the local rename input and applies provider edits through the cursor command contract. */
-export class RenameController extends DisposableOwner {
+export class RenameController extends Disposable {
 	private readonly element: HTMLDivElement;
 	private readonly input: HTMLInputElement;
 	private readonly status: HTMLSpanElement;
@@ -32,13 +32,13 @@ export class RenameController extends DisposableOwner {
 		this.status.setAttribute("aria-live", "polite");
 		this.element.append(this.input, this.status);
 		viewport.element.append(this.element);
-		this.defer(() => this.element.remove());
-		this.own(addDisposableListener(editorInput, "keydown", event => {
+		this._register(toDisposable(() => this.element.remove()));
+		this._register(addDisposableListener(editorInput, "keydown", event => {
 			if (event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.key !== "F2") return;
 			stopEvent(event);
 			void this.open();
 		}));
-		this.own(addDisposableListener(this.element, "keydown", event => this.handleWidgetKeydown(event)));
+		this._register(addDisposableListener(this.element, "keydown", event => this.handleWidgetKeydown(event)));
 	}
 
 	private async open(): Promise<void> {
@@ -116,6 +116,6 @@ export class RenameController extends DisposableOwner {
 
 registerEditorContribution({ id: "editor.contrib.rename", install: context => {
 	if (context.kind !== "text") return;
-	const service = context.own(context.languageFeaturesService.createRenameService(context.model, context.options.input.resource));
-	context.own(new RenameController(context.view.element, context.viewport, context.selections, service, context.languageId, context.options.input.resource, context.options.onApplyWorkspaceEdit, context.onLanguageError));
+	const service = context.register(context.languageFeaturesService.createRenameService(context.model, context.options.input.resource));
+	context.register(new RenameController(context.view.element, context.viewport, context.selections, service, context.languageId, context.options.input.resource, context.options.onApplyWorkspaceEdit, context.onLanguageError));
 } });

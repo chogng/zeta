@@ -1,6 +1,6 @@
 import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
 import { addDisposableListener } from "../../base/browser/dom.js";
-import { DisposableStore } from "../../base/common/lifecycle.js";
+import { DisposableStore, toDisposable } from "../../base/common/lifecycle.js";
 import {
 	DisposableTracker,
 	installDisposableTracker,
@@ -63,7 +63,7 @@ export async function startElectronWorkbench(
 	const workspaceSubscription = api.workspace.onDidChange((workspace) => {
 		void applyWorkspaceChange(workbench, workspace);
 	});
-	lifecycle.defer(() => workspaceSubscription.dispose());
+	lifecycle.add(toDisposable(() => workspaceSubscription.dispose()));
 	lifecycle.add(addDisposableListener(window, "pagehide", () => {
 		void workbench.shutdown("pageHide").catch(error => console.error("Failed to shut down Workbench", error)).finally(() => {
 			try {

@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type TextPosition, type TextRange } from "../../../common/core/text.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
 import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languages/languageFeatureRegistry.js";
@@ -27,7 +27,7 @@ export interface LanguageInlayHintsProvider extends LanguageFeatureProviderMetad
 }
 
 /** Computes versioned inlay hints; browser rendering owns only the visual projection. */
-export class InlayHintsService extends DisposableOwner {
+export class InlayHintsService extends Disposable {
 	constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureProviderRegistry<LanguageInlayHintsProvider>, private readonly resource?: URI) {
 		super();
 	}

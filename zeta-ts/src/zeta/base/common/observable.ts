@@ -1,6 +1,6 @@
 import type { Event } from "./event.js";
 import { Emitter } from "./event.js";
-import { DisposableMap, DisposableOwner, ResettableDisposableGroup, type IDisposable, toDisposable } from "./lifecycle.js";
+import { DisposableMap, Disposable, DisposableStore, type IDisposable, toDisposable } from "./lifecycle.js";
 import { onUnexpectedError } from "./errors.js";
 
 /** Reads an observable while recording it as a dependency of the current computation. */
@@ -10,7 +10,7 @@ export interface IReader {
 
 /** Reader whose store is cleared before every recomputation. */
 export interface IReaderWithStore extends IReader {
-	readonly store: ResettableDisposableGroup;
+	readonly store: DisposableStore;
 }
 
 /** A synchronously readable value with deterministic change notification. */
@@ -99,7 +99,7 @@ export function autorun(compute: (reader: IReader) => void): IDisposable {
  * when the returned registration is disposed.
  */
 export function autorunWithStore(
-	compute: (reader: IReader, store: ResettableDisposableGroup) => void,
+	compute: (reader: IReader, store: DisposableStore) => void,
 ): IDisposable {
 	return new ObservableReaction(reader => compute(reader, reader.store));
 }
@@ -242,16 +242,16 @@ class DerivedObservable<T> extends ConvenientObservable<T> {
 	}
 }
 
-class ObservableReaction extends DisposableOwner implements IReaderWithStore {
-	readonly store = this.own(new ResettableDisposableGroup());
-	private readonly dependencies = this.own(new DisposableMap<IObservable<unknown>, IDisposable>());
+class ObservableReaction extends Disposable implements IReaderWithStore {
+	readonly store = this._register(new DisposableStore());
+	private readonly dependencies = this._register(new DisposableMap<IObservable<unknown>, IDisposable>());
 	private readonly nextDependencies = new Set<IObservable<unknown>>();
 	private running = false;
 	private rerunRequested = false;
 
 	constructor(private readonly compute: ObservableComputation) {
 		super();
-		this.defer(() => this.nextDependencies.clear());
+		this._register(toDisposable(() => this.nextDependencies.clear()));
 		try {
 			this.run();
 		} catch (error) {

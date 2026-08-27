@@ -1,6 +1,6 @@
 import { type IDimension } from "../../geometry.js";
 import { Emitter, type Event } from "../../../common/event.js";
-import { DisposableOwner, ResettableDisposableGroup, toDisposable } from "../../../common/lifecycle.js";
+import { Disposable, DisposableStore, type IDisposable, toDisposable } from "../../../common/lifecycle.js";
 import { type Sash, type SashPresentation } from "../sash/sash.js";
 import { type ISplitViewView, SplitView, type SplitViewLayoutPriority, type SplitViewOrientation } from "../splitview/splitview.js";
 import { assertChildIndex, assertDimension, assertInsertionIndex, descriptorNode, descriptorSizing, deserializeGridViewDescriptor, isSerializableView, normalizeDescriptor, normalizeRootDescriptor, orthogonal, replaceDescriptorNode, splitLocation, type GridLocation, type GridViewDescriptor, type GridViewSizing, type ISerializableView, type IView, type IViewDeserializer, type SerializedGridViewDescriptor, validateDescriptor, validateSerializedGridViewDescriptor, validateViewConstraints } from "./gridviewDescriptor.js";
@@ -31,7 +31,7 @@ interface GridNodeHost {
 	readonly container: HTMLElement;
 	readonly sashPresentation: SashPresentation;
 	ownSplitView(splitView: SplitView): SplitView;
-	ownEvent(disposable: Disposable): void;
+	registerEvent(disposable: IDisposable): void;
 	createNode(descriptor: GridViewDescriptor<IView>): GridNode;
 	handleSplitViewChange(): void;
 }
@@ -117,8 +117,8 @@ class BranchNode extends GridNode {
 		}
 		this.updateBoundarySashes();
 		this.tryLink2x2Sashes(host);
-		host.ownEvent(this.splitView.onDidChangeViewSizes(() => host.handleSplitViewChange()));
-		host.ownEvent(this.splitView.onDidSashReset((boundaryIndex) => this.splitView.resetSash(boundaryIndex)));
+		host.registerEvent(this.splitView.onDidChangeViewSizes(() => host.handleSplitViewChange()));
+		host.registerEvent(this.splitView.onDidSashReset((boundaryIndex) => this.splitView.resetSash(boundaryIndex)));
 	}
 
 	get minimumWidth(): number {
@@ -214,7 +214,7 @@ class BranchNode extends GridNode {
 		if (!firstSash || !secondSash) return;
 		firstSash.linkedSash = secondSash;
 		secondSash.linkedSash = firstSash;
-		host.ownEvent(toDisposable(() => {
+		host.registerEvent(toDisposable(() => {
 			if (firstSash.linkedSash === secondSash) firstSash.linkedSash = undefined;
 			if (secondSash.linkedSash === firstSash) secondSash.linkedSash = undefined;
 		}));
@@ -284,12 +284,12 @@ class AxisView implements ISplitViewView {
  * GridView owns the nested SplitView tree. Callers that identify leaves by
  * object identity should use Grid instead.
  */
-export class GridView extends DisposableOwner {
+export class GridView extends Disposable {
 	readonly element: HTMLDivElement;
 	private readonly sashPresentation: SashPresentation;
-	private readonly treeResources = this.own(new ResettableDisposableGroup());
+	private readonly treeResources = this._register(new DisposableStore());
 	private readonly leaves = new Map<IView, LeafNode>();
-	private readonly _onDidChange = this.own(new Emitter<void>());
+	private readonly _onDidChange = this._register(new Emitter<void>());
 	private root!: BranchNode;
 	private layoutWidth = 0;
 	private layoutHeight = 0;
@@ -324,7 +324,7 @@ export class GridView extends DisposableOwner {
 		this.element.className = "zeta-grid zeta-grid-view";
 		this.sashPresentation = options.sashPresentation;
 		this._edgeSnapping = options.edgeSnapping ?? false;
-		this.defer(() => this.element.remove());
+		this._register(toDisposable(() => this.element.remove()));
 		container.append(this.element);
 		this.rebuild(normalizeRootDescriptor(descriptor));
 	}
@@ -535,7 +535,7 @@ export class GridView extends DisposableOwner {
 			container: this.element,
 			sashPresentation: this.sashPresentation,
 			ownSplitView: (splitView) => this.treeResources.add(splitView),
-			ownEvent: (disposable) => {
+			registerEvent: (disposable) => {
 				this.treeResources.add(disposable);
 			},
 			createNode: (nodeDescriptor) => this.createNode(nodeDescriptor, host),

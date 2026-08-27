@@ -1,6 +1,6 @@
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { Emitter } from '../../../../base/common/event.js';
-import { DisposableOwner } from '../../../../base/common/lifecycle.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { IConfigurationResourceService } from '../../../../platform/configuration/common/configurationResourceService.js';
 import { ConfigurationResourceRevisionConflictError } from '../../../../platform/configuration/common/configurationResourceService.js';
@@ -9,10 +9,10 @@ import { FileKind, FileNotFoundError, FileOperationNotSupportedError, FileRevisi
 import { SettingsFileSystemScheme, UserSettingsResource } from '../../../services/preferences/common/preferencesEditorInput.js';
 
 /** Exposes the editable current-profile settings source through one virtual scheme. */
-export class SettingsFileSystemProvider extends DisposableOwner implements IFileSystemProvider {
+export class SettingsFileSystemProvider extends Disposable implements IFileSystemProvider {
 	public static readonly scheme = SettingsFileSystemScheme;
 
-	private readonly changeEmitter = this.own(new Emitter<IFileChangeEvent>());
+	private readonly changeEmitter = this._register(new Emitter<IFileChangeEvent>());
 
 	public readonly onDidChangeFiles = this.changeEmitter.event;
 
@@ -20,7 +20,7 @@ export class SettingsFileSystemProvider extends DisposableOwner implements IFile
 		private readonly configurationResourceService: IConfigurationResourceService,
 	) {
 		super();
-		this.own(configurationResourceService.onDidChangeResource(() => {
+		this._register(configurationResourceService.onDidChangeResource(() => {
 			this.changeEmitter.fire(Object.freeze({ resources: Object.freeze([UserSettingsResource]) }));
 		}));
 	}

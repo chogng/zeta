@@ -17,11 +17,11 @@ registerEditorContribution({
 	id: "editor.contrib.suggest",
 	configure: context => {
 		if (context.options.suggestions === false) return;
-		const completions = context.own(context.languageFeaturesService.createCompletionService(context.model, {
+		const completions = context.register(context.languageFeaturesService.createCompletionService(context.model, {
 			resource: context.options.input.resource,
 			...(context.options.completionWorkerFactory ? { workerFactory: context.options.completionWorkerFactory } : {}),
 		}));
-		const session = context.own(new LanguageCompletionSessionController(completions.results, context.selections, {
+		const session = context.register(new LanguageCompletionSessionController(completions.results, context.selections, {
 			resolver: completions,
 			onResolveError: context.onLanguageError,
 			onDidAccept: item => completions.executeCompletionCommand(context.languageId, item, new AbortController().signal),
@@ -33,7 +33,7 @@ registerEditorContribution({
 		if (context.kind !== "text") return;
 		const state = context.getOptionalCapability(suggestState);
 		if (!state) return;
-		context.own(new SuggestController(
+		context.register(new SuggestController(
 			context.view,
 			context.selections,
 			state.service,

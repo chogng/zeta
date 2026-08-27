@@ -1,13 +1,13 @@
 import "./media/parameterHints.css";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type ParameterHintsService, type LanguageParameterHints, type LanguageParameterHintsContext } from "../common/parameterHints.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 /** Routes the signature-help shortcut and owns the accessible parameter widget. */
-export class ParameterHintsController extends DisposableOwner {
+export class ParameterHintsController extends Disposable {
 	private readonly element: HTMLDivElement;
 	private request: AbortController | undefined;
 
@@ -19,18 +19,18 @@ export class ParameterHintsController extends DisposableOwner {
 		this.element.setAttribute("role", "dialog");
 		this.element.setAttribute("aria-label", "Parameter hints");
 		viewport.element.append(this.element);
-		this.defer(() => this.element.remove());
-		this.own(addDisposableListener(input, "keydown", event => {
+		this._register(toDisposable(() => this.element.remove()));
+		this._register(addDisposableListener(input, "keydown", event => {
 			if (event.defaultPrevented || event.isComposing || !event.shiftKey || event.altKey || (!event.ctrlKey && !event.metaKey) || event.key !== " ") return;
 			stopEvent(event);
 			void this.refresh();
 		}));
-		this.own(addDisposableListener(input, "keydown", event => {
+		this._register(addDisposableListener(input, "keydown", event => {
 			if (event.key !== "Escape" || this.element.hidden) return;
 			stopEvent(event);
 			this.hide();
 		}));
-		this.own(viewport.textModel.onDidChange(change => {
+		this._register(viewport.textModel.onDidChange(change => {
 			const inserted = change.changes.length === 1 ? change.changes[0]!.text : "";
 			const triggerIndex = Math.max(inserted.lastIndexOf("("), inserted.lastIndexOf(","));
 			const trigger = triggerIndex >= 0 ? inserted[triggerIndex] : undefined;
@@ -42,8 +42,8 @@ export class ParameterHintsController extends DisposableOwner {
 				this.hide();
 			}
 		}));
-		this.own(selections.onDidChange(() => this.hide()));
-		this.own(viewport.onDidChangeLayout(() => this.position()));
+		this._register(selections.onDidChange(() => this.hide()));
+		this._register(viewport.onDidChangeLayout(() => this.position()));
 	}
 
 	private async refresh(context: LanguageParameterHintsContext = { kind: "invoke" }): Promise<void> {
@@ -100,6 +100,6 @@ export class ParameterHintsController extends DisposableOwner {
 
 registerEditorContribution({ id: "editor.contrib.parameterHints", install: context => {
 	if (context.kind !== "text" || context.options.parameterHints === false) return;
-	const service = context.own(context.languageFeaturesService.createParameterHintsService(context.model, context.options.input.resource));
-	context.own(new ParameterHintsController(context.view.element, context.viewport, context.selections, service, context.languageId, context.onLanguageError));
+	const service = context.register(context.languageFeaturesService.createParameterHintsService(context.model, context.options.input.resource));
+	context.register(new ParameterHintsController(context.view.element, context.viewport, context.selections, service, context.languageId, context.onLanguageError));
 } });

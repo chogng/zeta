@@ -5,7 +5,7 @@ import {
 	registerWindow,
 } from "../../base/browser/window.js";
 import { onUnexpectedError } from "../../base/common/errors.js";
-import { DisposableOwner } from "../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../base/common/lifecycle.js";
 import { environment } from "../../base/common/platform.js";
 import { type WorkbenchState, workbenchStateToString } from '../../platform/workspace/common/workspace.js';
 import type { WorkbenchModeId } from "../common/workbenchMode.js";
@@ -26,7 +26,7 @@ export interface WorkbenchWindowOptions {
  * and deterministic teardown.
  */
 export class WorkbenchWindow
-	extends DisposableOwner
+	extends Disposable
 	implements IWorkbenchHostService {
 	readonly root: HTMLElement;
 	readonly ownerDocument: Document;
@@ -43,23 +43,23 @@ export class WorkbenchWindow
 		options.root.setAttribute("data-runtime", environment.runtime);
 		options.root.setAttribute("data-os", environment.os);
 		this.setWorkbenchState(options.workbenchState);
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			options.root.classList.remove("zeta-workbench");
 			options.root.removeAttribute("data-workbench-mode");
 			options.root.removeAttribute("data-runtime");
 			options.root.removeAttribute("data-os");
 			options.root.removeAttribute("data-workbench-state");
 			options.root.replaceChildren();
-		});
+		}));
 
 		if (
 			this.targetWindow &&
 			!isRegisteredWindow(this.targetWindow)
 		) {
-			this.own(registerWindow(this.targetWindow));
+			this._register(registerWindow(this.targetWindow));
 		}
 		if (this.ownerDocument !== mainWindow.document) {
-			this.own(cloneDocumentStyles(
+			this._register(cloneDocumentStyles(
 				mainWindow.document,
 				this.ownerDocument,
 			));
@@ -76,10 +76,10 @@ export class WorkbenchWindow
 			};
 			this.targetWindow.addEventListener("error", onError);
 			if (this.targetWindow !== mainWindow) this.targetWindow.addEventListener("unhandledrejection", onUnhandledRejection);
-			this.defer(() => {
+			this._register(toDisposable(() => {
 				this.targetWindow?.removeEventListener("error", onError);
 				if (this.targetWindow !== mainWindow) this.targetWindow?.removeEventListener("unhandledrejection", onUnhandledRejection);
-			});
+			}));
 		}
 	}
 

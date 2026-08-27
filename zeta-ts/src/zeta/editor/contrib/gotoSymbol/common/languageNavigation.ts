@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type TextPosition, TextRange } from "../../../common/core/text.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
@@ -51,7 +51,7 @@ export interface LanguageNavigationProviderRegistries {
 }
 
 /** Coordinates cancellable cross-resource language requests for one source model. */
-export class LanguageNavigationService extends DisposableOwner {
+export class LanguageNavigationService extends Disposable {
 	constructor(private readonly model: TextModel, private readonly resource: URI, private readonly providers: LanguageNavigationProviderRegistries) {
 		super();
 	}

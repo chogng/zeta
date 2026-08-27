@@ -1,14 +1,14 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
-import { DisposableMap, DisposableOwner, DisposableStore } from "../../../../base/common/lifecycle.js";
+import { DisposableMap, Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import { EditorAutoSaveConfiguration, EditorAutoSaveDelayConfiguration, type EditorAutoSaveMode } from "../../../services/editor/common/editorConfiguration.js";
 import type { IWorkingCopy, IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import type { IEditorPart } from "./editorPart.js";
 
 /** Coordinates configuration-driven saves without taking ownership of editor models. */
-export class EditorAutoSaveContribution extends DisposableOwner {
-	private readonly registrations = this.own(new DisposableMap<IWorkingCopy, DisposableStore>());
-	private readonly windowListeners = this.own(new DisposableMap<Window, DisposableStore>());
+export class EditorAutoSaveContribution extends Disposable {
+	private readonly registrations = this._register(new DisposableMap<IWorkingCopy, DisposableStore>());
+	private readonly windowListeners = this._register(new DisposableMap<Window, DisposableStore>());
 	private readonly timers = new Map<IWorkingCopy, { readonly ownerWindow: Window; readonly handle: number }>();
 	private readonly saving = new Set<IWorkingCopy>();
 	private activeWorkingCopy: IWorkingCopy | undefined;
@@ -20,9 +20,9 @@ export class EditorAutoSaveContribution extends DisposableOwner {
 	) {
 		super();
 		for (const workingCopy of workingCopies.getAll()) this.attach(workingCopy);
-		this.own(workingCopies.onDidRegister(workingCopy => this.attach(workingCopy)));
-		this.own(workingCopies.onDidUnregister(workingCopy => this.detach(workingCopy)));
-		this.own(configuration.onDidChangeConfiguration(event => {
+		this._register(workingCopies.onDidRegister(workingCopy => this.attach(workingCopy)));
+		this._register(workingCopies.onDidUnregister(workingCopy => this.detach(workingCopy)));
+		this._register(configuration.onDidChangeConfiguration(event => {
 			if (!event.affectsConfiguration(EditorAutoSaveConfiguration) && !event.affectsConfiguration(EditorAutoSaveDelayConfiguration)) return;
 			this.clearTimers();
 			if (this.mode === "afterDelay") {
@@ -30,12 +30,12 @@ export class EditorAutoSaveContribution extends DisposableOwner {
 			}
 		}));
 		this.activeWorkingCopy = editorPart.activePane?.workingCopy;
-		this.own(editorPart.onDidChangeEditors(() => {
+		this._register(editorPart.onDidChangeEditors(() => {
 			this.attachWindow(editorPart.domNode.ownerDocument.defaultView);
 			this.handleActiveEditorChange();
 		}));
 		this.attachWindow(editorPart.domNode.ownerDocument.defaultView);
-		this.defer(() => this.clearTimers());
+		this._register(toDisposable(() => this.clearTimers()));
 	}
 
 	private get mode(): EditorAutoSaveMode {
@@ -50,7 +50,7 @@ export class EditorAutoSaveContribution extends DisposableOwner {
 			if (workingCopy.isDirty) this.schedule(workingCopy);
 			else this.clearTimer(workingCopy);
 		}));
-		resources.defer(() => this.clearTimer(workingCopy));
+		resources.add(toDisposable(() => this.clearTimer(workingCopy)));
 		this.registrations.set(workingCopy, resources);
 		this.schedule(workingCopy);
 	}

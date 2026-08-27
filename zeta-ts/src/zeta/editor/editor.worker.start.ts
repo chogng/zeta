@@ -25,9 +25,9 @@ export function start(bootstrap: (context: StanzaWorkerContext) => void, portFac
 	if (activeResources) throw new Error("Stanza worker has already started");
 	const resources = new DisposableStore();
 	activeResources = resources;
-	resources.defer(() => {
+	resources.add(toDisposable(() => {
 		if (activeResources === resources) activeResources = undefined;
-	});
+	}));
 	try {
 		const port = resources.add(portFactory());
 		bootstrap({ port, resources });

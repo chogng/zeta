@@ -1,3 +1,4 @@
+import { toDisposable } from "../../../../base/common/lifecycle.js";
 import { AccessibilityService, type AccessibilityServiceOptions } from "../../../../platform/accessibility/browser/accessibilityService.js";
 import { AccessibilitySupport } from "../../../../platform/accessibility/common/accessibility.js";
 import type { INativeHostApi } from "../../../../platform/native/common/nativeHost.js";
@@ -17,10 +18,10 @@ export class NativeAccessibilityService extends AccessibilityService {
 			supportChangedByEvent = true;
 			if (active) this.setAccessibilitySupport(enabled ? AccessibilitySupport.Enabled : AccessibilitySupport.Disabled);
 		});
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			active = false;
 			subscription.dispose();
-		});
+		}));
 		void options.nativeHostApi.isAccessibilitySupportEnabled()
 			.then((enabled) => {
 				if (active && !supportChangedByEvent) this.setAccessibilitySupport(enabled ? AccessibilitySupport.Enabled : AccessibilitySupport.Disabled);

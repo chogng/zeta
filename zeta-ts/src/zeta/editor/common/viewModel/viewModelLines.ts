@@ -1,5 +1,5 @@
 import { Emitter, type Event } from '../../../base/common/event.js';
-import { DisposableOwner, DisposableSlot, type IDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { isFiniteNumber, isPositiveSafeInteger } from '../../../base/common/numbers.js';
 import { EditorLineWrapping, isWrappingIndent, WrappingIndent } from '../config/editorOptions.js';
 import { type TextModel } from '../model/textModel.js';
@@ -60,11 +60,11 @@ interface ResolvedInitialMeasurement {
  * model-versioned logical-to-visual mapping and combines visibility with the
  * wrapped rows. The browser supplies only the line-break computation policy.
  */
-export class ViewModelLines extends DisposableOwner {
-	private readonly changeEmitter = this.own(new Emitter<void>());
-	private readonly lineCountChangeEmitter = this.own(new Emitter<void>());
+export class ViewModelLines extends Disposable {
+	private readonly changeEmitter = this._register(new Emitter<void>());
+	private readonly lineCountChangeEmitter = this._register(new Emitter<void>());
 	private readonly initialMeasurement: ResolvedInitialMeasurement | undefined;
-	private readonly pendingMeasurement = this.own(new DisposableSlot<IDisposable>());
+	private readonly pendingMeasurement = this._register(new MutableDisposable<IDisposable>());
 	private readonly visibilitySource: EditorLineVisibilitySource | undefined;
 	private wrapping: EditorLineWrapping;
 	private wrapWidth: number;
@@ -106,8 +106,8 @@ export class ViewModelLines extends DisposableOwner {
 			onDidChange: this.onDidChange,
 		});
 		if (this.usesInitialMeasurement()) this.startInitialMeasurement();
-		this.own(this.model.onDidChange(() => this.refresh()));
-		if (this.visibilitySource) this.own(this.visibilitySource.onDidChange(() => this.rebuildVisibleProjection()));
+		this._register(this.model.onDidChange(() => this.refresh()));
+		if (this.visibilitySource) this._register(this.visibilitySource.onDidChange(() => this.rebuildVisibleProjection()));
 	}
 
 	get textModel(): TextModel {
@@ -196,7 +196,7 @@ export class ViewModelLines extends DisposableOwner {
 	private scheduleNextSlice(): void {
 		const options = this.initialMeasurement;
 		if (!options || this.complete) return;
-		this.pendingMeasurement.replace(options.schedule(() => {
+		this.pendingMeasurement.value = options.schedule(() => {
 			this.pendingMeasurement.clear();
 			if (this.scanVersion !== this.model.version) {
 				this.startInitialMeasurement();
@@ -205,7 +205,7 @@ export class ViewModelLines extends DisposableOwner {
 			this.measureNextSlice(options.linesPerSlice);
 			if (this.complete) this.replaceWrappingProjection(this.createProjectionFromPendingBreaks());
 			this.scheduleNextSlice();
-		}));
+		});
 	}
 
 	private measureNextSlice(lineCount: number): void {

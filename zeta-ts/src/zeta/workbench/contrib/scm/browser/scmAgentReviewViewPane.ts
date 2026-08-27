@@ -12,7 +12,7 @@ export class ScmAgentReviewViewPane extends ViewPane {
 		const empty = h(container.ownerDocument, "p");
 		empty.className = "zeta-scm-empty";
 		empty.textContent = "No agent changes to review.";
-		const findIssues = this.own(new Button(this.contentElement, {
+		const findIssues = this._register(new Button(this.contentElement, {
 			label: "Find Issues",
 			icon: lxiconsLibrary.codeReview,
 			contentAlignment: "labelCentered",

@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { ACCESSIBLE_VIEW_SHOWN_STORAGE_PREFIX } from "../../../../platform/accessibility/common/accessibility.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import { IStorageService, StorageScope } from "../../../../platform/storage/common/storage.js";
@@ -11,7 +11,7 @@ export interface IAccessibleViewInformationService {
 export const IAccessibleViewInformationService = createServiceIdentifier<IAccessibleViewInformationService>("accessibleViewInformationService");
 
 /** Reads durable accessible-view history without owning accessible-view UI. */
-export class AccessibleViewInformationService extends DisposableOwner implements IAccessibleViewInformationService {
+export class AccessibleViewInformationService extends Disposable implements IAccessibleViewInformationService {
 	constructor(private readonly storageService: IStorageService) {
 		super();
 	}

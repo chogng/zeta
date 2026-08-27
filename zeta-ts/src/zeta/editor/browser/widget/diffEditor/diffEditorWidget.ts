@@ -4,7 +4,7 @@ import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { getClientArea, type IDimension } from "../../../../base/browser/geometry.js";
 import { observeResize } from "../../../../base/browser/observer.js";
 import { getWindow } from "../../../../base/browser/window.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { isFiniteNumber, isNonNegativeSafeInteger, rot } from "../../../../base/common/numbers.js";
 import { DiffModel } from "../../../common/diff/diffModel.js";
 import { LineDiffKind, type LineDiff, type LineDiffRow } from "../../../common/diff/lineDiff.js";
@@ -37,7 +37,7 @@ export interface DiffEditorWidgetOptions {
  * inline change ranges. This browser component owns only scroll geometry and
  * DOM projection; it never owns source text or diff computation.
  */
-export class DiffEditorWidget extends DisposableOwner {
+export class DiffEditorWidget extends Disposable {
 	readonly element: HTMLDivElement;
 	private readonly contentElement: HTMLDivElement;
 	private readonly contentNode: FastDomNode<HTMLDivElement>;
@@ -92,11 +92,11 @@ export class DiffEditorWidget extends DisposableOwner {
 		this.contentElement.append(this.rowsElement);
 		this.element.append(this.contentElement, this.overviewRuler.element, this.accessibilityStatusElement);
 		options.container.append(this.element);
-		this.defer(() => this.element.remove());
-		this.own(addDisposableListener(this.element, "scroll", () => this.project()));
-		this.own(addDisposableListener(this.element, "keydown", event => this.handleKeydown(event)));
-		this.own(this.model.onDidChange(() => this.refresh()));
-		this.own(observeResize(this.element, ([entry]) => {
+		this._register(toDisposable(() => this.element.remove()));
+		this._register(addDisposableListener(this.element, "scroll", () => this.project()));
+		this._register(addDisposableListener(this.element, "keydown", event => this.handleKeydown(event)));
+		this._register(this.model.onDidChange(() => this.refresh()));
+		this._register(observeResize(this.element, ([entry]) => {
 			if (entry) this.layout({ width: entry.contentRect.width, height: entry.contentRect.height });
 		}));
 		this.overviewRuler.setDiff(this.currentDiff);

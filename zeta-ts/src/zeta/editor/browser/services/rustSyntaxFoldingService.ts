@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { SyntaxAnalyzeResult } from "../../../platform/syntax/common/syntaxApi.js";
 import { type EditorFoldingRange, EditorFoldingRangeSource } from "../../contrib/folding/browser/foldingRanges.js";
 import { type TextSnapshot } from "../../common/core/text.js";
@@ -6,7 +6,7 @@ import { type TextModel } from "../../common/model/textModel.js";
 import { RustSyntaxFactsService, syntaxLanguageForStanzaLanguage } from "./rustSyntaxFactsService.js";
 
 /** Keeps Stanza's parser-derived folding ranges synchronized with the Rust syntax endpoint. */
-export class RustSyntaxFoldingService extends DisposableOwner {
+export class RustSyntaxFoldingService extends Disposable {
 	private readonly supported: boolean;
 	private generation = 0;
 	private _ranges: readonly EditorFoldingRange[] = Object.freeze([]);
@@ -23,12 +23,12 @@ export class RustSyntaxFoldingService extends DisposableOwner {
 		private readonly onError: (error: unknown) => void,
 	) {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.generation += 1;
-		});
+		}));
 		this.supported = syntaxLanguageForStanzaLanguage(languageId) !== undefined;
 		if (!this.supported) return;
-		this.own(model.onDidChange(() => this.refresh()));
+		this._register(model.onDidChange(() => this.refresh()));
 		this.request();
 	}
 

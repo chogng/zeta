@@ -1,6 +1,6 @@
 import "./media/editorTitleControl.css";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
-import { DisposableOwner, DisposableSlot } from "../../../../base/common/lifecycle.js";
+import { Disposable, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
 import { MenuId } from "../../../../platform/actions/common/actions.js";
@@ -28,16 +28,16 @@ export interface EditorTitleActions {
 }
 
 /** Hosts one group's Editor tabs and its independent action toolbar. */
-export class EditorTitleControl extends DisposableOwner {
+export class EditorTitleControl extends Disposable {
 	static readonly HEIGHT = 35;
 
 	readonly domNode: HTMLDivElement;
-	private readonly heightEmitter = this.own(new Emitter<void>());
+	private readonly heightEmitter = this._register(new Emitter<void>());
 	readonly onDidChangeHeight: Event<void> = this.heightEmitter.event;
 	private readonly tabsAndActionsDomNode: HTMLDivElement;
 	private readonly delegate: EditorTabsDelegate;
 	private readonly configurationService: IConfigurationService | undefined;
-	private readonly tabsSlot = this.own(new DisposableSlot<EditorTabsControl>());
+	private readonly tabsSlot = this._register(new MutableDisposable<EditorTabsControl>());
 	private tabsMode: EditorTabsMode;
 	private readonly breadcrumbs: EditorBreadcrumbsControl;
 	private breadcrumbsEnabled: boolean;
@@ -63,11 +63,11 @@ export class EditorTitleControl extends DisposableOwner {
 		this.tabsAndActionsDomNode = h(ownerDocument, "div");
 		this.tabsAndActionsDomNode.className = "zeta-editor-tabs-and-actions";
 		this.domNode.append(this.tabsAndActionsDomNode);
-		this.tabsSlot.replace(this.createTabsControl(this.tabsMode));
+		this.tabsSlot.value = this.createTabsControl(this.tabsMode);
 		const actionsDomNode = h(ownerDocument, "div");
 		actionsDomNode.className = "zeta-editor-title-actions";
 		this.tabsAndActionsDomNode.append(actionsDomNode);
-		this.toolbar = this.own(titleActions
+		this.toolbar = this._register(titleActions
 			? new MenuWorkbenchToolBar(
 				actionsDomNode,
 				titleActions.menuService,
@@ -86,13 +86,13 @@ export class EditorTitleControl extends DisposableOwner {
 					highlightToggledItems: true,
 				},
 			));
-		this.breadcrumbs = this.own(new EditorBreadcrumbsControl(this.domNode));
+		this.breadcrumbs = this._register(new EditorBreadcrumbsControl(this.domNode));
 		this.updateBreadcrumbVisibility();
 		if (configurationService) {
-			this.own(configurationService.onDidChangeConfiguration(event => {
+			this._register(configurationService.onDidChangeConfiguration(event => {
 				if (event.affectsConfiguration(EditorTabsModeConfiguration)) {
 					this.tabsMode = configurationService.getValue(EditorTabsModeConfiguration);
-					this.tabsSlot.replace(this.createTabsControl(this.tabsMode));
+					this.tabsSlot.value = this.createTabsControl(this.tabsMode);
 					this.tabs.setEditors(this.editors, this.activeInput);
 				}
 				if (event.affectsConfiguration(EditorBreadcrumbsEnabledConfiguration)) {
@@ -101,7 +101,7 @@ export class EditorTitleControl extends DisposableOwner {
 				}
 			}));
 		}
-		this.defer(() => this.domNode.remove());
+		this._register(toDisposable(() => this.domNode.remove()));
 	}
 
 	get height(): number {

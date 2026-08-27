@@ -1,16 +1,16 @@
-import { DisposableOwner, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type LanguageToken } from "../../../common/tokens/languageTokens.js";
 import { type LanguageTokenLine, type LanguageTokenLineIndex } from "../../../common/tokens/languageTokenLineIndex.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 
 /** Canonical tokenization model part consumed by semantic-token and view owners. */
-export class TokenizationTextModelPart extends DisposableOwner {
+export class TokenizationTextModelPart extends Disposable {
 	readonly onDidChange: (listener: (...args: any[]) => void) => IDisposable;
 
 	constructor(private readonly index: LanguageTokenLineIndex) {
 		super();
 		this.onDidChange = listener => index.onDidChange(() => listener());
-		this.own(index);
+		this._register(index);
 	}
 
 	get textModel(): TextModel { return this.index.textModel; }

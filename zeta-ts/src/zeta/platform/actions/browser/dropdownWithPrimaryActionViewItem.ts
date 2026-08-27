@@ -26,8 +26,8 @@ export class DropdownWithPrimaryActionViewItem extends ActionViewItem {
 		options: ActionViewItemOptions = {},
 	) {
 		super(primaryAction, options);
-		this.primaryItem = this.own(new ButtonActionViewItem(primaryAction, options));
-		this.dropdownItem = this.own(new DropdownMenuActionViewItem(dropdownAction, dropdownActions, contextMenuProvider, options));
+		this.primaryItem = this._register(new ButtonActionViewItem(primaryAction, options));
+		this.dropdownItem = this._register(new DropdownMenuActionViewItem(dropdownAction, dropdownActions, contextMenuProvider, options));
 	}
 
 	override render(container: HTMLElement): void {
@@ -54,18 +54,18 @@ export class DropdownWithPrimaryActionViewItem extends ActionViewItem {
 		this.dropdownButton = dropdownButton;
 		dropdownButton.setAttribute("aria-label", dropdownActionLabel(this.dropdownItem.action));
 		container.append(primaryContainer, dropdownContainer);
-		this.own(this.dropdownItem.onDidChangeVisibility((visible) => {
+		this._register(this.dropdownItem.onDidChangeVisibility((visible) => {
 			container.classList.toggle("active", visible);
 		}));
 
-		this.own(addDisposableListener(primaryButton, "keydown", (event) => {
+		this._register(addDisposableListener(primaryButton, "keydown", (event) => {
 			if (event.key !== "ArrowRight" || dropdownButton.disabled) return;
 			stopEvent(event);
 			primaryButton.tabIndex = -1;
 			dropdownButton.tabIndex = 0;
 			dropdownButton.focus();
 		}));
-		this.own(addDisposableListener(dropdownButton, "keydown", (event) => {
+		this._register(addDisposableListener(dropdownButton, "keydown", (event) => {
 			if (event.key !== "ArrowLeft" || primaryButton.disabled) return;
 			stopEvent(event);
 			dropdownButton.tabIndex = -1;

@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../common/event.js";
-import { type IDisposable, DisposableOwner, ResettableDisposableGroup } from "../../../common/lifecycle.js";
+import { type IDisposable, Disposable, DisposableStore, toDisposable } from "../../../common/lifecycle.js";
 import { clamp, isFiniteNumber } from "../../../common/numbers.js";
 import { Sash, SashState, type SashDragEvent, type SashPresentation } from "../sash/sash.js";
 import { h } from "../../dom.js";
@@ -82,13 +82,13 @@ interface SplitViewResizeOptions {
 }
 
 /** A constrained, explicit-pixel layout with accessible resize sashes. */
-export class SplitView extends DisposableOwner {
+export class SplitView extends Disposable {
 	readonly element: HTMLDivElement;
 	private readonly items: ViewItem[] = [];
-	private readonly sashes = this.own(new ResettableDisposableGroup());
+	private readonly sashes = this._register(new DisposableStore());
 	private readonly sashItems: SashItem[] = [];
-	private readonly _onDidChangeViewSizes = this.own(new Emitter<void>());
-	private readonly _onDidSashReset = this.own(new Emitter<number>());
+	private readonly _onDidChangeViewSizes = this._register(new Emitter<void>());
+	private readonly _onDidSashReset = this._register(new Emitter<number>());
 	private size = 0;
 	private orthogonalSize = 0;
 	private didLayout = false;
@@ -110,7 +110,7 @@ export class SplitView extends DisposableOwner {
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, "div");
 		this.element = element;
-		this.defer(() => element.remove());
+		this._register(toDisposable(() => element.remove()));
 		element.className = `zeta-split-view zeta-split-view-${orientation}`;
 		container.append(element);
 		this._startSnappingEnabled = options.startSnappingEnabled ?? true;
@@ -212,7 +212,7 @@ export class SplitView extends DisposableOwner {
 		container.hidden = !item.visible;
 		view.setVisible?.(item.visible);
 		if (view.onDidChange) {
-			item.changeListener = this.own(view.onDidChange((preferredSize) => {
+			item.changeListener = this._register(view.onDidChange((preferredSize) => {
 				validateViewConstraints(view);
 				if (!this.didLayout && preferredSize === undefined) return;
 				if (preferredSize === undefined) {

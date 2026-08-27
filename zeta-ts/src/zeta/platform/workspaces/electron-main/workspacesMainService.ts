@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable } from "../../../base/common/lifecycle.js";
 import type { IpcRoute } from "../../ipc/electron-main/trustedIpcRouter.js";
 import { type IAnyWorkspaceIdentifier, type ISingleFolderWorkspaceIdentifier, type IWorkspace, UNKNOWN_EMPTY_WINDOW_WORKSPACE, isSingleFolderWorkspaceIdentifier, serializeWorkspace, workspaceFromIdentifier } from "../../workspace/common/workspace.js";
 import { WORKSPACE_CONTEXT_READ_CHANNEL, validateWorkspaceContextRead } from "../../workspace/common/workspaceIpc.js";
@@ -62,10 +62,10 @@ export interface IWorkspaceContextMainChangeEvent {
 }
 
 /** Mutable main-process owner of the workspace currently hosted by one window. */
-export class WorkspaceContextMainService extends DisposableOwner {
+export class WorkspaceContextMainService extends Disposable {
 	private workspace: IAnyWorkspaceIdentifier;
 	private resolvedWorkspace: IWorkspace;
-	private readonly _onDidChangeWorkspace = this.own(new Emitter<IWorkspaceContextMainChangeEvent>());
+	private readonly _onDidChangeWorkspace = this._register(new Emitter<IWorkspaceContextMainChangeEvent>());
 
 	readonly onDidChangeWorkspace: Event<IWorkspaceContextMainChangeEvent> = this._onDidChangeWorkspace.event;
 

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { Emitter } from "../../../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../../../base/common/lifecycle.js";
+import { Disposable, type IDisposable } from "../../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../../base/common/uri.js";
 import type { IConfigurationKey, IConfigurationService } from "../../../../../../platform/configuration/common/configurationService.js";
 import { BrowserWorkingCopyService } from "../../../../../services/workingCopy/browser/browserWorkingCopyService.js";
@@ -142,7 +142,7 @@ test("EditorStatusContribution projects and clears active pane status", () => {
 	dom.window.close();
 });
 
-class TestConfigurationService implements IConfigurationService, Disposable {
+class TestConfigurationService implements IConfigurationService, IDisposable {
 	private readonly values = new Map<string, unknown>();
 	private readonly changeEmitter = new Emitter<{ readonly keys: ReadonlySet<string>; affectsConfiguration<T>(key: IConfigurationKey<T>): boolean }>();
 	readonly onDidChangeConfiguration = this.changeEmitter.event;
@@ -162,10 +162,10 @@ class TestConfigurationService implements IConfigurationService, Disposable {
 	[Symbol.dispose](): void { this.dispose(); }
 }
 
-class TestWorkingCopy extends DisposableOwner implements IWorkingCopy {
-	private readonly dirtyEmitter = this.own(new Emitter<void>());
-	private readonly externalEmitter = this.own(new Emitter<void>());
-	private readonly contentEmitter = this.own(new Emitter<void>());
+class TestWorkingCopy extends Disposable implements IWorkingCopy {
+	private readonly dirtyEmitter = this._register(new Emitter<void>());
+	private readonly externalEmitter = this._register(new Emitter<void>());
+	private readonly contentEmitter = this._register(new Emitter<void>());
 	private dirty = false;
 	private external = false;
 	readonly backupKind = "text" as const;
@@ -187,9 +187,9 @@ class TestWorkingCopy extends DisposableOwner implements IWorkingCopy {
 	async revert(): Promise<void> { this.dirty = false; this.dirtyEmitter.fire(); }
 }
 
-class TestStatusPane extends DisposableOwner implements IEditorPane {
+class TestStatusPane extends Disposable implements IEditorPane {
 	readonly id = "test.status";
-	private readonly statusEmitter = this.own(new Emitter<void>());
+	private readonly statusEmitter = this._register(new Emitter<void>());
 	readonly onDidChangeStatus = this.statusEmitter.event;
 	private status: EditorPaneStatus = { lineNumber: 4, columnNumber: 9, languageId: "typescript", encoding: "UTF-8", endOfLine: "LF" };
 

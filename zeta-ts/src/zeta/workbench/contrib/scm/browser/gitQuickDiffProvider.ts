@@ -1,22 +1,22 @@
 import { Emitter } from '../../../../base/common/event.js';
-import { DisposableOwner } from '../../../../base/common/lifecycle.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
 import { getRemoteWorkspacePath, isRemoteResource } from '../../../../platform/remote/common/remote.js';
 import { type IGitService } from '../../../services/git/common/gitService.js';
 import { type QuickDiffOriginalResource, type QuickDiffProvider } from '../common/quickDiff.js';
 
 /** Git-backed original-resource provider for worktree and index changes. */
-export class GitQuickDiffProvider extends DisposableOwner implements QuickDiffProvider {
+export class GitQuickDiffProvider extends Disposable implements QuickDiffProvider {
 	readonly id = 'git';
 	readonly label = 'Git';
-	private readonly changeEmitter = this.own(new Emitter<URI | undefined>());
+	private readonly changeEmitter = this._register(new Emitter<URI | undefined>());
 	readonly onDidChange = this.changeEmitter.event;
 
 	constructor(private readonly gitService: IGitService) {
 		super();
-		this.own(gitService.onDidChangeRepositoryStatus(() => this.changeEmitter.fire(undefined)));
-		this.own(gitService.onDidChangeRepositories(() => this.changeEmitter.fire(undefined)));
-		this.own(gitService.onDidBecomeReady(() => this.changeEmitter.fire(undefined)));
+		this._register(gitService.onDidChangeRepositoryStatus(() => this.changeEmitter.fire(undefined)));
+		this._register(gitService.onDidChangeRepositories(() => this.changeEmitter.fire(undefined)));
+		this._register(gitService.onDidBecomeReady(() => this.changeEmitter.fire(undefined)));
 	}
 
 	async provideOriginalResource(resource: URI, signal: AbortSignal): Promise<QuickDiffOriginalResource | undefined> {

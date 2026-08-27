@@ -4,7 +4,7 @@ import { appendIcon } from "../icon/icon.js";
 import type { ListDragAndDrop, ListDragData, ListScrolling } from "../list/list.js";
 import { List } from "../list/listWidget.js";
 import { Emitter, type Event } from "../../../common/event.js";
-import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../common/lifecycle.js";
+import { Disposable, MutableDisposable, type IDisposable } from "../../../common/lifecycle.js";
 import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
 import { rot } from "../../../common/numbers.js";
 import type { AbstractTreeNode, TreeAcceptEvent, TreeActivateEvent, TreeCollapseRequestEvent, TreeDragAndDrop, TreeDragOverReaction, TreeFindMatchType, TreeFindMode, TreeFindResult, TreeFocusChangeEvent, TreeIndentGuides, TreeKeyboardNavigationLabelProvider, TreePointerEvent, TreePointerTarget, TreeSelectionChangeEvent, TreeSelectionPresentation, TreeTwistieState } from "./tree.js";
@@ -34,23 +34,23 @@ export interface AbstractTreeOptions<T, TNode extends AbstractTreeNode<T>> {
  * layer owns tree row semantics and interaction, but never reconstructs or
  * mutates the hierarchy itself.
  */
-export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends DisposableOwner {
+export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposable {
 	readonly element: HTMLDivElement;
 	private readonly list: List<TNode>;
 	private readonly options: AbstractTreeOptions<T, TNode>;
-	private readonly _onPointer = this.own(new Emitter<TreePointerEvent<TNode>>());
-	private readonly _onDidDoubleClick = this.own(new Emitter<TreePointerEvent<TNode>>());
-	private readonly _onDidAccept = this.own(new Emitter<TreeAcceptEvent<TNode>>());
-	private readonly _onDidChangeFocus = this.own(new Emitter<TreeFocusChangeEvent<TNode>>());
-	private readonly _onDidChangeSelection = this.own(new Emitter<TreeSelectionChangeEvent<TNode>>());
-	private readonly _onDidRequestCollapseChange = this.own(new Emitter<TreeCollapseRequestEvent<TNode>>());
-	private readonly _onDidActivate = this.own(new Emitter<TreeActivateEvent<TNode>>());
-	private readonly _onDidChangeFind = this.own(new Emitter<TreeFindResult<TNode>>());
+	private readonly _onPointer = this._register(new Emitter<TreePointerEvent<TNode>>());
+	private readonly _onDidDoubleClick = this._register(new Emitter<TreePointerEvent<TNode>>());
+	private readonly _onDidAccept = this._register(new Emitter<TreeAcceptEvent<TNode>>());
+	private readonly _onDidChangeFocus = this._register(new Emitter<TreeFocusChangeEvent<TNode>>());
+	private readonly _onDidChangeSelection = this._register(new Emitter<TreeSelectionChangeEvent<TNode>>());
+	private readonly _onDidRequestCollapseChange = this._register(new Emitter<TreeCollapseRequestEvent<TNode>>());
+	private readonly _onDidActivate = this._register(new Emitter<TreeActivateEvent<TNode>>());
+	private readonly _onDidChangeFind = this._register(new Emitter<TreeFindResult<TNode>>());
 	private readonly findController: TreeFindController<T, TNode> | undefined;
 	private readonly stickyContainer: HTMLDivElement | undefined;
 	private sourceItems: readonly TNode[] = [];
 	private findCandidates: readonly TNode[] = [];
-	private readonly autoExpandTimer = this.own(new DisposableSlot<IDisposable>());
+	private readonly autoExpandTimer = this._register(new MutableDisposable<IDisposable>());
 	private autoExpandId: string | undefined;
 
 	readonly onPointer: Event<TreePointerEvent<TNode>> = this._onPointer.event;
@@ -68,7 +68,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		this.options = options;
 		validateIndent(options.indent);
 		this.findController = options.keyboardNavigationLabelProvider ? new TreeFindController({ labelProvider: options.keyboardNavigationLabelProvider, mode: options.findMode ?? "highlight", matchType: options.findMatchType ?? "fuzzy" }) : undefined;
-		this.list = this.own(new List<TNode>(container, {
+		this.list = this._register(new List<TNode>(container, {
 			ariaLabel: options.ariaLabel,
 			role: "tree",
 			scrolling: options.scrolling,
@@ -101,14 +101,14 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 			this.stickyContainer.className = "zeta-tree-sticky-container";
 			this.stickyContainer.setAttribute("aria-hidden", "true");
 			this.element.append(this.stickyContainer);
-			this.own(addDisposableListener(this.stickyContainer, "click", (event: MouseEvent) => this.onStickyClick(event)));
-			this.own(this.list.onDidScroll(() => this.updateStickyScroll()));
+			this._register(addDisposableListener(this.stickyContainer, "click", (event: MouseEvent) => this.onStickyClick(event)));
+			this._register(this.list.onDidScroll(() => this.updateStickyScroll()));
 		}
-		this.own(this.list.onPointer((event) => this.onListPointer(event.item, event.browserEvent)));
-		this.own(this.list.onDidDoubleClick((event) => this.onListDoubleClick(event.item, event.browserEvent)));
-		this.own(this.list.onDidChangeFocus(({ item, browserEvent }) => this._onDidChangeFocus.fire({ element: item, browserEvent })));
-		this.own(this.list.onDidChangeSelection(({ items, browserEvent }) => this._onDidChangeSelection.fire({ elements: items, browserEvent })));
-		this.own(addDisposableListener(this.element, "keydown", (event: KeyboardEvent) => this.onKeyDown(event)));
+		this._register(this.list.onPointer((event) => this.onListPointer(event.item, event.browserEvent)));
+		this._register(this.list.onDidDoubleClick((event) => this.onListDoubleClick(event.item, event.browserEvent)));
+		this._register(this.list.onDidChangeFocus(({ item, browserEvent }) => this._onDidChangeFocus.fire({ element: item, browserEvent })));
+		this._register(this.list.onDidChangeSelection(({ items, browserEvent }) => this._onDidChangeSelection.fire({ elements: items, browserEvent })));
+		this._register(addDisposableListener(this.element, "keydown", (event: KeyboardEvent) => this.onKeyDown(event)));
 	}
 
 	get items(): readonly TNode[] { return this.list.items; }
@@ -321,11 +321,11 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		this.autoExpandId = node.id;
 		const targetWindow = this.element.ownerDocument.defaultView;
 		if (!targetWindow) return;
-		this.autoExpandTimer.replace(disposableWindowTimeout(targetWindow, () => {
+		this.autoExpandTimer.value = disposableWindowTimeout(targetWindow, () => {
 			this.autoExpandTimer.clear();
 			this.autoExpandId = undefined;
 			this._onDidRequestCollapseChange.fire({ element: node, expanded: true, browserEvent });
-		}, 500));
+		}, 500);
 	}
 
 	private clearAutoExpand(): void {

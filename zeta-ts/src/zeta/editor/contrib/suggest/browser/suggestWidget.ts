@@ -1,6 +1,6 @@
 import "./media/completionWidget.css";
 import { addDisposableListener, fragment as createFragment, h, isElement, reset, stopEvent } from "../../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { LanguageCompletionDetailsStatus, type LanguageCompletionSessionState, LanguageCompletionSessionController } from "../common/suggestModel.js";
 import { LanguageCompletionItemKind } from "../../../common/languages/completion/languageCompletions.js";
@@ -9,7 +9,7 @@ import { type EditorViewport } from "../../../browser/view.js";
 let nextCompletionWidgetId = 1;
 
 /** Projects one common completion session into Stanza-owned browser UI. */
-export class CompletionWidget extends DisposableOwner {
+export class CompletionWidget extends Disposable {
 	readonly element: HTMLDivElement;
 	private readonly widgetId: string;
 	private readonly previousAriaAutocomplete: string | null;
@@ -51,19 +51,19 @@ export class CompletionWidget extends DisposableOwner {
 		inputElement.setAttribute("aria-controls", this.widgetId);
 		inputElement.setAttribute("aria-haspopup", "listbox");
 		(container ?? viewport.element).append(this.element);
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.element.remove();
 			restoreAttribute(inputElement, "aria-autocomplete", this.previousAriaAutocomplete);
 			restoreAttribute(inputElement, "aria-controls", this.previousAriaControls);
 			restoreAttribute(inputElement, "aria-haspopup", this.previousAriaHasPopup);
 			restoreAttribute(inputElement, "aria-activedescendant", this.previousAriaActiveDescendant);
-		});
-		this.own(session.onDidChange(() => this.render()));
-		this.own(viewport.onDidChangeLayout(() => this.position()));
-		this.own(addDisposableListener(inputElement, "keydown", event => this.handleKeydown(event)));
-		this.own(addDisposableListener(inputElement, "blur", () => session.cancel()));
-		this.own(addDisposableListener(inputElement, "compositionstart", () => session.cancel()));
-		this.own(addDisposableListener<MouseEvent>(this.element, "mousedown", event => {
+		}));
+		this._register(session.onDidChange(() => this.render()));
+		this._register(viewport.onDidChangeLayout(() => this.position()));
+		this._register(addDisposableListener(inputElement, "keydown", event => this.handleKeydown(event)));
+		this._register(addDisposableListener(inputElement, "blur", () => session.cancel()));
+		this._register(addDisposableListener(inputElement, "compositionstart", () => session.cancel()));
+		this._register(addDisposableListener<MouseEvent>(this.element, "mousedown", event => {
 			const index = this.readOptionIndex(event);
 			if (index === undefined || event.button !== 0) return;
 			stopEvent(event);

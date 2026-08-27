@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type TextEdit, type TextRange } from "../../../common/core/text.js";
 import { RGBA8 } from "../../../common/core/misc/rgba.js";
@@ -33,7 +33,7 @@ export interface LanguageColorProvider extends LanguageFeatureProviderMetadata {
 }
 
 /** Provides color ranges and replacement presentations; opening a color widget is browser-owned. */
-export class ColorService extends DisposableOwner {
+export class ColorService extends Disposable {
 	constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureProviderRegistry<LanguageColorProvider>, private readonly resource?: URI) {
 		super();
 	}

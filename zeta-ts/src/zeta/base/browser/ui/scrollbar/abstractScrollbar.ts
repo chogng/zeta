@@ -2,8 +2,10 @@ import { addDisposableListener, h } from "../../dom.js";
 import { FastDomNode } from "../../fastDomNode.js";
 import { StandardPointerEvent } from "../../mouseEvent.js";
 import {
-	DisposableOwner,
-	ResettableDisposableGroup,
+	Disposable,
+	DisposableStore,
+
+	toDisposable,
 } from "../../../common/lifecycle.js";
 import type { ScrollbarAxisMetrics } from "./scrollbarState.js";
 
@@ -17,7 +19,7 @@ export interface AbstractScrollbarOptions {
 }
 
 /** Owns the DOM and direct input behavior for one scrollbar axis. */
-export abstract class AbstractScrollbar extends DisposableOwner {
+export abstract class AbstractScrollbar extends Disposable {
 	readonly track: HTMLDivElement;
 	readonly thumb: HTMLDivElement;
 	public readonly trackNode: FastDomNode<HTMLDivElement>;
@@ -25,7 +27,7 @@ export abstract class AbstractScrollbar extends DisposableOwner {
 	private readonly trackClickBehavior: "jump" | "page";
 	private readonly getMetrics: () => ScrollbarAxisMetrics;
 	private readonly setPosition: (position: number) => void;
-	private readonly dragListeners: ResettableDisposableGroup;
+	private readonly dragListeners: DisposableStore;
 
 	protected constructor(
 		container: HTMLElement,
@@ -42,8 +44,8 @@ export abstract class AbstractScrollbar extends DisposableOwner {
 		this.thumb = thumb;
 		this.trackNode = new FastDomNode(track);
 		this.thumbNode = new FastDomNode(thumb);
-		this.dragListeners = this.own(new ResettableDisposableGroup());
-		this.defer(() => track.remove());
+		this.dragListeners = this._register(new DisposableStore());
+		this._register(toDisposable(() => track.remove()));
 
 		this.trackNode.setClassName(
 			`zeta-scrollbar-track zeta-scrollbar-track-${axis}`,
@@ -57,7 +59,7 @@ export abstract class AbstractScrollbar extends DisposableOwner {
 		track.append(thumb);
 		container.append(track);
 
-		this.own(addDisposableListener(
+		this._register(addDisposableListener(
 			track,
 			"pointerdown",
 			(event: PointerEvent) => {
@@ -65,7 +67,7 @@ export abstract class AbstractScrollbar extends DisposableOwner {
 				else this.handleTrackPointerDown(event);
 			},
 		));
-		this.own(addDisposableListener(
+		this._register(addDisposableListener(
 			track,
 			"keydown",
 			(event: KeyboardEvent) => this.handleKeydown(event),

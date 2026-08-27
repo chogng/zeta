@@ -17,9 +17,11 @@ import {
 	ResolvedKeybinding,
 } from "../../../../base/common/keybindings.js";
 import {
-	DisposableOwner,
-	DisposableSlot,
+	Disposable,
+	MutableDisposable,
 	type IDisposable,
+
+	toDisposable,
 } from "../../../../base/common/lifecycle.js";
 import type {
 	CommandId,
@@ -72,7 +74,7 @@ export interface WorkbenchKeybindingServiceOptions {
  * event lifecycle.
  */
 export class WorkbenchKeybindingService
-	extends DisposableOwner
+	extends Disposable
 	implements IKeybindingService, IKeyboardShortcutTroubleshootingService {
 	private readonly ownerDocument: Document;
 	private readonly ownerWindow: Window;
@@ -83,11 +85,11 @@ export class WorkbenchKeybindingService
 	private readonly resolver: KeybindingResolver;
 	private readonly chordTimeoutMs: number;
 	private readonly onCommandError: (error: unknown, command: CommandId) => void;
-	private readonly _onDidUpdateKeybindings = this.own(new Emitter<void>());
-	private readonly _onDidLog = this.own(new Emitter<string>());
-	private readonly chordTimeout = this.own(new DisposableSlot<IDisposable>());
-	private readonly chordStatus = this.own(
-		new DisposableSlot<IStatusbarEntryAccessor>(),
+	private readonly _onDidUpdateKeybindings = this._register(new Emitter<void>());
+	private readonly _onDidLog = this._register(new Emitter<string>());
+	private readonly chordTimeout = this._register(new MutableDisposable<IDisposable>());
+	private readonly chordStatus = this._register(
+		new MutableDisposable<IStatusbarEntryAccessor>(),
 	);
 	private readonly inChordModeKey: IContextKey<boolean>;
 	private readonly isComposingKey: IContextKey<boolean>;
@@ -127,30 +129,30 @@ export class WorkbenchKeybindingService
 			this.contextKeyService,
 		);
 
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.leaveChordMode();
 			this.isComposingKey.reset();
-		});
-		this.own(this.resolver.onDidChangeKeybindings(() => {
+		}));
+		this._register(this.resolver.onDidChangeKeybindings(() => {
 			this._onDidUpdateKeybindings.fire();
 		}));
-		this.own(this.keyboardLayoutService.onDidChangeKeyboardLayout(() => {
+		this._register(this.keyboardLayoutService.onDidChangeKeyboardLayout(() => {
 			this.leaveChordMode();
 			this._onDidUpdateKeybindings.fire();
 		}));
-		this.own(addDisposableListener(
+		this._register(addDisposableListener(
 			this.ownerDocument,
 			"keydown",
 			(event: KeyboardEvent) => this.dispatchEvent(event),
 			true,
 		));
-		this.own(addDisposableListener(
+		this._register(addDisposableListener(
 			this.ownerDocument,
 			"keyup",
 			(event: KeyboardEvent) => this.dispatchKeyupEvent(event),
 			true,
 		));
-		this.own(addDisposableListener(
+		this._register(addDisposableListener(
 			this.ownerDocument,
 			"compositionstart",
 			() => {
@@ -160,7 +162,7 @@ export class WorkbenchKeybindingService
 			},
 			true,
 		));
-		this.own(addDisposableListener(
+		this._register(addDisposableListener(
 			this.ownerDocument,
 			"compositionend",
 			() => this.isComposingKey.set(false),
@@ -168,7 +170,7 @@ export class WorkbenchKeybindingService
 		));
 		const targetWindow = this.ownerDocument.defaultView;
 		if (targetWindow) {
-			this.own(addDisposableListener(
+			this._register(addDisposableListener(
 				targetWindow,
 				"blur",
 				() => {
@@ -365,11 +367,11 @@ export class WorkbenchKeybindingService
 			IME.disable();
 			this.disabledIme = true;
 		}
-		this.chordTimeout.replace(disposableWindowTimeout(
+		this.chordTimeout.value = disposableWindowTimeout(
 			this.ownerWindow,
 			() => this.leaveChordMode(),
 			this.chordTimeoutMs,
-		));
+		);
 
 		if (this.statusbarService) {
 			const prefix = new ResolvedKeybinding(
@@ -378,7 +380,7 @@ export class WorkbenchKeybindingService
 			);
 			const label = getKeybindingLabel(prefix);
 			this.chordStatus.clear();
-			this.chordStatus.replace(this.statusbarService.addEntry(
+			this.chordStatus.value = this.statusbarService.addEntry(
 				{
 					text: `${label} was pressed. Waiting for another key…`,
 					ariaLabel: `${label} was pressed. Waiting for another key`,
@@ -388,7 +390,7 @@ export class WorkbenchKeybindingService
 					alignment: StatusbarAlignment.Left,
 					priority: 10_000,
 				},
-			));
+			);
 		}
 	}
 

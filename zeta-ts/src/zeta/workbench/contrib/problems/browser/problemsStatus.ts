@@ -1,8 +1,7 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
-import { LanguageDiagnosticSeverity } from "../../../../editor/common/languages/languageResults.js";
+import { MarkerSeverity, type IMarkerService } from "../../../../platform/markers/common/markers.js";
 import type { IWorkbenchContribution } from "../../../common/contributions.js";
-import type { ILanguageDiagnosticsService } from "../../../services/language/common/languageDiagnosticsService.js";
 import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
 import type { IViewsService } from "../../../services/views/browser/viewsService.js";
 
@@ -10,22 +9,22 @@ const ProblemsPriority = 700;
 
 export interface ProblemsStatusContributionOptions {
 	readonly statusbarService: IStatusbarService;
-	readonly diagnosticsService: ILanguageDiagnosticsService;
+	readonly markerService: IMarkerService;
 	readonly viewsService: IViewsService;
 }
 
 /** Projects workspace error and warning counts into the status bar. */
-export class ProblemsStatusContribution extends DisposableOwner implements IWorkbenchContribution {
+export class ProblemsStatusContribution extends Disposable implements IWorkbenchContribution {
 	private readonly status: IStatusbarEntryAccessor;
 
 	constructor(private readonly options: ProblemsStatusContributionOptions) {
 		super();
-		this.status = this.own(options.statusbarService.addEntry(this.entry(), {
+		this.status = this._register(options.statusbarService.addEntry(this.entry(), {
 			id: "zeta.status.problems",
 			alignment: StatusbarAlignment.Left,
 			priority: ProblemsPriority,
 		}));
-		this.own(options.diagnosticsService.onDidChangeDiagnostics(() => this.update()));
+		this._register(options.markerService.onDidChange(() => this.update()));
 	}
 
 	private update(): void {
@@ -33,8 +32,8 @@ export class ProblemsStatusContribution extends DisposableOwner implements IWork
 	}
 
 	private entry(): IStatusbarEntry {
-		const errors = this.count(LanguageDiagnosticSeverity.Error);
-		const warnings = this.count(LanguageDiagnosticSeverity.Warning);
+		const errors = this.count(MarkerSeverity.Error);
+		const warnings = this.count(MarkerSeverity.Warning);
 		const summaries: string[] = [];
 		if (errors > 0) summaries.push(`Errors: ${errors}`);
 		if (warnings > 0) summaries.push(`Warnings: ${warnings}`);
@@ -51,14 +50,8 @@ export class ProblemsStatusContribution extends DisposableOwner implements IWork
 		};
 	}
 
-	private count(severity: LanguageDiagnosticSeverity): number {
-		let count = 0;
-		for (const snapshot of this.options.diagnosticsService.getAllDiagnostics()) {
-			for (const diagnostic of snapshot.diagnostics) {
-				if (diagnostic.severity === severity) count += 1;
-			}
-		}
-		return count;
+	private count(severity: MarkerSeverity): number {
+		return this.options.markerService.getAll().filter(marker => marker.severity === severity).length;
 	}
 }
 

@@ -3,7 +3,7 @@ import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.
 import { h } from '../../../../base/browser/dom.js';
 import { type IDimension } from '../../../../base/browser/geometry.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
-import { DisposableOwner, DisposableSlot } from '../../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { assertDefined } from '../../../../base/common/types.js';
 import { MultiDiffEditorWidget, type MultiDiffEditorItem, type MultiDiffEditorLocation } from '../../../../editor/browser/widget/multiDiffEditor/multiDiffEditorWidget.js';
 import { DiffModel } from '../../../../editor/common/diff/diffModel.js';
@@ -42,9 +42,9 @@ interface ResolvedMultiDiffItem {
 }
 
 /** Workbench pane that resolves multi-diff inputs and hosts the generic editor widget. */
-export class MultiDiffEditorPane extends DisposableOwner implements IEditorPane {
+export class MultiDiffEditorPane extends Disposable implements IEditorPane {
 	public readonly id = MULTI_DIFF_EDITOR_ID;
-	private readonly session = this.own(new DisposableSlot<MultiDiffEditorPaneSession>());
+	private readonly session = this._register(new MutableDisposable<MultiDiffEditorPaneSession>());
 	private editorContainerDomNode: HTMLDivElement | undefined;
 	private dimension: IDimension = { width: 0, height: 0 };
 
@@ -66,10 +66,10 @@ export class MultiDiffEditorPane extends DisposableOwner implements IEditorPane 
 		editorContainerDomNode.className = 'stanza-multi-diff-editor-pane';
 		parent.append(editorContainerDomNode);
 		this.editorContainerDomNode = editorContainerDomNode;
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			editorContainerDomNode.remove();
 			this.editorContainerDomNode = undefined;
-		});
+		}));
 	}
 
 	public async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
@@ -102,7 +102,7 @@ export class MultiDiffEditorPane extends DisposableOwner implements IEditorPane 
 			if (!referencesOwnedBySession) disposeResolvedItems(resolved);
 			throw error;
 		}
-		this.session.replace(next);
+		this.session.value = next;
 		next.layout(this.dimension);
 	}
 
@@ -147,27 +147,27 @@ export class MultiDiffEditorPane extends DisposableOwner implements IEditorPane 
 	}
 }
 
-class MultiDiffEditorPaneSession extends DisposableOwner {
+class MultiDiffEditorPaneSession extends Disposable {
 	public readonly editor: MultiDiffEditorWidget;
 
 	constructor(container: HTMLElement, resolved: readonly ResolvedMultiDiffItem[], label: string, options: MultiDiffEditorPaneOptions) {
 		super();
 		try {
 			for (const item of resolved) {
-				this.own(item.original);
-				this.own(item.modified);
+				this._register(item.original);
+				this._register(item.modified);
 			}
 			const computationService = options.createComputationService();
 			if (!computationService || typeof computationService.compute !== 'function') {
 				throw new TypeError('Multi-diff editor pane factory returned an invalid Rust diff computation service');
 			}
-			this.own(computationService);
+			this._register(computationService);
 			const items: MultiDiffEditorItem[] = resolved.map((item) => ({
 				id: multiDiffEditorItemKey(item.input),
 				label: item.input.label,
 				originalLabel: item.input.original.label,
 				modifiedLabel: item.input.modified.label,
-				model: this.own(new DiffModel({
+				model: this._register(new DiffModel({
 					original: item.original.model,
 					modified: item.modified.model,
 					computationService,
@@ -175,7 +175,7 @@ class MultiDiffEditorPaneSession extends DisposableOwner {
 			}));
 			const inputsById = new Map(resolved.map((item) => [multiDiffEditorItemKey(item.input), item.input]));
 			const fileActions = options.fileActions;
-			this.editor = this.own(new MultiDiffEditorWidget({
+			this.editor = this._register(new MultiDiffEditorWidget({
 				container,
 				items,
 				lineHeight: options.lineHeight,

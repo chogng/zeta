@@ -120,11 +120,7 @@ Store / UI
 * ECMAScript `Disposable` / `AsyncDisposable` 表达对象、监听、注册关系和子资源的所有权与生命周期；项目创建的资源通过 `IDisposable` / `IAsyncDisposable` 同时提供便捷的显式调用入口
 * 标准 `AbortSignal` 表达某一次异步操作的协作式取消
 
-`DisposableStore` 和 `AsyncDisposableStore` 基于标准
-`DisposableStack` / `AsyncDisposableStack`，负责组合具有相同所有者的资源，
-并按 LIFO 顺序释放。长期对象可选择 `DisposableOwner.own()`，短作用域直接使用
-`using` / `await using`。可替换单槽使用 `DisposableSlot<T>`；只有存在真实的
-clear-and-rebuild 生命周期时才使用 `ResettableDisposableGroup`。
+`Disposable` 统一长期对象的组合式生命周期入口，通过受保护的 `_store` 和 `_register()` 持有子资源；`DisposableStore` 和 `AsyncDisposableStore` 基于标准 `DisposableStack` / `AsyncDisposableStack`，负责组合具有相同所有者的资源并按 LIFO 顺序释放。短作用域直接使用 `using` / `await using`，可替换单槽使用 `MutableDisposable<T>`，需要 clear-and-rebuild 时直接复用 `DisposableStore.clear()`。
 
 `AbortController` 由发起操作的一方持有，取消一次 request 不得隐式销毁整个
 peer。生命周期协议和操作取消保持正交，不再维护自定义取消协议或通用转换器。

@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type TextPosition, type TextRange } from "../../../common/core/text.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
 import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languages/languageFeatureRegistry.js";
@@ -23,7 +23,7 @@ export interface LanguageRenameProvider extends LanguageFeatureProviderMetadata 
 }
 
 /** Separates rename preparation/UI from the eventual workspace edit transaction. */
-export class RenameService extends DisposableOwner {
+export class RenameService extends Disposable {
 	constructor(private readonly model: TextModel, private readonly resource: URI, private readonly providers: LanguageFeatureProviderRegistry<LanguageRenameProvider>) {
 		super();
 	}

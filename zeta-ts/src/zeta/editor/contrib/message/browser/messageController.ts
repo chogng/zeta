@@ -1,14 +1,14 @@
 import "./media/message.css";
 import { h } from "../../../../base/browser/dom.js";
 import { disposableWindowTimeout } from "../../../../base/browser/scheduler.js";
-import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 /** Owns transient editor-local messages without replacing host notifications. */
-export class MessageController extends DisposableOwner {
+export class MessageController extends Disposable {
 	private readonly element: HTMLDivElement;
-	private readonly timer = this.own(new DisposableSlot<IDisposable>());
+	private readonly timer = this._register(new MutableDisposable<IDisposable>());
 
 	constructor(private readonly viewport: EditorViewport) {
 		super();
@@ -18,7 +18,7 @@ export class MessageController extends DisposableOwner {
 		this.element.setAttribute("role", "status");
 		this.element.setAttribute("aria-live", "polite");
 		viewport.element.append(this.element);
-		this.defer(() => this.element.remove());
+		this._register(toDisposable(() => this.element.remove()));
 	}
 
 	show(message: string, durationMs = 3000): void {
@@ -28,7 +28,7 @@ export class MessageController extends DisposableOwner {
 		this.element.textContent = message.trim();
 		this.element.hidden = false;
 		const targetWindow = this.element.ownerDocument.defaultView;
-		if (durationMs > 0 && targetWindow) this.timer.replace(disposableWindowTimeout(targetWindow, () => { this.timer.clear(); this.element.hidden = true; }, durationMs));
+		if (durationMs > 0 && targetWindow) this.timer.value = disposableWindowTimeout(targetWindow, () => { this.timer.clear(); this.element.hidden = true; }, durationMs);
 	}
 
 	hide(): void { this.timer.clear(); this.element.hidden = true; }
@@ -38,6 +38,6 @@ registerEditorContribution({
 	id: "editor.contrib.message",
 	install: context => {
 		if (context.kind !== "text") return;
-		context.own(new MessageController(context.viewport));
+		context.register(new MessageController(context.viewport));
 	},
 });

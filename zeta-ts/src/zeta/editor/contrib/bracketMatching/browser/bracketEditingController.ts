@@ -1,12 +1,12 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { createRemoveMatchingBracketsCommand } from "../common/bracketEditing.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type LanguageBracketMatcher } from "../common/bracketMatching.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 /** Routes the VS Code remove-brackets chord through Stanza's lexical bracket matcher. */
-export class BracketEditingController extends DisposableOwner {
+export class BracketEditingController extends Disposable {
 	constructor(
 		input: HTMLElement,
 		private readonly viewport: EditorViewport,
@@ -18,7 +18,7 @@ export class BracketEditingController extends DisposableOwner {
 			if (viewport.textModel !== selections.textModel || viewport.textModel !== matcher.textModel) {
 				throw new TypeError("Stanza bracket editing dependencies must share one text model");
 			}
-			this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
+			this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
 		} catch (error) {
 			this.dispose();
 			throw error;

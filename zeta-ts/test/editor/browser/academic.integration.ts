@@ -1,6 +1,6 @@
 import { URI } from "../../../src/zeta/base/common/uri.js";
 import { Emitter, type Event } from "../../../src/zeta/base/common/event.js";
-import { DisposableOwner } from "../../../src/zeta/base/common/lifecycle.js";
+import { Disposable } from "../../../src/zeta/base/common/lifecycle.js";
 import { createDefaultDocumentSchema } from "../../../src/zeta/editor/editor.api.js";
 import { createTextNode } from "../../../src/zeta/editor/editor.api.js";
 import { TextModel } from "../../../src/zeta/editor/editor.api.js";
@@ -40,17 +40,17 @@ declare global {
 	}
 }
 
-class BrowserDocumentCollaborationService extends DisposableOwner implements IDocumentCollaborationService {
+class BrowserDocumentCollaborationService extends Disposable implements IDocumentCollaborationService {
 	async open(input: DocumentCollaborationOpenInput, _signal: AbortSignal): Promise<DocumentCollaborationConnection> {
 		return new BrowserDocumentCollaborationConnection(input.schema, input.clientId, input.document, input.roomId ?? "editor-browser-room", input.target?.kind === "remote");
 	}
 }
 
-class BrowserDocumentCollaborationConnection extends DisposableOwner implements DocumentCollaborationConnection {
-	private readonly updates = this.own(new Emitter<DocumentCollaborationRemoteEnvelope>());
-	private readonly snapshots = this.own(new Emitter<DocumentCollaborationSnapshot>());
-	private readonly presences = this.own(new Emitter<readonly DocumentCollaborationPresence[]>());
-	private readonly failures = this.own(new Emitter<Error>());
+class BrowserDocumentCollaborationConnection extends Disposable implements DocumentCollaborationConnection {
+	private readonly updates = this._register(new Emitter<DocumentCollaborationRemoteEnvelope>());
+	private readonly snapshots = this._register(new Emitter<DocumentCollaborationSnapshot>());
+	private readonly presences = this._register(new Emitter<readonly DocumentCollaborationPresence[]>());
+	private readonly failures = this._register(new Emitter<Error>());
 	private version = 0;
 
 	readonly initialSnapshot;

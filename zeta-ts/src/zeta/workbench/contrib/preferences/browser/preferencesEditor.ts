@@ -1,7 +1,7 @@
 import './media/preferencesEditor.css';
 import { h } from '../../../../base/browser/dom.js';
 import { Dimension, type IDimension } from '../../../../base/browser/geometry.js';
-import { DisposableOwner, DisposableSlot } from '../../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextMenu.js';
 import type { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
@@ -16,10 +16,10 @@ export const PreferencesEditorId = 'workbench.editor.preferences';
 let nextPreferencesEditorId = 1;
 
 /** Shared Preferences shell. Product-specific preference panes arrive through the registry. */
-export class PreferencesEditor extends DisposableOwner implements IEditorPane {
+export class PreferencesEditor extends Disposable implements IEditorPane {
 	public readonly id = PreferencesEditorId;
 
-	private readonly activePane = this.own(new DisposableSlot<IPreferencesEditorPane>());
+	private readonly activePane = this._register(new MutableDisposable<IPreferencesEditorPane>());
 	private bodyDomNode: HTMLDivElement | undefined;
 	private dimension = Dimension.Zero;
 	private rootDomNode: HTMLDivElement | undefined;
@@ -32,8 +32,8 @@ export class PreferencesEditor extends DisposableOwner implements IEditorPane {
 		private readonly paneRegistry: PreferencesEditorPaneRegistry = PreferencesEditorPanes,
 	) {
 		super();
-		this.own(this.paneRegistry.onDidRegisterPreferencesEditorPanes(() => this.ensureActivePane()));
-		this.own(this.paneRegistry.onDidDeregisterPreferencesEditorPanes(() => this.ensureActivePane()));
+		this._register(this.paneRegistry.onDidRegisterPreferencesEditorPanes(() => this.ensureActivePane()));
+		this._register(this.paneRegistry.onDidDeregisterPreferencesEditorPanes(() => this.ensureActivePane()));
 	}
 
 	create(parent: HTMLElement): void {
@@ -43,20 +43,20 @@ export class PreferencesEditor extends DisposableOwner implements IEditorPane {
 		this.rootDomNode.className = 'zeta-settings-editor';
 		const bodyId = `zeta-preferences-editor-body-${nextPreferencesEditorId++}`;
 
-		this.searchWidget = this.own(new PreferencesSearchWidget(this.rootDomNode, {
+		this.searchWidget = this._register(new PreferencesSearchWidget(this.rootDomNode, {
 			ariaControls: bodyId,
 			contextMenuProvider: this.instantiationService.get(IContextMenuService),
 			localizationService: this.localizationService,
 		}));
-		this.own(this.searchWidget.onDidChange(value => this.activePane.value?.search(value)));
-		this.own(this.searchWidget.onDidRequestFocusResults(() => this.activePane.value?.focus()));
+		this._register(this.searchWidget.onDidChange(value => this.activePane.value?.search(value)));
+		this._register(this.searchWidget.onDidRequestFocusResults(() => this.activePane.value?.focus()));
 
 		this.bodyDomNode = h(ownerDocument, 'div');
 		this.bodyDomNode.className = 'zeta-preferences-editor-body';
 		this.bodyDomNode.id = bodyId;
 		this.rootDomNode.append(this.bodyDomNode);
 		parent.append(this.rootDomNode);
-		this.defer(() => this.rootDomNode?.remove());
+		this._register(toDisposable(() => this.rootDomNode?.remove()));
 	}
 
 	async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
@@ -98,7 +98,7 @@ export class PreferencesEditor extends DisposableOwner implements IEditorPane {
 		if (current?.getDomNode().dataset.preferencesPaneId === descriptor.id) return;
 		const pane = this.instantiationService.createInstance(descriptor.ctorDescriptor, this.bodyDomNode);
 		pane.getDomNode().dataset.preferencesPaneId = descriptor.id;
-		this.activePane.replace(pane);
+		this.activePane.value = pane;
 		this.bodyDomNode.replaceChildren(pane.getDomNode());
 		pane.search(this.searchWidget?.value ?? '');
 		this.layout(this.dimension);

@@ -2,7 +2,7 @@ import "./media/readOnlyMessage.css";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { disposableWindowTimeout } from "../../../../base/browser/scheduler.js";
-import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 export interface ReadOnlyMessageControllerOptions {
@@ -11,10 +11,10 @@ export interface ReadOnlyMessageControllerOptions {
 }
 
 /** Explains blocked mutations without making read-only state part of model policy. */
-export class ReadOnlyMessageController extends DisposableOwner {
+export class ReadOnlyMessageController extends Disposable {
 	readonly element: HTMLDivElement;
 	private readonly durationMs: number;
-	private readonly hideTimer = this.own(new DisposableSlot<IDisposable>());
+	private readonly hideTimer = this._register(new MutableDisposable<IDisposable>());
 
 	constructor(
 		input: HTMLElement,
@@ -40,22 +40,22 @@ export class ReadOnlyMessageController extends DisposableOwner {
 		this.element.setAttribute("role", "status");
 		this.element.setAttribute("aria-live", "polite");
 		viewport.element.append(this.element);
-		this.defer(() => this.element.remove());
-		this.own(addDisposableListener(input, "keydown", event => {
+		this._register(toDisposable(() => this.element.remove()));
+		this._register(addDisposableListener(input, "keydown", event => {
 			if (event.defaultPrevented || event.isComposing || !isMutationKey(event)) return;
 			stopEvent(event);
 			this.show();
 		}));
-		this.own(addDisposableListener(input, "beforeinput", event => {
+		this._register(addDisposableListener(input, "beforeinput", event => {
 			if (event.defaultPrevented || !isMutationInput(event)) return;
 			stopEvent(event);
 			this.show();
 		}));
-		this.own(addDisposableListener(input, "paste", event => {
+		this._register(addDisposableListener(input, "paste", event => {
 			stopEvent(event);
 			this.show();
 		}));
-		this.own(addDisposableListener(input, "cut", event => {
+		this._register(addDisposableListener(input, "cut", event => {
 			stopEvent(event);
 			this.show();
 		}));
@@ -71,10 +71,10 @@ export class ReadOnlyMessageController extends DisposableOwner {
 		}
 		const targetWindow = this.element.ownerDocument.defaultView;
 		if (!targetWindow) return;
-		this.hideTimer.replace(disposableWindowTimeout(targetWindow, () => {
+		this.hideTimer.value = disposableWindowTimeout(targetWindow, () => {
 			this.hideTimer.clear();
 			this.hide();
-		}, this.durationMs));
+		}, this.durationMs);
 	}
 
 	hide(): void {
@@ -97,5 +97,5 @@ function isMutationInput(event: InputEvent): boolean {
 
 registerEditorContribution({ id: "editor.contrib.readOnlyMessage", install: context => {
 	if (context.kind !== "text" || !context.options.input.readOnly) return;
-	context.own(new ReadOnlyMessageController(context.view.element, context.viewport));
+	context.register(new ReadOnlyMessageController(context.view.element, context.viewport));
 } });

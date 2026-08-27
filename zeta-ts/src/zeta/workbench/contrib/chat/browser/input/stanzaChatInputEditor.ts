@@ -1,7 +1,7 @@
 import "./stanzaChatInputEditor.css";
 import { addDisposableListener, stopEvent, h } from "../../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { EditorLineWrapping } from "../../../../../editor/common/config/editorOptions.js";
 import { CodeEditorWidget } from "../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js";
 import { EditorSelectionController } from "../../../../../editor/common/cursor/editorSelectionController.js";
@@ -22,13 +22,13 @@ const CHAT_INPUT_MIN_HEIGHT = 106;
 const CHAT_INPUT_MAX_HEIGHT = 320;
 
 /** Stanza-backed embedded editor hosted by the Chat input part. */
-export class ChatInputEditor extends DisposableOwner implements IChatInputEditor {
+export class ChatInputEditor extends Disposable implements IChatInputEditor {
 	readonly element: HTMLDivElement;
-	private readonly model = this.own(new TextModel());
-	private readonly selections = this.own(new EditorSelectionController(this.model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0)))));
+	private readonly model = this._register(new TextModel());
+	private readonly selections = this._register(new EditorSelectionController(this.model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0)))));
 	private readonly editor: CodeEditorWidget;
-	private readonly _onDidChange = this.own(new Emitter<string>());
-	private readonly _onDidSubmit = this.own(new Emitter<void>());
+	private readonly _onDidChange = this._register(new Emitter<string>());
+	private readonly _onDidSubmit = this._register(new Emitter<void>());
 	readonly onDidChange: Event<string> = this._onDidChange.event;
 	readonly onDidSubmit: Event<void> = this._onDidSubmit.event;
 	private height = CHAT_INPUT_MIN_HEIGHT;
@@ -40,11 +40,11 @@ export class ChatInputEditor extends DisposableOwner implements IChatInputEditor
 		this.element.className = "zeta-chat-input-editor";
 		this.element.style.height = `${this.height}px`;
 		options.container.append(this.element);
-		const providers = this.own(new LanguageCompletionProviderRegistry());
-		this.own(providers.register(createStanzaChatCommandCompletionProvider(options.slashCommands)));
-		const completions = this.own(new LanguageCompletionService(this.model, providers));
-		const completionSession = this.own(new LanguageCompletionSessionController(completions.results, this.selections, { resolver: completions }));
-		this.editor = this.own(new CodeEditorWidget({
+		const providers = this._register(new LanguageCompletionProviderRegistry());
+		this._register(providers.register(createStanzaChatCommandCompletionProvider(options.slashCommands)));
+		const completions = this._register(new LanguageCompletionService(this.model, providers));
+		const completionSession = this._register(new LanguageCompletionSessionController(completions.results, this.selections, { resolver: completions }));
+		this.editor = this._register(new CodeEditorWidget({
 			container: this.element,
 			model: this.model,
 			lineHeight: CHAT_INPUT_LINE_HEIGHT,
@@ -58,7 +58,7 @@ export class ChatInputEditor extends DisposableOwner implements IChatInputEditor
 				lineWrapping: EditorLineWrapping.On,
 			},
 		}));
-		this.own(new SuggestController(
+		this._register(new SuggestController(
 			this.editor.view,
 			this.selections,
 			completions,
@@ -66,17 +66,17 @@ export class ChatInputEditor extends DisposableOwner implements IChatInputEditor
 			CHAT_INPUT_LANGUAGE_ID,
 			{ widgetContainer: this.element },
 		));
-		this.own(this.model.onDidChange(() => {
+		this._register(this.model.onDidChange(() => {
 			this.syncHeight();
 			this._onDidChange.fire(this.value);
 		}));
-		this.own(addDisposableListener(this.editor.view.element, "keydown", event => {
+		this._register(addDisposableListener(this.editor.view.element, "keydown", event => {
 			if (event.defaultPrevented || event.isComposing || event.key !== "Enter" || event.shiftKey) return;
 			stopEvent(event);
 			this._onDidSubmit.fire();
 		}));
-		this.defer(() => this.closed = true);
-		this.defer(() => this.element.remove());
+		this._register(toDisposable(() => this.closed = true));
+		this._register(toDisposable(() => this.element.remove()));
 		queueMicrotask(() => {
 			if (!this.closed) this.layout();
 		});

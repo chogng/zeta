@@ -1,5 +1,5 @@
 import { throwIfCancelled } from "../../../base/common/cancellation.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable } from "../../../base/common/lifecycle.js";
 import type { URI } from "../../../base/common/uri.js";
 import type { RemoteRuntimeInstallProgress } from "../common/remoteRuntimeInstallProgress.js";
 import { RemoteRuntimeInstallProgressMainService } from "./remoteRuntimeInstallProgressMainService.js";
@@ -39,8 +39,8 @@ export interface RemoteRuntimeBootstrapMainServiceOptions {
  * Owns one SSH startup gate, including its cancellable install projection and
  * verified active/previous runtime profile binding.
  */
-export class RemoteRuntimeBootstrapMainService extends DisposableOwner {
-	readonly installProgress = this.own(new RemoteRuntimeInstallProgressMainService());
+export class RemoteRuntimeBootstrapMainService extends Disposable {
+	readonly installProgress = this._register(new RemoteRuntimeInstallProgressMainService());
 	readonly processLauncher: SshAppServerProcessLauncher;
 
 	private installOperation: RemoteRuntimeInstallProgressOperation | undefined;

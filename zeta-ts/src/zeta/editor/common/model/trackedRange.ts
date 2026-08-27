@@ -1,4 +1,4 @@
-import { AbstractDisposable, DisposableMap, DisposableOwner, type IDisposable } from "../../../base/common/lifecycle.js";
+import { AbstractDisposable, DisposableMap, Disposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import { TextPosition, TextRange, type TextModelContentChange } from "../core/text.js";
 
 export enum TrackedRangeStickiness {
@@ -24,8 +24,8 @@ enum OffsetAffinity {
 	After,
 }
 
-export class TrackedRangeCollection extends DisposableOwner {
-	private readonly handles = this.own(new DisposableMap<TrackedRangeRecord, TrackedRangeHandle>());
+export class TrackedRangeCollection extends Disposable {
+	private readonly handles = this._register(new DisposableMap<TrackedRangeRecord, TrackedRangeHandle>());
 
 	constructor(
 		private readonly positionAt: (offset: number) => TextPosition,

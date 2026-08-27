@@ -6,7 +6,7 @@ import { getClientArea, type IDimension } from '../../../../base/browser/geometr
 import { observeResize } from '../../../../base/browser/observer.js';
 import { getWindow } from '../../../../base/browser/window.js';
 import { isNonEmptyArray } from '../../../../base/common/arrays.js';
-import { DisposableOwner, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { isFiniteNumber, isNonNegativeSafeInteger, rot } from '../../../../base/common/numbers.js';
 import { type DiffModel } from '../../../common/diff/diffModel.js';
 import { LineDiffKind } from '../../../common/diff/lineDiff.js';
@@ -56,7 +56,7 @@ interface MultiDiffSectionLayout {
 }
 
 /** Read-only, vertically virtualized presentation of multiple DiffModels. */
-export class MultiDiffEditorWidget extends DisposableOwner {
+export class MultiDiffEditorWidget extends Disposable {
 	public readonly domNode: HTMLDivElement;
 	private readonly contentDomNode: HTMLDivElement;
 	private readonly contentNode: FastDomNode<HTMLDivElement>;
@@ -100,7 +100,7 @@ export class MultiDiffEditorWidget extends DisposableOwner {
 		this.accessibilityStatusDomNode.className = 'stanza-multi-diff-editor-accessibility-status';
 		this.accessibilityStatusDomNode.setAttribute('aria-live', 'polite');
 		this.accessibilityStatusDomNode.setAttribute('aria-atomic', 'true');
-		this.sections = this.items.map((item) => this.own(new MultiDiffSection(
+		this.sections = this.items.map((item) => this._register(new MultiDiffSection(
 			this.contentDomNode,
 			item,
 			() => this.toggleItem(item.id),
@@ -108,19 +108,19 @@ export class MultiDiffEditorWidget extends DisposableOwner {
 		)));
 		this.domNode.append(this.contentDomNode, this.accessibilityStatusDomNode);
 		options.container.append(this.domNode);
-		this.defer(() => this.domNode.remove());
-		this.own(addDisposableListener(this.domNode, 'scroll', () => this.project()));
-		this.own(addDisposableListener(this.domNode, 'keydown', (event) => this.handleKeydown(event)));
+		this._register(toDisposable(() => this.domNode.remove()));
+		this._register(addDisposableListener(this.domNode, 'scroll', () => this.project()));
+		this._register(addDisposableListener(this.domNode, 'keydown', (event) => this.handleKeydown(event)));
 		for (let index = 0; index < this.items.length; index += 1) {
 			const item = this.items[index]!;
 			const section = this.sections[index]!;
-			this.own(item.model.onDidChange(() => {
+			this._register(item.model.onDidChange(() => {
 				section.invalidate();
 				if (this.activeChange?.itemId === item.id) this.activeChange = undefined;
 				this.refreshLayout();
 			}));
 		}
-		this.own(observeResize(this.domNode, ([entry]) => {
+		this._register(observeResize(this.domNode, ([entry]) => {
 			if (entry) this.layout({ width: entry.contentRect.width, height: entry.contentRect.height });
 		}));
 		this.refreshLayout();
@@ -282,7 +282,7 @@ export class MultiDiffEditorWidget extends DisposableOwner {
 	}
 }
 
-class MultiDiffSection extends DisposableOwner {
+class MultiDiffSection extends Disposable {
 	public readonly domNode: HTMLElement;
 	private readonly headerDomNode: HTMLDivElement;
 	private readonly toggleDomNode: HTMLButtonElement;
@@ -324,7 +324,7 @@ class MultiDiffSection extends DisposableOwner {
 			const actionsDomNode = h(ownerDocument, 'div');
 			actionsDomNode.className = 'stanza-multi-diff-editor-file-actions';
 			this.headerDomNode.append(actionsDomNode);
-			this.own(createItemActions(actionsDomNode, item));
+			this._register(createItemActions(actionsDomNode, item));
 		}
 		this.bodyDomNode = h(ownerDocument, 'div');
 		this.bodyDomNode.className = 'stanza-multi-diff-editor-body';
@@ -336,8 +336,8 @@ class MultiDiffSection extends DisposableOwner {
 		this.bodyDomNode.append(this.rowsDomNode, this.statusDomNode);
 		this.domNode.append(this.headerDomNode, this.bodyDomNode);
 		container.append(this.domNode);
-		this.defer(() => this.domNode.remove());
-		this.own(addDisposableListener(this.toggleDomNode, 'click', toggle));
+		this._register(toDisposable(() => this.domNode.remove()));
+		this._register(addDisposableListener(this.toggleDomNode, 'click', toggle));
 	}
 
 	public layout(layout: MultiDiffSectionLayout): void {

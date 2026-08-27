@@ -1,5 +1,5 @@
 import "../media/chat.css";
-import { setDisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { setDisposableOwner, toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { IMenuService } from "../../../../../platform/actions/common/menuService.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import type { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
@@ -67,7 +67,7 @@ export class ChatViewPane extends ViewPane {
 		this.headerElement.hidden = true;
 		this.contentElement.classList.add("zeta-chat-view");
 		const viewId = `zeta-chat-view-${++chatViewInstanceId}`;
-		this.titleControl = this.own(new ChatTitleControl(
+		this.titleControl = this._register(new ChatTitleControl(
 			this.element,
 			viewId,
 			{
@@ -87,15 +87,15 @@ export class ChatViewPane extends ViewPane {
 		body.className = "zeta-chat-body";
 		body.append(this.paneHost);
 		this.contentElement.append(body);
-		this.own(sessionService.onDidChange(() => this.syncSessions()));
-		this.own(layoutService.onDidChangePartVisibility((event) => {
+		this._register(sessionService.onDidChange(() => this.syncSessions()));
+		this._register(layoutService.onDidChangePartVisibility((event) => {
 			if (event.partId === "auxiliarybar" && event.visible) this.ensureTabForVisibleChat();
 		}));
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.viewDisposed = true;
 			for (const pane of this.panes.values()) pane.dispose();
 			this.panes.clear();
-		});
+		}));
 		this.syncSessions();
 		this.ensureTabForVisibleChat();
 		void sessionService.initialize().then(() => {

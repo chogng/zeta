@@ -8,7 +8,9 @@ import {
 import { basename, dirname } from "node:path";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import {
-	DisposableOwner,
+	Disposable,
+
+	toDisposable,
 } from "../../../base/common/lifecycle.js";
 
 export interface IRevisionedJsonSnapshot<T> {
@@ -32,7 +34,7 @@ export interface RevisionedJsonFileOptions<T> {
  * use process-local compare-and-swap revisions so stale renderer snapshots
  * cannot overwrite newer UI or external file changes.
  */
-export class RevisionedJsonFile<T> extends DisposableOwner {
+export class RevisionedJsonFile<T> extends Disposable {
 	private readonly filePath: string;
 	private readonly temporaryFilePath: string;
 	private readonly defaultValue: () => T;
@@ -40,7 +42,7 @@ export class RevisionedJsonFile<T> extends DisposableOwner {
 	private readonly serialize: (value: T) => string;
 	private readonly label: string;
 	private readonly onError: (error: unknown) => void;
-	private readonly _onDidChange = this.own(
+	private readonly _onDidChange = this._register(
 		new Emitter<IRevisionedJsonSnapshot<T>>(),
 	);
 	private value: T;
@@ -68,14 +70,14 @@ export class RevisionedJsonFile<T> extends DisposableOwner {
 			((error) => console.error(`Failed to process ${this.label}`, error));
 		this.value = this.validate(this.defaultValue());
 		this.serialized = this.serialize(this.value);
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			if (this.reloadTimer !== undefined) {
 				globalThis.clearTimeout(this.reloadTimer);
 				this.reloadTimer = undefined;
 			}
 			this.watcher?.close();
 			this.watcher = undefined;
-		});
+		}));
 	}
 
 	static async create<T>(

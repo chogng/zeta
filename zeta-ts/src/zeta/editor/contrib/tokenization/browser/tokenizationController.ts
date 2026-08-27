@@ -1,13 +1,13 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { type TokenizationTextModelPart } from "../common/tokenizationTextModelPart.js";
 
 /** Exposes tokenization readiness to the browser view without owning token production. */
-export class TokenizationController extends DisposableOwner {
+export class TokenizationController extends Disposable {
 	constructor(private readonly viewport: EditorViewport, private readonly tokenization: TokenizationTextModelPart) {
 		super();
 		if (viewport.textModel !== tokenization.textModel) throw new TypeError("Stanza tokenization dependencies must share a text model");
-		this.own(tokenization.onDidChange(() => this.update()));
+		this._register(tokenization.onDidChange(() => this.update()));
 		this.update();
 	}
 

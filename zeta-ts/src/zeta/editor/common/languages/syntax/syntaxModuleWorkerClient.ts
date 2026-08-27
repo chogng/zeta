@@ -1,6 +1,6 @@
 import { raceCancellation } from "../../../../base/common/cancellation.js";
 import { type Event } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { SyntaxProviderModuleState, type SyntaxProviderModuleCatalog, type SyntaxProviderModuleController, type SyntaxProviderModuleStateChange } from "./syntaxProviderModules.js";
 import { SyntaxProviderModuleWireClient } from "./syntaxProviderModuleWire.js";
 import { type SyntaxRequest } from "./syntaxProviders.js";
@@ -16,7 +16,7 @@ export interface SyntaxModuleWorkerClientOptions {
 }
 
 /** Syntax Worker client with named provider-module activation readiness. */
-export class SyntaxModuleWorkerClient extends DisposableOwner implements SyntaxWorker, LanguageWorkerModelSynchronizer, LanguageWorkerResultSettler, SyntaxProviderModuleController {
+export class SyntaxModuleWorkerClient extends Disposable implements SyntaxWorker, LanguageWorkerModelSynchronizer, LanguageWorkerResultSettler, SyntaxProviderModuleController {
 	private readonly worker: LanguageWorkerWireClient<SyntaxLane, SyntaxRequest, SyntaxResult>;
 	private readonly modules: SyntaxProviderModuleWireClient;
 	private readonly moduleReadiness: Promise<void>;
@@ -26,10 +26,10 @@ export class SyntaxModuleWorkerClient extends DisposableOwner implements SyntaxW
 	constructor(port: LanguageWorkerWireClientPort, options: SyntaxModuleWorkerClientOptions = {}) {
 		super();
 		const requiredProviderModules = normalizeRequiredLanguageProviderModules(options.requiredProviderModules);
-		this.worker = this.own(new LanguageWorkerWireClient(port, syntaxWireCodec));
-		this.modules = this.own(new SyntaxProviderModuleWireClient(port, error => this.worker.invalidate(error)));
+		this.worker = this._register(new LanguageWorkerWireClient(port, syntaxWireCodec));
+		this.modules = this._register(new SyntaxProviderModuleWireClient(port, error => this.worker.invalidate(error)));
 		this.onDidChangeModuleCatalog = this.modules.onDidChangeModuleCatalog;
-		this.own(this.worker.onDidFail(error => this.modules.invalidate(error)));
+		this._register(this.worker.onDidFail(error => this.modules.invalidate(error)));
 		this.moduleReadiness = this.activateRequiredModules(requiredProviderModules);
 		void this.moduleReadiness.catch(() => undefined);
 	}

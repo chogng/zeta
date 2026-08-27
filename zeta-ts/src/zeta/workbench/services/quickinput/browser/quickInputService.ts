@@ -1,6 +1,6 @@
 import "./media/quickInput.css";
 import { addDisposableListener, isHTMLElement, stopEvent, h } from "../../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import {
 	BrowserQuickPick,
 	type IBrowserQuickPickHost,
@@ -27,7 +27,7 @@ export interface WorkbenchQuickInputServiceOptions {
 
 /** Window-scoped host shared by every short-lived Quick Input controller. */
 export class WorkbenchQuickInputService
-	extends DisposableOwner
+	extends Disposable
 	implements IQuickInputService {
 	private readonly host: HTMLDivElement;
 	private readonly ownerDocument: Document;
@@ -50,10 +50,10 @@ export class WorkbenchQuickInputService
 		container.append(this.host);
 		this.updateLayout();
 		if (this.layoutService) {
-			this.own(this.layoutService.onDidLayoutActiveContainer(() => this.updateLayout()));
+			this._register(this.layoutService.onDidLayoutActiveContainer(() => this.updateLayout()));
 		}
 
-		this.own(addDisposableListener(
+		this._register(addDisposableListener(
 			this.host,
 			"mousedown",
 			(event: MouseEvent) => {
@@ -62,7 +62,7 @@ export class WorkbenchQuickInputService
 				this.active?.hide();
 			},
 		));
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			for (const quickPick of [...this.quickPicks]) {
 				quickPick.dispose();
 			}
@@ -71,7 +71,7 @@ export class WorkbenchQuickInputService
 			this.focusToRestore = undefined;
 			this.inQuickInput.reset();
 			this.host.remove();
-		});
+		}));
 	}
 
 	createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem> {

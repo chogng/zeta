@@ -1,6 +1,6 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { createTransposeCharactersCommand } from "../../../common/cursor/cursorTranspose.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
@@ -11,7 +11,7 @@ export interface TransposeControllerOptions {
 }
 
 /** Routes VS Code's macOS Ctrl+T transpose chord through Stanza's common command. */
-export class TransposeController extends DisposableOwner {
+export class TransposeController extends Disposable {
 	private readonly targetOperatingSystem: OperatingSystem;
 
 	constructor(
@@ -26,7 +26,7 @@ export class TransposeController extends DisposableOwner {
 			if (viewport.textModel !== selections.textModel) {
 				throw new TypeError("Stanza transpose dependencies must share one text model");
 			}
-			this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
+			this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
 		} catch (error) {
 			this.dispose();
 			throw error;
@@ -46,7 +46,7 @@ export class TransposeController extends DisposableOwner {
 
 registerEditorContribution({ id: "editor.contrib.transpose", install: context => {
 	if (context.kind !== "text") return;
-	context.own(new TransposeController(context.view.element, context.viewport, context.selections));
+	context.register(new TransposeController(context.view.element, context.viewport, context.selections));
 } });
 
 function readOperatingSystem(value: OperatingSystem | undefined): OperatingSystem {

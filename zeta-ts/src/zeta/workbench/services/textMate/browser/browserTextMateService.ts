@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type SyntaxWorkerFactory } from "../../../../editor/common/languages/syntax/syntaxService.js";
 import { type ITextMateService } from "../common/textMateService.js";
 import { type TextMateGrammarDefinition } from "../common/textMateGrammarRegistry.js";
@@ -7,8 +7,8 @@ import { BrowserTextMateGrammarService } from "./browserTextMateGrammarService.j
 import { createTextMateSyntaxWorkerFactory } from "./textMateSyntaxWorkerClient.js";
 
 /** Browser implementation of the Workbench TextMate service. */
-export class BrowserTextMateService extends DisposableOwner implements ITextMateService {
-	readonly grammars = this.own(new BrowserTextMateGrammarService());
+export class BrowserTextMateService extends Disposable implements ITextMateService {
+	readonly grammars = this._register(new BrowserTextMateGrammarService());
 	readonly scopeTheme: TextMateScopeThemeSource;
 	readonly mutableScopeTheme: TextMateScopeThemeModel | undefined;
 	readonly syntaxWorkerFactory: SyntaxWorkerFactory;
@@ -23,7 +23,7 @@ export class BrowserTextMateService extends DisposableOwner implements ITextMate
 			if (scopeTheme !== undefined && !isThemeSource(scopeTheme)) {
 				throw new TypeError("Browser TextMate scope theme must be a theme source");
 			}
-			this.mutableScopeTheme = scopeTheme === undefined ? this.own(new TextMateScopeThemeModel()) : undefined;
+			this.mutableScopeTheme = scopeTheme === undefined ? this._register(new TextMateScopeThemeModel()) : undefined;
 			this.scopeTheme = scopeTheme ?? this.mutableScopeTheme!;
 			this.syntaxWorkerFactory = createTextMateSyntaxWorkerFactory(this.grammars, this.scopeTheme);
 			for (const contribution of contributions) this.grammars.registerGrammar(contribution);

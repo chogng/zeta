@@ -1,19 +1,19 @@
 import "./media/debugBreakpointDecorations.css";
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type EditorLineGutterDecoration } from "../../../../editor/browser/viewparts/margin/lineGutterDecoration.js";
 import { type IDebugService } from "../../../services/debug/common/debugService.js";
 import { h } from "../../../../base/browser/dom.js";
 
 /** Workbench-owned projection of Debug breakpoints into the editor's generic gutter slot. */
-export class DebugBreakpointDecorationProvider extends DisposableOwner implements EditorLineGutterDecoration {
-	private readonly changeEmitter = this.own(new Emitter<void>());
+export class DebugBreakpointDecorationProvider extends Disposable implements EditorLineGutterDecoration {
+	private readonly changeEmitter = this._register(new Emitter<void>());
 	readonly onDidChange: Event<void> = this.changeEmitter.event;
 
 	constructor(private readonly debug: IDebugService, private readonly resource: URI) {
 		super();
-		this.own(debug.onDidChangeBreakpoints(() => this.changeEmitter.fire()));
+		this._register(debug.onDidChangeBreakpoints(() => this.changeEmitter.fire()));
 	}
 
 	create(ownerDocument: Document): HTMLElement {

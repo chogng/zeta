@@ -1,6 +1,6 @@
 import { Hover, type HoverContent } from "../../../base/browser/ui/hover/hover.js";
 import { addDisposableListener, isHTMLElement } from "../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { IConfigurationService } from "../../configuration/common/configurationService.js";
 import type { IContextMenuService } from "../../contextview/browser/contextMenu.js";
 import type { IContextViewService } from "../../contextview/browser/contextView.js";
@@ -10,7 +10,7 @@ const InstantHoverWindowMs = 200;
 const PointerHoverResumeDistance = 2;
 
 /** Browser implementation of the window-scoped Workbench Hover policy. */
-export class HoverService extends DisposableOwner implements IHoverService {
+export class HoverService extends Disposable implements IHoverService {
 	private readonly managedHovers = new Set<ManagedHover>();
 	private readonly configurationService: IConfigurationService;
 	private readonly contextViewService: IContextViewService;
@@ -26,7 +26,7 @@ export class HoverService extends DisposableOwner implements IHoverService {
 		this.configurationService = configurationService;
 		this.contextViewService = contextViewService;
 		const ownerDocument = contextViewService.container.ownerDocument;
-		this.own(addDisposableListener(ownerDocument, "pointerdown", (event) => {
+		this._register(addDisposableListener(ownerDocument, "pointerdown", (event) => {
 			if (isHTMLElement(event.target) && event.target.closest(".zeta-hover")) return;
 			this.pointerHoverSuppressed = true;
 			this.pointerActivationPosition = { x: event.clientX, y: event.clientY };
@@ -34,7 +34,7 @@ export class HoverService extends DisposableOwner implements IHoverService {
 			this.lastGroupId = undefined;
 			this.lastHideTime = 0;
 		}, true));
-		this.own(addDisposableListener(ownerDocument, "pointermove", (event) => {
+		this._register(addDisposableListener(ownerDocument, "pointermove", (event) => {
 			const activationPosition = this.pointerActivationPosition;
 			if (event.buttons !== 0 || !activationPosition) return;
 			const deltaX = event.clientX - activationPosition.x;
@@ -43,16 +43,16 @@ export class HoverService extends DisposableOwner implements IHoverService {
 			this.pointerHoverSuppressed = false;
 			this.pointerActivationPosition = undefined;
 		}, true));
-		this.own(contextMenuService.onDidShowContextMenu(() => {
+		this._register(contextMenuService.onDidShowContextMenu(() => {
 			this.contextMenuVisible = true;
 			this.hideHover();
 		}));
-		this.own(contextMenuService.onDidHideContextMenu(() => {
+		this._register(contextMenuService.onDidHideContextMenu(() => {
 			this.contextMenuVisible = false;
 		}));
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			for (const hover of [...this.managedHovers]) hover.dispose();
-		});
+		}));
 	}
 
 	setupHover(options: HoverSetupOptions): IManagedHover {
@@ -131,17 +131,17 @@ interface ManagedHoverOptions {
 	readonly onDispose: () => void;
 }
 
-class ManagedHover extends DisposableOwner implements IManagedHover {
+class ManagedHover extends Disposable implements IManagedHover {
 	readonly groupId: string | undefined;
 	private readonly hover: Hover;
 
 	constructor(options: ManagedHoverOptions) {
 		super();
 		this.groupId = options.groupId;
-		this.hover = this.own(options.hover);
-		this.own(this.hover.onDidShow(options.onDidShow));
-		this.own(this.hover.onDidHide(options.onDidHide));
-		this.defer(options.onDispose);
+		this.hover = this._register(options.hover);
+		this._register(this.hover.onDidShow(options.onDidShow));
+		this._register(this.hover.onDidHide(options.onDidHide));
+		this._register(toDisposable(options.onDispose));
 	}
 
 	get visible(): boolean {

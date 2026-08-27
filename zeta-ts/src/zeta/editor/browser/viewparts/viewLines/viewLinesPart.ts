@@ -1,5 +1,5 @@
 import './viewLines.css';
-import { DisposableOwner } from '../../../../base/common/lifecycle.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import { type EditorVisualLine, type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { type EditorLineRange } from '../../../common/viewModel.js';
 import { type ViewportData } from '../../../common/viewLayout/viewLinesViewportData.js';
@@ -23,7 +23,7 @@ export interface ViewLinesPartOptions {
 }
 
 /** Projects text and semantic tokens into the generic virtualized ViewLayer. */
-export class ViewLinesPart extends DisposableOwner {
+export class ViewLinesPart extends Disposable {
 	readonly domNode: HTMLDivElement;
 	private readonly model: TextModel;
 	private readonly readVisualProjection: () => EditorVisualLineProjection;
@@ -41,7 +41,7 @@ export class ViewLinesPart extends DisposableOwner {
 		this.bracketColorizationSource = options.bracketColorizationSource;
 		this.lineGutterDecoration = options.lineGutterDecoration;
 		this.textDirection = options.textDirection;
-		this.layer = this.own(new ViewLayer<RenderedLine>({
+		this.layer = this._register(new ViewLayer<RenderedLine>({
 			host: options.host,
 			readVisualProjection: options.readVisualProjection,
 			readProjectionRevision: options.readProjectionRevision,

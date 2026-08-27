@@ -3,7 +3,7 @@ import { ToolBar } from "../../../../base/browser/ui/toolbar/toolbar.js";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { DocumentCollaborationInvite } from "../../../common/services/documentCollaborationService.js";
 import type { DocumentCollaborationMember } from "../../../common/services/documentCollaborationService.js";
 import type { DocumentCollaborationRoomRole } from "../../../common/services/documentCollaborationService.js";
@@ -28,7 +28,7 @@ export interface CollaborationContributionOptions {
 }
 
 /** Browser contribution that exposes document collaboration without owning state or transport. */
-export class CollaborationContribution extends DisposableOwner {
+export class CollaborationContribution extends Disposable {
 	readonly element: HTMLDivElement;
 	private readonly toolbar: ToolBar;
 	private readonly status: HTMLSpanElement;
@@ -53,8 +53,8 @@ export class CollaborationContribution extends DisposableOwner {
 		element.setAttribute("aria-label", "Document collaboration");
 		this.element = element;
 		container.append(element);
-		this.defer(() => element.remove());
-		this.toolbar = this.own(new ToolBar(element, {
+		this._register(toDisposable(() => element.remove()));
+		this.toolbar = this._register(new ToolBar(element, {
 			contextMenuProvider: emptyCollaborationContextMenuProvider,
 			ariaLabel: "Document collaboration",
 			highlightToggledItems: true,

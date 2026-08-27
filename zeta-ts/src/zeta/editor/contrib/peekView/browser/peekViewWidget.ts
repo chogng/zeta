@@ -1,11 +1,11 @@
 import "./media/peekView.css";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type TextPosition } from "../../../common/core/text.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { h } from "../../../../base/browser/dom.js";
 
 /** A lifecycle-safe preview surface anchored to an editor position. */
-export class PeekViewWidget extends DisposableOwner {
+export class PeekViewWidget extends Disposable {
 	readonly element: HTMLElement;
 	private readonly body: HTMLDivElement;
 
@@ -23,8 +23,8 @@ export class PeekViewWidget extends DisposableOwner {
 		this.body.className = "stanza-editor-peek-view-body";
 		this.element.append(header, this.body);
 		viewport.element.append(this.element);
-		this.defer(() => this.element.remove());
-		this.own(viewport.onDidChangeLayout(() => this.position(anchor)));
+		this._register(toDisposable(() => this.element.remove()));
+		this._register(viewport.onDidChangeLayout(() => this.position(anchor)));
 		this.position(anchor);
 	}
 

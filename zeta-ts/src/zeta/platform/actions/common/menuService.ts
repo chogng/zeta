@@ -3,7 +3,7 @@ import {
 	type IAction,
 } from "../../../base/common/actions.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import { isCommandActionToggleInfo } from "../../action/common/action.js";
 import type {
 	ICommandService,
@@ -49,7 +49,7 @@ export interface IMenuService {
 	createMenu(
 		id: MenuId,
 		contextKeyService?: IContextKeyService,
-	): IMenu & Disposable;
+	): IMenu & IDisposable;
 
 	getMenuActions(
 		id: MenuId,
@@ -77,7 +77,7 @@ export class MenuService implements IMenuService {
 	createMenu(
 		id: MenuId,
 		contextKeyService: IContextKeyService = this.contextKeyService,
-	): IMenu & Disposable {
+	): IMenu & IDisposable {
 		return new Menu(id, this.commandService, contextKeyService);
 	}
 
@@ -96,8 +96,8 @@ export class MenuService implements IMenuService {
 	}
 }
 
-class Menu extends DisposableOwner implements IMenu {
-	private readonly _onDidChange = this.own(new Emitter<IMenuChangeEvent>());
+class Menu extends Disposable implements IMenu {
+	private readonly _onDidChange = this._register(new Emitter<IMenuChangeEvent>());
 	readonly onDidChange = this._onDidChange.event;
 	private readonly id: MenuId;
 	private readonly commandService: ICommandService;
@@ -114,7 +114,7 @@ class Menu extends DisposableOwner implements IMenu {
 		this.commandService = commandService;
 		this.contextKeyService = contextKeyService;
 		this.snapshot = new MenuInfoSnapshot(this.id);
-		this.own(MenusRegistry.onDidChangeMenu(
+		this._register(MenusRegistry.onDidChangeMenu(
 			(event: IMenuRegistryChangeEvent) => {
 				if (!this.snapshot.menuIds.has(event.menuId)) return;
 				this.snapshot.refresh();
@@ -125,7 +125,7 @@ class Menu extends DisposableOwner implements IMenu {
 				});
 			},
 		));
-		this.own(this.contextKeyService.onDidChangeContext((event) => {
+		this._register(this.contextKeyService.onDidChangeContext((event) => {
 			const isStructuralChange = event.affectsSome(
 				this.snapshot.structureContextKeys,
 			);
@@ -144,7 +144,7 @@ class Menu extends DisposableOwner implements IMenu {
 				isToggleChange,
 			});
 		}));
-		this.own(onDidChangeNls(() => {
+		this._register(onDidChangeNls(() => {
 			this._onDidChange.fire({
 				isStructuralChange: false,
 				isEnablementChange: false,

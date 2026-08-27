@@ -1,12 +1,12 @@
 import { Emitter } from "../../../base/common/event.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable } from "../../../base/common/lifecycle.js";
 import type { IMarketplaceService, MarketplaceInstalledPackage } from "../../marketplace/common/marketplaceService.js";
 import { decodeBase64, normalizeLocale, parseLanguagePackCatalog } from "../common/languagePackCatalog.js";
 import type { ILanguagePackService, LanguagePackCatalog, LanguagePackInfo, LanguagePackPackage } from "../common/languagePacksService.js";
 
 /** Browser client adapter that projects Marketplace localization capabilities. */
-export class MarketplaceLanguagePackService extends DisposableOwner implements ILanguagePackService {
-	private readonly _onDidChange = this.own(new Emitter<void>());
+export class MarketplaceLanguagePackService extends Disposable implements ILanguagePackService {
+	private readonly _onDidChange = this._register(new Emitter<void>());
 	private readonly builtinLocales: ReadonlySet<string>;
 	private readonly catalogsByLocale = new Map<string, LanguagePackCatalog>();
 	private marketplaceLocales = new Set<string>();
@@ -27,7 +27,7 @@ export class MarketplaceLanguagePackService extends DisposableOwner implements I
 			if (locale) this.catalogsByLocale.set(locale, { ...catalog, locale });
 		}
 		this.whenReady = this.refresh().catch(() => undefined);
-		this.own(marketplace.onDidChangeInstalled(() => {
+		this._register(marketplace.onDidChangeInstalled(() => {
 			void this.refresh().catch(() => undefined);
 		}));
 	}

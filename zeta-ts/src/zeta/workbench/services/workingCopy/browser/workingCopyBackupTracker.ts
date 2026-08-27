@@ -1,24 +1,24 @@
 import { disposableWindowTimeout } from "../../../../base/browser/scheduler.js";
-import { DisposableMap, DisposableOwner, DisposableSlot, DisposableStore, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { DisposableMap, Disposable, MutableDisposable, DisposableStore, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type IWorkingCopy, type IWorkingCopyService } from "../common/workingCopyService.js";
 import { type IWorkingCopyBackupService } from "../common/workingCopyBackupService.js";
 
 const BACKUP_DELAY_MS = 250;
 
 /** Tracks dirty working copies and maintains their durable crash backups. */
-export class WorkingCopyBackupTracker extends DisposableOwner {
-	private readonly tracked = this.own(new DisposableMap<IWorkingCopy, DisposableStore>());
-	private readonly timers = new Map<IWorkingCopy, DisposableSlot<IDisposable>>();
+export class WorkingCopyBackupTracker extends Disposable {
+	private readonly tracked = this._register(new DisposableMap<IWorkingCopy, DisposableStore>());
+	private readonly timers = new Map<IWorkingCopy, MutableDisposable<IDisposable>>();
 	private readonly queues = new Map<string, Promise<void>>();
 
 	constructor(private readonly workingCopies: IWorkingCopyService, private readonly backups: IWorkingCopyBackupService, private readonly ownerWindow: Window, private readonly onError: (error: unknown) => void = error => console.error("Failed to update working-copy backup", error)) {
 		super();
-		this.own(workingCopies.onDidRegister(copy => this.track(copy)));
-		this.own(workingCopies.onDidUnregister(copy => this.untrack(copy)));
+		this._register(workingCopies.onDidRegister(copy => this.track(copy)));
+		this._register(workingCopies.onDidUnregister(copy => this.untrack(copy)));
 		for (const copy of workingCopies.getAll()) this.track(copy);
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.timers.clear();
-		});
+		}));
 	}
 
 	flush(): Promise<void> {
@@ -28,7 +28,7 @@ export class WorkingCopyBackupTracker extends DisposableOwner {
 	private track(copy: IWorkingCopy): void {
 		if (this.tracked.has(copy)) return;
 		const listeners = new DisposableStore();
-		this.timers.set(copy, listeners.add(new DisposableSlot<IDisposable>()));
+		this.timers.set(copy, listeners.add(new MutableDisposable<IDisposable>()));
 		listeners.add(copy.onDidChangeContent(() => this.schedule(copy)));
 		listeners.add(copy.onDidChangeDirty(() => this.schedule(copy)));
 		this.tracked.set(copy, listeners);
@@ -46,10 +46,10 @@ export class WorkingCopyBackupTracker extends DisposableOwner {
 		this.cancel(copy);
 		const timer = this.timers.get(copy);
 		if (!timer) return;
-		timer.replace(disposableWindowTimeout(this.ownerWindow, () => {
+		timer.value = disposableWindowTimeout(this.ownerWindow, () => {
 			timer.clear();
 			void this.persist(copy).catch(this.onError);
-		}, BACKUP_DELAY_MS));
+		}, BACKUP_DELAY_MS);
 	}
 
 	private cancel(copy: IWorkingCopy): void {

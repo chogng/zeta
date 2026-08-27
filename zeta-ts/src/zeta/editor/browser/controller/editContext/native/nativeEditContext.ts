@@ -1,3 +1,4 @@
+import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import "./nativeEditContext.css";
 import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
@@ -61,17 +62,17 @@ export class NativeEditContext extends EditContext {
 	readonly nativeContext: NativeEditContextObject;
 	private readonly imeTextArea: HTMLTextAreaElement;
 
-	private readonly focusEmitter = this.own(new Emitter<void>());
-	private readonly blurEmitter = this.own(new Emitter<void>());
-	private readonly beforeInputEmitter = this.own(new Emitter<InputEvent>());
-	private readonly inputEmitter = this.own(new Emitter<InputEvent>());
-	private readonly textUpdateEmitter = this.own(new Emitter<EditContextTextUpdate>());
-	private readonly textFormatUpdateEmitter = this.own(new Emitter<EditContextTextFormatUpdate>());
-	private readonly selectEmitter = this.own(new Emitter<void>());
-	private readonly keydownEmitter = this.own(new Emitter<KeyboardEvent>());
-	private readonly compositionStartEmitter = this.own(new Emitter<EditContextCompositionEvent>());
-	private readonly compositionUpdateEmitter = this.own(new Emitter<EditContextCompositionEvent>());
-	private readonly compositionEndEmitter = this.own(new Emitter<EditContextCompositionEvent>());
+	private readonly focusEmitter = this._register(new Emitter<void>());
+	private readonly blurEmitter = this._register(new Emitter<void>());
+	private readonly beforeInputEmitter = this._register(new Emitter<InputEvent>());
+	private readonly inputEmitter = this._register(new Emitter<InputEvent>());
+	private readonly textUpdateEmitter = this._register(new Emitter<EditContextTextUpdate>());
+	private readonly textFormatUpdateEmitter = this._register(new Emitter<EditContextTextFormatUpdate>());
+	private readonly selectEmitter = this._register(new Emitter<void>());
+	private readonly keydownEmitter = this._register(new Emitter<KeyboardEvent>());
+	private readonly compositionStartEmitter = this._register(new Emitter<EditContextCompositionEvent>());
+	private readonly compositionUpdateEmitter = this._register(new Emitter<EditContextCompositionEvent>());
+	private readonly compositionEndEmitter = this._register(new Emitter<EditContextCompositionEvent>());
 	private connected = false;
 	private readOnlyState: boolean;
 	private shadowText = "";
@@ -153,16 +154,16 @@ export class NativeEditContext extends EditContext {
 		imeTextArea.readOnly = true;
 		imeTextArea.setAttribute("aria-hidden", "true");
 		(element as NativeEditContextElement).editContext = nativeContext;
-		if (options.ownerId !== undefined) this.own(NativeEditContextRegistry.register(options.ownerId, this));
-		this.own(NativeEditContextRegistry.register(element, this));
+		if (options.ownerId !== undefined) this._register(NativeEditContextRegistry.register(options.ownerId, this));
+		this._register(NativeEditContextRegistry.register(element, this));
 		container.append(element);
 		container.append(imeTextArea);
-		this.focusTracker = this.own(new FocusTracker(element, focused => this.handleElementFocusChange(focused)));
-		this.defer(() => {
+		this.focusTracker = this._register(new FocusTracker(element, focused => this.handleElementFocusChange(focused)));
+		this._register(toDisposable(() => {
 			(element as NativeEditContextElement).editContext = undefined;
 			element.remove();
 			imeTextArea.remove();
-		});
+		}));
 	}
 
 	get readOnly(): boolean {
@@ -182,25 +183,25 @@ export class NativeEditContext extends EditContext {
 		this.assertNotDisposed();
 		if (this.connected) return;
 		this.connected = true;
-		this.own(addDisposableListener<KeyboardEvent>(
+		this._register(addDisposableListener<KeyboardEvent>(
 			this.element,
 			"keydown",
 			event => this.keydownEmitter.fire(event),
 		));
-		this.own(addDisposableListener<KeyboardEvent>(
+		this._register(addDisposableListener<KeyboardEvent>(
 			this.imeTextArea,
 			"keydown",
 			event => this.keydownEmitter.fire(event),
 		));
-		this.own(addDisposableListener(this.imeTextArea, "blur", () => {
+		this._register(addDisposableListener(this.imeTextArea, "blur", () => {
 			if (this.imeFallbackFocused && this.imeTextArea.ownerDocument.activeElement !== this.element) {
 				this.imeFallbackFocused = false;
 				this.focusTracker.resume();
 				this.handleElementBlur();
 			}
 		}));
-		this.own(IME.onDidChange(enabled => this.handleImeStateChange(enabled)));
-		this.own(addDisposableListener<InputEvent>(
+		this._register(IME.onDidChange(enabled => this.handleImeStateChange(enabled)));
+		this._register(addDisposableListener<InputEvent>(
 			this.element,
 			"beforeinput",
 			event => {
@@ -229,54 +230,54 @@ export class NativeEditContext extends EditContext {
 				}
 			},
 		));
-		this.own(addDisposableListener<InputEvent>(
+		this._register(addDisposableListener<InputEvent>(
 			this.element,
 			"input",
 			event => this.inputEmitter.fire(event),
 		));
-		this.own(addDisposableListener(this.element, "select", () => this.selectEmitter.fire(undefined)));
-		this.own(addDisposableListener<ClipboardEvent>(
+		this._register(addDisposableListener(this.element, "select", () => this.selectEmitter.fire(undefined)));
+		this._register(addDisposableListener<ClipboardEvent>(
 			this.element,
 			"copy",
 			event => this.fireWillCopy(event, false),
 		));
-		this.own(addDisposableListener<ClipboardEvent>(
+		this._register(addDisposableListener<ClipboardEvent>(
 			this.element,
 			"cut",
 			event => this.fireWillCopy(event, true),
 		));
-		this.own(addDisposableListener<ClipboardEvent>(
+		this._register(addDisposableListener<ClipboardEvent>(
 			this.element,
 			"paste",
 			event => this.fireWillPaste(event),
 		));
-		this.own(editContextAddDisposableListener<NativeTextUpdateEvent>(
+		this._register(editContextAddDisposableListener<NativeTextUpdateEvent>(
 			this.nativeContext,
 			"textupdate",
 			event => this.handleTextUpdate(event),
 		));
-		this.own(editContextAddDisposableListener<NativeTextFormatUpdateEvent>(
+		this._register(editContextAddDisposableListener<NativeTextFormatUpdateEvent>(
 			this.nativeContext,
 			"textformatupdate",
 			event => this.handleTextFormatUpdate(event),
 		));
-		this.own(editContextAddDisposableListener<NativeCharacterBoundsUpdateEvent>(
+		this._register(editContextAddDisposableListener<NativeCharacterBoundsUpdateEvent>(
 			this.nativeContext,
 			"characterboundsupdate",
 			event => this.handleCharacterBoundsUpdate(event),
 		));
-		this.own(editContextAddDisposableListener<CompositionEvent>(
+		this._register(editContextAddDisposableListener<CompositionEvent>(
 			this.nativeContext,
 			"compositionstart",
 			event => this.handleCompositionStart(event),
 		));
-		this.own(editContextAddDisposableListener<CompositionEvent>(
+		this._register(editContextAddDisposableListener<CompositionEvent>(
 			this.nativeContext,
 			"compositionend",
 			event => this.handleCompositionEnd(event),
 		));
-		this.own(editContextAddDisposableListener(this.nativeContext, "selectionchange", () => this.selectEmitter.fire(undefined)));
-		this.own(editContextAddDisposableListener<CompositionEvent>(
+		this._register(editContextAddDisposableListener(this.nativeContext, "selectionchange", () => this.selectEmitter.fire(undefined)));
+		this._register(editContextAddDisposableListener<CompositionEvent>(
 			this.nativeContext,
 			"compositionupdate",
 			event => {

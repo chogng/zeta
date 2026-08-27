@@ -1,5 +1,5 @@
 import { SashSettingsBinding } from "../../../../base/browser/ui/sash/sash.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import { SashConfiguration } from "../common/sash.js";
 
@@ -7,7 +7,7 @@ const MinimumDragAreaSize = 4;
 const MaximumHoverFeedbackSize = 8;
 
 /** Projects persisted Workbench Sash preferences into one window. */
-export class SashSettingsController extends DisposableOwner {
+export class SashSettingsController extends Disposable {
 	private readonly configurationService: IConfigurationService;
 	private readonly binding: SashSettingsBinding;
 
@@ -17,8 +17,8 @@ export class SashSettingsController extends DisposableOwner {
 	) {
 		super();
 		this.configurationService = configurationService;
-		this.binding = this.own(new SashSettingsBinding(root));
-		this.own(configurationService.onDidChangeConfiguration((event) => {
+		this.binding = this._register(new SashSettingsBinding(root));
+		this._register(configurationService.onDidChangeConfiguration((event) => {
 			if (
 				event.affectsConfiguration(SashConfiguration.size) ||
 				event.affectsConfiguration(SashConfiguration.hoverDelay)

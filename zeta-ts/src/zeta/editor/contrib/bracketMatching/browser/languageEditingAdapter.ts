@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type EditorLanguageEditingAdapter, type EditorLanguageTypeCommand } from "../../../browser/view/viewController.js";
 import { type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
@@ -15,7 +15,7 @@ import { createLanguageEnterCommand } from "../common/enter.js";
 import { createLanguagePairBackspaceCommand, createLanguagePairTypeCommand } from "../common/pairEditing.js";
 
 /** Language-aware typing adapter selected by the bracket-matching contribution. */
-export class LanguageEditingAdapter extends DisposableOwner implements EditorLanguageEditingAdapter {
+export class LanguageEditingAdapter extends Disposable implements EditorLanguageEditingAdapter {
 	private readonly autoClosingTracker: LanguageAutoClosingTracker;
 	private readonly lexicalContext: LanguageLexicalContextSource;
 
@@ -25,8 +25,8 @@ export class LanguageEditingAdapter extends DisposableOwner implements EditorLan
 		if (!configurations || typeof configurations.getLanguageConfiguration !== "function") throw new TypeError("Stanza text input language requires a configuration source");
 		resolveEditorIndentationOptions(indentation);
 		if (lexicalContext && (lexicalContext.textModel !== textModel || lexicalContext.languageId !== languageId)) throw new TypeError("Stanza text input lexical context must match its model and language");
-		this.lexicalContext = lexicalContext ?? this.own(new LanguageLexicalContextIndex(textModel, languageId, configurations));
-		this.autoClosingTracker = this.own(new LanguageAutoClosingTracker(textModel, selections));
+		this.lexicalContext = lexicalContext ?? this._register(new LanguageLexicalContextIndex(textModel, languageId, configurations));
+		this.autoClosingTracker = this._register(new LanguageAutoClosingTracker(textModel, selections));
 	}
 
 	createTypeCommand(selections: TextSelectionSet, text: string): EditorLanguageTypeCommand | undefined {

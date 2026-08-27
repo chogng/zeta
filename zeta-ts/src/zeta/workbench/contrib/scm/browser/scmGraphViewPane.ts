@@ -4,7 +4,7 @@ import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from "../../../.
 import { appendIcon } from "../../../../base/browser/ui/icon/icon.js";
 import { IconLabel } from "../../../../base/browser/ui/iconlabel/iconlabel.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
-import { ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
+import { DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
 import { MenuWorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
 import { MenuId } from "../../../../platform/actions/common/actions.js";
@@ -36,8 +36,8 @@ export class ScmGraphViewPane extends ViewPane {
 	private readonly gitService: IGitService;
 	private readonly busyContext: IContextKey<boolean>;
 	private readonly graphElement: HTMLDivElement;
-	private readonly hovers = this.own(new ResettableDisposableGroup());
-	private readonly more = this.own(new ResettableDisposableGroup());
+	private readonly hovers = this._register(new DisposableStore());
+	private readonly more = this._register(new DisposableStore());
 	private page: GraphPage | undefined;
 	private head: GitHead | undefined;
 	private generation = 0;
@@ -60,16 +60,16 @@ export class ScmGraphViewPane extends ViewPane {
 		this.graphElement.className = "zeta-scm-graph";
 		this.graphElement.setAttribute("role", "status");
 		this.graphElement.setAttribute("aria-live", "polite");
-		this.own(addDisposableListener(this.graphElement, "scroll", () => {
+		this._register(addDisposableListener(this.graphElement, "scroll", () => {
 			this.renderRows();
 			if (this.graphElement.scrollTop + this.graphElement.clientHeight >= this.graphElement.scrollHeight - LoadAhead) void this.loadMore();
 		}));
 		this.contentElement.append(this.graphElement);
-		this.own(observeElementSize(this.graphElement, () => this.renderRows()));
-		this.own(fileIconThemeService.onDidFileIconThemeChange(() => this.renderRows()));
+		this._register(observeElementSize(this.graphElement, () => this.renderRows()));
+		this._register(fileIconThemeService.onDidFileIconThemeChange(() => this.renderRows()));
 		this.busyContext = GitGraphBusyContext.bindTo(contextKeyService);
-		this.defer(() => this.busyContext.reset());
-		const toolbar = this.own(new MenuWorkbenchToolBar(
+		this._register(toDisposable(() => this.busyContext.reset()));
+		const toolbar = this._register(new MenuWorkbenchToolBar(
 			this.headerActionsElement,
 			menuService,
 			contextMenuService,
@@ -77,7 +77,7 @@ export class ScmGraphViewPane extends ViewPane {
 			{ ariaLabel: "Git graph actions", menuOptions: { arg: this } },
 		));
 		toolbar.element.classList.add("zeta-scm-remote-actions");
-		this.own(this.gitService.onDidBecomeReady(() => void this.refresh()));
+		this._register(this.gitService.onDidBecomeReady(() => void this.refresh()));
 		void this.refresh();
 	}
 

@@ -1,20 +1,20 @@
 import "./media/symbolIcons.css";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { type DocumentSymbolService, type LanguageDocumentSymbol } from "../../documentSymbols/common/documentSymbols.js";
 import { h } from "../../../../base/browser/dom.js";
 
 /** Projects document-symbol kinds into small, feature-owned gutter icons. */
-export class SymbolIconsController extends DisposableOwner {
+export class SymbolIconsController extends Disposable {
 	private symbols: readonly LanguageDocumentSymbol[] = [];
 	private request: AbortController | undefined;
 
 	constructor(private readonly viewport: EditorViewport, private readonly service: DocumentSymbolService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza symbol icons failed", error)) {
 		super();
 		if (service.textModel !== viewport.textModel) throw new TypeError("Stanza symbol icon dependencies must share a text model");
-		this.own(viewport.onDidChangeLayout(() => this.render()));
-		this.own(viewport.textModel.onDidChange(() => void this.refresh()));
-		this.defer(() => this.request?.abort());
+		this._register(viewport.onDidChangeLayout(() => this.render()));
+		this._register(viewport.textModel.onDidChange(() => void this.refresh()));
+		this._register(toDisposable(() => this.request?.abort()));
 		void this.refresh();
 	}
 

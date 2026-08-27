@@ -4,7 +4,7 @@ import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { Dimension, type IDimension } from "../../../../base/browser/geometry.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { validateJsonValue } from "../../../../base/common/jsonValue.js";
-import { DisposableOwner, setDisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, setDisposableOwner, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { URI } from "../../../../base/common/uri.js";
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
@@ -128,10 +128,10 @@ interface EditorGroupEntry extends EditorTabDescriptor {
  * EditorPart owns group layout. This class owns only the behavior that remains
  * independent when the Part later contains multiple split groups.
  */
-export class EditorGroup extends DisposableOwner implements IEditorGroup {
+export class EditorGroup extends Disposable implements IEditorGroup {
 	readonly id: EditorGroupId;
 	readonly domNode: HTMLElement;
-	private readonly editorChangeEmitter = this.own(new Emitter<EditorGroupChangeEvent>());
+	private readonly editorChangeEmitter = this._register(new Emitter<EditorGroupChangeEvent>());
 	readonly onDidChangeEditors: Event<EditorGroupChangeEvent> = this.editorChangeEmitter.event;
 	private readonly contentDomNode: HTMLDivElement;
 	private readonly registry: EditorPaneRegistry;
@@ -210,17 +210,17 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 		this.domNode.setAttribute("aria-label", "Editor group");
 		container.append(this.domNode);
 		this.scopedContextKeyService = this.contextKeyService
-			? this.own(this.contextKeyService.createScoped(this.domNode))
+			? this._register(this.contextKeyService.createScoped(this.domNode))
 			: undefined;
 		if (this.scopedContextKeyService) {
-			this.own(new EditorGroupContextKeyController(
+			this._register(new EditorGroupContextKeyController(
 				this.scopedContextKeyService,
 				this,
 				this.registry,
 				this.languageResolver,
 			));
 		}
-		this.own(new DragAndDropObserver(this.domNode, {
+		this._register(new DragAndDropObserver(this.domNode, {
 			onDragOver: (event) => {
 				if (!options.dragAndDrop?.isDragging() || this.dragIsOverTitle(event)) return;
 				if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
@@ -241,11 +241,11 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 			onDragEnd: () => this.clearEditorDropFeedback(),
 		}));
 		if (options.onDidActivate) {
-			this.own(addDisposableListener(this.domNode, "focusin", () => {
+			this._register(addDisposableListener(this.domNode, "focusin", () => {
 				options.onDidActivate?.();
 			}));
 		}
-		this.titleControl = this.own(new EditorTitleControl(
+		this.titleControl = this._register(new EditorTitleControl(
 			this.domNode,
 			{
 				activate: (input) => {
@@ -271,11 +271,11 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 			} : undefined,
 			this.configurationService,
 		));
-		this.own(this.titleControl.onDidChangeHeight(() => this.layout(this.groupDimension)));
+		this._register(this.titleControl.onDidChangeHeight(() => this.layout(this.groupDimension)));
 		this.contentDomNode = h(ownerDocument, "div");
 		this.contentDomNode.className = "zeta-editor-group-content";
 		const shortcuts = options.keybindingService
-			? this.own(new EditorGroupWatermark(
+			? this._register(new EditorGroupWatermark(
 				this.contentDomNode,
 				options.keybindingService,
 			))
@@ -284,7 +284,7 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 			...options.welcome,
 			...(shortcuts ? { shortcuts: shortcuts.domNode } : {}),
 		};
-		this.welcome = this.own(new EditorWelcome(
+		this.welcome = this._register(new EditorWelcome(
 			this.contentDomNode,
 			welcomeOptions,
 		));
@@ -295,12 +295,12 @@ export class EditorGroup extends DisposableOwner implements IEditorGroup {
 			this.titleControl.domNode,
 			this.contentDomNode,
 		);
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.cancelPendingOpen();
 			for (const entry of this.entries) entry.paneInstance.dispose();
 			this.entries.length = 0;
-		});
-		this.defer(() => this.domNode.remove());
+		}));
+		this._register(toDisposable(() => this.domNode.remove()));
 		this.renderChrome();
 	}
 
@@ -814,7 +814,7 @@ function nextEditorInstanceId(): EditorInstanceId {
 	return `editor-instance-${++editorInstanceId}`;
 }
 
-class EditorOpenErrorPane extends DisposableOwner implements IEditorPane {
+class EditorOpenErrorPane extends Disposable implements IEditorPane {
 	readonly id = "workbench.editor.openError";
 	private root!: HTMLDivElement;
 	private title!: HTMLHeadingElement;
@@ -854,14 +854,14 @@ class EditorOpenErrorPane extends DisposableOwner implements IEditorPane {
 			alternativeButton.type = "button";
 			alternativeButton.textContent = this.alternative.label;
 			actions.append(alternativeButton);
-			this.own(addDisposableListener(alternativeButton, "click", this.alternative.run));
+			this._register(addDisposableListener(alternativeButton, "click", this.alternative.run));
 		}
 		actions.append(closeButton);
 		this.root.append(this.title, this.detail, actions);
 		parent.append(this.root);
-		this.own(addDisposableListener(this.retryButton, "click", this.onRetry));
-		this.own(addDisposableListener(closeButton, "click", this.onClose));
-		this.defer(() => this.root.remove());
+		this._register(addDisposableListener(this.retryButton, "click", this.onRetry));
+		this._register(addDisposableListener(closeButton, "click", this.onClose));
+		this._register(toDisposable(() => this.root.remove()));
 		this.render();
 	}
 
@@ -888,7 +888,7 @@ class EditorOpenErrorPane extends DisposableOwner implements IEditorPane {
 	}
 }
 
-class EditorPaneInstance extends DisposableOwner {
+class EditorPaneInstance extends Disposable {
 	readonly domNode: HTMLDivElement;
 	readonly signal: AbortSignal;
 	readonly panelId: string;
@@ -913,11 +913,11 @@ class EditorPaneInstance extends DisposableOwner {
 		this.domNode.setAttribute("role", "tabpanel");
 		this.domNode.setAttribute("aria-labelledby", this.tabId);
 		container.append(this.domNode);
-		this.defer(() => this.domNode.remove());
-		this.own(pane);
-		this.defer(() => pane.clearInput());
-		this.defer(() => pane.setVisible(EditorPaneVisibility.Hidden));
-		this.defer(() => abortController.abort());
+		this._register(toDisposable(() => this.domNode.remove()));
+		this._register(pane);
+		this._register(toDisposable(() => pane.clearInput()));
+		this._register(toDisposable(() => pane.setVisible(EditorPaneVisibility.Hidden)));
+		this._register(toDisposable(() => abortController.abort()));
 	}
 
 	setVisible(visibility: EditorPaneVisibility): void {
@@ -928,8 +928,8 @@ class EditorPaneInstance extends DisposableOwner {
 	observeWorkingCopy(listener: () => void): void {
 		const workingCopy = this.pane.workingCopy;
 		if (!workingCopy) return;
-		this.own(workingCopy.onDidChangeDirty(listener));
-		this.own(workingCopy.onDidChangeExternalChange(listener));
+		this._register(workingCopy.onDidChangeDirty(listener));
+		this._register(workingCopy.onDidChangeExternalChange(listener));
 	}
 }
 

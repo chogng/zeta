@@ -1,13 +1,13 @@
 import "./media/fontZoom.css";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 export interface FontZoomControllerOptions { readonly baseFontSize?: number; readonly baseLineHeight?: number; readonly initialScale?: number; }
 
 /** Owns per-editor font zoom state and invalidates browser measurements after each change. */
-export class FontZoomController extends DisposableOwner {
+export class FontZoomController extends Disposable {
 	private readonly baseLineHeight: number;
 	private readonly baseFontSize: number | undefined;
 	private scale: number;
@@ -18,7 +18,7 @@ export class FontZoomController extends DisposableOwner {
 		this.baseFontSize = options.baseFontSize === undefined ? undefined : readPositive(options.baseFontSize, "baseFontSize");
 		this.scale = readScale(options.initialScale ?? 1);
 		this.apply();
-		this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event), true));
+		this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event), true));
 	}
 
 	get zoomScale(): number { return this.scale; }
@@ -51,6 +51,6 @@ registerEditorContribution({
 	id: "editor.contrib.fontZoom",
 	install: context => {
 		if (context.kind !== "text") return;
-		context.own(new FontZoomController(context.view.element, context.viewport, { baseFontSize: context.options.fontSize, initialScale: context.options.fontZoom?.initialScale }));
+		context.register(new FontZoomController(context.view.element, context.viewport, { baseFontSize: context.options.fontSize, initialScale: context.options.fontZoom?.initialScale }));
 	},
 });

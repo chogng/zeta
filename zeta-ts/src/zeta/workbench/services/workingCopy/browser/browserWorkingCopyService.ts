@@ -1,16 +1,16 @@
 import { Emitter } from "../../../../base/common/event.js";
-import { DisposableMap, DisposableOwner, toDisposable } from "../../../../base/common/lifecycle.js";
+import { DisposableMap, Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { getOrSet } from "../../../../base/common/map.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type IWorkingCopy, type IWorkingCopyService } from "../common/workingCopyService.js";
 
 /** Browser registry for editor-domain working copies. */
-export class BrowserWorkingCopyService extends DisposableOwner implements IWorkingCopyService {
+export class BrowserWorkingCopyService extends Disposable implements IWorkingCopyService {
 	private readonly copies = new Map<string, Set<IWorkingCopy>>();
-	private readonly dirtySubscriptions = this.own(new DisposableMap<IWorkingCopy>());
-	private readonly _onDidRegister = this.own(new Emitter<IWorkingCopy>());
-	private readonly _onDidUnregister = this.own(new Emitter<IWorkingCopy>());
-	private readonly _onDidChangeDirty = this.own(new Emitter<void>());
+	private readonly dirtySubscriptions = this._register(new DisposableMap<IWorkingCopy>());
+	private readonly _onDidRegister = this._register(new Emitter<IWorkingCopy>());
+	private readonly _onDidUnregister = this._register(new Emitter<IWorkingCopy>());
+	private readonly _onDidChangeDirty = this._register(new Emitter<void>());
 	private lastHasDirtyWorkingCopies = false;
 
 	readonly onDidRegister = this._onDidRegister.event;
@@ -19,7 +19,7 @@ export class BrowserWorkingCopyService extends DisposableOwner implements IWorki
 
 	constructor() {
 		super();
-		this.defer(() => this.copies.clear());
+		this._register(toDisposable(() => this.copies.clear()));
 	}
 
 	register(workingCopy: IWorkingCopy): ReturnType<typeof toDisposable> {

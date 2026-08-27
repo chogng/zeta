@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { validateDocumentSelection } from "../../../common/core/documentSelection.js";
 import { freezeDocumentNode, type DocumentNode } from "../../../common/model/document.js";
 import { DocumentSchema } from "../../../common/model/documentSchema.js";
@@ -30,8 +30,8 @@ export interface DocumentCollaborationSynchronizationChange {
  * in flight, later transactions are buffered, and remote updates rebase the
  * combined local intent before the next submission is issued.
  */
-export class DocumentCollaborationSynchronizer extends DisposableOwner {
-	private readonly changeEmitter = this.own(new Emitter<DocumentCollaborationSynchronizationChange>());
+export class DocumentCollaborationSynchronizer extends Disposable {
+	private readonly changeEmitter = this._register(new Emitter<DocumentCollaborationSynchronizationChange>());
 	private _canonicalDocument: DocumentNode;
 	private _document: DocumentNode;
 	private _inFlight: DocumentCollaborationEnvelope | undefined;

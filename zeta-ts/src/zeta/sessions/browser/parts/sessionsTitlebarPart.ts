@@ -32,10 +32,10 @@ export class SessionsTitlebarPart extends WorkbenchPart {
 		newSession.className = "zeta-sessions-button zeta-sessions-titlebar-new-session";
 		newSession.textContent = "New session";
 		this.contentDomNode.append(returnButton, backButton, forwardButton, title, newSession);
-		this.own(addDisposableListener(returnButton, "click", () => delegate.returnToWorkbench()));
-		this.own(addDisposableListener(backButton, "click", () => viewService.navigateBack()));
-		this.own(addDisposableListener(forwardButton, "click", () => viewService.navigateForward()));
-		this.own(addDisposableListener(newSession, "click", () => {
+		this._register(addDisposableListener(returnButton, "click", () => delegate.returnToWorkbench()));
+		this._register(addDisposableListener(backButton, "click", () => viewService.navigateBack()));
+		this._register(addDisposableListener(forwardButton, "click", () => viewService.navigateForward()));
+		this._register(addDisposableListener(newSession, "click", () => {
 			viewService.openNewSession("New code session");
 			delegate.focusSessions();
 		}));
@@ -48,7 +48,7 @@ export class SessionsTitlebarPart extends WorkbenchPart {
 				: selection?.kind === "untitled" ? selection.session.title.trim() || profile.label : profile.label;
 			title.title = title.textContent;
 		};
-		this.own(viewService.onDidChange(updateNavigation));
+		this._register(viewService.onDidChange(updateNavigation));
 		updateNavigation();
 	}
 }

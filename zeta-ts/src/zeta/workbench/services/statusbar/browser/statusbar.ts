@@ -1,6 +1,6 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import type { Icon } from "../../../../base/common/icon.js";
-import { DisposableOwner, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 
 /** The side of the status bar that owns an entry. */
@@ -79,9 +79,9 @@ interface IStoredStatusbarEntry extends IStatusbarEntryItem {
 }
 
 /** Default window-scoped status bar entry service. */
-export class StatusbarService extends DisposableOwner
+export class StatusbarService extends Disposable
 	implements IStatusbarService {
-	private readonly _onDidChangeEntries = this.own(new Emitter<void>());
+	private readonly _onDidChangeEntries = this._register(new Emitter<void>());
 	private readonly entries = new Map<string, IStoredStatusbarEntry>();
 	private nextOrder = 0;
 
@@ -89,9 +89,9 @@ export class StatusbarService extends DisposableOwner
 
 	constructor() {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.entries.clear();
-		});
+		}));
 	}
 
 	addEntry(
@@ -158,7 +158,7 @@ export class StatusbarService extends DisposableOwner
 	}
 }
 
-class StatusbarEntryAccessor extends DisposableOwner
+class StatusbarEntryAccessor extends Disposable
 	implements IStatusbarEntryAccessor {
 	private readonly _update: (entry: IStatusbarEntry) => void;
 	private active = true;
@@ -169,10 +169,10 @@ class StatusbarEntryAccessor extends DisposableOwner
 	) {
 		super();
 		this._update = update;
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.active = false;
 			remove();
-		});
+		}));
 	}
 
 	update(entry: IStatusbarEntry): void {

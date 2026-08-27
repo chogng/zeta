@@ -1,4 +1,4 @@
-import { DisposableOwner, ResettableDisposableGroup } from "../../base/common/lifecycle.js";
+import { Disposable, DisposableStore } from "../../base/common/lifecycle.js";
 import { assertDefined } from "../../base/common/types.js";
 import { parseUserColorTheme } from "../../platform/theme/common/userColorTheme.js";
 import { type IUserThemeFileList, type IUserThemeFilesApi, validateUserThemeFileList } from "../../platform/theme/common/userThemeFiles.js";
@@ -6,10 +6,10 @@ import { WorkbenchThemesRegistry } from "../common/theme.js";
 import { type IUserThemeDeleteResult, type IUserThemeLoadIssue, type IUserThemeSaveResult, type IUserThemeService, type IUserThemeSource } from "../common/userThemes.js";
 
 /** Electron-backed user theme collection with isolated registration and writes. */
-export class ElectronUserThemeService extends DisposableOwner implements IUserThemeService {
+export class ElectronUserThemeService extends Disposable implements IUserThemeService {
 	readonly available = true;
 	private readonly api: IUserThemeFilesApi;
-	private readonly registrations = this.own(new ResettableDisposableGroup());
+	private readonly registrations = this._register(new DisposableStore());
 	private readonly contents = new Map<string, string>();
 	private _directory: string | undefined;
 	private sources: readonly IUserThemeSource[] = [];

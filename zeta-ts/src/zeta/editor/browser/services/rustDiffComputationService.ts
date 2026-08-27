@@ -1,10 +1,10 @@
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable } from "../../../base/common/lifecycle.js";
 import type { DiffApiHunk, DiffApiRange, DiffApiResult, DiffApiRow, IDiffApi } from "../../../platform/diff/common/diffApi.js";
 import type { DiffComputationRequest, IDiffComputationService } from "../../common/diff/diffComputationService.js";
 import { LineDiffKind, type DiffRange, type LineDiff, type LineDiffHunk, type LineDiffRow } from "../../common/diff/lineDiff.js";
 
 /** Adapts the Rust diff projection to the editor's zero-based UTF-16 line model. */
-export class RustDiffComputationService extends DisposableOwner implements IDiffComputationService {
+export class RustDiffComputationService extends Disposable implements IDiffComputationService {
 
 	constructor(private readonly api: IDiffApi) {
 		super();

@@ -4,7 +4,7 @@ import { JSDOM } from "jsdom";
 import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
 import type { IAction } from "../../../base/common/actions.js";
 import { Emitter } from "../../../base/common/event.js";
-import { DisposableStore } from "../../../base/common/lifecycle.js";
+import { DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
 import type { IViewPaneOptions, PartTitleProjection } from "../../../workbench/browser/parts/views/viewPane.js";
 import {
 	ContextKeyService,
@@ -147,7 +147,7 @@ function createLayoutHarness(
 	const disposables = new DisposableStore();
 	const container = existingContainer ?? h(ownerDocument, "main");
 	ownerDocument.body.append(container);
-	disposables.defer(() => container.remove());
+	disposables.add(toDisposable(() => container.remove()));
 
 	const parts = new Map<WorkbenchPartId, WorkbenchPartInstance>();
 	let editor: EditorPartInstance | undefined;

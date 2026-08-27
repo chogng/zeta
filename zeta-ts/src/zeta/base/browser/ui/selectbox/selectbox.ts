@@ -1,5 +1,5 @@
 import { Emitter } from "../../../common/event.js";
-import { DisposableOwner } from "../../../common/lifecycle.js";
+import { Disposable } from "../../../common/lifecycle.js";
 import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
 import { addDisposableListener, isHTMLElement, stopEvent, h } from "../../dom.js";
 import { focusPreservingScroll } from "../../focus.js";
@@ -35,11 +35,11 @@ export interface SelectBoxSelection {
 let selectBoxId = 0;
 
 /** A keyboard-accessible custom select backed by an anchored Dropdown. */
-export class SelectBox extends DisposableOwner {
+export class SelectBox extends Disposable {
 	readonly element: HTMLDivElement;
 	private readonly dropdown: Dropdown;
 	private readonly list: HTMLDivElement;
-	private readonly _onDidSelect = this.own(new Emitter<SelectBoxSelection>());
+	private readonly _onDidSelect = this._register(new Emitter<SelectBoxSelection>());
 	readonly onDidSelect = this._onDidSelect.event;
 	private _options: readonly SelectOption[] = [];
 	private _selectedIndex = -1;
@@ -57,7 +57,7 @@ export class SelectBox extends DisposableOwner {
 		list.setAttribute("role", "listbox");
 		list.tabIndex = -1;
 
-		const dropdown = this.own(new Dropdown(container, {
+		const dropdown = this._register(new Dropdown(container, {
 			label: "",
 			content: list,
 			ariaLabel: options.ariaLabel,
@@ -76,25 +76,25 @@ export class SelectBox extends DisposableOwner {
 		setAriaAttribute(dropdown.button, "controls", list.id);
 		setAriaAttribute(dropdown.button, "autocomplete", "none");
 
-		this.own(dropdown.onDidChangeVisibility(({ visible }) => {
+		this._register(dropdown.onDidChangeVisibility(({ visible }) => {
 			if (!visible) return;
 			this.setActiveIndex(this._selectedIndex);
 			this.focusActiveOption();
 		}));
-		this.own(addDisposableListener(list, "click", (event) => {
+		this._register(addDisposableListener(list, "click", (event) => {
 			const index = this.optionIndexFromTarget(event.target);
 			if (index === undefined) return;
 			this.commitSelection(index);
 		}));
-		this.own(addDisposableListener(list, "pointermove", (event) => {
+		this._register(addDisposableListener(list, "pointermove", (event) => {
 			const index = this.optionIndexFromTarget(event.target);
 			if (index === undefined || this._options[index]?.disabled) return;
 			this.setActiveIndex(index);
 		}));
-		this.own(addDisposableListener(list, "keydown", (event) => {
+		this._register(addDisposableListener(list, "keydown", (event) => {
 			this.onListKeyDown(event);
 		}));
-		this.own(addDisposableListener(dropdown.button, "keydown", (event) => {
+		this._register(addDisposableListener(dropdown.button, "keydown", (event) => {
 			if (event.key === "Home" || event.key === "End") {
 				stopEvent(event);
 				dropdown.show();

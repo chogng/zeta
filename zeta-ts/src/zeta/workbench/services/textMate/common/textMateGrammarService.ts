@@ -1,6 +1,6 @@
 import { isCancellationError } from "../../../../base/common/cancellation.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner, DisposableStore, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { materializeTextMateGrammarCatalog, TextMateGrammarCatalogModel, type TextMateGrammarCatalog, type TextMateGrammarCatalogSource } from "./textMateGrammarCatalog.js";
 import { TextMateGrammarRegistry, type TextMateGrammarDefinition, type TextMateGrammarRegistration, type TextMateGrammarRegistrySnapshot } from "./textMateGrammarRegistry.js";
 
@@ -23,11 +23,11 @@ export interface PreparedTextMateGrammars {
 }
 
 /** Owns TextMate contributions and publishes their latest complete transferable catalog. */
-export class TextMateGrammarService extends DisposableOwner implements ITextMateGrammarService {
-	private readonly registry = this.own(new TextMateGrammarRegistry());
-	private readonly catalogs = this.own(new TextMateGrammarCatalogModel());
-	private readonly failureEmitter = this.own(new Emitter<TextMateGrammarCatalogFailure>());
-	private readonly registrations = this.own(new DisposableStore());
+export class TextMateGrammarService extends Disposable implements ITextMateGrammarService {
+	private readonly registry = this._register(new TextMateGrammarRegistry());
+	private readonly catalogs = this._register(new TextMateGrammarCatalogModel());
+	private readonly failureEmitter = this._register(new Emitter<TextMateGrammarCatalogFailure>());
+	private readonly registrations = this._register(new DisposableStore());
 	private materialization: Promise<TextMateGrammarCatalog> = Promise.resolve(this.catalogs.currentCatalog);
 	private materializationController: AbortController | undefined;
 	private preparedCatalog: TextMateGrammarCatalog | undefined;
@@ -38,11 +38,11 @@ export class TextMateGrammarService extends DisposableOwner implements ITextMate
 
 	constructor() {
 		super();
-		this.own(this.registry.onDidChange(snapshot => this.scheduleMaterialization(snapshot)));
-		this.defer(() => {
+		this._register(this.registry.onDidChange(snapshot => this.scheduleMaterialization(snapshot)));
+		this._register(toDisposable(() => {
 			this.materializationController?.abort(new Error("TextMate grammar service disposed"));
 			this.materializationController = undefined;
-		});
+		}));
 	}
 
 	get currentCatalog(): TextMateGrammarCatalog {

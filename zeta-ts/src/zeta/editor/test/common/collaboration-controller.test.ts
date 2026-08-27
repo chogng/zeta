@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable } from "../../../base/common/lifecycle.js";
 import { TextModel } from "../../common/model/textModel.js";
 import type { DocumentNode } from "../../common/model/document.js";
 import { createDefaultDocumentSchema, type DocumentSchema } from "../../common/model/documentSchema.js";
@@ -182,11 +182,11 @@ async function flushMicrotasks(): Promise<void> {
 	await Promise.resolve();
 }
 
-class FakeDocumentCollaborationConnection extends DisposableOwner implements DocumentCollaborationConnection {
-	private readonly updateEmitter = this.own(new Emitter<DocumentCollaborationRemoteEnvelope>());
-	private readonly snapshotEmitter = this.own(new Emitter<DocumentCollaborationSnapshot>());
-	private readonly presenceEmitter = this.own(new Emitter<readonly DocumentCollaborationPresence[]>());
-	private readonly failureEmitter = this.own(new Emitter<Error>());
+class FakeDocumentCollaborationConnection extends Disposable implements DocumentCollaborationConnection {
+	private readonly updateEmitter = this._register(new Emitter<DocumentCollaborationRemoteEnvelope>());
+	private readonly snapshotEmitter = this._register(new Emitter<DocumentCollaborationSnapshot>());
+	private readonly presenceEmitter = this._register(new Emitter<readonly DocumentCollaborationPresence[]>());
+	private readonly failureEmitter = this._register(new Emitter<Error>());
 
 	readonly roomId = "stanza-test-room";
 	readonly clientId = "client-a";

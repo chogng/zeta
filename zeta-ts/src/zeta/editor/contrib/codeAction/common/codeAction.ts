@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type TextRange } from "../../../common/core/text.js";
 import { type LanguageDiagnostic } from "../../../common/languages/languageResults.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
@@ -31,7 +31,7 @@ export interface LanguageCodeActionProvider extends LanguageFeatureProviderMetad
 }
 
 /** Collects code actions and keeps edit application in the editor command layer. */
-export class CodeActionService extends DisposableOwner {
+export class CodeActionService extends Disposable {
 	constructor(private readonly model: TextModel, private readonly resource: URI, private readonly providers: LanguageFeatureProviderRegistry<LanguageCodeActionProvider>) {
 		super();
 	}

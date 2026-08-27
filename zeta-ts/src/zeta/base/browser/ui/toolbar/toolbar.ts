@@ -1,7 +1,7 @@
 import type { IContextMenuProvider } from "../../contextmenu.js";
 import type { IAction } from "../../../common/actions.js";
 import { Separator } from "../../../common/actions.js";
-import { DisposableOwner } from "../../../common/lifecycle.js";
+import { Disposable } from "../../../common/lifecycle.js";
 import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
 import { ActionBar, type ActionBarOrientation, type ActionViewItemProvider } from "../actionbar/actionbar.js";
 import type { ActionViewItemOptions } from "../actionbar/actionViewItems.js";
@@ -33,7 +33,7 @@ export type ToolBarPresentation = "default" | "inherit-foreground";
  * Callers own action classification. The toolbar owns the synthetic More
  * Actions item and delegates its secondary menu to the supplied provider.
  */
-export class ToolBar extends DisposableOwner {
+export class ToolBar extends Disposable {
 	readonly element: HTMLDivElement;
 	private readonly actionBar: ActionBar;
 	private readonly moreActions = new MoreActionsAction();
@@ -44,7 +44,7 @@ export class ToolBar extends DisposableOwner {
 		super();
 		this.moreActionsPlacement = options.moreActionsPlacement;
 		const actionViewItemOptions: ActionViewItemOptions = { hoverAnchorPosition: options.hoverAnchorPosition };
-		this.actionBar = this.own(new ActionBar(container, {
+		this.actionBar = this._register(new ActionBar(container, {
 			ariaLabel: options.ariaLabel,
 			orientation: options.orientation,
 			highlightToggledItems: options.highlightToggledItems,

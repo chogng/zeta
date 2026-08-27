@@ -1,5 +1,5 @@
 import { h } from '../../../../base/browser/dom.js';
-import { DisposableOwner } from '../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 
 export interface SettingsTreeIndicatorsState {
 	readonly isModified: boolean;
@@ -7,7 +7,7 @@ export interface SettingsTreeIndicatorsState {
 }
 
 /** Projects persistent Settings state into a stable visible and accessible label. */
-export class SettingsTreeIndicatorsLabel extends DisposableOwner {
+export class SettingsTreeIndicatorsLabel extends Disposable {
 	public readonly domNode: HTMLSpanElement;
 	private readonly labelDomNode: HTMLSpanElement;
 
@@ -20,7 +20,7 @@ export class SettingsTreeIndicatorsLabel extends DisposableOwner {
 		this.labelDomNode.className = 'zeta-settings-indicator-label';
 		this.domNode.append(this.labelDomNode);
 		container.append(this.domNode);
-		this.defer(() => this.domNode.remove());
+		this._register(toDisposable(() => this.domNode.remove()));
 	}
 
 	public update(state: SettingsTreeIndicatorsState): void {

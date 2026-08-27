@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type LanguageCharacterPair } from "../../../common/languages/languageConfiguration.js";
 import { type LanguageAutoClosingAction, type LanguageAutoClosingTrust } from "./pairEditing.js";
@@ -20,7 +20,7 @@ interface AutoClosingEntry {
  * actions committed by that controller and dispose the tracker before either
  * borrowed dependency.
  */
-export class LanguageAutoClosingTracker extends DisposableOwner implements LanguageAutoClosingTrust {
+export class LanguageAutoClosingTracker extends Disposable implements LanguageAutoClosingTrust {
 	private entries: AutoClosingEntry[] = [];
 
 	constructor(private readonly model: TextModel, private readonly selections: EditorSelectionController) {
@@ -29,12 +29,12 @@ export class LanguageAutoClosingTracker extends DisposableOwner implements Langu
 			this.dispose();
 			throw new TypeError("Language auto-closing dependencies must share one text model");
 		}
-		this.own(model.onDidChange(() => this.pruneInvalidEntries()));
-		this.own(selections.onDidChange(() => this.pruneInvalidEntries()));
-		this.defer(() => {
+		this._register(model.onDidChange(() => this.pruneInvalidEntries()));
+		this._register(selections.onDidChange(() => this.pruneInvalidEntries()));
+		this._register(toDisposable(() => {
 			for (const entry of this.entries) this.disposeEntry(entry);
 			this.entries = [];
-		});
+		}));
 	}
 
 	record(actions: readonly LanguageAutoClosingAction[], committedModelVersion: number): void {

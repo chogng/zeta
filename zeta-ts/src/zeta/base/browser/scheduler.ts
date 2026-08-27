@@ -1,4 +1,4 @@
-import { DisposableOwner, DisposableSlot, type IDisposable, toDisposable } from "../common/lifecycle.js";
+import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../common/lifecycle.js";
 
 export interface WindowIdleOptions {
 	readonly timeoutMs?: number;
@@ -148,8 +148,8 @@ export function disposableWindowInterval(
 }
 
 /** Coalesces repeated schedule calls into one animation-frame callback. */
-export class AnimationFrameScheduler extends DisposableOwner {
-	private readonly pending = this.own(new DisposableSlot<IDisposable>());
+export class AnimationFrameScheduler extends Disposable {
+	private readonly pending = this._register(new MutableDisposable<IDisposable>());
 
 	constructor(
 		readonly targetWindow: Window,
@@ -164,13 +164,13 @@ export class AnimationFrameScheduler extends DisposableOwner {
 
 	schedule(): void {
 		if (this.scheduled) return;
-		this.pending.replace(scheduleAtNextAnimationFrame(
+		this.pending.value = scheduleAtNextAnimationFrame(
 			this.targetWindow,
 			() => {
 				this.pending.clear();
 				this.callback();
 			},
-		));
+		);
 	}
 
 	cancel(): void {

@@ -1,3 +1,4 @@
+import { toDisposable } from "../../../base/common/lifecycle.js";
 import "./paneCompositePart.css";
 import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
 import type { IDimension } from "../../../base/browser/geometry.js";
@@ -70,7 +71,7 @@ export class PaneCompositePart extends CompositePart {
 		this.activeCompositeContext = options.contextKeyService
 			? activeCompositeContextKeys[options.location].bindTo(options.contextKeyService)
 			: undefined;
-		this.defer(() => this.activeCompositeContext?.reset());
+		this._register(toDisposable(() => this.activeCompositeContext?.reset()));
 		this.storageService = options.storageService;
 		this.location = options.location;
 		const ownerDocument = container.ownerDocument;
@@ -80,7 +81,7 @@ export class PaneCompositePart extends CompositePart {
 		this.titleDomNode.classList.add("zeta-pane-composite-title");
 		this.titleContentDomNode = h(ownerDocument, "div");
 		this.titleContentDomNode.className = "zeta-pane-composite-title-content";
-		this.compositeBar = this.own(new CompositeBar(this.titleContentDomNode, {
+		this.compositeBar = this._register(new CompositeBar(this.titleContentDomNode, {
 			viewDescriptorService: options.viewDescriptorService,
 			localizationService: options.localizationService,
 			location: options.location,
@@ -89,7 +90,7 @@ export class PaneCompositePart extends CompositePart {
 			contextMenuProvider: options.compositeBarContextMenuProvider,
 			containerFilter: options.compositeBarContainerFilter,
 		}));
-		if (options.localizationService) this.own(options.localizationService.onDidChange(() => {
+		if (options.localizationService) this._register(options.localizationService.onDidChange(() => {
 			this.domNode.setAttribute("aria-label", localize(options.localizationService, options.ariaLabelKey, options.ariaLabel));
 			this.compositeBar.setAriaLabel(localize(options.localizationService, options.viewsAriaLabelKey, options.viewsAriaLabel));
 		}));
@@ -104,7 +105,7 @@ export class PaneCompositePart extends CompositePart {
 		this.titleDomNode.append(this.titleContentDomNode, this.titleActionsSlotDomNode);
 
 		if (options.titleActions) {
-			const actions = this.own(new MenuWorkbenchToolBar(
+			const actions = this._register(new MenuWorkbenchToolBar(
 				this.partTitleActionsDomNode,
 				options.titleActions.menuService,
 				options.titleActions.contextMenuProvider,

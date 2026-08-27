@@ -19,7 +19,7 @@ export class DecorationsPart extends DynamicViewOverlay {
 	private readonly model: TextModel;
 	private readonly decorationSources: readonly DecorationSource[];
 	private readonly decorationSnapshots = new Map<DecorationSource, readonly ResolvedDecoration[]>();
-	private readonly changeEmitter = this.own(new Emitter<void>());
+	private readonly changeEmitter = this._register(new Emitter<void>());
 	private decorationLineIndex = new DecorationLineIndex([]);
 	private markerRevision = 0;
 
@@ -29,12 +29,12 @@ export class DecorationsPart extends DynamicViewOverlay {
 		super(context);
 		this.model = model;
 		this.decorationSources = Object.freeze([...decorationSources]);
-		this.own(this.model.onDidChange(() => {
+		this._register(this.model.onDidChange(() => {
 			this.markerRevision += 1;
 		}));
 		for (const source of this.decorationSources) {
 			this.decorationSnapshots.set(source, source.decorations);
-			this.own(source.onDidChange(() => {
+			this._register(source.onDidChange(() => {
 				this.decorationSnapshots.set(source, source.decorations);
 				this.rebuildDecorationLineIndex();
 				this.changeEmitter.fire();

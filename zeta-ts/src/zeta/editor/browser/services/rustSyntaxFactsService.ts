@@ -1,6 +1,6 @@
 import { VSBuffer } from "../../../base/common/buffer.js";
 import { raceCancellation } from "../../../base/common/cancellation.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { ISyntaxApi, SyntaxAnalyzeResult, SyntaxDiagnostic, SyntaxSelectionRangesResult, SyntaxSymbol, SyntaxToken } from "../../../platform/syntax/common/syntaxApi.js";
 import { type LanguageDocumentSymbol, type LanguageDocumentSymbolProvider } from "../../contrib/documentSymbols/common/documentSymbols.js";
 import { TextPosition, TextRange, type TextSnapshot } from "../../common/core/text.js";
@@ -22,14 +22,14 @@ interface CachedSyntaxFacts {
  * This browser adapter owns no editor state: callers retain their own result stores and use the
  * projected facts only while the captured snapshot remains current.
  */
-export class RustSyntaxFactsService extends DisposableOwner {
+export class RustSyntaxFactsService extends Disposable {
 	private cached: CachedSyntaxFacts | undefined;
 
 	constructor(private readonly syntax: ISyntaxApi) {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.cached = undefined;
-		});
+		}));
 	}
 
 	async analyze(languageId: string, snapshot: TextSnapshot, signal: AbortSignal): Promise<SyntaxAnalyzeResult | undefined> {

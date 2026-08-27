@@ -1,6 +1,7 @@
 import './blockDecorations.css';
 import { h } from '../../../../base/browser/dom.js';
 import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
+import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { DecorationsPart } from '../decorations/decorationsPart.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
 import { type EditorRenderingContext, EditorViewContext } from '../../view/viewPart.js';
@@ -17,7 +18,9 @@ export class BlockDecorationsPart extends DynamicViewOverlay {
 		super(context);
 
 		this.decorations = decorations;
-		this.domNode = this.adopt(h(host.ownerDocument, 'div'), domNode => domNode.remove());
+		const domNode = h(host.ownerDocument, 'div');
+		this._register(toDisposable(() => domNode.remove()));
+		this.domNode = domNode;
 		this.root = new FastDomNode(this.domNode);
 		this.root.setClassName('stanza-editor-block-decorations');
 		this.domNode.setAttribute('role', 'presentation');

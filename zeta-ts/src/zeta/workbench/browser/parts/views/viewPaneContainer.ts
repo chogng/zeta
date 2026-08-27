@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IContextKey, IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
 import type { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import { localize, type ILocalizationService } from "../../../services/localization/common/localizationService.js";
@@ -23,7 +23,7 @@ export interface ViewPaneContainerOptions {
 /**
  * Browser host for the visible panes projected by one container model.
  */
-export class ViewPaneContainer extends DisposableOwner {
+export class ViewPaneContainer extends Disposable {
 	readonly element: HTMLElement;
 	readonly id: string;
 	readonly viewContainer: IViewContainerDescriptor;
@@ -43,7 +43,7 @@ export class ViewPaneContainer extends DisposableOwner {
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, "div");
 		this.element = element;
-		this.defer(() => element.remove());
+		this._register(toDisposable(() => element.remove()));
 		element.className = "zeta-view-pane-container";
 		element.dataset.viewContainerId = options.viewContainer.id;
 		container.append(element);
@@ -59,7 +59,7 @@ export class ViewPaneContainer extends DisposableOwner {
 		this.focusedView = FocusedViewContext.bindTo(
 			options.contextKeyService,
 		);
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			if (
 				[...this._panes.values()].some(
 					(item) => item.pane.id === this.focusedView.get(),
@@ -68,11 +68,11 @@ export class ViewPaneContainer extends DisposableOwner {
 				this.focusedView.reset();
 			}
 			this._panes.clear();
-		});
-		this.own(this.model.onDidChangeVisibleViewDescriptors(() => {
+		}));
+		this._register(this.model.onDidChangeVisibleViewDescriptors(() => {
 			this.syncPanes();
 		}));
-		if (this.localizationService) this.own(this.localizationService.onDidChange(() => this.updateLocalizedTitles()));
+		if (this.localizationService) this._register(this.localizationService.onDidChange(() => this.updateLocalizedTitles()));
 		this.syncPanes();
 	}
 
@@ -135,7 +135,7 @@ export class ViewPaneContainer extends DisposableOwner {
 			pane.setVisible(this.visible);
 			this._panes.set(
 				descriptor.id,
-				this.own(new ViewPaneItem(pane, this.focusedView)),
+				this._register(new ViewPaneItem(pane, this.focusedView)),
 			);
 		}
 		this.element.replaceChildren(
@@ -178,19 +178,19 @@ export class ViewPaneContainer extends DisposableOwner {
 	}
 }
 
-class ViewPaneItem extends DisposableOwner {
+class ViewPaneItem extends Disposable {
 	constructor(
 		readonly pane: ViewPane,
 		focusedView: IContextKey<string>,
 	) {
 		super();
-		this.own(pane);
-		this.own(pane.onDidFocus(() => focusedView.set(pane.id)));
-		this.own(pane.onDidBlur(() => {
+		this._register(pane);
+		this._register(pane.onDidFocus(() => focusedView.set(pane.id)));
+		this._register(pane.onDidBlur(() => {
 			if (focusedView.get() === pane.id) focusedView.reset();
 		}));
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			if (focusedView.get() === pane.id) focusedView.reset();
-		});
+		}));
 	}
 }

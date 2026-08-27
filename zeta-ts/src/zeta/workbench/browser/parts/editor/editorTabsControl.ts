@@ -1,5 +1,5 @@
 import type { TabListDropPosition } from "../../../../base/browser/ui/tablist/tabList.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { EditorInput } from "./editorInput.js";
 import { h } from "../../../../base/browser/dom.js";
 import type { EditorInstanceId } from "../../../services/editor/common/editorState.js";
@@ -28,7 +28,7 @@ export interface EditorTabsDelegate {
 }
 
 /** Common lifecycle contract implemented by each Editor tab presentation mode. */
-export abstract class EditorTabsControl extends DisposableOwner {
+export abstract class EditorTabsControl extends Disposable {
 	readonly domNode: HTMLDivElement;
 
 	protected constructor(container: HTMLElement) {
@@ -36,7 +36,7 @@ export abstract class EditorTabsControl extends DisposableOwner {
 		this.domNode = h(container.ownerDocument, "div");
 		this.domNode.className = "zeta-editor-tabs-control";
 		container.append(this.domNode);
-		this.defer(() => this.domNode.remove());
+		this._register(toDisposable(() => this.domNode.remove()));
 	}
 
 	abstract setEditors(editors: readonly EditorTabDescriptor[], activeInput: EditorInput | undefined): void;

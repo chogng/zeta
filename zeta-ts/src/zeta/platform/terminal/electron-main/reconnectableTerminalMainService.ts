@@ -1,6 +1,6 @@
 import { APP_SERVER_METHODS, type TerminalAttachResult, type TerminalCloseParams, type TerminalCreateParams, type TerminalReadParams, type TerminalReadResult, type TerminalReconnectLease, type TerminalResizeParams, type TerminalWriteParams } from "../../../../../generated/app-server/types.js";
 import { timeout } from "../../../base/common/async.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { AppServerConnectionState } from "../../app-server/common/appServerApi.js";
 import type { AppServerSupervisor } from "../../app-server/electron-main/app-server-supervisor.js";
 import type { ITerminalProcessCreation } from "../common/terminalProcessService.js";
@@ -30,7 +30,7 @@ interface TerminalRecord {
 }
 
 /** Keeps Remote PTY bearer leases in Main and reattaches them after App Server replacement. */
-export class ReconnectableTerminalMainService extends DisposableOwner {
+export class ReconnectableTerminalMainService extends Disposable {
 	private readonly supervisor: AppServerSupervisor;
 	private readonly now: () => number;
 	private readonly wait: (milliseconds: number) => Promise<void>;
@@ -45,10 +45,10 @@ export class ReconnectableTerminalMainService extends DisposableOwner {
 		this.wait = options.wait ?? timeout;
 		this.reportError = options.reportError ?? defaultReportError;
 		this.previousState = this.supervisor.state;
-		this.own(this.supervisor.onStateChange(state => this.acceptConnectionState(state)));
-		this.defer(() => {
+		this._register(this.supervisor.onStateChange(state => this.acceptConnectionState(state)));
+		this._register(toDisposable(() => {
 			this.terminals.clear();
-		});
+		}));
 	}
 
 	async create(params: TerminalCreateParams): Promise<ITerminalProcessCreation> {

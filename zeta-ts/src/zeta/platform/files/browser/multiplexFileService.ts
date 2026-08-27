@@ -1,5 +1,5 @@
 import { Emitter } from '../../../base/common/event.js';
-import { DisposableOwner, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import type { URI } from '../../../base/common/uri.js';
 import type { IFileSystemProvider, IFileSystemProviderService } from '../common/fileSystemProviderService.js';
 import type { FileDeleteMode, FileExistingTargetBehavior, FileMissingTargetBehavior, IFileBytes, IFileChangeEvent, IFileContent, IFileEntry, IFileService, IFileStat, IFileWriteRequest, IFileWriteResult } from '../common/files.js';
@@ -10,8 +10,8 @@ interface ProviderRegistration {
 }
 
 /** Routes registered virtual schemes before falling back to workspace file storage. */
-export class MultiplexFileService extends DisposableOwner implements IFileService, IFileSystemProviderService {
-	private readonly changeEmitter = this.own(new Emitter<IFileChangeEvent>());
+export class MultiplexFileService extends Disposable implements IFileService, IFileSystemProviderService {
+	private readonly changeEmitter = this._register(new Emitter<IFileChangeEvent>());
 	private readonly providers = new Map<string, ProviderRegistration>();
 
 	public readonly onDidChangeFiles = this.changeEmitter.event;
@@ -22,11 +22,11 @@ export class MultiplexFileService extends DisposableOwner implements IFileServic
 			this.dispose();
 			throw new TypeError('Multiplex file service requires a fallback file service');
 		}
-		this.own(fallback.onDidChangeFiles(event => this.changeEmitter.fire(event)));
-		this.defer(() => {
+		this._register(fallback.onDidChangeFiles(event => this.changeEmitter.fire(event)));
+		this._register(toDisposable(() => {
 			for (const registration of this.providers.values()) registration.listener.dispose();
 			this.providers.clear();
-		});
+		}));
 	}
 
 	public registerProvider(scheme: string, provider: IFileSystemProvider): IDisposable {

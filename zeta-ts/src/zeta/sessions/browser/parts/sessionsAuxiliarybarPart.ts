@@ -17,7 +17,7 @@ export class SessionsAuxiliarybarPart extends WorkbenchPart {
 		super(container, "auxiliarybar");
 		this.sessionService = sessionService;
 		this.viewService = viewService;
-		this.own(viewService.onDidChange(() => this.render()));
+		this._register(viewService.onDidChange(() => this.render()));
 		this.render();
 	}
 

@@ -2,7 +2,7 @@ import "./tablist.css";
 import { addDisposableListener } from "../../dom.js";
 import type { Icon } from "../../../common/icon.js";
 import type { IAction } from "../../../common/actions.js";
-import { DisposableOwner } from "../../../common/lifecycle.js";
+import { Disposable } from "../../../common/lifecycle.js";
 import { ActionBar, type ActionBarDragAndDrop, type ActionBarDropPosition, type ActionBarOrientation } from "../actionbar/actionbar.js";
 import { ScrollableElement } from "../scrollbar/scrollableElement.js";
 import { TabAction, TabActionViewItem } from "./tabActionViewItem.js";
@@ -66,7 +66,7 @@ export interface TabListOptions<T> {
  * Arrow keys move focus without changing selection. Callers own content
  * activation and panel lifetimes, then provide the resulting selected ID.
  */
-export class TabList<T> extends DisposableOwner {
+export class TabList<T> extends Disposable {
 	readonly element: HTMLDivElement;
 	private readonly actionBar: ActionBar;
 	private readonly scrollable: ScrollableElement;
@@ -102,8 +102,8 @@ export class TabList<T> extends DisposableOwner {
 		const scrollableOptions = orientation === "vertical"
 			? { direction: "vertical" as const, vertical: "auto" as const, tabIndex: -1, wheel: { consume: "when-scrolling" as const } }
 			: { direction: "horizontal" as const, horizontal: "auto" as const, tabIndex: -1, wheel: { consume: "when-scrolling" as const } };
-		this.scrollable = this.own(new ScrollableElement(container, scrollableOptions));
-		this.actionBar = this.own(new ActionBar(this.scrollable.contentElement, {
+		this.scrollable = this._register(new ScrollableElement(container, scrollableOptions));
+		this.actionBar = this._register(new ActionBar(this.scrollable.contentElement, {
 			ariaLabel: options.ariaLabel,
 			ariaRole: "tablist",
 			orientation,

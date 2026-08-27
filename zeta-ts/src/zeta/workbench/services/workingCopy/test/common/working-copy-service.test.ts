@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Emitter } from "../../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { BrowserWorkingCopyService } from "../../browser/browserWorkingCopyService.js";
 import type { IWorkingCopy } from "../../common/workingCopyService.js";
@@ -40,9 +40,9 @@ test('BrowserWorkingCopyService publishes aggregate dirty state changes', () => 
 	assert.deepEqual(changes, [true, false]);
 });
 
-class FakeWorkingCopy extends DisposableOwner implements IWorkingCopy {
-	private readonly dirtyEmitter = this.own(new Emitter<void>());
-	private readonly externalChangeEmitter = this.own(new Emitter<void>());
+class FakeWorkingCopy extends Disposable implements IWorkingCopy {
+	private readonly dirtyEmitter = this._register(new Emitter<void>());
+	private readonly externalChangeEmitter = this._register(new Emitter<void>());
 	readonly onDidChangeDirty = this.dirtyEmitter.event;
 	readonly onDidChangeExternalChange = this.externalChangeEmitter.event;
 	readonly onDidChangeContent = this.dirtyEmitter.event;

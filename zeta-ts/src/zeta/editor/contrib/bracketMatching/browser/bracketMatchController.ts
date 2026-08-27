@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type LanguageBracketMatcher } from "../common/bracketMatching.js";
@@ -6,7 +6,7 @@ import { type TextRange } from "../../../common/core/text.js";
 import { TrackedRangeStickiness } from "../../../common/model/trackedRange.js";
 
 /** Projects current collapsed-cursor bracket matches into caller-owned decorations. */
-export class BracketMatchController extends DisposableOwner {
+export class BracketMatchController extends Disposable {
 	constructor(
 		private readonly selections: EditorSelectionController,
 		private readonly matcher: LanguageBracketMatcher,
@@ -17,8 +17,8 @@ export class BracketMatchController extends DisposableOwner {
 			if (selections.textModel !== matcher.textModel || selections.textModel !== decorations.textModel) {
 				throw new TypeError("Stanza bracket matching dependencies must share one text model");
 			}
-			this.own(selections.onDidChange(() => this.update()));
-			this.own(matcher.textModel.onDidChange(() => this.update()));
+			this._register(selections.onDidChange(() => this.update()));
+			this._register(matcher.textModel.onDidChange(() => this.update()));
 			this.update();
 		} catch (error) {
 			this.dispose();

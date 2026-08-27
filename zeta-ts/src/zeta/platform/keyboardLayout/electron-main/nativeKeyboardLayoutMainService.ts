@@ -1,5 +1,5 @@
 import { Emitter } from '../../../base/common/event.js';
-import { DisposableOwner } from '../../../base/common/lifecycle.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
 import { OperatingSystem } from '../../../base/common/platform.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import type { IKeyboardLayoutDefinition, IKeyboardMappingEntry } from '../common/keyboardLayout.js';
@@ -8,8 +8,8 @@ import { NATIVE_KEYBOARD_LAYOUT_READ_CHANNEL } from '../common/nativeKeyboardLay
 type NativeKeymapModule = typeof import('native-keymap');
 
 /** Lazily loads the optional native-keymap addon and owns its current immutable snapshot. */
-export class NativeKeyboardLayoutMainService extends DisposableOwner {
-	private readonly _onDidChangeKeyboardLayout = this.own(new Emitter<IKeyboardLayoutDefinition | undefined>());
+export class NativeKeyboardLayoutMainService extends Disposable {
+	private readonly _onDidChangeKeyboardLayout = this._register(new Emitter<IKeyboardLayoutDefinition | undefined>());
 	private initialization: Promise<void> | undefined;
 	private layout: IKeyboardLayoutDefinition | undefined;
 

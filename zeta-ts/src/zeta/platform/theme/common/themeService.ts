@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable } from "../../../base/common/lifecycle.js";
 import {
 	createServiceIdentifier,
 } from "../../instantiation/common/instantiation.js";
@@ -17,9 +17,9 @@ export const IThemeService =
 	createServiceIdentifier<IThemeService>("themeService");
 
 /** Owns the active color theme and notifies consumers after it changes. */
-export class ThemeService extends DisposableOwner
+export class ThemeService extends Disposable
 	implements IThemeService {
-	private readonly _onDidColorThemeChange = this.own(new Emitter<IColorTheme>());
+	private readonly _onDidColorThemeChange = this._register(new Emitter<IColorTheme>());
 	private colorTheme: IColorTheme;
 
 	readonly onDidColorThemeChange = this._onDidColorThemeChange.event;

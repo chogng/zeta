@@ -1,5 +1,5 @@
 import { Emitter } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import type { IActiveSessionThread, IUntitledChatSession, SessionId, ThreadId } from "../../../services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../../services/sessions/common/sessionsManagementService.js";
 import type { ISessionsViewService, SessionsViewSelection } from "../common/sessionsViewService.js";
@@ -9,9 +9,9 @@ type SessionsViewReference =
 	| { readonly kind: "untitled"; readonly untitledSessionId: string };
 
 /** Dedicated Sessions-window view state layered over the canonical Session model service. */
-export class SessionsViewService extends DisposableOwner implements ISessionsViewService {
+export class SessionsViewService extends Disposable implements ISessionsViewService {
 	private readonly sessionService: ISessionsManagementService;
-	private readonly _onDidChange = this.own(new Emitter<void>());
+	private readonly _onDidChange = this._register(new Emitter<void>());
 	private _activeSelection: SessionsViewSelection | undefined;
 	private _visibleSelections: readonly SessionsViewSelection[] = [];
 	private visibleReferences: SessionsViewReference[] = [];
@@ -25,7 +25,7 @@ export class SessionsViewService extends DisposableOwner implements ISessionsVie
 	constructor(sessionService: ISessionsManagementService) {
 		super();
 		this.sessionService = sessionService;
-		this.own(sessionService.onDidChange(() => this.syncFromSessionService()));
+		this._register(sessionService.onDidChange(() => this.syncFromSessionService()));
 		this.syncFromSessionService();
 	}
 

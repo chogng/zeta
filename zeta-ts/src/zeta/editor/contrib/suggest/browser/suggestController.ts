@@ -1,5 +1,5 @@
 import { stopEvent } from '../../../../base/browser/dom.js';
-import { DisposableOwner } from '../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type EditorSelectionController } from '../../../common/cursor/editorSelectionController.js';
 import { createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, type LanguageCompletionContext } from '../../../common/languages/completion/languageCompletionProviders.js';
 import { type LanguageCompletionService } from '../../../common/languages/completion/languageCompletionService.js';
@@ -21,7 +21,7 @@ export interface SuggestControllerOptions {
  * keyboard/input interception, and the completion widget, matching VS Code's
  * separation between View and SuggestController.
  */
-export class SuggestController extends DisposableOwner {
+export class SuggestController extends Disposable {
 	readonly widget: CompletionWidget;
 	private readonly onRequestError: (error: unknown) => void;
 	private completionRequest: AbortController | undefined;
@@ -51,21 +51,21 @@ export class SuggestController extends DisposableOwner {
 			this.onRequestError = options.onRequestError ?? reportRequestError;
 			const results = service.results;
 			this.completionIsIncomplete = results.result?.value.isIncomplete === true;
-			this.own(results.onDidChange(change => {
+			this._register(results.onDidChange(change => {
 				if (change.result) this.completionIsIncomplete = change.result.value.isIncomplete;
 			}));
-			this.widget = this.own(new CompletionWidget(
+			this.widget = this._register(new CompletionWidget(
 				view.element,
 				view.viewport,
 				selectionController,
 				session,
 				options.widgetContainer,
 			));
-			this.own(view.onWillBeforeInput(event => this.handleBeforeInput(event)));
-			this.own(view.onWillTextUpdate(event => this.handleTextUpdate(event)));
-			this.own(view.onWillKeydown(event => this.handleKeydown(event)));
-			this.own(view.onDidEdit(event => this.handleDidEdit(event)));
-			this.defer(() => this.cancelCompletionRequest());
+			this._register(view.onWillBeforeInput(event => this.handleBeforeInput(event)));
+			this._register(view.onWillTextUpdate(event => this.handleTextUpdate(event)));
+			this._register(view.onWillKeydown(event => this.handleKeydown(event)));
+			this._register(view.onDidEdit(event => this.handleDidEdit(event)));
+			this._register(toDisposable(() => this.cancelCompletionRequest()));
 		} catch (error) {
 			this.dispose();
 			throw error;

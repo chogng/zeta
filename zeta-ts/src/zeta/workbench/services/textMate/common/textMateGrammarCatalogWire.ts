@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type LanguageWorkerWireClientPort, type LanguageWorkerWirePort } from "../../../../editor/common/languages/languageWorkerWire.js";
 import { normalizeTextMateGrammarCatalog, type TextMateGrammarCatalog } from "./textMateGrammarCatalog.js";
 import { TextMateGrammarCatalogStore } from "./textMateGrammarCatalogStore.js";
@@ -28,7 +28,7 @@ interface PendingRequest {
 }
 
 /** Renderer-side grammar catalog transport sharing an Syntax Worker port. */
-export class TextMateGrammarCatalogWireClient extends DisposableOwner {
+export class TextMateGrammarCatalogWireClient extends Disposable {
 	private readonly pending = new Map<number, PendingRequest>();
 	private nextRequestId = 1;
 	private closed = false;
@@ -44,9 +44,9 @@ export class TextMateGrammarCatalogWireClient extends DisposableOwner {
 		if (typeof invalidateWorker !== "function") {
 			throw new TypeError("TextMate grammar catalog client requires a Worker invalidation callback");
 		}
-		this.own(port.onMessage(message => this.acceptMessage(message)));
-		this.own(port.onFailure(error => this.invalidate(toError(error, "TextMate grammar catalog Worker failed"))));
-		this.defer(() => this.close(new ReferenceError("TextMateGrammarCatalogWireClient is already disposed"), false));
+		this._register(port.onMessage(message => this.acceptMessage(message)));
+		this._register(port.onFailure(error => this.invalidate(toError(error, "TextMate grammar catalog Worker failed"))));
+		this._register(toDisposable(() => this.close(new ReferenceError("TextMateGrammarCatalogWireClient is already disposed"), false)));
 	}
 
 	replaceCatalog(catalog: TextMateGrammarCatalog): Promise<void> {
@@ -116,7 +116,7 @@ export class TextMateGrammarCatalogWireClient extends DisposableOwner {
 }
 
 /** Worker-side atomic catalog receiver sharing the Syntax Worker port. */
-export class TextMateGrammarCatalogWireServer extends DisposableOwner {
+export class TextMateGrammarCatalogWireServer extends Disposable {
 	constructor(
 		private readonly port: LanguageWorkerWirePort,
 		private readonly store: TextMateGrammarCatalogStore,
@@ -128,7 +128,7 @@ export class TextMateGrammarCatalogWireServer extends DisposableOwner {
 		if (!(store instanceof TextMateGrammarCatalogStore)) {
 			throw new TypeError("TextMate grammar catalog server requires a catalog store");
 		}
-		this.own(port.onMessage(message => this.acceptMessage(message)));
+		this._register(port.onMessage(message => this.acceptMessage(message)));
 	}
 
 	private acceptMessage(value: unknown): void {

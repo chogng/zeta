@@ -3,7 +3,7 @@ import { DomEmitter, type DOMEventMap } from "../../event.js";
 import { FastDomNode } from "../../fastDomNode.js";
 import type { Icon } from "../../../common/icon.js";
 import type { Event } from "../../../common/event.js";
-import { DisposableOwner, DisposableSlot } from "../../../common/lifecycle.js";
+import { Disposable, MutableDisposable, toDisposable } from "../../../common/lifecycle.js";
 import { setAriaAttribute } from "../aria/aria.js";
 import type { AnchorPosition } from "../contextview/contextview.js";
 import { getHoverDelegate, type IManagedHover } from "../hover/hoverDelegate.js";
@@ -35,11 +35,11 @@ export interface ButtonOptions {
 }
 
 /** A semantic button with an explicit enabled state. */
-export class Button extends DisposableOwner {
+export class Button extends Disposable {
 	readonly domNode: HTMLButtonElement;
 	private readonly root: FastDomNode<HTMLButtonElement>;
 	private readonly content: IconLabel;
-	private readonly hover = this.own(new DisposableSlot<IManagedHover>());
+	private readonly hover = this._register(new MutableDisposable<IManagedHover>());
 	private readonly hoverGroupId: string | undefined;
 	private readonly hoverAnchorPosition: AnchorPosition | undefined;
 	readonly onDidClick: Event<DOMEventMap["click"]>;
@@ -49,12 +49,14 @@ export class Button extends DisposableOwner {
 		const ownerDocument = container.ownerDocument;
 		this.hoverGroupId = options.hoverGroupId;
 		this.hoverAnchorPosition = options.hoverAnchorPosition;
-		const root = new FastDomNode(this.adopt(h(ownerDocument, "button", {
+		const domNode = h(ownerDocument, "button", {
 			properties: {
 				type: options.type ?? "button",
 				disabled: options.enabled === false,
 			},
-		}), domNode => domNode.remove()));
+		});
+		this._register(toDisposable(() => domNode.remove()));
+		const root = new FastDomNode(domNode);
 		root.setClassName([
 			"zeta-button",
 			`zeta-button-${options.presentation ?? "quiet"}`,
@@ -66,7 +68,7 @@ export class Button extends DisposableOwner {
 		if (options.ariaLabel) {
 			setAriaAttribute(this.domNode, "label", options.ariaLabel);
 		}
-		this.content = this.own(new IconLabel(this.domNode, {
+		this.content = this._register(new IconLabel(this.domNode, {
 			label: options.label,
 			icon: options.icon,
 		}));
@@ -77,9 +79,9 @@ export class Button extends DisposableOwner {
 		if (options.checked !== undefined) {
 			this.checked = options.checked;
 		}
-		this.onDidClick = this.own(new DomEmitter(this.domNode, "click")).event;
+		this.onDidClick = this._register(new DomEmitter(this.domNode, "click")).event;
 		if (options.onClick) {
-			this.own(this.onDidClick(options.onClick));
+			this._register(this.onDidClick(options.onClick));
 		}
 	}
 
@@ -117,11 +119,11 @@ export class Button extends DisposableOwner {
 		this.hover.clear();
 		this.domNode.removeAttribute("title");
 		if (!title) return;
-		this.hover.replace(getHoverDelegate().setupHover({
+		this.hover.value = getHoverDelegate().setupHover({
 			target: this.domNode,
 			content: title,
 			groupId: this.hoverGroupId,
 			anchorPosition: this.hoverAnchorPosition,
-		}));
+		});
 	}
 }

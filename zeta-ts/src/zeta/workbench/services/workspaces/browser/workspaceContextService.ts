@@ -1,5 +1,5 @@
 import { Emitter } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import type {
 	IAnyWorkspaceIdentifier,
 	IWorkspace,
@@ -13,9 +13,9 @@ import {
 } from "../../../../platform/workspace/common/workspace.js";
 
 /** Live renderer projection of the workspace hosted by this window. */
-export class WorkspaceContextService extends DisposableOwner implements IWorkspaceContextService {
+export class WorkspaceContextService extends Disposable implements IWorkspaceContextService {
 	private readonly _onDidChangeWorkspace =
-		this.own(new Emitter<IWorkspaceChangeEvent>());
+		this._register(new Emitter<IWorkspaceChangeEvent>());
 	private workspace: IWorkspace;
 
 	readonly onDidChangeWorkspace = this._onDidChangeWorkspace.event;

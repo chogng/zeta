@@ -1,3 +1,4 @@
+import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { h } from "../../../../../base/browser/dom.js";
 import { FastDomNode } from "../../../../../base/browser/fastDomNode.js";
 import { type Event } from "../../../../../base/common/event.js";
@@ -54,11 +55,11 @@ export class TextAreaEditContext extends EditContext implements ITextAreaWrapper
 		this.element.setAttribute("aria-multiline", "true");
 		this.element.setAttribute("aria-roledescription", "code editor");
 		this.element.setAttribute("aria-readonly", String(this.element.readOnly));
-		this.textAreaInput = this.own(new TextAreaInput(this.element));
-		if (options.ownerId !== undefined) this.own(TextAreaEditContextRegistry.register(options.ownerId, this));
-		this.own(TextAreaEditContextRegistry.register(this.element, this));
+		this.textAreaInput = this._register(new TextAreaInput(this.element));
+		if (options.ownerId !== undefined) this._register(TextAreaEditContextRegistry.register(options.ownerId, this));
+		this._register(TextAreaEditContextRegistry.register(this.element, this));
 		container.append(this.element);
-		this.defer(() => this.element.remove());
+		this._register(toDisposable(() => this.element.remove()));
 	}
 
 	get readOnly(): boolean {
@@ -73,9 +74,9 @@ export class TextAreaEditContext extends EditContext implements ITextAreaWrapper
 		this.assertNotDisposed();
 		if (this.connected) return;
 		this.connected = true;
-		this.own(this.textAreaInput.onDidCopy(event => this.fireWillCopy(event, false)));
-		this.own(this.textAreaInput.onDidCut(event => this.fireWillCopy(event, true)));
-		this.own(this.textAreaInput.onDidPaste(event => this.fireWillPaste(event)));
+		this._register(this.textAreaInput.onDidCopy(event => this.fireWillCopy(event, false)));
+		this._register(this.textAreaInput.onDidCut(event => this.fireWillCopy(event, true)));
+		this._register(this.textAreaInput.onDidPaste(event => this.fireWillPaste(event)));
 		this.textAreaInput.connect();
 	}
 

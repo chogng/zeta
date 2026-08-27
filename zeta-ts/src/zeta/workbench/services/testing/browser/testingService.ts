@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import type { ILogService } from "../../../../platform/log/common/logService.js";
 import { type ITaskRun, type ITaskService } from "../../tasks/common/taskService.js";
 import { type ITestProfile, type ITestRun, type ITestingService, type TestProfileContribution, type TestProfileProvider, type TestProfileProviderRegistration, type TestRunStatus } from "../common/testingService.js";
@@ -10,10 +10,10 @@ interface OwnedTestProfileProvider {
 }
 
 /** Projects test-group workspace tasks into a dedicated testing workflow. */
-export class TestingService extends DisposableOwner implements ITestingService {
-	private readonly profilesEmitter = this.own(new Emitter<readonly ITestProfile[]>());
-	private readonly startRunEmitter = this.own(new Emitter<ITestRun>());
-	private readonly changeRunEmitter = this.own(new Emitter<ITestRun>());
+export class TestingService extends Disposable implements ITestingService {
+	private readonly profilesEmitter = this._register(new Emitter<readonly ITestProfile[]>());
+	private readonly startRunEmitter = this._register(new Emitter<ITestRun>());
+	private readonly changeRunEmitter = this._register(new Emitter<ITestRun>());
 	private readonly providers = new Map<string, OwnedTestProfileProvider>();
 	private currentProfiles: readonly ITestProfile[] = Object.freeze([]);
 	private providerProfiles: readonly ITestProfile[] = Object.freeze([]);
@@ -29,17 +29,17 @@ export class TestingService extends DisposableOwner implements ITestingService {
 
 	constructor(private readonly taskService: ITaskService, private readonly logService?: ILogService) {
 		super();
-		this.own(taskService.onDidChangeTasks(() => {
+		this._register(taskService.onDidChangeTasks(() => {
 			this.projectProfiles();
 			if (this.loaded && this.refreshingTasks === 0 && !this.activeProviderRefresh) void this.refreshProviderProfiles().catch(error => this.reportError(error));
 		}));
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.activeProviderRefresh?.abort();
 			this.activeProviderRefresh = undefined;
 			this.providers.clear();
 			for (const run of this.currentRuns) run.dispose();
 			this.currentRuns = [];
-		});
+		}));
 		this.projectProfiles();
 	}
 
@@ -82,7 +82,7 @@ export class TestingService extends DisposableOwner implements ITestingService {
 		const task = currentProfile ? this.taskService.tasks.find(candidate => candidate.id === currentProfile.taskId && candidate.group === "test") : undefined;
 		if (!task) throw new Error("Test profile is no longer present in the current workspace");
 		const taskRun = await this.taskService.run(task);
-		const run = this.own(new TestRun(currentProfile!, taskRun, current => this.changeRunEmitter.fire(current)));
+		const run = this._register(new TestRun(currentProfile!, taskRun, current => this.changeRunEmitter.fire(current)));
 		this.currentRuns = [...this.currentRuns, run].slice(-50);
 		this.startRunEmitter.fire(run);
 		return run;
@@ -194,15 +194,15 @@ export class TestingService extends DisposableOwner implements ITestingService {
 	}
 }
 
-class TestRun extends DisposableOwner implements ITestRun {
-	private readonly statusEmitter = this.own(new Emitter<TestRunStatus>());
+class TestRun extends Disposable implements ITestRun {
+	private readonly statusEmitter = this._register(new Emitter<TestRunStatus>());
 	private _status: TestRunStatus;
 	readonly onDidChangeStatus: Event<TestRunStatus> = this.statusEmitter.event;
 
 	constructor(readonly profile: ITestProfile, readonly taskRun: ITaskRun, private readonly onChange: (run: TestRun) => void) {
 		super();
 		this._status = projectTestStatus(taskRun.status);
-		this.own(taskRun.onDidChangeStatus(() => {
+		this._register(taskRun.onDidChangeStatus(() => {
 			const status = projectTestStatus(taskRun.status);
 			if (status === this._status) return;
 			this._status = status;

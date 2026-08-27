@@ -7,7 +7,7 @@ import {
 	InputBox,
 } from "../../../base/browser/ui/inputbox/inputbox.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type {
 	IQuickPick,
 	IQuickPickItem,
@@ -30,14 +30,14 @@ export interface IBrowserQuickPickHost {
 
 /** DOM implementation of one searchable Quick Pick controller. */
 export class BrowserQuickPick<TItem extends IQuickPickItem>
-	extends DisposableOwner
+	extends Disposable
 	implements IQuickPick<TItem> {
 	readonly element: HTMLDivElement;
 	private readonly inputBox: InputBox;
 	private readonly list: QuickInputList<TItem>;
-	private readonly _onDidAccept = this.own(new Emitter<TItem>());
-	private readonly _onDidChangeValue = this.own(new Emitter<string>());
-	private readonly _onDidHide = this.own(new Emitter<void>());
+	private readonly _onDidAccept = this._register(new Emitter<TItem>());
+	private readonly _onDidChangeValue = this._register(new Emitter<string>());
+	private readonly _onDidHide = this._register(new Emitter<void>());
 	private readonly options: BrowserQuickPickOptions;
 	private visible = false;
 	private _placeholder = "";
@@ -55,14 +55,14 @@ export class BrowserQuickPick<TItem extends IQuickPickItem>
 		this.element.className = "zeta-quick-pick";
 		setRole(this.element, "dialog");
 		setAriaAttribute(this.element, "label", "Quick Pick");
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			if (this.visible) this.hide();
 			options.onDispose(this);
 			this.element.remove();
-		});
+		}));
 
-		this.list = this.own(new QuickInputList<TItem>(this.element));
-		this.inputBox = this.own(new InputBox(this.element, {
+		this.list = this._register(new QuickInputList<TItem>(this.element));
+		this.inputBox = this._register(new InputBox(this.element, {
 			type: "search",
 			ariaLabel: "Quick Pick",
 			role: "combobox",
@@ -76,16 +76,16 @@ export class BrowserQuickPick<TItem extends IQuickPickItem>
 			this.list.element,
 		);
 
-		this.own(this.inputBox.onDidChange(
+		this._register(this.inputBox.onDidChange(
 			(value) => this.handleValueChange(value),
 		));
-		this.own(this.list.onDidAccept((item) => {
+		this._register(this.list.onDidAccept((item) => {
 			this._onDidAccept.fire(item);
 		}));
-		this.own(this.list.onDidChangeActive(({ rowId }) => {
+		this._register(this.list.onDidChangeActive(({ rowId }) => {
 			this.inputBox.ariaActiveDescendant = rowId;
 		}));
-		this.own(this.inputBox.onKeyDown(
+		this._register(this.inputBox.onKeyDown(
 			(event: KeyboardEvent) => this.handleKeyDown(event),
 		));
 	}

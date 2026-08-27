@@ -1,7 +1,7 @@
 import { WebContentsView, type BrowserWindow, type Event as ElectronEvent, type WebContents } from "electron/main";
 import { randomUUID } from "node:crypto";
 import type { EventEmitter } from "node:events";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { type BrowserViewEvent, type BrowserViewTargetId, type IBrowserViewCreateRequest, type IBrowserViewLayoutRequest, type IBrowserViewNavigateRequest, type IBrowserViewState, type IBrowserViewVisibilityRequest, normalizeBrowserViewUrl } from "../common/browserView.js";
 import { type BrowserViewNavigation, directBrowserViewNavigation, type IBrowserViewNavigationResolver } from "../common/browserViewNavigation.js";
 import type { IBrowserViewMainService } from "./browserViewIpc.js";
@@ -34,7 +34,7 @@ export interface BrowserViewMainServiceOptions {
  * Every target belongs to one workbench window, starts hidden, and uses an
  * ephemeral session with no Node integration or granted web permissions.
  */
-export class BrowserViewMainService extends DisposableOwner
+export class BrowserViewMainService extends Disposable
 	implements IBrowserViewMainService {
 	private readonly window: BrowserWindow;
 	private readonly registry: BrowserTargetRegistry;
@@ -52,13 +52,13 @@ export class BrowserViewMainService extends DisposableOwner
 		this.navigationResolver = options.navigationResolver ?? {
 			resolve: (url) => Promise.resolve(directBrowserViewNavigation(url)),
 		};
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.disposing = true;
 			this.cancellation.abort();
 			for (const target of [...this.targets.values()]) {
 				this.releaseTarget(target, true);
 			}
-		});
+		}));
 	}
 
 	async createTarget(request: IBrowserViewCreateRequest): Promise<IBrowserViewState> {
@@ -175,9 +175,9 @@ export class BrowserViewMainService extends DisposableOwner
 		const preventDownload = (event: ElectronEvent): void =>
 			event.preventDefault();
 		browserSession.on("will-download", preventDownload);
-		target.disposables.defer(() =>
+		target.disposables.add(toDisposable(() =>
 			browserSession.removeListener("will-download", preventDownload)
-		);
+		));
 
 		contents.setWindowOpenHandler(({ url }) => {
 			try {
@@ -345,7 +345,7 @@ export class BrowserViewMainService extends DisposableOwner
 	): void {
 		const emitter = contents as unknown as EventEmitter;
 		emitter.on(event, listener);
-		target.disposables.defer(() => emitter.removeListener(event, listener));
+		target.disposables.add(toDisposable(() => emitter.removeListener(event, listener)));
 	}
 
 	private state(target: BrowserTarget): IBrowserViewState {

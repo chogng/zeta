@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, dirname } from 'node:path';
 import { Emitter } from '../../../base/common/event.js';
 import { parseJsonc } from '../../../base/common/jsonc.js';
-import { DisposableOwner } from '../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import { keyboardMappingsEqual, type IKeyboardLayoutDefinition } from '../common/keyboardLayout.js';
 import {
@@ -22,8 +22,8 @@ export interface UserKeyboardLayoutMainServiceOptions {
 }
 
 /** Owns and live-reloads the active profile's `keyboard-layout.json`. */
-export class UserKeyboardLayoutMainService extends DisposableOwner {
-	private readonly _onDidChangeKeyboardLayout = this.own(new Emitter<void>());
+export class UserKeyboardLayoutMainService extends Disposable {
+	private readonly _onDidChangeKeyboardLayout = this._register(new Emitter<void>());
 	private readonly filePath: string;
 	private readonly onError: (error: unknown) => void;
 	private readonly openResourceInHost: ((filePath: string) => Promise<string>) | undefined;
@@ -40,13 +40,13 @@ export class UserKeyboardLayoutMainService extends DisposableOwner {
 		this.filePath = options.filePath;
 		this.onError = options.onError ?? ((error) => console.error('Failed to process user keyboard layout', error));
 		this.openResourceInHost = options.openResource;
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.closed = true;
 			if (this.reloadTimer !== undefined) {
 				globalThis.clearTimeout(this.reloadTimer);
 			}
 			this.watcher?.close();
-		});
+		}));
 	}
 
 	public static async create(options: UserKeyboardLayoutMainServiceOptions): Promise<UserKeyboardLayoutMainService> {

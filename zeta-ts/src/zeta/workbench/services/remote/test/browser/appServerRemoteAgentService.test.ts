@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { Emitter } from "../../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../../base/common/lifecycle.js";
 import type { AppServerConnectionState, IAppServerApi } from "../../../../../platform/app-server/common/appServerApi.js";
 import type { RemoteConnectionState } from "../../../../../platform/remote/common/remote.js";
 import type { IRemoteAgentApi, RemoteAgentConnection } from "../../../../../platform/remote/common/remoteAgentApi.js";
@@ -87,8 +87,8 @@ test("remote agent delegates path-free runtime rollback only for SSH connections
 	assert.equal(remoteApi.rollbacks, 1);
 });
 
-class TestAppServerApi extends DisposableOwner implements IAppServerApi {
-	private readonly stateEmitter = this.own(new Emitter<AppServerConnectionState>());
+class TestAppServerApi extends Disposable implements IAppServerApi {
+	private readonly stateEmitter = this._register(new Emitter<AppServerConnectionState>());
 	private readonly initial = deferred<AppServerConnectionState>();
 	connectionStateReads = 0;
 
@@ -99,8 +99,8 @@ class TestAppServerApi extends DisposableOwner implements IAppServerApi {
 	resolveInitial(state: AppServerConnectionState): void { this.initial.resolve(state); }
 }
 
-class TestRemoteAgentApi extends DisposableOwner implements IRemoteAgentApi {
-	private readonly connectionEmitter = this.own(new Emitter<RemoteAgentConnection>());
+class TestRemoteAgentApi extends Disposable implements IRemoteAgentApi {
+	private readonly connectionEmitter = this._register(new Emitter<RemoteAgentConnection>());
 	private readonly initial = deferred<RemoteAgentConnection>();
 	reconnects = 0;
 	rollbacks = 0;

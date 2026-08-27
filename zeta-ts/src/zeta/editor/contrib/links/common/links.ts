@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type TextRange } from "../../../common/core/text.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
@@ -20,7 +20,7 @@ export interface LanguageLinkProvider extends LanguageFeatureProviderMetadata {
 }
 
 /** Provides link candidates; opening a target remains a host-owned operation. */
-export class LinkService extends DisposableOwner {
+export class LinkService extends Disposable {
 	constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureProviderRegistry<LanguageLinkProvider>, private readonly resource?: URI) {
 		super();
 	}

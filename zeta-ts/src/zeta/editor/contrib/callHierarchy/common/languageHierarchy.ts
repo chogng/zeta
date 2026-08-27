@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type TextPosition, TextRange } from "../../../common/core/text.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
@@ -56,7 +56,7 @@ export interface PreparedTypeHierarchy {
 }
 
 /** Coordinates prepare/follow-up hierarchy requests while preserving provider identity and revision freshness. */
-export class LanguageHierarchyService extends DisposableOwner {
+export class LanguageHierarchyService extends Disposable {
 	constructor(private readonly model: TextModel, private readonly resource: URI, private readonly callProviders: LanguageFeatureProviderRegistry<LanguageCallHierarchyProvider>, private readonly typeProviders: LanguageFeatureProviderRegistry<LanguageTypeHierarchyProvider>) { super(); }
 
 	async prepareCallHierarchy(languageId: string, position: TextPosition, signal: AbortSignal = new AbortController().signal): Promise<readonly PreparedCallHierarchy[]> {

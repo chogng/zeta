@@ -1,6 +1,6 @@
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { Checkbox } from "../../../../base/browser/ui/toggle/toggle.js";
-import { ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
+import { DisposableStore } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
 import { TextPosition, TextRange } from "../../../../editor/common/core/text.js";
 import { type IEditorService } from "../../../services/editor/common/editorService.js";
@@ -36,7 +36,7 @@ export class DebugViewPane extends ViewPane {
 	private readonly watchInput: HTMLInputElement;
 	private readonly exceptionsElement: HTMLUListElement;
 	private readonly breakpointsElement: HTMLUListElement;
-	private readonly exceptionControls = this.own(new ResettableDisposableGroup());
+	private readonly exceptionControls = this._register(new DisposableStore());
 	private threads: readonly IDebugThread[] = [];
 	private frames: readonly IDebugStackFrame[] = [];
 	private variableRows: readonly DebugVariableRow[] = [];
@@ -67,20 +67,20 @@ export class DebugViewPane extends ViewPane {
 		this.exceptionsElement = section(container.ownerDocument, "Exception Breakpoints", "zeta-debug-exceptions");
 		this.breakpointsElement = section(container.ownerDocument, "Breakpoints", "zeta-debug-breakpoints");
 		this.contentElement.append(controls, this.statusElement, this.threadsElement, this.stackElement, this.variablesElement, this.watchElement, this.watchForm, this.exceptionsElement, this.breakpointsElement);
-		this.own(addDisposableListener(controls, "click", event => this.control(event)));
-		this.own(addDisposableListener(this.sessionsElement, "change", () => this.selectSession()));
-		this.own(addDisposableListener(this.threadsElement, "change", () => { void this.selectThread(); }));
-		this.own(addDisposableListener(this.stackElement, "click", event => this.activateFrame(event)));
-		this.own(addDisposableListener(this.variablesElement, "click", event => this.expandVariable(event)));
-		this.own(addDisposableListener(this.watchElement, "click", event => this.removeWatch(event)));
-		this.own(addDisposableListener(this.watchForm, "submit", event => this.addWatch(event)));
-		this.own(addDisposableListener(this.exceptionsElement, "change", () => { void this.changeExceptionBreakpoints(); }));
-		this.own(addDisposableListener(this.breakpointsElement, "click", event => this.activateBreakpoint(event)));
-		this.own(debug.onDidChangeConfigurations(() => this.render()));
-		this.own(debug.onDidChangeBreakpoints(() => this.render()));
-		this.own(debug.onDidChangeWatchExpressions(() => { void this.refreshWatches(); this.render(); }));
-		this.own(debug.onDidChangeExceptionBreakpoints(() => this.render()));
-		this.own(debug.onDidChangeSession(session => this.acceptSessionChange(session)));
+		this._register(addDisposableListener(controls, "click", event => this.control(event)));
+		this._register(addDisposableListener(this.sessionsElement, "change", () => this.selectSession()));
+		this._register(addDisposableListener(this.threadsElement, "change", () => { void this.selectThread(); }));
+		this._register(addDisposableListener(this.stackElement, "click", event => this.activateFrame(event)));
+		this._register(addDisposableListener(this.variablesElement, "click", event => this.expandVariable(event)));
+		this._register(addDisposableListener(this.watchElement, "click", event => this.removeWatch(event)));
+		this._register(addDisposableListener(this.watchForm, "submit", event => this.addWatch(event)));
+		this._register(addDisposableListener(this.exceptionsElement, "change", () => { void this.changeExceptionBreakpoints(); }));
+		this._register(addDisposableListener(this.breakpointsElement, "click", event => this.activateBreakpoint(event)));
+		this._register(debug.onDidChangeConfigurations(() => this.render()));
+		this._register(debug.onDidChangeBreakpoints(() => this.render()));
+		this._register(debug.onDidChangeWatchExpressions(() => { void this.refreshWatches(); this.render(); }));
+		this._register(debug.onDidChangeExceptionBreakpoints(() => this.render()));
+		this._register(debug.onDidChangeSession(session => this.acceptSessionChange(session)));
 		this.render();
 		void debug.refresh().catch(error => { this.error = message(error); this.render(); });
 	}
@@ -251,7 +251,7 @@ export class DebugViewPane extends ViewPane {
 	}
 
 	private render(): void {
-		if (this.exceptionControls.disposed) return;
+		if (this.exceptionControls.isDisposed) return;
 		const selectedConfiguration = this.configurationsElement.value;
 		this.configurationsElement.replaceChildren(...this.debug.configurations.map(configuration => option(this.element.ownerDocument, configuration.id, configuration.workspaceFolderName ? `${configuration.name} — ${configuration.workspaceFolderName}` : configuration.name)), ...this.debug.compounds.map(compound => option(this.element.ownerDocument, compound.id, `${compound.name}${compound.workspaceFolderName ? ` — ${compound.workspaceFolderName}` : ""} (compound)`)));
 		if ([...this.debug.configurations, ...this.debug.compounds].some(candidate => candidate.id === selectedConfiguration)) this.configurationsElement.value = selectedConfiguration;
@@ -285,7 +285,7 @@ function heading(document: Document, label: string): HTMLLIElement { const eleme
 function itemButton(document: Document, label: string, className: string, dataName: string, index: number, selected = false): HTMLLIElement { const item = h(document, "li"); const action = h(document, "button"); action.type = "button"; action.className = className; action.classList.toggle("selected", selected); action.textContent = label; action.dataset[dataName] = String(index); item.append(action); return item; }
 function variableItem(document: Document, row: DebugVariableRow, index: number): HTMLLIElement { const indicator = row.variablesReference > 0 ? row.expanded ? "▾ " : "▸ " : "  "; const label = `${indicator}${row.name}${row.value === undefined ? "" : ` = ${row.value}`}${row.type ? ` : ${row.type}` : ""}`; const item = itemButton(document, label, "zeta-debug-variable", "variableIndex", index); const action = item.firstElementChild as HTMLButtonElement; action.style.paddingInlineStart = `${6 + row.depth * 14}px`; action.disabled = row.variablesReference <= 0 && row.value === undefined; return item; }
 function watchItem(document: Document, expression: string, result: DebugWatchResult | undefined, index: number): HTMLLIElement { const item = h(document, "li"); const value = h(document, "span"); value.className = "zeta-debug-watch-value"; value.textContent = `${expression}${result?.result ? ` = ${result.result.result}` : result?.error ? ` — ${result.error}` : ""}`; const remove = button(document, "Remove", "removeWatch"); remove.className = "zeta-debug-watch-remove"; remove.dataset.watchIndex = String(index); item.append(value, remove); return item; }
-function exceptionItem(owner: ResettableDisposableGroup, document: Document, filter: string, label: string, description: string | undefined, checked: boolean): HTMLLIElement { const item = h(document, "li"); const control = owner.add(new Checkbox(item, { label, checked })); control.element.classList.add("zeta-debug-exception-toggle"); control.input.dataset.exceptionFilter = filter; if (description) control.element.title = description; return item; }
+function exceptionItem(owner: DisposableStore, document: Document, filter: string, label: string, description: string | undefined, checked: boolean): HTMLLIElement { const item = h(document, "li"); const control = owner.add(new Checkbox(item, { label, checked })); control.element.classList.add("zeta-debug-exception-toggle"); control.input.dataset.exceptionFilter = filter; if (description) control.element.title = description; return item; }
 function breakpointItem(document: Document, breakpoint: IDebugBreakpoint, index: number): HTMLLIElement { const item = itemButton(document, `${breakpoint.resource.path.split("/").at(-1)}:${breakpoint.lineNumber}`, "zeta-debug-breakpoint", "breakpointIndex", index); const remove = button(document, "Remove", "removeBreakpoint"); remove.className = "zeta-debug-breakpoint-remove"; item.append(remove); return item; }
 function inputForm(document: Document, label: string, action: string): [HTMLFormElement, HTMLInputElement] { const form = h(document, "form"); form.className = "zeta-debug-input-form"; const input = h(document, "input"); input.type = "text"; input.setAttribute("aria-label", label); const submit = h(document, "button"); submit.type = "submit"; submit.textContent = action; form.append(input, submit); return [form, input]; }
 function indexFromEvent(event: Event, selector: string, dataName: string, document: Document): number | undefined { const target = event.target instanceof document.defaultView!.Element ? event.target.closest<HTMLElement>(selector) : null; const raw = target?.dataset[dataName]; if (raw === undefined) return undefined; const index = Number(raw); return Number.isSafeInteger(index) && index >= 0 ? index : undefined; }

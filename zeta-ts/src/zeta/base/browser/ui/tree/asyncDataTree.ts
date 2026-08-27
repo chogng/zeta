@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../common/event.js";
-import { DisposableOwner, type IDisposable } from "../../../common/lifecycle.js";
+import { Disposable, type IDisposable, toDisposable } from "../../../common/lifecycle.js";
 import type { ListScrolling } from "../list/list.js";
 import { CompressibleObjectTree, ObjectTree, type CompressibleKeyboardNavigationLabelProvider, type CompressibleTreeAcceptEvent, type CompressibleTreeFocusChangeEvent, type CompressibleTreePointerEvent, type CompressibleTreeSelectionChangeEvent, type ObjectTreeAcceptEvent, type ObjectTreeCollapseStateChangeEvent, type ObjectTreeFocusChangeEvent, type ObjectTreePointerEvent, type ObjectTreeSelectionChangeEvent } from "./objectTree.js";
 import type { CompressibleTreeElement, CompressedTreeNode } from "./compressedObjectTreeModel.js";
@@ -117,13 +117,13 @@ interface AsyncNodeState<T> {
 }
 
 /** Owns lazy data state and delegates its presentation to a factory-created tree. */
-abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCommonOptions<T>> extends DisposableOwner {
+abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCommonOptions<T>> extends Disposable {
 	readonly element: HTMLDivElement;
 	protected readonly tree: AsyncTreeView<T>;
 	private readonly generatedIds = new Map<T, string>();
 	private readonly requests = new Map<string, number>();
-	private readonly _onDidChangeLoadState = this.own(new Emitter<AsyncDataTreeLoadStateEvent<T>>());
-	private readonly _onDidError = this.own(new Emitter<AsyncDataTreeErrorEvent<T>>());
+	private readonly _onDidChangeLoadState = this._register(new Emitter<AsyncDataTreeLoadStateEvent<T>>());
+	private readonly _onDidError = this._register(new Emitter<AsyncDataTreeErrorEvent<T>>());
 	private states = new Map<string, AsyncNodeState<T>>();
 	private rootChildren: readonly string[] = [];
 	private input: TInput | undefined;
@@ -136,16 +136,16 @@ abstract class AbstractAsyncDataTree<TInput, T, TOptions extends AsyncDataTreeCo
 
 	constructor(protected readonly container: HTMLElement, protected readonly dataSource: AsyncTreeDataSource<TInput, T>, protected readonly options: TOptions) {
 		super();
-		this.tree = this.own(this.createTree(container, options));
+		this.tree = this._register(this.createTree(container, options));
 		this.element = this.tree.element;
-		this.own(this.tree.onDidChangeCollapseState(({ element, collapsed }) => {
+		this._register(this.tree.onDidChangeCollapseState(({ element, collapsed }) => {
 			const state = this.states.get(this.getId(element));
 			if (!collapsed && state?.hasChildren && state.children === undefined) void this.updateChildren(element).catch(() => undefined);
 		}));
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.generation += 1;
 			this.requests.clear();
-		});
+		}));
 	}
 
 	protected abstract createTree(container: HTMLElement, options: TOptions): AsyncTreeView<T>;

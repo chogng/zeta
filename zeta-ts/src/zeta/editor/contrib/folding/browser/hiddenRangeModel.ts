@@ -1,12 +1,12 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type EditorLineVisibilitySource } from "../../../common/viewModel/viewModelLines.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { EditorFoldingModel } from "./foldingModel.js";
 
 /** Derives hidden physical lines from collapsed folding regions for visual consumers. */
-export class EditorHiddenRangeModel extends DisposableOwner implements EditorLineVisibilitySource {
-	private readonly changeEmitter = this.own(new Emitter<void>());
+export class EditorHiddenRangeModel extends Disposable implements EditorLineVisibilitySource {
+	private readonly changeEmitter = this._register(new Emitter<void>());
 	private hiddenLines: readonly boolean[] = Object.freeze([]);
 	private visibleLineIndexes: readonly number[] = Object.freeze([]);
 
@@ -16,8 +16,8 @@ export class EditorHiddenRangeModel extends DisposableOwner implements EditorLin
 		super();
 		if (folding.model !== textModel) throw new TypeError("Hidden range and folding models must share one text model");
 		this.rebuild();
-		this.own(folding.onDidChange(() => this.rebuild()));
-		this.own(textModel.onDidChange(() => this.rebuild()));
+		this._register(folding.onDidChange(() => this.rebuild()));
+		this._register(textModel.onDidChange(() => this.rebuild()));
 	}
 
 	get model(): TextModel {

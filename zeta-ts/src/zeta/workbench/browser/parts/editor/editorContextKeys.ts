@@ -1,5 +1,5 @@
 import type { Event } from '../../../../base/common/event.js';
-import { DisposableOwner, DisposableSlot, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { IContextKey, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 import { isTextResourceLanguageInput, resolveTextResourceLanguageId, type TextResourceLanguageResolver } from '../../../../platform/language/common/textResourceLanguage.js';
 import { ActiveEditorAvailableEditorIdsContext, ActiveEditorCanRevertContext, ActiveEditorContext, ActiveEditorDirtyContext, ActiveEditorFirstInGroupContext, ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorReadonlyContext, EditorGroupEditorsCountContext, EditorPartModalVisibleContext, ResourceContext, ResourceDirnameContext, ResourceExtensionContext, ResourceFilenameContext, ResourceLanguageIdContext, ResourcePathContext, ResourceSchemeContext, ResourceSetContext } from '../../../common/contextkeys.js';
@@ -20,9 +20,9 @@ export interface EditorGroupContextKeySource {
 }
 
 /** Projects editor-owned state into the Workbench context used by editor actions. */
-export class EditorContextKeyController extends DisposableOwner {
+export class EditorContextKeyController extends Disposable {
 	private readonly keys: EditorContextKeyBindings;
-	private readonly workingCopyListener = this.own(new DisposableSlot<IDisposable>());
+	private readonly workingCopyListener = this._register(new MutableDisposable<IDisposable>());
 	private activeWorkingCopy: IWorkingCopy | undefined;
 
 	constructor(
@@ -37,8 +37,8 @@ export class EditorContextKeyController extends DisposableOwner {
 			this.update(keys);
 			return keys;
 		});
-		this.own(this.source.onDidChangeEditors(() => this.update()));
-		this.defer(() => this.reset());
+		this._register(this.source.onDidChangeEditors(() => this.update()));
+		this._register(toDisposable(() => this.reset()));
 	}
 
 	private update(keys: EditorContextKeyBindings = this.keys): void {
@@ -66,9 +66,9 @@ export class EditorContextKeyController extends DisposableOwner {
 	private updateWorkingCopyListener(workingCopy: IWorkingCopy | undefined, activeEditorDirty: IContextKey<boolean>): void {
 		if (workingCopy === this.activeWorkingCopy) return;
 		this.activeWorkingCopy = workingCopy;
-		this.workingCopyListener.replace(workingCopy?.onDidChangeDirty(() => {
+		this.workingCopyListener.value = workingCopy?.onDidChangeDirty(() => {
 			if (this.activeWorkingCopy === workingCopy) activeEditorDirty.set(workingCopy.isDirty);
-		}));
+		});
 	}
 
 	private reset(): void {
@@ -81,7 +81,7 @@ export class EditorContextKeyController extends DisposableOwner {
 }
 
 /** Projects one EditorGroup's canonical state into its scoped context. */
-export class EditorGroupContextKeyController extends DisposableOwner {
+export class EditorGroupContextKeyController extends Disposable {
 	private readonly keys: EditorContextKeyBindings;
 
 	constructor(
@@ -96,8 +96,8 @@ export class EditorGroupContextKeyController extends DisposableOwner {
 			this.update(keys);
 			return keys;
 		});
-		this.own(this.source.onDidChangeEditors(() => this.update()));
-		this.defer(() => resetEditorContextKeys(this.contextKeyService, this.keys));
+		this._register(this.source.onDidChangeEditors(() => this.update()));
+		this._register(toDisposable(() => resetEditorContextKeys(this.contextKeyService, this.keys)));
 	}
 
 	private update(keys: EditorContextKeyBindings = this.keys): void {

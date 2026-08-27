@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable } from "../../../base/common/lifecycle.js";
 import { DocumentDecorationSet } from "./documentDecoration.js";
 import { DocumentHistory, type DocumentHistoryEntries } from "./documentHistory.js";
 import { type DocumentPlugin, type DocumentPluginApplyContext, type DocumentPluginChangeOrigin, type DocumentPluginDecorationContext, type DocumentPluginInitContext, type DocumentPluginKey, type DocumentPluginSelectionContext, type DocumentPluginTransactionContext } from "./documentPlugin.js";
@@ -48,10 +48,10 @@ export interface TextModelBlockHost {
 }
 
 /** Schema-backed block transactions coordinated by the owning TextModel. */
-export class TextModelBlockState extends DisposableOwner {
-	private readonly changeEmitter = this.own(new Emitter<TextModelBlockChange>());
-	private readonly selectionEmitter = this.own(new Emitter<DocumentSelection | undefined>());
-	private readonly storedMarksEmitter = this.own(new Emitter<readonly DocumentMark[] | undefined>());
+export class TextModelBlockState extends Disposable {
+	private readonly changeEmitter = this._register(new Emitter<TextModelBlockChange>());
+	private readonly selectionEmitter = this._register(new Emitter<DocumentSelection | undefined>());
+	private readonly storedMarksEmitter = this._register(new Emitter<readonly DocumentMark[] | undefined>());
 	private readonly history: DocumentHistory;
 	private readonly plugins: readonly DocumentPlugin<unknown>[];
 	private pluginStates: Map<DocumentPluginKey<unknown>, unknown>;

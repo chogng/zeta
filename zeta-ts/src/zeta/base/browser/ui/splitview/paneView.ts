@@ -2,7 +2,7 @@ import { addDisposableListener, h } from "../../dom.js";
 import { trackFocus } from "../../focus.js";
 import { appendIcon } from "../icon/icon.js";
 import type { Event } from "../../../common/event.js";
-import { DisposableOwner } from "../../../common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../common/lifecycle.js";
 import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
 
 /** Construction inputs for a titled, collapsible pane. */
@@ -25,7 +25,7 @@ export type PaneViewHeaderActionsVisibility = "always" | "whenExpanded";
  * through {@link headerActionsElement}. They must not recreate or style the
  * header interaction internals.
  */
-export class PaneView extends DisposableOwner {
+export class PaneView extends Disposable {
 	readonly element: HTMLElement;
 	readonly id: string;
 	protected readonly headerElement: HTMLDivElement;
@@ -46,7 +46,7 @@ export class PaneView extends DisposableOwner {
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, "section");
 		this.element = element;
-		this.defer(() => element.remove());
+		this._register(toDisposable(() => element.remove()));
 		element.className = "zeta-pane-view";
 		element.dataset.paneViewId = id;
 		element.tabIndex = -1;
@@ -81,10 +81,10 @@ export class PaneView extends DisposableOwner {
 		container.append(element);
 		this.collapsed = options.collapsed === true;
 		this.renderCollapsedState();
-		this.own(addDisposableListener(this.headerButton, "click", () => {
+		this._register(addDisposableListener(this.headerButton, "click", () => {
 			this.setCollapsed(!this.collapsed);
 		}));
-		this.focusTracker = this.own(trackFocus(element));
+		this.focusTracker = this._register(trackFocus(element));
 		this.onDidFocus = this.focusTracker.onDidFocus;
 		this.onDidBlur = this.focusTracker.onDidBlur;
 	}

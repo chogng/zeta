@@ -1,7 +1,7 @@
 import { ActionViewItem, LabelActionViewItem } from "../../../../../base/browser/ui/actionbar/actionViewItems.js";
 import type { IAction } from "../../../../../base/common/actions.js";
 import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
-import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { DropdownWithPrimaryActionViewItem } from "../../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js";
 import { MenuWorkbenchToolBar } from "../../../../../platform/actions/browser/toolbar.js";
 import { MenuId, MenusRegistry } from "../../../../../platform/actions/common/actions.js";
@@ -35,7 +35,7 @@ export interface TerminalTitleActionsOptions {
 }
 
 /** Owns the Terminal title Command, Menu, Context Key, and Toolbar projection. */
-export class TerminalTitleActions extends DisposableOwner {
+export class TerminalTitleActions extends Disposable {
 	readonly element: HTMLElement;
 	private readonly toolbar: MenuWorkbenchToolBar;
 	private readonly creatingContext: IContextKey<boolean>;
@@ -53,14 +53,14 @@ export class TerminalTitleActions extends DisposableOwner {
 		this.hasActiveInstanceContext = TerminalHasActiveInstanceContext.bindTo(options.contextKeyService);
 		this.activeInstanceInTitleContext = TerminalActiveInstanceInTitleContext.bindTo(options.contextKeyService);
 		this.activeInstanceStateContext = TerminalActiveInstanceStateContext.bindTo(options.contextKeyService);
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.activeInstanceStateContext.reset();
 			this.activeInstanceInTitleContext.reset();
 			this.hasActiveInstanceContext.reset();
 			this.creatingContext.reset();
-		});
+		}));
 		this.registerCommandsAndMenu(options);
-		this.toolbar = this.own(new MenuWorkbenchToolBar(
+		this.toolbar = this._register(new MenuWorkbenchToolBar(
 			container,
 			options.menuService,
 			options.contextMenuService,
@@ -94,15 +94,15 @@ export class TerminalTitleActions extends DisposableOwner {
 	}
 
 	private registerCommandsAndMenu(options: TerminalTitleActionsOptions): void {
-		this.own(CommandsRegistry.register(ACTIVE_TERMINAL_COMMAND_ID, () => options.focusActive()));
-		this.own(CommandsRegistry.register(NEW_TERMINAL_WITH_PROFILE_COMMAND_ID, (_accessor, profileId) => {
+		this._register(CommandsRegistry.register(ACTIVE_TERMINAL_COMMAND_ID, () => options.focusActive()));
+		this._register(CommandsRegistry.register(NEW_TERMINAL_WITH_PROFILE_COMMAND_ID, (_accessor, profileId) => {
 			return this.createTerminalWithProfile(profileId);
 		}));
-		this.own(CommandsRegistry.register(NEW_TERMINAL_COMMAND_ID, () => options.createTerminal()));
-		this.own(CommandsRegistry.register(RELAUNCH_TERMINAL_COMMAND_ID, () => options.relaunchActive()));
-		this.own(CommandsRegistry.register(KILL_TERMINAL_COMMAND_ID, () => options.killActive()));
-		this.own(CommandsRegistry.register(CLEAR_TERMINAL_COMMAND_ID, () => options.clearActive()));
-		this.own(MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
+		this._register(CommandsRegistry.register(NEW_TERMINAL_COMMAND_ID, () => options.createTerminal()));
+		this._register(CommandsRegistry.register(RELAUNCH_TERMINAL_COMMAND_ID, () => options.relaunchActive()));
+		this._register(CommandsRegistry.register(KILL_TERMINAL_COMMAND_ID, () => options.killActive()));
+		this._register(CommandsRegistry.register(CLEAR_TERMINAL_COMMAND_ID, () => options.clearActive()));
+		this._register(MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
 			command: {
 				id: ACTIVE_TERMINAL_COMMAND_ID,
 				title: "Focus Active Terminal",
@@ -112,7 +112,7 @@ export class TerminalTitleActions extends DisposableOwner {
 			group: "navigation",
 			order: 0,
 		}));
-		this.own(MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
+		this._register(MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
 			command: {
 				id: NEW_TERMINAL_COMMAND_ID,
 				title: "New Terminal",
@@ -123,7 +123,7 @@ export class TerminalTitleActions extends DisposableOwner {
 			group: "navigation",
 			order: 10,
 		}));
-		this.own(MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
+		this._register(MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
 			command: {
 				id: RELAUNCH_TERMINAL_COMMAND_ID,
 				title: "Relaunch Terminal",
@@ -137,7 +137,7 @@ export class TerminalTitleActions extends DisposableOwner {
 			group: "navigation",
 			order: 20,
 		}));
-		this.own(MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
+		this._register(MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
 			command: {
 				id: KILL_TERMINAL_COMMAND_ID,
 				title: "Kill Terminal",
@@ -148,7 +148,7 @@ export class TerminalTitleActions extends DisposableOwner {
 			group: "navigation",
 			order: 30,
 		}));
-		this.own(MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
+		this._register(MenusRegistry.appendMenuItem(MenuId.TerminalTitle, {
 			command: {
 				id: CLEAR_TERMINAL_COMMAND_ID,
 				title: "Clear Terminal",

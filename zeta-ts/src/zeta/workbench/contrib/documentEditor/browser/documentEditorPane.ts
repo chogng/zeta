@@ -1,5 +1,5 @@
 import { assertDefined } from "../../../../base/common/types.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IDimension } from "../../../../base/browser/geometry.js";
 import type { URI } from "../../../../base/common/uri.js";
 import { RichTextEditorWidget, type RichTextEditorOptions } from "../../../../editor/browser/widget/richTextEditor/richTextEditorWidget.js";
@@ -21,7 +21,7 @@ export interface EditorPaneOptions extends RichTextEditorOptions {
 }
 
 /** Workbench pane that hosts one structured document editor. */
-export class DocumentEditorPane extends DisposableOwner implements IEditorPane {
+export class DocumentEditorPane extends Disposable implements IEditorPane {
 	readonly id = DOCUMENT_EDITOR_ID;
 
 	private readonly editor: RichTextEditorWidget;
@@ -34,13 +34,13 @@ export class DocumentEditorPane extends DisposableOwner implements IEditorPane {
 
 	constructor(textFiles: ITextFileService, options: EditorPaneOptions = {}) {
 		super();
-		const modelService = this.own(new DocumentEditorTextModelService(textFiles, options.workingCopyService));
-		const collaborationService = options.documentCollaborationService ? this.own(options.documentCollaborationService) : undefined;
-		this.editor = this.own(new RichTextEditorWidget(modelService, { ...options, ...(collaborationService ? { documentCollaborationService: collaborationService } : {}) }));
-		this.defer(() => {
+		const modelService = this._register(new DocumentEditorTextModelService(textFiles, options.workingCopyService));
+		const collaborationService = options.documentCollaborationService ? this._register(options.documentCollaborationService) : undefined;
+		this.editor = this._register(new RichTextEditorWidget(modelService, { ...options, ...(collaborationService ? { documentCollaborationService: collaborationService } : {}) }));
+		this._register(toDisposable(() => {
 			this.container?.remove();
 			this.container = undefined;
-		});
+		}));
 	}
 
 	create(parent: HTMLElement): void {

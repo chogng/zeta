@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Emitter } from "../../../../../base/common/event.js";
 import {
-	DisposableOwner,
+	Disposable,
 } from "../../../../../base/common/lifecycle.js";
 import {
 	type ContextMenuOptions,
@@ -39,10 +39,10 @@ test("workbench context menu service owns and forwards its implementation", () =
 });
 
 class TestContextMenuImplementation
-	extends DisposableOwner
+	extends Disposable
 	implements IContextMenuService {
-	private readonly _onDidShowContextMenu = this.own(new Emitter<void>());
-	private readonly _onDidHideContextMenu = this.own(new Emitter<void>());
+	private readonly _onDidShowContextMenu = this._register(new Emitter<void>());
+	private readonly _onDidHideContextMenu = this._register(new Emitter<void>());
 	readonly onDidShowContextMenu = this._onDidShowContextMenu.event;
 	readonly onDidHideContextMenu = this._onDidHideContextMenu.event;
 	lastOptions: ContextMenuOptions | undefined;

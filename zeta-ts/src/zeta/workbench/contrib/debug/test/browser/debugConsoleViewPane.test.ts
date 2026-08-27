@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { Emitter } from "../../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../../base/common/lifecycle.js";
 import type { IDebugConsoleService, IDebugConsoleSession } from "../../../../services/debug/common/debugConsoleService.js";
 
 test("Debug Console renders retained output, evaluates expressions, and exposes its clear icon action", async () => {
@@ -31,8 +31,8 @@ test("Debug Console renders retained output, evaluates expressions, and exposes 
 	}
 });
 
-class FakeDebugConsoleService extends DisposableOwner implements IDebugConsoleService {
-	private readonly changeEmitter = this.own(new Emitter<void>());
+class FakeDebugConsoleService extends Disposable implements IDebugConsoleService {
+	private readonly changeEmitter = this._register(new Emitter<void>());
 	private output = "ready\n";
 	readonly onDidChange = this.changeEmitter.event;
 	get sessions(): readonly IDebugConsoleSession[] { return Object.freeze([this.snapshot()]); }

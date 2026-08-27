@@ -1,6 +1,6 @@
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { type ISize } from '../../../base/common/layout.js';
-import { DisposableOwner } from '../../../base/common/lifecycle.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
 import { clamp, isFiniteNumber, isNonNegativeSafeInteger, isPositiveSafeInteger } from '../../../base/common/numbers.js';
 import { type TextModelChange } from '../core/text.js';
 import { type EditorLineHeightChangeAccessor, type EditorLineRange, type EditorScrollPosition, type EditorViewportLineSource, type EditorViewportModelSource } from '../viewModel.js';
@@ -51,8 +51,8 @@ export interface EditorViewportOptions {
  * Horizontal measurement and scroll state stay here, while `LinesLayout` owns
  * line heights, padding, and visible/render line projection.
  */
-export class ViewLayout extends DisposableOwner {
-	private readonly changeEmitter = this.own(new Emitter<EditorViewportChange>());
+export class ViewLayout extends Disposable {
+	private readonly changeEmitter = this._register(new Emitter<EditorViewportChange>());
 	private readonly lineSource: EditorViewportLineSource;
 	private readonly linesLayout: LinesLayout;
 	private viewportSize: ISize = Object.freeze({ width: 0, height: 0 });
@@ -79,9 +79,9 @@ export class ViewLayout extends DisposableOwner {
 			options.customLineHeightData,
 		);
 		this.currentLayout = this.createLayout();
-		this.own(model.onDidChange(change => this.publish(EditorViewportChangeReason.Model, change)));
+		this._register(model.onDidChange(change => this.publish(EditorViewportChangeReason.Model, change)));
 		if (options.lineSource) {
-			this.own(this.lineSource.onDidChange(() => this.publish(EditorViewportChangeReason.LineProjection)));
+			this._register(this.lineSource.onDidChange(() => this.publish(EditorViewportChangeReason.LineProjection)));
 		}
 	}
 

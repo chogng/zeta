@@ -1,5 +1,5 @@
 import { Emitter } from "../../../../base/common/event.js";
-import { combinedDisposable, DisposableOwner, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { combinedDisposable, Disposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IDebugConsoleService, IDebugConsoleSession } from "../common/debugConsoleService.js";
 import type { IDebugService, IDebugSession } from "../common/debugService.js";
 
@@ -16,19 +16,19 @@ const MAXIMUM_CONSOLE_SESSIONS = 20;
 const MAXIMUM_CONSOLE_CHARACTERS = 128_000;
 
 /** Captures DAP output independently of whether the Debug Console panel is visible. */
-export class DebugConsoleService extends DisposableOwner implements IDebugConsoleService {
-	private readonly changeEmitter = this.own(new Emitter<void>());
+export class DebugConsoleService extends Disposable implements IDebugConsoleService {
+	private readonly changeEmitter = this._register(new Emitter<void>());
 	private readonly records = new Map<string, DebugConsoleRecord>();
 	private activeSessionId: string | undefined;
 	readonly onDidChange = this.changeEmitter.event;
 
 	constructor(private readonly debug: IDebugService) {
 		super();
-		this.own(debug.onDidChangeSession(() => this.synchronize()));
-		this.defer(() => {
+		this._register(debug.onDidChangeSession(() => this.synchronize()));
+		this._register(toDisposable(() => {
 			for (const record of this.records.values()) record.listener?.dispose();
 			this.records.clear();
-		});
+		}));
 		this.synchronize();
 	}
 
@@ -97,7 +97,7 @@ export class DebugConsoleService extends DisposableOwner implements IDebugConsol
 		const record: DebugConsoleRecord = { id: session.id, label: session.configuration.name, state: session.state, output: session.output, session, listener: undefined };
 		const output = session.onDidOutput(value => this.append(record, value));
 		const state = session.onDidChangeState(value => { record.state = value; this.changeEmitter.fire(); });
-		record.listener = this.own(combinedDisposable(output, state));
+		record.listener = this._register(combinedDisposable(output, state));
 		this.records.set(session.id, record);
 		return record;
 	}

@@ -1,6 +1,6 @@
 import "./media/findWidget.css";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
-import { DisposableOwner, DisposableSlot } from "../../../../base/common/lifecycle.js";
+import { Disposable, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
 import { type TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
@@ -25,7 +25,7 @@ export interface FindControllerOptions {
 }
 
 /** Owns Stanza's browser find/replace widget, shortcuts, match navigation, and search decorations. */
-export class FindController extends DisposableOwner {
+export class FindController extends Disposable {
 	readonly element: HTMLDivElement;
 	readonly searchInput: HTMLInputElement;
 	readonly replaceInput: HTMLInputElement;
@@ -36,7 +36,7 @@ export class FindController extends DisposableOwner {
 	private readonly wholeWordButton: HTMLButtonElement;
 	private readonly regularExpressionButton: HTMLButtonElement;
 	private readonly findInSelectionButton: HTMLButtonElement;
-	private readonly selectionScope = this.own(new DisposableSlot<TrackedRange>());
+	private readonly selectionScope = this._register(new MutableDisposable<TrackedRange>());
 	private matches: readonly TextSearchMatch[] = Object.freeze([]);
 	private currentMatchIndex = -1;
 	private replaceVisible = false;
@@ -118,43 +118,43 @@ export class FindController extends DisposableOwner {
 		projectToggle(this.wholeWordButton, this.wholeWord);
 		projectToggle(this.regularExpressionButton, this.regularExpression);
 		viewport.element.append(this.element);
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.decorations.clear();
 			this.element.remove();
-		});
+		}));
 
-		this.own(addDisposableListener(editorInput, "keydown", event => this.handleEditorKeydown(event)));
-		this.own(addDisposableListener(this.element, "keydown", event => this.handleWidgetKeydown(event)));
-		this.own(addDisposableListener(this.element, "mousedown", event => {
+		this._register(addDisposableListener(editorInput, "keydown", event => this.handleEditorKeydown(event)));
+		this._register(addDisposableListener(this.element, "keydown", event => this.handleWidgetKeydown(event)));
+		this._register(addDisposableListener(this.element, "mousedown", event => {
 			if (event.target !== this.searchInput && event.target !== this.replaceInput) event.preventDefault();
 		}));
-		this.own(addDisposableListener(this.searchInput, "input", () => this.refreshMatches({ selectMatch: true })));
-		this.own(addDisposableListener(this.replaceToggle, "click", () => this.setReplaceVisible(!this.replaceVisible)));
-		this.own(addDisposableListener(this.matchCaseButton, "click", () => {
+		this._register(addDisposableListener(this.searchInput, "input", () => this.refreshMatches({ selectMatch: true })));
+		this._register(addDisposableListener(this.replaceToggle, "click", () => this.setReplaceVisible(!this.replaceVisible)));
+		this._register(addDisposableListener(this.matchCaseButton, "click", () => {
 			this.matchCase = !this.matchCase;
 			projectToggle(this.matchCaseButton, this.matchCase);
 			this.refreshMatches({ selectMatch: true });
 		}));
-		this.own(addDisposableListener(this.wholeWordButton, "click", () => {
+		this._register(addDisposableListener(this.wholeWordButton, "click", () => {
 			this.wholeWord = !this.wholeWord;
 			projectToggle(this.wholeWordButton, this.wholeWord);
 			this.refreshMatches({ selectMatch: true });
 		}));
-		this.own(addDisposableListener(this.regularExpressionButton, "click", () => {
+		this._register(addDisposableListener(this.regularExpressionButton, "click", () => {
 			this.regularExpression = !this.regularExpression;
 			projectToggle(this.regularExpressionButton, this.regularExpression);
 			this.refreshMatches({ selectMatch: true });
 		}));
-		this.own(addDisposableListener(this.findInSelectionButton, "click", () => this.toggleFindInSelection()));
-		this.own(addDisposableListener(previousButton, "click", () => this.selectRelativeMatch(-1)));
-		this.own(addDisposableListener(nextButton, "click", () => this.selectRelativeMatch(1)));
-		this.own(addDisposableListener(closeButton, "click", () => this.close()));
-		this.own(addDisposableListener(replaceButton, "click", () => this.replaceCurrentMatch()));
-		this.own(addDisposableListener(replaceAllButton, "click", () => this.replaceAllMatches()));
-		this.own(viewport.textModel.onDidChange(() => {
+		this._register(addDisposableListener(this.findInSelectionButton, "click", () => this.toggleFindInSelection()));
+		this._register(addDisposableListener(previousButton, "click", () => this.selectRelativeMatch(-1)));
+		this._register(addDisposableListener(nextButton, "click", () => this.selectRelativeMatch(1)));
+		this._register(addDisposableListener(closeButton, "click", () => this.close()));
+		this._register(addDisposableListener(replaceButton, "click", () => this.replaceCurrentMatch()));
+		this._register(addDisposableListener(replaceAllButton, "click", () => this.replaceAllMatches()));
+		this._register(viewport.textModel.onDidChange(() => {
 			if (this.visible) this.refreshMatches({ selectMatch: false });
 		}));
-		this.own(viewport.onDidChangeLayout(() => this.position()));
+		this._register(viewport.onDidChangeLayout(() => this.position()));
 		this.position();
 	}
 
@@ -360,7 +360,7 @@ export class FindController extends DisposableOwner {
 
 	private captureSelectionScope(): void {
 		const range = this.selections.selections.primary.range;
-		this.selectionScope.replace(range.empty ? undefined : this.model.trackRange(range, TrackedRangeStickiness.NeverGrowsAtEdges));
+		this.selectionScope.value = range.empty ? undefined : this.model.trackRange(range, TrackedRangeStickiness.NeverGrowsAtEdges);
 		this.projectFindInSelectionAvailability();
 	}
 

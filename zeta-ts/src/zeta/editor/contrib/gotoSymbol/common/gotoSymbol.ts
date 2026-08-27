@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type TextPosition, type TextRange } from "../../../common/core/text.js";
 import { type LanguageDocumentSymbol, DocumentSymbolService } from "../../documentSymbols/common/documentSymbols.js";
 
@@ -9,10 +9,10 @@ export interface LanguageSymbolMatch {
 }
 
 /** Queries document symbols without coupling quick access UI to provider transport. */
-export class GotoSymbolService extends DisposableOwner {
+export class GotoSymbolService extends Disposable {
 	constructor(private readonly documentSymbols: DocumentSymbolService) {
 		super();
-		this.own(documentSymbols);
+		this._register(documentSymbols);
 	}
 
 	async query(languageId: string, query: string, signal: AbortSignal = new AbortController().signal): Promise<readonly LanguageSymbolMatch[]> {

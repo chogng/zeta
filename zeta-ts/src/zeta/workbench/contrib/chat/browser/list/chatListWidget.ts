@@ -1,7 +1,7 @@
 import { MarkdownElement } from "../../../../../base/browser/markdownRenderer.js";
 import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
 import { ScrollableElement } from "../../../../../base/browser/ui/scrollbar/scrollableElement.js";
-import { DisposableOwner, ResettableDisposableGroup } from "../../../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore } from "../../../../../base/common/lifecycle.js";
 import type { ChatTurnErrorAction, IChatListItem } from "./chatListItems.js";
 
 interface ChatListWidgetOptions {
@@ -9,11 +9,11 @@ interface ChatListWidgetOptions {
 }
 
 /** Renders the ordered user, Agent, reasoning, and tool items in one Chat pane. */
-export class ChatListWidget extends DisposableOwner {
+export class ChatListWidget extends Disposable {
 	readonly element: HTMLElement;
 	private readonly scrollable: ScrollableElement;
 	private readonly transcript: HTMLDivElement;
-	private readonly renderedItems = this.own(new ResettableDisposableGroup());
+	private readonly renderedItems = this._register(new DisposableStore());
 	private readonly onDidRequestErrorAction: ((action: ChatTurnErrorAction) => void) | undefined;
 	private visible = false;
 	private shouldFollow = true;
@@ -21,7 +21,7 @@ export class ChatListWidget extends DisposableOwner {
 	constructor(container: HTMLElement, options: ChatListWidgetOptions = {}) {
 		super();
 		this.onDidRequestErrorAction = options.onDidRequestErrorAction;
-		this.scrollable = this.own(new ScrollableElement(container, {
+		this.scrollable = this._register(new ScrollableElement(container, {
 			direction: "vertical",
 			vertical: "auto",
 			tabIndex: -1,

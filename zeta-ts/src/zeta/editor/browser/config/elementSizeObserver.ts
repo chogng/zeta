@@ -1,7 +1,7 @@
 import { getClientArea, type IDimension, Dimension } from '../../../base/browser/geometry.js';
 import { observeElementSize } from '../../../base/browser/observer.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
-import { DisposableOwner, DisposableSlot, type IDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { isFiniteNumber } from '../../../base/common/numbers.js';
 
 /**
@@ -11,9 +11,9 @@ import { isFiniteNumber } from '../../../base/common/numbers.js';
  * same dimension shape for ResizeObserver and explicit initial observation,
  * which keeps layout ownership in the viewport rather than in the DOM API.
  */
-export class ElementSizeObserver extends DisposableOwner {
-	private readonly changeEmitter = this.own(new Emitter<IDimension>());
-	private readonly observation = this.own(new DisposableSlot<IDisposable>());
+export class ElementSizeObserver extends Disposable {
+	private readonly changeEmitter = this._register(new Emitter<IDimension>());
+	private readonly observation = this._register(new MutableDisposable<IDisposable>());
 	private currentSize: Dimension | undefined;
 
 	readonly onDidChange: Event<IDimension> = this.changeEmitter.event;
@@ -27,11 +27,11 @@ export class ElementSizeObserver extends DisposableOwner {
 	}
 
 	startObserving(): void {
-		this.observation.replace(observeElementSize(
+		this.observation.value = observeElementSize(
 			this.element,
 			size => this.observe(size),
 			{ box: 'content-box' },
-		));
+		);
 	}
 
 	stopObserving(): void {

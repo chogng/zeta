@@ -1,7 +1,7 @@
 import { List } from "../../../base/browser/ui/list/listWidget.js";
 import { setRole } from "../../../base/browser/ui/aria/aria.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { IQuickPickItem } from "../common/quickInput.js";
 import { h } from "../../../base/browser/dom.js";
 
@@ -12,13 +12,13 @@ export interface QuickInputListActiveChangeEvent<TItem> {
 
 /** Searchable single-selection list shared by browser Quick Inputs. */
 export class QuickInputList<TItem extends IQuickPickItem>
-	extends DisposableOwner {
+	extends Disposable {
 	readonly element: HTMLDivElement;
 	private readonly empty: HTMLDivElement;
 	private readonly list: List<TItem>;
-	private readonly _onDidAccept = this.own(new Emitter<TItem>());
+	private readonly _onDidAccept = this._register(new Emitter<TItem>());
 	private readonly _onDidChangeActive =
-		this.own(new Emitter<QuickInputListActiveChangeEvent<TItem>>());
+		this._register(new Emitter<QuickInputListActiveChangeEvent<TItem>>());
 	private _items: readonly TItem[] = [];
 	private _visibleItems: readonly TItem[] = [];
 	private query = "";
@@ -33,10 +33,10 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		const ownerDocument = container.ownerDocument;
 		this.element = h(ownerDocument, "div");
 		this.element.className = "zeta-quick-pick-list";
-		this.defer(() => this.element.remove());
+		this._register(toDisposable(() => this.element.remove()));
 		container.append(this.element);
 
-		this.list = this.own(new List<TItem>(this.element, {
+		this.list = this._register(new List<TItem>(this.element, {
 			ariaLabel: "Quick Pick results",
 			renderItem: (item) => this.renderItem(item),
 		}));
@@ -48,10 +48,10 @@ export class QuickInputList<TItem extends IQuickPickItem>
 		this.empty.hidden = true;
 		this.element.append(this.list.element, this.empty);
 
-		this.own(this.list.onDidAccept(({ item }) => {
+		this._register(this.list.onDidAccept(({ item }) => {
 			this._onDidAccept.fire(item);
 		}));
-		this.own(this.list.onDidChangeActive(({ item, rowId }) => {
+		this._register(this.list.onDidChangeActive(({ item, rowId }) => {
 			this._onDidChangeActive.fire({ item, rowId });
 		}));
 	}

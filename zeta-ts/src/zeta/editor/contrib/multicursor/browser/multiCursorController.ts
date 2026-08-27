@@ -1,5 +1,5 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { addAdjacentLineCursors, addCursorsToSelectedLineEnds, EditorCursorInsertionDirection } from "../../../common/cursor/cursorInsertion.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
@@ -10,7 +10,7 @@ export interface MultiCursorControllerOptions {
 }
 
 /** Routes platform-specific add-cursor-above/below chords through Stanza common state. */
-export class MultiCursorController extends DisposableOwner {
+export class MultiCursorController extends Disposable {
 	private readonly targetOperatingSystem: OperatingSystem;
 
 	constructor(
@@ -25,7 +25,7 @@ export class MultiCursorController extends DisposableOwner {
 			if (viewport.textModel !== selections.textModel) {
 				throw new TypeError("Stanza multi-cursor dependencies must share one text model");
 			}
-			this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
+			this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
 		} catch (error) {
 			this.dispose();
 			throw error;

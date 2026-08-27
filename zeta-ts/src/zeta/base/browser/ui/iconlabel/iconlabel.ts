@@ -3,7 +3,7 @@ import { getHoverDelegate, type IManagedHover } from '../hover/hoverDelegate.js'
 import { appendIcon } from '../icon/icon.js';
 import { getIconAriaLabel, type IMatch } from '../../../common/iconLabels.js';
 import type { Icon } from '../../../common/icon.js';
-import { DisposableOwner, DisposableSlot } from '../../../common/lifecycle.js';
+import { Disposable, MutableDisposable, toDisposable } from '../../../common/lifecycle.js';
 import { h, text as createText } from '../../dom.js';
 import { renderLabelWithIcons } from './iconLabels.js';
 
@@ -39,14 +39,14 @@ export interface IconLabelOptions extends IconLabelValueOptions {
  * Reusable label whose icon, name, description, suffix, and hover lifetimes
  * share one stable DOM shape.
  */
-export class IconLabel extends DisposableOwner {
+export class IconLabel extends Disposable {
 	readonly element: HTMLSpanElement;
 	readonly iconElement: HTMLSpanElement;
 	readonly labelElement: HTMLSpanElement;
 
 	private readonly labelContainer: HTMLSpanElement;
-	private readonly descriptionHover = this.own(new DisposableSlot<IManagedHover>());
-	private readonly titleHover = this.own(new DisposableSlot<IManagedHover>());
+	private readonly descriptionHover = this._register(new MutableDisposable<IManagedHover>());
+	private readonly titleHover = this._register(new MutableDisposable<IManagedHover>());
 	private readonly supportIcons: boolean;
 	private appliedClasses: readonly string[] = [];
 	private descriptionElement: HTMLSpanElement | undefined;
@@ -60,7 +60,7 @@ export class IconLabel extends DisposableOwner {
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, 'span');
 		this.element = element;
-		this.defer(() => element.remove());
+		this._register(toDisposable(() => element.remove()));
 		element.className = 'zeta-icon-label';
 		this.supportIcons = options.supportIcons === true;
 
@@ -223,14 +223,14 @@ export class IconLabel extends DisposableOwner {
 	}
 
 	private setHover(
-		slot: DisposableSlot<IManagedHover>,
+		slot: MutableDisposable<IManagedHover>,
 		target: HTMLElement,
 		content: HoverContent,
 	): void {
 		slot.clear();
 		target.removeAttribute('title');
 		if (content === undefined || content === '') return;
-		slot.replace(getHoverDelegate().setupHover({ target, content }));
+		slot.value = getHoverDelegate().setupHover({ target, content });
 	}
 }
 

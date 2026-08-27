@@ -1,3 +1,4 @@
+import { toDisposable } from "../../../../base/common/lifecycle.js";
 import "./composition.css";
 import { type TextRange } from "../../../common/core/text.js";
 import { type TextModel } from "../../../common/model/textModel.js";
@@ -14,7 +15,7 @@ export class CompositionPart extends DynamicViewOverlay {
 	constructor(context: EditorViewContext, model: TextModel) {
 		super(context);
 		this.model = model;
-		this.defer(() => this.compositionRange?.dispose());
+		this._register(toDisposable(() => this.compositionRange?.dispose()));
 	}
 
 	public setRange(range: TextRange | undefined): void {

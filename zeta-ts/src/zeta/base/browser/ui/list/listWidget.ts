@@ -1,6 +1,6 @@
 import { addDisposableListener, stopEvent } from "../../dom.js";
 import { Emitter, type Event } from "../../../common/event.js";
-import { DisposableOwner } from "../../../common/lifecycle.js";
+import { Disposable } from "../../../common/lifecycle.js";
 import { rot } from "../../../common/numbers.js";
 import { setAriaAttribute } from "../aria/aria.js";
 import type { ListAccessibilityProvider, ListDragAndDrop, ListScrolling } from "./list.js";
@@ -48,15 +48,15 @@ export interface ListAcceptEvent<T> {
 }
 
 /** Selection, focus, keyboard, and pointer semantics over a flat ListView. */
-export class List<T> extends DisposableOwner {
+export class List<T> extends Disposable {
 	readonly element: HTMLDivElement;
 	private readonly view: ListView<T>;
 	private readonly loopNavigation: boolean;
-	private readonly _onDidChangeActive = this.own(new Emitter<ListActiveChangeEvent<T>>());
-	private readonly _onDidChangeSelection = this.own(new Emitter<ListSelectionChangeEvent<T>>());
-	private readonly _onPointer = this.own(new Emitter<ListPointerEvent<T>>());
-	private readonly _onDidDoubleClick = this.own(new Emitter<ListPointerEvent<T>>());
-	private readonly _onDidAccept = this.own(new Emitter<ListAcceptEvent<T>>());
+	private readonly _onDidChangeActive = this._register(new Emitter<ListActiveChangeEvent<T>>());
+	private readonly _onDidChangeSelection = this._register(new Emitter<ListSelectionChangeEvent<T>>());
+	private readonly _onPointer = this._register(new Emitter<ListPointerEvent<T>>());
+	private readonly _onDidDoubleClick = this._register(new Emitter<ListPointerEvent<T>>());
+	private readonly _onDidAccept = this._register(new Emitter<ListAcceptEvent<T>>());
 	private _activeIndex = -1;
 	private _selectionIndexes: readonly number[] = [];
 
@@ -71,7 +71,7 @@ export class List<T> extends DisposableOwner {
 	constructor(container: HTMLElement, private readonly options: ListOptions<T>) {
 		super();
 		this.loopNavigation = options.loopNavigation ?? true;
-		this.view = this.own(new ListView(container, {
+		this.view = this._register(new ListView(container, {
 			ariaLabel: options.ariaLabel,
 			role: options.role,
 			scrolling: options.scrolling,
@@ -85,18 +85,18 @@ export class List<T> extends DisposableOwner {
 		}));
 		this.element = this.view.element;
 		this.onDidScroll = this.view.onDidScroll;
-		this.own(addDisposableListener(this.element, "mousemove", (event: MouseEvent) => {
+		this._register(addDisposableListener(this.element, "mousemove", (event: MouseEvent) => {
 			if (options.focusOnMouseMove === false) return;
 			const index = this.view.getRowIndex(event);
 			if (index !== undefined) this.setActiveIndex(index, event);
 		}));
-		this.own(addDisposableListener(this.element, "mousedown", (event: MouseEvent) => {
+		this._register(addDisposableListener(this.element, "mousedown", (event: MouseEvent) => {
 			if (this.view.getRowIndex(event) !== undefined) stopEvent(event);
 		}));
-		this.own(addDisposableListener(this.element, "click", (event: MouseEvent) => this.onClick(event)));
-		this.own(addDisposableListener(this.element, "auxclick", (event: MouseEvent) => this.onAuxClick(event)));
-		this.own(addDisposableListener(this.element, "dblclick", (event: MouseEvent) => this.onDoubleClick(event)));
-		if (options.keyboardNavigation === true) this.own(addDisposableListener(this.element, "keydown", (event: KeyboardEvent) => this.onKeyDown(event)));
+		this._register(addDisposableListener(this.element, "click", (event: MouseEvent) => this.onClick(event)));
+		this._register(addDisposableListener(this.element, "auxclick", (event: MouseEvent) => this.onAuxClick(event)));
+		this._register(addDisposableListener(this.element, "dblclick", (event: MouseEvent) => this.onDoubleClick(event)));
+		if (options.keyboardNavigation === true) this._register(addDisposableListener(this.element, "keydown", (event: KeyboardEvent) => this.onKeyDown(event)));
 	}
 
 	get items(): readonly T[] { return this.view.items; }

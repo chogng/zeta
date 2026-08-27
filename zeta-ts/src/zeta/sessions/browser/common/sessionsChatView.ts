@@ -3,7 +3,7 @@ import "./sessionsChatView.css";
 import { addDisposableListener, h } from "../../../base/browser/dom.js";
 import type { IDimension, IRectangle } from "../../../base/browser/geometry.js";
 import { Direction, Grid, Sizing, type IView } from "../../../base/browser/ui/grid/grid.js";
-import { DisposableOwner, setDisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable, setDisposableOwner, toDisposable } from "../../../base/common/lifecycle.js";
 import type { ICommandService } from "../../../platform/commands/common/commands.js";
 import type { IContextMenuService } from "../../../platform/contextview/browser/contextMenu.js";
 import type { IContextViewService } from "../../../platform/contextview/browser/contextView.js";
@@ -30,7 +30,7 @@ export interface SessionsChatViewOptions {
 }
 
 /** Owns the resizable grid of retained Chat panes in the Sessions Part. */
-export class SessionsChatView extends DisposableOwner {
+export class SessionsChatView extends Disposable {
 	readonly domNode: HTMLElement;
 	private readonly grid: Grid<SessionsChatGridView>;
 	private readonly empty: SessionsChatEmptyView;
@@ -64,13 +64,13 @@ export class SessionsChatView extends DisposableOwner {
 		this.domNode.className = "zeta-sessions-chat-view";
 		container.append(this.domNode);
 		this.empty = new SessionsChatEmptyView(this.domNode);
-		this.grid = this.own(new Grid<SessionsChatGridView>(this.domNode, { type: "leaf", view: this.empty, size: 800 }, { sashPresentation: { type: "inset", gap: 8 } }));
+		this.grid = this._register(new Grid<SessionsChatGridView>(this.domNode, { type: "leaf", view: this.empty, size: 800 }, { sashPresentation: { type: "inset", gap: 8 } }));
 		this.grid.element.classList.add("zeta-sessions-chat-grid");
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			for (const entry of this.entries.values()) entry.dispose();
 			this.entries.clear();
 			this.domNode.remove();
-		});
+		}));
 	}
 
 	focus(): void {
@@ -182,7 +182,7 @@ interface SessionsChatGridEntryOptions extends SessionsChatViewOptions {
 	readonly selection: SessionsViewSelection;
 }
 
-class SessionsChatGridEntry extends DisposableOwner implements IView {
+class SessionsChatGridEntry extends Disposable implements IView {
 	readonly element: HTMLElement;
 	readonly pane: ChatPane;
 	readonly minimumWidth = 300;
@@ -212,7 +212,7 @@ class SessionsChatGridEntry extends DisposableOwner implements IView {
 		close.setAttribute("aria-label", "Close visible session");
 		close.textContent = "×";
 		header.append(activate, close);
-		this.pane = this.own(new ChatPane(
+		this.pane = this._register(new ChatPane(
 			this.element,
 			`zeta-sessions-chat-pane-${sessionsChatPaneInstanceId}`,
 			options.chatService,
@@ -227,19 +227,19 @@ class SessionsChatGridEntry extends DisposableOwner implements IView {
 		this.pane.setTabId(this.title.id);
 		this.pane.setVisible(true);
 		this.element.append(header, this.pane.element);
-		this.own(addDisposableListener(activate, "click", () => this.pane.focus()));
-		this.own(addDisposableListener(close, "click", event => {
+		this._register(addDisposableListener(activate, "click", () => this.pane.focus()));
+		this._register(addDisposableListener(close, "click", event => {
 			event.stopPropagation();
 			options.closeSelection(this.selection);
 		}));
-		this.own(addDisposableListener(this.element, "focusin", () => {
+		this._register(addDisposableListener(this.element, "focusin", () => {
 			if (!this.element.classList.contains("active")) options.activateSelection(this.selection);
 		}));
-		this.own(addDisposableListener(this.element, "pointerdown", event => {
+		this._register(addDisposableListener(this.element, "pointerdown", event => {
 			if (close.contains(event.target as Node)) return;
 			if (!this.element.classList.contains("active")) options.activateSelection(this.selection);
 		}));
-		this.defer(() => this.element.remove());
+		this._register(toDisposable(() => this.element.remove()));
 	}
 
 	layout(_bounds: IRectangle): void {}

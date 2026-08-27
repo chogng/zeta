@@ -4,42 +4,42 @@ import type { IAction } from "../../../../base/common/actions.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { getOrSet } from "../../../../base/common/map.js";
 import { type URI } from "../../../../base/common/uri.js";
-import { LanguageDiagnosticSeverity, type LanguageDiagnostic } from "../../../../editor/common/languages/languageResults.js";
+import { TextRange } from "../../../../editor/common/core/range.js";
+import { MarkerSeverity, type Marker } from "../../../../platform/markers/common/markers.js";
 import { type IEditorService } from "../../../services/editor/common/editorService.js";
 import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
-import { type ILanguageDiagnosticsService, type LanguageDiagnosticSnapshot } from "../../../services/language/common/languageDiagnosticsService.js";
+import { type IMarkerService } from "../../../../platform/markers/common/markers.js";
 
 interface ProblemEntry {
-	readonly resource: URI;
-	readonly diagnostic: LanguageDiagnostic;
+	readonly marker: Marker;
 }
 
 const severities = Object.freeze([
-	LanguageDiagnosticSeverity.Error,
-	LanguageDiagnosticSeverity.Warning,
-	LanguageDiagnosticSeverity.Information,
-	LanguageDiagnosticSeverity.Hint,
+	MarkerSeverity.Error,
+	MarkerSeverity.Warning,
+	MarkerSeverity.Information,
+	MarkerSeverity.Hint,
 ]);
 
-const severityLabels: Readonly<Record<LanguageDiagnosticSeverity, string>> = Object.freeze({
-	[LanguageDiagnosticSeverity.Error]: "Errors",
-	[LanguageDiagnosticSeverity.Warning]: "Warnings",
-	[LanguageDiagnosticSeverity.Information]: "Information",
-	[LanguageDiagnosticSeverity.Hint]: "Hints",
+const severityLabels: Readonly<Record<MarkerSeverity, string>> = Object.freeze({
+	[MarkerSeverity.Error]: "Errors",
+	[MarkerSeverity.Warning]: "Warnings",
+	[MarkerSeverity.Information]: "Information",
+	[MarkerSeverity.Hint]: "Hints",
 });
 
 /** Aggregated workspace diagnostics with severity filtering and editor navigation. */
 export class ProblemsViewPane extends ViewPane {
 	private readonly filterInput: HTMLInputElement;
 	private readonly titleActions: ActionBar;
-	private readonly severityButtons = new Map<LanguageDiagnosticSeverity, HTMLButtonElement>();
-	private readonly enabledSeverities = new Set<LanguageDiagnosticSeverity>(severities);
+	private readonly severityButtons = new Map<MarkerSeverity, HTMLButtonElement>();
+	private readonly enabledSeverities = new Set<MarkerSeverity>(severities);
 	private readonly statusElement: HTMLDivElement;
 	private readonly resultsElement: HTMLUListElement;
 	private renderedProblems: readonly ProblemEntry[] = [];
 	private navigationError: string | undefined;
 
-	constructor(container: HTMLElement, options: IViewPaneOptions, private readonly diagnosticsService: ILanguageDiagnosticsService, private readonly editorService: IEditorService) {
+	constructor(container: HTMLElement, options: IViewPaneOptions, private readonly markerService: IMarkerService, private readonly editorService: IEditorService) {
 		super(container, options);
 		this.contentElement.classList.add("zeta-problems");
 		const document = container.ownerDocument;
@@ -61,7 +61,7 @@ export class ProblemsViewPane extends ViewPane {
 			checked: undefined,
 			run: () => this.filterInput.focus(),
 		};
-		this.titleActions = this.own(new ActionBar(this.headerActionsElement, { ariaLabel: "Problems actions", actions: [focusFilterAction] }));
+		this.titleActions = this._register(new ActionBar(this.headerActionsElement, { ariaLabel: "Problems actions", actions: [focusFilterAction] }));
 		this.titleActions.element.classList.add("zeta-toolbar");
 		const severityControls = h(document, "div");
 		severityControls.className = "zeta-problems-severities";
@@ -74,7 +74,7 @@ export class ProblemsViewPane extends ViewPane {
 			button.setAttribute("aria-pressed", "true");
 			this.severityButtons.set(severity, button);
 			severityControls.append(button);
-			this.own(addDisposableListener(button, "click", () => this.toggleSeverity(severity)));
+			this._register(addDisposableListener(button, "click", () => this.toggleSeverity(severity)));
 		}
 		controls.append(this.filterInput, severityControls);
 		this.statusElement = h(document, "div");
@@ -85,14 +85,14 @@ export class ProblemsViewPane extends ViewPane {
 		this.resultsElement.className = "zeta-problems-results";
 		this.resultsElement.setAttribute("aria-label", "Problems");
 		this.contentElement.append(controls, this.statusElement, this.resultsElement);
-		this.own(addDisposableListener(this.filterInput, "input", () => this.render()));
-		this.own(addDisposableListener(this.resultsElement, "click", event => {
+		this._register(addDisposableListener(this.filterInput, "input", () => this.render()));
+		this._register(addDisposableListener(this.resultsElement, "click", event => {
 			const button = event.target instanceof container.ownerDocument.defaultView!.Element ? event.target.closest<HTMLButtonElement>(".zeta-problems-item-button") : null;
 			const index = Number(button?.dataset.problemIndex);
 			const problem = Number.isSafeInteger(index) ? this.renderedProblems[index] : undefined;
 			if (problem) void this.openProblem(problem);
 		}));
-		this.own(diagnosticsService.onDidChangeDiagnostics(() => this.render()));
+		this._register(markerService.onDidChange(() => this.render()));
 		this.render();
 	}
 
@@ -100,7 +100,7 @@ export class ProblemsViewPane extends ViewPane {
 		return { actions: this.titleActions.element };
 	}
 
-	private toggleSeverity(severity: LanguageDiagnosticSeverity): void {
+	private toggleSeverity(severity: MarkerSeverity): void {
 		if (this.enabledSeverities.has(severity)) this.enabledSeverities.delete(severity);
 		else this.enabledSeverities.add(severity);
 		const button = this.severityButtons.get(severity)!;
@@ -111,9 +111,9 @@ export class ProblemsViewPane extends ViewPane {
 	}
 
 	private render(): void {
-		const all = problemEntries(this.diagnosticsService.getAllDiagnostics());
+		const all = markerEntries(this.markerService.getAll());
 		const filter = this.filterInput.value.trim().toLocaleLowerCase();
-		const visible = all.filter(entry => this.enabledSeverities.has(entry.diagnostic.severity) && matchesFilter(entry, filter));
+		const visible = all.filter(entry => this.enabledSeverities.has(entry.marker.severity) && matchesFilter(entry, filter));
 		this.renderedProblems = visible;
 		const indexes = new Map(visible.map((problem, index) => [problem, index]));
 		this.resultsElement.replaceChildren(...groupProblems(visible).map(group => this.renderGroup(group.resource, group.problems, indexes)));
@@ -146,24 +146,24 @@ export class ProblemsViewPane extends ViewPane {
 	private renderProblem(entry: ProblemEntry, index: number): HTMLLIElement {
 		const document = this.element.ownerDocument;
 		const item = h(document, "li");
-		item.className = `zeta-problems-item ${entry.diagnostic.severity}`;
+		item.className = `zeta-problems-item ${entry.marker.severity}`;
 		const button = h(document, "button");
 		button.type = "button";
 		button.className = "zeta-problems-item-button";
 		button.dataset.problemIndex = String(index);
-		button.title = `${entry.diagnostic.message} — ${resourceName(entry.resource)}:${entry.diagnostic.range.start.lineIndex + 1}:${entry.diagnostic.range.start.columnIndex + 1}`;
+		button.title = `${entry.marker.message} — ${resourceName(entry.marker.resource)}:${entry.marker.range.start.lineIndex + 1}:${entry.marker.range.start.columnIndex + 1}`;
 		const marker = h(document, "span");
 		marker.className = "zeta-problems-marker";
 		marker.setAttribute("aria-hidden", "true");
 		const message = h(document, "span");
 		message.className = "zeta-problems-message";
-		message.textContent = entry.diagnostic.message;
+		message.textContent = entry.marker.message;
 		const source = h(document, "span");
 		source.className = "zeta-problems-source";
-		source.textContent = diagnosticSource(entry.diagnostic);
+		source.textContent = diagnosticSource(entry.marker);
 		const location = h(document, "span");
 		location.className = "zeta-problems-location";
-		location.textContent = `[Ln ${entry.diagnostic.range.start.lineIndex + 1}, Col ${entry.diagnostic.range.start.columnIndex + 1}]`;
+		location.textContent = `[Ln ${entry.marker.range.start.lineIndex + 1}, Col ${entry.marker.range.start.columnIndex + 1}]`;
 		button.append(marker, message, source, location);
 		item.append(button);
 		return item;
@@ -172,7 +172,7 @@ export class ProblemsViewPane extends ViewPane {
 	private async openProblem(entry: ProblemEntry): Promise<void> {
 		this.navigationError = undefined;
 		try {
-			await this.editorService.openEditor({ resource: entry.resource, label: resourceName(entry.resource) }, { selection: entry.diagnostic.range });
+			await this.editorService.openEditor({ resource: entry.marker.resource, label: resourceName(entry.marker.resource) }, { selection: toEditorRange(entry.marker.range) });
 		} catch (error) {
 			if (this.isDisposed) return;
 			this.navigationError = error instanceof Error ? error.message : "Could not open problem location.";
@@ -181,19 +181,19 @@ export class ProblemsViewPane extends ViewPane {
 	}
 }
 
-function problemEntries(snapshots: readonly LanguageDiagnosticSnapshot[]): readonly ProblemEntry[] {
-	return snapshots.flatMap(snapshot => snapshot.diagnostics.map(diagnostic => ({ resource: snapshot.resource, diagnostic }))).sort(compareProblems);
+function markerEntries(markers: readonly Marker[]): readonly ProblemEntry[] {
+	return markers.map(marker => ({ marker })).sort(compareProblems);
 }
 
 function compareProblems(left: ProblemEntry, right: ProblemEntry): number {
-	return left.resource.toString().localeCompare(right.resource.toString()) || severities.indexOf(left.diagnostic.severity) - severities.indexOf(right.diagnostic.severity) || left.diagnostic.range.start.compareTo(right.diagnostic.range.start) || left.diagnostic.message.localeCompare(right.diagnostic.message);
+	return left.marker.resource.toString().localeCompare(right.marker.resource.toString()) || severities.indexOf(left.marker.severity) - severities.indexOf(right.marker.severity) || comparePositions(left.marker.range.start, right.marker.range.start) || left.marker.message.localeCompare(right.marker.message);
 }
 
 function groupProblems(problems: readonly ProblemEntry[]): readonly { readonly resource: URI; readonly problems: readonly ProblemEntry[] }[] {
 	const groups = new Map<string, { readonly resource: URI; readonly problems: ProblemEntry[] }>();
 	for (const problem of problems) {
-		const key = problem.resource.toString();
-		const group = getOrSet(groups, key, { resource: problem.resource, problems: [] });
+		const key = problem.marker.resource.toString();
+		const group = getOrSet(groups, key, { resource: problem.marker.resource, problems: [] });
 		group.problems.push(problem);
 	}
 	return [...groups.values()];
@@ -201,8 +201,8 @@ function groupProblems(problems: readonly ProblemEntry[]): readonly { readonly r
 
 function matchesFilter(entry: ProblemEntry, filter: string): boolean {
 	if (!filter) return true;
-	const diagnostic = entry.diagnostic;
-	return `${diagnostic.message} ${diagnostic.source ?? ""} ${diagnostic.code ?? ""} ${resourceName(entry.resource)} ${resourceParent(entry.resource)}`.toLocaleLowerCase().includes(filter);
+	const marker = entry.marker;
+	return `${marker.message} ${marker.source ?? ""} ${marker.code ?? ""} ${resourceName(marker.resource)} ${resourceParent(marker.resource)}`.toLocaleLowerCase().includes(filter);
 }
 
 function statusMessage(total: number, visible: number, filter: string, enabledSeverityCount: number): string {
@@ -211,11 +211,19 @@ function statusMessage(total: number, visible: number, filter: string, enabledSe
 	return visible === total ? `${total} ${total === 1 ? "problem" : "problems"} in the workspace.` : `${visible} of ${total} problems shown.`;
 }
 
-function diagnosticSource(diagnostic: LanguageDiagnostic): string {
-	if (diagnostic.source && diagnostic.code !== undefined) return `${diagnostic.source}(${diagnostic.code})`;
-	if (diagnostic.source) return diagnostic.source;
-	if (diagnostic.code !== undefined) return String(diagnostic.code);
+function diagnosticSource(marker: Marker): string {
+	if (marker.source && marker.code !== undefined) return `${marker.source}(${marker.code})`;
+	if (marker.source) return marker.source;
+	if (marker.code !== undefined) return String(marker.code);
 	return "";
+}
+
+function comparePositions(left: Marker["range"]["start"], right: Marker["range"]["start"]): number {
+	return left.lineIndex - right.lineIndex || left.columnIndex - right.columnIndex;
+}
+
+function toEditorRange(range: Marker["range"]): TextRange {
+	return TextRange.from(range.start, range.end);
 }
 
 function resourceName(resource: URI): string {

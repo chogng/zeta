@@ -1,5 +1,5 @@
 import { Emitter } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { AppServerConnectionState, IAppServerApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { RemoteConnectionState } from "../../../../platform/remote/common/remote.js";
 import type { IRemoteAgentApi, RemoteAgentConnection, RemoteAgentReconnectResult, RemoteRuntimeRollbackResult } from "../../../../platform/remote/common/remoteAgentApi.js";
@@ -12,9 +12,9 @@ export interface AppServerRemoteAgentServiceOptions {
 }
 
 /** Adapts the App Server supervisor state into the Workbench remote-agent contract. */
-export class AppServerRemoteAgentService extends DisposableOwner implements IRemoteAgentService {
-	private readonly connectionStateEmitter = this.own(new Emitter<RemoteConnectionState>());
-	private readonly connectionEmitter = this.own(new Emitter<RemoteAgentConnection>());
+export class AppServerRemoteAgentService extends Disposable implements IRemoteAgentService {
+	private readonly connectionStateEmitter = this._register(new Emitter<RemoteConnectionState>());
+	private readonly connectionEmitter = this._register(new Emitter<RemoteAgentConnection>());
 	private revision = 0;
 	private connectionRevision = 0;
 	private readonly remoteApi: IRemoteAgentApi | undefined;
@@ -32,7 +32,7 @@ export class AppServerRemoteAgentService extends DisposableOwner implements IRem
 			this.revision += 1;
 			this.acceptState(state);
 		});
-		this.defer(() => subscription.dispose());
+		this._register(toDisposable(() => subscription.dispose()));
 		if (options.remoteApi) this.observeConnection(options.remoteApi);
 		const readRevision = this.revision;
 		void Promise.resolve()
@@ -82,7 +82,7 @@ export class AppServerRemoteAgentService extends DisposableOwner implements IRem
 			this.connectionRevision += 1;
 			this.setConnection(connection);
 		});
-		this.defer(() => subscription.dispose());
+		this._register(toDisposable(() => subscription.dispose()));
 		const readRevision = this.connectionRevision;
 		void Promise.resolve().then(() => this.isDisposed ? undefined : api.getConnection()).then(connection => {
 			if (!this.isDisposed && connection !== undefined && this.connectionRevision === readRevision) this.setConnection(connection);

@@ -1,6 +1,7 @@
 import "./minimap.css";
 import { addDisposableListener, h, reset, fragment as createFragment } from "../../../../base/browser/dom.js";
 import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
+import { toDisposable } from "../../../../base/common/lifecycle.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type EditorScrollPosition } from "../../../common/viewModel.js";
 import { type EditorViewportLayout } from "../../../common/viewLayout/viewLayout.js";
@@ -48,7 +49,9 @@ export class MinimapPart extends EditorViewPart {
 		this.readMarkers = options.readMarkers;
 		this.readMarkersRevision = options.readMarkersRevision;
 		const ownerDocument = options.host.ownerDocument;
-		this.domNode = this.adopt(h(ownerDocument, "div"), domNode => domNode.remove());
+		const domNode = h(ownerDocument, "div");
+		this._register(toDisposable(() => domNode.remove()));
+		this.domNode = domNode;
 		this.root = new FastDomNode(this.domNode);
 		this.canvas = h(ownerDocument, "canvas");
 		this.viewportElement = h(ownerDocument, "div");
@@ -63,12 +66,12 @@ export class MinimapPart extends EditorViewPart {
 		this.gpuRenderer = options.enabled
 			? GpuMinimapRenderer.tryCreate(this.canvas)
 			: undefined;
-		this.own(new MinimapNavigationController(
+		this._register(new MinimapNavigationController(
 			this.domNode,
 			options.readLayout,
 			options.scrollTo,
 		));
-		this.own(addDisposableListener<globalThis.Event>(this.canvas, "webglcontextlost", event => {
+		this._register(addDisposableListener<globalThis.Event>(this.canvas, "webglcontextlost", event => {
 			event.preventDefault();
 			this.gpuRenderer?.disable();
 			this.renderedMarkersRevision = -1;

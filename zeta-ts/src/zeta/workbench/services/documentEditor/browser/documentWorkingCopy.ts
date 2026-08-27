@@ -1,6 +1,6 @@
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Emitter } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type DocumentNode } from "../../../../editor/common/model/document.js";
 import { TextModel } from "../../../../editor/common/model/textModel.js";
@@ -26,9 +26,9 @@ export interface DocumentWorkingCopyOptions {
 }
 
 /** Persistence adapter for Group/Block metadata owned by Stanza's TextModel. */
-export class DocumentWorkingCopy extends DisposableOwner implements IWorkingCopy {
-	private readonly dirtyEmitter = this.own(new Emitter<void>());
-	private readonly externalChangeEmitter = this.own(new Emitter<void>());
+export class DocumentWorkingCopy extends Disposable implements IWorkingCopy {
+	private readonly dirtyEmitter = this._register(new Emitter<void>());
+	private readonly externalChangeEmitter = this._register(new Emitter<void>());
 	private readonly schema: DocumentSchema;
 	private readonly initialDocument: DocumentNode;
 	private readonly initialContent: string;
@@ -52,8 +52,8 @@ export class DocumentWorkingCopy extends DisposableOwner implements IWorkingCopy
 		this.initialContent = serializeDocument(options.initialDocument, this.schema);
 		this.savedContent = this.initialContent;
 		this.revision = options.initialRevision;
-		this.own(options.model.onDidChangeBlocks(() => this.refreshDirty()));
-		this.own(options.textFiles.onDidChangeFiles(event => {
+		this._register(options.model.onDidChangeBlocks(() => this.refreshDirty()));
+		this._register(options.textFiles.onDidChangeFiles(event => {
 			if (this.resource.scheme === "untitled" || (event.resources && !event.resources.some(resource => resource.toString() === this.resource.toString()))) return;
 			if (this.isDirty) {
 				this.setExternalChange(true);
@@ -61,7 +61,7 @@ export class DocumentWorkingCopy extends DisposableOwner implements IWorkingCopy
 			}
 			void this.reloadCleanDocument();
 		}));
-		if (options.workingCopyService) this.own(options.workingCopyService.register(this));
+		if (options.workingCopyService) this._register(options.workingCopyService.register(this));
 	}
 
 	get isDirty(): boolean {

@@ -1,6 +1,7 @@
 import "./margin.css";
 import { h } from "../../../../base/browser/dom.js";
 import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
+import { toDisposable } from "../../../../base/common/lifecycle.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type EditorVisualLineProjection } from "../../../common/viewModel/modelLineProjection.js";
 import { type TextMeasurer } from "../../config/fontMeasurements.js";
@@ -49,7 +50,9 @@ export class MarginPart extends EditorViewPart {
 		this.lineGutterDecoration = options.lineGutterDecoration;
 		this.readVisualProjection = options.readVisualProjection;
 		this.readRenderedLines = options.readRenderedLines;
-		this.domNode = this.adopt(h(options.host.ownerDocument, "div"), domNode => domNode.remove());
+		const domNode = h(options.host.ownerDocument, "div");
+		this._register(toDisposable(() => domNode.remove()));
+		this.domNode = domNode;
 		this.root = new FastDomNode(this.domNode);
 		this.root.setClassName("stanza-editor-margin");
 		this.domNode.setAttribute("role", "presentation");

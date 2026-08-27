@@ -1,5 +1,5 @@
 import { isMacintosh } from "../../../../base/common/platform.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import type {
 	INativeMenubarApi,
 } from "../../../../platform/menubar/common/nativeMenubar.js";
@@ -40,7 +40,7 @@ export class ElectronTitlebarPart extends BrowserTitlebarPart {
  * Keeps the compact renderer menu on every platform and mirrors it into the
  * native macOS application menu.
  */
-class ElectronMenubarControl extends DisposableOwner
+class ElectronMenubarControl extends Disposable
 	implements IMenubarControl {
 	readonly domNode: HTMLElement;
 
@@ -50,7 +50,7 @@ class ElectronMenubarControl extends DisposableOwner
 		nativeMenubar: INativeMenubarApi,
 	) {
 		super();
-		const browserMenubar = this.own(new BrowserMenubarControl(
+		const browserMenubar = this._register(new BrowserMenubarControl(
 			container,
 			options.menuService,
 			options.contextMenuService,
@@ -58,7 +58,7 @@ class ElectronMenubarControl extends DisposableOwner
 		));
 		this.domNode = browserMenubar.domNode;
 		if (isMacintosh) {
-			this.own(new NativeMenubarControl(
+			this._register(new NativeMenubarControl(
 				options.menuService,
 				nativeMenubar,
 			));

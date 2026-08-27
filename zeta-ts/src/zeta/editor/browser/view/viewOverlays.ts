@@ -1,5 +1,5 @@
 import { type Event } from '../../../base/common/event.js';
-import { DisposableOwner } from '../../../base/common/lifecycle.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
 import { type EditorSelectionController } from '../../common/cursor/editorSelectionController.js';
 import { type TextRange } from '../../common/core/text.js';
 import { type TextModel } from '../../common/model/textModel.js';
@@ -25,7 +25,7 @@ export interface ViewOverlaysOptions {
 }
 
 /** Coordinates row and block overlays while keeping their concrete projections independent. */
-export class ViewOverlays extends DisposableOwner {
+export class ViewOverlays extends Disposable {
 	readonly blockDecorationsPart: BlockDecorationsPart;
 	readonly decorationsPart: DecorationsPart;
 	readonly onDidChangeDecorations: Event<void>;
@@ -82,7 +82,7 @@ export class ViewOverlays extends DisposableOwner {
 
 	private register<TPart extends DynamicViewOverlay>(part: TPart): TPart {
 		this.parts.push(part);
-		this.own(part);
+		this._register(part);
 		return part;
 	}
 }

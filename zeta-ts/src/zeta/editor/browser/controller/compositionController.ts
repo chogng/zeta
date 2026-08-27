@@ -1,6 +1,6 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { IME } from "../../../base/common/ime.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { type EditorCompositionSession } from "../../common/cursor/editorComposition.js";
 import { type EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
 import { type TextSelectionOffsets } from "../../common/commands/editorEditCommand.js";
@@ -19,8 +19,8 @@ interface ActiveComposition {
 /**
  * Maps an edit-context composition stream to one protected Stanza composition session.
  */
-export class CompositionController extends DisposableOwner {
-	private readonly _onDidChange = this.own(new Emitter<boolean>());
+export class CompositionController extends Disposable {
+	private readonly _onDidChange = this._register(new Emitter<boolean>());
 	private readonly input: EditContext;
 	private readonly initialReadOnly: boolean;
 	private activeComposition: ActiveComposition | undefined;
@@ -41,31 +41,31 @@ export class CompositionController extends DisposableOwner {
 		}
 		this.input = input;
 		this.initialReadOnly = input.readOnly;
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.cancelComposition();
 			this.input.setReadOnly(this.initialReadOnly);
 			this.clearPresentation();
-		});
-		this.own(input.onDidCompositionStart(event => this.handleCompositionStart(event)));
-		this.own(input.onDidCompositionUpdate(event => this.handleCompositionUpdate(event)));
-		this.own(input.onDidCompositionEnd(event => this.handleCompositionEnd(event)));
-		this.own(input.onDidKeydown(event => {
+		}));
+		this._register(input.onDidCompositionStart(event => this.handleCompositionStart(event)));
+		this._register(input.onDidCompositionUpdate(event => this.handleCompositionUpdate(event)));
+		this._register(input.onDidCompositionEnd(event => this.handleCompositionEnd(event)));
+		this._register(input.onDidKeydown(event => {
 			if (event.isComposing && event.key === "Escape" && this.activeComposition) {
 				this.activeComposition.cancelRequested = true;
 			}
 		}));
-		this.own(input.onDidBlur(() => this.cancelComposition()));
-		this.own(IME.onDidChange(enabled => {
+		this._register(input.onDidBlur(() => this.cancelComposition()));
+		this._register(IME.onDidChange(enabled => {
 			if (!enabled) this.cancelComposition();
 			this.synchronizeReadOnly();
 		}));
-		this.own(selectionController.onDidChange(() => {
+		this._register(selectionController.onDidChange(() => {
 			this.finishInvalidComposition();
 		}));
-		this.own(viewport.textModel.onDidChange(() => {
+		this._register(viewport.textModel.onDidChange(() => {
 			this.finishInvalidComposition();
 		}));
-		this.own(viewport.onDidChangeLayout(() => {
+		this._register(viewport.onDidChangeLayout(() => {
 			if (this.activeComposition) this.positionInputAtPrimary();
 		}));
 		this.synchronizeReadOnly();

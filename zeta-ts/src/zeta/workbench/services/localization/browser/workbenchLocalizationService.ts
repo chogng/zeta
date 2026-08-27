@@ -1,13 +1,13 @@
 import { Emitter } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { formatNlsMessage, setNlsResolver } from "../../../../nls.js";
 import type { ILanguagePackService } from "../../../../platform/languagePacks/common/languagePacksService.js";
 import type { ILocaleService } from "../common/locale.js";
 import type { ILocalizationService, LocalizationParameters } from "../common/localizationService.js";
 
 /** Resolves catalogs for one Workbench and projects them into the low-level NLS API. */
-export class WorkbenchLocalizationService extends DisposableOwner implements ILocalizationService {
-	private readonly _onDidChange = this.own(new Emitter<void>());
+export class WorkbenchLocalizationService extends Disposable implements ILocalizationService {
+	private readonly _onDidChange = this._register(new Emitter<void>());
 	readonly whenReady: Promise<void>;
 
 	readonly onDidChange = this._onDidChange.event;
@@ -19,11 +19,11 @@ export class WorkbenchLocalizationService extends DisposableOwner implements ILo
 		super();
 		setNlsResolver((bundle, key, fallback, parameters) => this.translate(bundle, key, fallback, parameters));
 		this.whenReady = this.initialize();
-		this.own(localeService.onDidChangeLocale(() => {
+		this._register(localeService.onDidChangeLocale(() => {
 			this._onDidChange.fire();
 			setNlsResolver((bundle, key, fallback, parameters) => this.translate(bundle, key, fallback, parameters));
 		}));
-		this.own(languagePacks.onDidChange(() => {
+		this._register(languagePacks.onDidChange(() => {
 			this._onDidChange.fire();
 			setNlsResolver((bundle, key, fallback, parameters) => this.translate(bundle, key, fallback, parameters));
 		}));

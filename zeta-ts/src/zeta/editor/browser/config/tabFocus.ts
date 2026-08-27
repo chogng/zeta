@@ -1,5 +1,5 @@
 import { Emitter, type Event } from '../../../base/common/event.js';
-import { DisposableOwner } from '../../../base/common/lifecycle.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
 
 /**
  * Host-scoped state for whether Tab moves browser focus or edits the document.
@@ -8,8 +8,8 @@ import { DisposableOwner } from '../../../base/common/lifecycle.js';
  * instance across its editors; when an editor is constructed without an
  * injected instance, its browser runtime creates an editor-local one.
  */
-export class TabFocus extends DisposableOwner {
-	private readonly changeEmitter = this.own(new Emitter<boolean>());
+export class TabFocus extends Disposable {
+	private readonly changeEmitter = this._register(new Emitter<boolean>());
 	private enabled = false;
 
 	readonly onDidChange: Event<boolean> = this.changeEmitter.event;

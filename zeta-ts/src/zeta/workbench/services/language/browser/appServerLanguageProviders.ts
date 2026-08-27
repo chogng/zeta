@@ -1,5 +1,5 @@
 import { VSBuffer } from "../../../../base/common/buffer.js";
-import { DisposableOwner, DisposableSlot, DisposableStore } from "../../../../base/common/lifecycle.js";
+import { Disposable, MutableDisposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
 import { TextPosition, TextRange } from "../../../../editor/common/core/text.js";
 import { type ILanguageFeaturesService } from "../../../../editor/common/services/languageService.js";
@@ -43,8 +43,8 @@ interface LanguageWorkspaceRoot {
 }
 
 /** Registers App Server-backed cross-resource providers for Code languages. */
-export class AppServerLanguageProviders extends DisposableOwner {
-	private readonly registrations = this.own(new DisposableSlot<DisposableStore>());
+export class AppServerLanguageProviders extends Disposable {
+	private readonly registrations = this._register(new MutableDisposable<DisposableStore>());
 	private refreshQueued = false;
 	private refreshGeneration = 0;
 	private refreshQueue = Promise.resolve();
@@ -57,11 +57,11 @@ export class AppServerLanguageProviders extends DisposableOwner {
 			const subscription = options.events.subscribe(event => {
 				if (event.method === "config/changed") this.queueRefresh();
 			});
-			this.defer(() => subscription.dispose());
+			this._register(toDisposable(() => subscription.dispose()));
 		}
-		this.own(workspace.onDidChangeWorkspace(() => this.queueRefresh()));
-		this.defer(() => { this.alive = false; });
-		if (!options.workspaceTrust && workspace.getWorkspace().folders.length > 0) this.registrations.replace(this.install());
+		this._register(workspace.onDidChangeWorkspace(() => this.queueRefresh()));
+		this._register(toDisposable(() => { this.alive = false; }));
+		if (!options.workspaceTrust && workspace.getWorkspace().folders.length > 0) this.registrations.value = this.install();
 		else this.queueRefresh();
 	}
 
@@ -112,7 +112,7 @@ export class AppServerLanguageProviders extends DisposableOwner {
 		const trust = await resolveAppServerLanguageWorkspaceTrust(this.workspace, this.options.workspaceTrust);
 		if (!this.alive || generation !== this.refreshGeneration || this.workspace.getWorkspace().id !== trust.workspaceId) return;
 		if (trust.trusted) {
-			if (!this.registrations.value) this.registrations.replace(this.install());
+			if (!this.registrations.value) this.registrations.value = this.install();
 		} else {
 			this.registrations.clear();
 		}

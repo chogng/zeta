@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../common/event.js";
-import { DisposableOwner } from "../../../common/lifecycle.js";
+import { Disposable } from "../../../common/lifecycle.js";
 import type { ListScrolling } from "../list/list.js";
 import { AbstractTree } from "./abstractTree.js";
 import { CompressibleObjectTreeModel, type CompressibleObjectTreeModelOptions, type CompressibleTreeElement, type CompressedTreeNode } from "./compressedObjectTreeModel.js";
@@ -71,18 +71,18 @@ export interface ObjectTreeFindResult<TNode> {
 }
 
 /** Model-driven accessible tree view for ordinary single-action rows. */
-export class ObjectTree<TNode> extends DisposableOwner {
+export class ObjectTree<TNode> extends Disposable {
 	readonly element: HTMLDivElement;
 	readonly model: ObjectTreeModel<TNode>;
 	private readonly tree: AbstractTree<TNode, ObjectTreeNode<TNode>>;
-	private readonly _onPointer = this.own(new Emitter<ObjectTreePointerEvent<TNode>>());
-	private readonly _onDidDoubleClick = this.own(new Emitter<ObjectTreePointerEvent<TNode>>());
-	private readonly _onDidAccept = this.own(new Emitter<ObjectTreeAcceptEvent<TNode>>());
-	private readonly _onDidChangeFocus = this.own(new Emitter<ObjectTreeFocusChangeEvent<TNode>>());
-	private readonly _onDidChangeSelection = this.own(new Emitter<ObjectTreeSelectionChangeEvent<TNode>>());
-	private readonly _onDidChangeCollapseState = this.own(new Emitter<ObjectTreeCollapseStateChangeEvent<TNode>>());
-	private readonly _onDidActivate = this.own(new Emitter<ObjectTreeActivateEvent<TNode>>());
-	private readonly _onDidChangeFind = this.own(new Emitter<ObjectTreeFindResult<TNode>>());
+	private readonly _onPointer = this._register(new Emitter<ObjectTreePointerEvent<TNode>>());
+	private readonly _onDidDoubleClick = this._register(new Emitter<ObjectTreePointerEvent<TNode>>());
+	private readonly _onDidAccept = this._register(new Emitter<ObjectTreeAcceptEvent<TNode>>());
+	private readonly _onDidChangeFocus = this._register(new Emitter<ObjectTreeFocusChangeEvent<TNode>>());
+	private readonly _onDidChangeSelection = this._register(new Emitter<ObjectTreeSelectionChangeEvent<TNode>>());
+	private readonly _onDidChangeCollapseState = this._register(new Emitter<ObjectTreeCollapseStateChangeEvent<TNode>>());
+	private readonly _onDidActivate = this._register(new Emitter<ObjectTreeActivateEvent<TNode>>());
+	private readonly _onDidChangeFind = this._register(new Emitter<ObjectTreeFindResult<TNode>>());
 	private readonly onWillRender: (() => void) | undefined;
 	private collapseBrowserEvent: { readonly id: string; readonly event: MouseEvent | KeyboardEvent } | undefined;
 
@@ -100,8 +100,8 @@ export class ObjectTree<TNode> extends DisposableOwner {
 		super();
 		const expandOnlyOnTwistieClick = options.expandOnlyOnTwistieClick;
 		this.onWillRender = options.onWillRender;
-		this.model = this.own(new ObjectTreeModel(options.modelOptions));
-		this.tree = this.own(new AbstractTree(container, {
+		this.model = this._register(new ObjectTreeModel(options.modelOptions));
+		this.tree = this._register(new AbstractTree(container, {
 			ariaLabel: options.ariaLabel,
 			scrolling: options.scrolling,
 			indent: options.indent,
@@ -121,26 +121,26 @@ export class ObjectTree<TNode> extends DisposableOwner {
 				: undefined,
 		}));
 		this.element = this.tree.element;
-		this.own(this.model.onDidChange(() => this.render()));
-		this.own(this.model.onDidChangeCollapseState(({ node, collapsed }) => {
+		this._register(this.model.onDidChange(() => this.render()));
+		this._register(this.model.onDidChangeCollapseState(({ node, collapsed }) => {
 			this._onDidChangeCollapseState.fire({ element: node.element, node, collapsed, browserEvent: this.collapseBrowserEvent?.id === node.id ? this.collapseBrowserEvent.event : undefined });
 		}));
-		this.own(this.tree.onPointer(({ element: node, target, browserEvent }) => {
+		this._register(this.tree.onPointer(({ element: node, target, browserEvent }) => {
 			this._onPointer.fire({ element: node.element, node, target, browserEvent });
 		}));
-		this.own(this.tree.onDidDoubleClick(({ element: node, target, browserEvent }) => {
+		this._register(this.tree.onDidDoubleClick(({ element: node, target, browserEvent }) => {
 			this._onDidDoubleClick.fire({ element: node.element, node, target, browserEvent });
 		}));
-		this.own(this.tree.onDidAccept(({ element: node, browserEvent }) => {
+		this._register(this.tree.onDidAccept(({ element: node, browserEvent }) => {
 			this._onDidAccept.fire({ element: node.element, node, browserEvent });
 		}));
-		this.own(this.tree.onDidChangeFocus(({ element: node, browserEvent }) => {
+		this._register(this.tree.onDidChangeFocus(({ element: node, browserEvent }) => {
 			this._onDidChangeFocus.fire({ element: node?.element, node, browserEvent });
 		}));
-		this.own(this.tree.onDidChangeSelection(({ elements: nodes, browserEvent }) => {
+		this._register(this.tree.onDidChangeSelection(({ elements: nodes, browserEvent }) => {
 			this._onDidChangeSelection.fire({ elements: nodes.map((node) => node.element), nodes, browserEvent });
 		}));
-		this.own(this.tree.onDidRequestCollapseChange(({ element: node, expanded, browserEvent }) => {
+		this._register(this.tree.onDidRequestCollapseChange(({ element: node, expanded, browserEvent }) => {
 			this.collapseBrowserEvent = { id: node.id, event: browserEvent };
 			try {
 				if (expanded) this.model.expand(node.id);
@@ -149,10 +149,10 @@ export class ObjectTree<TNode> extends DisposableOwner {
 				this.collapseBrowserEvent = undefined;
 			}
 		}));
-		this.own(this.tree.onDidActivate(({ element: node, browserEvent }) => {
+		this._register(this.tree.onDidActivate(({ element: node, browserEvent }) => {
 			this._onDidActivate.fire({ element: node.element, node, browserEvent });
 		}));
-		this.own(this.tree.onDidChangeFind((event: TreeFindResult<ObjectTreeNode<TNode>>) => {
+		this._register(this.tree.onDidChangeFind((event: TreeFindResult<ObjectTreeNode<TNode>>) => {
 			this._onDidChangeFind.fire({ pattern: event.pattern, matches: event.matches.map((node) => node.element), activeMatch: event.activeMatch?.element });
 		}));
 		this.render();
@@ -288,16 +288,16 @@ export interface CompressibleTreeSelectionChangeEvent<T> {
 }
 
 /** Object tree widget whose rows represent maximal compressible single-child chains. */
-export class CompressibleObjectTree<T> extends DisposableOwner {
+export class CompressibleObjectTree<T> extends Disposable {
 	readonly element: HTMLDivElement;
 	readonly model: CompressibleObjectTreeModel<T>;
 	private readonly tree: AbstractTree<CompressedTreeNode<T>, ObjectTreeNode<CompressedTreeNode<T>>>;
-	private readonly _onPointer = this.own(new Emitter<CompressibleTreePointerEvent<T>>());
-	private readonly _onDidDoubleClick = this.own(new Emitter<CompressibleTreePointerEvent<T>>());
-	private readonly _onDidAccept = this.own(new Emitter<CompressibleTreeAcceptEvent<T>>());
-	private readonly _onDidChangeFocus = this.own(new Emitter<CompressibleTreeFocusChangeEvent<T>>());
-	private readonly _onDidChangeSelection = this.own(new Emitter<CompressibleTreeSelectionChangeEvent<T>>());
-	private readonly _onDidChangeCollapseState = this.own(new Emitter<{ readonly element: T; readonly elements: readonly T[]; readonly collapsed: boolean; readonly browserEvent: MouseEvent | KeyboardEvent | undefined }>());
+	private readonly _onPointer = this._register(new Emitter<CompressibleTreePointerEvent<T>>());
+	private readonly _onDidDoubleClick = this._register(new Emitter<CompressibleTreePointerEvent<T>>());
+	private readonly _onDidAccept = this._register(new Emitter<CompressibleTreeAcceptEvent<T>>());
+	private readonly _onDidChangeFocus = this._register(new Emitter<CompressibleTreeFocusChangeEvent<T>>());
+	private readonly _onDidChangeSelection = this._register(new Emitter<CompressibleTreeSelectionChangeEvent<T>>());
+	private readonly _onDidChangeCollapseState = this._register(new Emitter<{ readonly element: T; readonly elements: readonly T[]; readonly collapsed: boolean; readonly browserEvent: MouseEvent | KeyboardEvent | undefined }>());
 
 	readonly onPointer: Event<CompressibleTreePointerEvent<T>> = this._onPointer.event;
 	readonly onDidDoubleClick: Event<CompressibleTreePointerEvent<T>> = this._onDidDoubleClick.event;
@@ -309,8 +309,8 @@ export class CompressibleObjectTree<T> extends DisposableOwner {
 	constructor(container: HTMLElement, private readonly options: CompressibleObjectTreeOptions<T>) {
 		super();
 		const expandOnlyOnTwistieClick = options.expandOnlyOnTwistieClick;
-		this.model = this.own(new CompressibleObjectTreeModel(options.modelOptions));
-		this.tree = this.own(new AbstractTree(container, {
+		this.model = this._register(new CompressibleObjectTreeModel(options.modelOptions));
+		this.tree = this._register(new AbstractTree(container, {
 			ariaLabel: options.ariaLabel,
 			scrolling: options.scrolling,
 			indent: options.indent,
@@ -327,14 +327,14 @@ export class CompressibleObjectTree<T> extends DisposableOwner {
 			renderTwistie: options.renderTwistie ? (node, state, container) => options.renderTwistie!(node.element.elements, state, container) : undefined,
 		}));
 		this.element = this.tree.element;
-		this.own(this.model.onDidChange(() => this.render()));
-		this.own(this.model.onDidChangeCollapseState(({ node, collapsed }) => this._onDidChangeCollapseState.fire({ element: lastCompressedElement(node.element.elements), elements: node.element.elements, collapsed, browserEvent: undefined })));
-		this.own(this.tree.onPointer(({ element: node, target, browserEvent }) => this._onPointer.fire({ element: lastCompressedElement(node.element.elements), elements: node.element.elements, node, target, browserEvent })));
-		this.own(this.tree.onDidDoubleClick(({ element: node, target, browserEvent }) => this._onDidDoubleClick.fire({ element: lastCompressedElement(node.element.elements), elements: node.element.elements, node, target, browserEvent })));
-		this.own(this.tree.onDidAccept(({ element: node, browserEvent }) => this._onDidAccept.fire({ element: lastCompressedElement(node.element.elements), elements: node.element.elements, node, browserEvent })));
-		this.own(this.tree.onDidChangeFocus(({ element: node, browserEvent }) => this._onDidChangeFocus.fire({ element: node ? lastCompressedElement(node.element.elements) : undefined, elements: node?.element.elements ?? [], browserEvent })));
-		this.own(this.tree.onDidChangeSelection(({ elements: nodes, browserEvent }) => this._onDidChangeSelection.fire({ elements: nodes.map((node) => lastCompressedElement(node.element.elements)), compressedElements: nodes.map((node) => node.element.elements), browserEvent })));
-		this.own(this.tree.onDidRequestCollapseChange(({ element: node, expanded }) => {
+		this._register(this.model.onDidChange(() => this.render()));
+		this._register(this.model.onDidChangeCollapseState(({ node, collapsed }) => this._onDidChangeCollapseState.fire({ element: lastCompressedElement(node.element.elements), elements: node.element.elements, collapsed, browserEvent: undefined })));
+		this._register(this.tree.onPointer(({ element: node, target, browserEvent }) => this._onPointer.fire({ element: lastCompressedElement(node.element.elements), elements: node.element.elements, node, target, browserEvent })));
+		this._register(this.tree.onDidDoubleClick(({ element: node, target, browserEvent }) => this._onDidDoubleClick.fire({ element: lastCompressedElement(node.element.elements), elements: node.element.elements, node, target, browserEvent })));
+		this._register(this.tree.onDidAccept(({ element: node, browserEvent }) => this._onDidAccept.fire({ element: lastCompressedElement(node.element.elements), elements: node.element.elements, node, browserEvent })));
+		this._register(this.tree.onDidChangeFocus(({ element: node, browserEvent }) => this._onDidChangeFocus.fire({ element: node ? lastCompressedElement(node.element.elements) : undefined, elements: node?.element.elements ?? [], browserEvent })));
+		this._register(this.tree.onDidChangeSelection(({ elements: nodes, browserEvent }) => this._onDidChangeSelection.fire({ elements: nodes.map((node) => lastCompressedElement(node.element.elements)), compressedElements: nodes.map((node) => node.element.elements), browserEvent })));
+		this._register(this.tree.onDidRequestCollapseChange(({ element: node, expanded }) => {
 			const element = lastCompressedElement(node.element.elements);
 			if (expanded) this.model.expand(element);
 			else this.model.collapse(element);

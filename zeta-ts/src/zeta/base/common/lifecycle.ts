@@ -4,7 +4,7 @@
  *
  * Implementations must release synchronously and idempotently.
  */
-export interface IDisposable extends Disposable {
+export interface IDisposable extends globalThis.Disposable {
 	dispose(): void;
 }
 
@@ -12,7 +12,7 @@ export interface IDisposable extends Disposable {
  * A project resource that supports both explicit `.disposeAsync()` calls and
  * the ECMAScript `await using` protocol.
  */
-export interface IAsyncDisposable extends AsyncDisposable {
+export interface IAsyncDisposable extends globalThis.AsyncDisposable {
 	disposeAsync(): Promise<void>;
 }
 
@@ -23,7 +23,7 @@ export const noneDisposable: IDisposable = Object.freeze({
 });
 
 /** @internal */
-export type TrackableDisposable = Disposable | AsyncDisposable;
+export type TrackableDisposable = globalThis.Disposable | globalThis.AsyncDisposable;
 
 function isNoneDisposable(disposable: TrackableDisposable): boolean {
 	return Object.is(disposable, noneDisposable);
@@ -59,7 +59,7 @@ let disposableTracker: IDisposableTracker | undefined;
 /** @internal */
 export function registerDisposableTracker(
 	tracker: IDisposableTracker,
-): Disposable {
+): globalThis.Disposable {
 	if (disposableTracker) {
 		throw new Error("A disposable tracker is already installed");
 	}
@@ -122,7 +122,7 @@ export abstract class AbstractDisposable implements IDisposable {
 		trackDisposable(this);
 	}
 
-	protected get isDisposed(): boolean {
+	public get isDisposed(): boolean {
 		return this.disposedState;
 	}
 
@@ -176,29 +176,71 @@ export function toDisposable(fn: () => void): IDisposable {
  * registrations throw `ReferenceError`, matching the standard stack.
  */
 export class DisposableStore extends AbstractDisposable {
-	private readonly stack = new DisposableStack();
+	private stack = new DisposableStack();
+	private resources = new Set<IDisposable>();
 
-	get disposed(): boolean {
-		return this.stack.disposed;
+	public clear(): void {
+		if (this.isDisposed) return;
+		const current = this.stack;
+		const resources = this.resources;
+		this.stack = new DisposableStack();
+		this.resources = new Set();
+		try {
+			current.dispose();
+		} finally {
+			for (const resource of resources) markAsDisposed(resource);
+		}
 	}
 
-	add<T extends Disposable | null | undefined>(resource: T): T {
-		if (resource) validateDisposableOwner(resource, this);
+	public add<T extends IDisposable | null | undefined>(resource: T): T {
+		if (!resource) return resource;
+		if ((resource as unknown) === this) {
+			throw new Error("Cannot register a disposable store on itself");
+		}
+		this.assertNotDisposed();
+		validateDisposableOwner(resource, this);
 		const owned = this.stack.use(resource);
-		if (resource) setDisposableOwner(resource, this);
+		setDisposableOwner(resource, this);
+		this.resources.add(resource);
 		return owned;
 	}
 
-	adopt<T>(value: T, onDispose: (value: T) => void): T {
-		return this.stack.adopt(value, onDispose);
+	protected override disposeCore(): void {
+		const current = this.stack;
+		const resources = this.resources;
+		this.stack = new DisposableStack();
+		this.resources = new Set();
+		try {
+			current.dispose();
+		} finally {
+			for (const resource of resources) markAsDisposed(resource);
+		}
+	}
+}
+
+/**
+ * Base class for composite objects that own independently created resources.
+ * Register resources through `_register`; the protected store disposes them
+ * in reverse registration order.
+ */
+export abstract class Disposable extends AbstractDisposable {
+	public static readonly None: IDisposable = noneDisposable;
+	protected readonly _store = new DisposableStore();
+
+	constructor() {
+		super();
+		setDisposableOwner(this._store, this);
 	}
 
-	defer(onDispose: () => void): void {
-		this.stack.defer(onDispose);
+	protected _register<T extends IDisposable | null | undefined>(resource: T): T {
+		if (resource && (resource as unknown) === this) {
+			throw new Error("Cannot register a disposable on itself");
+		}
+		return this._store.add(resource);
 	}
 
 	protected override disposeCore(): void {
-		this.stack.dispose();
+		this._store.dispose();
 	}
 }
 
@@ -208,39 +250,42 @@ export class DisposableStore extends AbstractDisposable {
  */
 export class AsyncDisposableStore implements IAsyncDisposable {
 	private readonly stack = new AsyncDisposableStack();
+	private resources = new Set<globalThis.AsyncDisposable | globalThis.Disposable>();
 	private disposePromise: Promise<void> | undefined;
 
 	constructor() {
 		trackDisposable(this);
 	}
 
-	get disposed(): boolean {
+	public get isDisposed(): boolean {
 		return this.stack.disposed;
 	}
 
-	add<
-		T extends AsyncDisposable | Disposable | null | undefined,
+	public add<
+		T extends globalThis.AsyncDisposable | globalThis.Disposable | null | undefined,
 	>(resource: T): T {
-		if (resource) validateDisposableOwner(resource, this);
+		if (!resource) return resource;
+		if ((resource as unknown) === this) {
+			throw new Error("Cannot register an async disposable store on itself");
+		}
+		if (this.isDisposed) {
+			throw new ReferenceError("AsyncDisposableStore is already disposed");
+		}
+		validateDisposableOwner(resource, this);
 		const owned = this.stack.use(resource);
-		if (resource) setDisposableOwner(resource, this);
+		setDisposableOwner(resource, this);
+		this.resources.add(resource);
 		return owned;
-	}
-
-	adopt<T>(
-		value: T,
-		onDisposeAsync: (value: T) => PromiseLike<void> | void,
-	): T {
-		return this.stack.adopt(value, onDisposeAsync);
-	}
-
-	defer(onDisposeAsync: () => PromiseLike<void> | void): void {
-		this.stack.defer(onDisposeAsync);
 	}
 
 	public disposeAsync(): Promise<void> {
 		if (!this.disposePromise) {
-			this.disposePromise = this.stack.disposeAsync().finally(() => markAsDisposed(this));
+			this.disposePromise = this.stack.disposeAsync().finally(() => {
+				const resources = this.resources;
+				this.resources = new Set();
+				for (const resource of resources) markAsDisposed(resource);
+				markAsDisposed(this);
+			});
 		}
 		return this.disposePromise;
 	}
@@ -251,54 +296,17 @@ export class AsyncDisposableStore implements IAsyncDisposable {
 }
 
 /**
- * Optional base class for composite objects that own independently created
- * synchronous resources. Leaf cleanup adapters extend `AbstractDisposable`.
- *
- * Subclasses register cleanup through `own`, `adopt`, or `defer` and must not
- * override the two disposal entry points.
- */
-export abstract class DisposableOwner extends AbstractDisposable {
-	private readonly resources = new DisposableStore();
-
-	constructor() {
-		super();
-		setDisposableOwner(this.resources, this);
-	}
-
-	protected own<T extends Disposable | null | undefined>(resource: T): T {
-		return this.resources.add(resource);
-	}
-
-	protected adopt<T>(value: T, onDispose: (value: T) => void): T {
-		return this.resources.adopt(value, onDispose);
-	}
-
-	protected defer(onDispose: () => void): void {
-		this.resources.defer(onDispose);
-	}
-
-	protected override disposeCore(): void {
-		this.resources.dispose();
-	}
-}
-
-/**
  * Owns one replaceable synchronous resource.
  */
-export class DisposableSlot<T extends Disposable> extends AbstractDisposable {
+export class MutableDisposable<T extends IDisposable> extends AbstractDisposable {
 	private _value: T | undefined;
 
-	get value(): T | undefined {
-		return this._value;
+	public get value(): T | undefined {
+		return this.isDisposed ? undefined : this._value;
 	}
 
-	get disposed(): boolean {
-		return this.isDisposed;
-	}
-
-	replace(next: T | undefined): void {
-		this.assertNotDisposed();
-		if (next === this._value) return;
+	public set value(next: T | undefined) {
+		if (this.isDisposed || next === this._value) return;
 		if (next) validateDisposableOwner(next, this);
 		const previous = this._value;
 		this._value = next;
@@ -312,8 +320,15 @@ export class DisposableSlot<T extends Disposable> extends AbstractDisposable {
 		}
 	}
 
-	clear(): void {
-		this.replace(undefined);
+	public clear(): void {
+		this.value = undefined;
+	}
+
+	public clearAndLeak(): T | undefined {
+		const previous = this._value;
+		this._value = undefined;
+		if (previous) clearDisposableOwner(previous);
+		return previous;
 	}
 
 	protected override disposeCore(): void {
@@ -328,7 +343,7 @@ export class DisposableSlot<T extends Disposable> extends AbstractDisposable {
 }
 
 /** Owns disposable resources whose lifetime follows stable keys. */
-export class DisposableMap<K, V extends Disposable = Disposable> extends AbstractDisposable implements Iterable<[K, V]> {
+export class DisposableMap<K, V extends IDisposable = IDisposable> extends AbstractDisposable implements Iterable<[K, V]> {
 	private readonly resources = new Map<K, V>();
 
 	public has(key: K): boolean {
@@ -396,73 +411,10 @@ export class DisposableMap<K, V extends Disposable = Disposable> extends Abstrac
 }
 
 /**
- * Owns a reusable group of synchronous resources.
- *
- * Prefer `DisposableStore`. Use this type only when one owner must repeatedly
- * discard and rebuild a complete group during its lifetime.
- */
-export class ResettableDisposableGroup extends AbstractDisposable {
-	private stack = new DisposableStack();
-	private readonly resources = new Set<Disposable>();
-
-	get disposed(): boolean {
-		return this.isDisposed;
-	}
-
-	add<T extends Disposable | null | undefined>(resource: T): T {
-		if (resource) validateDisposableOwner(resource, this);
-		const owned = this.current().use(resource);
-		if (resource) {
-			this.resources.add(resource);
-			setDisposableOwner(resource, this);
-		}
-		return owned;
-	}
-
-	adopt<T>(value: T, onDispose: (value: T) => void): T {
-		return this.current().adopt(value, onDispose);
-	}
-
-	defer(onDispose: () => void): void {
-		this.current().defer(onDispose);
-	}
-
-	clear(): void {
-		const current = this.current();
-		this.stack = new DisposableStack();
-		try {
-			current.dispose();
-		} finally {
-			for (const resource of this.resources) {
-				markAsDisposed(resource);
-			}
-			this.resources.clear();
-		}
-	}
-
-	protected override disposeCore(): void {
-		const current = this.stack;
-		try {
-			current.dispose();
-		} finally {
-			for (const resource of this.resources) {
-				markAsDisposed(resource);
-			}
-			this.resources.clear();
-		}
-	}
-
-	private current(): DisposableStack {
-		this.assertNotDisposed();
-		return this.stack;
-	}
-}
-
-/**
  * Combines resources into one project disposable.
  */
 export function combinedDisposable(
-	...resources: readonly Disposable[]
+	...resources: readonly IDisposable[]
 ): IDisposable {
 	const store = new DisposableStore();
 	for (const resource of resources) store.add(resource);

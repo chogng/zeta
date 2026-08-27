@@ -1,6 +1,6 @@
 import { CharCode } from "../../../base/common/charCode.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, MutableDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import { type TextModelChange } from "../../common/core/text.js";
 import { type TextModel } from "../../common/model/textModel.js";
 import { type TextMeasurer } from "../../common/viewModel/textMeasurer.js";
@@ -45,11 +45,11 @@ interface ResolvedInitialMeasurement {
 }
 
 /** Viewport-owned width index used to bound horizontal layout work. */
-export class LineWidthIndex extends DisposableOwner {
+export class LineWidthIndex extends Disposable {
 	private widths: number[] = [];
 	private readonly widthCounts = new Map<number, number>();
-	private readonly changeEmitter = this.own(new Emitter<void>());
-	private readonly pendingMeasurement = this.own(new DisposableSlot<IDisposable>());
+	private readonly changeEmitter = this._register(new Emitter<void>());
+	private readonly pendingMeasurement = this._register(new MutableDisposable<IDisposable>());
 	private readonly observedLineIndexes = new Set<number>();
 	private readonly initialMeasurement: ResolvedInitialMeasurement | undefined;
 	private maximumWidth = 0;
@@ -186,7 +186,7 @@ export class LineWidthIndex extends DisposableOwner {
 	private scheduleNextSlice(): void {
 		const options = this.initialMeasurement;
 		if (!options || this.nextLineIndex >= this.initialScanLineCount) return;
-		this.pendingMeasurement.replace(options.schedule(() => {
+		this.pendingMeasurement.value = options.schedule(() => {
 			this.pendingMeasurement.clear();
 			if (this.scanVersion !== this.model.version) {
 				this.startInitialMeasurement();
@@ -196,7 +196,7 @@ export class LineWidthIndex extends DisposableOwner {
 			this.measureNextSlice(options.linesPerSlice);
 			if (this.maximumWidth !== previousMaximum) this.changeEmitter.fire();
 			this.scheduleNextSlice();
-		}));
+		});
 	}
 
 	private measureNextSlice(lineCount: number): void {

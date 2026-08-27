@@ -3,7 +3,7 @@ import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { Dimension, type IDimension } from "../../../../base/browser/geometry.js";
 import type { Direction as GridDirection } from "../../../../base/browser/ui/grid/grid.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableMap, DisposableOwner, DisposableStore, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { DisposableMap, Disposable, DisposableStore, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { EditorInput, EditorOpenOptions, EditorOpenTarget } from "../../../services/editor/common/editorService.js";
@@ -40,11 +40,11 @@ export interface IEditorPartsService extends IEditorPart {
 export const IEditorPartsService = createServiceIdentifier<IEditorPartsService>("editorPartsService");
 
 /** Coordinates one primary EditorPart and zero or more auxiliary-window parts. */
-export class EditorParts extends DisposableOwner implements IEditorPartsService {
-	private readonly editorChangeEmitter = this.own(new Emitter<EditorPartChangeEvent>());
-	private readonly auxiliaryCreatedEmitter = this.own(new Emitter<IEditorPart>());
-	private readonly auxiliary = this.own(new DisposableMap<IEditorPart, AuxiliaryEditorPartHandle>());
-	private readonly partListeners = this.own(new DisposableMap<IEditorPart, DisposableStore>());
+export class EditorParts extends Disposable implements IEditorPartsService {
+	private readonly editorChangeEmitter = this._register(new Emitter<EditorPartChangeEvent>());
+	private readonly auxiliaryCreatedEmitter = this._register(new Emitter<IEditorPart>());
+	private readonly auxiliary = this._register(new DisposableMap<IEditorPart, AuxiliaryEditorPartHandle>());
+	private readonly partListeners = this._register(new DisposableMap<IEditorPart, DisposableStore>());
 	private _activePart: IEditorPart;
 	readonly onDidChangeEditors = this.editorChangeEmitter.event;
 	readonly onDidCreateAuxiliaryEditorPart = this.auxiliaryCreatedEmitter.event;
@@ -215,23 +215,23 @@ export class EditorParts extends DisposableOwner implements IEditorPartsService 
 	}
 }
 
-class AuxiliaryEditorPartHandle extends DisposableOwner {
+class AuxiliaryEditorPartHandle extends Disposable {
 	constructor(window: IAuxiliaryWindow, creation: AuxiliaryEditorPartCreation) {
 		super();
 		// The window service owns registry lifetime; this handle only requests close.
-		this.defer(() => window[Symbol.dispose]());
-		const resources = this.own(new DisposableStore());
+		this._register(toDisposable(() => window[Symbol.dispose]()));
+		const resources = this._register(new DisposableStore());
 		for (const resource of creation.resources ?? []) resources.add(resource);
-		this.own(creation.part);
-		const statusbarService = this.own(new StatusbarService());
-		const statusbarPart = this.own(new StatusbarPart(window.container, statusbarService));
-		this.own(new EditorStatusContribution(creation.part, statusbarService));
-		this.own(window.onBeforeUnload(event => {
+		this._register(creation.part);
+		const statusbarService = this._register(new StatusbarService());
+		const statusbarPart = this._register(new StatusbarPart(window.container, statusbarService));
+		this._register(new EditorStatusContribution(creation.part, statusbarService));
+		this._register(window.onBeforeUnload(event => {
 			if (creation.part.getEditorState().groups.some(group => group.editors.some(editor => editor.isDirty))) {
 				event.veto("The auxiliary editor window contains unsaved changes.");
 			}
 		}));
-		this.own(window.onDidLayout(dimension => {
+		this._register(window.onDidLayout(dimension => {
 			creation.part.layout(new Dimension(dimension.width, Math.max(0, dimension.height - StatusbarHeight)));
 			statusbarPart.layout(new Dimension(dimension.width, StatusbarHeight));
 		}));

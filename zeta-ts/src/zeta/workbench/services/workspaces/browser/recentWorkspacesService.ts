@@ -1,5 +1,5 @@
 import { Emitter } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { isRecord } from "../../../../base/common/types.js";
 import { IStorageService, StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
 import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
@@ -21,8 +21,8 @@ interface PersistedRecentWorkspace {
  * Persists local folder workspaces at profile scope and keeps the welcome page
  * synchronized with host-authoritative workspace transitions.
  */
-export class RecentWorkspacesService extends DisposableOwner implements IRecentWorkspacesService {
-	private readonly _onDidChange = this.own(new Emitter<readonly IRecentWorkspace[]>());
+export class RecentWorkspacesService extends Disposable implements IRecentWorkspacesService {
+	private readonly _onDidChange = this._register(new Emitter<readonly IRecentWorkspace[]>());
 	private readonly storageService: IStorageService;
 	private readonly workspaceContextService: IWorkspaceContextService;
 	private readonly workspaceOpenService: IWorkspaceOpenService;
@@ -36,7 +36,7 @@ export class RecentWorkspacesService extends DisposableOwner implements IRecentW
 		this.workspaceContextService = workspaceContextService;
 		this.workspaceOpenService = workspaceOpenService;
 		this.entries = readEntries(storageService.get(RECENT_WORKSPACES_STORAGE_KEY, StorageScope.PROFILE));
-		this.own(workspaceContextService.onDidChangeWorkspace(() => this.recordCurrentWorkspace()));
+		this._register(workspaceContextService.onDidChangeWorkspace(() => this.recordCurrentWorkspace()));
 		this.recordCurrentWorkspace();
 	}
 

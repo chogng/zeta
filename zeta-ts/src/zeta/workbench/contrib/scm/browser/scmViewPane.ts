@@ -5,7 +5,7 @@ import { IconLabel } from "../../../../base/browser/ui/iconlabel/iconlabel.js";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
-import { ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
+import { DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
 import type { ICommandService } from "../../../../platform/commands/common/commands.js";
 import type { IFileIconThemeService } from "../../../../platform/theme/browser/fileIconThemeService.js";
@@ -29,7 +29,7 @@ export class ScmViewPane extends ViewPane {
 	private readonly commitButton: HTMLButtonElement;
 	private readonly statusElement: HTMLDivElement;
 	private readonly changesElement: HTMLDivElement;
-	private readonly renderedChanges = this.own(new ResettableDisposableGroup());
+	private readonly renderedChanges = this._register(new DisposableStore());
 	private readonly actionViewItems: ScmActionViewItem[] = [];
 	private status: GitStatus | undefined;
 	private readonly retiredStreamInstanceIds = new Set<string>();
@@ -57,7 +57,7 @@ export class ScmViewPane extends ViewPane {
 		this.commitInput.rows = 2;
 		this.commitInput.placeholder = "Message (Ctrl+Enter to commit)";
 		this.commitInput.setAttribute("aria-label", "Commit message");
-		const commitButton = this.own(new Button(commitForm, {
+		const commitButton = this._register(new Button(commitForm, {
 			label: "Commit",
 			icon: lxiconsLibrary.check,
 			contentAlignment: "labelCentered",
@@ -75,28 +75,28 @@ export class ScmViewPane extends ViewPane {
 		this.changesElement = h(document, "div");
 		this.changesElement.className = "zeta-scm-changes";
 		this.contentElement.append(this.repositorySelectorContainer, commitForm, this.statusElement, this.changesElement);
-		this.own(addDisposableListener(this.repositorySelector, "change", () => void this.selectRepository(this.repositorySelector.value)));
-		this.own(addDisposableListener(commitForm, "submit", (event) => {
+		this._register(addDisposableListener(this.repositorySelector, "change", () => void this.selectRepository(this.repositorySelector.value)));
+		this._register(addDisposableListener(commitForm, "submit", (event) => {
 			event.preventDefault();
 			void this.commit();
 		}));
-		this.own(addDisposableListener(this.commitInput, "keydown", (event) => {
+		this._register(addDisposableListener(this.commitInput, "keydown", (event) => {
 			const keyboardEvent = event as KeyboardEvent;
 			if (keyboardEvent.key === "Enter" && (keyboardEvent.ctrlKey || keyboardEvent.metaKey)) {
 				event.preventDefault();
 				void this.commit();
 			}
 		}));
-		this.own(this.gitService.onDidChangeStatus((status) => this.onStatusChanged(status)));
-		this.own(this.gitService.onDidChangeRepositories(() => this.renderRepositorySelector()));
-		this.own(this.gitService.onDidChangeActiveRepository(() => this.renderRepositorySelector()));
-		this.own(this.gitService.onDidBecomeReady(() => void this.refresh()));
-		this.own(this.fileIconThemeService.onDidFileIconThemeChange(() => {
+		this._register(this.gitService.onDidChangeStatus((status) => this.onStatusChanged(status)));
+		this._register(this.gitService.onDidChangeRepositories(() => this.renderRepositorySelector()));
+		this._register(this.gitService.onDidChangeActiveRepository(() => this.renderRepositorySelector()));
+		this._register(this.gitService.onDidBecomeReady(() => void this.refresh()));
+		this._register(this.fileIconThemeService.onDidFileIconThemeChange(() => {
 			if (this.status) this.renderStatus(this.status);
 		}));
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.revision += 1;
-		});
+		}));
 		this.setBusy(true);
 		this.renderRepositorySelector();
 		void this.refresh();

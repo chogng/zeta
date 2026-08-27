@@ -1,7 +1,6 @@
 import {
-	DisposableOwner,
+	Disposable,
 	DisposableStore,
-	ResettableDisposableGroup,
 	type IDisposable,
 	toDisposable,
 } from "../common/lifecycle.js";
@@ -15,7 +14,7 @@ import {
 import { h } from "./dom.js";
 
 /** A disposable stylesheet attached to one document. */
-export class ManagedStyleSheet extends DisposableOwner {
+export class ManagedStyleSheet extends Disposable {
 	readonly element: HTMLStyleElement;
 
 	constructor(
@@ -29,7 +28,7 @@ export class ManagedStyleSheet extends DisposableOwner {
 		element.media = "screen";
 		element.textContent = cssText;
 		ownerDocument.head.append(element);
-		this.defer(() => element.remove());
+		this._register(toDisposable(() => element.remove()));
 	}
 
 	setText(cssText: string): void {
@@ -43,7 +42,7 @@ export class ManagedStyleSheet extends DisposableOwner {
  * Keeps the same dynamic stylesheet attached to every registered browser
  * window.
  */
-export class GlobalStyleSheet extends DisposableOwner {
+export class GlobalStyleSheet extends Disposable {
 	private readonly styles = new Map<BrowserWindow, ManagedStyleSheet>();
 	private cssText: string;
 
@@ -53,9 +52,9 @@ export class GlobalStyleSheet extends DisposableOwner {
 		for (const registration of getWindows()) {
 			this.attach(registration.window);
 		}
-		this.own(onDidRegisterWindow(({ window }) => this.attach(window)));
-		this.own(onWillUnregisterWindow(({ window }) => this.detach(window)));
-		this.defer(() => this.styles.clear());
+		this._register(onDidRegisterWindow(({ window }) => this.attach(window)));
+		this._register(onWillUnregisterWindow(({ window }) => this.detach(window)));
+		this._register(toDisposable(() => this.styles.clear()));
 	}
 
 	setText(cssText: string): void {
@@ -66,7 +65,7 @@ export class GlobalStyleSheet extends DisposableOwner {
 
 	private attach(targetWindow: BrowserWindow): void {
 		if (this.styles.has(targetWindow)) return;
-		const style = this.own(
+		const style = this._register(
 			new ManagedStyleSheet(targetWindow.document, this.cssText),
 		);
 		this.styles.set(targetWindow, style);
@@ -107,7 +106,7 @@ export function cloneDocumentStyles(
 	targetDocument: Document,
 ): IDisposable {
 	const store = new DisposableStore();
-	const clones = store.add(new ResettableDisposableGroup());
+	const clones = store.add(new DisposableStore());
 	const synchronize = (): void => {
 		clones.clear();
 		const styles = sourceDocument.head.querySelectorAll<
@@ -121,7 +120,7 @@ export function cloneDocumentStyles(
 					(source as HTMLLinkElement).href;
 			}
 			targetDocument.head.append(clone);
-			clones.defer(() => clone.remove());
+			clones.add(toDisposable(() => clone.remove()));
 		}
 	};
 	synchronize();

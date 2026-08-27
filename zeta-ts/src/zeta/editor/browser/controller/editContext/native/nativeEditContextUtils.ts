@@ -1,5 +1,5 @@
 import { addDisposableListener } from "../../../../../base/browser/dom.js";
-import { DisposableOwner, toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
 
 /** Maximum native text window used when the complete document is too large. */
 export const NATIVE_TEXT_WINDOW_LENGTH = 32 * 1_024;
@@ -8,7 +8,7 @@ export const NATIVE_TEXT_WINDOW_LENGTH = 32 * 1_024;
 export const MAX_CHARACTER_BOUNDS_REQUEST_LENGTH = 4 * 1_024;
 
 /** Tracks focus for a DOM node, including nodes hosted inside a shadow root. */
-export class FocusTracker extends DisposableOwner {
+export class FocusTracker extends Disposable {
 	private focused = false;
 	private paused = false;
 
@@ -17,10 +17,10 @@ export class FocusTracker extends DisposableOwner {
 		private readonly onFocusChange: (focused: boolean) => void,
 	) {
 		super();
-		this.own(addDisposableListener(this.domNode, "focus", () => {
+		this._register(addDisposableListener(this.domNode, "focus", () => {
 			if (!this.paused) this.refreshFocusState();
 		}));
-		this.own(addDisposableListener(this.domNode, "blur", () => {
+		this._register(addDisposableListener(this.domNode, "blur", () => {
 			if (!this.paused) this.setFocused(false);
 		}));
 	}

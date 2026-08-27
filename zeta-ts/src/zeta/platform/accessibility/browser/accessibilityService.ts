@@ -1,6 +1,6 @@
 import { AriaLiveRegion } from "../../../base/browser/ui/aria/aria.js";
 import { Emitter } from "../../../base/common/event.js";
-import { DisposableOwner, toDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { IContextKey, IContextKeyService } from "../../contextkey/common/contextkey.js";
 import { IConfigurationService } from "../../configuration/common/configurationService.js";
 import { AccessibilityConfiguration, AccessibilitySupport, CONTEXT_ACCESSIBILITY_MODE_ENABLED, IAccessibilityService } from "../common/accessibility.js";
@@ -14,15 +14,15 @@ export interface AccessibilityServiceOptions {
 }
 
 /** Applies accessibility policy, reduced-motion state, and live announcements to one Workbench. */
-export class AccessibilityService extends DisposableOwner implements IAccessibilityService {
+export class AccessibilityService extends Disposable implements IAccessibilityService {
 	private readonly accessibilityModeEnabledContext: IContextKey<boolean>;
 	private readonly root: HTMLElement;
 	private readonly configurationService: IConfigurationService;
 	private readonly liveRegion: AriaLiveRegion;
-	private readonly onDidChangeScreenReaderOptimizedEmitter = this.own(new Emitter<void>());
-	private readonly onDidChangeReducedMotionEmitter = this.own(new Emitter<void>());
-	private readonly onDidChangeReducedTransparencyEmitter = this.own(new Emitter<void>());
-	private readonly onDidChangeLinkUnderlinesEmitter = this.own(new Emitter<void>());
+	private readonly onDidChangeScreenReaderOptimizedEmitter = this._register(new Emitter<void>());
+	private readonly onDidChangeReducedMotionEmitter = this._register(new Emitter<void>());
+	private readonly onDidChangeReducedTransparencyEmitter = this._register(new Emitter<void>());
+	private readonly onDidChangeLinkUnderlinesEmitter = this._register(new Emitter<void>());
 	private accessibilitySupport: AccessibilitySupport;
 	private configMotionReduced: "auto" | "off" | "on";
 	private configTransparencyReduced: "auto" | "off" | "on";
@@ -47,11 +47,11 @@ export class AccessibilityService extends DisposableOwner implements IAccessibil
 		this.systemMotionReduced = false;
 		this.systemTransparencyReduced = false;
 		this.accessibilityModeEnabledContext = CONTEXT_ACCESSIBILITY_MODE_ENABLED.bindTo(options.contextKeyService);
-		this.liveRegion = this.own(new AriaLiveRegion(ownerDocument));
-		this.defer(() => {
+		this.liveRegion = this._register(new AriaLiveRegion(ownerDocument));
+		this._register(toDisposable(() => {
 			this.accessibilityModeEnabledContext.reset();
 			this.root.classList.remove("zeta-reduce-motion", "zeta-enable-motion", "zeta-reduce-transparency", "zeta-underline-links");
-		});
+		}));
 
 		const ownerWindow = ownerDocument.defaultView;
 		const motionMatcher = createMediaMatcher(ownerWindow, "(prefers-reduced-motion: reduce)");
@@ -59,21 +59,21 @@ export class AccessibilityService extends DisposableOwner implements IAccessibil
 		this.systemMotionReduced = motionMatcher?.matches ?? false;
 		this.systemTransparencyReduced = transparencyMatcher?.matches ?? false;
 		if (motionMatcher) {
-			this.own(listenToMediaQuery(motionMatcher, () => {
+			this._register(listenToMediaQuery(motionMatcher, () => {
 				this.systemMotionReduced = motionMatcher.matches;
 				if (this.configMotionReduced === "auto") this.onDidChangeReducedMotionEmitter.fire();
 				this.updateMotionClasses();
 			}));
 		}
 		if (transparencyMatcher) {
-			this.own(listenToMediaQuery(transparencyMatcher, () => {
+			this._register(listenToMediaQuery(transparencyMatcher, () => {
 				this.systemTransparencyReduced = transparencyMatcher.matches;
 				if (this.configTransparencyReduced === "auto") this.onDidChangeReducedTransparencyEmitter.fire();
 				this.updateTransparencyClass();
 			}));
 		}
 
-		this.own(options.configurationService.onDidChangeConfiguration((event) => {
+		this._register(options.configurationService.onDidChangeConfiguration((event) => {
 			if (event.affectsConfiguration(AccessibilityConfiguration.editorAccessibilitySupport)) {
 				this.updateAccessibilityModeContext();
 				this.onDidChangeScreenReaderOptimizedEmitter.fire();

@@ -1,12 +1,12 @@
 import "./media/inlineProgress.css";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { createReactiveDom } from "../../../../base/browser/reactiveDom.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { observableValue } from "../../../../base/common/observable.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 /** Provides a reusable inline progress presentation for asynchronous editor requests. */
-export class InlineProgressController extends DisposableOwner {
+export class InlineProgressController extends Disposable {
 	private readonly element: HTMLDivElement;
 	private readonly label = observableValue(this, "");
 	private active = 0;
@@ -14,14 +14,14 @@ export class InlineProgressController extends DisposableOwner {
 	constructor(private readonly viewport: EditorViewport) {
 		super();
 		const n = createReactiveDom(viewport.element.ownerDocument);
-		const view = this.own(n.div({
+		const view = this._register(n.div({
 			className: "stanza-editor-inline-progress",
 			attributes: { role: "status", "aria-live": "polite" },
 			properties: { hidden: this.label.map(label => label.length === 0) },
 		}, this.label).toLiveElement());
 		this.element = view.element;
 		viewport.element.append(this.element);
-		this.defer(() => this.element.remove());
+		this._register(toDisposable(() => this.element.remove()));
 	}
 
 	async run<T>(label: string, task: Promise<T>): Promise<T> {
@@ -36,6 +36,6 @@ registerEditorContribution({
 	id: "editor.contrib.inlineProgress",
 	install: context => {
 		if (context.kind !== "text") return;
-		context.own(new InlineProgressController(context.viewport));
+		context.register(new InlineProgressController(context.viewport));
 	},
 });

@@ -1,5 +1,5 @@
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
-import { DisposableOwner, ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
@@ -11,16 +11,16 @@ import { type LanguageLocation, type LanguageNavigationService } from "../common
 export type LanguageNavigationKind = "definition" | "declaration" | "implementation" | "typeDefinition" | "references";
 
 /** Owns keyboard navigation and the multi-result Peek surface for one text editor. */
-export class LanguageNavigationController extends DisposableOwner {
-	private readonly peek = this.own(new ResettableDisposableGroup());
+export class LanguageNavigationController extends Disposable {
+	private readonly peek = this._register(new DisposableStore());
 	private request: AbortController | undefined;
 
 	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: LanguageNavigationService, private readonly resource: URI, private readonly languageId: string, private readonly openLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor language navigation failed", error)) {
 		super();
 		if (viewport.textModel !== selections.textModel) throw new TypeError("Language navigation dependencies must share one text model");
-		this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
-		this.own(viewport.textModel.onDidChange(() => this.closePeek()));
-		this.defer(() => this.cancelRequest());
+		this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
+		this._register(viewport.textModel.onDidChange(() => this.closePeek()));
+		this._register(toDisposable(() => this.cancelRequest()));
 	}
 
 	navigate(kind: LanguageNavigationKind, options: { readonly peek?: boolean; readonly includeDeclaration?: boolean } = {}): Promise<void> {

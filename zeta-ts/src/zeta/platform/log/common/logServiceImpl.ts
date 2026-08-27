@@ -1,4 +1,4 @@
-import { DisposableOwner, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import type { ILogServiceHost, ILogSink, LogEntry, LogLevel } from "./logService.js";
 
 export interface LogServiceOptions {
@@ -8,7 +8,7 @@ export interface LogServiceOptions {
 }
 
 /** Multiplexes structured entries to runtime-selected sinks. */
-export class LogService extends DisposableOwner implements ILogServiceHost {
+export class LogService extends Disposable implements ILogServiceHost {
 	private readonly sinks = new Set<ILogSink>();
 	private readonly now: () => number;
 	private readonly onSinkError: (entry: LogEntry, error: unknown) => void;
@@ -18,7 +18,7 @@ export class LogService extends DisposableOwner implements ILogServiceHost {
 		this.now = options.now ?? Date.now;
 		this.onSinkError = options.onSinkError ?? reportSinkFailure;
 		for (const sink of options.sinks ?? []) this.sinks.add(sink);
-		this.defer(() => this.sinks.clear());
+		this._register(toDisposable(() => this.sinks.clear()));
 	}
 
 	registerSink(sink: ILogSink): IDisposable {

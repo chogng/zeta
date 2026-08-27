@@ -1,6 +1,6 @@
 import './richTextEditorWidget.css';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
-import { DisposableOwner, DisposableSlot, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { isSafeInteger } from '../../../../base/common/numbers.js';
 import { assertDefined } from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -117,13 +117,13 @@ type CommandFocusBehavior = "focus-editor" | "preserve-focus";
  * block-level input. `EditorPane` owns Workbench pane lifecycle. Code blocks
  * edit line ranges in this same TextModel rather than creating nested models.
  */
-export class RichTextEditorWidget extends DisposableOwner {
+export class RichTextEditorWidget extends Disposable {
 
-	private readonly modelReferenceSlot = this.own(new DisposableSlot<TextModelWorkingCopyReference>());
-	private readonly modelChangeListenerSlot = this.own(new DisposableSlot<IDisposable>());
-	private readonly collaborationControllerSlot = this.own(new DisposableSlot<DocumentCollaborationController>());
-	private readonly collaborationStateListenerSlot = this.own(new DisposableSlot<IDisposable>());
-	private readonly collaborationPresenceListenerSlot = this.own(new DisposableSlot<IDisposable>());
+	private readonly modelReferenceSlot = this._register(new MutableDisposable<TextModelWorkingCopyReference>());
+	private readonly modelChangeListenerSlot = this._register(new MutableDisposable<IDisposable>());
+	private readonly collaborationControllerSlot = this._register(new MutableDisposable<DocumentCollaborationController>());
+	private readonly collaborationStateListenerSlot = this._register(new MutableDisposable<IDisposable>());
+	private readonly collaborationPresenceListenerSlot = this._register(new MutableDisposable<IDisposable>());
 	private readonly schema: DocumentSchema;
 	private readonly nodeViewSlots = new Map<string, { readonly type: string; readonly view: NodeView }>();
 	private editorDom: EditorDom | undefined;
@@ -149,8 +149,8 @@ export class RichTextEditorWidget extends DisposableOwner {
 			throw new TypeError("Document editor requires a TextModel service");
 		}
 		this.schema = options.schema ?? createDefaultDocumentSchema();
-		this.defer(() => this.cancelCollaborationStart());
-		this.defer(() => this.disposeNodeViews());
+		this._register(toDisposable(() => this.cancelCollaborationStart()));
+		this._register(toDisposable(() => this.disposeNodeViews()));
 	}
 
 	create(parent: HTMLElement): void {
@@ -174,15 +174,15 @@ export class RichTextEditorWidget extends DisposableOwner {
 				onRevokeCollaborator: principalId => this.revokeCollaborationMember(principalId),
 				setFormattingContribution: value => {
 					if (formattingContribution) throw new Error("Document formatting contribution is already installed");
-					formattingContribution = this.own(value);
+					formattingContribution = this._register(value);
 				},
 				setCollaborationContribution: value => {
 					if (collaborationContribution) throw new Error("Document collaboration contribution is already installed");
-					collaborationContribution = this.own(value);
+					collaborationContribution = this._register(value);
 				},
 			});
 		}
-		const editorDom = this.own(new EditorDom({
+		const editorDom = this._register(new EditorDom({
 			rootClassName: "zeta-text-editor-widget-layout",
 			contentClassName: "zeta-text-editor-widget-pane",
 		}));
@@ -201,7 +201,7 @@ export class RichTextEditorWidget extends DisposableOwner {
 		this.outlineNavigator = outlineNavigator;
 		const onSelectionChange = () => this.syncDocumentSelection();
 		parent.ownerDocument.addEventListener("selectionchange", onSelectionChange);
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			parent.ownerDocument.removeEventListener("selectionchange", onSelectionChange);
 			outlineNavigator?.dispose();
 			collaborationContribution?.element.remove();
@@ -211,7 +211,7 @@ export class RichTextEditorWidget extends DisposableOwner {
 			this.editorDom = undefined;
 			this.outlineNavigator = undefined;
 			this.container = undefined;
-		});
+		}));
 	}
 
 	async setInput(input: EditorResourceInput, signal: AbortSignal): Promise<void> {
@@ -236,8 +236,8 @@ export class RichTextEditorWidget extends DisposableOwner {
 		this.collaborationControllerSlot.clear();
 		this.remotePresences = [];
 		this.modelChangeListenerSlot.clear();
-		this.modelReferenceSlot.replace(modelReference);
-		this.modelChangeListenerSlot.replace(model.onDidChangeBlocks(() => this.render()));
+		this.modelReferenceSlot.value = modelReference;
+		this.modelChangeListenerSlot.value = model.onDidChangeBlocks(() => this.render());
 		this.input = input;
 		this.activeBlockId = undefined;
 		container.replaceChildren();
@@ -1385,17 +1385,17 @@ export class RichTextEditorWidget extends DisposableOwner {
 				throw new Error("Opening a document collaboration room was cancelled");
 			}
 			const controller = new DocumentCollaborationController(model, connection);
-			this.collaborationControllerSlot.replace(controller);
+			this.collaborationControllerSlot.value = controller;
 			this.remotePresences = controller.presences;
-			this.collaborationStateListenerSlot.replace(controller.onDidChangeState(change => {
+			this.collaborationStateListenerSlot.value = controller.onDidChangeState(change => {
 				if (this.collaborationControllerSlot.value !== controller) return;
 				this.collaborationContribution?.setState(change.state, { roomId: change.roomId, target, principalId: controller.principalId, canManageMembers: controller.canManageMembers, ...(change.message === undefined ? {} : { message: change.message }) });
-			}));
-			this.collaborationPresenceListenerSlot.replace(controller.onDidChangePresence(change => {
+			});
+			this.collaborationPresenceListenerSlot.value = controller.onDidChangePresence(change => {
 				if (this.collaborationControllerSlot.value !== controller) return;
 				this.remotePresences = change.presences;
 				this.render();
-			}));
+			});
 			this.render();
 			return { roomId: controller.roomId, principalId: controller.principalId, canManageMembers: controller.canManageMembers };
 		} finally {

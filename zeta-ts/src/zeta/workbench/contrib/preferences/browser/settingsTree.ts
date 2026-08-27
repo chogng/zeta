@@ -1,6 +1,6 @@
 import "./media/settingsTree.css";
 import type { ObjectTreeNode } from "../../../../base/browser/ui/tree/objectTreeModel.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { SettingsTreeElement, SettingsTreeGroup, SettingsTreeItem, SettingsTreeModel } from "./settingsTreeModels.js";
 import { h } from "../../../../base/browser/dom.js";
 
@@ -39,7 +39,7 @@ type RenderedSettingsNode<T> = RenderedSettingsGroup<T> | RenderedSettingsItem<T
  * filtering, sorting, and structural updates. This specialized renderer does
  * not nest Settings inputs, selects, or buttons inside an interactive tree row.
  */
-export class SettingsTree<T> extends DisposableOwner {
+export class SettingsTree<T> extends Disposable {
 	readonly element: HTMLDivElement;
 	readonly model: SettingsTreeModel<T>;
 	private readonly options: SettingsTreeOptions<T>;
@@ -52,12 +52,12 @@ export class SettingsTree<T> extends DisposableOwner {
 		this.element = h(container.ownerDocument, "div");
 		this.element.className = `zeta-settings-tree ${options.rootClassName}`;
 		container.append(this.element);
-		this.own(options.model.onDidChange(() => this.render()));
-		this.defer(() => {
+		this._register(options.model.onDidChange(() => this.render()));
+		this._register(toDisposable(() => {
 			for (const rendered of this.rendered.values()) this.disposeRenderedNode(rendered);
 			this.rendered.clear();
 			this.element.remove();
-		});
+		}));
 		this.render();
 	}
 

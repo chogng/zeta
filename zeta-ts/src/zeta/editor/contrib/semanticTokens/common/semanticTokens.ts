@@ -1,4 +1,4 @@
-import { DisposableOwner, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languages/languageFeatureRegistry.js";
 import { LanguageRequestCoordinator, type LanguageRequestOptions, type LanguageRequestOutcome, type LanguageWorker, type LanguageWorkerRequest } from "../../../common/languages/languageRequestCoordinator.js";
@@ -28,14 +28,14 @@ interface SemanticTokensPayload {
 }
 
 /** Runs full-document semantic-token providers through the editor's version gate. */
-export class SemanticTokensService extends DisposableOwner {
+export class SemanticTokensService extends Disposable {
 	readonly tokens: ReturnType<typeof createLanguageTokenStore>;
 	private readonly coordinator: LanguageRequestCoordinator<SemanticTokensLane, SemanticTokensPayload, LanguageTokenResult>;
 
 	constructor(model: TextModel, providers: LanguageFeatureProviderRegistry<LanguageSemanticTokensProvider>, private readonly resource?: URI) {
 		super();
-		this.tokens = this.own(createLanguageTokenStore(model));
-		this.coordinator = this.own(new LanguageRequestCoordinator(model, () => new SemanticTokensProviderWorker(model, providers)));
+		this.tokens = this._register(createLanguageTokenStore(model));
+		this.coordinator = this._register(new LanguageRequestCoordinator(model, () => new SemanticTokensProviderWorker(model, providers)));
 	}
 
 	requestTokens(languageId: string, options: LanguageRequestOptions = {}): Promise<LanguageRequestOutcome> {

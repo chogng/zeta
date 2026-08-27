@@ -5,7 +5,7 @@ import { disposableWindowTimeout } from "../../base/browser/scheduler.js";
 import { mainWindow } from "../../base/browser/window.js";
 import {
 	type IDisposable,
-	DisposableOwner,
+	Disposable,
 } from "../../base/common/lifecycle.js";
 import { getErrorMessage, onUnexpectedError, setUnexpectedErrorHandler } from "../../base/common/errors.js";
 import { assertDefined } from "../../base/common/types.js";
@@ -290,7 +290,7 @@ export function startWorkbench({
 }
 
 /** Owns the renderer workbench, its parts, commands, and runtime layout. */
-export class Workbench extends DisposableOwner {
+export class Workbench extends Disposable {
 	/** Resolves after dirty working copies are restored and AfterRestored contributions are active. */
 	readonly whenRestored: Promise<void>;
 	private readonly workspaceContext: WorkspaceContextService;
@@ -327,14 +327,14 @@ export class Workbench extends DisposableOwner {
 		const mode = WorkbenchModeRegistry.get(modeId);
 		const services = new ServiceCollection();
 		const instantiationService = new InstantiationService(services);
-		const logService = this.own(new LogService({ sinks: [new ConsoleLogSink()] }));
+		const logService = this._register(new LogService({ sinks: [new ConsoleLogSink()] }));
 		this.logService = logService;
 		this.registerErrorHandler(logService);
 		services.set(ILogService, logService);
 		services.set(IExtensionHostApi, api.extensionHost);
 		services.set(ISymbolIndexApi, api.symbolIndex);
 		if (api.debugAdapter) services.set(IDebugAdapterProcessService, api.debugAdapter);
-		const remoteAgentService = this.own(new AppServerRemoteAgentService({ api: api.appServer, remoteApi: api.remote }));
+		const remoteAgentService = this._register(new AppServerRemoteAgentService({ api: api.appServer, remoteApi: api.remote }));
 		services.set(IRemoteAgentService, remoteAgentService);
 		services.set(IRemoteConnectionService, api.remoteConnections ?? UnavailableRemoteConnectionService);
 		services.set(IRemoteTunnelService, api.remoteTunnels ?? UnavailableRemoteTunnelService);
@@ -343,12 +343,12 @@ export class Workbench extends DisposableOwner {
 		}
 		const workspaceOpenService = new WorkspaceOpenService(nativeHostApi);
 		services.set(IWorkspaceOpenService, workspaceOpenService);
-		const workspaceContext = this.own(new WorkspaceContextService(workspace));
+		const workspaceContext = this._register(new WorkspaceContextService(workspace));
 		this.workspaceContext = workspaceContext;
 		services.set(IWorkspaceContextService, workspaceContext);
-		const labelService = this.own(new LabelService(workspaceContext));
+		const labelService = this._register(new LabelService(workspaceContext));
 		services.set(ILabelService, labelService);
-		services.set(IFileLabelDecorationService, this.own(new FileLabelDecorationService()));
+		services.set(IFileLabelDecorationService, this._register(new FileLabelDecorationService()));
 		const workspaceTrustService = new AppServerWorkspaceTrustService(api.workspaceTrust);
 		services.set(IWorkspaceTrustService, workspaceTrustService);
 		const workspaceFileService = new BrowserFileService({
@@ -365,36 +365,36 @@ export class Workbench extends DisposableOwner {
 				};
 			},
 		});
-		this.own(workspaceFileService);
-		const fileService = this.own(new MultiplexFileService(workspaceFileService));
+		this._register(workspaceFileService);
+		const fileService = this._register(new MultiplexFileService(workspaceFileService));
 		services.set(IFileService, fileService);
 		services.set(IFileSystemProviderService, fileService);
 		const textFileService = new TextFileService(fileService);
 		services.set(ITextFileService, textFileService);
-		const untitledTextEditorService = this.own(new BrowserUntitledTextEditorService());
+		const untitledTextEditorService = this._register(new BrowserUntitledTextEditorService());
 		services.set(IUntitledTextEditorService, untitledTextEditorService);
-		const workingCopyService = this.own(new BrowserWorkingCopyService());
+		const workingCopyService = this._register(new BrowserWorkingCopyService());
 		services.set(IWorkingCopyService, workingCopyService);
-		const workingCopyBackups = this.own(new IndexedDbWorkingCopyBackupService(workspace.id));
+		const workingCopyBackups = this._register(new IndexedDbWorkingCopyBackupService(workspace.id));
 		this.workingCopyBackups = workingCopyBackups;
 		services.set(IWorkingCopyBackupService, workingCopyBackups);
 		const textResourceStore = getBrowserTextResourceStore(textFileService);
-		const textModelService = this.own(getBrowserTextModelService(textResourceStore));
+		const textModelService = this._register(getBrowserTextModelService(textResourceStore));
 		services.set(ITextModelService, textModelService);
-		const workspaceEditService = this.own(new BrowserWorkspaceEditService(textModelService, workingCopyService, fileService));
+		const workspaceEditService = this._register(new BrowserWorkspaceEditService(textModelService, workingCopyService, fileService));
 		services.set(IWorkspaceEditService, workspaceEditService);
-		const bulkEditService = this.own(new BrowserBulkEditService(workspaceEditService));
+		const bulkEditService = this._register(new BrowserBulkEditService(workspaceEditService));
 		services.set(IBulkEditService, bulkEditService);
-		const textMateService = this.own(new BrowserTextMateService());
+		const textMateService = this._register(new BrowserTextMateService());
 		services.set(ITextMateService, textMateService);
-		const languageFeaturesService = this.own(new LanguageFeaturesService());
+		const languageFeaturesService = this._register(new LanguageFeaturesService());
 		services.set(ILanguageFeaturesService, languageFeaturesService);
-		this.own(new AppServerLanguageProviders(languageFeaturesService, api.language, workspaceContext, { workspaceTrust: workspaceTrustService, events: api.events }));
+		this._register(new AppServerLanguageProviders(languageFeaturesService, api.language, workspaceContext, { workspaceTrust: workspaceTrustService, events: api.events }));
 		const codeIntelligenceDocuments = new AppServerCodeIntelligenceDocumentService(api.symbolIndex);
 		services.set(ICodeIntelligenceDocumentService, codeIntelligenceDocuments);
-		const languageDiagnosticsService = this.own(new AppServerLanguageDiagnosticsService(api.language, api.events, workspaceContext, codeIntelligenceDocuments, workspaceTrustService));
+		const languageDiagnosticsService = this._register(new AppServerLanguageDiagnosticsService(api.language, api.events, workspaceContext, codeIntelligenceDocuments, workspaceTrustService));
 		services.set(ILanguageDiagnosticsService, languageDiagnosticsService);
-		const extensionService = this.own(new AppServerExtensionService({ api: api.extensions, eventApi: api.events, textMateService, languageFeaturesService }));
+		const extensionService = this._register(new AppServerExtensionService({ api: api.extensions, eventApi: api.events, textMateService, languageFeaturesService }));
 		services.set(IExtensionService, extensionService);
 		const extensionReady = extensionService.start();
 		void extensionReady.catch(error => logService.error("extensions", "Declarative extension activation failed", error));
@@ -402,19 +402,19 @@ export class Workbench extends DisposableOwner {
 			IWorkspaceSearchService,
 			new BrowserWorkspaceSearchService(api.workspaceSearch, workspaceContext),
 		);
-		const terminalService = this.own(new TerminalService(api.terminal, workspaceContext));
+		const terminalService = this._register(new TerminalService(api.terminal, workspaceContext));
 		services.set(ITerminalService, terminalService);
-		const gitService = this.own(new GitService({ api: api.git, appServerApi: api.appServer, eventApi: api.events, workspaceContext }));
+		const gitService = this._register(new GitService({ api: api.git, appServerApi: api.appServer, eventApi: api.events, workspaceContext }));
 		services.set(IGitService, gitService);
 		services.set(ICodeIndexService, new AppServerCodeIndexService(api.codeIndex));
-		services.set(IConnectorService, this.own(new AppServerConnectorService(api.connectors, api.events)));
-		services.set(IAccountService, this.own(new AppServerAccountService(api.accounts, api.events)));
-		services.set(IPluginService, this.own(new AppServerPluginService(api.plugins, api.events)));
-		const marketplaceService = this.own(new AppServerMarketplaceService(api.marketplace, api.events));
+		services.set(IConnectorService, this._register(new AppServerConnectorService(api.connectors, api.events)));
+		services.set(IAccountService, this._register(new AppServerAccountService(api.accounts, api.events)));
+		services.set(IPluginService, this._register(new AppServerPluginService(api.plugins, api.events)));
+		const marketplaceService = this._register(new AppServerMarketplaceService(api.marketplace, api.events));
 		services.set(IMarketplaceService, marketplaceService);
 		services.set(IToolSearchService, new AppServerToolSearchService(api.toolSearch));
 		const workbenchState = workspaceContext.getWorkbenchState();
-		const workbenchWindow = this.own(new WorkbenchWindow({
+		const workbenchWindow = this._register(new WorkbenchWindow({
 			root: workbenchRoot,
 			modeId,
 			workbenchState,
@@ -422,7 +422,7 @@ export class Workbench extends DisposableOwner {
 		services.set(IWorkbenchHostService, workbenchWindow);
 		const ownerDocument = workbenchWindow.ownerDocument;
 		let workbenchLayout: WorkbenchLayout | undefined;
-		const layoutService = this.own(new BrowserLayoutService({
+		const layoutService = this._register(new BrowserLayoutService({
 			root: workbenchRoot,
 			getContainerOffset: () => workbenchLayout?.mainContainerOffset ?? {
 				top: 0,
@@ -432,19 +432,19 @@ export class Workbench extends DisposableOwner {
 		}));
 		services.set(ILayoutService, layoutService);
 
-		const configuration = this.own(new WorkbenchConfigurationService({
+		const configuration = this._register(new WorkbenchConfigurationService({
 			api: configurationApi,
 		}));
 		services.set(IConfigurationService, configuration);
 		services.set(IConfigurationResourceService, configuration);
-		const chatService = this.own(new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events, configurationService: configuration }));
+		const chatService = this._register(new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events, configurationService: configuration }));
 		services.set(IChatService, chatService);
 		services.set(IChatContextPickService, new ChatContextPickService());
-		const languagePackService = this.own(new MarketplaceLanguagePackService(marketplaceService, builtinLanguagePackCatalogs));
+		const languagePackService = this._register(new MarketplaceLanguagePackService(marketplaceService, builtinLanguagePackCatalogs));
 		services.set(ILanguagePackService, languagePackService);
-		const localeService = this.own(new WorkbenchLocaleService(configuration, languagePackService));
+		const localeService = this._register(new WorkbenchLocaleService(configuration, languagePackService));
 		services.set(ILocaleService, localeService);
-		const localizationService = this.own(new WorkbenchLocalizationService(localeService, languagePackService));
+		const localizationService = this._register(new WorkbenchLocalizationService(localeService, languagePackService));
 		services.set(ILocalizationService, localizationService);
 		const ownerWindow = ownerDocument.defaultView;
 		if (!ownerWindow) {
@@ -452,18 +452,18 @@ export class Workbench extends DisposableOwner {
 		}
 		this.ownerWindow = ownerWindow;
 		services.set(IClipboardService, new BrowserClipboardService(ownerWindow.navigator.clipboard));
-		const lifecycleService = this.own(new BrowserLifecycleService({ ownerWindow, onError: error => logService.error("lifecycle", "Workbench shutdown failed", error) }));
+		const lifecycleService = this._register(new BrowserLifecycleService({ ownerWindow, onError: error => logService.error("lifecycle", "Workbench shutdown failed", error) }));
 		this.lifecycleService = lifecycleService;
 		services.set(ILifecycleService, lifecycleService);
-		services.set(IWorkbenchModeService, this.own(new WorkbenchModeService({
+		services.set(IWorkbenchModeService, this._register(new WorkbenchModeService({
 			currentModeId: modeId,
 			configurationService: configuration,
 			lifecycleService,
 			switchHostMode: switchWorkbenchMode,
 		})));
-		const workingCopyBackupTracker = this.own(new WorkingCopyBackupTracker(workingCopyService, workingCopyBackups, ownerWindow));
+		const workingCopyBackupTracker = this._register(new WorkingCopyBackupTracker(workingCopyService, workingCopyBackups, ownerWindow));
 		this.workingCopyBackupTracker = workingCopyBackupTracker;
-		const storage = this.own(new BrowserStorageService({
+		const storage = this._register(new BrowserStorageService({
 			ownerWindow,
 			applicationId: mode.storageNamespace,
 			workspaceId: workspace.id,
@@ -471,20 +471,20 @@ export class Workbench extends DisposableOwner {
 		this.workbenchWindow = workbenchWindow;
 		this.storage = storage;
 		services.set(IStorageService, storage);
-		const recentWorkspaces = this.own(new RecentWorkspacesService(storage, workspaceContext, workspaceOpenService));
+		const recentWorkspaces = this._register(new RecentWorkspacesService(storage, workspaceContext, workspaceOpenService));
 		services.set(IRecentWorkspacesService, recentWorkspaces);
-		this.own(lifecycleService.onWillShutdown(event => {
+		this._register(lifecycleService.onWillShutdown(event => {
 			event.join(workingCopyBackupTracker.flush(), "working-copy backup flush");
 			event.join(storage.flush(WillSaveStateReason.SHUTDOWN), "Workbench storage flush");
 		}));
-		const outputService = this.own(new OutputService({ storageService: storage }));
+		const outputService = this._register(new OutputService({ storageService: storage }));
 		services.set(IOutputService, outputService);
-		const systemOutputService = this.own(new SystemOutputService(outputService, api.appServer));
-		this.own(logService.registerSink(systemOutputService));
+		const systemOutputService = this._register(new SystemOutputService(outputService, api.appServer));
+		this._register(logService.registerSink(systemOutputService));
 		const serviceContributionReady: Promise<void>[] = [];
-		installWorkbenchServiceContributions({ services, own: value => this.own(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
-		services.set(IAccessibleViewInformationService, this.own(new AccessibleViewInformationService(storage)));
-		const themeService = this.own(new ThemeService(
+		installWorkbenchServiceContributions({ services, own: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
+		services.set(IAccessibleViewInformationService, this._register(new AccessibleViewInformationService(storage)));
+		const themeService = this._register(new ThemeService(
 			resolveWorkbenchColorTheme(
 				configuration.getValue(WorkbenchConfiguration.colorTheme),
 				ownerWindow.matchMedia("(prefers-color-scheme: dark)").matches,
@@ -499,37 +499,37 @@ export class Workbench extends DisposableOwner {
 			try { model.replace(projectExtensionTokenTheme(extensionService.themes.currentCatalog, activeTheme.colorScheme, ++textMateThemeRevision, activeTheme.id)); }
 			catch (error) { logService.error("theme", "Failed to apply extension token theme", error); }
 		};
-		this.own(extensionService.themes.onDidChange(() => updateTextMateTheme()));
-		this.own(themeService.onDidColorThemeChange(() => updateTextMateTheme()));
+		this._register(extensionService.themes.onDidChange(() => updateTextMateTheme()));
+		this._register(themeService.onDidColorThemeChange(() => updateTextMateTheme()));
 		services.set(IUserThemeService, userThemeService ?? UnavailableUserThemeService);
-		const fileIconThemeService = this.own(new SetiFileIconThemeService(themeService));
+		const fileIconThemeService = this._register(new SetiFileIconThemeService(themeService));
 		services.set(IFileIconThemeService, fileIconThemeService);
-		services.set(IResourceLabelService, this.own(new ResourceLabelService({
+		services.set(IResourceLabelService, this._register(new ResourceLabelService({
 			workspaceContextService: workspaceContext,
 			fileIconThemeService,
 			untitledTextEditorService,
 			fileLabelDecorationService: services.get(IFileLabelDecorationService),
 			labelService,
 		})));
-		const workbenchThemeController = this.own(new WorkbenchThemeController(
+		const workbenchThemeController = this._register(new WorkbenchThemeController(
 			configuration,
 			themeService,
 			ownerWindow,
 		));
-		this.own(extensionService.onDidChange(() => workbenchThemeController.refresh()));
-		this.own(bindColorTheme(themeService, workbenchRoot));
-		const statusbarService = this.own(new StatusbarService());
+		this._register(extensionService.onDidChange(() => workbenchThemeController.refresh()));
+		this._register(bindColorTheme(themeService, workbenchRoot));
+		const statusbarService = this._register(new StatusbarService());
 		services.set(IStatusbarService, statusbarService);
-		const dialogService = this.own(new DialogService());
+		const dialogService = this._register(new DialogService());
 		services.set(IDialogService, dialogService);
 		services.set(IDialogsModel, dialogService.model);
-		const languageServerStatusService = this.own(new AppServerLanguageServerStatusService(api.events, dialogService, outputService, statusbarService, workspaceContext));
+		const languageServerStatusService = this._register(new AppServerLanguageServerStatusService(api.events, dialogService, outputService, statusbarService, workspaceContext));
 		services.set(ILanguageServerStatusService, languageServerStatusService);
 		services.set(
 			IWorkbenchDialogHandler,
 			new BrowserDialogHandler(workbenchRoot),
 		);
-		const interactionServices = this.own(new WorkbenchInteractionServices({
+		const interactionServices = this._register(new WorkbenchInteractionServices({
 			services,
 			layoutService,
 			configurationService: configuration,
@@ -544,7 +544,7 @@ export class Workbench extends DisposableOwner {
 		const menus = interactionServices.menuService;
 		const contextViews = interactionServices.contextViewService;
 		const contextMenus = interactionServices.contextMenuService;
-		const accessibilityService = this.own(nativeHostApi
+		const accessibilityService = this._register(nativeHostApi
 			? new NativeAccessibilityService({
 				root: workbenchRoot,
 				contextKeyService: contextKeys,
@@ -557,11 +557,11 @@ export class Workbench extends DisposableOwner {
 				configurationService: configuration,
 			}));
 		services.set(IAccessibilityService, accessibilityService);
-		const viewDescriptors = this.own(new ViewDescriptorService({
+		const viewDescriptors = this._register(new ViewDescriptorService({
 			contextKeyService: contextKeys,
 		}));
 		services.set(IViewDescriptorService, viewDescriptors);
-		const sessionService = this.own(new AppServerSessionsManagementService({
+		const sessionService = this._register(new AppServerSessionsManagementService({
 			session: api.session,
 			turn: api.turn,
 			events: api.events,
@@ -574,17 +574,17 @@ export class Workbench extends DisposableOwner {
 		}));
 		services.set(ISessionsManagementService, sessionService);
 		const keybindings = interactionServices.keybindingService;
-		const contributions = this.own(
+		const contributions = this._register(
 			WorkbenchContributionsRegistry.createHost(services),
 		);
 		contributions.advance(WorkbenchPhase.BlockStartup);
 
-		const titlebar = this.own(createTitlebarPart(workbenchRoot, {
+		const titlebar = this._register(createTitlebarPart(workbenchRoot, {
 			menuService: menus,
 			contextMenuService: contextMenus,
 			localizationService,
 		}));
-		const sidebar = this.own(new SidebarPart(workbenchRoot, {
+		const sidebar = this._register(new SidebarPart(workbenchRoot, {
 			viewDescriptorService: viewDescriptors,
 			contextKeyService: contextKeys,
 			storageService: storage,
@@ -592,7 +592,7 @@ export class Workbench extends DisposableOwner {
 			ariaLabelKey: { bundle: "zeta.regions", key: "primarySidebar" },
 			viewsAriaLabelKey: { bundle: "zeta.regions", key: "primarySidebarViews" },
 		}));
-		const agentSidebar = this.own(new SidebarPart(workbenchRoot, {
+		const agentSidebar = this._register(new SidebarPart(workbenchRoot, {
 			viewDescriptorService: viewDescriptors,
 			contextKeyService: contextKeys,
 			storageService: storage,
@@ -662,10 +662,10 @@ export class Workbench extends DisposableOwner {
 				},
 			},
 		};
-		const editor = this.own(new EditorPart(workbenchRoot, editorOptions));
-		const auxiliaryWindows = this.own(new BrowserAuxiliaryWindowService(ownerWindow));
+		const editor = this._register(new EditorPart(workbenchRoot, editorOptions));
+		const auxiliaryWindows = this._register(new BrowserAuxiliaryWindowService(ownerWindow));
 		services.set(IAuxiliaryWindowService, auxiliaryWindows);
-		const editorParts = this.own(new EditorParts(editor, auxiliaryWindows, container => {
+		const editorParts = this._register(new EditorParts(editor, auxiliaryWindows, container => {
 			const contextKeyService = contextKeys.createScoped(container);
 			return {
 				part: new EditorPart(container, {
@@ -677,9 +677,9 @@ export class Workbench extends DisposableOwner {
 			};
 		}));
 		services.set(IEditorPartsService, editorParts);
-		this.own(new EditorContextKeyController(contextKeys, editorParts, EditorPanes, languageFeaturesService));
+		this._register(new EditorContextKeyController(contextKeys, editorParts, EditorPanes, languageFeaturesService));
 		services.set(IEditorPart, editorParts);
-		const editorService = this.own(new BrowserEditorService(editorParts));
+		const editorService = this._register(new BrowserEditorService(editorParts));
 		services.set(IEditorService, editorService);
 		services.set(IEditorGroupsService, editorService);
 		const openSidebarComposite = (
@@ -732,7 +732,7 @@ export class Workbench extends DisposableOwner {
 			assertDefined(composite, `Agent Sidebar Composite is not available: ${viewContainer.id}`);
 			return composite;
 		};
-		const panel = this.own(new PanelPart(workbenchRoot, {
+		const panel = this._register(new PanelPart(workbenchRoot, {
 			viewDescriptorService: viewDescriptors,
 			contextKeyService: contextKeys,
 			storageService: storage,
@@ -745,7 +745,7 @@ export class Workbench extends DisposableOwner {
 			},
 		}));
 		this.editor = editorParts;
-		this.own(recentWorkspaces.onDidChange(() => {
+		this._register(recentWorkspaces.onDidChange(() => {
 			editor.setWelcomeRecentProjects(welcomeRecentProjects());
 		}));
 		const openPanelComposite = (
@@ -775,13 +775,13 @@ export class Workbench extends DisposableOwner {
 			assertDefined(composite, `Panel Composite is not available: ${viewContainer.id}`);
 			return composite;
 		};
-		const auxiliarybar = this.own(new AuxiliarybarPart(workbenchRoot, {
+		const auxiliarybar = this._register(new AuxiliarybarPart(workbenchRoot, {
 			viewDescriptorService: viewDescriptors,
 			contextKeyService: contextKeys,
 			storageService: storage,
 			localizationService,
 		}));
-		const statusbar = this.own(new StatusbarPart(workbenchRoot, statusbarService));
+		const statusbar = this._register(new StatusbarPart(workbenchRoot, statusbarService));
 		const parts = new Map<WorkbenchPartId, WorkbenchPart>([
 			["titlebar", titlebar],
 			["statusbar", statusbar],
@@ -791,7 +791,7 @@ export class Workbench extends DisposableOwner {
 			["editor", editor],
 			["panel", panel],
 		]);
-		const layout = this.own(new WorkbenchLayout(workbenchRoot, parts, {
+		const layout = this._register(new WorkbenchLayout(workbenchRoot, parts, {
 			initialDimension: layoutService.mainContainerDimension,
 			fallbackPartVisibility: DEFAULT_WORKBENCH_LAYOUT.parts,
 			defaultLayout,
@@ -800,8 +800,8 @@ export class Workbench extends DisposableOwner {
 		workbenchLayout = layout;
 		this.workbenchLayout = layout;
 		services.set(IWorkbenchLayoutService, layout);
-		this.own(new WorkbenchContextKeysHandler(contextKeys, workspaceContext, editorService, editorService, layout, workingCopyService));
-		this.own(bindResizableLayout(layoutService.onDidLayoutMainContainer, layout));
+		this._register(new WorkbenchContextKeysHandler(contextKeys, workspaceContext, editorService, editorService, layout, workingCopyService));
+		this._register(bindResizableLayout(layoutService.onDidLayoutMainContainer, layout));
 		const openAuxiliaryComposite = (compositeId: string): PaneComposite => {
 			const viewContainer = viewDescriptors
 				.getViewContainers(ViewContainerLocation.AuxiliaryBar)
@@ -873,23 +873,23 @@ export class Workbench extends DisposableOwner {
 			},
 		});
 		services.set(IViewsService, viewsService);
-		this.own(outputService.onDidRequestShowChannel(request => {
+		this._register(outputService.onDidRequestShowChannel(request => {
 			if (request.focus === "take") viewsService.focusView(OUTPUT_VIEW_ID);
 			else viewsService.openView(OUTPUT_VIEW_ID);
 		}));
-		this.own(sidebar.onDidSelectComposite(
+		this._register(sidebar.onDidSelectComposite(
 			({ compositeId }) => {
 				if (sidebar.activeCompositeId === compositeId) return;
 				openSidebarComposite(compositeId);
 			},
 		));
-		this.own(agentSidebar.onDidSelectComposite(
+		this._register(agentSidebar.onDidSelectComposite(
 			({ compositeId }) => {
 				if (agentSidebar.activeCompositeId === compositeId) return;
 				openAgentSidebarComposite(compositeId);
 			},
 		));
-		this.own(panel.onDidSelectComposite(
+		this._register(panel.onDidSelectComposite(
 			({ compositeId }) => {
 				if (panel.activeCompositeId === compositeId) return;
 				openPanelComposite(compositeId);
@@ -929,7 +929,7 @@ export class Workbench extends DisposableOwner {
 		await this.restoreWorkingCopyBackups(backups, editor);
 		if (this.isDisposed) return;
 		contributions.advance(WorkbenchPhase.AfterRestored);
-		this.own(disposableWindowTimeout(this.ownerWindow, () => contributions.advance(WorkbenchPhase.Eventually), 2_000));
+		this._register(disposableWindowTimeout(this.ownerWindow, () => contributions.advance(WorkbenchPhase.Eventually), 2_000));
 	}
 
 	private async restoreWorkingCopyBackups(backups: IWorkingCopyBackupService, editor: IEditorPart): Promise<void> {

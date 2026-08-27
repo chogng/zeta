@@ -1,11 +1,11 @@
 import { Emitter } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { IPluginApi } from "../../../../platform/plugins/common/pluginApi.js";
 import type { IPluginService, PluginCatalogView, PluginPackageView } from "../../../../platform/plugins/common/pluginService.js";
 
-export class AppServerPluginService extends DisposableOwner implements IPluginService {
-	private readonly _onDidChange = this.own(new Emitter<number>());
+export class AppServerPluginService extends Disposable implements IPluginService {
+	private readonly _onDidChange = this._register(new Emitter<number>());
 	readonly onDidChange = this._onDidChange.event;
 
 	constructor(private readonly api: IPluginApi, events: IServerEventApi) {
@@ -13,7 +13,7 @@ export class AppServerPluginService extends DisposableOwner implements IPluginSe
 		const subscription = events.subscribe(event => {
 			if (event.method === "plugin/changed") this._onDidChange.fire(event.params.revision);
 		});
-		this.defer(() => subscription.dispose());
+		this._register(toDisposable(() => subscription.dispose()));
 	}
 
 	async list(): Promise<PluginCatalogView> {

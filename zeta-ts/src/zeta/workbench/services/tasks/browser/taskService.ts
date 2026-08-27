@@ -1,6 +1,6 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { getErrorMessage } from "../../../../base/common/errors.js";
-import { DisposableOwner, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { FileKind, FileNotFoundError, type IFileService } from "../../../../platform/files/common/files.js";
 import type { ILogService } from "../../../../platform/log/common/logService.js";
@@ -18,10 +18,10 @@ interface OwnedTaskProvider {
 }
 
 /** Workspace task discovery and integrated-Terminal execution. */
-export class TaskService extends DisposableOwner implements ITaskService {
-	private readonly changeTasksEmitter = this.own(new Emitter<readonly IWorkspaceTask[]>());
-	private readonly startTaskEmitter = this.own(new Emitter<ITaskRun>());
-	private readonly changeTaskRunEmitter = this.own(new Emitter<ITaskRun>());
+export class TaskService extends Disposable implements ITaskService {
+	private readonly changeTasksEmitter = this._register(new Emitter<readonly IWorkspaceTask[]>());
+	private readonly startTaskEmitter = this._register(new Emitter<ITaskRun>());
+	private readonly changeTaskRunEmitter = this._register(new Emitter<ITaskRun>());
 	private readonly runs = new Set<TaskRun>();
 	private readonly providers = new Map<string, OwnedTaskProvider>();
 	private currentTasks: readonly IWorkspaceTask[] = Object.freeze([]);
@@ -37,23 +37,23 @@ export class TaskService extends DisposableOwner implements ITaskService {
 
 	constructor(private readonly fileService: IFileService, private readonly workspace: IWorkspaceContextService, private readonly terminalService: ITerminalService, outputService?: IOutputService, private readonly logService?: ILogService) {
 		super();
-		this.output = outputService ? this.own(outputService.createChannel({ id: "tasks", label: "Tasks", kind: "log", source: "core" })) : undefined;
-		this.own(fileService.onDidChangeFiles(event => {
+		this.output = outputService ? this._register(outputService.createChannel({ id: "tasks", label: "Tasks", kind: "log", source: "core" })) : undefined;
+		this._register(fileService.onDidChangeFiles(event => {
 			if (this.loaded && affectsTaskConfiguration(event.resources)) void this.refresh().catch(error => this.reportError(error));
 		}));
-		this.own(workspace.onDidChangeWorkspace(() => {
+		this._register(workspace.onDidChangeWorkspace(() => {
 			this.activeRefresh?.abort();
 			this.refreshGeneration += 1;
 			this.loaded = false;
 			this.setTasks(Object.freeze([]));
 		}));
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			for (const run of this.runs) run.dispose();
 			this.runs.clear();
 			this.activeRefresh?.abort();
 			this.activeRefresh = undefined;
 			this.providers.clear();
-		});
+		}));
 	}
 
 	get tasks(): readonly IWorkspaceTask[] { return this.currentTasks; }
@@ -131,7 +131,7 @@ export class TaskService extends DisposableOwner implements ITaskService {
 		let terminal: ITerminalInstance;
 		try { terminal = await this.terminalService.createTerminal({ workspaceFolderId: workspaceFolder.id, dimensions: TASK_TERMINAL_DIMENSIONS, profile: { type: "default" }, title: `Task: ${currentTask.label}` }); }
 		catch (error) { this.log("error", "execution", `Could not create a terminal for task '${currentTask.label}': ${errorMessage(error)}`); throw error; }
-		const run = this.own(new TaskRun(currentTask, terminal, current => {
+		const run = this._register(new TaskRun(currentTask, terminal, current => {
 			const exit = current.exitCode === undefined ? "" : ` (exit code ${current.exitCode})`;
 			this.log(current.status === "failed" ? "error" : current.status === "canceled" ? "warning" : "information", "execution", `Task '${current.task.label}' ${current.status}${exit}.`);
 			this.changeTaskRunEmitter.fire(current);
@@ -261,8 +261,8 @@ function taskProviderId(task: IWorkspaceTask): string | undefined {
 	catch { return undefined; }
 }
 
-class TaskRun extends DisposableOwner implements ITaskRun {
-	private readonly changeStatusEmitter = this.own(new Emitter<TaskRunStatus>());
+class TaskRun extends Disposable implements ITaskRun {
+	private readonly changeStatusEmitter = this._register(new Emitter<TaskRunStatus>());
 	private commandId: string | undefined;
 	private _status: TaskRunStatus = "running";
 	private _exitCode: number | undefined;
@@ -270,11 +270,11 @@ class TaskRun extends DisposableOwner implements ITaskRun {
 
 	constructor(readonly task: IWorkspaceTask, readonly terminal: ITerminalInstance, private readonly onChange: (run: TaskRun) => void) {
 		super();
-		this.own(terminal.onDidChangeCommandStatus(event => this.acceptCommandStatus(event)));
-		this.own(terminal.onDidExit(exitCode => {
+		this._register(terminal.onDidChangeCommandStatus(event => this.acceptCommandStatus(event)));
+		this._register(terminal.onDidExit(exitCode => {
 			if (this._status === "running") this.setStatus(exitCode === 0 ? "succeeded" : "failed", exitCode);
 		}));
-		this.own(terminal.onDidChangeState(state => {
+		this._register(terminal.onDidChangeState(state => {
 			if (this._status === "running" && (state === "disconnected" || state === "error")) this.setStatus(state === "error" ? "failed" : "canceled", undefined);
 		}));
 	}

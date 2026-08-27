@@ -1,7 +1,7 @@
 import { Emitter, type Event } from "../common/event.js";
 import {
-	DisposableOwner,
-	DisposableSlot,
+	Disposable,
+	MutableDisposable,
 	type IDisposable,
 	toDisposable,
 } from "../common/lifecycle.js";
@@ -296,10 +296,10 @@ export function restoreAncestorScrollPositions(
 	}
 }
 
-class FocusTracker extends DisposableOwner implements IFocusTracker {
-	private readonly _onDidFocus = this.own(new Emitter<void>());
-	private readonly _onDidBlur = this.own(new Emitter<void>());
-	private readonly pendingRefresh = this.own(new DisposableSlot<IDisposable>());
+class FocusTracker extends Disposable implements IFocusTracker {
+	private readonly _onDidFocus = this._register(new Emitter<void>());
+	private readonly _onDidBlur = this._register(new Emitter<void>());
+	private readonly pendingRefresh = this._register(new MutableDisposable<IDisposable>());
 	readonly onDidFocus = this._onDidFocus.event;
 	readonly onDidBlur = this._onDidBlur.event;
 	private readonly target: HTMLElement | BrowserWindow;
@@ -310,24 +310,24 @@ class FocusTracker extends DisposableOwner implements IFocusTracker {
 		this.target = target;
 		if (isWindow(target)) {
 			this._hasFocus = target.document.hasFocus();
-			this.own(addDisposableListener(target, "focus", () =>
+			this._register(addDisposableListener(target, "focus", () =>
 				this.setFocused(true),
 			));
-			this.own(addDisposableListener(target, "blur", () =>
+			this._register(addDisposableListener(target, "blur", () =>
 				this.setFocused(false),
 			));
 			return;
 		}
 
 		this._hasFocus = isAncestorOfActiveElement(target);
-		this.own(addDisposableListener(target, "focusin", () => {
+		this._register(addDisposableListener(target, "focusin", () => {
 			this.pendingRefresh.clear();
 			this.setFocused(true);
 		}));
-		this.own(addDisposableListener(target, "focusout", () =>
+		this._register(addDisposableListener(target, "focusout", () =>
 			this.scheduleRefresh()
 		));
-		this.own(addDisposableListener(getWindow(target), "blur", () =>
+		this._register(addDisposableListener(getWindow(target), "blur", () =>
 			this.setFocused(false),
 		));
 	}
@@ -346,10 +346,10 @@ class FocusTracker extends DisposableOwner implements IFocusTracker {
 	private scheduleRefresh(): void {
 		if (this.pendingRefresh.value) return;
 		const targetWindow = getWindow(this.target);
-		this.pendingRefresh.replace(disposableWindowTimeout(targetWindow, () => {
+		this.pendingRefresh.value = disposableWindowTimeout(targetWindow, () => {
 			this.pendingRefresh.clear();
 			this.refreshState();
-		}, 0));
+		}, 0);
 	}
 
 	private setFocused(focused: boolean): void {

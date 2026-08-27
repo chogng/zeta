@@ -1,5 +1,7 @@
 import {
-	DisposableOwner,
+	Disposable,
+
+	toDisposable,
 } from "../../../common/lifecycle.js";
 import { disposableWindowInterval } from "../../scheduler.js";
 import { getWindow } from "../../window.js";
@@ -10,7 +12,7 @@ import {
 import { h } from "../../dom.js";
 
 /** A compact four-pixel activity indicator with no image asset dependency. */
-export class PixelSpinner extends DisposableOwner {
+export class PixelSpinner extends Disposable {
 	readonly element: HTMLSpanElement;
 	private step = 0;
 
@@ -19,13 +21,13 @@ export class PixelSpinner extends DisposableOwner {
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, "span");
 		this.element = element;
-		this.defer(() => element.remove());
+		this._register(toDisposable(() => element.remove()));
 		element.className = "zeta-pixel-spinner";
 		setRole(element, "status");
 		setAriaAttribute(element, "label", "Loading");
 		element.append(...Array.from({ length: 4 }, () => h(ownerDocument, "i")));
 		container.append(element);
-		this.own(disposableWindowInterval(
+		this._register(disposableWindowInterval(
 			getWindow(element),
 			() => this.render(),
 			120,

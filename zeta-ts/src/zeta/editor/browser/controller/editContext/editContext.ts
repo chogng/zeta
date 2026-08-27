@@ -1,6 +1,6 @@
 import { stopEvent } from "../../../../base/browser/dom.js";
 import { Emitter, type Event as EditorEvent, noEvent } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type TextSelectionOffsets } from "../../../common/commands/editorEditCommand.js";
 import { type CompositionController } from "../compositionController.js";
 import { type EditorViewTextUpdateEvent, type ViewController } from "../../view/viewController.js";
@@ -80,15 +80,15 @@ export interface EditContextPosition {
  * browser. This is the same seam that lets VS Code provide native and
  * textarea edit contexts side by side.
  */
-export abstract class EditContext extends DisposableOwner {
+export abstract class EditContext extends Disposable {
 	abstract readonly element: HTMLElement;
 	abstract readonly textArea: HTMLTextAreaElement | undefined;
-	private readonly willCopyEmitter = this.own(new Emitter<IClipboardCopyEvent>());
-	private readonly willCutEmitter = this.own(new Emitter<IClipboardCopyEvent>());
-	private readonly willPasteEmitter = this.own(new Emitter<IClipboardPasteEvent>());
-	private readonly willBeforeInputEmitter = this.own(new Emitter<InputEvent>());
-	private readonly willTextUpdateEmitter = this.own(new Emitter<EditorViewTextUpdateEvent>());
-	private readonly willKeydownEmitter = this.own(new Emitter<KeyboardEvent>());
+	private readonly willCopyEmitter = this._register(new Emitter<IClipboardCopyEvent>());
+	private readonly willCutEmitter = this._register(new Emitter<IClipboardCopyEvent>());
+	private readonly willPasteEmitter = this._register(new Emitter<IClipboardPasteEvent>());
+	private readonly willBeforeInputEmitter = this._register(new Emitter<InputEvent>());
+	private readonly willTextUpdateEmitter = this._register(new Emitter<EditorViewTextUpdateEvent>());
+	private readonly willKeydownEmitter = this._register(new Emitter<KeyboardEvent>());
 	private inputConnected = false;
 	abstract readonly onDidFocus: EditorEvent<void>;
 	abstract readonly onDidBlur: EditorEvent<void>;
@@ -139,12 +139,12 @@ export abstract class EditContext extends DisposableOwner {
 	connectViewController(viewController: ViewController, compositionController: CompositionController): void {
 		if (this.inputConnected) return;
 		this.inputConnected = true;
-		this.own(this.onDidBeforeInput(event => this.routeBeforeInput(event, viewController, compositionController)));
-		this.own(this.onDidInput(event => {
+		this._register(this.onDidBeforeInput(event => this.routeBeforeInput(event, viewController, compositionController)));
+		this._register(this.onDidInput(event => {
 			if (!event.isComposing || !compositionController.composing) this.clear();
 		}));
-		this.own(this.onDidTextUpdate(update => this.routeTextUpdate(update, viewController, compositionController)));
-		this.own(this.onDidKeydown(event => this.routeKeydown(event, viewController)));
+		this._register(this.onDidTextUpdate(update => this.routeTextUpdate(update, viewController, compositionController)));
+		this._register(this.onDidKeydown(event => this.routeKeydown(event, viewController)));
 	}
 
 	protected fireWillCopy(browserEvent: ClipboardEvent, isCut: boolean): void {

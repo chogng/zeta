@@ -1,14 +1,14 @@
 import type { AccountDto, AccountLoginCompleted, AccountReadResult, AccountUpdated } from '../../../../../../generated/app-server/types.js';
 import { Emitter } from '../../../../base/common/event.js';
-import { DisposableOwner } from '../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { IAccountApi } from '../../../../platform/accounts/common/accountApi.js';
 import type { Account, AccountLoginChallenge, AccountLoginCompletion, AccountLoginMethod, AccountState, IAccountService } from '../../../../platform/accounts/common/accountService.js';
 import type { IServerEventApi } from '../../../../platform/app-server/common/appServerApi.js';
 
-export class AppServerAccountService extends DisposableOwner implements IAccountService {
-	private readonly _onDidChangeAccounts = this.own(new Emitter<AccountState>());
+export class AppServerAccountService extends Disposable implements IAccountService {
+	private readonly _onDidChangeAccounts = this._register(new Emitter<AccountState>());
 	readonly onDidChangeAccounts = this._onDidChangeAccounts.event;
-	private readonly _onDidCompleteLogin = this.own(new Emitter<AccountLoginCompletion>());
+	private readonly _onDidCompleteLogin = this._register(new Emitter<AccountLoginCompletion>());
 	readonly onDidCompleteLogin = this._onDidCompleteLogin.event;
 
 	constructor(private readonly api: IAccountApi, events: IServerEventApi) {
@@ -22,7 +22,7 @@ export class AppServerAccountService extends DisposableOwner implements IAccount
 				this._onDidChangeAccounts.fire(completion.account);
 			}
 		});
-		this.defer(() => subscription.dispose());
+		this._register(toDisposable(() => subscription.dispose()));
 	}
 
 	async read(): Promise<AccountState> {

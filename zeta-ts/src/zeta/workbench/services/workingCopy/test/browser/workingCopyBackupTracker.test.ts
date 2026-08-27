@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Emitter } from "../../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { BrowserWorkingCopyService } from "../../browser/browserWorkingCopyService.js";
 import { WorkingCopyBackupTracker } from "../../browser/workingCopyBackupTracker.js";
@@ -28,9 +28,9 @@ test("working-copy backup tracker persists the latest dirty content and deletes 
 	assert.deepEqual(await backups.list(), []);
 });
 
-class TestWorkingCopy extends DisposableOwner implements IWorkingCopy {
-	private readonly dirtyChanges = this.own(new Emitter<void>());
-	private readonly contentChanges = this.own(new Emitter<void>());
+class TestWorkingCopy extends Disposable implements IWorkingCopy {
+	private readonly dirtyChanges = this._register(new Emitter<void>());
+	private readonly contentChanges = this._register(new Emitter<void>());
 	readonly resource;
 	readonly backupKind = "text" as const;
 	readonly onDidChangeDirty = this.dirtyChanges.event;
@@ -50,7 +50,7 @@ class TestWorkingCopy extends DisposableOwner implements IWorkingCopy {
 	async revert(): Promise<void> { this.markClean(); }
 }
 
-class MemoryBackups extends DisposableOwner implements IWorkingCopyBackupService {
+class MemoryBackups extends Disposable implements IWorkingCopyBackupService {
 	private readonly values = new Map<string, WorkingCopyBackup>();
 	async list(): Promise<readonly WorkingCopyBackup[]> { return [...this.values.values()]; }
 	async store(backup: WorkingCopyBackup): Promise<void> { this.values.set(backup.resource.toString(), backup); }

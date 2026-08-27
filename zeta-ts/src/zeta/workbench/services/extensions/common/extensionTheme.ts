@@ -1,6 +1,6 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Color } from "../../../../base/common/color.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { colorIdentifiers, createColorTheme, type IColorTheme } from "../../../../platform/theme/common/colorTheme.js";
 import { ColorScheme } from "../../../../platform/theme/common/theme.js";
 
@@ -36,17 +36,17 @@ export interface ExtensionThemeSource {
 }
 
 /** Owns validated extension theme documents without executing theme or extension code. */
-export class ExtensionThemeRegistry extends DisposableOwner implements ExtensionThemeSource {
-	private readonly changeEmitter = this.own(new Emitter<ExtensionThemeCatalog>());
+export class ExtensionThemeRegistry extends Disposable implements ExtensionThemeSource {
+	private readonly changeEmitter = this._register(new Emitter<ExtensionThemeCatalog>());
 	private catalog: ExtensionThemeCatalog = Object.freeze({ revision: 0, themes: Object.freeze([]) });
 
 	readonly onDidChange: Event<ExtensionThemeCatalog> = this.changeEmitter.event;
 
 	constructor() {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.catalog = Object.freeze({ revision: this.catalog.revision, themes: Object.freeze([]) });
-		});
+		}));
 	}
 
 	get currentCatalog(): ExtensionThemeCatalog {

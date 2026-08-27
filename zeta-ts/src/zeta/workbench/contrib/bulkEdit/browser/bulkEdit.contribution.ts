@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { isCancellationError } from "../../../../base/common/cancellation.js";
 import { type LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
 import { ITextModelService } from "../../../../editor/common/services/textModelService.js";
@@ -29,13 +29,13 @@ export function registerBulkEditView(registry: WorkbenchViewRegistry = ViewsRegi
 }
 
 /** Connects the bulk-edit service to the transient preview pane. */
-export class BulkEditPreviewContribution extends DisposableOwner {
+export class BulkEditPreviewContribution extends Disposable {
 	private activeSession: PreviewSession | undefined;
 
 	constructor(private readonly bulkEdits: IBulkEditService, private readonly views: IViewsService, private readonly files: IFileService, private readonly models: ITextModelService, private readonly workingCopies: IWorkingCopyService, private readonly dialogs: IDialogService) {
 		super();
-		this.own(bulkEdits.setPreviewHandler((edit, signal) => this.preview(edit, signal)));
-		this.defer(() => this.activeSession?.controller.abort());
+		this._register(bulkEdits.setPreviewHandler((edit, signal) => this.preview(edit, signal)));
+		this._register(toDisposable(() => this.activeSession?.controller.abort()));
 	}
 
 	private async preview(edit: LanguageWorkspaceEdit, signal: AbortSignal): Promise<LanguageWorkspaceEdit | undefined> {

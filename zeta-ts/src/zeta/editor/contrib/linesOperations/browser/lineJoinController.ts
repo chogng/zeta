@@ -1,5 +1,5 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { createJoinLinesCommand } from "../common/lineJoin.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
@@ -10,7 +10,7 @@ export interface LineJoinControllerOptions {
 }
 
 /** Routes the platform join-lines chord to Stanza's DOM-free command semantics. */
-export class LineJoinController extends DisposableOwner {
+export class LineJoinController extends Disposable {
 	constructor(
 		input: HTMLElement,
 		private readonly viewport: EditorViewport,
@@ -23,7 +23,7 @@ export class LineJoinController extends DisposableOwner {
 			if (viewport.textModel !== selections.textModel) {
 				throw new TypeError("Stanza line join dependencies must share one text model");
 			}
-			this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
+			this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
 		} catch (error) {
 			this.dispose();
 			throw error;

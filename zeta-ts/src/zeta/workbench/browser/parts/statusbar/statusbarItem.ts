@@ -1,6 +1,6 @@
 import "./statusbarItem.css";
 import { addDisposableListener, h, text as createText } from "../../../../base/browser/dom.js";
-import { DisposableOwner, DisposableSlot } from "../../../../base/common/lifecycle.js";
+import { Disposable, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { getHoverDelegate, type IManagedHover } from "../../../../base/browser/ui/hover/hoverDelegate.js";
 import { appendIcon } from "../../../../base/browser/ui/icon/icon.js";
 import type { IStatusbarEntry, IStatusbarEntrySegment } from "../../../services/statusbar/browser/statusbar.js";
@@ -9,11 +9,11 @@ const StatusbarHoverGroupId = "statusbar";
 type CompactHoverState = "none" | "group" | "entry";
 
 /** Owns the DOM and interaction presentation for one status bar entry. */
-export class StatusbarEntryItem extends DisposableOwner {
+export class StatusbarEntryItem extends Disposable {
 	readonly id: string;
 	readonly domNode: HTMLDivElement;
 	private readonly labelDomNode: HTMLAnchorElement;
-	private readonly hover = this.own(new DisposableSlot<IManagedHover>());
+	private readonly hover = this._register(new MutableDisposable<IManagedHover>());
 	private iconDomNode: SVGElement | undefined;
 	private textNode: Text | undefined;
 	private segmentDomNodes: HTMLElement[] = [];
@@ -32,7 +32,7 @@ export class StatusbarEntryItem extends DisposableOwner {
 		domNode.dataset.statusbarItemId = id;
 		this.domNode = domNode;
 		container.append(domNode);
-		this.defer(() => domNode.remove());
+		this._register(toDisposable(() => domNode.remove()));
 
 		const labelDomNode = h(ownerDocument, "a");
 		labelDomNode.className = "zeta-statusbar-item-label";
@@ -41,7 +41,7 @@ export class StatusbarEntryItem extends DisposableOwner {
 		this.labelDomNode = labelDomNode;
 		domNode.append(labelDomNode);
 
-		this.own(addDisposableListener(labelDomNode, "click", (event) => {
+		this._register(addDisposableListener(labelDomNode, "click", (event) => {
 			if (!this.isFocusable()) {
 				event.preventDefault();
 				return;
@@ -49,7 +49,7 @@ export class StatusbarEntryItem extends DisposableOwner {
 			event.preventDefault();
 			this.entry?.run?.();
 		}));
-		this.own(addDisposableListener(labelDomNode, "keydown", (event) => {
+		this._register(addDisposableListener(labelDomNode, "keydown", (event) => {
 			if (event.key !== "Enter" && event.key !== " ") return;
 			if (!this.isFocusable()) {
 				event.preventDefault();
@@ -90,13 +90,13 @@ export class StatusbarEntryItem extends DisposableOwner {
 		this.updateContent(previousEntry, entry);
 
 		if (!previousEntry || previousEntry.tooltip !== entry.tooltip) {
-			this.hover.replace(entry.tooltip
+			this.hover.value = entry.tooltip
 				? getHoverDelegate().setupHover({
 					target: this.labelDomNode,
 					content: entry.tooltip,
 					groupId: StatusbarHoverGroupId,
 				})
-			: undefined);
+			: undefined;
 		}
 	}
 

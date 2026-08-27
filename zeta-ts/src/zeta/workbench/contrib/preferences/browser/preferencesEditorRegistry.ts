@@ -1,6 +1,6 @@
 import type { IDimension } from '../../../../base/browser/geometry.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
-import { DisposableOwner, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { SyncDescriptor } from '../../../../platform/instantiation/common/instantiation.js';
 
 /** One Preferences surface hosted by the shared Preferences editor shell. */
@@ -19,10 +19,10 @@ export interface IPreferencesEditorPaneDescriptor {
 }
 
 /** Owns the Preferences panes contributed within one module realm. */
-export class PreferencesEditorPaneRegistry extends DisposableOwner {
+export class PreferencesEditorPaneRegistry extends Disposable {
 	private readonly descriptors = new Map<string, IPreferencesEditorPaneDescriptor>();
-	private readonly registerEmitter = this.own(new Emitter<readonly IPreferencesEditorPaneDescriptor[]>());
-	private readonly deregisterEmitter = this.own(new Emitter<readonly IPreferencesEditorPaneDescriptor[]>());
+	private readonly registerEmitter = this._register(new Emitter<readonly IPreferencesEditorPaneDescriptor[]>());
+	private readonly deregisterEmitter = this._register(new Emitter<readonly IPreferencesEditorPaneDescriptor[]>());
 
 	public readonly onDidRegisterPreferencesEditorPanes: Event<readonly IPreferencesEditorPaneDescriptor[]> = this.registerEmitter.event;
 	public readonly onDidDeregisterPreferencesEditorPanes: Event<readonly IPreferencesEditorPaneDescriptor[]> = this.deregisterEmitter.event;

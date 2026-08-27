@@ -1,21 +1,21 @@
 import "./media/inlayHints.css";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { TextPosition, TextRange } from "../../../common/core/text.js";
 import { type InlayHintsService, type LanguageInlayHint } from "../common/inlayHints.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { h } from "../../../../base/browser/dom.js";
 
 /** Projects versioned inlay hints into lightweight editor-local inline nodes. */
-export class InlayHintsController extends DisposableOwner {
+export class InlayHintsController extends Disposable {
 	private hints: readonly LanguageInlayHint[] = [];
 	private request: AbortController | undefined;
 
 	constructor(private readonly viewport: EditorViewport, private readonly service: InlayHintsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza inlay hints failed", error)) {
 		super();
-		this.own(viewport.onDidChangeLayout(() => this.render()));
-		this.own(viewport.textModel.onDidChange(() => void this.refresh()));
-		this.defer(() => this.cancelRequest());
+		this._register(viewport.onDidChangeLayout(() => this.render()));
+		this._register(viewport.textModel.onDidChange(() => void this.refresh()));
+		this._register(toDisposable(() => this.cancelRequest()));
 		void this.refresh();
 	}
 
@@ -56,6 +56,6 @@ export class InlayHintsController extends DisposableOwner {
 
 registerEditorContribution({ id: "editor.contrib.inlayHints", install: context => {
 	if (context.kind !== "text" || context.options.inlayHints === false || context.model.largeFile.tooLargeForTokenization) return;
-	const service = context.own(context.languageFeaturesService.createInlayHintsService(context.model, context.options.input.resource));
-	context.own(new InlayHintsController(context.viewport, service, context.languageId, context.onLanguageError));
+	const service = context.register(context.languageFeaturesService.createInlayHintsService(context.model, context.options.input.resource));
+	context.register(new InlayHintsController(context.viewport, service, context.languageId, context.onLanguageError));
 } });

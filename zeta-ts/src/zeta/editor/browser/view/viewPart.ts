@@ -1,4 +1,4 @@
-import { DisposableOwner } from '../../../base/common/lifecycle.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
 import { type EditorViewportLayout } from '../../common/viewLayout/viewLayout.js';
 import { type EditorRenderingContext } from './renderingContext.js';
 
@@ -19,7 +19,7 @@ export class EditorViewContext {
 	}
 }
 
-export abstract class EditorViewPart extends DisposableOwner {
+export abstract class EditorViewPart extends Disposable {
 	public prepareRender(_context: EditorRenderingContext): void {
 	}
 
@@ -31,12 +31,12 @@ export abstract class EditorViewPart extends DisposableOwner {
 	public abstract render(context: EditorRenderingContext): void;
 }
 
-export class EditorViewPartCollection extends DisposableOwner {
+export class EditorViewPartCollection extends Disposable {
 	private readonly parts: EditorViewPart[] = [];
 
 	public register<TPart extends EditorViewPart>(part: TPart): TPart {
 		this.parts.push(part);
-		this.own(part);
+		this._register(part);
 		return part;
 	}
 

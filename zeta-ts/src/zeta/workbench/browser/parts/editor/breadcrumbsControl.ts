@@ -1,9 +1,9 @@
 import { h } from "../../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { EditorInput } from "./editorInput.js";
 
 /** Resource-path projection for the active editor in one group title. */
-export class EditorBreadcrumbsControl extends DisposableOwner {
+export class EditorBreadcrumbsControl extends Disposable {
 	readonly domNode: HTMLElement;
 
 	constructor(container: HTMLElement) {
@@ -12,7 +12,7 @@ export class EditorBreadcrumbsControl extends DisposableOwner {
 		this.domNode.className = "zeta-editor-breadcrumbs";
 		this.domNode.setAttribute("aria-label", "Editor breadcrumbs");
 		container.append(this.domNode);
-		this.defer(() => this.domNode.remove());
+		this._register(toDisposable(() => this.domNode.remove()));
 	}
 
 	setInput(input: EditorInput | undefined): void {

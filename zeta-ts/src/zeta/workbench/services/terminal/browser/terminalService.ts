@@ -1,7 +1,7 @@
 import { timeout } from "../../../../base/common/async.js";
 import { decodeBase64, VSBuffer } from "../../../../base/common/buffer.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { ITerminalProcessCommandStatusEvent, ITerminalProcessOutputChunk, ITerminalProcessService, TerminalProcessConnectionPersistence, TerminalProcessConnectionState } from "../../../../platform/terminal/common/terminalProcessService.js";
 import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import type { ITerminalCommandStatusEvent, ITerminalCreateOptions, ITerminalDimensions, ITerminalInstance, ITerminalProfile, ITerminalService, TerminalInstanceState } from "../common/terminal.js";
@@ -13,13 +13,13 @@ const MAX_INPUT_BATCH_BYTES = 60 * 1024;
 const MAX_READ_CHUNKS = 128;
 
 /** Browser Workbench owner of terminal instances and their process lifecycle. */
-export class TerminalService extends DisposableOwner implements ITerminalService {
+export class TerminalService extends Disposable implements ITerminalService {
 	private readonly processService: ITerminalProcessService;
 	private readonly _instances: TerminalInstance[] = [];
-	private readonly _onDidCreateInstance = this.own(new Emitter<ITerminalInstance>());
-	private readonly _onDidDisposeInstance = this.own(new Emitter<ITerminalInstance>());
-	private readonly _onDidChangeInstances = this.own(new Emitter<void>());
-	private readonly _onDidChangeActiveInstance = this.own(new Emitter<ITerminalInstance | undefined>());
+	private readonly _onDidCreateInstance = this._register(new Emitter<ITerminalInstance>());
+	private readonly _onDidDisposeInstance = this._register(new Emitter<ITerminalInstance>());
+	private readonly _onDidChangeInstances = this._register(new Emitter<void>());
+	private readonly _onDidChangeActiveInstance = this._register(new Emitter<ITerminalInstance | undefined>());
 	private _activeInstance: TerminalInstance | undefined;
 	private nextInstanceId = 1;
 	private connectionState: TerminalProcessConnectionState = "ready";
@@ -33,7 +33,7 @@ export class TerminalService extends DisposableOwner implements ITerminalService
 	constructor(processService: ITerminalProcessService, private readonly workspaceContext: IWorkspaceContextService) {
 		super();
 		this.processService = processService;
-		this.own(processService.onConnectionState((state) => {
+		this._register(processService.onConnectionState((state) => {
 			this.connectionRevision += 1;
 			this.setConnectionState(state);
 		}));
@@ -45,13 +45,13 @@ export class TerminalService extends DisposableOwner implements ITerminalService
 			.catch(() => {
 				if (this.connectionRevision === connectionRevision) this.setConnectionState("crashed");
 			});
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			for (const instance of [...this._instances]) {
 				void instance.close().catch(() => {});
 			}
 			this._instances.length = 0;
 			this._activeInstance = undefined;
-		});
+		}));
 	}
 
 	get instances(): readonly ITerminalInstance[] {
@@ -79,7 +79,7 @@ export class TerminalService extends DisposableOwner implements ITerminalService
 			profile: options.profile,
 		});
 		const instanceNumber = this.nextInstanceId++;
-		const instance = this.own(new TerminalInstance(
+		const instance = this._register(new TerminalInstance(
 			`terminal-instance-${instanceNumber}`,
 			workspaceFolder.id,
 			processWorkspaceFolderId,
@@ -183,13 +183,13 @@ export class TerminalService extends DisposableOwner implements ITerminalService
 	}
 }
 
-class TerminalInstance extends DisposableOwner implements ITerminalInstance {
+class TerminalInstance extends Disposable implements ITerminalInstance {
 	private readonly processService: ITerminalProcessService;
 	private readonly onClosed: () => void;
-	private readonly _onDidWriteData = this.own(new Emitter<Uint8Array>());
-	private readonly _onDidChangeCommandStatus = this.own(new Emitter<ITerminalCommandStatusEvent>());
-	private readonly _onDidExit = this.own(new Emitter<number | undefined>());
-	private readonly _onDidChangeState = this.own(new Emitter<TerminalInstanceState>());
+	private readonly _onDidWriteData = this._register(new Emitter<Uint8Array>());
+	private readonly _onDidChangeCommandStatus = this._register(new Emitter<ITerminalCommandStatusEvent>());
+	private readonly _onDidExit = this._register(new Emitter<number | undefined>());
+	private readonly _onDidChangeState = this._register(new Emitter<TerminalInstanceState>());
 	private _state: TerminalInstanceState = "running";
 	private _exitCode: number | undefined;
 	private nextSequence = 0;
@@ -228,9 +228,9 @@ class TerminalInstance extends DisposableOwner implements ITerminalInstance {
 		this._title = title;
 		this.processService = processService;
 		this.onClosed = onClosed;
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			if (this.inputTimer !== undefined) clearTimeout(this.inputTimer);
-		});
+		}));
 	}
 
 	get state(): TerminalInstanceState {

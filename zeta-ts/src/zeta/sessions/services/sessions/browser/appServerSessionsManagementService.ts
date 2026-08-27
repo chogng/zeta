@@ -1,6 +1,6 @@
 import type { AgentTreeNodeProjection as AgentTreeNodeProjectionDto, ModelRef as ModelRefDto, Session as SessionDto, SessionThreadProjection as SessionThreadProjectionDto, TurnStatus as TurnStatusDto } from "../../../../../../generated/app-server/types.js";
 import { Emitter } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../base/common/uuid.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { ISessionApi, ITurnApi } from "../../../../platform/sessions/common/sessionApi.js";
@@ -20,11 +20,11 @@ interface AppServerSessionsManagementServiceHost {
 }
 
 /** App Server-backed canonical Session manager for one renderer window. */
-export class AppServerSessionsManagementService extends DisposableOwner implements ISessionsManagementService {
+export class AppServerSessionsManagementService extends Disposable implements ISessionsManagementService {
 	private readonly api: ISessionApi;
 	private readonly turnApi: ITurnApi | undefined;
 	private readonly workspaceRouter: ISessionWorkspaceRouter | undefined;
-	private readonly _onDidChange = this.own(new Emitter<void>());
+	private readonly _onDidChange = this._register(new Emitter<void>());
 	private _sessions: readonly Session[] = [];
 	private _active: IActiveSessionThread | undefined;
 	private _untitledSessions: readonly IUntitledChatSession[] = [];
@@ -53,9 +53,9 @@ export class AppServerSessionsManagementService extends DisposableOwner implemen
 					this.acceptThreadUpdate(event.params.sessionId, event.params.threadId, event.params.durableSequence);
 				}
 			});
-			this.defer(() => subscription.dispose());
+			this._register(toDisposable(() => subscription.dispose()));
 		}
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			for (const sessionId of this.subscribedSessionIds) {
 				void this.api.unsubscribe({ sessionId }).catch(error => console.error(`Failed to unsubscribe Session '${sessionId}'`, error));
 			}
@@ -63,7 +63,7 @@ export class AppServerSessionsManagementService extends DisposableOwner implemen
 			this.pendingSessionSequences.clear();
 			this.pendingProjectionRefreshes.clear();
 			this.refreshes.clear();
-		});
+		}));
 	}
 
 	get sessions(): readonly Session[] { return this._sessions; }

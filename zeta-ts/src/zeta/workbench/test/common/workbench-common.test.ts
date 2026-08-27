@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { Emitter } from '../../../base/common/event.js';
-import { DisposableOwner, toDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
 import {
 	ConfigurationsRegistry,
@@ -353,10 +353,10 @@ class TestView implements IView {
 	}
 }
 
-class TestWorkingCopy extends DisposableOwner {
-	private readonly dirtyEmitter = this.own(new Emitter<void>());
-	private readonly contentEmitter = this.own(new Emitter<void>());
-	private readonly externalChangeEmitter = this.own(new Emitter<void>());
+class TestWorkingCopy extends Disposable {
+	private readonly dirtyEmitter = this._register(new Emitter<void>());
+	private readonly contentEmitter = this._register(new Emitter<void>());
+	private readonly externalChangeEmitter = this._register(new Emitter<void>());
 	readonly onDidChangeDirty = this.dirtyEmitter.event;
 	readonly onDidChangeContent = this.contentEmitter.event;
 	readonly onDidChangeExternalChange = this.externalChangeEmitter.event;

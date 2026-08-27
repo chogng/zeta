@@ -4,5 +4,5 @@ import { TextEditorCapability } from "../../textEditorCapabilities.js";
 
 registerEditorContribution({ id: "editor.contrib.sectionHeaders", install: context => {
 	if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization) return;
-	context.own(new SectionHeadersController(context.viewport, context.getCapability(TextEditorCapability.folding)));
+	context.register(new SectionHeadersController(context.viewport, context.getCapability(TextEditorCapability.folding)));
 } });

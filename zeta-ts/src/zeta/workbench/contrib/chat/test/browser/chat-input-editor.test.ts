@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { ChatInputEditorRegistry, type ChatInputEditorOptions, type IChatInputEditor } from "../../../../../workbench/contrib/chat/browser/input/chatInputEditor.js";
 import { SlashCommandCatalog } from "../../../../../workbench/contrib/chat/common/slashCommands.js";
 import { h } from "../../../../../base/browser/dom.js";
@@ -88,10 +88,10 @@ test("Chat input editor registry selects and releases a product provider", () =>
 	dom.window.close();
 });
 
-class FakeChatInputEditor extends DisposableOwner implements IChatInputEditor {
+class FakeChatInputEditor extends Disposable implements IChatInputEditor {
 	readonly element: HTMLDivElement;
-	private readonly _onDidChange = this.own(new Emitter<string>());
-	private readonly _onDidSubmit = this.own(new Emitter<void>());
+	private readonly _onDidChange = this._register(new Emitter<string>());
+	private readonly _onDidSubmit = this._register(new Emitter<void>());
 	readonly onDidChange: Event<string> = this._onDidChange.event;
 	readonly onDidSubmit: Event<void> = this._onDidSubmit.event;
 	value = "";
@@ -100,7 +100,7 @@ class FakeChatInputEditor extends DisposableOwner implements IChatInputEditor {
 		super();
 		this.element = h(options.container.ownerDocument, "div");
 		options.container.append(this.element);
-		this.defer(() => this.element.remove());
+		this._register(toDisposable(() => this.element.remove()));
 	}
 
 	focus(): void {

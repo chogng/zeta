@@ -3,7 +3,7 @@ import { ObjectTree, type ObjectTreeCollapseStateChangeEvent, type ObjectTreeFin
 import type { ObjectTreeElement } from '../../../../base/browser/ui/tree/objectTreeModel.js';
 import { TreeFindMatchType, TreeFindMode } from '../../../../base/browser/ui/tree/tree.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
-import { DisposableOwner } from '../../../../base/common/lifecycle.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { ISetting } from '../../../services/preferences/common/preferences.js';
 import { SettingsLayout, SettingsNavigation, type SettingsCategoryDescriptor, type SettingsCategoryGroupDescriptor, type SettingsLayoutCategory, type SettingsNavigationDescriptor } from './settingsLayout.js';
 import type { SettingsTreeNode } from './settingsTreeModels.js';
@@ -81,9 +81,9 @@ function tocSearchKeywords(node: SettingsTreeNode<ISetting>): readonly string[] 
 }
 
 /** Settings table of contents backed exclusively by TOCTreeModel/layout identities. */
-export class TOCTree extends DisposableOwner {
+export class TOCTree extends Disposable {
 	public readonly element: HTMLDivElement;
-	private readonly openEmitter = this.own(new Emitter<SettingsTOCOpenEntry>());
+	private readonly openEmitter = this._register(new Emitter<SettingsTOCOpenEntry>());
 	private readonly tree: ObjectTree<SettingsTOCEntry>;
 
 	public readonly onDidOpen: Event<SettingsTOCOpenEntry> = this.openEmitter.event;
@@ -93,7 +93,7 @@ export class TOCTree extends DisposableOwner {
 	constructor(container: HTMLElement, private readonly model: TOCTreeModel, private readonly options: TOCTreeOptions) {
 		super();
 		const document = container.ownerDocument;
-		this.tree = this.own(new ObjectTree(container, {
+		this.tree = this._register(new ObjectTree(container, {
 			ariaLabel: options.ariaLabel,
 			scrolling: 'external',
 			expandOnlyOnTwistieClick: false,
@@ -116,11 +116,11 @@ export class TOCTree extends DisposableOwner {
 		this.tree.setChildren(model.children);
 		this.onDidChangeCollapseState = this.tree.onDidChangeCollapseState;
 		this.onDidChangeFind = this.tree.onDidChangeFind;
-		this.own(this.tree.onDidChangeSelection(({ elements, browserEvent }) => {
+		this._register(this.tree.onDidChangeSelection(({ elements, browserEvent }) => {
 			const entry = elements[0];
 			if (entry && entry.kind !== 'group' && browserEvent) this.openEmitter.fire(entry);
 		}));
-		this.own(this.tree.onDidAccept(({ element, node }) => {
+		this._register(this.tree.onDidAccept(({ element, node }) => {
 			if (node.collapsible) this.tree.toggleCollapsed(element.id);
 			if (element.kind !== 'group') this.openEmitter.fire(element);
 		}));

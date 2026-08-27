@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { DocumentNodeId } from "../../common/model/document.js";
 import type { DocumentOutline } from "../../common/model/documentOutline.js";
 import { h, fragment as createFragment } from "../../../base/browser/dom.js";
@@ -8,7 +8,7 @@ export interface DocumentOutlineNavigatorOptions {
 }
 
 /** Browser-owned outline list that delegates selection back to its host. */
-export class DocumentOutlineNavigator extends DisposableOwner {
+export class DocumentOutlineNavigator extends Disposable {
 	readonly element: HTMLElement;
 	private readonly list: HTMLOListElement;
 
@@ -28,7 +28,7 @@ export class DocumentOutlineNavigator extends DisposableOwner {
 		this.element = element;
 		this.list = list;
 		container.append(element);
-		this.defer(() => element.remove());
+		this._register(toDisposable(() => element.remove()));
 	}
 
 	setOutline(outline: DocumentOutline): void {

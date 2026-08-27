@@ -1,7 +1,7 @@
 import "@xterm/xterm/css/xterm.css";
 import { FitAddon } from "@xterm/addon-fit";
 import { Terminal, type IDecoration } from "@xterm/xterm";
-import { DisposableOwner, toDisposable } from "../../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { IThemeService } from "../../../../../platform/theme/common/themeService.js";
 import type { ITerminalCommandStatusEvent, ITerminalDimensions, ITerminalInstance } from "../../../../services/terminal/common/terminal.js";
 import { terminalTheme } from "./terminalTheme.js";
@@ -9,7 +9,7 @@ import { h } from "../../../../../base/browser/dom.js";
 import { observeResize } from "../../../../../base/browser/observer.js";
 
 /** One persistent xterm renderer bound to exactly one Terminal instance. */
-export class TerminalInstanceWidget extends DisposableOwner {
+export class TerminalInstanceWidget extends Disposable {
 	readonly element: HTMLDivElement;
 	private readonly terminal: Terminal;
 	private readonly fitAddon = new FitAddon();
@@ -32,21 +32,21 @@ export class TerminalInstanceWidget extends DisposableOwner {
 			scrollback: 5_000,
 			theme: terminalTheme(themeService.getColorTheme()),
 		});
-		this.own(themeService.onDidColorThemeChange((theme) => {
+		this._register(themeService.onDidColorThemeChange((theme) => {
 			this.terminal.options.theme = terminalTheme(theme);
 		}));
 		this.terminal.loadAddon(this.fitAddon);
 		this.terminal.open(this.element);
-		this.defer(() => this.terminal.dispose());
+		this._register(toDisposable(() => this.terminal.dispose()));
 		const input = this.terminal.onData((data) => this.instance.write(data));
-		this.own(toDisposable(() => input.dispose()));
-		this.own(instance.onDidWriteData((data) => this.terminal.write(data)));
-		this.own(instance.onDidChangeCommandStatus((event) => this.renderCommandStatus(event)));
-		this.own(instance.onDidExit((exitCode) => {
+		this._register(toDisposable(() => input.dispose()));
+		this._register(instance.onDidWriteData((data) => this.terminal.write(data)));
+		this._register(instance.onDidChangeCommandStatus((event) => this.renderCommandStatus(event)));
+		this._register(instance.onDidExit((exitCode) => {
 			this.terminal.writeln("");
 			this.terminal.writeln(`[process exited with code ${exitCode ?? "unknown"}]`);
 		}));
-		this.own(instance.onDidChangeState((state) => {
+		this._register(instance.onDidChangeState((state) => {
 			this.element.dataset.state = state;
 			if (state === "error") {
 				this.terminal.writeln("");
@@ -54,7 +54,7 @@ export class TerminalInstanceWidget extends DisposableOwner {
 			}
 		}));
 		this.element.dataset.state = instance.state;
-		this.own(observeResize(this.element, () => this.fit()));
+		this._register(observeResize(this.element, () => this.fit()));
 	}
 
 	setVisible(visible: boolean): void {
@@ -99,9 +99,9 @@ export class TerminalInstanceWidget extends DisposableOwner {
 			this.commandDecorations.set(event.commandId, item);
 			const renderListener = decoration.onRender((element) => this.presentCommandStatus(element, item!));
 			const disposeListener = decoration.onDispose(() => this.commandDecorations.delete(event.commandId));
-			this.own(toDisposable(() => renderListener.dispose()));
-			this.own(toDisposable(() => disposeListener.dispose()));
-			this.own(toDisposable(() => decoration.dispose()));
+			this._register(toDisposable(() => renderListener.dispose()));
+			this._register(toDisposable(() => disposeListener.dispose()));
+			this._register(toDisposable(() => decoration.dispose()));
 		} else {
 			item.event = event;
 		}

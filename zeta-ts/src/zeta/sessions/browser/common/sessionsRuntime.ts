@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { ServiceCollection } from "../../../platform/instantiation/common/instantiation.js";
 import type { IRendererHost } from "../../../platform/renderer/common/rendererHost.js";
 import type { IWorkspaceContextApi } from "../../../platform/workspace/common/workspaceIpc.js";
@@ -19,7 +19,7 @@ export interface SessionsRuntimeOptions {
 }
 
 /** Shared App Server-backed state used by one dedicated Sessions renderer. */
-export class SessionsRuntime extends DisposableOwner {
+export class SessionsRuntime extends Disposable {
 	readonly services = new ServiceCollection();
 	readonly sessions: AppServerSessionsManagementService;
 	readonly view: SessionsViewService;
@@ -29,7 +29,7 @@ export class SessionsRuntime extends DisposableOwner {
 
 	constructor(api: IRendererHost, options: SessionsRuntimeOptions = {}) {
 		super();
-		this.sessions = this.own(new AppServerSessionsManagementService({
+		this.sessions = this._register(new AppServerSessionsManagementService({
 			session: api.session,
 			turn: api.turn,
 			events: api.events,
@@ -40,8 +40,8 @@ export class SessionsRuntime extends DisposableOwner {
 				},
 			} : {}),
 		}));
-		this.view = this.own(new SessionsViewService(this.sessions));
-		this.chat = this.own(new ChatService({
+		this.view = this._register(new SessionsViewService(this.sessions));
+		this.chat = this._register(new ChatService({
 			modelApi: api.model,
 			threadApi: api.thread,
 			turnApi: api.turn,
@@ -55,7 +55,7 @@ export class SessionsRuntime extends DisposableOwner {
 		this.services.set(IChatService, this.chat);
 		if (options.workspaceApi) {
 			const subscription = options.workspaceApi.onDidChange(workspace => this.updateWorkspaceRoot(workspace));
-			this.defer(() => subscription.dispose());
+			this._register(toDisposable(() => subscription.dispose()));
 		}
 		this.workspaceApi = options.workspaceApi;
 	}

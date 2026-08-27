@@ -1,13 +1,13 @@
 import "./media/links.css";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type LinkService, type LanguageLink } from "../common/links.js";
 import { type TextPosition } from "../../../common/core/text.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 /** Resolves provider links on demand and delegates opening to the host callback. */
-export class LinksController extends DisposableOwner {
+export class LinksController extends Disposable {
 	private request: AbortController | undefined;
 	private links: readonly LanguageLink[] = [];
 	private activeLink: LanguageLink | undefined;
@@ -15,14 +15,14 @@ export class LinksController extends DisposableOwner {
 
 	constructor(private readonly viewport: EditorViewport, private readonly service: LinkService, private readonly languageId: string, private readonly onOpenLink: (target: string) => void | Promise<void>, private readonly onError: (error: unknown) => void = error => console.error("Stanza link opening failed", error)) {
 		super();
-		this.own(addDisposableListener<PointerEvent>(viewport.element, "pointermove", event => this.update(event)));
-		this.own(addDisposableListener(viewport.element, "pointerleave", () => this.clear()));
-		this.own(addDisposableListener<PointerEvent>(viewport.element, "pointerdown", event => {
+		this._register(addDisposableListener<PointerEvent>(viewport.element, "pointermove", event => this.update(event)));
+		this._register(addDisposableListener(viewport.element, "pointerleave", () => this.clear()));
+		this._register(addDisposableListener<PointerEvent>(viewport.element, "pointerdown", event => {
 			if (event.button !== 0 || !this.activeLink) return;
 			stopEvent(event);
 			void this.open(this.activeLink.target);
 		}));
-		this.own(viewport.textModel.onDidChange(() => this.clear()));
+		this._register(viewport.textModel.onDidChange(() => this.clear()));
 	}
 
 	private update(event: PointerEvent): void {
@@ -74,6 +74,6 @@ export class LinksController extends DisposableOwner {
 
 registerEditorContribution({ id: "editor.contrib.links", install: context => {
 	if (context.kind !== "text" || !context.options.onOpenLink) return;
-	const service = context.own(context.languageFeaturesService.createLinkService(context.model, context.options.input.resource));
-	context.own(new LinksController(context.viewport, service, context.languageId, context.options.onOpenLink, context.onLanguageError));
+	const service = context.register(context.languageFeaturesService.createLinkService(context.model, context.options.input.resource));
+	context.register(new LinksController(context.viewport, service, context.languageId, context.options.onOpenLink, context.onLanguageError));
 } });

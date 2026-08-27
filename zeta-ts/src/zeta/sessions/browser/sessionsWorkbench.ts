@@ -1,6 +1,6 @@
 import "./media/sessionsWorkbench.css";
 import "./actions/sessionsChatActions.js";
-import { DisposableOwner } from "../../base/common/lifecycle.js";
+import { Disposable } from "../../base/common/lifecycle.js";
 import { WorkbenchModeRegistry, type WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
 import type { IConfigurationApi } from "../../platform/configuration/common/configurationIpc.js";
 import type { IKeybindingsResourceApi } from "../../platform/keybinding/common/keybindingsResource.js";
@@ -29,7 +29,7 @@ export interface SessionsWorkbenchOptions {
 }
 
 /** Standalone mode-owned Sessions host that intentionally does not construct WorkbenchLayout. */
-export class SessionsWorkbench extends DisposableOwner {
+export class SessionsWorkbench extends Disposable {
 	readonly domNode: HTMLElement;
 
 	constructor(options: SessionsWorkbenchOptions) {
@@ -41,14 +41,14 @@ export class SessionsWorkbench extends DisposableOwner {
 		const container = options.container;
 		const ownerWindow = container.ownerDocument.defaultView;
 		if (!ownerWindow) throw new Error("Sessions renderer requires an owner window");
-		this.own(bindSessionsTheme(container));
-		const configurationService = this.own(new WorkbenchConfigurationService({ api: options.configurationApi }));
-		const runtime = this.own(new SessionsRuntime(options.api, {
+		this._register(bindSessionsTheme(container));
+		const configurationService = this._register(new WorkbenchConfigurationService({ api: options.configurationApi }));
+		const runtime = this._register(new SessionsRuntime(options.api, {
 			...(options.sessionsWindowApi ? { sessionsWindowApi: options.sessionsWindowApi } : {}),
 			...(options.workspaceApi ? { workspaceApi: options.workspaceApi } : {}),
 			configurationService,
 		}));
-		const storage = this.own(new BrowserStorageService({
+		const storage = this._register(new BrowserStorageService({
 			ownerWindow,
 			applicationId: mode.storageNamespace,
 			workspaceId: "sessions",
@@ -73,7 +73,7 @@ export class SessionsWorkbench extends DisposableOwner {
 		if (options.profile.id !== "code-sessions") {
 			throw new TypeError(`Unsupported Code Sessions profile '${options.profile.id}'`);
 		}
-		return this.own(new CodeSessionsWorkbench(container, options));
+		return this._register(new CodeSessionsWorkbench(container, options));
 	}
 }
 

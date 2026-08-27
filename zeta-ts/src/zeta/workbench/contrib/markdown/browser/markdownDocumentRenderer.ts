@@ -1,5 +1,7 @@
 import {
-	DisposableOwner,
+	Disposable,
+
+	toDisposable,
 } from "../../../../base/common/lifecycle.js";
 import { MarkdownPreview } from "../../../../platform/markdown/browser/markdownPreview.js";
 
@@ -15,7 +17,7 @@ export interface MarkdownDocumentViewOptions {
  * The platform component owns parsing, sanitization, and iframe isolation;
  * this view owns the product link-opening policy and editor-compatible shape.
  */
-export class MarkdownDocumentView extends DisposableOwner {
+export class MarkdownDocumentView extends Disposable {
 	private readonly preview: MarkdownPreview;
 	private readonly openLink: (href: string) => void | Promise<void>;
 	private active = true;
@@ -25,20 +27,20 @@ export class MarkdownDocumentView extends DisposableOwner {
 	constructor(container: HTMLElement, options: MarkdownDocumentViewOptions) {
 		super();
 		this.openLink = options.openLink;
-		this.preview = this.own(new MarkdownPreview(container, {
+		this.preview = this._register(new MarkdownPreview(container, {
 			markdown: options.markdown,
 			title: options.title,
 		}));
 		this.element = this.preview.element;
 		this.element.classList.add("zeta-markdown-document-view");
-		this.own(this.preview.onDidOpenLink((href) => {
+		this._register(this.preview.onDidOpenLink((href) => {
 			void Promise.resolve(this.openLink(href)).catch((error: unknown) => {
 				console.error("Unable to open Markdown link", error);
 			});
 		}));
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.active = false;
-		});
+		}));
 	}
 
 	setMarkdown(markdown: string): void {

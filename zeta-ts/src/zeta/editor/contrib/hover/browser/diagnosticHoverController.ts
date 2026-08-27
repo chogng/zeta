@@ -1,9 +1,9 @@
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 /** Owns Stanza's non-modal diagnostic hover over projected gutter markers. */
-export class DiagnosticHoverController extends DisposableOwner {
+export class DiagnosticHoverController extends Disposable {
 	private readonly element: HTMLDivElement;
 	private activeMarker: HTMLElement | undefined;
 
@@ -15,13 +15,13 @@ export class DiagnosticHoverController extends DisposableOwner {
 		this.element.hidden = true;
 		this.element.setAttribute("role", "tooltip");
 		(ownerDocument.body ?? viewport.element).append(this.element);
-		this.defer(() => this.element.remove());
-		this.own(addDisposableListener<PointerEvent>(viewport.element, "pointerover", event => this.showForTarget(event.target)));
-		this.own(addDisposableListener<PointerEvent>(viewport.element, "pointerout", event => {
+		this._register(toDisposable(() => this.element.remove()));
+		this._register(addDisposableListener<PointerEvent>(viewport.element, "pointerover", event => this.showForTarget(event.target)));
+		this._register(addDisposableListener<PointerEvent>(viewport.element, "pointerout", event => {
 			if (markerForTarget(event.relatedTarget) === this.activeMarker) return;
 			this.hide();
 		}));
-		this.own(addDisposableListener(viewport.element, "scroll", () => this.hide()));
+		this._register(addDisposableListener(viewport.element, "scroll", () => this.hide()));
 	}
 
 	private showForTarget(target: EventTarget | null): void {

@@ -1,5 +1,5 @@
 import { Emitter } from "../../../common/event.js";
-import { DisposableOwner, DisposableSlot, ResettableDisposableGroup, type IDisposable } from "../../../common/lifecycle.js";
+import { Disposable, MutableDisposable, DisposableStore, type IDisposable, toDisposable } from "../../../common/lifecycle.js";
 import { addDisposableListener, isNode, h } from "../../dom.js";
 import { disposableWindowTimeout } from "../../scheduler.js";
 import { getWindow } from "../../window.js";
@@ -28,14 +28,14 @@ export interface HoverOptions {
 let hoverId = 0;
 
 /** A managed, accessible tooltip hosted in a ContextView. */
-export class Hover extends DisposableOwner {
+export class Hover extends Disposable {
 	readonly element: HTMLElement;
 	private readonly contextView: IContextViewProvider;
-	private readonly showTimer = this.own(new DisposableSlot<IDisposable>());
-	private readonly hideTimer = this.own(new DisposableSlot<IDisposable>());
-	private readonly tooltipListeners = this.own(new ResettableDisposableGroup());
-	private readonly _onDidShow = this.own(new Emitter<void>());
-	private readonly _onDidHide = this.own(new Emitter<void>());
+	private readonly showTimer = this._register(new MutableDisposable<IDisposable>());
+	private readonly hideTimer = this._register(new MutableDisposable<IDisposable>());
+	private readonly tooltipListeners = this._register(new DisposableStore());
+	private readonly _onDidShow = this._register(new Emitter<void>());
+	private readonly _onDidHide = this._register(new Emitter<void>());
 	readonly onDidShow = this._onDidShow.event;
 	readonly onDidHide = this._onDidHide.event;
 	private readonly delayMs: HoverDelay;
@@ -71,44 +71,44 @@ export class Hover extends DisposableOwner {
 			AnchorPosition.Above;
 		this.gap = Math.max(0, options.gap ?? 6);
 		this.contextView = options.contextViewProvider ??
-			this.own(new ContextView(target.ownerDocument.body));
+			this._register(new ContextView(target.ownerDocument.body));
 
 		const title = target.getAttribute("title");
 		if (title !== null) {
 			this.previousTitle = title;
 			target.removeAttribute("title");
 		}
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.restoreDescription();
 			if (this.previousTitle !== undefined) {
 				target.setAttribute("title", this.previousTitle);
 			}
-		});
-		this.defer(() => this.hide());
+		}));
+		this._register(toDisposable(() => this.hide()));
 
-		this.own(addDisposableListener(target, "pointerenter", () => {
+		this._register(addDisposableListener(target, "pointerenter", () => {
 			this.hideTimer.clear();
 			this.scheduleShow();
 		}));
-		this.own(addDisposableListener(target, "pointerdown", () => {
+		this._register(addDisposableListener(target, "pointerdown", () => {
 			this.pointerDown = true;
 			this.hide();
 		}, true));
-		this.own(addDisposableListener(target, "pointerup", () => {
+		this._register(addDisposableListener(target, "pointerup", () => {
 			this.pointerDown = false;
 		}, true));
-		this.own(addDisposableListener(target, "pointercancel", () => {
+		this._register(addDisposableListener(target, "pointercancel", () => {
 			this.pointerDown = false;
 		}, true));
-		this.own(addDisposableListener(target, "pointerleave", (event) => {
+		this._register(addDisposableListener(target, "pointerleave", (event) => {
 			this.pointerDown = false;
 			if (this.isInsideHover(event.relatedTarget)) return;
 			this.scheduleHide();
 		}));
-		this.own(addDisposableListener(target, "focusin", () => {
+		this._register(addDisposableListener(target, "focusin", () => {
 			if (!this.pointerDown) this.show();
 		}));
-		this.own(addDisposableListener(target, "focusout", (event) => {
+		this._register(addDisposableListener(target, "focusout", (event) => {
 			if (this.isInsideHover(event.relatedTarget)) return;
 			this.scheduleHide();
 		}));
@@ -219,7 +219,7 @@ export class Hover extends DisposableOwner {
 				? this.delayMs()
 				: this.delayMs,
 		);
-		this.showTimer.replace(disposableWindowTimeout(
+		this.showTimer.value = disposableWindowTimeout(
 			getWindow(this.element),
 			() => {
 				this.showTimer.clear();
@@ -227,7 +227,7 @@ export class Hover extends DisposableOwner {
 				this.show();
 			},
 			delayMs,
-		));
+		);
 	}
 
 	private scheduleHide(): void {
@@ -237,14 +237,14 @@ export class Hover extends DisposableOwner {
 			!this.visible ||
 			this.hideTimer.value
 		) return;
-		this.hideTimer.replace(disposableWindowTimeout(
+		this.hideTimer.value = disposableWindowTimeout(
 			getWindow(this.element),
 			() => {
 				this.hideTimer.clear();
 				this.hide();
 			},
 			80,
-		));
+		);
 	}
 
 	private renderContent(container: HTMLElement): boolean {
@@ -297,7 +297,7 @@ export class Hover extends DisposableOwner {
 		const wasVisible = this._visible;
 		this._visible = false;
 		this.tooltip = undefined;
-		if (!this.tooltipListeners.disposed) this.tooltipListeners.clear();
+		if (!this.tooltipListeners.isDisposed) this.tooltipListeners.clear();
 		this.restoreDescription();
 		if (wasVisible) this._onDidHide.fire();
 	}

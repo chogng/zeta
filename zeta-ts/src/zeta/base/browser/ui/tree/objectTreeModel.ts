@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../common/event.js";
-import { DisposableOwner } from "../../../common/lifecycle.js";
+import { Disposable } from "../../../common/lifecycle.js";
 import { IndexTreeModel, type IndexTreeNode } from "./indexTreeModel.js";
 import type { TreeFilter, TreeSorter } from "./tree.js";
 
@@ -48,9 +48,9 @@ export interface ObjectTreeModelCollapseStateChangeEvent<TNode> {
  * remain owned by `IndexTreeModel`; this layer only translates object IDs and
  * applies object-level sorting before structural changes enter that model.
  */
-export class ObjectTreeModel<TNode> extends DisposableOwner {
-	private readonly _onDidChange = this.own(new Emitter<ObjectTreeModelChangeEvent<TNode>>());
-	private readonly _onDidChangeCollapseState = this.own(new Emitter<ObjectTreeModelCollapseStateChangeEvent<TNode>>());
+export class ObjectTreeModel<TNode> extends Disposable {
+	private readonly _onDidChange = this._register(new Emitter<ObjectTreeModelChangeEvent<TNode>>());
+	private readonly _onDidChangeCollapseState = this._register(new Emitter<ObjectTreeModelCollapseStateChangeEvent<TNode>>());
 	private readonly index: IndexTreeModel<TNode>;
 	private readonly identityProvider: ObjectTreeIdentityProvider<TNode>;
 	private nodesById = new Map<string, ObjectTreeNode<TNode>>();
@@ -64,17 +64,17 @@ export class ObjectTreeModel<TNode> extends DisposableOwner {
 		super();
 		this.identityProvider = options.identityProvider;
 		this.sorter = options.sorter;
-		this.index = this.own(new IndexTreeModel<TNode>(undefined as TNode, {
+		this.index = this._register(new IndexTreeModel<TNode>(undefined as TNode, {
 			defaultCollapseState: options.defaultCollapseState,
 			filter: options.filter,
 			identityProvider: options.identityProvider,
 			preserveCollapseStateByIdentity: true,
 		}));
-		this.own(this.index.onDidChange((event) => {
+		this._register(this.index.onDidChange((event) => {
 			this.rebuildIdentityIndex();
 			this._onDidChange.fire({ kind: this.changeKindOverride ?? event.kind, node: event.node as ObjectTreeNode<TNode> | undefined });
 		}));
-		this.own(this.index.onDidChangeCollapseState(({ node, collapsed }) => {
+		this._register(this.index.onDidChangeCollapseState(({ node, collapsed }) => {
 			this._onDidChangeCollapseState.fire({ node: node as ObjectTreeNode<TNode>, collapsed });
 		}));
 		this.rebuildIdentityIndex();

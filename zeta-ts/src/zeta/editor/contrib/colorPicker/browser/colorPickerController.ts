@@ -1,7 +1,7 @@
 import "./media/colorPicker.css";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { RGBA8 } from "../../../common/core/misc/rgba.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
@@ -9,7 +9,7 @@ import { type EditorViewport } from "../../../browser/view.js";
 import { type ColorService, type LanguageColorInformation } from "../common/color.js";
 
 /** Presents provider colors through a native color input and applies the selected text presentation. */
-export class ColorPickerController extends DisposableOwner {
+export class ColorPickerController extends Disposable {
 	private readonly element: HTMLDivElement;
 	private readonly input: HTMLInputElement;
 	private request: AbortController | undefined;
@@ -27,11 +27,11 @@ export class ColorPickerController extends DisposableOwner {
 		this.input.setAttribute("aria-label", "Choose color");
 		this.element.append(this.input);
 		viewport.element.append(this.element);
-		this.defer(() => this.element.remove());
-		this.own(addDisposableListener(editorInput, "keydown", event => { if (event.defaultPrevented || event.isComposing || !event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.altKey || event.key.toLowerCase() !== "c") return; stopEvent(event); void this.open(); }, true));
-		this.own(addDisposableListener(this.input, "change", () => void this.apply()));
-		this.own(addDisposableListener(this.input, "keydown", event => { if (event.key === "Escape") { stopEvent(event); this.close(); } }));
-		this.own(viewport.textModel.onDidChange(() => this.close()));
+		this._register(toDisposable(() => this.element.remove()));
+		this._register(addDisposableListener(editorInput, "keydown", event => { if (event.defaultPrevented || event.isComposing || !event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.altKey || event.key.toLowerCase() !== "c") return; stopEvent(event); void this.open(); }, true));
+		this._register(addDisposableListener(this.input, "change", () => void this.apply()));
+		this._register(addDisposableListener(this.input, "keydown", event => { if (event.key === "Escape") { stopEvent(event); this.close(); } }));
+		this._register(viewport.textModel.onDidChange(() => this.close()));
 	}
 
 	private async open(): Promise<void> {
@@ -84,6 +84,6 @@ function hexToRgb(value: string): RGBA8 { const normalized = value.replace(/^#/,
 
 registerEditorContribution({ id: "editor.contrib.colorPicker", install: context => {
 	if (context.kind !== "text") return;
-	const service = context.own(context.languageFeaturesService.createColorService(context.model, context.options.input.resource));
-	context.own(new ColorPickerController(context.view.element, context.viewport, context.selections, service, context.languageId, context.onLanguageError));
+	const service = context.register(context.languageFeaturesService.createColorService(context.model, context.options.input.resource));
+	context.register(new ColorPickerController(context.view.element, context.viewport, context.selections, service, context.languageId, context.onLanguageError));
 } });

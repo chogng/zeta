@@ -12,7 +12,7 @@ export class ChatAgentSidebarViewPane extends ViewPane {
 		super(container, options);
 		this.sessionService = sessionService;
 		this.contentElement.classList.add("zeta-chat-agent-sidebar-view");
-		this.own(sessionService.onDidChange(() => this.render()));
+		this._register(sessionService.onDidChange(() => this.render()));
 		this.render();
 	}
 

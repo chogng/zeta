@@ -1,20 +1,20 @@
 import "./media/folding.css";
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type EditorLineGutterDecoration } from "../../../browser/viewparts/margin/lineGutterDecoration.js";
 import { type EditorFoldingModel } from "./foldingModel.js";
 import { type EditorFoldingRegion } from "./foldingRanges.js";
 import { h } from "../../../../base/browser/dom.js";
 
 /** Owns folding gutter presentation and mirrors every fold-state change. */
-export class FoldingDecorationProvider extends DisposableOwner implements EditorLineGutterDecoration {
-	private readonly changeEmitter = this.own(new Emitter<void>());
+export class FoldingDecorationProvider extends Disposable implements EditorLineGutterDecoration {
+	private readonly changeEmitter = this._register(new Emitter<void>());
 
 	readonly onDidChange: Event<void> = this.changeEmitter.event;
 
 	constructor(private readonly folding: EditorFoldingModel) {
 		super();
-		this.own(folding.onDidChange(() => this.changeEmitter.fire()));
+		this._register(folding.onDidChange(() => this.changeEmitter.fire()));
 	}
 
 	create(ownerDocument: Document): HTMLElement {

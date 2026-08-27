@@ -1,7 +1,7 @@
 import { timeout } from "../../../../base/common/async.js";
 import { getErrorMessage } from "../../../../base/common/errors.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
 import { type IDebugAdapterProcessService } from "../../../../platform/debug/common/debugAdapterProcessService.js";
 import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
@@ -25,9 +25,9 @@ export interface DebugAdapterSessionStartOptions {
 }
 
 /** One initialized DAP client session over the platform process boundary. */
-export class DebugAdapterSession extends DisposableOwner implements IDebugSession {
-	private readonly stateEmitter = this.own(new Emitter<DebugSessionState>());
-	private readonly outputEmitter = this.own(new Emitter<string>());
+export class DebugAdapterSession extends Disposable implements IDebugSession {
+	private readonly stateEmitter = this._register(new Emitter<DebugSessionState>());
+	private readonly outputEmitter = this._register(new Emitter<string>());
 	private retainedOutput = "";
 	private readonly pending = new Map<number, { readonly resolve: (response: DapResponse) => void; readonly reject: (error: Error) => void; readonly timeout: ReturnType<typeof setTimeout> }>();
 	private readonly sessionId: string;
@@ -51,10 +51,10 @@ export class DebugAdapterSession extends DisposableOwner implements IDebugSessio
 	private constructor(readonly configuration: IDebugConfiguration, private readonly processService: IDebugAdapterProcessService, readonly id: string, private readonly breakpoints: () => readonly IDebugBreakpoint[], private readonly workspace: URI, private readonly runInTerminal: DebugAdapterSessionStartOptions["runInTerminal"], private readonly updateBreakpoints: DebugAdapterSessionStartOptions["updateBreakpoints"], private readonly exceptionBreakpoints: DebugAdapterSessionStartOptions["exceptionBreakpoints"]) {
 		super();
 		this.sessionId = id;
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			for (const pending of this.pending.values()) { clearTimeout(pending.timeout); pending.reject(new Error("Debug session was disposed")); }
 			this.pending.clear();
-		});
+		}));
 	}
 
 	static async start(options: DebugAdapterSessionStartOptions): Promise<DebugAdapterSession> {

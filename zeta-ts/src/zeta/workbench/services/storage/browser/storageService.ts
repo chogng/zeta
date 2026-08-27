@@ -1,5 +1,5 @@
 import { Emitter } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { isRecord } from "../../../../base/common/types.js";
 import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { disposableWindowInterval } from "../../../../base/browser/scheduler.js";
@@ -31,9 +31,9 @@ export interface BrowserStorageServiceOptions {
  * Each scope is one versioned localStorage document. Failed persistence falls
  * back to the in-memory projection so storage availability never blocks UI.
  */
-export class BrowserStorageService extends DisposableOwner implements IStorageService {
-	private readonly _onDidChangeValue = this.own(new Emitter<IStorageValueChangeEvent>());
-	private readonly _onWillSaveState = this.own(new Emitter<IWillSaveStateEvent>());
+export class BrowserStorageService extends Disposable implements IStorageService {
+	private readonly _onDidChangeValue = this._register(new Emitter<IStorageValueChangeEvent>());
+	private readonly _onWillSaveState = this._register(new Emitter<IWillSaveStateEvent>());
 	private readonly ownerWindow: Window;
 	private readonly backend: Storage | undefined;
 	private readonly onError: (error: unknown) => void;
@@ -68,16 +68,16 @@ export class BrowserStorageService extends DisposableOwner implements IStorageSe
 			this.entries.set(scope, this.load(scope));
 		}
 
-		this.own(addDisposableListener(this.ownerWindow, "storage", (event: StorageEvent) => this.handleStorageEvent(event)));
+		this._register(addDisposableListener(this.ownerWindow, "storage", (event: StorageEvent) => this.handleStorageEvent(event)));
 
 		if (flushInterval > 0) {
-			this.own(disposableWindowInterval(this.ownerWindow, () => {
+			this._register(disposableWindowInterval(this.ownerWindow, () => {
 				void this.flush(WillSaveStateReason.PERIODIC);
 			}, flushInterval));
 		}
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			void this.flush(WillSaveStateReason.SHUTDOWN);
-		});
+		}));
 	}
 
 	get(key: string, scope: StorageScope, fallbackValue: string): string;

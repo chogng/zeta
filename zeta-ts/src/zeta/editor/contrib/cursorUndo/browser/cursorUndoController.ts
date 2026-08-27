@@ -1,6 +1,6 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type EditorViewport } from "../../../browser/view.js";
@@ -10,7 +10,7 @@ export interface CursorUndoControllerOptions {
 }
 
 /** Routes the platform cursor-undo chord to selection-only history without changing document undo. */
-export class CursorUndoController extends DisposableOwner {
+export class CursorUndoController extends Disposable {
 	private readonly targetOperatingSystem: OperatingSystem;
 
 	constructor(input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, options: CursorUndoControllerOptions = {}) {
@@ -18,7 +18,7 @@ export class CursorUndoController extends DisposableOwner {
 		try {
 			this.targetOperatingSystem = readOperatingSystem(options.operatingSystem);
 			if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza cursor undo dependencies must share one text model");
-			this.own(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
+			this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
 		} catch (error) {
 			this.dispose();
 			throw error;
@@ -36,7 +36,7 @@ export class CursorUndoController extends DisposableOwner {
 
 registerEditorContribution({ id: "editor.contrib.cursorUndo", install: context => {
 	if (context.kind !== "text") return;
-	context.own(new CursorUndoController(context.view.element, context.viewport, context.selections));
+	context.register(new CursorUndoController(context.view.element, context.viewport, context.selections));
 } });
 
 /** Resolves Stanza's cursor-only undo shortcut without accepting unrelated modifiers. */

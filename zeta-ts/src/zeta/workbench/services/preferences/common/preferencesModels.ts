@@ -1,5 +1,5 @@
 import { Emitter } from '../../../../base/common/event.js';
-import { DisposableOwner } from '../../../../base/common/lifecycle.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import { ConfigurationsRegistry, type ConfigurationRegistry, type IConfigurationSettingSchema } from '../../../../platform/configuration/common/configurationRegistry.js';
 import type { IConfigurationKey, IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
 import type { IBooleanSetting, INumberSetting, ISelectSetting, ISetting, ISettingsEditorModel, ITextSetting, SettingReference, SettingsStatus, SettingValueBinding } from './preferences.js';
@@ -13,8 +13,8 @@ export interface SettingState<T> {
 }
 
 /** Resolves one addressable setting and emits only that setting's state changes. */
-export class SettingModel<T> extends DisposableOwner implements SettingReference {
-	private readonly changeEmitter = this.own(new Emitter<SettingState<T>>());
+export class SettingModel<T> extends Disposable implements SettingReference {
+	private readonly changeEmitter = this._register(new Emitter<SettingState<T>>());
 	private value: T;
 	private pending = false;
 
@@ -23,7 +23,7 @@ export class SettingModel<T> extends DisposableOwner implements SettingReference
 	constructor(private readonly binding: SettingValueBinding<T>) {
 		super();
 		this.value = binding.getValue();
-		if (binding.onDidChange) this.own(binding.onDidChange(() => this.refresh()));
+		if (binding.onDidChange) this._register(binding.onDidChange(() => this.refresh()));
 	}
 
 	public get id(): string {
@@ -142,8 +142,8 @@ function registeredSetting(key: IConfigurationKey<unknown>, schema: IConfigurati
 }
 
 /** Owns the immutable Settings projection and transient editor status. */
-export class SettingsEditorModel extends DisposableOwner implements ISettingsEditorModel {
-	private readonly statusEmitter = this.own(new Emitter<SettingsStatus>());
+export class SettingsEditorModel extends Disposable implements ISettingsEditorModel {
+	private readonly statusEmitter = this._register(new Emitter<SettingsStatus>());
 
 	public readonly onDidChangeStatus = this.statusEmitter.event;
 	public readonly settings: readonly ISetting[];

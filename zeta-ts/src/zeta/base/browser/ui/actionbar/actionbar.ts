@@ -1,7 +1,7 @@
 import { addDisposableListener, h } from "../../dom.js";
 import { DataTransfers, DragAndDropObserver } from "../../dnd.js";
 import type { IAction } from "../../../common/actions.js";
-import { DisposableOwner, DisposableStore } from "../../../common/lifecycle.js";
+import { Disposable, DisposableStore, toDisposable } from "../../../common/lifecycle.js";
 import { rot } from "../../../common/numbers.js";
 import { type ActionViewItem, type ActionViewItemOptions, createActionViewItem } from "./actionViewItems.js";
 import { DndCssClasses } from "../dnd/dnd.js";
@@ -50,7 +50,7 @@ interface ActionBarEntry {
  * The optional ARIA role describes the rendered collection. Item providers
  * remain responsible for role-specific item state such as `aria-selected`.
  */
-export class ActionBar extends DisposableOwner {
+export class ActionBar extends Disposable {
 	readonly element: HTMLDivElement;
 	private readonly entries: ActionBarEntry[] = [];
 	private readonly actionViewItemProvider: ActionViewItemProvider | undefined;
@@ -68,7 +68,7 @@ export class ActionBar extends DisposableOwner {
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, "div");
 		this.element = element;
-		this.defer(() => element.remove());
+		this._register(toDisposable(() => element.remove()));
 		element.className = "zeta-action-bar";
 		container.append(element);
 		this.orientation = options.orientation ?? "horizontal";
@@ -83,10 +83,10 @@ export class ActionBar extends DisposableOwner {
 		this.actionViewItemOptions = options.actionViewItemOptions ?? {};
 		this.dragAndDrop = options.dragAndDrop;
 		element.classList.toggle("zeta-action-bar-dnd", this.dragAndDrop !== undefined);
-		this.own(addDisposableListener(element, "keydown", (event) => {
+		this._register(addDisposableListener(element, "keydown", (event) => {
 			this.handleNavigation(event);
 		}));
-		this.own(addDisposableListener(element, "focusin", () => {
+		this._register(addDisposableListener(element, "focusin", () => {
 			const activeElement = this.element.ownerDocument.activeElement;
 			const entry = this.entries.find(
 				({ container }) => container.contains(activeElement),
@@ -94,7 +94,7 @@ export class ActionBar extends DisposableOwner {
 			if (entry?.action.enabled) this._setTabStop(entry.item);
 		}));
 		if (this.dragAndDrop) {
-			this.own(new DragAndDropObserver(element, {
+			this._register(new DragAndDropObserver(element, {
 				onDragStart: (event) => this.onDragStart(event),
 				onDragOver: (event, duration) => {
 					if (!this.entryFromEvent(event)) this.onDragOver(event, duration);
@@ -106,7 +106,7 @@ export class ActionBar extends DisposableOwner {
 				onDragEnd: () => this.endDrag(),
 			}));
 		}
-		this.defer(() => this.clearActions());
+		this._register(toDisposable(() => this.clearActions()));
 		this.setActions(options.actions ?? []);
 	}
 

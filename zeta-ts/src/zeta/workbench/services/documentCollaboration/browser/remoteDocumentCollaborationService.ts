@@ -1,6 +1,6 @@
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Emitter } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { isRecord } from "../../../../base/common/types.js";
 import { allSelection, nodeSelection, textSelection, type DocumentSelection } from "../../../../editor/common/core/documentSelection.js";
 import type { DocumentNode } from "../../../../editor/common/model/document.js";
@@ -29,14 +29,14 @@ class RemoteCollaborationRequestError extends Error {
 }
 
 /** Fetch transport for the independently hosted durable Stanza collaboration service. */
-export class RemoteDocumentCollaborationService extends DisposableOwner implements IDocumentCollaborationService {
+export class RemoteDocumentCollaborationService extends Disposable implements IDocumentCollaborationService {
 	private readonly connections = new Set<RemoteDocumentCollaborationConnection>();
 
 	constructor() {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			for (const connection of [...this.connections]) connection.dispose();
-		});
+		}));
 	}
 
 	async open(input: DocumentCollaborationOpenInput, signal: AbortSignal): Promise<DocumentCollaborationConnection> {
@@ -175,11 +175,11 @@ export class RemoteDocumentCollaborationService extends DisposableOwner implemen
 	}
 }
 
-class RemoteDocumentCollaborationConnection extends DisposableOwner implements DocumentCollaborationConnection {
-	private readonly updateEmitter = this.own(new Emitter<DocumentCollaborationRemoteEnvelope>());
-	private readonly snapshotEmitter = this.own(new Emitter<DocumentCollaborationSnapshot>());
-	private readonly presenceEmitter = this.own(new Emitter<readonly DocumentCollaborationPresence[]>());
-	private readonly failureEmitter = this.own(new Emitter<Error>());
+class RemoteDocumentCollaborationConnection extends Disposable implements DocumentCollaborationConnection {
+	private readonly updateEmitter = this._register(new Emitter<DocumentCollaborationRemoteEnvelope>());
+	private readonly snapshotEmitter = this._register(new Emitter<DocumentCollaborationSnapshot>());
+	private readonly presenceEmitter = this._register(new Emitter<readonly DocumentCollaborationPresence[]>());
+	private readonly failureEmitter = this._register(new Emitter<Error>());
 	private polling: AbortController | undefined;
 	private presencePolling: AbortController | undefined;
 	private readonly presenceHeartbeat: ReturnType<typeof setInterval>;
@@ -199,13 +199,13 @@ class RemoteDocumentCollaborationConnection extends DisposableOwner implements D
 		this.roomId = initialSnapshot.roomId;
 		this._version = initialSnapshot.version;
 		this.presenceHeartbeat = setInterval(() => this.heartbeatPresence(), 20_000);
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.polling?.abort();
 			this.presencePolling?.abort();
 			clearInterval(this.presenceHeartbeat);
 			void service.updatePresence(this, undefined, new AbortController().signal).catch(() => undefined);
 			service.remove(this);
-		});
+		}));
 		void this.poll();
 		void this.pollPresence();
 	}

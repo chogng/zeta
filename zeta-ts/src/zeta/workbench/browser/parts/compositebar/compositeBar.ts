@@ -4,7 +4,7 @@ import type { ActionViewItem } from "../../../../base/browser/ui/actionbar/actio
 import { ActionBar, type ActionBarDropPosition } from "../../../../base/browser/ui/actionbar/actionbar.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { localize, type ILocalizationService } from "../../../services/localization/common/localizationService.js";
 import { ViewContainerLocation, type IViewContainerDescriptor } from "../../../common/views.js";
@@ -43,7 +43,7 @@ const OVERFLOW_ACTION_ID = "zeta.compositeBar.overflow";
  * Its containing Part owns construction, activation, visibility, and
  * persisted state for the selected Composite.
  */
-export class CompositeBar extends DisposableOwner {
+export class CompositeBar extends Disposable {
 	readonly domNode: HTMLElement;
 	private readonly viewDescriptorService: IViewDescriptorService;
 	private readonly localizationService: ILocalizationService | undefined;
@@ -53,7 +53,7 @@ export class CompositeBar extends DisposableOwner {
 	private readonly overflowEnabled: boolean;
 	private readonly containerFilter: (container: IViewContainerDescriptor) => boolean;
 	private readonly _onDidSelectComposite =
-		this.own(new Emitter<CompositeBarSelectionEvent>());
+		this._register(new Emitter<CompositeBarSelectionEvent>());
 	private containers: readonly IViewContainerDescriptor[] = [];
 	private readonly tabWidths = new Map<string, number>();
 	private actionBarInsetWidth = 0;
@@ -80,8 +80,8 @@ export class CompositeBar extends DisposableOwner {
 		this.domNode.setAttribute("aria-label", options.ariaLabel);
 		this.domNode.dataset.viewContainerLocation = options.location;
 		container.append(this.domNode);
-		this.defer(() => this.domNode.remove());
-		this.actionBar = this.own(new ActionBar(this.domNode, {
+		this._register(toDisposable(() => this.domNode.remove()));
+		this.actionBar = this._register(new ActionBar(this.domNode, {
 			ariaLabel: options.ariaLabel,
 			ariaRole: "tablist",
 			actionViewItemProvider: (action): ActionViewItem => {
@@ -108,14 +108,14 @@ export class CompositeBar extends DisposableOwner {
 				},
 			},
 		}));
-		this.own(this.viewDescriptorService.onDidChangeViewContainers(() => {
+		this._register(this.viewDescriptorService.onDidChangeViewContainers(() => {
 			this.render();
 		}));
-		this.own(this.viewDescriptorService.onDidChangeViewContainerOrder((location) => {
+		this._register(this.viewDescriptorService.onDidChangeViewContainerOrder((location) => {
 			if (location === this.location) this.render();
 		}));
-		if (this.localizationService) this.own(this.localizationService.onDidChange(() => this.render()));
-		if (this.overflowEnabled) this.own(observeResize(this.domNode, () => this.layout()));
+		if (this.localizationService) this._register(this.localizationService.onDidChange(() => this.render()));
+		if (this.overflowEnabled) this._register(observeResize(this.domNode, () => this.layout()));
 		this.render();
 	}
 

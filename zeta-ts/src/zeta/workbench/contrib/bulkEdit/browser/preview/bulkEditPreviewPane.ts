@@ -1,3 +1,4 @@
+import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
 import { normalizeLanguageWorkspaceEdit, type LanguageWorkspaceEdit, type LanguageWorkspaceEditEntry } from "../../../../../editor/common/languages/languageWorkspaceEdit.js";
 import { ViewPane, type IViewPaneOptions } from "../../../../browser/parts/views/viewPane.js";
@@ -39,15 +40,15 @@ export class BulkEditPreviewPane extends ViewPane {
 		this.listElement.className = "zeta-bulk-edit-list";
 		this.listElement.setAttribute("aria-label", "Bulk edit preview");
 		this.contentElement.append(toolbar, this.statusElement, this.listElement);
-		this.own(addDisposableListener(this.selectAllButton, "click", () => this.selectAll()));
-		this.own(addDisposableListener(this.applyButton, "click", () => this.accept()));
-		this.own(addDisposableListener(this.cancelButton, "click", () => this.cancelInput()));
-		this.own(addDisposableListener(this.listElement, "change", event => this.toggleSelection(event)));
-		this.defer(() => {
+		this._register(addDisposableListener(this.selectAllButton, "click", () => this.selectAll()));
+		this._register(addDisposableListener(this.applyButton, "click", () => this.accept()));
+		this._register(addDisposableListener(this.cancelButton, "click", () => this.cancelInput()));
+		this._register(addDisposableListener(this.listElement, "change", event => this.toggleSelection(event)));
+		this._register(toDisposable(() => {
 			const active = this.activePreview;
 			this.activePreview = undefined;
 			active?.resolve(undefined);
-		});
+		}));
 		this.render();
 	}
 

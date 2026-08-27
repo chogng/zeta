@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { getOccurrenceHighlightRanges } from "../common/wordHighlighter.js";
@@ -9,7 +9,7 @@ export interface OccurrenceHighlightControllerOptions {
 }
 
 /** Projects current primary-word occurrences through a caller-owned decoration collection. */
-export class OccurrenceHighlightController extends DisposableOwner {
+export class OccurrenceHighlightController extends Disposable {
 	private lastKey = "";
 
 	constructor(
@@ -26,8 +26,8 @@ export class OccurrenceHighlightController extends DisposableOwner {
 				throw new TypeError("Stanza occurrence highlight word pattern resolver must be a function");
 			}
 			this.wordPattern = options.wordPattern;
-			this.own(selections.onDidChange(() => this.update()));
-			this.own(selections.textModel.onDidChange(() => this.update()));
+			this._register(selections.onDidChange(() => this.update()));
+			this._register(selections.textModel.onDidChange(() => this.update()));
 			this.update();
 		} catch (error) {
 			this.dispose();

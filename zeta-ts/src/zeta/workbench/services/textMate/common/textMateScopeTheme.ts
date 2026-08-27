@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { escapeRegExpCharacters } from "../../../../base/common/strings.js";
 import { defaultTextMateScopeResolver, type TextMateResolvedTokenStyle, type TextMateScopeResolver } from "./textMateScopeResolver.js";
 
@@ -33,8 +33,8 @@ export const EMPTY_TEXTMATE_SCOPE_THEME: TextMateScopeTheme = Object.freeze({
 });
 
 /** Owns revisioned, serializable TextMate scope-theme contributions. */
-export class TextMateScopeThemeModel extends DisposableOwner implements TextMateScopeThemeSource {
-	private readonly changeEmitter = this.own(new Emitter<TextMateScopeTheme>());
+export class TextMateScopeThemeModel extends Disposable implements TextMateScopeThemeSource {
+	private readonly changeEmitter = this._register(new Emitter<TextMateScopeTheme>());
 	private theme: TextMateScopeTheme;
 	private resolver: TextMateScopeResolver;
 

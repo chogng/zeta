@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Emitter, noEvent } from "../../../../../base/common/event.js";
-import { DisposableOwner, toDisposable } from "../../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { type AppServerConnectionState } from "../../../../../platform/app-server/common/appServerApi.js";
 import { type IDebugAdapterProcessReadResult, type IDebugAdapterProcessService } from "../../../../../platform/debug/common/debugAdapterProcessService.js";
@@ -86,7 +86,7 @@ class FakeFileService implements IFileService {
 	async delete() { throw new Error("unused"); }
 }
 
-class FakeTaskService extends DisposableOwner implements ITaskService {
+class FakeTaskService extends Disposable implements ITaskService {
 	readonly tasks: readonly IWorkspaceTask[] = Object.freeze([task("prepare"), task("build"), task("cleanup")]);
 	readonly activeRuns = Object.freeze([]);
 	lastRun: ITaskRun | undefined;

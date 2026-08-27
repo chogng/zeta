@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../base/common/event.js";
-import { DisposableOwner } from "../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../base/common/lifecycle.js";
 import {
 	type DialogRequest,
 	DialogResult,
@@ -60,12 +60,12 @@ export const IWorkbenchDialogHandler =
  * Owns pending workbench dialogs without depending on browser presentation.
  */
 export class DialogsModel
-	extends DisposableOwner
+	extends Disposable
 	implements IDialogsModel {
 	private readonly _onWillShowDialog =
-		this.own(new Emitter<IDialogViewItem>());
+		this._register(new Emitter<IDialogViewItem>());
 	private readonly _onDidCloseDialog =
-		this.own(new Emitter<IDialogCloseEvent>());
+		this._register(new Emitter<IDialogCloseEvent>());
 	private readonly _dialogs: IDialogViewItem[] = [];
 
 	readonly onWillShowDialog = this._onWillShowDialog.event;
@@ -73,9 +73,9 @@ export class DialogsModel
 
 	constructor() {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			for (const item of [...this._dialogs]) item.cancel();
-		});
+		}));
 	}
 
 	get dialogs(): readonly IDialogViewItem[] {

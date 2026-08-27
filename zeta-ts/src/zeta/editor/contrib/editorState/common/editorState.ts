@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type TextSelectionSet } from "../../../common/core/selection.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 
@@ -12,15 +12,15 @@ export interface EditorState {
 }
 
 /** Observable editor-instance state shared by context actions and browser contributions. */
-export class EditorStateModel extends DisposableOwner {
-	private readonly changeEmitter = this.own(new Emitter<EditorState>());
+export class EditorStateModel extends Disposable {
+	private readonly changeEmitter = this._register(new Emitter<EditorState>());
 	private state: EditorState;
 	readonly onDidChange: Event<EditorState> = this.changeEmitter.event;
 
 	constructor(private readonly model: TextModel, selections: TextSelectionSet) {
 		super();
 		this.state = Object.freeze({ focused: false, modelVersion: model.version, selections, scrollLeft: 0, scrollTop: 0 });
-		this.own(model.onDidChange(() => this.update({ modelVersion: model.version })));
+		this._register(model.onDidChange(() => this.update({ modelVersion: model.version })));
 	}
 
 	get value(): EditorState {

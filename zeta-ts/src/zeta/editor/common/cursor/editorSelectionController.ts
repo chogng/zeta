@@ -1,6 +1,6 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { IME } from "../../../base/common/ime.js";
-import { DisposableOwner, ResettableDisposableGroup } from "../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
 import { EditorCompositionSession } from "./editorComposition.js";
 import { calculateResultLength, readSelectionHistoryLimit, selectionSetFromOffsets, selectionSetsEqual, validateSelectionOffsets, validateSelectionSet } from "./editorSelectionOperations.js";
 import { SelectionDirection, TextSelection, TextSelectionSet } from "../core/selection.js";
@@ -72,11 +72,11 @@ function readCursorHistoryLimit(value: number | undefined): number {
  * Text remains document-owned. This controller owns only one editor instance's
  * tracked selections and command-level selection history.
  */
-export class EditorSelectionController extends DisposableOwner {
+export class EditorSelectionController extends Disposable {
 	private readonly changeEmitter =
-		this.own(new Emitter<EditorSelectionChange>());
+		this._register(new Emitter<EditorSelectionChange>());
 	private readonly trackedSelectionResources =
-		this.own(new ResettableDisposableGroup());
+		this._register(new DisposableStore());
 	private readonly selectionHistory =
 		new Map<number, SelectionHistoryEntry>();
 	private readonly selectionHistoryOrder: number[] = [];
@@ -108,8 +108,8 @@ export class EditorSelectionController extends DisposableOwner {
 		this.currentSelections = initialSelections;
 		try {
 			this.installSelections(initialSelections);
-			this.own(model.onDidChange(change => this.acceptModelChange(change)));
-			this.defer(() => {
+			this._register(model.onDidChange(change => this.acceptModelChange(change)));
+			this._register(toDisposable(() => {
 				this.trackedSelections = [];
 				this.selectionHistory.clear();
 				this.selectionHistoryOrder.length = 0;
@@ -118,7 +118,7 @@ export class EditorSelectionController extends DisposableOwner {
 					this.activeComposition.valid = false;
 					this.activeComposition = undefined;
 				}
-			});
+			}));
 		} catch (error) {
 			this.dispose();
 			throw error;
@@ -410,16 +410,14 @@ export class EditorSelectionController extends DisposableOwner {
 		validateSelectionSet(this.model, selections);
 		const previous = this.currentSelections;
 		this.trackedSelectionResources.clear();
-		this.trackedSelections = selections.selections.map(selection => ({
-			range: this.trackedSelectionResources.adopt(
-				this.model.trackRange(
-					selection.range,
-					TrackedRangeStickiness.NeverGrowsAtEdges,
-				),
-				range => range.dispose(),
-			),
-			direction: selection.direction,
-		}));
+		this.trackedSelections = selections.selections.map(selection => {
+			const range = this.model.trackRange(
+				selection.range,
+				TrackedRangeStickiness.NeverGrowsAtEdges,
+			);
+			this.trackedSelectionResources.add(toDisposable(() => range.dispose()));
+			return { range, direction: selection.direction };
+		});
 		this.currentSelections = selections;
 		if (reason && !selectionSetsEqual(previous, selections)) {
 			this.changeEmitter.fire(Object.freeze({

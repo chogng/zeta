@@ -2,7 +2,7 @@ import { strict as assert } from "node:assert";
 import test from "node:test";
 import { Emitter } from "../../../../../base/common/event.js";
 import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
-import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../../base/common/lifecycle.js";
 import type { RemoteConnectionState } from "../../../../../platform/remote/common/remote.js";
 import type { RemoteAgentConnection } from "../../../../../platform/remote/common/remoteAgentApi.js";
 import { RemoteStatusIndicator } from "../../browser/remoteIndicator.js";
@@ -58,9 +58,9 @@ function commandRunner(commands: string[]): (id: string) => void {
 	};
 }
 
-class TestRemoteAgentService extends DisposableOwner implements IRemoteAgentService {
-	private readonly stateEmitter = this.own(new Emitter<RemoteConnectionState>());
-	private readonly connectionEmitter = this.own(new Emitter<RemoteAgentConnection>());
+class TestRemoteAgentService extends Disposable implements IRemoteAgentService {
+	private readonly stateEmitter = this._register(new Emitter<RemoteConnectionState>());
+	private readonly connectionEmitter = this._register(new Emitter<RemoteAgentConnection>());
 	readonly onDidChangeConnectionState = this.stateEmitter.event;
 	readonly onDidChangeConnection = this.connectionEmitter.event;
 	async reconnect() { return { kind: "reconnected" } as const; }

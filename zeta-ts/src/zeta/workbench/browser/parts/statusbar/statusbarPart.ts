@@ -1,3 +1,4 @@
+import { toDisposable } from "../../../../base/common/lifecycle.js";
 import "./statusbarpart.css";
 import { addDisposableListener, isNode, h } from "../../../../base/browser/dom.js";
 import { WorkbenchPart } from "../../part.js";
@@ -29,7 +30,7 @@ export class StatusbarPart extends WorkbenchPart {
 		this.domNode.setAttribute("role", "status");
 		this.domNode.setAttribute("aria-live", "polite");
 		this.domNode.tabIndex = 0;
-		this.own(addDisposableListener(this.domNode, "keydown", (event) => {
+		this._register(addDisposableListener(this.domNode, "keydown", (event) => {
 			if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
 			if (event.key === "ArrowRight") {
 				this.focusNextEntry();
@@ -42,15 +43,15 @@ export class StatusbarPart extends WorkbenchPart {
 			event.preventDefault();
 			event.stopPropagation();
 		}));
-		this.own(addDisposableListener(this.domNode, "mouseover", (event) => this.updateCompactHover(event.target)));
-		this.own(addDisposableListener(this.domNode, "mouseout", (event) => this.updateCompactHover(event.relatedTarget)));
+		this._register(addDisposableListener(this.domNode, "mouseover", (event) => this.updateCompactHover(event.target)));
+		this._register(addDisposableListener(this.domNode, "mouseout", (event) => this.updateCompactHover(event.relatedTarget)));
 
 		this.leftItems = createItemsContainer(ownerDocument, "left");
 		this.rightItems = createItemsContainer(ownerDocument, "right");
 		this.domNode.append(this.leftItems, this.rightItems);
 
-		this.defer(() => this.disposeItems());
-		this.own(this.statusbarService.onDidChangeEntries(() => this.render()));
+		this._register(toDisposable(() => this.disposeItems()));
+		this._register(this.statusbarService.onDidChangeEntries(() => this.render()));
 		this.render();
 	}
 

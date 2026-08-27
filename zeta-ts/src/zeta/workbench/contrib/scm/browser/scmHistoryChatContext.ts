@@ -1,4 +1,4 @@
-import { DisposableOwner } from '../../../../base/common/lifecycle.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { CHAT_VIEW_ID } from '../../chat/common/chat.js';
@@ -14,10 +14,10 @@ const MaxFileCharacters = 64 * 1024;
 const MaxContextCharacters = 512 * 1024;
 
 /** Registers Git history as a searchable, lazily resolved Chat context source. */
-export class ScmHistoryChatContextContribution extends DisposableOwner {
+export class ScmHistoryChatContextContribution extends Disposable {
 	constructor(contextPickService: IChatContextPickService, gitService: IGitService) {
 		super();
-		this.own(contextPickService.registerPicker({
+		this._register(contextPickService.registerPicker({
 			id: 'scm.history',
 			label: 'Source Control',
 			isEnabled: async () => gitService.status().then(() => true, () => false),

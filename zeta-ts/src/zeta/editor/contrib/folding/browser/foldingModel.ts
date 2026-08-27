@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { TextPosition, TextRange } from "../../../common/core/text.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { TrackedRangeStickiness, type TrackedRange } from "../../../common/model/trackedRange.js";
@@ -19,16 +19,16 @@ interface EditorFoldingRegionRecord {
  * analysis changes; the model retains manual ranges until their tracked text span
  * is deleted.
  */
-export class EditorFoldingModel extends DisposableOwner {
-	private readonly changeEmitter = this.own(new Emitter<void>());
+export class EditorFoldingModel extends Disposable {
+	private readonly changeEmitter = this._register(new Emitter<void>());
 	private records: readonly EditorFoldingRegionRecord[] = Object.freeze([]);
 
 	readonly onDidChange: Event<void> = this.changeEmitter.event;
 
 	constructor(private readonly textModel: TextModel) {
 		super();
-		this.defer(() => disposeRecords(this.records));
-		this.own(textModel.onDidChange(() => this.reconcileTrackedRanges()));
+		this._register(toDisposable(() => disposeRecords(this.records)));
+		this._register(textModel.onDidChange(() => this.reconcileTrackedRanges()));
 	}
 
 	get model(): TextModel {

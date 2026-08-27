@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { LanguageRequestCoordinator, type LanguageRequestOptions, type LanguageRequestOutcome, type LanguageWorker, type LanguageWorkerRequest } from "../languageRequestCoordinator.js";
 import { LanguageResultAcceptance } from "../languageResultStore.js";
 import { createLanguageCompletionSnapshotNormalizer, createLanguageCompletionStore, normalizeLanguageCompletionItemDetails, normalizeLanguageCompletionResolveRequest, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest, type LanguageCompletionResult, type LanguageCompletionResultNormalizer } from "./languageCompletions.js";
@@ -27,9 +27,9 @@ export interface LanguageCompletionServiceOptions {
  * The service owns its coordinator, provider host instances, and result store.
  * It observes but does not own the provider registry or text model.
  */
-export class LanguageCompletionService extends DisposableOwner implements LanguageCompletionItemResolver {
-	private readonly catalogEmitter = this.own(new Emitter<LanguageCompletionProviderCatalog>());
-	private readonly catalogSubscription = this.own(new DisposableSlot<IDisposable>());
+export class LanguageCompletionService extends Disposable implements LanguageCompletionItemResolver {
+	private readonly catalogEmitter = this._register(new Emitter<LanguageCompletionProviderCatalog>());
+	private readonly catalogSubscription = this._register(new MutableDisposable<IDisposable>());
 	readonly results: ReturnType<typeof createLanguageCompletionStore>;
 	private readonly coordinator: LanguageRequestCoordinator<LanguageCompletionLane, LanguageCompletionRequest, LanguageCompletionResult>;
 	private catalogSource: LanguageCompletionProviderCatalogSource;
@@ -62,7 +62,7 @@ export class LanguageCompletionService extends DisposableOwner implements Langua
 			this.dispose();
 			throw new TypeError("A custom language completion worker owns its provider error policy");
 		}
-		this.results = this.own(createLanguageCompletionStore(model));
+		this.results = this._register(createLanguageCompletionStore(model));
 		this.resource = options.resource;
 		const createWorker = (): LanguageCompletionWorker => {
 			const worker = options.workerFactory
@@ -80,7 +80,7 @@ export class LanguageCompletionService extends DisposableOwner implements Langua
 				throw error;
 			}
 		};
-		this.coordinator = this.own(new LanguageRequestCoordinator(
+		this.coordinator = this._register(new LanguageRequestCoordinator(
 			model,
 			createWorker,
 		));
@@ -93,9 +93,9 @@ export class LanguageCompletionService extends DisposableOwner implements Langua
 				throw error;
 			}
 		}
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.currentResolver = undefined;
-		});
+		}));
 	}
 
 	private readonly resource: URI | undefined;
@@ -182,10 +182,10 @@ export class LanguageCompletionService extends DisposableOwner implements Langua
 	private bindCatalogSource(source: LanguageCompletionProviderCatalogSource): void {
 		this.catalogSource = source;
 		this.catalog = source.providerCatalog;
-		this.catalogSubscription.replace(source.onDidChangeProviderCatalog(catalog => {
+		this.catalogSubscription.value = source.onDidChangeProviderCatalog(catalog => {
 			this.catalog = catalog;
 			this.catalogEmitter.fire(catalog);
-		}));
+		});
 		this.catalogEmitter.fire(this.catalog);
 	}
 

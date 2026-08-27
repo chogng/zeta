@@ -1,13 +1,13 @@
 import { Emitter } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
 import { type IUntitledTextEditor, type IUntitledTextEditorService, type UntitledTextEditorOptions, UNTITLED_TEXT_EDITOR_SCHEME } from "../common/untitledTextEditorService.js";
 
 /** Browser-side owner for Workbench untitled editor identities. */
-export class BrowserUntitledTextEditorService extends DisposableOwner implements IUntitledTextEditorService {
+export class BrowserUntitledTextEditorService extends Disposable implements IUntitledTextEditorService {
 	private readonly editors = new Map<string, IUntitledTextEditor>();
-	private readonly _onDidCreate = this.own(new Emitter<IUntitledTextEditor>());
-	private readonly _onDidChangeLabel = this.own(new Emitter<IUntitledTextEditor>());
+	private readonly _onDidCreate = this._register(new Emitter<IUntitledTextEditor>());
+	private readonly _onDidChangeLabel = this._register(new Emitter<IUntitledTextEditor>());
 	private nextUntitledNumber = 1;
 
 	readonly onDidCreate = this._onDidCreate.event;

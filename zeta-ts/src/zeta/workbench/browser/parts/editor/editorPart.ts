@@ -8,7 +8,7 @@ import { validateJsonValue } from "../../../../base/common/jsonValue.js";
 import { Dimension, type IDimension, type IRectangle } from "../../../../base/browser/geometry.js";
 import { observeElementSize } from "../../../../base/browser/observer.js";
 import { Direction, SerializableGrid, Sizing, type Direction as GridDirection, type GridDescriptor, type ISerializableView as ISerializableGridView } from "../../../../base/browser/ui/grid/grid.js";
-import { DisposableMap, DisposableOwner, DisposableSlot, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { DisposableMap, Disposable, MutableDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
 import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
@@ -137,10 +137,10 @@ export interface IEditorPartOptions {
 
 /** Owns EditorGroup layout and delegates editor behavior to the active group. */
 export class EditorPart extends WorkbenchPart implements IEditorPart {
-	private readonly editorChangeEmitter = this.own(new Emitter<EditorPartChangeEvent>());
+	private readonly editorChangeEmitter = this._register(new Emitter<EditorPartChangeEvent>());
 	readonly onDidChangeEditors: Event<EditorPartChangeEvent> = this.editorChangeEmitter.event;
-	private readonly gridSlot = this.own(new DisposableSlot<SerializableGrid<EditorGroupGridView>>());
-	private readonly groupHosts = this.own(new DisposableMap<EditorGroupId, EditorGroupHost>());
+	private readonly gridSlot = this._register(new MutableDisposable<SerializableGrid<EditorGroupGridView>>());
+	private readonly groupHosts = this._register(new DisposableMap<EditorGroupId, EditorGroupHost>());
 	private readonly modalEditor: ModalEditorPart;
 	private readonly groupOptions: Omit<EditorGroupOptions, "onDidActivate" | "dragAndDrop">;
 	private readonly _groups: EditorGroupHost[] = [];
@@ -207,12 +207,12 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 		const initial = this.createGroup();
 		this._groups.push(initial);
 		this._activeGroup = initial.group;
-		this.gridSlot.replace(new SerializableGrid(this.contentDomNode, {
+		this.gridSlot.value = new SerializableGrid(this.contentDomNode, {
 			type: "leaf",
 			view: initial.view,
 			size: 1,
-		}));
-		this.modalEditor = this.own(new ModalEditorPart({
+		});
+		this.modalEditor = this._register(new ModalEditorPart({
 			container,
 			registry: this.groupOptions.registry,
 			paneCreationOptions: {
@@ -246,10 +246,10 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 				} : {}),
 			},
 		}));
-		this.own(this.modalEditor.onDidRequestClose(input => {
+		this._register(this.modalEditor.onDidRequestClose(input => {
 			void this.closeEditor(input).catch(reportEditorCloseError);
 		}));
-		this.own(observeElementSize(this.contentDomNode, size => this.layout(size)));
+		this._register(observeElementSize(this.contentDomNode, size => this.layout(size)));
 	}
 
 	get groups(): readonly IEditorGroup[] {
@@ -710,7 +710,7 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 				},
 			})
 			: new SerializableGrid(this.contentDomNode, legacyGridDescriptor(hosts, groups, this.dimension));
-		this.gridSlot.replace(grid);
+		this.gridSlot.value = grid;
 		this._activeGroup = hosts[activeGroupIndex]?.group ?? hosts[0]!.group;
 		for (const host of hosts) {
 			this.editorChangeEmitter.fire(Object.freeze({ kind: "groupAdded", group: host.group.getEditorState() }));
@@ -863,13 +863,13 @@ function editorInputLabel(input: Pick<EditorInput, "resource" | "label">): strin
 	return path.slice(separator + 1) || input.resource.toString();
 }
 
-class EditorGroupHost extends DisposableOwner {
+class EditorGroupHost extends Disposable {
 	readonly view: EditorGroupGridView;
 
 	constructor(readonly group: EditorGroup, listener: IDisposable) {
 		super();
-		this.own(group);
-		this.own(listener);
+		this._register(group);
+		this._register(listener);
 		this.view = new EditorGroupGridView(group);
 	}
 }

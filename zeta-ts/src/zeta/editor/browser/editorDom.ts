@@ -1,7 +1,7 @@
 import { h, isHTMLElement } from '../../base/browser/dom.js';
 import { type IDimension } from '../../base/browser/geometry.js';
 import { FastDomNode } from '../../base/browser/fastDomNode.js';
-import { DisposableOwner } from '../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
 
 export interface EditorDomOptions {
 	readonly rootClassName: string;
@@ -9,7 +9,7 @@ export interface EditorDomOptions {
 }
 
 /** Owns the stable DOM roots shared by a browser editor projection. */
-export class EditorDom extends DisposableOwner {
+export class EditorDom extends Disposable {
 	private readonly options: EditorDomOptions;
 	private domNodeHandle: FastDomNode<HTMLDivElement> | undefined;
 	private contentDomNodeHandle: FastDomNode<HTMLDivElement> | undefined;
@@ -40,7 +40,7 @@ export class EditorDom extends DisposableOwner {
 		const contentDomNode = new FastDomNode(h(parent.ownerDocument, 'div', { className: this.options.contentClassName }));
 		this.domNodeHandle = domNode;
 		this.contentDomNodeHandle = contentDomNode;
-		this.defer(() => domNode.domNode.remove());
+		this._register(toDisposable(() => domNode.domNode.remove()));
 		parent.append(domNode.domNode);
 		this.attached = true;
 	}

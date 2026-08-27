@@ -1,5 +1,5 @@
 import { Emitter } from "../../../../base/common/event.js";
-import { DisposableOwner, DisposableSlot } from "../../../../base/common/lifecycle.js";
+import { Disposable, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { DialogSeverity, type IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
 import { type IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
@@ -9,12 +9,12 @@ import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor,
 import { type ILanguageServerStatusService, type LanguageServerLifecycleState, type LanguageServerProgressState } from "../common/languageServerStatusService.js";
 
 /** Projects App Server language notifications into Workbench dialogs, logs, and status. */
-export class AppServerLanguageServerStatusService extends DisposableOwner implements ILanguageServerStatusService {
-	private readonly changeEmitter = this.own(new Emitter<void>());
+export class AppServerLanguageServerStatusService extends Disposable implements ILanguageServerStatusService {
+	private readonly changeEmitter = this._register(new Emitter<void>());
 	private readonly channels = new Map<string, IOutputChannel>();
 	private readonly progress = new Map<string, LanguageServerProgressState>();
 	private readonly states = new Map<string, LanguageServerLifecycleState>();
-	private readonly status = this.own(new DisposableSlot<IStatusbarEntryAccessor>());
+	private readonly status = this._register(new MutableDisposable<IStatusbarEntryAccessor>());
 	readonly onDidChange = this.changeEmitter.event;
 
 	constructor(events: IServerEventApi, private readonly dialogs: IDialogService, private readonly outputService: IOutputService, private readonly statusbar: IStatusbarService, private readonly workspace?: IWorkspaceContextService) {
@@ -24,7 +24,7 @@ export class AppServerLanguageServerStatusService extends DisposableOwner implem
 			if (event.method === "language/serverProgress") this.acceptProgress(event.params);
 			if (event.method === "language/serverState") this.acceptState(event.params);
 		});
-		this.defer(() => subscription.dispose());
+		this._register(toDisposable(() => subscription.dispose()));
 	}
 
 	getProgress(): readonly LanguageServerProgressState[] {
@@ -74,7 +74,7 @@ export class AppServerLanguageServerStatusService extends DisposableOwner implem
 		const entry = active.length > 0 ? progressStatusEntry(active, reveal) : lifecycleStatusEntry([...this.states.values()], reveal);
 		if (!entry) { this.status.clear(); return; }
 		if (this.status.value) this.status.value.update(entry);
-		else this.status.replace(this.statusbar.addEntry(entry, { id: "zeta.status.languageServers", alignment: StatusbarAlignment.Right, priority: 20 }));
+		else this.status.value = this.statusbar.addEntry(entry, { id: "zeta.status.languageServers", alignment: StatusbarAlignment.Right, priority: 20 });
 	}
 
 	private ensureChannel(server: string): IOutputChannel {
@@ -82,7 +82,7 @@ export class AppServerLanguageServerStatusService extends DisposableOwner implem
 		const existing = this.channels.get(id);
 		if (existing) return existing;
 		const label = server.trim() || "Language Server";
-		const channel = this.own(this.outputService.createChannel({ id, label, kind: "log", source: "core" }));
+		const channel = this._register(this.outputService.createChannel({ id, label, kind: "log", source: "core" }));
 		this.channels.set(id, channel);
 		return channel;
 	}

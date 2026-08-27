@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type TextPosition } from "../../../common/core/text.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
 import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languages/languageFeatureRegistry.js";
@@ -35,7 +35,7 @@ export interface LanguageParameterHintsProvider extends LanguageFeatureProviderM
 }
 
 /** Queries signature help independently of completion and keeps active indices provider-owned. */
-export class ParameterHintsService extends DisposableOwner {
+export class ParameterHintsService extends Disposable {
 	constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureProviderRegistry<LanguageParameterHintsProvider>, private readonly resource?: URI) {
 		super();
 	}

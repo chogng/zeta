@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type TextPosition, type TextRange } from "../../../common/core/text.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
@@ -20,7 +20,7 @@ export interface LanguageLinkedEditingProvider extends LanguageFeatureProviderMe
 }
 
 /** Calculates linked ranges; the browser controller later translates them into one model transaction. */
-export class LinkedEditingService extends DisposableOwner {
+export class LinkedEditingService extends Disposable {
 	constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureProviderRegistry<LanguageLinkedEditingProvider>, private readonly resource?: URI) {
 		super();
 	}

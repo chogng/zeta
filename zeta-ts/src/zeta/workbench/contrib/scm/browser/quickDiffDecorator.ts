@@ -1,5 +1,5 @@
 import { type Event } from '../../../../base/common/event.js';
-import { DisposableOwner } from '../../../../base/common/lifecycle.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { createStanzaDecorationSource, DecorationPresentation, type DecorationSource, type OwnedDecorationSource, type ResolvedDecoration } from '../../../../editor/browser/viewparts/decorations/decorationPresentation.js';
 import { TextPosition, TextRange } from '../../../../editor/common/core/text.js';
@@ -18,19 +18,19 @@ interface QuickDiffDecorationMetadata {
 }
 
 /** Projects one shared Quick Diff model into gutter, overview-ruler, and minimap decorations. */
-export class QuickDiffDecorator extends DisposableOwner implements OwnedDecorationSource {
+export class QuickDiffDecorator extends Disposable implements OwnedDecorationSource {
 	private readonly collection: TextDecorationCollection<QuickDiffDecorationMetadata>;
 	private readonly source: DecorationSource;
 	readonly onDidChange: Event<void>;
 
 	constructor(resource: URI, private readonly model: TextModel, diffApi: IDiffApi, modelService: IQuickDiffModelService, private readonly configurationService: IConfigurationService) {
 		super();
-		const modelReference = this.own(modelService.createModelReference(resource, model, diffApi));
-		this.collection = this.own(new TextDecorationCollection<QuickDiffDecorationMetadata>(model));
+		const modelReference = this._register(modelService.createModelReference(resource, model, diffApi));
+		this.collection = this._register(new TextDecorationCollection<QuickDiffDecorationMetadata>(model));
 		this.source = createStanzaDecorationSource(this.collection, decoration => this.resolve(decoration.metadata), decoration => hoverText(decoration.metadata));
 		this.onDidChange = this.source.onDidChange;
-		this.own(modelReference.object.onDidChange(() => this.rebuild(modelReference.object.state.comparisons)));
-		this.own(configurationService.onDidChangeConfiguration(event => {
+		this._register(modelReference.object.onDidChange(() => this.rebuild(modelReference.object.state.comparisons)));
+		this._register(configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(ScmConfiguration.diffDecorations)) this.rebuild(modelReference.object.state.comparisons);
 		}));
 		this.rebuild(modelReference.object.state.comparisons);

@@ -1,6 +1,6 @@
 import { addDisposableListener } from "../../../base/browser/dom.js";
 import { StandardKeyboardEvent } from "../../../base/browser/keyboardEvent.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable } from "../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../base/common/platform.js";
 import { EditorCursorNavigationCommand, EditorCursorNavigationMode, navigateEditorCursors } from "../../common/cursor/cursorNavigation.js";
 import { type EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
@@ -22,7 +22,7 @@ export interface KeyboardNavigationCommand {
 /**
  * Routes browser keydown navigation into Stanza common selection commands.
  */
-export class KeyboardNavigationController extends DisposableOwner {
+export class KeyboardNavigationController extends Disposable {
 	private readonly targetOperatingSystem: OperatingSystem;
 	private readonly wordPattern: (() => RegExp | undefined) | undefined;
 	private preferredColumns: readonly number[] | undefined;
@@ -53,12 +53,12 @@ export class KeyboardNavigationController extends DisposableOwner {
 				"Stanza keyboard and selection controllers must share one text model",
 			);
 		}
-		this.own(addDisposableListener(
+		this._register(addDisposableListener(
 			viewport.element,
 			"keydown",
 			event => this.handleKeydown(event),
 		));
-		this.own(selectionController.onDidChange(() => {
+		this._register(selectionController.onDidChange(() => {
 			if (!this.applyingNavigation) {
 				this.preferredColumns = undefined;
 				this.preferredVisualHorizontalOffsets = undefined;

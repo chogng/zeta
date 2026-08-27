@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { TextModel } from "../../../common/model/textModel.js";
 import { TextModelRemoteHistoryPolicy } from "../../../common/model/textModelBlockState.js";
 import { serializeDocument } from "../../../common/model/documentSerialization.js";
@@ -30,9 +30,9 @@ export interface DocumentCollaborationPresenceChange {
 }
 
 /** Binds one structured Stanza TextModel to a server-ordered collaboration connection. */
-export class DocumentCollaborationController extends DisposableOwner {
-	private readonly stateEmitter = this.own(new Emitter<DocumentCollaborationStateChange>());
-	private readonly presenceEmitter = this.own(new Emitter<DocumentCollaborationPresenceChange>());
+export class DocumentCollaborationController extends Disposable {
+	private readonly stateEmitter = this._register(new Emitter<DocumentCollaborationStateChange>());
+	private readonly presenceEmitter = this._register(new Emitter<DocumentCollaborationPresenceChange>());
 	private readonly synchronizer: DocumentCollaborationSynchronizer;
 	private submitting = false;
 	private synchronizingModel = false;
@@ -43,27 +43,27 @@ export class DocumentCollaborationController extends DisposableOwner {
 
 	constructor(private readonly model: TextModel, private readonly connection: DocumentCollaborationConnection) {
 		super();
-		this.synchronizer = this.own(new DocumentCollaborationSynchronizer({
+		this.synchronizer = this._register(new DocumentCollaborationSynchronizer({
 			schema: model.schema,
 			document: connection.initialSnapshot.document,
 			clientId: connection.clientId,
 			version: connection.initialSnapshot.version,
 		}));
 		this._presences = connection.currentPresence;
-		this.own(connection);
-		this.own(model.onDidChangeBlocks(change => {
+		this._register(connection);
+		this._register(model.onDidChangeBlocks(change => {
 			if (this.synchronizingModel || (change.origin !== "user" && change.origin !== "undo" && change.origin !== "redo")) return;
 			const envelope = this.synchronizer.dispatchLocal(change.transaction);
 			if (envelope) this.submit(envelope);
 		}));
-		this.own(model.onDidChangeSelection(selection => this.publishPresence(selection)));
-		this.own(connection.onDidReceiveUpdate(update => this.acceptUpdate(update)));
-		this.own(connection.onDidReceiveSnapshot(snapshot => this.acceptResync(snapshot)));
-		this.own(connection.onDidReceivePresence(presences => {
+		this._register(model.onDidChangeSelection(selection => this.publishPresence(selection)));
+		this._register(connection.onDidReceiveUpdate(update => this.acceptUpdate(update)));
+		this._register(connection.onDidReceiveSnapshot(snapshot => this.acceptResync(snapshot)));
+		this._register(connection.onDidReceivePresence(presences => {
 			this._presences = presences;
 			this.presenceEmitter.fire(Object.freeze({ presences }));
 		}));
-		this.own(connection.onDidFail(error => this.setState("error", error.message)));
+		this._register(connection.onDidFail(error => this.setState("error", error.message)));
 		this.synchronizeModel();
 		this.setState("connected");
 		this.publishPresence(model.selection);

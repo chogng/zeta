@@ -1,5 +1,5 @@
 import { Emitter } from '../../../../base/common/event.js';
-import { DisposableOwner, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { type IQuickDiffService, type QuickDiffOriginalResource, type QuickDiffProvider } from '../common/quickDiff.js';
 
@@ -9,8 +9,8 @@ interface ProviderRegistration {
 }
 
 /** Window-scoped provider registry and visibility owner for Quick Diff. */
-export class WorkbenchQuickDiffService extends DisposableOwner implements IQuickDiffService {
-	private readonly changeEmitter = this.own(new Emitter<URI | undefined>());
+export class WorkbenchQuickDiffService extends Disposable implements IQuickDiffService {
+	private readonly changeEmitter = this._register(new Emitter<URI | undefined>());
 	private readonly registrations: ProviderRegistration[] = [];
 	private readonly hiddenProviders = new Set<string>();
 
@@ -18,11 +18,11 @@ export class WorkbenchQuickDiffService extends DisposableOwner implements IQuick
 
 	constructor() {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			for (const registration of this.registrations) registration.listeners.dispose();
 			this.registrations.length = 0;
 			this.hiddenProviders.clear();
-		});
+		}));
 	}
 
 	get providers(): readonly QuickDiffProvider[] {

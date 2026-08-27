@@ -4,7 +4,7 @@ import {
 	SubmenuAction,
 } from "../../../../base/common/actions.js";
 import {
-	DisposableOwner,
+	Disposable,
 	toDisposable,
 } from "../../../../base/common/lifecycle.js";
 import {
@@ -24,7 +24,7 @@ import type {
 } from "../../../browser/parts/titlebar/menubarControl.js";
 
 /** Synchronizes the workbench menu model to the macOS application menu. */
-export class NativeMenubarControl extends DisposableOwner
+export class NativeMenubarControl extends Disposable
 	implements IMenubarControl {
 	private readonly api: INativeMenubarApi;
 	private readonly menu: IMenu & Disposable;
@@ -43,16 +43,16 @@ export class NativeMenubarControl extends DisposableOwner
 	) {
 		super();
 		this.api = api;
-		this.menu = this.own(menuService.createMenu(MenuId.MenubarMainMenu));
-		this.own(this.menu.onDidChange(() => this.synchronize()));
+		this.menu = this._register(menuService.createMenu(MenuId.MenubarMainMenu));
+		this._register(this.menu.onDidChange(() => this.synchronize()));
 		const selection = api.onDidSelect(({ revision, id }) => {
 			const action = this.actionsByRevision.get(revision)?.get(id);
 			if (action) runAction(action);
 		});
-		this.own(toDisposable(() => selection.dispose()));
-		this.defer(() => {
+		this._register(toDisposable(() => selection.dispose()));
+		this._register(toDisposable(() => {
 			this.actionsByRevision.clear();
-		});
+		}));
 		this.synchronize();
 	}
 

@@ -1,7 +1,7 @@
 import "./media/part.css";
 import { type IDimension } from "../../base/browser/geometry.js";
 import { Emitter, type Event } from "../../base/common/event.js";
-import { DisposableOwner } from "../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../base/common/lifecycle.js";
 import { h } from "../../base/browser/dom.js";
 
 /**
@@ -10,11 +10,11 @@ import { h } from "../../base/browser/dom.js";
  * Parts own their layout constraints. WorkbenchLayout decides topology and
  * delegates the resulting pixel dimensions through `layout`.
  */
-export abstract class WorkbenchPart extends DisposableOwner {
+export abstract class WorkbenchPart extends Disposable {
 	readonly domNode: HTMLElement;
 	protected readonly titleDomNode: HTMLDivElement;
 	protected readonly contentDomNode: HTMLDivElement;
-	private readonly _onDidChangeConstraints = this.own(new Emitter<void>());
+	private readonly _onDidChangeConstraints = this._register(new Emitter<void>());
 
 	readonly onDidChangeConstraints: Event<void> =
 		this._onDidChangeConstraints.event;
@@ -24,7 +24,7 @@ export abstract class WorkbenchPart extends DisposableOwner {
 		const ownerDocument = container.ownerDocument;
 		const domNode = h(ownerDocument, "section");
 		this.domNode = domNode;
-		this.defer(() => domNode.remove());
+		this._register(toDisposable(() => domNode.remove()));
 		domNode.className = `zeta-workbench-part zeta-workbench-${id}`;
 		domNode.dataset.part = id;
 		this.titleDomNode = h(ownerDocument, "div");

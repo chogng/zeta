@@ -34,7 +34,7 @@ export class EmptyView extends ViewPane {
 		const message = h(container.ownerDocument, "p");
 		message.className = "zeta-empty-explorer-message";
 		message.textContent = "Open a folder to explore its files.";
-		this.openButton = this.own(new Button(this.contentElement, {
+		this.openButton = this._register(new Button(this.contentElement, {
 			label: "Open Folder",
 			enabled: workspaceOpenService.canOpenFolder,
 			title: workspaceOpenService.canOpenFolder

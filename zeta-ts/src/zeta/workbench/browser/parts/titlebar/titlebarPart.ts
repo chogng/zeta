@@ -38,11 +38,11 @@ export class BrowserTitlebarPart extends WorkbenchPart {
 	) {
 		super(container, "titlebar");
 		const ownerDocument = container.ownerDocument;
-		this.menubar = this.own(menubar);
+		this.menubar = this._register(menubar);
 		const leftActionsDomNode = h(ownerDocument, "div");
 		leftActionsDomNode.className = "zeta-titlebar-left-actions zeta-titlebar-interactive-region";
 		this.titleDomNode.append(leftActionsDomNode);
-		this.leftActions = this.own(
+		this.leftActions = this._register(
 			new MenuWorkbenchToolBar(
 				leftActionsDomNode,
 				options.menuService,
@@ -54,7 +54,7 @@ export class BrowserTitlebarPart extends WorkbenchPart {
 		const actionsDomNode = h(ownerDocument, "div");
 		actionsDomNode.className = "zeta-titlebar-actions zeta-titlebar-interactive-region";
 		this.contentDomNode.append(actionsDomNode);
-		this.actions = this.own(
+		this.actions = this._register(
 			new MenuWorkbenchToolBar(
 				actionsDomNode,
 				options.menuService,

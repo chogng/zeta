@@ -1,6 +1,6 @@
 import { type Event } from "../../../base/common/event.js";
 import {
-	DisposableOwner,
+	Disposable,
 } from "../../../base/common/lifecycle.js";
 import type {
 	IpcRoute,
@@ -28,14 +28,14 @@ export interface ConfigurationMainServiceOptions {
 /**
  * Owns the Desktop configuration resource in the Electron main process.
  */
-export class ConfigurationMainService extends DisposableOwner {
+export class ConfigurationMainService extends Disposable {
 	private readonly resource: RevisionedJsonFile<IConfigurationDocument>;
 
 	private constructor(
 		resource: RevisionedJsonFile<IConfigurationDocument>,
 	) {
 		super();
-		this.resource = this.own(resource);
+		this.resource = this._register(resource);
 	}
 
 	static async create(

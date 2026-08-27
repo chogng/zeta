@@ -1,18 +1,18 @@
 import { Emitter } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { IMarketplaceApi } from "../../../../platform/marketplace/common/marketplaceApi.js";
 import type { IMarketplaceService, MarketplaceAcquiredCapability, MarketplaceBrowseSnapshot, MarketplaceInstalledPackage, MarketplacePackageDetails, MarketplacePackageSummary } from "../../../../platform/marketplace/common/marketplaceService.js";
 
 /** App Server adapter and owner of path-free Renderer browse snapshots. */
-export class AppServerMarketplaceService extends DisposableOwner implements IMarketplaceService {
+export class AppServerMarketplaceService extends Disposable implements IMarketplaceService {
 	private readonly browseSnapshots = new Map<string, MarketplaceBrowseSnapshot>();
 	private readonly browseRequests = new Map<string, Promise<MarketplaceBrowseSnapshot>>();
 	private readonly details = new Map<string, Promise<MarketplacePackageDetails>>();
 	private browseGeneration = 0;
 	private installedInstanceId: string | undefined;
 	private installedGeneration = 0;
-	private readonly _onDidChangeInstalled = this.own(new Emitter<void>());
+	private readonly _onDidChangeInstalled = this._register(new Emitter<void>());
 
 	readonly onDidChangeInstalled = this._onDidChangeInstalled.event;
 
@@ -26,7 +26,7 @@ export class AppServerMarketplaceService extends DisposableOwner implements IMar
 			this.invalidateBrowse();
 			this._onDidChangeInstalled.fire();
 		});
-		this.defer(() => subscription.dispose());
+		this._register(toDisposable(() => subscription.dispose()));
 	}
 
 	cachedBrowse(query: string, packageType?: string, limit?: number): MarketplaceBrowseSnapshot | undefined {

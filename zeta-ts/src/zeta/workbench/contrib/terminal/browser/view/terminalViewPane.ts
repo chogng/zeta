@@ -1,5 +1,5 @@
 import { TabList, type TabListDropPosition } from "../../../../../base/browser/ui/tablist/tabList.js";
-import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../../base/common/lifecycle.js";
 import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
 import type { IMenuService } from "../../../../../platform/actions/common/menuService.js";
 import type { IContextKeyService } from "../../../../../platform/contextkey/common/contextkey.js";
@@ -39,7 +39,7 @@ export class TerminalViewPane extends ViewPane {
 		this.themeService = themeService;
 		this.element.classList.add("zeta-terminal-view");
 		this.headerElement.remove();
-		this.titleActions = this.own(new TerminalTitleActions(this.headerActionsElement, {
+		this.titleActions = this._register(new TerminalTitleActions(this.headerActionsElement, {
 			menuService,
 			contextMenuService,
 			contextKeyService,
@@ -55,7 +55,7 @@ export class TerminalViewPane extends ViewPane {
 		this.statusElement.className = "zeta-terminal-status";
 		this.statusElement.setAttribute("role", "status");
 		this.statusElement.hidden = true;
-		this.tabList = this.own(new TabList(this.contentElement, {
+		this.tabList = this._register(new TabList(this.contentElement, {
 			ariaLabel: "Terminal instances",
 			orientation: "vertical",
 			draggable: true,
@@ -84,30 +84,30 @@ export class TerminalViewPane extends ViewPane {
 		this.tabList.element.classList.add("zeta-terminal-tabs");
 		this.widgetsElement = h(container.ownerDocument, "div");
 		this.widgetsElement.className = "zeta-terminal-widgets";
-		this.tabsLayout = this.own(new TerminalTabsLayout(this.widgetsElement, this.tabList.element));
+		this.tabsLayout = this._register(new TerminalTabsLayout(this.widgetsElement, this.tabList.element));
 		this.contentElement.append(this.statusElement, this.tabsLayout.element);
 
 		for (const instance of terminalService.instances) this.addInstance(instance);
-		this.own(terminalService.onDidCreateInstance((instance) => {
+		this._register(terminalService.onDidCreateInstance((instance) => {
 			this.addInstance(instance);
 			this.render();
 		}));
-		this.own(terminalService.onDidDisposeInstance((instance) => {
+		this._register(terminalService.onDidDisposeInstance((instance) => {
 			this.removeInstance(instance);
 			this.render();
 		}));
-		this.own(terminalService.onDidChangeActiveInstance(() => this.render()));
-		this.own(terminalService.onDidChangeInstances(() => this.render()));
-		this.own(layoutService.onDidChangePartVisibility(({ partId, visible }) => {
+		this._register(terminalService.onDidChangeActiveInstance(() => this.render()));
+		this._register(terminalService.onDidChangeInstances(() => this.render()));
+		this._register(layoutService.onDidChangePartVisibility(({ partId, visible }) => {
 			if (partId === "panel" && visible && this.terminalService.instances.length === 0) {
 				void this.createTerminal();
 			}
 		}));
-		this.own(workspaceContext.onDidChangeWorkspace(({ workspace }) => {
+		this._register(workspaceContext.onDidChangeWorkspace(({ workspace }) => {
 			if (workspace.folders.length > 0 && this.terminalService.instances.length === 0) void this.initialize();
 		}));
 
-		this.own(observeResize([this.tabsLayout.element, this.widgetsElement], () => {
+		this._register(observeResize([this.tabsLayout.element, this.widgetsElement], () => {
 			const bounds = this.tabsLayout.element.getBoundingClientRect();
 			this.tabsLayout.layout(bounds.width, bounds.height);
 			this.activeItem()?.widget.fit();
@@ -197,7 +197,7 @@ export class TerminalViewPane extends ViewPane {
 
 	private addInstance(instance: ITerminalInstance): void {
 		if (this.items.has(instance)) return;
-		const item = this.own(new TerminalViewItem(
+		const item = this._register(new TerminalViewItem(
 			instance,
 			new TerminalInstanceWidget(this.widgetsElement, instance, this.themeService),
 			() => this.render(),
@@ -276,14 +276,14 @@ function terminalErrorMessage(error: unknown, fallback: string): string {
 	return error instanceof Error ? error.message : fallback;
 }
 
-class TerminalViewItem extends DisposableOwner {
+class TerminalViewItem extends Disposable {
 	constructor(
 		readonly instance: ITerminalInstance,
 		readonly widget: TerminalInstanceWidget,
 		onDidChangeState: () => void,
 	) {
 		super();
-		this.own(widget);
-		this.own(instance.onDidChangeState(onDidChangeState));
+		this._register(widget);
+		this._register(instance.onDidChangeState(onDidChangeState));
 	}
 }

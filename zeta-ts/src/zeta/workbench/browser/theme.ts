@@ -1,4 +1,4 @@
-import { DisposableOwner, toDisposable } from "../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../base/common/lifecycle.js";
 import type { IConfigurationService } from "../../platform/configuration/common/configurationService.js";
 import type { IThemeService } from "../../platform/theme/common/themeService.js";
 import { WorkbenchConfiguration } from "../common/configuration.js";
@@ -12,7 +12,7 @@ const DarkColorSchemeQuery = "(prefers-color-scheme: dark)";
  * System-mode changes are projected immediately while explicit theme choices
  * remain stable when the operating-system preference changes.
  */
-export class WorkbenchThemeController extends DisposableOwner {
+export class WorkbenchThemeController extends Disposable {
 	private readonly configurationService: IConfigurationService;
 	private readonly themeService: IThemeService;
 	private readonly systemDarkQuery: MediaQueryList;
@@ -27,7 +27,7 @@ export class WorkbenchThemeController extends DisposableOwner {
 		this.themeService = themeService;
 		this.systemDarkQuery = ownerWindow.matchMedia(DarkColorSchemeQuery);
 
-		this.own(configurationService.onDidChangeConfiguration((event) => {
+		this._register(configurationService.onDidChangeConfiguration((event) => {
 			if (event.affectsConfiguration(WorkbenchConfiguration.colorTheme)) {
 				this.refresh();
 			}
@@ -45,7 +45,7 @@ export class WorkbenchThemeController extends DisposableOwner {
 			"change",
 			handleSystemSchemeChange,
 		);
-		this.own(toDisposable(() => {
+		this._register(toDisposable(() => {
 			this.systemDarkQuery.removeEventListener(
 				"change",
 				handleSystemSchemeChange,

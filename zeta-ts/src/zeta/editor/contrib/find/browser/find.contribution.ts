@@ -7,12 +7,12 @@ import { DecorationPresentation, createStanzaDecorationSource } from "../../../b
 registerEditorContribution({
 	id: "editor.contrib.find",
 	configure: context => {
-		const decorations = context.own(new TextDecorationCollection<void>(context.model));
+		const decorations = context.register(new TextDecorationCollection<void>(context.model));
 		context.provideCapability(TextEditorCapability.searchDecorations, decorations);
 		context.addDecorationSource(createStanzaDecorationSource(decorations, () => DecorationPresentation.SearchMatch));
 	},
 	install: context => {
 		if (context.kind !== "text") return;
-		context.own(new FindController(context.view.element, context.viewport, context.selections, context.getCapability(TextEditorCapability.searchDecorations), context.options.find));
+		context.register(new FindController(context.view.element, context.viewport, context.selections, context.getCapability(TextEditorCapability.searchDecorations), context.options.find));
 	},
 });

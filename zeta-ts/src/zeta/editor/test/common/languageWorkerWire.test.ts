@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableOwner, DisposableStore } from "../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
 import { createLanguageCompletionInvokeContext, LanguageCompletionProviderRegistry, type LanguageCompletionRequest } from "../../common/languages/completion/languageCompletionProviders.js";
 import { LANGUAGE_COMPLETION_LANE, LanguageCompletionProviderWorker, LanguageCompletionService, type LanguageCompletionWorker } from "../../common/languages/completion/languageCompletionService.js";
 import { languageCompletionWireCodec } from "../../common/languages/completion/languageCompletionWire.js";
@@ -330,9 +330,9 @@ function nextMessage(port: MemoryWirePort): Promise<unknown> {
 	});
 }
 
-class MemoryWirePort extends DisposableOwner implements LanguageWorkerWireClientPort {
-	private readonly messageEmitter = this.own(new Emitter<unknown>());
-	private readonly failureEmitter = this.own(new Emitter<unknown>());
+class MemoryWirePort extends Disposable implements LanguageWorkerWireClientPort {
+	private readonly messageEmitter = this._register(new Emitter<unknown>());
+	private readonly failureEmitter = this._register(new Emitter<unknown>());
 	private peer: MemoryWirePort | undefined;
 
 	readonly sentMessages: unknown[] = [];
@@ -341,9 +341,9 @@ class MemoryWirePort extends DisposableOwner implements LanguageWorkerWireClient
 
 	constructor() {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.peer = undefined;
-		});
+		}));
 	}
 
 	connect(peer: MemoryWirePort): void {
@@ -367,7 +367,7 @@ class MemoryWirePort extends DisposableOwner implements LanguageWorkerWireClient
 	}
 }
 
-class TestCompletionWorker extends DisposableOwner implements LanguageCompletionWorker {
+class TestCompletionWorker extends Disposable implements LanguageCompletionWorker {
 	constructor(private readonly runRequest: (request: LanguageWorkerRequest<typeof LANGUAGE_COMPLETION_LANE, LanguageCompletionRequest>, signal: AbortSignal) => ReturnType<LanguageCompletionWorker["run"]>) {
 		super();
 	}

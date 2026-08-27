@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { type LanguageWorkerWirePort } from "../../common/languages/languageWorkerWire.js";
 
 interface DedicatedWorkerScope {
@@ -9,8 +9,8 @@ interface DedicatedWorkerScope {
 }
 
 /** Adapts the current dedicated Worker global scope without owning it. */
-export class DedicatedWorkerLanguagePort extends DisposableOwner implements LanguageWorkerWirePort {
-	private readonly messageEmitter = this.own(new Emitter<unknown>());
+export class DedicatedWorkerLanguagePort extends Disposable implements LanguageWorkerWirePort {
+	private readonly messageEmitter = this._register(new Emitter<unknown>());
 
 	readonly onMessage: Event<unknown> = this.messageEmitter.event;
 
@@ -18,9 +18,9 @@ export class DedicatedWorkerLanguagePort extends DisposableOwner implements Lang
 		super();
 		const onMessage = (event: { readonly data: unknown }): void => this.messageEmitter.fire(event.data);
 		scope.addEventListener("message", onMessage);
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			scope.removeEventListener("message", onMessage);
-		});
+		}));
 	}
 
 	send(message: unknown): void {

@@ -1,11 +1,11 @@
 import type { HoverContent } from '../hover/hover.js';
 import { getHoverDelegate, type IManagedHover } from '../hover/hoverDelegate.js';
-import { DisposableOwner, DisposableSlot } from '../../../common/lifecycle.js';
+import { Disposable, MutableDisposable } from '../../../common/lifecycle.js';
 import { renderLabelWithIcons } from './iconLabels.js';
 
 /** Lightweight icon-aware text label for controls that do not need descriptions. */
-export class SimpleIconLabel extends DisposableOwner {
-	private readonly hover = this.own(new DisposableSlot<IManagedHover>());
+export class SimpleIconLabel extends Disposable {
+	private readonly hover = this._register(new MutableDisposable<IManagedHover>());
 
 	constructor(private readonly container: HTMLElement) {
 		super();
@@ -19,6 +19,6 @@ export class SimpleIconLabel extends DisposableOwner {
 		this.hover.clear();
 		this.container.removeAttribute('title');
 		if (value === undefined || value === '') return;
-		this.hover.replace(getHoverDelegate().setupHover({ target: this.container, content: value }));
+		this.hover.value = getHoverDelegate().setupHover({ target: this.container, content: value });
 	}
 }

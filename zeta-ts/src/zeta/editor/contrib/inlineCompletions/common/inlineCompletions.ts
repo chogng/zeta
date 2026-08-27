@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type TextPosition, type TextRange, type TextEdit } from "../../../common/core/text.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
 import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languages/languageFeatureRegistry.js";
@@ -22,7 +22,7 @@ export interface LanguageInlineCompletionsProvider extends LanguageFeatureProvid
 }
 
 /** Owns ghost-text candidates and freshness; accepting a candidate is a cursor command. */
-export class InlineCompletionsService extends DisposableOwner {
+export class InlineCompletionsService extends Disposable {
 	constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureProviderRegistry<LanguageInlineCompletionsProvider>) {
 		super();
 	}

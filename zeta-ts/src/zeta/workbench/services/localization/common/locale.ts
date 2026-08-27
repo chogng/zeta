@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { ConfigurationsRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
@@ -33,8 +33,8 @@ export const LocalizationConfiguration = Object.freeze({
 });
 
 /** Owns the client/window display-language selection and its persistence. */
-export class WorkbenchLocaleService extends DisposableOwner implements ILocaleService {
-	private readonly _onDidChangeLocale = this.own(new Emitter<LocaleId>());
+export class WorkbenchLocaleService extends Disposable implements ILocaleService {
+	private readonly _onDidChangeLocale = this._register(new Emitter<LocaleId>());
 	private currentLocale = "en";
 	readonly whenReady: Promise<void>;
 
@@ -44,11 +44,11 @@ export class WorkbenchLocaleService extends DisposableOwner implements ILocaleSe
 	) {
 		super();
 		this.whenReady = this.initialize();
-		this.own(configuration.onDidChangeConfiguration(event => {
+		this._register(configuration.onDidChangeConfiguration(event => {
 			if (!event.affectsConfiguration(LocalizationConfiguration.locale)) return;
 			this.applyLocale(configuration.getValue(LocalizationConfiguration.locale));
 		}));
-		this.own(languagePacks.onDidChange(() => {
+		this._register(languagePacks.onDidChange(() => {
 			this.applyLocale(configuration.getValue(LocalizationConfiguration.locale));
 		}));
 	}

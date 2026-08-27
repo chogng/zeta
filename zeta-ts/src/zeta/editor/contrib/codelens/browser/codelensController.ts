@@ -1,6 +1,6 @@
 import "./media/codelens.css";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { type CodeLensService, type LanguageCodeLens } from "../common/codelens.js";
 import { h } from "../../../../base/browser/dom.js";
@@ -8,15 +8,15 @@ import { h } from "../../../../base/browser/dom.js";
 export type ExecuteCodeLensCommand = (id: string, args: readonly unknown[] | undefined) => void | Promise<void>;
 
 /** Projects provider code lenses as inline command buttons and delegates execution to the host. */
-export class CodeLensController extends DisposableOwner {
+export class CodeLensController extends Disposable {
 	private lenses: readonly LanguageCodeLens[] = [];
 	private request: AbortController | undefined;
 
 	constructor(private readonly viewport: EditorViewport, private readonly service: CodeLensService, private readonly languageId: string, private readonly onExecuteCommand?: ExecuteCodeLensCommand, private readonly onError: (error: unknown) => void = error => console.error("Stanza code lens failed", error)) {
 		super();
-		this.own(viewport.onDidChangeLayout(() => this.render()));
-		this.own(viewport.textModel.onDidChange(() => void this.refresh()));
-		this.defer(() => this.request?.abort());
+		this._register(viewport.onDidChangeLayout(() => this.render()));
+		this._register(viewport.textModel.onDidChange(() => void this.refresh()));
+		this._register(toDisposable(() => this.request?.abort()));
 		void this.refresh();
 	}
 
@@ -59,6 +59,6 @@ export class CodeLensController extends DisposableOwner {
 
 registerEditorContribution({ id: "editor.contrib.codelens", install: context => {
 	if (context.kind !== "text" || context.options.codeLens === false || context.model.largeFile.tooLargeForTokenization) return;
-	const service = context.own(context.languageFeaturesService.createCodeLensService(context.model, context.options.input.resource));
-	context.own(new CodeLensController(context.viewport, service, context.languageId, context.options.onExecuteEditorCommand, context.onLanguageError));
+	const service = context.register(context.languageFeaturesService.createCodeLensService(context.model, context.options.input.resource));
+	context.register(new CodeLensController(context.viewport, service, context.languageId, context.options.onExecuteEditorCommand, context.onLanguageError));
 } });

@@ -1,5 +1,5 @@
 import { GlobalStyleSheet } from "../../../base/browser/domStylesheets.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable } from "../../../base/common/lifecycle.js";
 
 /** Named boundaries for the global browser stacking context. */
 export enum ZIndex {
@@ -30,8 +30,8 @@ const ZIndexValues = [
  * Registers named z-index values and projects them as CSS variables into every
  * registered browser window.
  */
-export class ZIndexRegistry extends DisposableOwner {
-	private readonly styleSheet = this.own(new GlobalStyleSheet());
+export class ZIndexRegistry extends Disposable {
+	private readonly styleSheet = this._register(new GlobalStyleSheet());
 	private readonly values = new Map<string, number>();
 
 	registerZIndex(relativeLayer: ZIndex, offset: number, name: string): string {

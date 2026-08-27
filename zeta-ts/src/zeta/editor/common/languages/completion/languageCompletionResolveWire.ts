@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { toError } from "../../../../base/common/errors.js";
 import { normalizeLanguageCompletionItemDetails, normalizeLanguageCompletionResolveRequest, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest } from "./languageCompletions.js";
 import { type LanguageWorkerWirePort } from "../languageWorkerWire.js";
@@ -7,7 +7,7 @@ const RESOLVE_PROTOCOL = "zeta.language.completion-resolve";
 const RESOLVE_PROTOCOL_VERSION = 1;
 
 /** Renderer-side completion-details resolver over a shared Worker port. */
-export class LanguageCompletionResolveWireClient extends DisposableOwner implements LanguageCompletionItemResolver {
+export class LanguageCompletionResolveWireClient extends Disposable implements LanguageCompletionItemResolver {
 	private readonly pending = new Map<number, PendingResolveRequest>();
 	private nextRequestId = 1;
 	private failure: Error | undefined;
@@ -21,10 +21,10 @@ export class LanguageCompletionResolveWireClient extends DisposableOwner impleme
 		if (typeof invalidateWorker !== "function") {
 			throw new TypeError("Completion resolve wire client requires an invalidation callback");
 		}
-		this.own(port.onMessage(message => this.receive(message)));
-		this.defer(() => {
+		this._register(port.onMessage(message => this.receive(message)));
+		this._register(toDisposable(() => {
 			this.failPending(new ReferenceError("LanguageCompletionResolveWireClient is already disposed"));
-		});
+		}));
 	}
 
 	resolveCompletionItem(request: LanguageCompletionResolveRequest, signal: AbortSignal): Promise<LanguageCompletionItemDetails> {
@@ -131,7 +131,7 @@ export class LanguageCompletionResolveWireClient extends DisposableOwner impleme
 }
 
 /** Worker-side dispatcher for deferred completion item details. */
-export class LanguageCompletionResolveWireServer extends DisposableOwner {
+export class LanguageCompletionResolveWireServer extends Disposable {
 	private readonly active = new Map<number, AbortController>();
 
 	constructor(
@@ -143,11 +143,11 @@ export class LanguageCompletionResolveWireServer extends DisposableOwner {
 		if (!resolver || typeof resolver.resolveCompletionItem !== "function") {
 			throw new TypeError("Completion resolve wire server requires a resolver");
 		}
-		this.own(port.onMessage(message => this.receive(message)));
-		this.defer(() => {
+		this._register(port.onMessage(message => this.receive(message)));
+		this._register(toDisposable(() => {
 			for (const controller of this.active.values()) controller.abort("serverDisposed");
 			this.active.clear();
-		});
+		}));
 	}
 
 	private receive(value: unknown): void {

@@ -1,6 +1,6 @@
 import './media/quickDiff.css';
 import { addDisposableListener, h, isHTMLElement, stopEvent } from '../../../../base/browser/dom.js';
-import { DisposableOwner, DisposableSlot, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
 import { type TextEditorContributionContext, type TextEditorRuntimeContribution } from '../../../../editor/browser/editorExtensions.js';
 import { TextPosition } from '../../../../editor/common/core/text.js';
@@ -11,8 +11,8 @@ import { type IQuickDiffEditorController, type IQuickDiffEditorControllerService
 import { ScmConfiguration } from '../common/scmConfiguration.js';
 
 /** Per-editor Quick Diff controller created through constructor injection after first render. */
-export class QuickDiffEditorController extends DisposableOwner implements TextEditorRuntimeContribution, IQuickDiffEditorController {
-	private readonly view = this.own(new DisposableSlot<QuickDiffPeekView>());
+export class QuickDiffEditorController extends Disposable implements TextEditorRuntimeContribution, IQuickDiffEditorController {
+	private readonly view = this._register(new MutableDisposable<QuickDiffPeekView>());
 	private readonly modelReference: QuickDiffModelReference | undefined;
 	private currentChange: QuickDiffChange | undefined;
 
@@ -20,13 +20,13 @@ export class QuickDiffEditorController extends DisposableOwner implements TextEd
 		super();
 		const diffApi = context.options.diffApi;
 		if (!diffApi) return;
-		this.modelReference = this.own(modelService.createModelReference(context.options.input.resource, context.model, diffApi));
-		this.own(controllerService.register(this));
-		this.own(addDisposableListener<FocusEvent>(context.viewport.element, 'focusin', () => controllerService.activate(this)));
+		this.modelReference = this._register(modelService.createModelReference(context.options.input.resource, context.model, diffApi));
+		this._register(controllerService.register(this));
+		this._register(addDisposableListener<FocusEvent>(context.viewport.element, 'focusin', () => controllerService.activate(this)));
 		if (context.viewport.element.contains(context.viewport.element.ownerDocument.activeElement)) controllerService.activate(this);
-		this.own(addDisposableListener<PointerEvent>(context.viewport.element, 'pointerdown', event => this.handlePointerDown(event), { capture: true }));
-		this.own(addDisposableListener<KeyboardEvent>(context.viewport.element, 'keydown', event => this.handleKeyDown(event), { capture: true }));
-		this.own(this.modelReference.object.onDidChange(() => this.handleModelChange()));
+		this._register(addDisposableListener<PointerEvent>(context.viewport.element, 'pointerdown', event => this.handlePointerDown(event), { capture: true }));
+		this._register(addDisposableListener<KeyboardEvent>(context.viewport.element, 'keydown', event => this.handleKeyDown(event), { capture: true }));
+		this._register(this.modelReference.object.onDidChange(() => this.handleModelChange()));
 	}
 
 	showNextChange(): void {
@@ -86,7 +86,7 @@ export class QuickDiffEditorController extends DisposableOwner implements TextEd
 		this.currentChange = change;
 		this.context.viewport.revealPosition(TextPosition.at(change.lineIndex, 0));
 		const index = model.state.changes.indexOf(change);
-		this.view.replace(new QuickDiffPeekView(
+		this.view.value = new QuickDiffPeekView(
 			this.context,
 			change,
 			Math.max(0, index) + 1,
@@ -94,22 +94,22 @@ export class QuickDiffEditorController extends DisposableOwner implements TextEd
 			() => this.showPreviousChange(),
 			() => this.showNextChange(),
 			() => this.close(),
-		));
+		);
 		this.context.viewport.announceAccessibilityStatus(`Quick Diff change ${Math.max(0, index) + 1} of ${model.state.changes.length}`);
 	}
 }
 
 /** Tracks the last focused Quick Diff-capable editor for commands and keybindings. */
-export class QuickDiffEditorControllerService extends DisposableOwner implements IQuickDiffEditorControllerService {
+export class QuickDiffEditorControllerService extends Disposable implements IQuickDiffEditorControllerService {
 	private readonly controllers = new Set<IQuickDiffEditorController>();
 	private _activeController: IQuickDiffEditorController | undefined;
 
 	constructor() {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.controllers.clear();
 			this._activeController = undefined;
-		});
+		}));
 	}
 
 	get activeController(): IQuickDiffEditorController | undefined {
@@ -133,12 +133,12 @@ export class QuickDiffEditorControllerService extends DisposableOwner implements
 	}
 }
 
-class QuickDiffPeekView extends DisposableOwner {
+class QuickDiffPeekView extends Disposable {
 	constructor(context: TextEditorContributionContext, change: QuickDiffChange, index: number, count: number, showPrevious: () => void, showNext: () => void, close: () => void) {
 		super();
 		const document = context.viewport.element.ownerDocument;
 		const kind = change.kind === LineDiffKind.Added ? 'Added' : change.kind === LineDiffKind.Removed ? 'Deleted' : 'Modified';
-		const peek = this.own(new PeekViewWidget(context.viewport, TextPosition.at(change.lineIndex, 0), `${change.comparison.original.label} — ${kind} — ${index} of ${count}`));
+		const peek = this._register(new PeekViewWidget(context.viewport, TextPosition.at(change.lineIndex, 0), `${change.comparison.original.label} — ${kind} — ${index} of ${count}`));
 		peek.element.classList.add('zeta-quick-diff-peek');
 		const body = h(document, 'div');
 		body.className = 'zeta-quick-diff-peek-body';
@@ -152,10 +152,10 @@ class QuickDiffPeekView extends DisposableOwner {
 		diffContainer.className = 'zeta-quick-diff-peek-diff';
 		body.append(toolbar, diffContainer);
 		peek.setBody(body);
-		this.own(addDisposableListener(previous, 'click', showPrevious));
-		this.own(addDisposableListener(next, 'click', showNext));
-		this.own(addDisposableListener(closeButton, 'click', close));
-		const diffWidget = this.own(new DiffEditorWidget({
+		this._register(addDisposableListener(previous, 'click', showPrevious));
+		this._register(addDisposableListener(next, 'click', showNext));
+		this._register(addDisposableListener(closeButton, 'click', close));
+		const diffWidget = this._register(new DiffEditorWidget({
 			container: diffContainer,
 			model: change.comparison.model,
 			lineHeight: context.options.lineHeight,
@@ -175,7 +175,7 @@ class QuickDiffPeekView extends DisposableOwner {
 				// The live model may have advanced between selecting and projecting this hunk.
 			}
 		};
-		this.own(change.comparison.model.onDidChange(reveal));
+		this._register(change.comparison.model.onDidChange(reveal));
 		reveal();
 		peek.show();
 	}

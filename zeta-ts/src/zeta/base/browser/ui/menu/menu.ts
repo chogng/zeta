@@ -2,7 +2,7 @@ import { type IAction, Separator, SubmenuAction } from "../../../common/actions.
 import { addDisposableListener, isNode, h } from "../../dom.js";
 import { FocusNavigationBoundary, FocusNavigationDirection, focusFirst, focusLast, moveFocus } from "../../focus.js";
 import type { ResolvedKeybinding } from "../../../common/keybindings.js";
-import { DisposableOwner } from "../../../common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../common/lifecycle.js";
 import { lxiconsLibrary } from "../../../common/lxiconsLibrary.js";
 import { ActionViewItem, ButtonActionViewItem, SeparatorActionViewItem } from "../actionbar/actionViewItems.js";
 import { AnchorAxisAlignment, AnchorPosition, ContextView, ContextViewFocusRestore } from "../contextview/contextview.js";
@@ -69,7 +69,7 @@ class MenuActionViewItem extends ButtonActionViewItem {
 			this.button.domNode.append(badge);
 		}
 		if (!this.keybinding) return;
-		const label = this.own(new KeybindingLabel(this.button.domNode, {
+		const label = this._register(new KeybindingLabel(this.button.domNode, {
 			keybinding: this.keybinding,
 		}));
 		label.element.classList.add("zeta-menu-keybinding");
@@ -119,10 +119,10 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
 		) {
 			throw new Error("Context view container belongs to another document");
 		}
-		this.contextView = this.own(new ContextView(
+		this.contextView = this._register(new ContextView(
 			this.contextViewContainer ?? ownerDocument.body,
 		));
-		this.menu = this.own(new Menu(this.contextView.element, {
+		this.menu = this._register(new Menu(this.contextView.element, {
 			actions: this.submenuAction.actions,
 			contextViewContainer: this.contextViewContainer,
 			layer: this.submenuLayer,
@@ -136,7 +136,7 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
 				this.button.focus();
 			},
 		}));
-		this.own(this.contextView.onDidHide(() => {
+		this._register(this.contextView.onDidHide(() => {
 			this.open = false;
 			this.button.domNode.setAttribute("aria-expanded", "false");
 		}));
@@ -223,7 +223,7 @@ interface MenuEntry {
 }
 
 /** Keyboard-focusable action menu with shared nested-submenu behavior. */
-export class Menu extends DisposableOwner {
+export class Menu extends Disposable {
 	readonly element: HTMLDivElement;
 	private readonly submenus: SubmenuMenuActionViewItem[] = [];
 	private readonly entries: MenuEntry[] = [];
@@ -234,13 +234,13 @@ export class Menu extends DisposableOwner {
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, "div");
 		this.element = element;
-		this.defer(() => element.remove());
+		this._register(toDisposable(() => element.remove()));
 		element.className = "zeta-menu";
 		element.setAttribute("role", "menu");
 		container.append(element);
 
 		for (const action of options.actions) {
-			const item = this.own(
+			const item = this._register(
 				createMenuActionViewItem(action, {
 					onDidSelect: options.onDidSelect,
 					submenuLayer: (options.layer ?? 20) + 1,
@@ -260,23 +260,23 @@ export class Menu extends DisposableOwner {
 			item.render(container);
 			this.entries.push({ action, container, item });
 		}
-		this.own(addDisposableListener(element, "focusin", (event) => {
+		this._register(addDisposableListener(element, "focusin", (event) => {
 			const entry = this.findEntry(event.target);
 			if (entry?.action.enabled) this.setFocusedEntry(entry);
 		}));
-		this.own(addDisposableListener(element, "focusout", (event) => {
+		this._register(addDisposableListener(element, "focusout", (event) => {
 			if (isNode(event.relatedTarget) && this.contains(event.relatedTarget)) return;
 			this.setFocusedEntry(undefined);
 		}));
-		this.own(addDisposableListener(element, "mouseover", (event) => {
+		this._register(addDisposableListener(element, "mouseover", (event) => {
 			const entry = this.findEntry(event.target);
 			this.setFocusedEntry(entry?.action.enabled ? entry : undefined, true);
 		}));
-		this.own(addDisposableListener(element, "mouseout", (event) => {
+		this._register(addDisposableListener(element, "mouseout", (event) => {
 			if (isNode(event.relatedTarget) && this.contains(event.relatedTarget)) return;
 			this.setFocusedEntry(undefined);
 		}));
-		this.own(addDisposableListener(element, "keydown", (event) => {
+		this._register(addDisposableListener(element, "keydown", (event) => {
 			if (event.isComposing) return;
 			let handled = true;
 			switch (event.key) {

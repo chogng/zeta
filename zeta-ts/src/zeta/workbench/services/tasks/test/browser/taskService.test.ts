@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Emitter, noEvent } from "../../../../../base/common/event.js";
-import { DisposableOwner, toDisposable } from "../../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { FileKind, FileNotFoundError, type IFileBytes, type IFileService, type IFileStat, type IFileWriteResult } from "../../../../../platform/files/common/files.js";
 import { type IWorkspaceContextService } from "../../../../../platform/workspace/common/workspace.js";
@@ -106,8 +106,8 @@ class FakeFileService implements IFileService {
 	private relative(resource: URI): string { return decodeURIComponent(resource.path).slice(decodeURIComponent(this.root.path).length + 1); }
 }
 
-class FakeTerminalService extends DisposableOwner implements ITerminalService {
-	private readonly createEmitter = this.own(new Emitter<ITerminalInstance>());
+class FakeTerminalService extends Disposable implements ITerminalService {
+	private readonly createEmitter = this._register(new Emitter<ITerminalInstance>());
 	readonly instances: FakeTerminalInstance[] = [];
 	activeInstance: ITerminalInstance | undefined;
 	readonly onDidCreateInstance = this.createEmitter.event;
@@ -115,19 +115,19 @@ class FakeTerminalService extends DisposableOwner implements ITerminalService {
 	readonly onDidChangeInstances = noEvent;
 	readonly onDidChangeActiveInstance = noEvent;
 	async getProfiles(): Promise<readonly ITerminalProfile[]> { return [{ profileId: "command-prompt", title: "Command Prompt", isDefault: true }]; }
-	async createTerminal(options: ITerminalCreateOptions): Promise<ITerminalInstance> { const terminal = this.own(new FakeTerminalInstance(`terminal-${this.instances.length + 1}`, options.workspaceFolderId ?? "folder", options.title ?? "Terminal")); this.instances.push(terminal); this.activeInstance = terminal; this.createEmitter.fire(terminal); return terminal; }
+	async createTerminal(options: ITerminalCreateOptions): Promise<ITerminalInstance> { const terminal = this._register(new FakeTerminalInstance(`terminal-${this.instances.length + 1}`, options.workspaceFolderId ?? "folder", options.title ?? "Terminal")); this.instances.push(terminal); this.activeInstance = terminal; this.createEmitter.fire(terminal); return terminal; }
 	async relaunchTerminal() {}
 	setActiveInstance(instance: ITerminalInstance | undefined) { this.activeInstance = instance; }
 	moveTerminal() {}
 	async closeTerminal(instance: ITerminalInstance) { await instance.close(); }
 }
 
-class FakeTerminalInstance extends DisposableOwner implements ITerminalInstance {
+class FakeTerminalInstance extends Disposable implements ITerminalInstance {
 	readonly profile = { profileId: "command-prompt", title: "Command Prompt", isDefault: true };
 	readonly writes: string[] = [];
 	state: TerminalInstanceState = "running";
 	exitCode: number | undefined;
-	private readonly commandEmitter = this.own(new Emitter<ITerminalCommandStatusEvent>());
+	private readonly commandEmitter = this._register(new Emitter<ITerminalCommandStatusEvent>());
 	readonly onDidWriteData = noEvent;
 	readonly onDidChangeCommandStatus = this.commandEmitter.event;
 	readonly onDidExit = noEvent;

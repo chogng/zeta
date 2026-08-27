@@ -1,6 +1,6 @@
 import { raceCancellation } from "../../../../base/common/cancellation.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { assertLanguageId } from "../../../../editor/common/languages/languageId.js";
 import { type TextMateGrammarRegistrySnapshot, type TextMateGrammarTokenType } from "./textMateGrammarRegistry.js";
 import * as textMateNamespace from "vscode-textmate";
@@ -31,8 +31,8 @@ export interface TextMateGrammarCatalogSource {
 }
 
 /** Mutable renderer-side source for complete versioned grammar catalogs. */
-export class TextMateGrammarCatalogModel extends DisposableOwner implements TextMateGrammarCatalogSource {
-	private readonly changeEmitter = this.own(new Emitter<TextMateGrammarCatalog>());
+export class TextMateGrammarCatalogModel extends Disposable implements TextMateGrammarCatalogSource {
+	private readonly changeEmitter = this._register(new Emitter<TextMateGrammarCatalog>());
 	private catalog: TextMateGrammarCatalog;
 
 	readonly onDidChangeCatalog: Event<TextMateGrammarCatalog> = this.changeEmitter.event;

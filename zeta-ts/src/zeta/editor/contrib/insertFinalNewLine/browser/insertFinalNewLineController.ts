@@ -1,9 +1,9 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { createInsertFinalNewLineCommand } from "../common/insertFinalNewLine.js";
 
 /** Applies the final-newline policy immediately before a save operation. */
-export class InsertFinalNewLineController extends DisposableOwner {
+export class InsertFinalNewLineController extends Disposable {
 	constructor(private readonly selections: EditorSelectionController) {
 		super();
 	}

@@ -1,5 +1,5 @@
 import { ScrollableElement } from "../../../../base/browser/ui/scrollbar/scrollableElement.js";
-import { ResettableDisposableGroup } from "../../../../base/common/lifecycle.js";
+import { DisposableStore } from "../../../../base/common/lifecycle.js";
 import { URI } from "../../../../base/common/uri.js";
 import type { IConfigurationService } from "../../../../platform/configuration/common/configurationService.js";
 import { FileKind, type IFileEntry, type IFileService } from "../../../../platform/files/common/files.js";
@@ -32,7 +32,7 @@ export class ExplorerViewPane extends ViewPane {
 	private readonly scrollable: ScrollableElement;
 	private readonly tree: WorkbenchAsyncDataTree<ExplorerNode, ExplorerNode>;
 	private readonly renderedLabels =
-		this.own(new ResettableDisposableGroup());
+		this._register(new DisposableStore());
 	private root: ExplorerNode | undefined;
 	private error: string | undefined;
 	private workspaceGeneration = 0;
@@ -55,7 +55,7 @@ export class ExplorerViewPane extends ViewPane {
 		this.editorService = editorService;
 		this.fileIconThemeService = fileIconThemeService;
 		this.hoverService = hoverService;
-		this.resourceLabels = this.own(new ResourceLabels(DEFAULT_LABELS_CONTAINER, {
+		this.resourceLabels = this._register(new ResourceLabels(DEFAULT_LABELS_CONTAINER, {
 			workspaceContextService,
 			fileIconThemeService,
 			fileLabelDecorationService,
@@ -64,12 +64,12 @@ export class ExplorerViewPane extends ViewPane {
 		this.element.classList.add("zeta-explorer-view-pane");
 		this.headerElement.classList.add("zeta-explorer-title");
 		this.contentElement.classList.add("zeta-explorer");
-		this.scrollable = this.own(new ScrollableElement(this.contentElement, {
+		this.scrollable = this._register(new ScrollableElement(this.contentElement, {
 			ariaLabel: "Workspace files",
 			direction: "vertical",
 			vertical: "auto",
 		}));
-		this.tree = this.own(new WorkbenchAsyncDataTree<ExplorerNode, ExplorerNode>(this.scrollable.contentElement, {
+		this.tree = this._register(new WorkbenchAsyncDataTree<ExplorerNode, ExplorerNode>(this.scrollable.contentElement, {
 			hasChildren: (node) => node.kind === FileKind.Directory,
 			getChildren: async (node) => {
 				if (node.children) return node.children;
@@ -87,17 +87,17 @@ export class ExplorerViewPane extends ViewPane {
 			onWillRender: () => this.renderedLabels.clear(),
 			renderElement: (node) => this.renderTreeElement(node),
 		}));
-		this.own(this.tree.onDidError(({ error }) => {
+		this._register(this.tree.onDidError(({ error }) => {
 			this.error = error instanceof Error ? error.message : "Unable to read workspace files.";
 			this.render();
 		}));
-		this.own(this.tree.onDidOpen((event) => {
+		this._register(this.tree.onDidOpen((event) => {
 			if (event.element.kind === FileKind.File) void this.openFile(event);
 		}));
-		this.own(fileIconThemeService.onDidFileIconThemeChange(
+		this._register(fileIconThemeService.onDidFileIconThemeChange(
 			() => this.render(),
 		));
-		this.own(workspaceContextService.onDidChangeWorkspace(() => {
+		this._register(workspaceContextService.onDidChangeWorkspace(() => {
 			void this.initialize();
 		}));
 		this.render();

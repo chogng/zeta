@@ -1,5 +1,5 @@
 import "./media/zoneWidget.css";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type TextPosition } from "../../../common/core/text.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { h } from "../../../../base/browser/dom.js";
@@ -7,7 +7,7 @@ import { h } from "../../../../base/browser/dom.js";
 export interface ZoneWidgetOptions { readonly anchor: TextPosition; readonly createContent: (document: Document) => HTMLElement; readonly className?: string; }
 
 /** Anchors a transient interactive widget to a model position and follows viewport layout. */
-export class ZoneWidget extends DisposableOwner {
+export class ZoneWidget extends Disposable {
 	readonly element: HTMLDivElement;
 	private content: HTMLElement;
 
@@ -20,8 +20,8 @@ export class ZoneWidget extends DisposableOwner {
 		this.element.append(this.content);
 		this.element.hidden = true;
 		viewport.element.append(this.element);
-		this.defer(() => this.element.remove());
-		this.own(viewport.onDidChangeLayout(() => this.layout(options.anchor)));
+		this._register(toDisposable(() => this.element.remove()));
+		this._register(viewport.onDidChangeLayout(() => this.layout(options.anchor)));
 		this.layout(options.anchor);
 	}
 

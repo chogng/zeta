@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { type VersionedLanguageResultStore } from "../../../common/languages/languageResultStore.js";
 import { type LanguageDiagnostic, type LanguageDiagnosticResult } from "../../../common/languages/languageResults.js";
@@ -12,18 +12,18 @@ import { type LanguageDiagnosticsPublisher, type LanguageDiagnosticsSource } fro
  * The bridge observes but does not own the result store or text model. It owns
  * its projected collection and clears it whenever the store loses its result.
  */
-export class LanguageDiagnosticDecorationBridge extends DisposableOwner {
+export class LanguageDiagnosticDecorationBridge extends Disposable {
 	readonly decorations: TextDecorationCollection<LanguageDiagnostic>;
 
 	constructor(private readonly store: VersionedLanguageResultStore<LanguageDiagnosticResult>, private readonly externalSource?: LanguageDiagnosticsSource, private readonly resource?: URI) {
 		super();
-		this.decorations = this.own(new TextDecorationCollection(store.textModel));
+		this.decorations = this._register(new TextDecorationCollection(store.textModel));
 		try {
-			this.own(store.onDidChange(() => this.synchronize()));
-			if (externalSource) this.own(externalSource.onDidChangeDiagnostics(resource => {
+			this._register(store.onDidChange(() => this.synchronize()));
+			if (externalSource) this._register(externalSource.onDidChangeDiagnostics(resource => {
 				if (resource.toString() === this.resource?.toString()) this.synchronize();
 			}));
-			if (externalSource) this.own(store.textModel.onDidChange(() => this.synchronize()));
+			if (externalSource) this._register(store.textModel.onDidChange(() => this.synchronize()));
 			this.synchronize();
 		} catch (error) {
 			this.dispose();
@@ -45,11 +45,11 @@ export class LanguageDiagnosticDecorationBridge extends DisposableOwner {
 }
 
 /** Publishes the local syntax worker's current revision into the shared diagnostic repository. */
-export class LanguageDiagnosticPublisherBridge extends DisposableOwner {
+export class LanguageDiagnosticPublisherBridge extends Disposable {
 	constructor(private readonly store: VersionedLanguageResultStore<LanguageDiagnosticResult>, private readonly publisher: LanguageDiagnosticsPublisher) {
 		super();
-		this.own(publisher);
-		this.own(store.onDidChange(() => this.synchronize()));
+		this._register(publisher);
+		this._register(store.onDidChange(() => this.synchronize()));
 		this.synchronize();
 	}
 

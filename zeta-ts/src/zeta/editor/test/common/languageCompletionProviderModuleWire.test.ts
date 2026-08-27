@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableOwner, DisposableStore } from "../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
 import { LanguageCompletionCatalogWirePublisher, LanguageCompletionCatalogWorkerClient } from "../../common/languages/completion/languageCompletionCatalogWire.js";
 import { createLanguageCompletionInvokeContext, LanguageCompletionProviderRegistry, type LanguageCompletionProvider } from "../../common/languages/completion/languageCompletionProviders.js";
 import { LanguageCompletionProviderModuleHost, LanguageCompletionProviderModuleRegistry, LanguageCompletionProviderModuleState } from "../../common/languages/completion/languageCompletionProviderModules.js";
@@ -276,9 +276,9 @@ function createPortPair(): readonly [MemoryModulePort, MemoryModulePort] {
 	return [first, second];
 }
 
-class MemoryModulePort extends DisposableOwner implements LanguageWorkerWireClientPort {
-	private readonly messageEmitter = this.own(new Emitter<unknown>());
-	private readonly failureEmitter = this.own(new Emitter<unknown>());
+class MemoryModulePort extends Disposable implements LanguageWorkerWireClientPort {
+	private readonly messageEmitter = this._register(new Emitter<unknown>());
+	private readonly failureEmitter = this._register(new Emitter<unknown>());
 	private peer: MemoryModulePort | undefined;
 
 	readonly sentMessages: unknown[] = [];
@@ -287,9 +287,9 @@ class MemoryModulePort extends DisposableOwner implements LanguageWorkerWireClie
 
 	constructor() {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.peer = undefined;
-		});
+		}));
 	}
 
 	connect(peer: MemoryModulePort): void {

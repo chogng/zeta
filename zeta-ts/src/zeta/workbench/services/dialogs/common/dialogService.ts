@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import {
 	type IConfirmationDialogOptions,
 	type IDialogService,
@@ -11,9 +11,9 @@ import { DialogsModel } from "../../../common/dialogs.js";
 /**
  * Maps the platform dialog API onto the workbench-owned dialog model.
  */
-export class DialogService extends DisposableOwner
+export class DialogService extends Disposable
 	implements IDialogService {
-	readonly model = this.own(new DialogsModel());
+	readonly model = this._register(new DialogsModel());
 
 	async showMessage(options: IMessageDialogOptions): Promise<void> {
 		const handle = this.model.show({

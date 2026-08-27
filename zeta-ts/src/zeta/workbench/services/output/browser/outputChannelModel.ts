@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import type { IOutputChannelChange, IOutputEntry, IOutputEntryInput, OutputEntrySeverity } from "../common/outputService.js";
 
 const MaxRetainedEntries = 20_000;
@@ -17,8 +17,8 @@ export interface IOutputChannelModel {
 }
 
 /** Bounded in-memory model for transient and frontend-owned Output streams. */
-export class InMemoryOutputChannelModel extends DisposableOwner implements IOutputChannelModel {
-	private readonly changeEmitter = this.own(new Emitter<IOutputChannelChange>());
+export class InMemoryOutputChannelModel extends Disposable implements IOutputChannelModel {
+	private readonly changeEmitter = this._register(new Emitter<IOutputChannelChange>());
 	private readonly retainedEntries: IOutputEntry[] = [];
 	private retainedBytes = 0;
 	private nextSequence = 1;

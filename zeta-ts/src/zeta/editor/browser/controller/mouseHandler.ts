@@ -1,4 +1,4 @@
-import { DisposableOwner, ResettableDisposableGroup } from "../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
 import { createEditorColumnSelectionSet } from "../../common/cursor/columnSelection.js";
 import { SelectionDirection, TextSelection, TextSelectionSet } from "../../common/core/selection.js";
@@ -54,9 +54,9 @@ export interface MouseHandlerOptions {
  * PointerHandler owns browser dispatch/capture. This controller owns gesture
  * policy and maps semantic hit targets to common selection state.
  */
-export class MouseHandler extends DisposableOwner {
+export class MouseHandler extends Disposable {
 	private readonly dragListeners =
-		this.own(new ResettableDisposableGroup());
+		this._register(new DisposableStore());
 	private readonly pointerHandler: PointerHandler;
 	private readonly mouseTargetFactory: MouseTargetFactory;
 	private readonly multiCursorModifier: PointerMultiCursorModifier;
@@ -88,11 +88,11 @@ export class MouseHandler extends DisposableOwner {
 				"Stanza pointer and selection controllers must share one text model",
 			);
 		}
-		this.pointerHandler = this.own(new PointerHandler(viewport.element));
+		this.pointerHandler = this._register(new PointerHandler(viewport.element));
 		this.mouseTargetFactory = new MouseTargetFactory(viewport);
-		this.own(this.pointerHandler.onDidPointerDown(event => this.beginPointerSelection(event)));
-		this.own(this.pointerHandler.onDidContextMenu(event => this.handleContextMenu(event)));
-		this.defer(() => this.stopPointerSelection());
+		this._register(this.pointerHandler.onDidPointerDown(event => this.beginPointerSelection(event)));
+		this._register(this.pointerHandler.onDidContextMenu(event => this.handleContextMenu(event)));
+		this._register(toDisposable(() => this.stopPointerSelection()));
 	}
 
 	private beginPointerSelection(event: PointerEvent): void {

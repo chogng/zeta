@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Emitter } from "../../../../../base/common/event.js";
-import { DisposableOwner, toDisposable } from "../../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { type ITaskRun, type ITaskService, type IWorkspaceTask, type TaskProvider, type TaskProviderRegistration, type TaskRunStatus } from "../../../../services/tasks/common/taskService.js";
 import { type ITerminalInstance } from "../../../../services/terminal/common/terminal.js";
 import { TestingService } from "../../browser/testingService.js";
@@ -63,10 +63,10 @@ function task(id: string, label: string, group: IWorkspaceTask["group"]): IWorks
 	return Object.freeze({ id, label, group, command: `run ${id}`, source: "vscode" });
 }
 
-class FakeTaskService extends DisposableOwner implements ITaskService {
-	private readonly tasksEmitter = this.own(new Emitter<readonly IWorkspaceTask[]>());
-	readonly startEmitter = this.own(new Emitter<ITaskRun>());
-	readonly runEmitter = this.own(new Emitter<ITaskRun>());
+class FakeTaskService extends Disposable implements ITaskService {
+	private readonly tasksEmitter = this._register(new Emitter<readonly IWorkspaceTask[]>());
+	readonly startEmitter = this._register(new Emitter<ITaskRun>());
+	readonly runEmitter = this._register(new Emitter<ITaskRun>());
 	readonly onDidChangeTasks = this.tasksEmitter.event;
 	readonly onDidStartTask = this.startEmitter.event;
 	readonly onDidChangeTaskRun = this.runEmitter.event;
@@ -77,12 +77,12 @@ class FakeTaskService extends DisposableOwner implements ITaskService {
 	registerTaskProvider(_provider: TaskProvider) { return toDisposable(() => undefined); }
 	registerTaskProviders(_providers: readonly TaskProvider[]): TaskProviderRegistration { const registration = toDisposable(() => undefined) as TaskProviderRegistration; registration.replace = () => undefined; return registration; }
 	async refresh() { return this.tasks; }
-	async run(task: IWorkspaceTask): Promise<ITaskRun> { const run = this.own(new FakeTaskRun(task)); this.runs.push(run); this.lastRun = run; this.startEmitter.fire(run); return run; }
+	async run(task: IWorkspaceTask): Promise<ITaskRun> { const run = this._register(new FakeTaskRun(task)); this.runs.push(run); this.lastRun = run; this.startEmitter.fire(run); return run; }
 	async terminate(run: ITaskRun) { (run as FakeTaskRun).finish("canceled"); }
 }
 
-class FakeTaskRun extends DisposableOwner implements ITaskRun {
-	private readonly emitter = this.own(new Emitter<TaskRunStatus>());
+class FakeTaskRun extends Disposable implements ITaskRun {
+	private readonly emitter = this._register(new Emitter<TaskRunStatus>());
 	readonly onDidChangeStatus = this.emitter.event;
 	readonly terminal = {} as ITerminalInstance;
 	status: TaskRunStatus = "running";

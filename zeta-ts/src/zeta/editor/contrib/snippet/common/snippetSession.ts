@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
@@ -16,7 +16,7 @@ import { TrackedRangeStickiness, type TrackedRange } from "../../../common/model
  * session owns neither the model nor the editor selection controller, and may
  * be disposed without changing inserted text.
  */
-export class LanguageCompletionSnippetSession extends DisposableOwner {
+export class LanguageCompletionSnippetSession extends Disposable {
 	private readonly groups: readonly SnippetTrackedGroup[];
 	private readonly transforms: readonly SnippetTrackedTransform[];
 	private readonly choiceIndexes = new Map<number, number>();
@@ -76,13 +76,13 @@ export class LanguageCompletionSnippetSession extends DisposableOwner {
 				TextRange.emptyAt(model.positionAt(insertionStartOffset + finalOffsetWithinInsertion)),
 				TrackedRangeStickiness.NeverGrowsAtEdges,
 			);
-			this.defer(() => {
+			this._register(toDisposable(() => {
 				for (const group of this.groups) {
 					for (const range of group.ranges) range.dispose();
 				}
 				for (const transform of this.transforms) transform.range.dispose();
 				this.finalRange.dispose();
-			});
+			}));
 		} catch (error) {
 			this.dispose();
 			throw error;

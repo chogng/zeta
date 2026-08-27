@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type TextRange } from "../../../common/core/text.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
@@ -27,7 +27,7 @@ export interface LanguageCodeLensProvider extends LanguageFeatureProviderMetadat
 }
 
 /** Owns versioned code-lens discovery and resolve; command execution is host-owned. */
-export class CodeLensService extends DisposableOwner {
+export class CodeLensService extends Disposable {
 	constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureProviderRegistry<LanguageCodeLensProvider>, private readonly resource?: URI) {
 		super();
 	}

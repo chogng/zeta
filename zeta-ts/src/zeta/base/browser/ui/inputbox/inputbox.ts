@@ -9,7 +9,7 @@ import {
 } from "../aria/aria.js";
 import { Emitter, type Event } from "../../../common/event.js";
 import { IME } from "../../../common/ime.js";
-import { DisposableOwner } from "../../../common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../common/lifecycle.js";
 
 export interface InputBoxOptions {
 	readonly placeholder?: string;
@@ -30,13 +30,13 @@ export interface InputSelection {
 }
 
 /** A text input foundation with events, focus control, and validation state. */
-export class InputBox extends DisposableOwner {
+export class InputBox extends Disposable {
 	readonly element: HTMLDivElement;
 	readonly inputElement: HTMLInputElement;
 	private readonly message: HTMLDivElement;
-	private readonly _onDidChange = this.own(new Emitter<string>());
-	private readonly _onDidFocus = this.own(new Emitter<void>());
-	private readonly _onDidBlur = this.own(new Emitter<void>());
+	private readonly _onDidChange = this._register(new Emitter<string>());
+	private readonly _onDidFocus = this._register(new Emitter<void>());
+	private readonly _onDidBlur = this._register(new Emitter<void>());
 	private _readOnly: boolean;
 
 	readonly onDidChange: Event<string> = this._onDidChange.event;
@@ -50,7 +50,7 @@ export class InputBox extends DisposableOwner {
 		this.element = h(ownerDocument, "div");
 		this.element.className = "zeta-input-box";
 		if (options.presentation === "field") this.element.classList.add("zeta-input-box-field");
-		this.defer(() => this.element.remove());
+		this._register(toDisposable(() => this.element.remove()));
 
 		this.inputElement = h(ownerDocument, "input");
 		this.inputElement.type = options.type ?? "text";
@@ -94,15 +94,15 @@ export class InputBox extends DisposableOwner {
 		this.message.hidden = true;
 		this.element.append(this.inputElement, this.message);
 		container.append(this.element);
-		this.onKeyDown = this.own(new DomEmitter(this.inputElement, "keydown")).event;
+		this.onKeyDown = this._register(new DomEmitter(this.inputElement, "keydown")).event;
 		this.syncReadOnly();
-		this.own(IME.onDidChange(() => this.syncReadOnly()));
-		this.own(addDisposableListener(
+		this._register(IME.onDidChange(() => this.syncReadOnly()));
+		this._register(addDisposableListener(
 			this.inputElement,
 			"input",
 			() => this._onDidChange.fire(this.value),
 		));
-		this.own(addDisposableListener(
+		this._register(addDisposableListener(
 			this.inputElement,
 			"focus",
 			() => {
@@ -110,7 +110,7 @@ export class InputBox extends DisposableOwner {
 				this._onDidFocus.fire();
 			},
 		));
-		this.own(addDisposableListener(
+		this._register(addDisposableListener(
 			this.inputElement,
 			"blur",
 			() => {

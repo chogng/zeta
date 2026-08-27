@@ -4,7 +4,9 @@ import {
 	AbstractDisposable,
 	DisposableMap,
 	DisposableStore,
-	DisposableOwner,
+	Disposable,
+	MutableDisposable,
+	type IDisposable,
 	noneDisposable,
 	toDisposable,
 } from "../../common/lifecycle.js";
@@ -58,6 +60,27 @@ test("DisposableTracker records ownership and closes the complete subtree", () =
 	tracker.assertNoLeaks();
 });
 
+test("DisposableStore closes tracker records for structural resources", () => {
+	const tracker = new DisposableTracker();
+	using installation = installDisposableTracker(tracker);
+	let cleanupCalls = 0;
+	const resource: IDisposable = {
+		dispose(): void {
+			cleanupCalls += 1;
+		},
+		[Symbol.dispose](): void {
+			this.dispose();
+		},
+	};
+	const store = new DisposableStore();
+	store.add(resource);
+
+	store.dispose();
+
+	assert.equal(cleanupCalls, 1);
+	tracker.assertNoLeaks();
+});
+
 test("DisposableTracker follows values owned by DisposableMap", () => {
 	const tracker = new DisposableTracker();
 	using installation = installDisposableTracker(tracker);
@@ -86,6 +109,25 @@ test("DisposableMap releases leaked values from its ownership graph", () => {
 	tracker.assertNoLeaks();
 });
 
+test("DisposableTracker follows MutableDisposable values", () => {
+	const tracker = new DisposableTracker();
+	using installation = installDisposableTracker(tracker);
+	const slot = new MutableDisposable();
+	const first = toDisposable(() => {});
+	const second = toDisposable(() => {});
+	slot.value = first;
+
+	assert.equal(
+		tracker.leaks().find((leak) => leak.disposable === first)?.ownerLabel,
+		"MutableDisposable",
+	);
+	slot.value = second;
+	assert.equal(tracker.leaks().some((leak) => leak.disposable === first), false);
+
+	slot.dispose();
+	tracker.assertNoLeaks();
+});
+
 test("noneDisposable can be shared by independent owners", () => {
 	const tracker = new DisposableTracker();
 	using installation = installDisposableTracker(tracker);
@@ -99,10 +141,10 @@ test("noneDisposable can be shared by independent owners", () => {
 	tracker.assertNoLeaks();
 });
 
-test("DisposableTracker follows DisposableOwner through its internal store", () => {
-	class Owner extends DisposableOwner {
-		take(resource: Disposable): void {
-			this.own(resource);
+test("DisposableTracker follows Disposable through its internal store", () => {
+	class Owner extends Disposable {
+		take(resource: IDisposable): void {
+			this._register(resource);
 		}
 	}
 

@@ -1,6 +1,6 @@
 import { isNonEmptyArray } from "../../../../base/common/arrays.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type LanguageCompletionCommand, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionResult } from "./languageCompletions.js";
 import { assertLanguageId, assertLanguageSelector } from "../languageId.js";
 import { type TextPosition, type TextSnapshot } from "../../core/text.js";
@@ -105,8 +105,8 @@ interface OwnedLanguageCompletionProvider {
 }
 
 /** Caller-owned registry with deterministic registration-order provider lookup. */
-export class LanguageCompletionProviderRegistry extends DisposableOwner implements LanguageCompletionProviderCatalogSource {
-	private readonly catalogEmitter = this.own(new Emitter<LanguageCompletionProviderCatalog>());
+export class LanguageCompletionProviderRegistry extends Disposable implements LanguageCompletionProviderCatalogSource {
+	private readonly catalogEmitter = this._register(new Emitter<LanguageCompletionProviderCatalog>());
 	private readonly providers = new Map<string, OwnedLanguageCompletionProvider>();
 	private catalog: LanguageCompletionProviderCatalog = EMPTY_PROVIDER_CATALOG;
 
@@ -115,9 +115,9 @@ export class LanguageCompletionProviderRegistry extends DisposableOwner implemen
 
 	constructor() {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.providers.clear();
-		});
+		}));
 	}
 
 	register(provider: LanguageCompletionProvider): IDisposable {

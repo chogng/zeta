@@ -18,7 +18,7 @@ export class DebugConsoleViewPane extends ViewPane {
 	constructor(container: HTMLElement, options: IViewPaneOptions, private readonly consoleService: IDebugConsoleService) {
 		super(container, options);
 		this.contentElement.classList.add("zeta-debug-console");
-		this.titleActions = this.own(new ActionBar(this.headerActionsElement, { ariaLabel: "Debug Console actions" }));
+		this.titleActions = this._register(new ActionBar(this.headerActionsElement, { ariaLabel: "Debug Console actions" }));
 		this.titleActions.element.classList.add("zeta-toolbar");
 		this.sessionSelect = h(container.ownerDocument, "select");
 		this.sessionSelect.className = "zeta-debug-console-session";
@@ -39,9 +39,9 @@ export class DebugConsoleViewPane extends ViewPane {
 		this.status.className = "zeta-debug-console-status";
 		this.status.setAttribute("role", "status");
 		this.contentElement.append(this.sessionSelect, this.output, this.form, this.status);
-		this.own(addDisposableListener(this.sessionSelect, "change", () => this.selectSession()));
-		this.own(addDisposableListener(this.form, "submit", event => { void this.evaluate(event); }));
-		this.own(consoleService.onDidChange(() => this.render()));
+		this._register(addDisposableListener(this.sessionSelect, "change", () => this.selectSession()));
+		this._register(addDisposableListener(this.form, "submit", event => { void this.evaluate(event); }));
+		this._register(consoleService.onDidChange(() => this.render()));
 		this.render();
 	}
 

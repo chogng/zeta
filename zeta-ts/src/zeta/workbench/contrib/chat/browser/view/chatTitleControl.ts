@@ -1,5 +1,5 @@
 import "./chatTitleControl.css";
-import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { AnchorPosition } from "../../../../../base/common/layout.js";
 import { MenuWorkbenchToolBar } from "../../../../../platform/actions/browser/toolbar.js";
 import { MenuId } from "../../../../../platform/actions/common/actions.js";
@@ -11,18 +11,18 @@ import type { PartTitleProjection } from "../../../../browser/parts/views/viewPa
 import { h } from "../../../../../base/browser/dom.js";
 
 /** Owns Chat's title content and action projections. */
-export class ChatTitleControl extends DisposableOwner {
+export class ChatTitleControl extends Disposable {
 	private readonly tabs: ChatTabsControl;
 	private readonly actionsElement: HTMLDivElement;
 
 	constructor(container: HTMLElement, idPrefix: string, delegate: ChatTabsDelegate, menuService: IMenuService, contextMenuService: IContextMenuService) {
 		super();
 		const ownerDocument = container.ownerDocument;
-		this.tabs = this.own(new MultiChatTabsControl(container, idPrefix, delegate, "pane-title"));
+		this.tabs = this._register(new MultiChatTabsControl(container, idPrefix, delegate, "pane-title"));
 		this.actionsElement = h(ownerDocument, "div");
 		this.actionsElement.className = "zeta-chat-title-actions";
 		container.append(this.actionsElement);
-		const toolbar = this.own(new MenuWorkbenchToolBar(
+		const toolbar = this._register(new MenuWorkbenchToolBar(
 			this.actionsElement,
 			menuService,
 			contextMenuService,
@@ -30,7 +30,7 @@ export class ChatTitleControl extends DisposableOwner {
 			{ hoverAnchorPosition: AnchorPosition.Below },
 		));
 		toolbar.element.setAttribute("aria-label", "Chat actions");
-		const layoutToolbar = this.own(new MenuWorkbenchToolBar(
+		const layoutToolbar = this._register(new MenuWorkbenchToolBar(
 			this.actionsElement,
 			menuService,
 			contextMenuService,
@@ -39,7 +39,7 @@ export class ChatTitleControl extends DisposableOwner {
 		));
 		layoutToolbar.element.setAttribute("aria-label", "Chat layout");
 		layoutToolbar.element.classList.add("zeta-chat-title-layout-actions");
-		this.defer(() => this.actionsElement.remove());
+		this._register(toDisposable(() => this.actionsElement.remove()));
 	}
 
 	get partTitleProjection(): PartTitleProjection {

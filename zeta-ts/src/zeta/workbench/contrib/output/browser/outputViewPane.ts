@@ -4,7 +4,7 @@ import type { ActionViewItem, ActionViewItemOptions } from "../../../../base/bro
 import { DropdownMenuActionViewItem } from "../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js";
 import { Separator, SubmenuAction, type IAction } from "../../../../base/common/actions.js";
 import type { Icon } from "../../../../base/common/icon.js";
-import { DisposableSlot, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { MutableDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { URI } from "../../../../base/common/uri.js";
 import { TextPosition } from "../../../../editor/common/core/text.js";
@@ -32,7 +32,7 @@ const MaximumRenderedEntries = 5_000;
 
 /** Generic Output channel projection with filtering, navigation, and export. */
 export class OutputViewPane extends ViewPane {
-	private readonly activeChannelListener = this.own(new DisposableSlot<IDisposable>());
+	private readonly activeChannelListener = this._register(new MutableDisposable<IDisposable>());
 	private readonly filters: OutputFilterState;
 	private readonly filterInput: HTMLInputElement;
 	private readonly content: HTMLDivElement;
@@ -43,9 +43,9 @@ export class OutputViewPane extends ViewPane {
 	constructor(container: HTMLElement, options: IViewPaneOptions, private readonly outputService: IOutputService, private readonly contextMenuService: IContextMenuService, private readonly storageService?: IStorageService, private readonly editorService?: IEditorService, private readonly workspaceContextService?: IWorkspaceContextService, private readonly hostService?: IWorkbenchHostService) {
 		super(container, options);
 		this.contentElement.classList.add("zeta-output");
-		this.filters = this.own(new OutputFilterState(storageService));
+		this.filters = this._register(new OutputFilterState(storageService));
 		this.autoScroll = storageService?.getBoolean(AutoScrollStorageKey, StorageScope.WORKSPACE, true) ?? true;
-		this.titleActions = this.own(new ActionBar(this.headerActionsElement, { ariaLabel: "Output actions", highlightToggledItems: true, actionViewItemProvider: (action, actionOptions) => this.createActionViewItem(action, actionOptions) }));
+		this.titleActions = this._register(new ActionBar(this.headerActionsElement, { ariaLabel: "Output actions", highlightToggledItems: true, actionViewItemProvider: (action, actionOptions) => this.createActionViewItem(action, actionOptions) }));
 		this.titleActions.element.classList.add("zeta-toolbar", "zeta-output-title-actions");
 		const filterBar = h(container.ownerDocument, "div");
 		filterBar.className = "zeta-output-filter-bar";
@@ -62,31 +62,31 @@ export class OutputViewPane extends ViewPane {
 		this.content.setAttribute("aria-live", "off");
 		this.content.tabIndex = 0;
 		this.contentElement.append(filterBar, this.content);
-		this.own(addDisposableListener(this.filterInput, "input", () => this.filters.setText(this.filterInput.value)));
-		this.own(addDisposableListener(this.filterInput, "keydown", event => {
+		this._register(addDisposableListener(this.filterInput, "input", () => this.filters.setText(this.filterInput.value)));
+		this._register(addDisposableListener(this.filterInput, "keydown", event => {
 			if (event.key !== "Escape" || !this.filterInput.value) return;
 			stopEvent(event);
 			this.filterInput.value = "";
 			this.filters.setText("");
 		}));
-		this.own(addDisposableListener(this.contentElement, "keydown", event => {
+		this._register(addDisposableListener(this.contentElement, "keydown", event => {
 			if (event.key.toLocaleLowerCase() !== "f" || (!event.ctrlKey && !event.metaKey)) return;
 			stopEvent(event);
 			this.filterInput.focus();
 			this.filterInput.select();
 		}));
-		this.own(addDisposableListener(this.content, "scroll", () => this.acceptScrollPosition()));
-		this.own(addDisposableListener(this.content, "click", event => this.openLink(event)));
-		this.own(outputService.onDidChangeChannels(() => this.render()));
-		this.own(outputService.onDidChangeActiveChannel(channel => this.bindActiveChannel(channel)));
-		this.own(this.filters.onDidChange(() => this.render()));
+		this._register(addDisposableListener(this.content, "scroll", () => this.acceptScrollPosition()));
+		this._register(addDisposableListener(this.content, "click", event => this.openLink(event)));
+		this._register(outputService.onDidChangeChannels(() => this.render()));
+		this._register(outputService.onDidChangeActiveChannel(channel => this.bindActiveChannel(channel)));
+		this._register(this.filters.onDidChange(() => this.render()));
 		this.bindActiveChannel(outputService.activeChannel);
 	}
 
 	override get partTitleProjection(): PartTitleProjection { return { actions: this.titleActions.element }; }
 
 	private bindActiveChannel(channel: IOutputChannel | undefined): void {
-		this.activeChannelListener.replace(channel?.onDidChange(() => this.render()));
+		this.activeChannelListener.value = channel?.onDidChange(() => this.render());
 		this.render();
 	}
 

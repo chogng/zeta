@@ -1,6 +1,6 @@
 import { getKeybindingLabel, getKeybindingLabelParts, KeybindingLabelStyle } from "../../../common/keybindingLabels.js";
 import type { ResolvedKeybinding } from "../../../common/keybindings.js";
-import { DisposableOwner } from "../../../common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../common/lifecycle.js";
 import { setAriaAttribute } from "../aria/aria.js";
 import { h } from "../../dom.js";
 
@@ -13,7 +13,7 @@ export interface KeybindingLabelOptions {
 export type KeybindingLabelPresentation = "plain" | "keycap";
 
 /** Presents a resolved keybinding without owning matching or dispatch policy. */
-export class KeybindingLabel extends DisposableOwner {
+export class KeybindingLabel extends Disposable {
 	readonly element: HTMLSpanElement;
 	private _keybinding: ResolvedKeybinding;
 
@@ -22,7 +22,7 @@ export class KeybindingLabel extends DisposableOwner {
 		const ownerDocument = container.ownerDocument;
 		this._keybinding = options.keybinding;
 		this.element = h(ownerDocument, "span");
-		this.defer(() => this.element.remove());
+		this._register(toDisposable(() => this.element.remove()));
 		this.element.className = `zeta-keybinding-label zeta-keybinding-label-${options.presentation ?? "plain"}`;
 		container.append(this.element);
 		this.render();

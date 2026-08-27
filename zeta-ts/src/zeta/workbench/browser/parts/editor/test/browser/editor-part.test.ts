@@ -11,7 +11,7 @@ import {
 	type ResolvedKeybinding,
 	resolveKeybinding,
 } from "../../../../../../base/common/keybindings.js";
-import { DisposableOwner } from "../../../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../../base/common/uri.js";
 import { TextPosition, TextRange } from "../../../../../../editor/common/core/text.js";
 import type { LanguageLocation } from "../../../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
@@ -1206,7 +1206,7 @@ test("BrowserAuxiliaryWindowService opens, registers, mirrors styles, and releas
 	popup.window.close();
 });
 
-class TestEditorPane extends DisposableOwner implements IEditorPane {
+class TestEditorPane extends Disposable implements IEditorPane {
 	readonly visibilities: EditorPaneVisibility[] = [];
 	inputError: Error | undefined;
 	inputPromise: Promise<void> | undefined;
@@ -1271,10 +1271,10 @@ class TestViewStateEditorPane extends TestEditorPane implements IEditorPaneWithV
 	restoreViewState(state: unknown): void { this.restoredViewState = state; }
 }
 
-class TestWorkingCopy extends DisposableOwner implements IWorkingCopy {
-	private readonly dirtyEmitter = this.own(new Emitter<void>());
-	private readonly externalChangeEmitter = this.own(new Emitter<void>());
-	private readonly contentEmitter = this.own(new Emitter<void>());
+class TestWorkingCopy extends Disposable implements IWorkingCopy {
+	private readonly dirtyEmitter = this._register(new Emitter<void>());
+	private readonly externalChangeEmitter = this._register(new Emitter<void>());
+	private readonly contentEmitter = this._register(new Emitter<void>());
 	private dirty = false;
 	readonly backupKind = "text" as const;
 	readonly onDidChangeDirty = this.dirtyEmitter.event;
@@ -1328,13 +1328,13 @@ class TestDialogService implements IDialogService {
 	}
 }
 
-class TestAuxiliaryWindowService extends DisposableOwner implements IAuxiliaryWindowService {
-	private readonly openEmitter = this.own(new Emitter<IAuxiliaryWindow>());
+class TestAuxiliaryWindowService extends Disposable implements IAuxiliaryWindowService {
+	private readonly openEmitter = this._register(new Emitter<IAuxiliaryWindow>());
 	readonly onDidOpenWindow = this.openEmitter.event;
 	lastWindow: TestAuxiliaryWindow | undefined;
 
 	async open(_options?: AuxiliaryWindowOpenOptions): Promise<IAuxiliaryWindow> {
-		const auxiliary = this.own(new TestAuxiliaryWindow());
+		const auxiliary = this._register(new TestAuxiliaryWindow());
 		this.lastWindow = auxiliary;
 		this.openEmitter.fire(auxiliary);
 		return auxiliary;
@@ -1345,12 +1345,12 @@ class TestAuxiliaryWindowService extends DisposableOwner implements IAuxiliaryWi
 	}
 }
 
-class TestAuxiliaryWindow extends DisposableOwner implements IAuxiliaryWindow {
+class TestAuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 	readonly id = 42;
 	private readonly dom = new JSDOM("<!doctype html><body><main></main></body>");
-	private readonly layoutEmitter = this.own(new Emitter<IDimension>());
-	private readonly beforeUnloadEmitter = this.own(new Emitter<AuxiliaryWindowBeforeUnloadEvent>());
-	private readonly closeEmitter = this.own(new Emitter<void>());
+	private readonly layoutEmitter = this._register(new Emitter<IDimension>());
+	private readonly beforeUnloadEmitter = this._register(new Emitter<AuxiliaryWindowBeforeUnloadEvent>());
+	private readonly closeEmitter = this._register(new Emitter<void>());
 	readonly onDidLayout = this.layoutEmitter.event;
 	readonly onBeforeUnload = this.beforeUnloadEmitter.event;
 	readonly onDidClose = this.closeEmitter.event;
@@ -1359,10 +1359,10 @@ class TestAuxiliaryWindow extends DisposableOwner implements IAuxiliaryWindow {
 
 	constructor() {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.closeEmitter.fire();
 			this.dom.window.close();
-		});
+		}));
 	}
 
 	layout(): void {

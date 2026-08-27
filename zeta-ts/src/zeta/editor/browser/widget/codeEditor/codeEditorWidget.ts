@@ -1,6 +1,6 @@
 import { isHTMLElement } from "../../../../base/browser/dom.js";
 import { getClientArea, type IDimension } from "../../../../base/browser/geometry.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { TextPosition, type TextRange } from "../../../common/core/text.js";
@@ -54,7 +54,7 @@ export interface CodeEditorViewState {
  * projection plus native text input, keyboard navigation, and pointer selection. Optional
  * drop/paste behavior belongs to the host's contribution composition.
  */
-export class CodeEditorWidget extends DisposableOwner {
+export class CodeEditorWidget extends Disposable {
 	private readonly selectionController: EditorSelectionController;
 	readonly ownerId: string;
 	readonly view: EditorView;
@@ -67,7 +67,7 @@ export class CodeEditorWidget extends DisposableOwner {
 		try {
 			validateOptions(options);
 			this.selectionController = options.selectionController;
-			this.view = this.own(new EditorView({
+			this.view = this._register(new EditorView({
 				ownerId: options.ownerId,
 				container: options.container,
 				model: options.model,
@@ -86,7 +86,7 @@ export class CodeEditorWidget extends DisposableOwner {
 			this.ownerId = this.view.ownerId;
 			this.viewport = this.view.viewport;
 			this.userInputEvents = this.view.userInputEvents;
-			this.contributions = this.own(new CodeEditorContributions());
+			this.contributions = this._register(new CodeEditorContributions());
 			this.contributions.initialize({
 				model: options.model,
 				selectionController: options.selectionController,
@@ -94,8 +94,8 @@ export class CodeEditorWidget extends DisposableOwner {
 				view: this.view,
 				placeholder: options.placeholder,
 			}, options.instantiationService ?? new InstantiationService(), options.contributions, options.onContributionError);
-			this.own(new KeyboardNavigationController(this.viewport, options.selectionController, options.keyboardNavigation));
-			this.own(new MouseHandler(this.viewport, options.selectionController, options.mouseHandler));
+			this._register(new KeyboardNavigationController(this.viewport, options.selectionController, options.keyboardNavigation));
+			this._register(new MouseHandler(this.viewport, options.selectionController, options.mouseHandler));
 		} catch (error) {
 			this.dispose();
 			throw error;

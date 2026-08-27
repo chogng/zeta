@@ -2,7 +2,7 @@ import { Dimension, getClientArea, type IDimension } from "../../../base/browser
 import { SerializableGrid } from "../../../base/browser/ui/grid/grid.js";
 import type { IResizable } from "../../../base/browser/ui/resizable/resizable.js";
 import { Emitter } from "../../../base/common/event.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { ILayoutOffsetInfo } from "../../../platform/layout/common/layoutService.js";
 import type { IStorageService } from "../../../platform/storage/common/storage.js";
 import { WorkbenchPartView } from "../../../workbench/browser/workbenchPartView.js";
@@ -21,12 +21,12 @@ export interface SessionsWorkbenchLayoutOptions {
 }
 
 /** Owns the fixed Part topology and mutable geometry of one dedicated Sessions window. */
-export class SessionsWorkbenchLayout extends DisposableOwner implements IResizable, ISessionsLayoutService {
+export class SessionsWorkbenchLayout extends Disposable implements IResizable, ISessionsLayoutService {
 	private readonly views = new Map<SessionsPartId, WorkbenchPartView<SessionsPartId>>();
 	private readonly grid: SerializableGrid<WorkbenchPartView<SessionsPartId>>;
 	private readonly stateModel: SessionsWorkbenchLayoutStateModel;
 	private readonly partVisibility = new Map<SessionsPartId, boolean>();
-	private readonly _onDidChangePartVisibility = this.own(new Emitter<SessionsPartVisibilityChangeEvent>());
+	private readonly _onDidChangePartVisibility = this._register(new Emitter<SessionsPartVisibilityChangeEvent>());
 
 	readonly onDidChangePartVisibility = this._onDidChangePartVisibility.event;
 	readonly domNode: HTMLDivElement;
@@ -37,20 +37,20 @@ export class SessionsWorkbenchLayout extends DisposableOwner implements IResizab
 		this.domNode = h(container.ownerDocument, "div");
 		this.domNode.className = "zeta-sessions-workbench-layout";
 		container.append(this.domNode);
-		this.defer(() => this.domNode.remove());
+		this._register(toDisposable(() => this.domNode.remove()));
 		for (const partId of sessionsPartIds) this.views.set(partId, new WorkbenchPartView(partId, requiredPart(parts, partId)));
 		const initialDimension = resolveSessionsInitialDimension(this.domNode, options.initialDimension);
 		this.stateModel = new SessionsWorkbenchLayoutStateModel(options.storageService, options.initialState ?? createDefaultSessionsWorkbenchLayoutState());
 		const state = this.stateModel.state;
 		this.projectFrameInsets(state.auxiliarybar.visible);
-		this.grid = this.own(SerializableGrid.deserialize(
+		this.grid = this._register(SerializableGrid.deserialize(
 			this.domNode,
 			createSessionsWorkbenchGridDescriptor(this.views, initialDimension, state),
 			{ fromJSON: data => this.view(parseSessionsPartId(data)) },
 			{ sashPresentation: { type: "inset", gap: PART_GUTTER } },
 		));
-		if (options.storageService) this.own(options.storageService.onWillSaveState(() => this.saveState()));
-		this.defer(() => this.saveState());
+		if (options.storageService) this._register(options.storageService.onWillSaveState(() => this.saveState()));
+		this._register(toDisposable(() => this.saveState()));
 	}
 
 	get mainContainerOffset(): ILayoutOffsetInfo {

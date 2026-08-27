@@ -2,7 +2,7 @@ import { createConnection, createServer } from "node:net";
 import { type ChildProcess, spawn } from "node:child_process";
 import { getErrorMessage } from "../../../base/common/errors.js";
 import { Emitter } from "../../../base/common/event.js";
-import { DisposableOwner, type IDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { IAnyWorkspaceIdentifier } from "../../workspace/common/workspace.js";
 import { isRemoteWorkspaceIdentifier } from "../../workspace/common/workspace.js";
 import { getRemoteAuthority } from "../common/remote.js";
@@ -60,8 +60,8 @@ interface TunnelRecord {
 }
 
 /** Owns SSH local forwards for one Remote window and never exposes the child to Renderer code. */
-export class SshRemoteTunnelService extends DisposableOwner implements IRemoteTunnelService {
-	private readonly changes = this.own(new Emitter<RemoteTunnelChange>());
+export class SshRemoteTunnelService extends Disposable implements IRemoteTunnelService {
+	private readonly changes = this._register(new Emitter<RemoteTunnelChange>());
 	private readonly tunnels = new Map<string, TunnelRecord>();
 	private readonly cancellation = new AbortController();
 	private readonly spawnProcess: SpawnSshTunnel;
@@ -93,7 +93,7 @@ export class SshRemoteTunnelService extends DisposableOwner implements IRemoteTu
 		validateRecoveryPolicy(this.recoveryPolicy);
 		this.now = options.now ?? Date.now;
 		this.wait = options.wait ?? wait;
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.cancellation.abort();
 			for (const record of this.tunnels.values()) {
 				record.cancellation.abort();
@@ -101,7 +101,7 @@ export class SshRemoteTunnelService extends DisposableOwner implements IRemoteTu
 				record.candidateChild?.kill();
 			}
 			this.tunnels.clear();
-		});
+		}));
 	}
 
 	list(): Promise<readonly RemoteTunnel[]> {

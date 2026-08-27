@@ -1,12 +1,12 @@
 import { Emitter } from '../../../../base/common/event.js';
-import { DisposableOwner } from '../../../../base/common/lifecycle.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { IFileLabelDecoration, IFileLabelDecorationChangeEvent, IFileLabelDecorationService } from '../common/fileLabelDecorationService.js';
 
 /** Mutable in-window store used by Workbench label consumers. */
-export class FileLabelDecorationService extends DisposableOwner implements IFileLabelDecorationService {
+export class FileLabelDecorationService extends Disposable implements IFileLabelDecorationService {
 	private readonly decorations = new Map<string, IFileLabelDecoration>();
-	private readonly changeEmitter = this.own(new Emitter<IFileLabelDecorationChangeEvent>());
+	private readonly changeEmitter = this._register(new Emitter<IFileLabelDecorationChangeEvent>());
 
 	readonly onDidChange = this.changeEmitter.event;
 

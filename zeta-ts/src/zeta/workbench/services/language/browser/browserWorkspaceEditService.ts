@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { normalizeTextLineEndings } from "../../../../editor/common/core/text.js";
 import { normalizeLanguageWorkspaceEdit, type LanguageTextDocumentEdit, type LanguageWorkspaceEdit, type LanguageWorkspaceEditEntry } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
@@ -39,15 +39,15 @@ type PreparedEdit = PreparedTextEdit | PreparedResourceEdit;
 type UndoOperation = () => Promise<void>;
 
 /** Workbench owner for ordered, preflighted workspace edits with best-effort undo on failure. */
-export class BrowserWorkspaceEditService extends DisposableOwner implements IWorkspaceEditService {
+export class BrowserWorkspaceEditService extends Disposable implements IWorkspaceEditService {
 	private readonly retainedFailedSaves = new Map<string, TextModelReference>();
 
 	constructor(private readonly models: ITextModelService, private readonly workingCopies: IWorkingCopyService, private readonly files: IFileService) {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			for (const reference of this.retainedFailedSaves.values()) reference.dispose();
 			this.retainedFailedSaves.clear();
-		});
+		}));
 	}
 
 	async apply(value: LanguageWorkspaceEdit, signal: AbortSignal = new AbortController().signal): Promise<WorkspaceEditResult> {

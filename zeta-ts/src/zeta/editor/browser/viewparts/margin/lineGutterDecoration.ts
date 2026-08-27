@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { h } from "../../../../base/browser/dom.js";
 
 export const EDITOR_GUTTER_SLOT_WIDTH = 20;
@@ -12,16 +12,16 @@ export interface EditorLineGutterDecoration extends IDisposable {
 }
 
 /** Owns and projects independently contributed margin decorations without making features aware of each other. */
-export class CompositeEditorLineGutterDecoration extends DisposableOwner implements EditorLineGutterDecoration {
-	private readonly changeEmitter = this.own(new Emitter<void>());
+export class CompositeEditorLineGutterDecoration extends Disposable implements EditorLineGutterDecoration {
+	private readonly changeEmitter = this._register(new Emitter<void>());
 	readonly onDidChange: Event<void> = this.changeEmitter.event;
 
 	constructor(readonly decorations: readonly EditorLineGutterDecoration[]) {
 		super();
 		if (decorations.length === 0) throw new RangeError("A gutter decoration composite requires at least one decoration");
 		for (const decoration of decorations) {
-			this.own(decoration);
-			this.own(decoration.onDidChange(() => this.changeEmitter.fire()));
+			this._register(decoration);
+			this._register(decoration.onDidChange(() => this.changeEmitter.fire()));
 		}
 	}
 

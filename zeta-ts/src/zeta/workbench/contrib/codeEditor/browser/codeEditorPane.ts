@@ -2,7 +2,7 @@ import "./media/editorPane.css";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { type IDimension } from "../../../../base/browser/geometry.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
-import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { assertDefined } from "../../../../base/common/types.js";
 import type { URI } from "../../../../base/common/uri.js";
@@ -104,13 +104,13 @@ export interface EditorPaneOptions {
 }
 
 /** Workbench pane that composes the text model, input, view, and language services. */
-export class CodeEditorPane extends DisposableOwner implements IEditorPane {
+export class CodeEditorPane extends Disposable implements IEditorPane {
 	readonly id = CODE_EDITOR_ID;
 	readonly viewStateTypeId = "stanza.code.textView";
-	private readonly part = this.own(new DisposableSlot<EditorPanePart>());
-	private readonly workingCopySlot = this.own(new DisposableSlot<IWorkingCopy>());
-	private readonly statusListener = this.own(new DisposableSlot<IDisposable>());
-	private readonly statusChangeEmitter = this.own(new Emitter<void>());
+	private readonly part = this._register(new MutableDisposable<EditorPanePart>());
+	private readonly workingCopySlot = this._register(new MutableDisposable<IWorkingCopy>());
+	private readonly statusListener = this._register(new MutableDisposable<IDisposable>());
+	private readonly statusChangeEmitter = this._register(new Emitter<void>());
 	private readonly modelService: ITextModelService;
 	private readonly createPart: (options: EditorPanePartOptions) => EditorPanePart;
 	private container: HTMLDivElement | undefined;
@@ -143,11 +143,11 @@ export class CodeEditorPane extends DisposableOwner implements IEditorPane {
 		container.className = "stanza-editor-pane";
 		parent.append(container);
 		this.container = container;
-		this.own(addDisposableListener<KeyboardEvent>(container, "keydown", event => this.handleSaveKeydown(event)));
-		this.defer(() => {
+		this._register(addDisposableListener<KeyboardEvent>(container, "keydown", event => this.handleSaveKeydown(event)));
+		this._register(toDisposable(() => {
 			container.remove();
 			this.container = undefined;
-		});
+		}));
 	}
 
 	async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {
@@ -214,16 +214,16 @@ export class CodeEditorPane extends DisposableOwner implements IEditorPane {
 			throw error;
 		}
 		this.workingCopySlot.clear();
-		this.part.replace(part);
+		this.part.value = part;
 		this.languageId = languageForEditorInput({ ...input, firstLine: modelReference.model.getLineContent(0) }, this.options.languageFeaturesService);
-		this.statusListener.replace(part.onDidChange?.(() => this.statusChangeEmitter.fire()));
-		this.workingCopySlot.replace(new EditorWorkingCopy(
+		this.statusListener.value = part.onDidChange?.(() => this.statusChangeEmitter.fire());
+		this.workingCopySlot.value = new EditorWorkingCopy(
 			modelReference,
 			this.resourceStore,
 			input,
 			this.options.workingCopyService,
 			input.resource.scheme === "untitled" ? this.options.onSave : undefined,
-		));
+		);
 		part.layout(this.dimension);
 		this.statusChangeEmitter.fire();
 	}
@@ -337,7 +337,7 @@ function reportSaveError(error: unknown): void {
 	console.error("Code editor save failed", error);
 }
 
-class EditorWorkingCopy extends DisposableOwner implements IWorkingCopy {
+class EditorWorkingCopy extends Disposable implements IWorkingCopy {
 	readonly resource: URI;
 	readonly backupKind = "text" as const;
 	readonly backupLanguageId: string | undefined;
@@ -362,7 +362,7 @@ class EditorWorkingCopy extends DisposableOwner implements IWorkingCopy {
 		this.onDidChangeDirty = reference.onDidChangeDirty;
 		this.onDidChangeExternalChange = reference.onDidChangeExternalChange;
 		this.onDidChangeContent = listener => reference.model.onDidChange(() => listener());
-		if (workingCopyService) this.own(workingCopyService.register(this));
+		if (workingCopyService) this._register(workingCopyService.register(this));
 	}
 
 	get isDirty(): boolean {

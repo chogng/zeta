@@ -1,5 +1,5 @@
 import { Emitter } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IStorageService } from "../../../../platform/storage/common/storage.js";
 import { StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
 import type { IOutputChannel, IOutputChannelDescriptor, IOutputChannelRevealOptions, IOutputChannelRevealRequest, IOutputEntryInput, IOutputService, OutputChannelKind } from "../common/outputService.js";
@@ -13,11 +13,11 @@ export interface OutputServiceOptions {
 }
 
 /** Default Output registry with caller-owned channels and workspace selection. */
-export class OutputService extends DisposableOwner implements IOutputService {
+export class OutputService extends Disposable implements IOutputService {
 	private readonly channelsById = new Map<string, OutputChannel>();
-	private readonly changeChannelsEmitter = this.own(new Emitter<void>());
-	private readonly changeActiveChannelEmitter = this.own(new Emitter<IOutputChannel | undefined>());
-	private readonly requestShowChannelEmitter = this.own(new Emitter<IOutputChannelRevealRequest>());
+	private readonly changeChannelsEmitter = this._register(new Emitter<void>());
+	private readonly changeActiveChannelEmitter = this._register(new Emitter<IOutputChannel | undefined>());
+	private readonly requestShowChannelEmitter = this._register(new Emitter<IOutputChannelRevealRequest>());
 	private readonly storageService: IStorageService | undefined;
 	private preferredChannelId: string | undefined;
 	private activeChannelId: string | undefined;
@@ -30,10 +30,10 @@ export class OutputService extends DisposableOwner implements IOutputService {
 		super();
 		this.storageService = options.storageService;
 		this.preferredChannelId = options.storageService?.get(ActiveChannelStorageKey, StorageScope.WORKSPACE);
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.channelsById.clear();
 			this.activeChannelId = undefined;
-		});
+		}));
 	}
 
 	get channels(): readonly IOutputChannel[] {
@@ -101,16 +101,16 @@ export class OutputService extends DisposableOwner implements IOutputService {
 	}
 }
 
-class OutputChannel extends DisposableOwner implements IOutputChannel {
+class OutputChannel extends Disposable implements IOutputChannel {
 	readonly onDidChange;
 
 	constructor(readonly descriptor: IOutputChannelDescriptor, private readonly model: InMemoryOutputChannelModel, unregister: () => void, private readonly reveal: (options?: IOutputChannelRevealOptions) => void) {
 		super();
 		this.onDidChange = model.onDidChange;
-		this.own(model);
-		this.defer(() => {
+		this._register(model);
+		this._register(toDisposable(() => {
 			unregister();
-		});
+		}));
 	}
 
 	get id(): string { return this.descriptor.id; }

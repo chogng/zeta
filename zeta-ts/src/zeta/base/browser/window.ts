@@ -1,8 +1,10 @@
 import { Emitter, type Event } from "../common/event.js";
 import {
-	DisposableOwner,
+	Disposable,
 	DisposableStore,
 	type IDisposable,
+
+	toDisposable,
 } from "../common/lifecycle.js";
 
 export type BrowserWindow = Window & typeof globalThis;
@@ -143,26 +145,26 @@ function isDocument(value: unknown): value is Document {
 		(value as Node).nodeType === 9;
 }
 
-class WindowRegistrationLifecycle extends DisposableOwner {
+class WindowRegistrationLifecycle extends Disposable {
 	readonly disposables: DisposableStore;
 	private registration: IRegisteredWindow | undefined;
 
 	constructor() {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			const registration = this.registration;
 			if (!registration) return;
 			registrations.delete(registration.id);
 			windowIds.delete(registration.window);
 			onDidUnregisterEmitter.fire(registration.window);
 			this.registration = undefined;
-		});
-		this.disposables = this.own(new DisposableStore());
-		this.defer(() => {
+		}));
+		this.disposables = this._register(new DisposableStore());
+		this._register(toDisposable(() => {
 			if (this.registration) {
 				onWillUnregisterEmitter.fire(this.registration);
 			}
-		});
+		}));
 	}
 
 	initialize(registration: IRegisteredWindow): void {

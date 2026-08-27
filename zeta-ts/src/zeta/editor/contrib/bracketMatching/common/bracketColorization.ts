@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type LanguageStructuralBracketSource } from "../../../common/languages/languageLexicalContext.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 
@@ -19,7 +19,7 @@ interface CachedColorizedLine {
 }
 
 /** Caches lexical bracket nesting colors while retaining no renderer state. */
-export class LanguageBracketColorizationIndex extends DisposableOwner {
+export class LanguageBracketColorizationIndex extends Disposable {
 	private cachedLines: CachedColorizedLine[] = [];
 
 	constructor(readonly textModel: TextModel, private readonly brackets: LanguageStructuralBracketSource, private readonly colorCount = 6) {
@@ -32,12 +32,12 @@ export class LanguageBracketColorizationIndex extends DisposableOwner {
 			this.dispose();
 			throw new RangeError("Bracket color count must be a positive safe integer");
 		}
-		this.own(textModel.onDidChange(() => {
+		this._register(textModel.onDidChange(() => {
 			this.cachedLines = [];
 		}));
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.cachedLines = [];
-		});
+		}));
 	}
 
 	getLineColorizations(lineIndex: number): readonly LanguageBracketColorization[] {

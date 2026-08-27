@@ -3,7 +3,7 @@ import {
 	type BrowserWindow,
 	type MenuItemConstructorOptions,
 } from "electron/main";
-import { DisposableOwner } from "../../../common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../common/lifecycle.js";
 import {
 	type INativeContextMenuRequest,
 	type INativeContextMenuResult,
@@ -11,7 +11,7 @@ import {
 } from "../common/contextmenu.js";
 
 /** Owns the active Electron context menu for one browser window. */
-export class ElectronContextMenu extends DisposableOwner {
+export class ElectronContextMenu extends Disposable {
 	private readonly window: BrowserWindow;
 	private activeMenu: Menu | undefined;
 	private settle: ((result: INativeContextMenuResult) => void) | undefined;
@@ -19,10 +19,10 @@ export class ElectronContextMenu extends DisposableOwner {
 	constructor(window: BrowserWindow) {
 		super();
 		this.window = window;
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.close();
 			this.finish({});
-		});
+		}));
 	}
 
 	popup(

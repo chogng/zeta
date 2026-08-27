@@ -1,10 +1,10 @@
 import { isCancellationError } from "../../../../base/common/cancellation.js";
 import { type Event } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type SemanticTokensService } from "../common/semanticTokens.js";
 
 /** Refreshes full semantic tokens while the document and provider set remain current. */
-export class SemanticTokensController extends DisposableOwner {
+export class SemanticTokensController extends Disposable {
 	private requestGeneration = 0;
 
 	constructor(
@@ -19,11 +19,11 @@ export class SemanticTokensController extends DisposableOwner {
 			const requestGeneration = ++this.requestGeneration;
 			queueMicrotask(() => void this.requestTokens(requestGeneration, whenLanguageSupportReady));
 		};
-		this.own(semanticTokensService.tokens.textModel.onDidChange(scheduleTokens));
-		if (onDidChangeLanguageSupport) this.own(onDidChangeLanguageSupport(scheduleTokens));
-		this.defer(() => {
+		this._register(semanticTokensService.tokens.textModel.onDidChange(scheduleTokens));
+		if (onDidChangeLanguageSupport) this._register(onDidChangeLanguageSupport(scheduleTokens));
+		this._register(toDisposable(() => {
 			this.requestGeneration += 1;
-		});
+		}));
 		scheduleTokens();
 	}
 

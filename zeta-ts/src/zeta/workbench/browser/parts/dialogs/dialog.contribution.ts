@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import {
 	type DialogResult,
 	type IDialogHandler,
@@ -32,7 +32,7 @@ type DialogPresentationOutcome =
 /**
  * Serially presents the queue owned by the workbench dialog service.
  */
-export class DialogHandlerContribution extends DisposableOwner
+export class DialogHandlerContribution extends Disposable
 	implements IWorkbenchContribution {
 	private readonly model: IDialogsModel;
 	private readonly handler: IDialogHandler;
@@ -42,18 +42,18 @@ export class DialogHandlerContribution extends DisposableOwner
 		super();
 		this.model = model;
 		this.handler = handler;
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			const active = this.active;
 			this.active = undefined;
 			active?.controller.abort();
 			active?.item.cancel();
-		});
-		this.own(model.onDidCloseDialog(({ item }) => {
+		}));
+		this._register(model.onDidCloseDialog(({ item }) => {
 			if (this.active?.item === item) {
 				this.active.controller.abort();
 			}
 		}));
-		this.own(model.onWillShowDialog(() => this.processDialogs()));
+		this._register(model.onWillShowDialog(() => this.processDialogs()));
 		this.processDialogs();
 	}
 

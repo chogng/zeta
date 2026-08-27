@@ -1,4 +1,4 @@
-import { DisposableOwner, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import { runWithBufferedEvents } from "../../../base/common/event.js";
 import { type TextModel } from "../model/textModel.js";
 import { registerBuiltinLanguageConfigurations } from "../languages/languageBuiltinConfigurations.js";
@@ -101,7 +101,7 @@ export interface LanguageCompletionFeaturesOptions {
 }
 
 /** Provides built-in language configuration and provider registries. */
-export class LanguageFeaturesService extends DisposableOwner implements ILanguageFeaturesService {
+export class LanguageFeaturesService extends Disposable implements ILanguageFeaturesService {
 	readonly languages: LanguageRegistry;
 	readonly configurations: LanguageConfigurationRegistry;
 	private readonly syntaxProviders: SyntaxProviderRegistry;
@@ -131,36 +131,36 @@ export class LanguageFeaturesService extends DisposableOwner implements ILanguag
 
 	constructor() {
 		super();
-		this.languages = this.own(new LanguageRegistry());
-		this.own(registerBuiltinLanguageDescriptions(this.languages));
-		this.configurations = this.own(new LanguageConfigurationRegistry());
-		this.own(registerBuiltinLanguageConfigurations(this.configurations));
-		this.syntaxProviders = this.own(new SyntaxProviderRegistry());
-		this.own(this.syntaxProviders.register(createLanguageLexicalSyntaxProvider({ languageConfigurations: this.configurations })));
-		this.completionProviders = this.own(new LanguageCompletionProviderRegistry());
-		this.own(this.completionProviders.register(createLanguageWordCompletionProvider()));
-		this.codeActionProviders = this.own(new LanguageFeatureProviderRegistry());
-		this.codeLensProviders = this.own(new LanguageFeatureProviderRegistry());
-		this.documentSymbolProviders = this.own(new LanguageFeatureProviderRegistry());
-		this.formattingProviders = this.own(new LanguageFeatureProviderRegistry());
-		this.hoverProviders = this.own(new LanguageFeatureProviderRegistry());
-		this.inlayHintsProviders = this.own(new LanguageFeatureProviderRegistry());
-		this.inlineCompletionsProviders = this.own(new LanguageFeatureProviderRegistry());
-		this.linkedEditingProviders = this.own(new LanguageFeatureProviderRegistry());
-		this.linkProviders = this.own(new LanguageFeatureProviderRegistry());
-		this.parameterHintsProviders = this.own(new LanguageFeatureProviderRegistry());
-		this.renameProviders = this.own(new LanguageFeatureProviderRegistry());
-		this.colorProviders = this.own(new LanguageFeatureProviderRegistry());
-		this.definitionProviders = this.own(new LanguageFeatureProviderRegistry());
-		this.declarationProviders = this.own(new LanguageFeatureProviderRegistry());
-		this.implementationProviders = this.own(new LanguageFeatureProviderRegistry());
-		this.typeDefinitionProviders = this.own(new LanguageFeatureProviderRegistry());
-		this.referenceProviders = this.own(new LanguageFeatureProviderRegistry());
-		this.workspaceSymbolProviders = this.own(new LanguageFeatureProviderRegistry());
-		this.callHierarchyProviders = this.own(new LanguageFeatureProviderRegistry());
-		this.typeHierarchyProviders = this.own(new LanguageFeatureProviderRegistry());
-		this.semanticTokensProviders = this.own(new LanguageFeatureProviderRegistry());
-		this.foldingRangeProviders = this.own(new LanguageFeatureProviderRegistry());
+		this.languages = this._register(new LanguageRegistry());
+		this._register(registerBuiltinLanguageDescriptions(this.languages));
+		this.configurations = this._register(new LanguageConfigurationRegistry());
+		this._register(registerBuiltinLanguageConfigurations(this.configurations));
+		this.syntaxProviders = this._register(new SyntaxProviderRegistry());
+		this._register(this.syntaxProviders.register(createLanguageLexicalSyntaxProvider({ languageConfigurations: this.configurations })));
+		this.completionProviders = this._register(new LanguageCompletionProviderRegistry());
+		this._register(this.completionProviders.register(createLanguageWordCompletionProvider()));
+		this.codeActionProviders = this._register(new LanguageFeatureProviderRegistry());
+		this.codeLensProviders = this._register(new LanguageFeatureProviderRegistry());
+		this.documentSymbolProviders = this._register(new LanguageFeatureProviderRegistry());
+		this.formattingProviders = this._register(new LanguageFeatureProviderRegistry());
+		this.hoverProviders = this._register(new LanguageFeatureProviderRegistry());
+		this.inlayHintsProviders = this._register(new LanguageFeatureProviderRegistry());
+		this.inlineCompletionsProviders = this._register(new LanguageFeatureProviderRegistry());
+		this.linkedEditingProviders = this._register(new LanguageFeatureProviderRegistry());
+		this.linkProviders = this._register(new LanguageFeatureProviderRegistry());
+		this.parameterHintsProviders = this._register(new LanguageFeatureProviderRegistry());
+		this.renameProviders = this._register(new LanguageFeatureProviderRegistry());
+		this.colorProviders = this._register(new LanguageFeatureProviderRegistry());
+		this.definitionProviders = this._register(new LanguageFeatureProviderRegistry());
+		this.declarationProviders = this._register(new LanguageFeatureProviderRegistry());
+		this.implementationProviders = this._register(new LanguageFeatureProviderRegistry());
+		this.typeDefinitionProviders = this._register(new LanguageFeatureProviderRegistry());
+		this.referenceProviders = this._register(new LanguageFeatureProviderRegistry());
+		this.workspaceSymbolProviders = this._register(new LanguageFeatureProviderRegistry());
+		this.callHierarchyProviders = this._register(new LanguageFeatureProviderRegistry());
+		this.typeHierarchyProviders = this._register(new LanguageFeatureProviderRegistry());
+		this.semanticTokensProviders = this._register(new LanguageFeatureProviderRegistry());
+		this.foldingRangeProviders = this._register(new LanguageFeatureProviderRegistry());
 	}
 
 	registerLanguage(description: LanguageDescription, options: LanguageRegistrationOptions = {}): IDisposable {

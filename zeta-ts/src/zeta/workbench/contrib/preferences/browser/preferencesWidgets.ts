@@ -8,7 +8,7 @@ import { SelectBox, type SelectOption } from '../../../../base/browser/ui/select
 import { Checkbox, Switch, type Toggle } from '../../../../base/browser/ui/toggle/toggle.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
-import { DisposableOwner, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { lxiconsLibrary } from '../../../../base/common/lxiconsLibrary.js';
 import type { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
@@ -25,12 +25,12 @@ interface PreferencesSearchWidgetOptions {
 }
 
 /** Owns Preferences search input, localization, and search-specific keyboard behavior. */
-export class PreferencesSearchWidget extends DisposableOwner {
+export class PreferencesSearchWidget extends Disposable {
 	public readonly domNode: HTMLDivElement;
 	public readonly onDidChange: Event<string>;
 	public readonly onDidRequestFocusResults: Event<void>;
 
-	private readonly focusResultsEmitter = this.own(new Emitter<void>());
+	private readonly focusResultsEmitter = this._register(new Emitter<void>());
 	private readonly inputBox: InputBox;
 	private readonly searchMenu: SettingsSearchMenu;
 
@@ -40,14 +40,14 @@ export class PreferencesSearchWidget extends DisposableOwner {
 		this.domNode.className = 'zeta-settings-search';
 		this.domNode.setAttribute('role', 'search');
 		const searchLabel = this.localized('chrome.search', 'Search settings');
-		this.inputBox = this.own(new InputBox(this.domNode, {
+		this.inputBox = this._register(new InputBox(this.domNode, {
 			type: 'search',
 			placeholder: searchLabel,
 			ariaLabel: searchLabel,
 			ariaControls: options.ariaControls,
 		}));
 		this.inputBox.element.classList.add('zeta-settings-search-input');
-		this.searchMenu = this.own(new SettingsSearchMenu(this.domNode, {
+		this.searchMenu = this._register(new SettingsSearchMenu(this.domNode, {
 			getValue: () => this.inputBox.value,
 			setValue: value => { this.inputBox.value = value; },
 			focus: () => this.inputBox.focus(),
@@ -56,9 +56,9 @@ export class PreferencesSearchWidget extends DisposableOwner {
 		container.append(this.domNode);
 		this.onDidChange = this.inputBox.onDidChange;
 		this.onDidRequestFocusResults = this.focusResultsEmitter.event;
-		this.own(this.inputBox.onKeyDown(event => this.handleKeydown(event)));
-		this.own(options.localizationService.onDidChange(() => this.updateLocalizedChrome()));
-		this.defer(() => this.domNode.remove());
+		this._register(this.inputBox.onKeyDown(event => this.handleKeydown(event)));
+		this._register(options.localizationService.onDidChange(() => this.updateLocalizedChrome()));
+		this._register(toDisposable(() => this.domNode.remove()));
 	}
 
 	public get value(): string {
@@ -116,7 +116,7 @@ interface SettingActionsOptions {
 	readonly onError: (error: unknown) => void;
 }
 
-class SettingActions extends DisposableOwner {
+class SettingActions extends Disposable {
 	private readonly actionsDomNode: HTMLSpanElement;
 	private readonly trigger: Button;
 
@@ -124,7 +124,7 @@ class SettingActions extends DisposableOwner {
 		super();
 		this.actionsDomNode = h(container.ownerDocument, 'span');
 		this.actionsDomNode.className = 'zeta-setting-item-actions';
-		this.trigger = this.own(new Button(this.actionsDomNode, {
+		this.trigger = this._register(new Button(this.actionsDomNode, {
 			label: '',
 			icon: lxiconsLibrary.gear,
 			onClick: () => this.show(),
@@ -137,10 +137,10 @@ class SettingActions extends DisposableOwner {
 		container.dataset.settingsItemKind = 'setting';
 		container.classList.add('zeta-setting-item');
 		container.prepend(this.actionsDomNode);
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			container.classList.remove('zeta-setting-item');
 			this.actionsDomNode.remove();
-		});
+		}));
 	}
 
 	public updateLabel(label: string): void {
@@ -191,7 +191,7 @@ class SettingActions extends DisposableOwner {
 	}
 }
 
-abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends DisposableOwner implements SettingWidget {
+abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends Disposable implements SettingWidget {
 	public readonly domNode: HTMLDivElement;
 	protected readonly copyDomNode: HTMLSpanElement;
 	protected readonly model: SettingModel<TValue>;
@@ -212,7 +212,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 		this.domNode.className = `zeta-configuration-setting zeta-${this.presentation}-setting`;
 		if (kind === 'select' && this.presentation === 'editor') this.domNode.classList.add('zeta-editor-setting-select-row');
 		if (kind === 'toggle') this.domNode.classList.add(`zeta-${this.presentation}-toggle-setting`);
-		this.defer(() => this.domNode.remove());
+		this._register(toDisposable(() => this.domNode.remove()));
 
 		this.copyDomNode = h(document, 'span');
 		this.copyDomNode.className = `zeta-configuration-setting-copy zeta-${this.presentation}-setting-copy`;
@@ -220,12 +220,12 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 		this.titleDomNode.className = `zeta-configuration-setting-title zeta-${this.presentation}-setting-title`;
 		this.descriptionDomNode = h(document, 'span');
 		this.descriptionDomNode.className = `zeta-configuration-setting-description zeta-${this.presentation}-setting-description`;
-		this.indicators = this.own(new SettingsTreeIndicatorsLabel(this.copyDomNode));
+		this.indicators = this._register(new SettingsTreeIndicatorsLabel(this.copyDomNode));
 		this.copyDomNode.prepend(this.titleDomNode, this.descriptionDomNode);
 		this.updateCopy(descriptor);
 
-		this.model = this.own(new SettingModel(binding));
-		this.actions = this.own(new SettingActions(this.domNode, descriptor.title, {
+		this.model = this._register(new SettingModel(binding));
+		this.actions = this._register(new SettingActions(this.domNode, descriptor.title, {
 			reference: {
 				id: this.model.id,
 				isDefault: () => this.model.isDefault(),
@@ -255,7 +255,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 			this.indicators.update({ isModified: !state.isDefault, isPending: state.isPending });
 			renderState(state);
 		};
-		this.own(this.model.onDidChange(render));
+		this._register(this.model.onDidChange(render));
 		render(this.model.state);
 	}
 
@@ -295,7 +295,7 @@ class BooleanSettingWidget extends AbstractSettingWidget<IBooleanSetting, boolea
 
 	constructor(container: HTMLElement, descriptor: IBooleanSetting, options: SettingWidgetOptions) {
 		super(container, descriptor, configurationSettingBinding(options.configurationService, descriptor.key), options, 'toggle');
-		this.toggle = this.own(this.presentation === 'general'
+		this.toggle = this._register(this.presentation === 'general'
 			? new Checkbox(this.domNode, { ariaLabel: descriptor.title, content: this.copyDomNode, contentPlacement: 'before-control' })
 			: new Switch(this.domNode, { ariaLabel: descriptor.title, content: this.copyDomNode, contentPlacement: 'before-control' }));
 		this.toggle.element.classList.add(`zeta-${this.presentation}-toggle-control`);
@@ -304,7 +304,7 @@ class BooleanSettingWidget extends AbstractSettingWidget<IBooleanSetting, boolea
 			this.toggle.checked = state.value;
 			this.toggle.busy = state.isPending;
 		});
-		this.own(this.toggle.onDidChange(checked => void this.updateSetting(checked)));
+		this._register(this.toggle.onDidChange(checked => void this.updateSetting(checked)));
 	}
 
 	protected updateControl(descriptor: IBooleanSetting): void {
@@ -320,7 +320,7 @@ class NumberSettingWidget extends AbstractSettingWidget<INumberSetting, number> 
 		super(container, descriptor, configurationSettingBinding(options.configurationService, descriptor.key), options);
 		this.domNode.append(this.copyDomNode);
 		if (this.presentation === 'editor') {
-			this.inputBox = this.own(new InputBox(this.domNode, {
+			this.inputBox = this._register(new InputBox(this.domNode, {
 				type: 'number',
 				ariaLabel: descriptor.title,
 				presentation: 'field',
@@ -343,7 +343,7 @@ class NumberSettingWidget extends AbstractSettingWidget<INumberSetting, number> 
 			if (this.inputBox) this.inputBox.enabled = !state.isPending;
 			else this.input.disabled = state.isPending;
 		});
-		this.own(addDisposableListener(this.input, 'change', () => this.acceptValue()));
+		this._register(addDisposableListener(this.input, 'change', () => this.acceptValue()));
 	}
 
 	protected updateControl(descriptor: INumberSetting): void {
@@ -369,7 +369,7 @@ class SelectSettingWidget extends AbstractSettingWidget<ISelectSetting, string> 
 
 	constructor(container: HTMLElement, descriptor: ISelectSetting, options: SettingWidgetOptions) {
 		super(container, descriptor, configurationSettingBinding(options.configurationService, descriptor.key), options, 'select');
-		this.select = this.own(new SelectBox(this.domNode, {
+		this.select = this._register(new SelectBox(this.domNode, {
 			options: descriptor.options,
 			ariaLabel: descriptor.title,
 			presentation: 'field',
@@ -379,7 +379,7 @@ class SelectSettingWidget extends AbstractSettingWidget<ISelectSetting, string> 
 		this.select.element.dataset.configurationKey = descriptor.id;
 		this.domNode.append(this.copyDomNode, this.select.element);
 		this.bindState(state => this.renderState(state));
-		this.own(this.select.onDidSelect(({ value }) => void this.updateSetting(value)));
+		this._register(this.select.onDidSelect(({ value }) => void this.updateSetting(value)));
 	}
 
 	protected updateControl(descriptor: ISelectSetting): void {
@@ -410,7 +410,7 @@ class TextSettingWidget extends AbstractSettingWidget<ITextSetting, string> {
 			this.input.value = state.value;
 			this.input.disabled = state.isPending;
 		});
-		this.own(addDisposableListener(this.input, 'change', () => void this.updateSetting(this.input.value.trim())));
+		this._register(addDisposableListener(this.input, 'change', () => void this.updateSetting(this.input.value.trim())));
 	}
 
 	protected updateControl(descriptor: ITextSetting): void {

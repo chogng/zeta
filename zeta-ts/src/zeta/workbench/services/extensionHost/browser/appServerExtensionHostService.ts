@@ -1,6 +1,6 @@
 import { Emitter, runWithBufferedEvents, type Event } from "../../../../base/common/event.js";
 import { getErrorMessage } from "../../../../base/common/errors.js";
-import { DisposableOwner, toDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { CommandsRegistry, type CommandDefinition, type CommandRegistration, type CommandRegistry } from "../../../../platform/commands/common/commands.js";
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { normalizeExtensionHostPayload, type ExtensionHostFleetSnapshot, type ExtensionHostLanguageRegistration, type ExtensionHostRegistration, type ExtensionHostRuntime, type IExtensionHostApi, type JsonValue } from "../../../../platform/extensionHost/common/extensionHostApi.js";
@@ -62,10 +62,10 @@ interface ExtensionNamedOutputChannel {
 }
 
 /** Owns one coherent frontend projection of the App Server Extension Host fleet. */
-export class AppServerExtensionHostService extends DisposableOwner implements IExtensionHostService {
-	private readonly stateEmitter = this.own(new Emitter<ExtensionHostState>());
-	private readonly changeEmitter = this.own(new Emitter<ExtensionHostSnapshot>());
-	private readonly failureEmitter = this.own(new Emitter<ExtensionHostFailure>());
+export class AppServerExtensionHostService extends Disposable implements IExtensionHostService {
+	private readonly stateEmitter = this._register(new Emitter<ExtensionHostState>());
+	private readonly changeEmitter = this._register(new Emitter<ExtensionHostSnapshot>());
+	private readonly failureEmitter = this._register(new Emitter<ExtensionHostFailure>());
 	private readonly commandRegistration: CommandRegistration;
 	private readonly languageRegistration: LanguageProviderBatchRegistration;
 	private readonly taskRegistration: TaskProviderRegistration;
@@ -96,22 +96,22 @@ export class AppServerExtensionHostService extends DisposableOwner implements IE
 		super();
 		this.commands = options.commands ?? CommandsRegistry;
 		this.invocationTimeoutMillis = normalizeTimeout(options.invocationTimeoutMillis ?? 30_000);
-		this.fleetOutput = options.output ? this.own(options.output.createChannel({ id: "extension-host", label: "Extension Host", kind: "log", source: "core" })) : undefined;
-		this.commandRegistration = this.own(this.commands.registerMany([]));
-		this.languageRegistration = this.own(options.languageFeatures.registerProviderBatch({}));
-		this.taskRegistration = this.own(options.tasks.registerTaskProviders([]));
-		this.testRegistration = this.own(options.testing.registerTestProfileProviders([]));
+		this.fleetOutput = options.output ? this._register(options.output.createChannel({ id: "extension-host", label: "Extension Host", kind: "log", source: "core" })) : undefined;
+		this.commandRegistration = this._register(this.commands.registerMany([]));
+		this.languageRegistration = this._register(options.languageFeatures.registerProviderBatch({}));
+		this.taskRegistration = this._register(options.tasks.registerTaskProviders([]));
+		this.testRegistration = this._register(options.testing.registerTestProfileProviders([]));
 		const changed = options.api.onDidChange(generation => this.acceptChanged(generation));
 		const connection = options.api.onConnectionState(state => { void this.acceptConnectionState(state).catch(error => this.failRefresh(error)); });
-		this.own(toDisposable(() => changed.dispose()));
-		this.own(toDisposable(() => connection.dispose()));
-		this.defer(() => {
+		this._register(toDisposable(() => changed.dispose()));
+		this._register(toDisposable(() => connection.dispose()));
+		this._register(toDisposable(() => {
 			this.started = false;
 			this.connectionRevision += 1;
 			this.authorityRevision += 1;
 			this.pendingAction = undefined;
 			this.revokeContributions();
-		});
+		}));
 	}
 
 	get state(): ExtensionHostState { return this._state; }
@@ -421,7 +421,7 @@ export class AppServerExtensionHostService extends DisposableOwner implements IE
 				const existing = this.namedOutputChannels.get(key);
 				if (existing && existing.label === operation.label && existing.kind === operation.kind) continue;
 				existing?.channel.dispose();
-				const channel = this.own(this.options.output!.createChannel({ id: `extension.${encodeURIComponent(runtime.id)}.${encodeURIComponent(operation.channelId)}`, label: operation.label, kind: operation.kind, source: "extension", extensionId: runtime.id }));
+				const channel = this._register(this.options.output!.createChannel({ id: `extension.${encodeURIComponent(runtime.id)}.${encodeURIComponent(operation.channelId)}`, label: operation.label, kind: operation.kind, source: "extension", extensionId: runtime.id }));
 				this.namedOutputChannels.set(key, { extensionId: runtime.id, channelId: operation.channelId, label: operation.label, kind: operation.kind, channel });
 				continue;
 			}
@@ -456,7 +456,7 @@ export class AppServerExtensionHostService extends DisposableOwner implements IE
 		const existing = this.extensionOutputs.get(extensionId);
 		if (existing) return existing;
 		if (!this.options.output) throw new Error("Extension Host Output service is unavailable");
-		const channel = this.own(this.options.output.createChannel({ id: `extension-host.${encodeURIComponent(extensionId)}`, label: `${extensionId} (Extension Host)`, kind: "log", source: "extension", extensionId }));
+		const channel = this._register(this.options.output.createChannel({ id: `extension-host.${encodeURIComponent(extensionId)}`, label: `${extensionId} (Extension Host)`, kind: "log", source: "extension", extensionId }));
 		this.extensionOutputs.set(extensionId, channel);
 		return channel;
 	}

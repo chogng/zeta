@@ -1,7 +1,9 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
 import {
-	DisposableOwner,
+	Disposable,
 	type IDisposable,
+
+	toDisposable,
 } from "../../../base/common/lifecycle.js";
 import {
 	createServiceIdentifier,
@@ -156,7 +158,7 @@ interface ContextKeyState {
 }
 
 abstract class AbstractContextKeyService
-	extends DisposableOwner
+	extends Disposable
 	implements IContextKeyService {
 	private readonly values = new Map<string, ContextKeyValue>();
 	private readonly parent: AbstractContextKeyService | undefined;
@@ -169,11 +171,11 @@ abstract class AbstractContextKeyService
 		super();
 		this.state = state;
 		this.parent = parent;
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			const keys = new Set(this.values.keys());
 			this.values.clear();
 			fireContextChange(this.state, keys);
-		});
+		}));
 	}
 
 	get onDidChangeContext(): Event<ContextKeyChangeEvent> {
@@ -256,7 +258,7 @@ export class ContextKeyService extends AbstractContextKeyService {
 		};
 		super(state);
 		state.root = this;
-		this.own(state.emitter);
+		this._register(state.emitter);
 	}
 }
 
@@ -273,9 +275,9 @@ class ScopedContextKeyService
 		}
 		super(state, parent);
 		state.scopes.set(target, this);
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			if (state.scopes.get(target) === this) state.scopes.delete(target);
-		});
+		}));
 	}
 }
 

@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableOwner, DisposableStore } from "../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
 import { LanguageCompletionCatalogWirePublisher, LanguageCompletionCatalogWorkerClient } from "../../common/languages/completion/languageCompletionCatalogWire.js";
 import { createLanguageCompletionInvokeContext, LanguageCompletionProviderRegistry, type LanguageCompletionProvider, type LanguageCompletionProviderCatalog } from "../../common/languages/completion/languageCompletionProviders.js";
 import { LanguageCompletionProviderWorker, LanguageCompletionService, type LanguageCompletionWorker } from "../../common/languages/completion/languageCompletionService.js";
@@ -132,9 +132,9 @@ function createPortPair(): readonly [MemoryCatalogPort, MemoryCatalogPort] {
 	return [first, second];
 }
 
-class MemoryCatalogPort extends DisposableOwner implements LanguageWorkerWireClientPort {
-	private readonly messageEmitter = this.own(new Emitter<unknown>());
-	private readonly failureEmitter = this.own(new Emitter<unknown>());
+class MemoryCatalogPort extends Disposable implements LanguageWorkerWireClientPort {
+	private readonly messageEmitter = this._register(new Emitter<unknown>());
+	private readonly failureEmitter = this._register(new Emitter<unknown>());
 	private peer: MemoryCatalogPort | undefined;
 
 	readonly onMessage: Event<unknown> = this.messageEmitter.event;
@@ -142,9 +142,9 @@ class MemoryCatalogPort extends DisposableOwner implements LanguageWorkerWireCli
 
 	constructor() {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.peer = undefined;
-		});
+		}));
 	}
 
 	connect(peer: MemoryCatalogPort): void {
@@ -163,7 +163,7 @@ class MemoryCatalogPort extends DisposableOwner implements LanguageWorkerWireCli
 	}
 }
 
-class FailingCompletionWorker extends DisposableOwner implements LanguageCompletionWorker {
+class FailingCompletionWorker extends Disposable implements LanguageCompletionWorker {
 	async run(): Promise<never> {
 		throw new Error("catalog worker failed");
 	}

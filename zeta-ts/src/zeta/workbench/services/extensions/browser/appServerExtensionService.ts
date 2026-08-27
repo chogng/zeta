@@ -1,6 +1,6 @@
 import { VSBuffer } from "../../../../base/common/buffer.js";
 import { Emitter, runWithBufferedEvents, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { LanguageCompletionProvider, LanguageCompletionProviderRegistration } from "../../../../editor/common/languages/completion/languageCompletionProviders.js";
 import type { LanguageConfigurationContributionInput, LanguageConfigurationRegistration } from "../../../../editor/common/languages/languageConfiguration.js";
 import { parseLanguageConfiguration } from "../../../../editor/common/languages/languageConfigurationParser.js";
@@ -33,9 +33,9 @@ export interface AppServerExtensionServiceOptions {
 }
 
 /** Loads Rust-discovered declarative extensions and projects their grammar contributions into TextMate. */
-export class AppServerExtensionService extends DisposableOwner implements IExtensionService {
-	private readonly changeEmitter = this.own(new Emitter<ExtensionCatalog>());
-	private readonly failureEmitter = this.own(new Emitter<ExtensionServiceFailure>());
+export class AppServerExtensionService extends Disposable implements IExtensionService {
+	private readonly changeEmitter = this._register(new Emitter<ExtensionCatalog>());
+	private readonly failureEmitter = this._register(new Emitter<ExtensionServiceFailure>());
 	private catalog: ExtensionCatalog = Object.freeze({
 		generation: 0,
 		extensions: Object.freeze([]),
@@ -67,10 +67,10 @@ export class AppServerExtensionService extends DisposableOwner implements IExten
 
 	constructor(private readonly options: AppServerExtensionServiceOptions) {
 		super();
-		this.defer(() => { this.reloadQueued = false; });
-		this.themeRegistry = this.own(new ExtensionThemeRegistry());
-		this.fileTemplateRegistry = this.own(new ExtensionFileTemplateRegistry());
-		this.debugAdapterRegistry = this.own(new ExtensionDebugAdapterRegistry());
+		this._register(toDisposable(() => { this.reloadQueued = false; }));
+		this.themeRegistry = this._register(new ExtensionThemeRegistry());
+		this.fileTemplateRegistry = this._register(new ExtensionFileTemplateRegistry());
+		this.debugAdapterRegistry = this._register(new ExtensionDebugAdapterRegistry());
 		const themeRegistry = this.themeRegistry;
 		const fileTemplateRegistry = this.fileTemplateRegistry;
 		const debugAdapterRegistry = this.debugAdapterRegistry;
@@ -91,12 +91,12 @@ export class AppServerExtensionService extends DisposableOwner implements IExten
 			throw new TypeError("App Server extension service requires a TextMate service");
 		}
 		this.grammarRegistration = options.textMateService.grammars.registerGrammars([]);
-		this.defer(() => this.grammarRegistration.dispose());
-		this.languageRegistration = options.languageFeaturesService ? this.own(options.languageFeaturesService.registerLanguages([])) : undefined;
-		this.languageConfigurationRegistration = options.languageFeaturesService ? this.own(options.languageFeaturesService.registerLanguageConfigurations([])) : undefined;
-		this.completionRegistration = options.languageFeaturesService ? this.own(options.languageFeaturesService.registerCompletionProviders([])) : undefined;
-		this.workbenchThemeRegistration = this.own(WorkbenchThemesRegistry.registerColorThemes([]));
-		this.debugAdapterFactoryRegistration = this.own(DebugAdapterFactoriesRegistry.registerFactories([]));
+		this._register(toDisposable(() => this.grammarRegistration.dispose()));
+		this.languageRegistration = options.languageFeaturesService ? this._register(options.languageFeaturesService.registerLanguages([])) : undefined;
+		this.languageConfigurationRegistration = options.languageFeaturesService ? this._register(options.languageFeaturesService.registerLanguageConfigurations([])) : undefined;
+		this.completionRegistration = options.languageFeaturesService ? this._register(options.languageFeaturesService.registerCompletionProviders([])) : undefined;
+		this.workbenchThemeRegistration = this._register(WorkbenchThemesRegistry.registerColorThemes([]));
+		this.debugAdapterFactoryRegistration = this._register(DebugAdapterFactoriesRegistry.registerFactories([]));
 		if (options.eventApi) {
 			let activationGeneration: number | undefined;
 			const subscription = options.eventApi.subscribe(event => {
@@ -104,7 +104,7 @@ export class AppServerExtensionService extends DisposableOwner implements IExten
 				activationGeneration = event.params.activationGeneration;
 				void this.reload().catch(error => console.error("Declarative extension refresh failed", error));
 			});
-			this.defer(() => subscription.dispose());
+			this._register(toDisposable(() => subscription.dispose()));
 		}
 	}
 

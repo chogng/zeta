@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type LanguageWorkerWireClientPort, type LanguageWorkerWirePort } from "../../../../editor/common/languages/languageWorkerWire.js";
 import { normalizeTextMateScopeTheme, TextMateScopeThemeModel, type TextMateScopeTheme } from "./textMateScopeTheme.js";
 
@@ -24,7 +24,7 @@ interface PendingRequest {
 }
 
 /** Renderer-side scope-theme transport sharing an Syntax Worker port. */
-export class TextMateScopeThemeWireClient extends DisposableOwner {
+export class TextMateScopeThemeWireClient extends Disposable {
 	private readonly pending = new Map<number, PendingRequest>();
 	private nextRequestId = 1;
 	private closed = false;
@@ -35,9 +35,9 @@ export class TextMateScopeThemeWireClient extends DisposableOwner {
 			throw new TypeError("TextMate scope theme client requires a Worker client port");
 		}
 		if (typeof invalidateWorker !== "function") throw new TypeError("TextMate scope theme client requires a Worker invalidation callback");
-		this.own(port.onMessage(message => this.acceptMessage(message)));
-		this.own(port.onFailure(error => this.invalidate(toError(error, "TextMate scope theme Worker failed"))));
-		this.defer(() => this.close(new ReferenceError("TextMateScopeThemeWireClient is already disposed"), false));
+		this._register(port.onMessage(message => this.acceptMessage(message)));
+		this._register(port.onFailure(error => this.invalidate(toError(error, "TextMate scope theme Worker failed"))));
+		this._register(toDisposable(() => this.close(new ReferenceError("TextMateScopeThemeWireClient is already disposed"), false)));
 	}
 
 	replaceTheme(theme: TextMateScopeTheme): Promise<void> {
@@ -96,7 +96,7 @@ export class TextMateScopeThemeWireClient extends DisposableOwner {
 }
 
 /** Worker-side atomic scope-theme receiver sharing an Syntax Worker port. */
-export class TextMateScopeThemeWireServer extends DisposableOwner {
+export class TextMateScopeThemeWireServer extends Disposable {
 	constructor(private readonly port: LanguageWorkerWirePort, private readonly themes: TextMateScopeThemeModel, private readonly onDidReplace?: () => void) {
 		super();
 		if (!port || typeof port.send !== "function" || typeof port.onMessage !== "function") {
@@ -104,7 +104,7 @@ export class TextMateScopeThemeWireServer extends DisposableOwner {
 		}
 		if (!(themes instanceof TextMateScopeThemeModel)) throw new TypeError("TextMate scope theme server requires a theme model");
 		if (onDidReplace !== undefined && typeof onDidReplace !== "function") throw new TypeError("TextMate scope theme replacement hook must be a function");
-		this.own(port.onMessage(message => this.acceptMessage(message)));
+		this._register(port.onMessage(message => this.acceptMessage(message)));
 	}
 
 	private acceptMessage(value: unknown): void {

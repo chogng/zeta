@@ -1,6 +1,6 @@
 import { Emitter, type Event } from "../../base/common/event.js";
 import { type JsonValue, validateJsonValue } from "../../base/common/jsonValue.js";
-import { DisposableOwner } from "../../base/common/lifecycle.js";
+import { Disposable } from "../../base/common/lifecycle.js";
 import { type IStorageService, type IStorageValueChangeEvent, StorageScope, StorageTarget } from "../../platform/storage/common/storage.js";
 
 const MEMENTO_STORAGE_PREFIX = "memento/";
@@ -34,7 +34,7 @@ interface MementoSnapshot<TState extends object> {
  * announces a save or the consumer explicitly calls `save`. Pending local
  * updates take precedence over external storage changes.
  */
-export class Memento<TState extends object> extends DisposableOwner {
+export class Memento<TState extends object> extends Disposable {
 	private readonly storageKey: string;
 	private readonly scope: StorageScope;
 	private readonly target: StorageTarget;
@@ -42,7 +42,7 @@ export class Memento<TState extends object> extends DisposableOwner {
 	private readonly parse: (value: unknown) => TState;
 	private readonly serialize: (value: TState) => JsonValue;
 	private readonly onError: (error: unknown) => void;
-	private readonly _onDidChange = this.own(new Emitter<MementoChangeEvent<TState>>());
+	private readonly _onDidChange = this._register(new Emitter<MementoChangeEvent<TState>>());
 	private stateValue: TState;
 	private serializedValue: string;
 	private dirty: boolean;
@@ -70,8 +70,8 @@ export class Memento<TState extends object> extends DisposableOwner {
 		this.serializedValue = initial.serialized;
 		this.dirty = initial.dirty;
 
-		this.own(this.storageService.onWillSaveState(() => this.save()));
-		this.own(this.storageService.onDidChangeValue((event) => {
+		this._register(this.storageService.onWillSaveState(() => this.save()));
+		this._register(this.storageService.onDidChangeValue((event) => {
 			if (event.external && this.affects(event) && !this.dirty) {
 				this.reloadExternal();
 			}

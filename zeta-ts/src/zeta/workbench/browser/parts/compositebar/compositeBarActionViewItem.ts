@@ -74,17 +74,17 @@ export class CompositeBarActionViewItem extends ActionViewItem {
 		this.setupHover(container, this.compositeAction.tooltip);
 		const action = h(container.ownerDocument, "span");
 		action.className = "zeta-composite-bar-action";
-		const label = this.own(new IconLabel(action, {
+		const label = this._register(new IconLabel(action, {
 			label: options.label,
 			icon: options.icon,
 		}));
 		container.append(action);
-		this.own(addDisposableListener(container, "click", (event) => {
+		this._register(addDisposableListener(container, "click", (event) => {
 			event.preventDefault();
 			event.stopPropagation();
 			this.compositeAction.run();
 		}));
-		this.own(addDisposableListener(container, "keydown", (event) => {
+		this._register(addDisposableListener(container, "keydown", (event) => {
 			if (event.key !== "Enter" && event.key !== " ") return;
 			event.preventDefault();
 			event.stopPropagation();
@@ -133,17 +133,17 @@ export class CompositeBarOverflowViewItem extends ActionViewItem {
 		this.setupHover(container, this.action.tooltip);
 		const action = h(container.ownerDocument, "span");
 		action.className = "zeta-composite-bar-action";
-		const label = this.own(new IconLabel(action, {
+		const label = this._register(new IconLabel(action, {
 			label: this.action.label,
 			icon: this.action.icon,
 		}));
 		container.append(action);
-		this.own(addDisposableListener(container, "click", (event) => {
+		this._register(addDisposableListener(container, "click", (event) => {
 			event.preventDefault();
 			event.stopPropagation();
 			this.show();
 		}));
-		this.own(addDisposableListener(container, "keydown", (event) => {
+		this._register(addDisposableListener(container, "keydown", (event) => {
 			if (event.key !== "Enter" && event.key !== " " && event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
 			event.preventDefault();
 			event.stopPropagation();

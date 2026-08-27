@@ -2,7 +2,7 @@ import "./media/binaryEditorPane.css";
 import { h } from "../../../../base/browser/dom.js";
 import type { IDimension } from "../../../../base/browser/geometry.js";
 import { raceCancellation, throwIfCancelled } from "../../../../base/common/cancellation.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { IFileService } from "../../../../platform/files/common/files.js";
 import { isRemoteResource } from "../../../../platform/remote/common/remote.js";
 import type { EditorInput } from "../../../browser/parts/editor/editorInput.js";
@@ -13,7 +13,7 @@ const MAX_BINARY_EDITOR_BYTES = 128 * 1024 * 1024;
 const MAX_RENDERED_BYTES = 64 * 1024;
 
 /** Read-only hexadecimal/ascii projection for resources that are not safe text. */
-export class BinaryEditorPane extends DisposableOwner implements IEditorPane {
+export class BinaryEditorPane extends Disposable implements IEditorPane {
 	readonly id = BINARY_EDITOR_ID;
 	private container: HTMLElement | undefined;
 	private content: HTMLPreElement | undefined;
@@ -39,7 +39,7 @@ export class BinaryEditorPane extends DisposableOwner implements IEditorPane {
 		this.container = container;
 		this.summary = summary;
 		this.content = content;
-		this.defer(() => container.remove());
+		this._register(toDisposable(() => container.remove()));
 	}
 
 	async setInput(input: EditorInput, signal: AbortSignal): Promise<void> {

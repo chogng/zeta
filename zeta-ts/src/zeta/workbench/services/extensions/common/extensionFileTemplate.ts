@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 
 export interface ExtensionFileTemplateDefinition {
 	readonly id: string;
@@ -22,17 +22,17 @@ export interface ExtensionFileTemplateSource {
 }
 
 /** Owns the active, declarative file templates contributed by extensions. */
-export class ExtensionFileTemplateRegistry extends DisposableOwner implements ExtensionFileTemplateSource {
-	private readonly changeEmitter = this.own(new Emitter<ExtensionFileTemplateCatalog>());
+export class ExtensionFileTemplateRegistry extends Disposable implements ExtensionFileTemplateSource {
+	private readonly changeEmitter = this._register(new Emitter<ExtensionFileTemplateCatalog>());
 	private catalog: ExtensionFileTemplateCatalog = Object.freeze({ revision: 0, templates: Object.freeze([]) });
 
 	readonly onDidChange: Event<ExtensionFileTemplateCatalog> = this.changeEmitter.event;
 
 	constructor() {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.catalog = Object.freeze({ revision: this.catalog.revision, templates: Object.freeze([]) });
-		});
+		}));
 	}
 
 	get currentCatalog(): ExtensionFileTemplateCatalog {

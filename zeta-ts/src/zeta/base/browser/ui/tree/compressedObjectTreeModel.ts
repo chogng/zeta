@@ -1,5 +1,5 @@
 import type { Event } from "../../../common/event.js";
-import { DisposableOwner } from "../../../common/lifecycle.js";
+import { Disposable } from "../../../common/lifecycle.js";
 import { ObjectTreeModel, type ObjectTreeDefaultCollapseState, type ObjectTreeElement, type ObjectTreeIdentityProvider, type ObjectTreeModelChangeEvent, type ObjectTreeModelCollapseStateChangeEvent, type ObjectTreeNode } from "./objectTreeModel.js";
 import type { TreeFilter, TreeSorter } from "./tree.js";
 
@@ -25,7 +25,7 @@ export interface CompressibleObjectTreeModelOptions<T> {
 }
 
 /** Compresses single-child chains before they enter the canonical ObjectTreeModel. */
-export class CompressibleObjectTreeModel<T> extends DisposableOwner {
+export class CompressibleObjectTreeModel<T> extends Disposable {
 	readonly model: ObjectTreeModel<CompressedTreeNode<T>>;
 	private roots: readonly CompressibleTreeElement<T>[] = [];
 	private nodesByElementId = new Map<string, CompressedTreeNode<T>>();
@@ -37,7 +37,7 @@ export class CompressibleObjectTreeModel<T> extends DisposableOwner {
 	constructor(private readonly options: CompressibleObjectTreeModelOptions<T>) {
 		super();
 		this.compressionEnabled = options.compressionEnabled ?? true;
-		this.model = this.own(new ObjectTreeModel({
+		this.model = this._register(new ObjectTreeModel({
 			identityProvider: { getId: (node) => compressedId(node, options.identityProvider) },
 			defaultCollapseState: options.defaultCollapseState,
 			sorter: options.sorter ? { compare: (left, right) => options.sorter!.compare(last(left.elements), last(right.elements)) } : undefined,

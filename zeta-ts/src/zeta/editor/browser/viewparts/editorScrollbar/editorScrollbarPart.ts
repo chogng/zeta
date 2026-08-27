@@ -1,3 +1,4 @@
+import { toDisposable } from "../../../../base/common/lifecycle.js";
 import "./editorScrollbar.css";
 import { isFiniteNumber } from "../../../../base/common/numbers.js";
 import { HorizontalScrollbar } from "../../../../base/browser/ui/scrollbar/horizontalScrollbar.js";
@@ -56,7 +57,7 @@ export class EditorScrollbarPart extends EditorViewPart {
 		options.container.style.setProperty("--stanza-editor-scrollbar-size", `${this.scrollbarSize}px`);
 		this.horizontalMetrics = createScrollbarAxisMetrics(0, 0, 0, 0, 0);
 		this.verticalMetrics = createScrollbarAxisMetrics(0, 0, 0, 0, 0);
-		this.horizontal = this.own(new HorizontalScrollbar(options.container, {
+		this.horizontal = this._register(new HorizontalScrollbar(options.container, {
 			viewport: options.viewport,
 			trackClickBehavior: "jump",
 			getMetrics: () => this.horizontalMetrics,
@@ -65,7 +66,7 @@ export class EditorScrollbarPart extends EditorViewPart {
 				top: this.verticalMetrics.position,
 			}),
 		}));
-		this.vertical = this.own(new VerticalScrollbar(options.container, {
+		this.vertical = this._register(new VerticalScrollbar(options.container, {
 			viewport: options.viewport,
 			trackClickBehavior: "jump",
 			getMetrics: () => this.verticalMetrics,
@@ -76,10 +77,10 @@ export class EditorScrollbarPart extends EditorViewPart {
 		}));
 		this.configureTrack(this.horizontal, "horizontal", this.horizontalVisibility);
 		this.configureTrack(this.vertical, "vertical", this.verticalVisibility);
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			if (this.scrollActivityTimer !== undefined) clearTimeout(this.scrollActivityTimer);
 			this.container.classList.remove("stanza-editor-scrolling");
-		});
+		}));
 	}
 
 	render(context: EditorRenderingContext): void {

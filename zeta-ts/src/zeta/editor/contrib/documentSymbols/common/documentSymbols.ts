@@ -1,5 +1,5 @@
 import { isNonEmptyArray } from "../../../../base/common/arrays.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type TextRange } from "../../../common/core/text.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
@@ -32,7 +32,7 @@ export interface DocumentSymbolServiceOptions {
 }
 
 /** Provider-backed document symbol service used by outline and symbol navigation. */
-export class DocumentSymbolService extends DisposableOwner {
+export class DocumentSymbolService extends Disposable {
 	private readonly fallbackProviders: readonly LanguageDocumentSymbolProvider[];
 
 	constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureProviderRegistry<LanguageDocumentSymbolProvider>, private readonly options: DocumentSymbolServiceOptions = {}) {

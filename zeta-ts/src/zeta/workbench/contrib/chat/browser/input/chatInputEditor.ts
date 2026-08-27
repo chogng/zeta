@@ -1,6 +1,6 @@
 import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
-import { DisposableOwner, type IDisposable, toDisposable } from "../../../../../base/common/lifecycle.js";
+import { Disposable, type IDisposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { SlashCommandCatalog } from "../../common/slashCommands.js";
 
 /** Construction inputs shared by Chat input editor implementations. */
@@ -63,10 +63,10 @@ export class ChatInputEditorRegistry {
 /** Realm-scoped Chat input editor selected by the active product graph. */
 export const ChatInputEditors = new ChatInputEditorRegistry();
 
-class TextareaChatInputEditor extends DisposableOwner implements IChatInputEditor {
+class TextareaChatInputEditor extends Disposable implements IChatInputEditor {
 	readonly element: HTMLTextAreaElement;
-	private readonly _onDidChange = this.own(new Emitter<string>());
-	private readonly _onDidSubmit = this.own(new Emitter<void>());
+	private readonly _onDidChange = this._register(new Emitter<string>());
+	private readonly _onDidSubmit = this._register(new Emitter<void>());
 	readonly onDidChange = this._onDidChange.event;
 	readonly onDidSubmit = this._onDidSubmit.event;
 
@@ -78,14 +78,14 @@ class TextareaChatInputEditor extends DisposableOwner implements IChatInputEdito
 		this.element.placeholder = options.placeholder;
 		this.element.setAttribute("aria-label", options.ariaLabel);
 		options.container.append(this.element);
-		this.own(addDisposableListener(this.element, "input", () => this._onDidChange.fire(this.value)));
-		this.own(addDisposableListener(this.element, "keydown", (event) => {
+		this._register(addDisposableListener(this.element, "input", () => this._onDidChange.fire(this.value)));
+		this._register(addDisposableListener(this.element, "keydown", (event) => {
 			if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
 			event.preventDefault();
 			event.stopPropagation();
 			this._onDidSubmit.fire();
 		}));
-		this.defer(() => this.element.remove());
+		this._register(toDisposable(() => this.element.remove()));
 	}
 
 	get value(): string {

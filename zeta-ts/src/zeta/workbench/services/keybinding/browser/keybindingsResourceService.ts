@@ -1,6 +1,6 @@
 import { Emitter } from "../../../../base/common/event.js";
 import {
-	DisposableOwner,
+	Disposable,
 	toDisposable,
 } from "../../../../base/common/lifecycle.js";
 import {
@@ -21,11 +21,11 @@ export interface WorkbenchKeybindingsResourceServiceOptions {
  * Window projection of the active host-authoritative `keybindings.json`.
  */
 export class WorkbenchKeybindingsResourceService
-	extends DisposableOwner
+	extends Disposable
 	implements IKeybindingsResourceService {
 	private readonly api: IKeybindingsResourceApi | undefined;
 	private readonly onError: (error: unknown) => void;
-	private readonly _onDidChangeKeybindings = this.own(
+	private readonly _onDidChangeKeybindings = this._register(
 		new Emitter<readonly IKeybindingEntry[]>(),
 	);
 	private revision = 0;
@@ -51,7 +51,7 @@ export class WorkbenchKeybindingsResourceService
 					this.onError(error);
 				}
 			});
-			this.own(toDisposable(() => subscription.dispose()));
+			this._register(toDisposable(() => subscription.dispose()));
 		}
 	}
 

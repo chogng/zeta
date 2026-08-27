@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { assertLanguageId } from "../../../../editor/common/languages/languageId.js";
 import { type IRawGrammar } from "vscode-textmate";
 
@@ -55,8 +55,8 @@ export interface PreparedTextMateGrammarReplacement {
 }
 
 /** Caller-owned TextMate grammar contributions with immutable revision snapshots. */
-export class TextMateGrammarRegistry extends DisposableOwner {
-	private readonly changeEmitter = this.own(new Emitter<TextMateGrammarRegistrySnapshot>());
+export class TextMateGrammarRegistry extends Disposable {
+	private readonly changeEmitter = this._register(new Emitter<TextMateGrammarRegistrySnapshot>());
 	private readonly groups = new Map<object, readonly RegisteredTextMateGrammarDefinition[]>();
 	private snapshot: TextMateGrammarRegistrySnapshot = createSnapshot(0, []);
 
@@ -64,11 +64,11 @@ export class TextMateGrammarRegistry extends DisposableOwner {
 
 	constructor() {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			const changed = this.groups.size > 0;
 			this.groups.clear();
 			if (changed) this.publish();
-		});
+		}));
 	}
 
 	get currentSnapshot(): TextMateGrammarRegistrySnapshot {

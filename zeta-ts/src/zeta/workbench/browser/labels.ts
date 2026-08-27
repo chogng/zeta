@@ -1,7 +1,7 @@
 import { IconLabel, type IconLabelValueOptions } from '../../base/browser/ui/iconlabel/iconlabel.js';
 import { getPathLabel, type IRelativePathProvider } from '../../base/common/labels.js';
 import { noEvent, Emitter, type Event } from '../../base/common/event.js';
-import { DisposableOwner, type IDisposable } from '../../base/common/lifecycle.js';
+import { Disposable, type IDisposable } from '../../base/common/lifecycle.js';
 import { basenameOrAuthority, dirnameResource, isEqualResource } from './resourceLabelHelpers.js';
 import type { URI } from '../../base/common/uri.js';
 import { operatingSystem, OperatingSystem } from '../../base/common/platform.js';
@@ -67,10 +67,10 @@ export interface IResourceLabelService extends IDisposable {
 export const IResourceLabelService = createServiceIdentifier<IResourceLabelService>('resourceLabelService');
 
 /** Owns a group of resource labels and keeps them in sync with Workbench state. */
-export class ResourceLabels extends DisposableOwner {
+export class ResourceLabels extends Disposable {
 	private readonly widgets = new Set<ResourceLabelWidget>();
 	private readonly labels = new Set<IResourceLabel>();
-	private readonly decorationChangeEmitter = this.own(new Emitter<void>());
+	private readonly decorationChangeEmitter = this._register(new Emitter<void>());
 	private readonly services: ResourceLabelServices;
 
 	readonly onDidChangeDecorations = this.decorationChangeEmitter.event;
@@ -81,17 +81,17 @@ export class ResourceLabels extends DisposableOwner {
 	) {
 		super();
 		this.services = services;
-		this.own(container.onDidChangeVisibility(visible => {
+		this._register(container.onDidChangeVisibility(visible => {
 			for (const widget of this.widgets) widget.setVisibility(visible);
 		}));
-		this.own(services.workspaceContextService.onDidChangeWorkspace(() => this.rerenderAll()));
-		this.own(services.fileIconThemeService.onDidFileIconThemeChange(() => this.rerenderAll(true)));
-		if (services.labelService) this.own(services.labelService.onDidChangeFormatters(event => this.rerenderScheme(event.scheme)));
+		this._register(services.workspaceContextService.onDidChangeWorkspace(() => this.rerenderAll()));
+		this._register(services.fileIconThemeService.onDidFileIconThemeChange(() => this.rerenderAll(true)));
+		if (services.labelService) this._register(services.labelService.onDidChangeFormatters(event => this.rerenderScheme(event.scheme)));
 		if (services.untitledTextEditorService) {
-			this.own(services.untitledTextEditorService.onDidCreate(() => this.rerenderAll()));
-			this.own(services.untitledTextEditorService.onDidChangeLabel(() => this.rerenderAll()));
+			this._register(services.untitledTextEditorService.onDidCreate(() => this.rerenderAll()));
+			this._register(services.untitledTextEditorService.onDidChangeLabel(() => this.rerenderAll()));
 		}
-		if (services.fileLabelDecorationService) this.own(services.fileLabelDecorationService.onDidChange(event => this.onDecorationChange(event)));
+		if (services.fileLabelDecorationService) this._register(services.fileLabelDecorationService.onDidChange(event => this.onDecorationChange(event)));
 	}
 
 	create(container: HTMLElement, options?: { readonly supportIcons?: boolean }): IResourceLabel {
@@ -160,12 +160,12 @@ export class ResourceLabels extends DisposableOwner {
 }
 
 /** Window-scoped factory for consumers that do not need to manage a label group. */
-export class ResourceLabelService extends DisposableOwner implements IResourceLabelService {
+export class ResourceLabelService extends Disposable implements IResourceLabelService {
 	private readonly labels: ResourceLabels;
 
 	constructor(services: ResourceLabelServices) {
 		super();
-		this.labels = this.own(new ResourceLabels(DEFAULT_LABELS_CONTAINER, services));
+		this.labels = this._register(new ResourceLabels(DEFAULT_LABELS_CONTAINER, services));
 	}
 
 	create(container: HTMLElement, options?: { readonly supportIcons?: boolean }): IResourceLabel {
@@ -174,7 +174,7 @@ export class ResourceLabelService extends DisposableOwner implements IResourceLa
 }
 
 /** Convenience owner for a single resource label. */
-export class ResourceLabel extends DisposableOwner implements IResourceLabel {
+export class ResourceLabel extends Disposable implements IResourceLabel {
 	private readonly labels: ResourceLabels;
 	private readonly label: IResourceLabel;
 
@@ -187,7 +187,7 @@ export class ResourceLabel extends DisposableOwner implements IResourceLabel {
 		options?: { readonly supportIcons?: boolean },
 	) {
 		super();
-		this.labels = this.own(new ResourceLabels(DEFAULT_LABELS_CONTAINER, services));
+		this.labels = this._register(new ResourceLabels(DEFAULT_LABELS_CONTAINER, services));
 		this.label = this.labels.create(container, options);
 		this.element = this.label.element;
 		this.onDidRender = this.label.onDidRender;
@@ -210,9 +210,9 @@ export class ResourceLabel extends DisposableOwner implements IResourceLabel {
 	}
 }
 
-class ResourceLabelWidget extends DisposableOwner {
+class ResourceLabelWidget extends Disposable {
 	private readonly label: IconLabel;
-	private readonly renderEmitter = this.own(new Emitter<void>());
+	private readonly renderEmitter = this._register(new Emitter<void>());
 	private readonly services: ResourceLabelServices;
 	private readonly supportIcons: boolean;
 	private current: IResourceLabelProps | undefined;
@@ -234,7 +234,7 @@ class ResourceLabelWidget extends DisposableOwner {
 		super();
 		this.services = services;
 		this.supportIcons = options?.supportIcons === true;
-		this.label = this.own(new IconLabel(container, { label: '', supportIcons: this.supportIcons }));
+		this.label = this._register(new IconLabel(container, { label: '', supportIcons: this.supportIcons }));
 		this.element = this.label.element;
 	}
 

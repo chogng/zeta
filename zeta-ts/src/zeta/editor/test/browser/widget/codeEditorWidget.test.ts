@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { CodeEditorContributionContext } from "../../../browser/widget/codeEditor/codeEditorContributions.js";
 import { EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
@@ -119,7 +119,7 @@ test("CodeEditorWidget stages and owns per-instance contributions", () => {
 	dom.window.close();
 });
 
-class TestCodeEditorContribution extends DisposableOwner {
+class TestCodeEditorContribution extends Disposable {
 	constructor(
 		private readonly state: { readonly events: string[]; readonly model: TextModel; readonly service: { readonly kind: string } },
 		private readonly id: string,
@@ -130,7 +130,7 @@ class TestCodeEditorContribution extends DisposableOwner {
 		assert.equal(context.model, state.model);
 		assert.equal(service, state.service);
 		state.events.push(`${id}:create`);
-		this.defer(() => state.events.push(`${id}:dispose`));
+		this._register(toDisposable(() => state.events.push(`${id}:dispose`)));
 	}
 }
 

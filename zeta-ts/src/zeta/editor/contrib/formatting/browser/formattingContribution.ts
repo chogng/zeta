@@ -2,7 +2,7 @@ import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.
 import { ToolBar } from "../../../../base/browser/ui/toolbar/toolbar.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { DocumentTextStyleAttributes, DocumentTextStyleFontFamily } from "../../../common/model/documentSchema.js";
 import { h } from "../../../../base/browser/dom.js";
 
@@ -39,7 +39,7 @@ export interface FormattingContributionOptions {
  * state and document-command callbacks, keeping editor lifecycle independent
  * from this Word-like presentation surface.
  */
-export class FormattingContribution extends DisposableOwner {
+export class FormattingContribution extends Disposable {
 	readonly element: HTMLDivElement;
 	private readonly inlineActions: ToolBar;
 	private readonly documentActions: ToolBar;
@@ -58,9 +58,9 @@ export class FormattingContribution extends DisposableOwner {
 		element.setAttribute("aria-label", "Document formatting");
 		this.element = element;
 		container.append(element);
-		this.defer(() => element.remove());
+		this._register(toDisposable(() => element.remove()));
 
-		const inlineActions = this.own(new ToolBar(element, {
+		const inlineActions = this._register(new ToolBar(element, {
 			contextMenuProvider: emptyFormattingContextMenuProvider,
 			ariaLabel: "Text formatting",
 			highlightToggledItems: true,
@@ -106,7 +106,7 @@ export class FormattingContribution extends DisposableOwner {
 		this.fontSize = fontSize.select;
 		typographyControls.append(fontFamily.element, fontSize.element);
 
-		const documentActions = this.own(new ToolBar(element, {
+		const documentActions = this._register(new ToolBar(element, {
 			contextMenuProvider: emptyFormattingContextMenuProvider,
 			ariaLabel: "Document structure",
 			highlightToggledItems: true,

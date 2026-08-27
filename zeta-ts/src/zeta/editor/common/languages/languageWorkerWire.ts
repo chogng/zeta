@@ -1,6 +1,6 @@
 import { isNonEmptyArray } from "../../../base/common/arrays.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableOwner, type IDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { LanguageWorkerResultDisposition, type LanguageWorker, type LanguageWorkerModelSynchronizer, type LanguageWorkerRequest, type LanguageWorkerResultSettler } from "./languageRequestCoordinator.js";
 import { LanguageWorkerDocumentMirror, type LanguageWorkerDocumentChange, type LanguageWorkerDocumentSynchronizationObserver } from "./languageWorkerDocumentMirror.js";
 import { assertRequestId, createCancelMessage, createFailureMessage, createResultMessage, createSyncFailureMessage, decodeClientMessage, decodeRequestSnapshot, decodeServerMessage, encodeRequestMessage, encodeSyncMessage, isProtocolMessage, readRequestId, type FailureWireMessage, type LanguageWorkerWireCodec, type LanguageWorkerWireResultState, type RequestWireMessage, type ResultWireMessage, type SyncFailureWireMessage } from "./languageWorkerWireProtocol.js";
@@ -26,8 +26,8 @@ export class LanguageWorkerRemoteError extends Error {
 }
 
 /** Coordinator-compatible client for one typed worker lane and model mirror. */
-export class LanguageWorkerWireClient<TLane extends string, TPayload, TResult> extends DisposableOwner implements LanguageWorker<TLane, TPayload, TResult>, LanguageWorkerModelSynchronizer, LanguageWorkerResultSettler {
-	private readonly failureEmitter = this.own(new Emitter<Error>());
+export class LanguageWorkerWireClient<TLane extends string, TPayload, TResult> extends Disposable implements LanguageWorker<TLane, TPayload, TResult>, LanguageWorkerModelSynchronizer, LanguageWorkerResultSettler {
+	private readonly failureEmitter = this._register(new Emitter<Error>());
 	private readonly pending = new Map<number, PendingWireRequest<TLane, TPayload, TResult>>();
 	private readonly resultStates = new Map<TLane, LanguageWorkerWireResultState<TResult>>();
 	private readonly stagedResultStates = new Map<number, StagedWireResultState<TLane, TResult>>();
@@ -43,15 +43,15 @@ export class LanguageWorkerWireClient<TLane extends string, TPayload, TResult> e
 		super();
 		assertPort(port, true);
 		assertCodec(codec);
-		this.own(port);
-		this.own(port.onMessage(message => this.receive(message)));
-		this.own(port.onFailure(error => this.fail(asError(error, "Language worker transport failed"))));
-		this.defer(() => {
+		this._register(port);
+		this._register(port.onMessage(message => this.receive(message)));
+		this._register(port.onFailure(error => this.fail(asError(error, "Language worker transport failed"))));
+		this._register(toDisposable(() => {
 			this.mirroredVersion = undefined;
 			this.resultStates.clear();
 			this.stagedResultStates.clear();
 			this.failAll(new ReferenceError("LanguageWorkerWireClient is already disposed"));
-		});
+		}));
 	}
 
 	run(request: LanguageWorkerRequest<TLane, TPayload>, signal: AbortSignal): Promise<TResult> {
@@ -202,7 +202,7 @@ export class LanguageWorkerWireClient<TLane extends string, TPayload, TResult> e
 }
 
 /** Worker-side dispatcher for one typed language lane and immutable mirror. */
-export class LanguageWorkerWireServer<TLane extends string, TPayload, TResult> extends DisposableOwner {
+export class LanguageWorkerWireServer<TLane extends string, TPayload, TResult> extends Disposable {
 	private readonly active = new Map<number, AbortController>();
 	private readonly resultStates = new Map<TLane, LanguageWorkerWireResultState<TResult>>();
 	private mirror: LanguageWorkerDocumentMirror | undefined;
@@ -216,17 +216,17 @@ export class LanguageWorkerWireServer<TLane extends string, TPayload, TResult> e
 		assertPort(port, false);
 		assertCodec(codec);
 		assertWorker(worker);
-		this.own(port);
-		this.own(worker);
-		this.own(port.onMessage(message => this.receive(message)));
-		this.defer(() => {
+		this._register(port);
+		this._register(worker);
+		this._register(port.onMessage(message => this.receive(message)));
+		this._register(toDisposable(() => {
 			this.mirror = undefined;
 			this.resultStates.clear();
 			for (const controller of this.active.values()) {
 				controller.abort("serverDisposed");
 			}
 			this.active.clear();
-		});
+		}));
 	}
 
 	private receive(value: unknown): void {
@@ -357,7 +357,7 @@ function assertWorker<TLane extends string, TPayload, TResult>(value: LanguageWo
 	}
 }
 
-function supportsDocumentSynchronization(value: Disposable): value is Disposable & LanguageWorkerDocumentSynchronizationObserver {
+function supportsDocumentSynchronization(value: IDisposable): value is IDisposable & LanguageWorkerDocumentSynchronizationObserver {
 	return typeof (value as Partial<LanguageWorkerDocumentSynchronizationObserver>).synchronizeDocument === "function";
 }
 

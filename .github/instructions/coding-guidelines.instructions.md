@@ -45,17 +45,18 @@ private visible = false;
 
 ## Disposable Ownership
 
-- Treat `IDisposable` as a cleanup capability and `DisposableOwner` as a composite ownership mechanism. Choose from the object's ownership role, not to avoid writing `dispose()`.
+- Treat `IDisposable` as a cleanup capability and `Disposable` as the VS Code-style composite ownership mechanism. Choose from the object's ownership role, not to avoid writing `dispose()`.
+- `Disposable` intentionally exposes the protected `_store` and `_register()` names for API compatibility; this is the exception to the general underscore naming rule.
 - A stateful leaf adapter or handle extends `AbstractDisposable` and implements `disposeCore`; callback-only cleanup uses `toDisposable`. These primitives provide idempotency, explicit resource-management symbols, and disposable tracking without allocating a resource collection.
-- A component that aggregates independently created listeners, child components, timers, or replaceable resources normally extends `DisposableOwner` and registers each resource immediately with `own`, `adopt`, or `defer`.
-- Owning one implementation resource does not by itself make a leaf adapter a composite owner. Do not allocate a `DisposableStore` or extend `DisposableOwner` only to delegate disposal to that resource.
-- Use `DisposableSlot` for one replaceable resource and `DisposableMap` for resources whose ownership follows stable keys. Do not pair a plain `Map` with hand-written replacement and disposal loops.
-- Use `noneDisposable` and `noEvent` for intentionally inert boundaries instead of repeating empty disposal objects.
+- A component that aggregates independently created listeners, child components, timers, or replaceable resources normally extends `Disposable` and registers each resource immediately with `_register()`.
+- Owning one implementation resource does not by itself make a leaf adapter a composite owner. Do not allocate a `DisposableStore` or extend `Disposable` only to delegate disposal to that resource.
+- Use `MutableDisposable` for one replaceable resource and `DisposableMap` for resources whose ownership follows stable keys. Do not pair a plain `Map` with hand-written replacement and disposal loops.
+- Use `Disposable.None` or `noneDisposable` and `noEvent` for intentionally inert boundaries instead of repeating empty disposal objects.
 - Subclasses use the inherited `isDisposed` and `assertNotDisposed()` state instead of shadowing disposal with another field or guard method.
 - A separate `failed`, `closed`, or protocol-terminal state is valid only when the object can become unusable before lifecycle disposal. Name and guard that domain state explicitly while leaving disposal idempotency to the lifecycle base.
-- Subclasses of `AbstractDisposable` and `DisposableOwner` implement or register cleanup through their protected APIs; they do not override the public disposal entry points.
+- Subclasses of `AbstractDisposable` and `Disposable` implement or register cleanup through their protected APIs; they do not override the public disposal entry points.
 - A resource with semantically distinct graceful async `close()` and forced synchronous `dispose()` paths owns that terminal-state protocol in its domain. Do not collapse the two paths into a generic base abstraction merely because both end tracking.
-- When inheritance is unavailable, use a component-owned `DisposableStore`; do not hand-maintain an array of cleanup callbacks.
+- When inheritance is unavailable, use a component-owned `DisposableStore`; call `clear()` only for a real clear-and-rebuild lifecycle and do not hand-maintain an array of cleanup callbacks.
 
 ## Functions
 

@@ -4,18 +4,14 @@ description: Zeta TypeScript resource ownership and cancellation guidelines
 
 # Lifecycle
 
-Zeta uses the ECMAScript explicit resource-management protocol as its
-foundation and exposes a small project facade for application code.
+Zeta uses the ECMAScript explicit resource-management protocol as its foundation and exposes a small project facade for application code.
 
 ## Protocols
 
 - `Disposable`, `[Symbol.dispose]()` and `using` are the synchronous protocol.
-- `AsyncDisposable`, `[Symbol.asyncDispose]()` and `await using` are the
-  asynchronous protocol.
-- `AbortSignal` represents cancellation of one asynchronous operation. It does
-  not represent ownership and must not dispose the object performing the work.
-- Keep synchronous and asynchronous cleanup separate. Do not define
-  `dispose(): void | Promise<void>`.
+- `AsyncDisposable`, `[Symbol.asyncDispose]()` and `await using` are the asynchronous protocol.
+- `AbortSignal` represents cancellation of one asynchronous operation; it does not represent ownership and must not dispose the object performing the work.
+- Keep synchronous and asynchronous cleanup separate; do not define `dispose(): void | Promise<void>`.
 
 Lifecycle and cancellation are separate base modules:
 
@@ -25,89 +21,61 @@ base/common/
 └─ cancellation.ts
 ```
 
-`lifecycle.ts` must not depend on `cancellation.ts`. The cancellation module
-uses the standard `AbortSignal` protocol and owns only project-wide
-cancellation policy such as `CancellationError`, classification, signal
-composition, and timeout helpers. Add the latter helpers only when real
-callers need them.
+`lifecycle.ts` must not depend on `cancellation.ts`. The cancellation module uses the standard `AbortSignal` protocol and owns only project-wide cancellation policy such as `CancellationError`, classification, signal composition, and timeout helpers.
 
 ## Project facade
 
-- `IDisposable extends Disposable` adds the convenient explicit `dispose()`
-  entry point. Project-created synchronous resources should implement both
-  entry points idempotently.
-- `IAsyncDisposable extends AsyncDisposable` adds `disposeAsync()`.
-- `DisposableStore` owns a fixed-lifetime group and releases it in LIFO order.
-- `AsyncDisposableStore` owns asynchronous and synchronous resources and
-  releases them asynchronously in LIFO order.
-- `DisposableOwner` is an optional base class for long-lived objects. Its `own`,
-  `adopt`, and `defer` helpers transfer resources into the object's store.
-- `DisposableSlot<T>` owns one replaceable resource.
-- `ResettableDisposableGroup` is only for a real clear-and-rebuild lifecycle.
+- `IDisposable` extends the standard `Disposable` protocol with explicit `dispose()` and is the project type for synchronous resources.
+- `IAsyncDisposable` extends the standard `AsyncDisposable` protocol with explicit `disposeAsync()`.
+- `Disposable` is the VS Code-style composite base class. It owns a protected `_store`, exposes `_register<T>()`, and provides `Disposable.None` for an intentionally empty resource.
+- `AbstractDisposable` is for stateful leaf resources that implement custom cleanup in `disposeCore()`.
+- `DisposableStore` owns a reusable group in LIFO order. `clear()` releases the current group and permits new registrations; `isDisposed` reports the terminal state.
+- `MutableDisposable<T>` owns one replaceable resource through `value`; replacing or clearing releases the previous value, while `clearAndLeak()` transfers it without releasing it.
+- `AsyncDisposableStore` owns synchronous and asynchronous resources and releases them asynchronously in LIFO order.
+- `DisposableMap` owns resources whose lifetime follows stable keys.
 - `toDisposable()` adapts one cleanup callback to `IDisposable`.
 
-Public ownership inputs should accept the standard `Disposable` interface.
-Project APIs that create a resource should return `IDisposable` so callers may
-use either `.dispose()` or `using`.
+Public ownership inputs should accept the standard `Disposable` protocol where appropriate, while project APIs that create synchronous resources should return `IDisposable` so callers may use either `.dispose()` or `using`.
 
 ## Ownership rules
 
 Register a resource immediately after creating it:
 
 ```ts
-class TitlebarPart extends DisposableOwner {
-  readonly #listener = this.own(
-    titleService.onDidChange(() => this.render()),
-  );
+class TitlebarPart extends Disposable {
+	private readonly listener = this._register(titleService.onDidChange(() => this.render()));
 }
+```
+
+Use `toDisposable()` when cleanup is a callback or when an API returns a value whose lifetime must be tied to an owner:
+
+```ts
+this._register(toDisposable(() => element.remove()));
 ```
 
 Use `using` for lexical, short-lived ownership:
 
 ```ts
 function performOperation(): void {
-  using subscription = service.subscribe(listener);
-  using lock = acquireLock();
-  doWork();
+	using subscription = service.subscribe(listener);
+	using lock = acquireLock();
+	doWork();
 }
 ```
 
-Use composition when a class already has a natural base class:
+When inheritance is unavailable, compose with a `DisposableStore` and register it as part of the class's disposal protocol. Do not override `Disposable.dispose()` or `[Symbol.dispose]()` merely to forward to the store.
 
-```ts
-class Component extends ExistingBase implements IDisposable {
-  readonly #resources = new DisposableStore();
-
-  dispose(): void {
-    this.#resources.dispose();
-  }
-
-  [Symbol.dispose](): void {
-    this.dispose();
-  }
-}
-```
-
-Disposal must be idempotent. A disposed store or slot rejects new resources
-with `ReferenceError`; it does not silently dispose or adopt the incoming
-resource. Callers therefore retain ownership when registration fails.
+Disposal is idempotent. A disposed store rejects new resources with `ReferenceError` and does not take ownership of the rejected resource; `MutableDisposable.value = resource` is a no-op after the mutable object is disposed and likewise leaves the caller responsible for `resource`.
 
 ## Electron boundary
 
-Electron `contextBridge` cannot carry Symbol-keyed properties. A preload API
-therefore returns a string-keyed `DisposableHandle` containing only
-`dispose()`. This is a serialization-boundary type, not the local lifecycle
-protocol. Adapt it to `IDisposable` with `toDisposable()` when renderer code
-needs to transfer the handle into a local owner.
+Electron `contextBridge` cannot carry Symbol-keyed properties. A preload API therefore returns a string-keyed `DisposableHandle` containing only `dispose()`. This is a serialization-boundary type, not the local lifecycle protocol; adapt it to `IDisposable` with `toDisposable()` when renderer code needs to transfer the handle into a local owner.
 
-Do not create general-purpose adapters elsewhere. Standard `Disposable`
-structural typing already provides local interoperability.
+Do not create general-purpose adapters elsewhere. Standard `Disposable` structural typing already provides local interoperability.
 
 ## Diagnostics
 
-`DisposableTracker` is an opt-in development and test diagnostic. It records
-creation stacks and owner-child relationships, rejects multiple owners and
-ownership cycles, and can assert that a completed scope has no live resources:
+`DisposableTracker` is an opt-in development and test diagnostic. It records creation stacks and owner-child relationships, rejects multiple owners and ownership cycles, and can assert that a completed scope has no live resources:
 
 ```ts
 const tracker = new DisposableTracker();
@@ -120,29 +88,17 @@ store.dispose();
 tracker.assertNoLeaks();
 ```
 
-Only one tracker is installed per JavaScript realm. Zeta's Electron main and
-renderer entry points install it automatically in development and assert their
-respective application scopes during shutdown.
+Only one tracker is installed per JavaScript realm. Tracking is disabled when no tracker is installed, so production lifecycle correctness must never depend on it.
 
-Tracking is disabled when no tracker is installed, so production lifecycle
-correctness must never depend on it.
-
-The thin `IDisposableTracker` contract, current tracker slot, and notification
-hooks live in `lifecycle.ts`. Stack collection, ownership graphs, and leak
-reporting live in `disposableTracker.ts`; the lifecycle module does not depend
-on that concrete implementation.
+The thin `IDisposableTracker` contract, current tracker slot, and notification hooks live in `lifecycle.ts`. Stack collection, ownership graphs, and leak reporting live in `disposableTracker.ts`; the lifecycle module does not depend on that concrete implementation.
 
 ## Review rules
 
-- Register a newly created resource immediately with `own()`, `add()`, a slot,
-  or `using`.
-- Do not discard a returned `IDisposable` unless the API explicitly documents
-  process-lifetime ownership.
+- Register a newly created resource immediately with `_register()`, `add()`, a `MutableDisposable`, or `using`.
+- Do not discard a returned `IDisposable` unless the API explicitly documents process-lifetime ownership.
 - Do not register one resource with multiple owners.
-- Do not override `DisposableOwner.dispose()` or `[Symbol.dispose]()`.
-- Cleanup callbacks must tolerate repeated public disposal, even though the
-  standard stacks already guard their own state.
+- Use `clear()` only for a real clear-and-rebuild lifecycle; use `clearAndLeak()` only when ownership intentionally transfers.
+- Cleanup callbacks must tolerate repeated public disposal, even though the standard stacks already guard their own state.
 - A synchronous owner must not hide unfinished asynchronous cleanup.
 - Keep `AbortSignal` cancellation separate from resource disposal.
-- Add a semantic test whenever a new resource container or ownership pattern is
-  introduced.
+- Add a semantic test whenever a new resource container or ownership pattern is introduced.

@@ -1,7 +1,7 @@
 import "./media/editorGroupWatermark.css";
 import { KeybindingLabel } from "../../../../base/browser/ui/keybindinglabel/keybindinglabel.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { DisposableOwner, type IDisposable, ResettableDisposableGroup, toDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, type IDisposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { CommandId } from "../../../../platform/commands/common/commands.js";
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
 import { h } from "../../../../base/browser/dom.js";
@@ -44,9 +44,9 @@ export const EditorGroupWatermarkEntries =
 	new EditorGroupWatermarkRegistry();
 
 /** Renders command shortcuts when an editor group has no active editor. */
-export class EditorGroupWatermark extends DisposableOwner {
+export class EditorGroupWatermark extends Disposable {
 	readonly domNode: HTMLElement;
-	private readonly rendered = this.own(new ResettableDisposableGroup());
+	private readonly rendered = this._register(new DisposableStore());
 	private readonly keybindingService: IKeybindingService;
 
 	constructor(
@@ -60,9 +60,9 @@ export class EditorGroupWatermark extends DisposableOwner {
 		this.domNode.className = "zeta-editor-group-watermark-shortcuts";
 		this.domNode.setAttribute("aria-label", "Editor shortcuts");
 		container.append(this.domNode);
-		this.defer(() => this.domNode.remove());
-		this.own(EditorGroupWatermarkEntries.onDidChange(() => this.render()));
-		this.own(
+		this._register(toDisposable(() => this.domNode.remove()));
+		this._register(EditorGroupWatermarkEntries.onDidChange(() => this.render()));
+		this._register(
 			this.keybindingService.onDidUpdateKeybindings(() => this.render()),
 		);
 		this.render();

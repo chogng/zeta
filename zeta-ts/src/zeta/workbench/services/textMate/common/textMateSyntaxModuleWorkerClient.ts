@@ -1,5 +1,5 @@
 import { raceCancellation } from "../../../../base/common/cancellation.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { SyntaxModuleWorkerClient } from "../../../../editor/common/languages/syntax/syntaxModuleWorkerClient.js";
 import { type SyntaxRequest } from "../../../../editor/common/languages/syntax/syntaxProviders.js";
 import { type SyntaxLane, type SyntaxResult, type SyntaxWorker } from "../../../../editor/common/languages/syntax/syntaxService.js";
@@ -18,7 +18,7 @@ export interface TextMateSyntaxModuleWorkerClientOptions {
 }
 
 /** Syntax Worker client gated by the latest renderer-owned grammar catalog. */
-export class TextMateSyntaxModuleWorkerClient extends DisposableOwner implements SyntaxWorker, LanguageWorkerModelSynchronizer, LanguageWorkerResultSettler {
+export class TextMateSyntaxModuleWorkerClient extends Disposable implements SyntaxWorker, LanguageWorkerModelSynchronizer, LanguageWorkerResultSettler {
 	private readonly worker: SyntaxModuleWorkerClient;
 	private readonly catalogClient: TextMateGrammarCatalogWireClient;
 	private readonly themeClient: TextMateScopeThemeWireClient | undefined;
@@ -34,23 +34,23 @@ export class TextMateSyntaxModuleWorkerClient extends DisposableOwner implements
 		if (!catalogs || typeof catalogs !== "object" || typeof catalogs.onDidChangeCatalog !== "function" || !("currentCatalog" in catalogs)) {
 			throw new TypeError("TextMate Syntax Worker client requires a grammar catalog source");
 		}
-		this.worker = this.own(new SyntaxModuleWorkerClient(port, options));
-		this.catalogClient = this.own(new TextMateGrammarCatalogWireClient(port, error => this.worker.invalidate(error)));
+		this.worker = this._register(new SyntaxModuleWorkerClient(port, options));
+		this.catalogClient = this._register(new TextMateGrammarCatalogWireClient(port, error => this.worker.invalidate(error)));
 		if (options.scopeTheme !== undefined && (!options.scopeTheme || typeof options.scopeTheme !== "object" || typeof options.scopeTheme.onDidChangeTheme !== "function" || !("currentTheme" in options.scopeTheme))) {
 			throw new TypeError("TextMate Syntax Worker scope theme must be a theme source");
 		}
 		this.themeClient = options.scopeTheme === undefined
 			? undefined
-			: this.own(new TextMateScopeThemeWireClient(port, error => this.worker.invalidate(error)));
+			: this._register(new TextMateScopeThemeWireClient(port, error => this.worker.invalidate(error)));
 		this.catalogTail = this.pushCatalog(catalogs.currentCatalog);
 		this.themeTail = options.scopeTheme === undefined ? Promise.resolve() : this.pushTheme(options.scopeTheme.currentTheme);
 		this.observeTail();
-		this.own(catalogs.onDidChangeCatalog(catalog => {
+		this._register(catalogs.onDidChangeCatalog(catalog => {
 			this.catalogTail = this.catalogTail.then(() => this.pushCatalog(catalog));
 			this.observeTail();
 		}));
 		if (options.scopeTheme) {
-			this.own(options.scopeTheme.onDidChangeTheme(theme => {
+			this._register(options.scopeTheme.onDidChangeTheme(theme => {
 				this.themeTail = this.themeTail.then(() => this.pushTheme(theme));
 				this.observeTail();
 			}));

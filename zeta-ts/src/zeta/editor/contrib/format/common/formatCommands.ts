@@ -1,4 +1,4 @@
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type TextEdit, type TextRange, type TextPosition } from "../../../common/core/text.js";
 import { type TextSelectionSet } from "../../../common/core/selection.js";
 import { type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
@@ -29,7 +29,7 @@ export interface LanguageFormattingProvider extends LanguageFeatureProviderMetad
 }
 
 /** Owns formatting provider dispatch; edit validation/application stays in TextModel and cursor. */
-export class FormatService extends DisposableOwner {
+export class FormatService extends Disposable {
 	constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureProviderRegistry<LanguageFormattingProvider>, private readonly resource?: URI) {
 		super();
 	}

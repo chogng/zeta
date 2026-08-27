@@ -1,17 +1,17 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { TextRange } from "../../../common/core/text.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 /** Replaces the current selection with the next or previous matching occurrence. */
-export class InPlaceReplaceController extends DisposableOwner {
+export class InPlaceReplaceController extends Disposable {
 	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController) {
 		super();
 		if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza in-place replace dependencies must share a text model");
-		this.own(addDisposableListener(input, "keydown", event => {
+		this._register(addDisposableListener(input, "keydown", event => {
 			if (event.defaultPrevented || event.isComposing || !event.shiftKey || event.key !== "Enter" || (!event.ctrlKey && !event.metaKey)) return;
 			stopEvent(event);
 			this.replace(event.altKey ? -1 : 1);
@@ -42,7 +42,7 @@ registerEditorContribution({
 	id: "editor.contrib.inPlaceReplace",
 	install: context => {
 		if (context.kind !== "text") return;
-		context.own(new InPlaceReplaceController(context.view.element, context.viewport, context.selections));
+		context.register(new InPlaceReplaceController(context.view.element, context.viewport, context.selections));
 	},
 });
 

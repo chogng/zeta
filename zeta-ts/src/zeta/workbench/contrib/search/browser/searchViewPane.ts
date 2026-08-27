@@ -1,3 +1,4 @@
+import { toDisposable } from "../../../../base/common/lifecycle.js";
 import { addDisposableListener, h, text as createText } from "../../../../base/browser/dom.js";
 import { Checkbox } from "../../../../base/browser/ui/toggle/toggle.js";
 import type { IWorkspaceSearchQuery, IWorkspaceSearchService, WorkspaceSearchMatch, WorkspaceSearchMatchRange } from "../../../../platform/search/common/search.js";
@@ -49,13 +50,13 @@ export class SearchViewPane extends ViewPane {
 		this.submitButton.textContent = "Search";
 		const toggles = h(document, "div");
 		toggles.className = "zeta-search-toggles";
-		const caseSensitive = this.own(checkbox(
+		const caseSensitive = this._register(checkbox(
 			document,
 			toggles,
 			"Match Case",
 		));
 		this.caseSensitiveInput = caseSensitive.input;
-		const regex = this.own(checkbox(document, toggles, "Use Regex"));
+		const regex = this._register(checkbox(document, toggles, "Use Regex"));
 		this.regexInput = regex.input;
 		const filters = h(document, "div");
 		filters.className = "zeta-search-filters";
@@ -90,11 +91,11 @@ export class SearchViewPane extends ViewPane {
 			this.statusElement,
 			this.resultsElement,
 		);
-		this.own(addDisposableListener(form, "submit", (event) => {
+		this._register(addDisposableListener(form, "submit", (event) => {
 			event.preventDefault();
 			void this.startSearch();
 		}));
-		if (configurationService) this.own(configurationService.onDidChangeConfiguration(event => {
+		if (configurationService) this._register(configurationService.onDidChangeConfiguration(event => {
 			if (
 				event.affectsConfiguration(WorkspaceSearchConfiguration.matchCase) ||
 				event.affectsConfiguration(WorkspaceSearchConfiguration.smartCase) ||
@@ -103,10 +104,10 @@ export class SearchViewPane extends ViewPane {
 				event.affectsConfiguration(WorkspaceSearchConfiguration.excludePatterns)
 			) this.applyConfiguration();
 		}));
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.searchController?.abort();
 			this.groups.clear();
-		});
+		}));
 	}
 
 	private async startSearch(): Promise<void> {

@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableOwner, DisposableStore } from "../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
 import { SyntaxModuleWorkerClient } from "../../common/languages/syntax/syntaxModuleWorkerClient.js";
 import { SyntaxProviderRegistry } from "../../common/languages/syntax/syntaxProviders.js";
 import { SyntaxProviderModuleHost, SyntaxProviderModuleRegistry } from "../../common/languages/syntax/syntaxProviderModules.js";
@@ -105,9 +105,9 @@ function createPortPair(): readonly [MemorySyntaxModulePort, MemorySyntaxModuleP
 	return [first, second];
 }
 
-class MemorySyntaxModulePort extends DisposableOwner implements LanguageWorkerWireClientPort {
-	private readonly messageEmitter = this.own(new Emitter<unknown>());
-	private readonly failureEmitter = this.own(new Emitter<unknown>());
+class MemorySyntaxModulePort extends Disposable implements LanguageWorkerWireClientPort {
+	private readonly messageEmitter = this._register(new Emitter<unknown>());
+	private readonly failureEmitter = this._register(new Emitter<unknown>());
 	private peer: MemorySyntaxModulePort | undefined;
 
 	readonly sentMessages: unknown[] = [];
@@ -116,9 +116,9 @@ class MemorySyntaxModulePort extends DisposableOwner implements LanguageWorkerWi
 
 	constructor() {
 		super();
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.peer = undefined;
-		});
+		}));
 	}
 
 	connect(peer: MemorySyntaxModulePort): void {

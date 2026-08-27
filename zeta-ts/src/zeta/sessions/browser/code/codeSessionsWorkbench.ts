@@ -1,5 +1,5 @@
 import { bindResizableLayout } from "../../../base/browser/ui/resizable/resizable.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { BrowserLayoutService } from "../../../platform/layout/browser/layoutService.js";
 import type { IConfigurationService } from "../../../platform/configuration/common/configurationService.js";
 import type { IKeybindingsResourceApi } from "../../../platform/keybinding/common/keybindingsResource.js";
@@ -30,7 +30,7 @@ export interface CodeSessionsWorkbenchOptions {
 }
 
 /** Fixed, VS Code-inspired Workbench composition for Code agent Sessions. */
-export class CodeSessionsWorkbench extends DisposableOwner {
+export class CodeSessionsWorkbench extends Disposable {
 	readonly domNode: HTMLElement;
 	private readonly layoutService: BrowserLayoutService;
 
@@ -42,28 +42,28 @@ export class CodeSessionsWorkbench extends DisposableOwner {
 		this.domNode = h(ownerDocument, "main");
 		this.domNode.className = "zeta-sessions-window zeta-code-sessions-window";
 		container.append(this.domNode);
-		this.defer(() => this.domNode.remove());
+		this._register(toDisposable(() => this.domNode.remove()));
 		let layout: SessionsWorkbenchLayout | undefined;
 		let sessionsPart: SessionsPart | undefined;
-		const layoutService = this.own(new BrowserLayoutService({
+		const layoutService = this._register(new BrowserLayoutService({
 			root: this.domNode,
 			getContainerOffset: () => layout?.mainContainerOffset ?? { top: 0, quickInputTop: 0 },
 			focus: () => sessionsPart?.focus(),
 		}));
 		this.layoutService = layoutService;
-		const interactionServices = this.own(new WorkbenchInteractionServices({
+		const interactionServices = this._register(new WorkbenchInteractionServices({
 			services: runtime.services,
 			layoutService,
 			configurationService: options.configurationService,
 			keybindingsResourceApi: options.keybindingsResourceApi,
 			createContextMenuService: options.createContextMenuService,
 		}));
-		const titlebar = this.own(new SessionsTitlebarPart(this.domNode, profile, runtime.view, {
+		const titlebar = this._register(new SessionsTitlebarPart(this.domNode, profile, runtime.view, {
 			returnToWorkbench: () => returnToWorkbench(profile.workbenchRelativePath, options.sessionsWindowApi, ownerDocument.location),
 			focusSessions: () => sessionsPart?.focus(),
 		}));
-		const sidebar = this.own(new SessionsSidebarPart(this.domNode, runtime.sessions, runtime.view));
-		sessionsPart = this.own(new SessionsPart(this.domNode, {
+		const sidebar = this._register(new SessionsSidebarPart(this.domNode, runtime.sessions, runtime.view));
+		sessionsPart = this._register(new SessionsPart(this.domNode, {
 			sessionService: runtime.sessions,
 			chatService: runtime.chat,
 			contextMenuService: interactionServices.contextMenuService,
@@ -75,21 +75,21 @@ export class CodeSessionsWorkbench extends DisposableOwner {
 			closeSelection: selection => runtime.view.closeVisibleSelection(selection),
 		}));
 		const updateSessionsPart = (): void => sessionsPart?.updateVisibleSelections(runtime.view.visibleSelections, runtime.view.activeSelection);
-		this.own(runtime.view.onDidChange(updateSessionsPart));
+		this._register(runtime.view.onDidChange(updateSessionsPart));
 		updateSessionsPart();
-		const auxiliarybar = this.own(new SessionsAuxiliarybarPart(this.domNode, runtime.sessions, runtime.view));
+		const auxiliarybar = this._register(new SessionsAuxiliarybarPart(this.domNode, runtime.sessions, runtime.view));
 		const parts = new Map<SessionsPartId, WorkbenchPart>([
 			["titlebar", titlebar],
 			["sidebar", sidebar],
 			["sessions", sessionsPart],
 			["auxiliarybar", auxiliarybar],
 		]);
-		layout = this.own(new SessionsWorkbenchLayout(this.domNode, parts, {
+		layout = this._register(new SessionsWorkbenchLayout(this.domNode, parts, {
 			initialDimension: layoutService.mainContainerDimension,
 			storageService: options.storageService,
 		}));
 		runtime.services.set(ISessionsLayoutService, layout);
-		this.own(bindResizableLayout(layoutService.onDidLayoutMainContainer, layout));
+		this._register(bindResizableLayout(layoutService.onDidLayoutMainContainer, layout));
 		void runtime.initialize();
 	}
 

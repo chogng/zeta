@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { AgentResponse, IChatService, ModelCatalogEntry, SkillCommandDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadItem, ThreadUpdateEnvelope, Turn, TurnInteraction } from "../../../../services/chat/common/chatService.js";
 import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
 import type { ResolvedChatContext } from "../../../../services/chat/common/chatContextService.js";
@@ -25,10 +25,10 @@ export type ChatPaneSelection =
  * updates are layered by Item ID and discarded once the committed snapshot
  * contains the same item.
  */
-export class ChatPaneModel extends DisposableOwner {
+export class ChatPaneModel extends Disposable {
 	private readonly chatService: IChatService;
 	private readonly sessionService: ISessionsManagementService;
-	private readonly _onDidChange = this.own(new Emitter<void>());
+	private readonly _onDidChange = this._register(new Emitter<void>());
 	private readonly transientItems = new Map<string, ThreadItem>();
 	private selection: ChatPaneSelection;
 	private _thread: Thread | undefined;
@@ -54,22 +54,22 @@ export class ChatPaneModel extends DisposableOwner {
 		this.chatService = chatService;
 		this.sessionService = sessionService;
 		this.selection = selection;
-		this.own(chatService.onDidUpdateThread((update) => this.acceptUpdate(update)));
-		this.own(chatService.onDidUpdateGoal((update) => {
+		this._register(chatService.onDidUpdateThread((update) => this.acceptUpdate(update)));
+		this._register(chatService.onDidUpdateGoal((update) => {
 			if (update.threadId !== this.threadId || !this._thread) return;
 			this._thread = { ...this._thread, goal: update.goal ?? null };
 			this._onDidChange.fire();
 		}));
-		this.own(chatService.onDidBecomeReady(() => void this.reconnect()));
-		this.own(chatService.onDidChangeModels(() => void this.loadModels()));
-		this.own(chatService.onDidChangeSkills(() => void this.loadSkillCommands()));
-		this.defer(() => {
+		this._register(chatService.onDidBecomeReady(() => void this.reconnect()));
+		this._register(chatService.onDidChangeModels(() => void this.loadModels()));
+		this._register(chatService.onDidChangeSkills(() => void this.loadSkillCommands()));
+		this._register(toDisposable(() => {
 			this.generation++;
 			const active = this.activeSession;
 			if (active) void this.chatService.unsubscribeThread(active.session.sessionId, active.threadId);
 			this.transientItems.clear();
 			this.resetStreamCursor();
-		});
+		}));
 		void this.initialize();
 	}
 

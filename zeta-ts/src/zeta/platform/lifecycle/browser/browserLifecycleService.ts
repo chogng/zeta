@@ -1,5 +1,5 @@
 import { Emitter } from "../../../base/common/event.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { ILifecycleService, IWillShutdownEvent, LifecyclePhase, ShutdownReason } from "../common/lifecycleService.js";
 
 export interface BrowserLifecycleServiceOptions {
@@ -8,9 +8,9 @@ export interface BrowserLifecycleServiceOptions {
 }
 
 /** Maps browser page lifecycle into one ordered shutdown join point. */
-export class BrowserLifecycleService extends DisposableOwner implements ILifecycleService {
-	private readonly willShutdownEmitter = this.own(new Emitter<IWillShutdownEvent>());
-	private readonly didShutdownEmitter = this.own(new Emitter<ShutdownReason>());
+export class BrowserLifecycleService extends Disposable implements ILifecycleService {
+	private readonly willShutdownEmitter = this._register(new Emitter<IWillShutdownEvent>());
+	private readonly didShutdownEmitter = this._register(new Emitter<ShutdownReason>());
 	private readonly onError: (error: unknown) => void;
 	private shutdownPromise: Promise<void> | undefined;
 	private _phase: LifecyclePhase = "running";
@@ -23,7 +23,7 @@ export class BrowserLifecycleService extends DisposableOwner implements ILifecyc
 		this.onError = options.onError;
 		const onPageHide = (): void => { void this.shutdown("pageHide").catch(this.onError); };
 		options.ownerWindow.addEventListener("pagehide", onPageHide);
-		this.defer(() => options.ownerWindow.removeEventListener("pagehide", onPageHide));
+		this._register(toDisposable(() => options.ownerWindow.removeEventListener("pagehide", onPageHide)));
 	}
 
 	get phase(): LifecyclePhase { return this._phase; }

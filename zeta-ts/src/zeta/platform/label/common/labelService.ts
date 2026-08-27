@@ -2,7 +2,7 @@ import { Emitter, type Event } from '../../../base/common/event.js';
 import { getPathLabel, type IPathLabelFormatting, type IRelativePathProvider, type IUserHomeProvider } from '../../../base/common/labels.js';
 import { operatingSystem, type OperatingSystem } from '../../../base/common/platform.js';
 import type { URI } from '../../../base/common/uri.js';
-import { DisposableOwner, type IDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { IWorkspaceContextService } from '../../workspace/common/workspace.js';
 
@@ -35,8 +35,8 @@ export interface ILabelService extends IDisposable {
 export const ILabelService = createServiceIdentifier<ILabelService>('labelService');
 
 /** Default label service for the current Workbench workspace and host OS. */
-export class LabelService extends DisposableOwner implements ILabelService {
-	private readonly formatterChangeEmitter = this.own(new Emitter<ILabelFormatterChangeEvent>());
+export class LabelService extends Disposable implements ILabelService {
+	private readonly formatterChangeEmitter = this._register(new Emitter<ILabelFormatterChangeEvent>());
 	private readonly formatters = new Map<string, ILabelFormatter[]>();
 
 	readonly onDidChangeFormatters = this.formatterChangeEmitter.event;

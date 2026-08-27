@@ -20,7 +20,7 @@ for (const [name, value] of Object.entries({
 
 const { Keybinding, logicalKey } = await import('../../../../../base/common/keybindings.js');
 const { h } = await import('../../../../../base/browser/dom.js');
-const { DisposableOwner, DisposableStore } = await import('../../../../../base/common/lifecycle.js');
+const { Disposable, DisposableStore } = await import('../../../../../base/common/lifecycle.js');
 const { OperatingSystem } = await import('../../../../../base/common/platform.js');
 const { CommandsRegistry } = await import('../../../../../platform/commands/common/commands.js');
 const { ContextKeyService } = await import('../../../../../platform/contextkey/common/contextkey.js');
@@ -169,7 +169,7 @@ function nextTurn(): Promise<void> {
 	return new Promise(resolve => globalThis.setTimeout(resolve, 0));
 }
 
-class TestPreferencesEditor extends DisposableOwner {
+class TestPreferencesEditor extends Disposable {
 	readonly id = 'test.preferences';
 	private element: HTMLElement | undefined;
 

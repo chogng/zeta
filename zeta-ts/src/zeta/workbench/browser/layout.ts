@@ -3,7 +3,7 @@ import { Dimension, getClientArea, type IDimension } from "../../base/browser/ge
 import { SerializableGrid, type SerializedGridDescriptor } from "../../base/browser/ui/grid/grid.js";
 import type { IResizable } from "../../base/browser/ui/resizable/resizable.js";
 import { Emitter } from "../../base/common/event.js";
-import { DisposableOwner } from "../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../base/common/lifecycle.js";
 import { isRecord } from "../../base/common/types.js";
 import type { ILayoutOffsetInfo } from "../../platform/layout/common/layoutService.js";
 import { type IStorageService, StorageScope, StorageTarget } from "../../platform/storage/common/storage.js";
@@ -71,13 +71,13 @@ export interface WorkbenchLayoutOptions {
  * class only translates those dimensions into Grid bounds and Part layout calls.
  */
 export class WorkbenchLayout
-	extends DisposableOwner
+	extends Disposable
 	implements IResizable, IWorkbenchLayoutService {
 	private readonly views = new Map<WorkbenchPartId, WorkbenchPartView>();
 	private readonly grid: SerializableGrid<WorkbenchPartView>;
 	private readonly stateModel: WorkbenchLayoutStateModel;
 	private readonly partVisibility = new Map<WorkbenchPartId, boolean>();
-	private readonly _onDidChangePartVisibility = this.own(
+	private readonly _onDidChangePartVisibility = this._register(
 		new Emitter<WorkbenchPartVisibilityChangeEvent>(),
 	);
 
@@ -94,7 +94,7 @@ export class WorkbenchLayout
 		this.domNode = h(container.ownerDocument, "div");
 		this.domNode.className = "zeta-workbench-layout";
 		container.append(this.domNode);
-		this.defer(() => this.domNode.remove());
+		this._register(toDisposable(() => this.domNode.remove()));
 
 		for (const partId of workbenchPartIds) {
 			this.views.set(
@@ -128,7 +128,7 @@ export class WorkbenchLayout
 			initialState.agentSidebar.visible,
 			initialState.panel.visible,
 		);
-		this.grid = this.own(SerializableGrid.deserialize(
+		this.grid = this._register(SerializableGrid.deserialize(
 			this.domNode,
 			createWorkbenchGridDescriptor(this.views, initialDimension, initialState),
 			{ fromJSON: (data) => this.view(parseWorkbenchPartId(data)) },
@@ -137,12 +137,12 @@ export class WorkbenchLayout
 				edgeSnapping: true,
 			},
 		));
-		this.own(this.grid.onDidChange(() => {
+		this._register(this.grid.onDidChange(() => {
 			this.projectPartFrameInsets();
 			this.publishPartVisibility();
 		}));
 		if (options.storageService) {
-			this.own(options.storageService.onWillSaveState(() => {
+			this._register(options.storageService.onWillSaveState(() => {
 				this.saveState();
 			}));
 		}

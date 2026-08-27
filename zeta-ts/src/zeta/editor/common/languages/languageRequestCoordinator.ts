@@ -1,4 +1,4 @@
-import { DisposableOwner, DisposableSlot, type IDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { type TextModelChange, type TextSnapshot } from "../core/text.js";
 import { type TextModel } from "../model/textModel.js";
 
@@ -106,8 +106,8 @@ interface ActiveLanguageRequest<TLane extends string> {
  * Requests in the same lane are latest-wins. Different lanes may run
  * concurrently. The coordinator owns its worker, but not the text model.
  */
-export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult> extends DisposableOwner {
-	private readonly workerSlot = this.own(new DisposableSlot<LanguageWorker<TLane, TPayload, TResult>>());
+export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult> extends Disposable {
+	private readonly workerSlot = this._register(new MutableDisposable<LanguageWorker<TLane, TPayload, TResult>>());
 	private readonly activeRequests = new Map<TLane, ActiveLanguageRequest<TLane>>();
 	private nextRequestId = 1;
 
@@ -120,13 +120,13 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 			this.dispose();
 			throw new TypeError("Language worker factory must be a function");
 		}
-		this.own(model.onDidChange(change => {
+		this._register(model.onDidChange(change => {
 			this.cancelAll(LanguageRequestCancellationReason.ModelChanged);
 			this.synchronizeWorker(change);
 		}));
-		this.defer(() => {
+		this._register(toDisposable(() => {
 			this.cancelAll(LanguageRequestCancellationReason.CoordinatorDisposed);
-		});
+		}));
 	}
 
 	startWorker(): void {
@@ -272,7 +272,7 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 		) {
 			throw new TypeError("Language worker factory returned an invalid worker");
 		}
-		this.workerSlot.replace(worker);
+		this.workerSlot.value = worker;
 		return worker;
 	}
 
@@ -329,11 +329,11 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 
 }
 
-function supportsModelSynchronization(value: Disposable): value is Disposable & LanguageWorkerModelSynchronizer {
+function supportsModelSynchronization(value: IDisposable): value is IDisposable & LanguageWorkerModelSynchronizer {
 	return typeof (value as Partial<LanguageWorkerModelSynchronizer>).synchronizeModel === "function";
 }
 
-function settleWorkerResult(value: Disposable, requestId: number, disposition: LanguageWorkerResultDisposition): void {
+function settleWorkerResult(value: IDisposable, requestId: number, disposition: LanguageWorkerResultDisposition): void {
 	const settler = value as Partial<LanguageWorkerResultSettler>;
 	if (typeof settler.settleResult === "function") settler.settleResult(requestId, disposition);
 }

@@ -3,7 +3,7 @@ import type { FsChanged } from "../../../../../generated/app-server/types.js";
 import type { IResourceApi } from "../../app-server/common/appServerApi.js";
 import { decodeBase64 } from "../../../base/common/buffer.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
 import { FileKind, FileNotFoundError, FileRevisionConflictError, type FileDeleteMode, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type IFileBytes, type IFileChangeEvent, type IFileContent, type IFileEntry, type IFileService, type IFileStat, type IFileWriteRequest, type IFileWriteResult } from "../common/files.js";
 import type { IWorkspaceContextService } from "../../workspace/common/workspace.js";
@@ -31,11 +31,11 @@ export interface BrowserFileServiceOptions {
 /**
  * Maps workspace resource URIs to the App Server's root-relative filesystem protocol.
  */
-export class BrowserFileService extends DisposableOwner implements IFileService {
+export class BrowserFileService extends Disposable implements IFileService {
 	private readonly api: IFileSystemApi;
 	private readonly resourceApi: IResourceApi;
 	private readonly workspaceContextService: IWorkspaceContextService;
-	private readonly fileChanges = this.own(new Emitter<IFileChangeEvent>());
+	private readonly fileChanges = this._register(new Emitter<IFileChangeEvent>());
 
 	readonly onDidChangeFiles = this.fileChanges.event;
 
@@ -44,7 +44,7 @@ export class BrowserFileService extends DisposableOwner implements IFileService 
 		this.api = options.api;
 		this.resourceApi = options.resourceApi;
 		this.workspaceContextService = options.workspaceContextService;
-		if (options.onDidChange) this.own(options.onDidChange(change => this.acceptFileChange(change)));
+		if (options.onDidChange) this._register(options.onDidChange(change => this.acceptFileChange(change)));
 	}
 
 	async stat(resource: URI): Promise<IFileStat> {

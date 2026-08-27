@@ -1,6 +1,6 @@
 import { addDisposableListener } from "../../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../../base/common/lifecycle.js";
 import { type TextSelectionOffsets } from "../../../../common/commands/editorEditCommand.js";
 import { normalizeTextLineEndings } from "../../../../common/core/text.js";
 import { type EditContextCompositionEvent } from "../editContext.js";
@@ -13,19 +13,19 @@ import { type ITextAreaWrapper, TextAreaState } from "./textAreaEditContextState
  * routed by the owning EditorView, while accessibility content
  * is written by the textarea accessibility controller.
  */
-export class TextAreaInput extends DisposableOwner implements ITextAreaWrapper {
-	private readonly focusEmitter = this.own(new Emitter<void>());
-	private readonly blurEmitter = this.own(new Emitter<void>());
-	private readonly beforeInputEmitter = this.own(new Emitter<InputEvent>());
-	private readonly inputEmitter = this.own(new Emitter<InputEvent>());
-	private readonly selectEmitter = this.own(new Emitter<void>());
-	private readonly keydownEmitter = this.own(new Emitter<KeyboardEvent>());
-	private readonly compositionStartEmitter = this.own(new Emitter<EditContextCompositionEvent>());
-	private readonly compositionUpdateEmitter = this.own(new Emitter<EditContextCompositionEvent>());
-	private readonly compositionEndEmitter = this.own(new Emitter<EditContextCompositionEvent>());
-	private readonly copyEmitter = this.own(new Emitter<ClipboardEvent>());
-	private readonly cutEmitter = this.own(new Emitter<ClipboardEvent>());
-	private readonly pasteEmitter = this.own(new Emitter<ClipboardEvent>());
+export class TextAreaInput extends Disposable implements ITextAreaWrapper {
+	private readonly focusEmitter = this._register(new Emitter<void>());
+	private readonly blurEmitter = this._register(new Emitter<void>());
+	private readonly beforeInputEmitter = this._register(new Emitter<InputEvent>());
+	private readonly inputEmitter = this._register(new Emitter<InputEvent>());
+	private readonly selectEmitter = this._register(new Emitter<void>());
+	private readonly keydownEmitter = this._register(new Emitter<KeyboardEvent>());
+	private readonly compositionStartEmitter = this._register(new Emitter<EditContextCompositionEvent>());
+	private readonly compositionUpdateEmitter = this._register(new Emitter<EditContextCompositionEvent>());
+	private readonly compositionEndEmitter = this._register(new Emitter<EditContextCompositionEvent>());
+	private readonly copyEmitter = this._register(new Emitter<ClipboardEvent>());
+	private readonly cutEmitter = this._register(new Emitter<ClipboardEvent>());
+	private readonly pasteEmitter = this._register(new Emitter<ClipboardEvent>());
 	private connected = false;
 	private selectionChangeIgnoredUntil = 0;
 	private _textAreaState = TextAreaState.EMPTY;
@@ -56,29 +56,29 @@ export class TextAreaInput extends DisposableOwner implements ITextAreaWrapper {
 		this.assertNotDisposed();
 		if (this.connected) return;
 		this.connected = true;
-		this.own(addDisposableListener(this.element, "focus", () => this.focusEmitter.fire(undefined)));
-		this.own(addDisposableListener(this.element, "blur", () => this.blurEmitter.fire(undefined)));
-		this.own(addDisposableListener<CompositionEvent>(
+		this._register(addDisposableListener(this.element, "focus", () => this.focusEmitter.fire(undefined)));
+		this._register(addDisposableListener(this.element, "blur", () => this.blurEmitter.fire(undefined)));
+		this._register(addDisposableListener<CompositionEvent>(
 			this.element,
 			"compositionstart",
 			event => this.compositionStartEmitter.fire(toCompositionEvent(this.element, event)),
 		));
-		this.own(addDisposableListener<CompositionEvent>(
+		this._register(addDisposableListener<CompositionEvent>(
 			this.element,
 			"compositionupdate",
 			event => this.compositionUpdateEmitter.fire(toCompositionEvent(this.element, event)),
 		));
-		this.own(addDisposableListener<CompositionEvent>(
+		this._register(addDisposableListener<CompositionEvent>(
 			this.element,
 			"compositionend",
 			event => this.compositionEndEmitter.fire(toCompositionEvent(this.element, event)),
 		));
-		this.own(addDisposableListener<InputEvent>(
+		this._register(addDisposableListener<InputEvent>(
 			this.element,
 			"beforeinput",
 			event => this.beforeInputEmitter.fire(event),
 		));
-		this.own(addDisposableListener<InputEvent>(
+		this._register(addDisposableListener<InputEvent>(
 			this.element,
 			"input",
 			event => {
@@ -86,14 +86,14 @@ export class TextAreaInput extends DisposableOwner implements ITextAreaWrapper {
 				this.inputEmitter.fire(event);
 			},
 		));
-		this.own(addDisposableListener(this.element, "select", () => this.fireSelectionChange()));
-		this.own(addDisposableListener(this.element.ownerDocument, "selectionchange", () => {
+		this._register(addDisposableListener(this.element, "select", () => this.fireSelectionChange()));
+		this._register(addDisposableListener(this.element.ownerDocument, "selectionchange", () => {
 			if (this.element.ownerDocument.activeElement === this.element) this.fireSelectionChange();
 		}));
-		this.own(addDisposableListener<ClipboardEvent>(this.element, "copy", event => this.copyEmitter.fire(event)));
-		this.own(addDisposableListener<ClipboardEvent>(this.element, "cut", event => this.cutEmitter.fire(event)));
-		this.own(addDisposableListener<ClipboardEvent>(this.element, "paste", event => this.pasteEmitter.fire(event)));
-		this.own(addDisposableListener<KeyboardEvent>(
+		this._register(addDisposableListener<ClipboardEvent>(this.element, "copy", event => this.copyEmitter.fire(event)));
+		this._register(addDisposableListener<ClipboardEvent>(this.element, "cut", event => this.cutEmitter.fire(event)));
+		this._register(addDisposableListener<ClipboardEvent>(this.element, "paste", event => this.pasteEmitter.fire(event)));
+		this._register(addDisposableListener<KeyboardEvent>(
 			this.element,
 			"keydown",
 			event => this.keydownEmitter.fire(event),

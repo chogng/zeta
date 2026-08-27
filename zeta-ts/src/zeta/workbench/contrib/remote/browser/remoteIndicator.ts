@@ -1,5 +1,5 @@
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
-import { DisposableOwner } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import type { RemoteConnectionState } from "../../../../platform/remote/common/remote.js";
 import type { IWorkbenchContribution } from "../../../common/contributions.js";
 import type { IRemoteAgentService } from "../../../services/remote/common/remoteAgentService.js";
@@ -17,23 +17,23 @@ export interface RemoteStatusIndicatorOptions {
 }
 
 /** Projects the active backend connection into the leading Workbench status item. */
-export class RemoteStatusIndicator extends DisposableOwner implements IWorkbenchContribution {
+export class RemoteStatusIndicator extends Disposable implements IWorkbenchContribution {
 	static readonly ID = "workbench.contrib.remoteStatusIndicator";
 
 	constructor(options: RemoteStatusIndicatorOptions) {
 		super();
 		let state = options.remoteAgentService.connectionState ?? "connecting";
 		let connection = options.remoteAgentService.connection;
-		const status = this.own(options.statusbarService.addEntry(remoteStatusEntry(state, connection, options.runCommand), {
+		const status = this._register(options.statusbarService.addEntry(remoteStatusEntry(state, connection, options.runCommand), {
 			id: "zeta.status.remote",
 			alignment: StatusbarAlignment.Left,
 			priority: RemoteStatusPriority,
 		}));
-		this.own(options.remoteAgentService.onDidChangeConnectionState(nextState => {
+		this._register(options.remoteAgentService.onDidChangeConnectionState(nextState => {
 			state = nextState;
 			status.update(remoteStatusEntry(state, connection, options.runCommand));
 		}));
-		this.own(options.remoteAgentService.onDidChangeConnection(nextConnection => {
+		this._register(options.remoteAgentService.onDidChangeConnection(nextConnection => {
 			connection = nextConnection;
 			status.update(remoteStatusEntry(state, connection, options.runCommand));
 		}));

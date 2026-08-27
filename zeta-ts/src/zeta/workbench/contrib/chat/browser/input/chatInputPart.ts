@@ -7,7 +7,7 @@ import { appendIcon } from "../../../../../base/browser/ui/icon/icon.js";
 import { Menu } from "../../../../../base/browser/ui/menu/menu.js";
 import type { IAction } from "../../../../../base/common/actions.js";
 import type { Icon } from "../../../../../base/common/icon.js";
-import { DisposableOwner, DisposableSlot, ResettableDisposableGroup } from "../../../../../base/common/lifecycle.js";
+import { Disposable, MutableDisposable, DisposableStore, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
 import { WorkbenchToolBar } from "../../../../../platform/actions/browser/toolbar.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
@@ -41,11 +41,11 @@ const modeOptions: readonly { readonly id: ChatInputMode; readonly label: string
 ];
 
 /** Owns the complete input region and all user-facing interactions for one Chat pane. */
-export class ChatInputPart extends DisposableOwner {
+export class ChatInputPart extends Disposable {
 	readonly element: HTMLElement;
 	private readonly delegate: ChatInputDelegate;
-	private readonly interactionListeners = this.own(new ResettableDisposableGroup());
-	private readonly attachmentListeners = this.own(new ResettableDisposableGroup());
+	private readonly interactionListeners = this._register(new DisposableStore());
+	private readonly attachmentListeners = this._register(new DisposableStore());
 	private readonly attachments = new Map<string, ChatContextAttachment>();
 	private readonly status: HTMLDivElement;
 	private readonly interaction: HTMLDivElement;
@@ -80,36 +80,36 @@ export class ChatInputPart extends DisposableOwner {
 		this.attachmentList.setAttribute("aria-label", "Attached context");
 		const editorHost = h(ownerDocument, "div");
 		editorHost.className = "zeta-chat-input-editor-host";
-		this.input = this.own(ChatInputEditors.create({
+		this.input = this._register(ChatInputEditors.create({
 			container: editorHost,
 			placeholder: "Ask Zeta",
 			ariaLabel: "Chat message",
 			slashCommands: this.slashCommands,
 		}));
-		this.inputToolbar = this.own(new WorkbenchToolBar(this.inputContainer, contextMenuService, {
+		this.inputToolbar = this._register(new WorkbenchToolBar(this.inputContainer, contextMenuService, {
 			ariaLabel: "Chat input actions",
 			actionViewItemProvider: action => this.createToolbarViewItem(action, contextMenuService, contextViewService),
 		}));
 		this.inputToolbar.element.classList.add("zeta-chat-input-toolbars");
 		this.inputContainer.append(this.attachmentList, editorHost, this.inputToolbar.element);
 		this.element.append(this.status, this.interaction, this.inputContainer);
-		this.own(addDisposableListener(this.inputContainer, "focusin", () => this.inputContainer.classList.add("focused")));
-		this.own(addDisposableListener(this.inputContainer, "focusout", event => {
+		this._register(addDisposableListener(this.inputContainer, "focusin", () => this.inputContainer.classList.add("focused")));
+		this._register(addDisposableListener(this.inputContainer, "focusout", event => {
 			if (this.inputContainer.contains(event.relatedTarget as Node | null)) return;
 			this.inputContainer.classList.remove("focused");
 		}));
-		this.own(addDisposableListener(this.inputContainer, "submit", (event) => {
+		this._register(addDisposableListener(this.inputContainer, "submit", (event) => {
 			event.preventDefault();
 			void this.acceptInput().catch(() => undefined);
 		}));
-		this.own(this.input.onDidChange(() => {
+		this._register(this.input.onDidChange(() => {
 			this.status.textContent = this.statusText(this.state);
 			this.renderToolbar();
 		}));
-		this.own(this.input.onDidSubmit(() => this.inputContainer.requestSubmit()));
+		this._register(this.input.onDidSubmit(() => this.inputContainer.requestSubmit()));
 		this.renderToolbarActions();
 		this.renderAttachments();
-		this.defer(() => this.element.remove());
+		this._register(toDisposable(() => this.element.remove()));
 	}
 
 	private async submit(value: string, contexts: readonly ChatContextAttachment[], operation: Promise<void>): Promise<void> {
@@ -490,7 +490,7 @@ class ChatInputModeSelectorViewItem extends ButtonActionViewItem {
 	private readonly selectorAction: SelectorAction;
 	private readonly contextViewService: IContextViewService;
 	private readonly onDidSelect: () => void;
-	private readonly menu = this.own(new DisposableSlot<Menu>());
+	private readonly menu = this._register(new MutableDisposable<Menu>());
 	private contextView: ContextView | undefined;
 	private visible = false;
 
@@ -516,8 +516,8 @@ class ChatInputModeSelectorViewItem extends ButtonActionViewItem {
 		indicator.className = "zeta-dropdown-menu-indicator zeta-chat-input-mode-indicator";
 		appendIcon(lxiconsLibrary.dropdownIndicator, indicator);
 		button.append(indicator);
-		this.contextView = this.own(new ContextView(this.contextViewService.container));
-		this.own(addDisposableListener(button, "keydown", (event) => {
+		this.contextView = this._register(new ContextView(this.contextViewService.container));
+		this._register(addDisposableListener(button, "keydown", (event) => {
 			if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
 			stopEvent(event);
 			this.show();
@@ -547,7 +547,7 @@ class ChatInputModeSelectorViewItem extends ButtonActionViewItem {
 			},
 		});
 		menu.element.classList.add("zeta-chat-input-mode-menu");
-		this.menu.replace(menu);
+		this.menu.value = menu;
 		const shown = contextView.show({
 			anchor: this.button.domNode,
 			content: menu.element,

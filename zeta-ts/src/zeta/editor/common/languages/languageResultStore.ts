@@ -1,5 +1,5 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { isPositiveSafeInteger } from "../../../base/common/numbers.js";
 import { type VersionedLanguageResult } from "./languageRequestCoordinator.js";
 import { type TextModel } from "../model/textModel.js";
@@ -47,8 +47,8 @@ export type LanguageResultNormalizer<TResult> = (value: TResult, model: TextMode
  * The store observes but does not own its text model. Any model transaction
  * clears the result instead of mapping stale language ranges through edits.
  */
-export class VersionedLanguageResultStore<TResult> extends DisposableOwner {
-	private readonly changeEmitter = this.own(new Emitter<LanguageResultStoreChange<TResult>>());
+export class VersionedLanguageResultStore<TResult> extends Disposable {
+	private readonly changeEmitter = this._register(new Emitter<LanguageResultStoreChange<TResult>>());
 	private currentResult: VersionedLanguageResult<TResult> | undefined;
 	private latestAcceptedRequestId = 0;
 	private normalizing = false;
@@ -64,10 +64,10 @@ export class VersionedLanguageResultStore<TResult> extends DisposableOwner {
 			this.dispose();
 			throw new TypeError("Language result normalizer must be a function");
 		}
-		this.own(model.onDidChange(() => this.acceptModelChange()));
-		this.defer(() => {
+		this._register(model.onDidChange(() => this.acceptModelChange()));
+		this._register(toDisposable(() => {
 			this.currentResult = undefined;
-		});
+		}));
 	}
 
 	get textModel(): TextModel {

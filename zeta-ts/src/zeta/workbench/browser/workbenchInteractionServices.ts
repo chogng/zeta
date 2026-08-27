@@ -1,5 +1,5 @@
 import { setHoverDelegate } from "../../base/browser/ui/hover/hoverDelegate.js";
-import { DisposableOwner } from "../../base/common/lifecycle.js";
+import { Disposable } from "../../base/common/lifecycle.js";
 import { IMenuService, MenuService } from "../../platform/actions/common/menuService.js";
 import { ICommandService } from "../../platform/commands/common/commands.js";
 import { IConfigurationService, type IConfigurationService as IConfigurationServiceContract } from "../../platform/configuration/common/configurationService.js";
@@ -51,7 +51,7 @@ export interface WorkbenchInteractionServicesOptions {
  * this runtime owns the canonical command, context, menu, keybinding, overlay,
  * quick-input, settings, and hover service graph.
  */
-export class WorkbenchInteractionServices extends DisposableOwner {
+export class WorkbenchInteractionServices extends Disposable {
 	readonly commandService: CommandService;
 	readonly contextKeyService: ContextKeyService;
 	readonly menuService: MenuService;
@@ -72,23 +72,23 @@ export class WorkbenchInteractionServices extends DisposableOwner {
 		const userKeyboardLayoutService = options.userKeyboardLayoutApi ?? UnavailableUserKeyboardLayoutService;
 		services.set(IUserKeyboardLayoutService, userKeyboardLayoutService);
 
-		this.commandService = this.own(new CommandService(services));
+		this.commandService = this._register(new CommandService(services));
 		services.set(ICommandService, this.commandService);
-		this.contextKeyService = this.own(new ContextKeyService());
+		this.contextKeyService = this._register(new ContextKeyService());
 		services.set(IContextKeyService, this.contextKeyService);
 
-		const keyboardLayoutService = this.own(new BrowserKeyboardLayoutService({
+		const keyboardLayoutService = this._register(new BrowserKeyboardLayoutService({
 			navigator: ownerWindow.navigator,
 			configurationService: options.configurationService,
 			layoutProvider: options.keyboardLayoutProvider,
 			userLayoutProvider: userKeyboardLayoutService,
 		}));
 		services.set(IKeyboardLayoutService, keyboardLayoutService);
-		const keybindingsResourceService = this.own(new WorkbenchKeybindingsResourceService({
+		const keybindingsResourceService = this._register(new WorkbenchKeybindingsResourceService({
 			api: options.keybindingsResourceApi,
 		}));
 		services.set(IKeybindingsResourceService, keybindingsResourceService);
-		this.keybindingService = this.own(new WorkbenchKeybindingService({
+		this.keybindingService = this._register(new WorkbenchKeybindingService({
 			ownerDocument,
 			commandService: this.commandService,
 			contextKeyService: this.contextKeyService,
@@ -100,9 +100,9 @@ export class WorkbenchInteractionServices extends DisposableOwner {
 
 		this.menuService = new MenuService(this.commandService, this.contextKeyService);
 		services.set(IMenuService, this.menuService);
-		this.contextViewService = this.own(new BrowserContextViewService(options.layoutService.activeContainer, options.layoutService));
+		this.contextViewService = this._register(new BrowserContextViewService(options.layoutService.activeContainer, options.layoutService));
 		services.set(IContextViewService, this.contextViewService);
-		const quickInputService = this.own(new WorkbenchQuickInputService({
+		const quickInputService = this._register(new WorkbenchQuickInputService({
 			container: options.layoutService.activeContainer,
 			contextKeyService: this.contextKeyService,
 			layoutService: options.layoutService,
@@ -111,16 +111,16 @@ export class WorkbenchInteractionServices extends DisposableOwner {
 		services.set(IQuickInputService, quickInputService);
 		this.chatContextPickService = services.getOptional(IChatContextPickService) ?? new ChatContextPickService();
 		services.set(IChatContextPickService, this.chatContextPickService);
-		services.set(IPreferencesService, this.own(new PreferencesService(() => services.get(IEditorService))));
-		this.contextMenuService = this.own(options.createContextMenuService({
+		services.set(IPreferencesService, this._register(new PreferencesService(() => services.get(IEditorService))));
+		this.contextMenuService = this._register(options.createContextMenuService({
 			menuService: this.menuService,
 			keybindingService: this.keybindingService,
 			contextViewService: this.contextViewService,
 		}));
 		services.set(IContextMenuService, this.contextMenuService);
-		const hoverService = this.own(new HoverService(options.configurationService, this.contextViewService, this.contextMenuService));
+		const hoverService = this._register(new HoverService(options.configurationService, this.contextViewService, this.contextMenuService));
 		services.set(IHoverService, hoverService);
-		this.own(setHoverDelegate(hoverService));
+		this._register(setHoverDelegate(hoverService));
 
 		void options.configurationService.reload().catch((error: unknown) => {
 			console.error("Failed to initialize configuration", error);

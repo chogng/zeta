@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { Emitter } from "../../../../../base/common/event.js";
-import { DisposableOwner } from "../../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../../base/common/lifecycle.js";
 import { isMenuItem, MenuId, MenusRegistry } from "../../../../../platform/actions/common/actions.js";
 import type { RemoteConnectionState } from "../../../../../platform/remote/common/remote.js";
 import type { RemoteAgentConnection } from "../../../../../platform/remote/common/remoteAgentApi.js";
@@ -69,9 +69,9 @@ test("Remote runtime rollback appears in the Command Palette only for SSH contex
 	assert.equal(contextKeyService.contextMatchesRules(item.when), true);
 });
 
-class TestRemoteAgentService extends DisposableOwner implements IRemoteAgentService {
-	private readonly stateEmitter = this.own(new Emitter<RemoteConnectionState>());
-	private readonly connectionEmitter = this.own(new Emitter<RemoteAgentConnection>());
+class TestRemoteAgentService extends Disposable implements IRemoteAgentService {
+	private readonly stateEmitter = this._register(new Emitter<RemoteConnectionState>());
+	private readonly connectionEmitter = this._register(new Emitter<RemoteAgentConnection>());
 	connectionState: RemoteConnectionState | undefined;
 	connection: RemoteAgentConnection | undefined;
 	readonly onDidChangeConnectionState = this.stateEmitter.event;

@@ -1,5 +1,5 @@
 import { Emitter } from "../../../base/common/event.js";
-import { DisposableOwner } from "../../../base/common/lifecycle.js";
+import { Disposable } from "../../../base/common/lifecycle.js";
 import type { URI } from "../../../base/common/uri.js";
 import { isDarkColorScheme } from "../common/theme.js";
 import type { IThemeService } from "../common/themeService.js";
@@ -59,9 +59,9 @@ const LANGUAGE_ID_BY_EXTENSION = new Map<string, string>([
 /**
  * Built-in Seti file icon theme generated from `jesseweed/seti-ui`.
  */
-export class SetiFileIconThemeService extends DisposableOwner
+export class SetiFileIconThemeService extends Disposable
 	implements IFileIconThemeService {
-	private readonly _onDidFileIconThemeChange = this.own(new Emitter<void>());
+	private readonly _onDidFileIconThemeChange = this._register(new Emitter<void>());
 	private readonly themeService: IThemeService;
 
 	readonly onDidFileIconThemeChange =
@@ -70,7 +70,7 @@ export class SetiFileIconThemeService extends DisposableOwner
 	constructor(themeService: IThemeService) {
 		super();
 		this.themeService = themeService;
-		this.own(themeService.onDidColorThemeChange(() => {
+		this._register(themeService.onDidColorThemeChange(() => {
 			this._onDidFileIconThemeChange.fire();
 		}));
 	}
