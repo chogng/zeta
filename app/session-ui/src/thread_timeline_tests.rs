@@ -22,6 +22,7 @@ fn timeline_groups_shell_result_under_its_tool_call() {
             status: TurnStatus::Completed,
             model: None,
             tool_profile: None,
+            tool_mode: Default::default(),
             usage: Default::default(),
             items: vec![
                 ThreadItem::UserMessage {

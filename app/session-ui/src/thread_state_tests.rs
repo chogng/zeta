@@ -186,6 +186,7 @@ fn thread_snapshot(sequence: u64) -> Thread {
                 model: ModelId::new("test-model").unwrap(),
             }),
             tool_profile: None,
+            tool_mode: Default::default(),
             usage: Default::default(),
             items: vec![ThreadItem::UserMessage {
                 item_id: item_id("question"),
