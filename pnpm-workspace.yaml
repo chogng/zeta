@@ -3,8 +3,6 @@ packages:
   - scripts
   - zeta-ts
   - docs-site
-patchedDependencies:
-  native-keymap@3.3.9: patches/native-keymap@3.3.9.patch
 allowBuilds:
   electron: true
   esbuild: true
