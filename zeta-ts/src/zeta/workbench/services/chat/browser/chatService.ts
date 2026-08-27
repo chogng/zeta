@@ -1,4 +1,4 @@
-import type { AgentResponse as AgentResponseDto, InputItem, SkillRef as SkillRefDto, Thread as ThreadDto, ThreadUpdateEnvelope as ThreadUpdateEnvelopeDto } from "../../../../../../generated/app-server/types.js";
+import type { AgentResponse as AgentResponseDto, InputItem, SkillRef as SkillRefDto, Thread as ThreadDto, ThreadItem as ThreadItemDto, ThreadTranscriptEntry as ThreadTranscriptEntryDto, ThreadTranscriptSnapshot as ThreadTranscriptSnapshotDto, ThreadTranscriptUpdateEnvelope as ThreadTranscriptUpdateEnvelopeDto, ThreadUpdateEnvelope as ThreadUpdateEnvelopeDto } from "../../../../../../generated/app-server/types.js";
 import { Emitter } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../base/common/uuid.js";
@@ -7,7 +7,7 @@ import type { IAppServerApi, IServerEventApi } from "../../../../platform/app-se
 import type { IModelApi, IThreadApi, ITurnApi } from "../../../../platform/sessions/common/sessionApi.js";
 import type { ISkillApi } from "../../../../platform/skills/common/skillApi.js";
 import type { ModelRef, SessionId, ThreadId } from "../../../../sessions/services/sessions/common/session.js";
-import type { CompactContextOptions, IChatService, InterruptTurnOptions, ModelCatalogEntry, ResolveInteractionOptions, SkillCommandDefinition, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadSubscription, ThreadUpdateEnvelope } from "../common/chatService.js";
+import type { CompactContextOptions, IChatService, InterruptTurnOptions, ModelCatalogEntry, ResolveInteractionOptions, SkillCommandDefinition, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadItem, ThreadSubscription, ThreadTranscriptEntry, ThreadTranscriptSnapshot, ThreadTranscriptUpdateEnvelope, ThreadUpdate, ThreadUpdateEnvelope } from "../common/chatService.js";
 import { ModelCatalogConfiguration, modelRefIdentity } from "../common/modelCatalog.js";
 
 export interface ChatServiceOptions {
@@ -23,6 +23,7 @@ export interface ChatServiceOptions {
 /** App Server-backed implementation of the frontend Chat service. */
 export class ChatService extends Disposable implements IChatService {
 	private readonly _onDidUpdateThread = this._register(new Emitter<ThreadUpdateEnvelope>());
+	private readonly _onDidUpdateThreadTranscript = this._register(new Emitter<ThreadTranscriptUpdateEnvelope>());
 	private readonly _onDidUpdateGoal = this._register(new Emitter<ThreadGoalUpdate>());
 	private readonly _onDidBecomeReady = this._register(new Emitter<void>());
 	private readonly _onDidChangeModels = this._register(new Emitter<void>());
@@ -33,6 +34,7 @@ export class ChatService extends Disposable implements IChatService {
 	private hasLoadedModelCatalog = false;
 
 	readonly onDidUpdateThread = this._onDidUpdateThread.event;
+	readonly onDidUpdateThreadTranscript = this._onDidUpdateThreadTranscript.event;
 	readonly onDidUpdateGoal = this._onDidUpdateGoal.event;
 	readonly onDidBecomeReady = this._onDidBecomeReady.event;
 	readonly onDidChangeModels = this._onDidChangeModels.event;
@@ -42,6 +44,7 @@ export class ChatService extends Disposable implements IChatService {
 		super();
 		const events = options.eventApi.subscribe((event) => {
 			if (event.method === "session/thread/update") this._onDidUpdateThread.fire(toThreadUpdate(event.params));
+			if (event.method === "session/thread/transcript/update") this._onDidUpdateThreadTranscript.fire(toThreadTranscriptUpdate(event.params));
 			if (event.method === "thread/goal/updated") this._onDidUpdateGoal.fire({ threadId: event.params.threadId, goal: { ...event.params.goal } });
 			if (event.method === "thread/goal/cleared") this._onDidUpdateGoal.fire({ threadId: event.params.threadId });
 			if (event.method === "skills/changed") this._onDidChangeSkills.fire();
@@ -119,13 +122,14 @@ export class ChatService extends Disposable implements IChatService {
 			}));
 	}
 
-	async readThread(sessionId: SessionId, threadId: ThreadId): Promise<Thread> {
-		return toThread((await this.options.threadApi.read({ sessionId, threadId })).thread);
+	async readThread(sessionId: SessionId, threadId: ThreadId): Promise<{ readonly thread: Thread; readonly transcript: ThreadTranscriptSnapshot }> {
+		const result = await this.options.threadApi.read({ sessionId, threadId });
+		return { thread: toThread(result.thread), transcript: toThreadTranscriptSnapshot(result.transcript) };
 	}
 
 	async subscribeThread(sessionId: SessionId, threadId: ThreadId, afterSequence: number): Promise<ThreadSubscription> {
 		const result = await this.options.threadApi.subscribe({ sessionId, threadId, afterSequence });
-		return { thread: toThread(result.thread), updates: result.updates.map(toThreadUpdate) };
+		return { thread: toThread(result.thread), transcript: toThreadTranscriptSnapshot(result.transcript), updates: result.updates.map(toThreadUpdate) };
 	}
 
 	unsubscribeThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
@@ -259,7 +263,69 @@ function toThread(thread: ThreadDto): Thread {
 }
 
 function toThreadUpdate(update: ThreadUpdateEnvelopeDto): ThreadUpdateEnvelope {
-	return update as unknown as ThreadUpdateEnvelope;
+	return {
+		sessionId: update.sessionId,
+		threadId: update.threadId,
+		durableSequence: update.durableSequence,
+		streamCursor: update.streamCursor ? { ...update.streamCursor } : update.streamCursor,
+		update: toThreadUpdateValue(update.update),
+	};
+}
+
+function toThreadUpdateValue(update: ThreadUpdateEnvelopeDto["update"]): ThreadUpdate {
+	switch (update.type) {
+		case "committed": return { type: "committed", event: update.event.type === "interactionRequested" ? { type: update.event.type, interaction: { ...update.event.interaction } } : { type: update.event.type } };
+		case "itemStarted": return { type: "itemStarted", item: toThreadItem(update.item) };
+		case "itemDelta": return { type: "itemDelta", itemId: update.itemId, delta: { ...update.delta } };
+		case "toolOutputDelta": return { type: "toolOutputDelta", turnId: update.turnId, toolCallId: update.toolCallId, stream: update.stream, text: update.text };
+	}
+}
+
+function toThreadTranscriptSnapshot(snapshot: ThreadTranscriptSnapshotDto): ThreadTranscriptSnapshot {
+	return {
+		sessionId: snapshot.sessionId,
+		threadId: snapshot.threadId,
+		durableSequence: snapshot.durableSequence,
+		entries: snapshot.entries.map(toThreadTranscriptEntry),
+	};
+}
+
+function toThreadTranscriptUpdate(update: ThreadTranscriptUpdateEnvelopeDto): ThreadTranscriptUpdateEnvelope {
+	return {
+		sessionId: update.sessionId,
+		threadId: update.threadId,
+		durableSequence: update.durableSequence,
+		changes: update.changes.map((change) => {
+			switch (change.type) {
+				case "upsert": return { type: "upsert", entry: toThreadTranscriptEntry(change.entry) };
+				case "remove": return { type: "remove", entryIds: [...change.entryIds] };
+				case "clearTransient": return { type: "clearTransient" };
+			}
+		}),
+	};
+}
+
+function toThreadTranscriptEntry(entry: ThreadTranscriptEntryDto): ThreadTranscriptEntry {
+	switch (entry.type) {
+		case "item": return { type: "item", entryId: entry.entryId, turnId: entry.turnId, item: toThreadItem(entry.item), transient: entry.transient };
+		case "turnPlan": return { type: "turnPlan", entryId: entry.entryId, turnId: entry.turnId, plan: { explanation: entry.plan.explanation, steps: entry.plan.steps.map((step) => ({ ...step })) } };
+		case "turnError": return { type: "turnError", entryId: entry.entryId, turnId: entry.turnId, error: { ...entry.error } };
+		case "toolOutput": return { type: "toolOutput", entryId: entry.entryId, turnId: entry.turnId, toolCallId: entry.toolCallId, stream: entry.stream, text: entry.text };
+	}
+}
+
+function toThreadItem(item: ThreadItemDto): ThreadItem {
+	switch (item.type) {
+		case "userMessage": return { type: item.type, itemId: item.itemId, turnId: item.turnId, text: item.text };
+		case "userContext": return { type: item.type, itemId: item.itemId, turnId: item.turnId, name: item.name, content: item.content };
+		case "userImage": return { type: item.type, itemId: item.itemId, turnId: item.turnId, url: item.url };
+		case "userImageAttachment": return { type: item.type, itemId: item.itemId, turnId: item.turnId, attachment: { ...item.attachment } };
+		case "agentMessage":
+		case "reasoning":
+		case "plan": return { type: item.type, itemId: item.itemId, turnId: item.turnId, text: item.text };
+		case "toolCall": return { type: item.type, itemId: item.itemId, turnId: item.turnId, toolCallId: item.toolCallId, name: item.name, argumentsJson: item.argumentsJson };
+		case "toolResult": return { type: item.type, itemId: item.itemId, turnId: item.turnId, toolCallId: item.toolCallId, text: item.text, isError: item.isError };
+	}
 }
 
 function toAgentResponse(response: ResolveInteractionOptions["response"]): AgentResponseDto {

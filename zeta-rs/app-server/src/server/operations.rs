@@ -312,13 +312,15 @@ impl AppServer {
         let thread_projections = thread_snapshots
             .iter()
             .map(|thread| {
+                let thread = thread.public_thread();
                 let updates = self
                     .sessions
                     .threads()
                     .thread_updates_after(&thread.thread_id, 0)
                     .map_err(core_error)?;
                 Ok(SessionThreadProjection {
-                    thread: thread.public_thread(),
+                    transcript: self.updates.thread_transcript_snapshot(&thread, true),
+                    thread,
                     updates,
                 })
             })
@@ -701,9 +703,20 @@ impl AppServer {
 
     pub(super) fn session_thread_read(&self, params: &Value) -> Result<Value, RpcError> {
         let params: SessionThreadReadParams = decode(params)?;
+        let include_transient = !matches!(
+            params.history.as_ref(),
+            Some(ThreadSnapshotHistory::Before { .. })
+        );
         let snapshot = self.read_session_thread_snapshot(&params.session_id, &params.thread_id)?;
         let (thread, history) = bounded_thread_snapshot(snapshot.public_thread(), params.history)?;
-        result(&SessionThreadReadResult { thread, history })
+        let transcript = self
+            .updates
+            .thread_transcript_snapshot(&thread, include_transient);
+        result(&SessionThreadReadResult {
+            thread,
+            transcript,
+            history,
+        })
     }
 
     pub(super) fn thread_goal_get(&self, params: &Value) -> Result<Value, RpcError> {
@@ -770,9 +783,39 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: SessionThreadSubscribeParams = decode(params)?;
+        let inserted_subscription = self.updates.subscribe_session_thread(
+            connection.connection_id,
+            params.session_id.clone(),
+            params.thread_id.clone(),
+            params.after_sequence,
+        );
+        let result = self.session_thread_subscribe_after_registration(connection, params.clone());
+        if result.is_err() && inserted_subscription {
+            let lost_dynamic_tools = self.updates.unsubscribe_session_thread(
+                connection.connection_id,
+                &params.session_id,
+                &params.thread_id,
+            );
+            self.cancel_lost_dynamic_tool_owners(lost_dynamic_tools);
+        }
+        result
+    }
+
+    fn session_thread_subscribe_after_registration(
+        &self,
+        connection: &mut ConnectionState,
+        params: SessionThreadSubscribeParams,
+    ) -> Result<Value, RpcError> {
         let bounded_history = params.history.is_some();
+        let include_transient = !matches!(
+            params.history.as_ref(),
+            Some(ThreadSnapshotHistory::Before { .. })
+        );
         let snapshot = self.read_session_thread_snapshot(&params.session_id, &params.thread_id)?;
         let (thread, history) = bounded_thread_snapshot(snapshot.public_thread(), params.history)?;
+        let transcript = self
+            .updates
+            .thread_transcript_snapshot(&thread, include_transient);
         let replay_after = if bounded_history {
             params.after_sequence.max(thread.sequence)
         } else {
@@ -786,12 +829,13 @@ impl AppServer {
         self.updates.subscribe_session_thread(
             connection.connection_id,
             params.session_id.clone(),
-            params.thread_id,
+            params.thread_id.clone(),
             thread.sequence,
         );
         self.offer_pending_interactions(&snapshot);
         result(&SessionThreadSubscribeResult {
             thread,
+            transcript,
             updates,
             history,
         })

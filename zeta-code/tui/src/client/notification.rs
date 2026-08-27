@@ -2,6 +2,7 @@ use zeta_app_server_client::AppServerEvent;
 use zeta_app_server_client::ConnectionCloseReason;
 use zeta_app_server_client::ServerNotification;
 use zeta_app_server_protocol::protocol::git::GitStatusResult;
+use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptUpdateEnvelope;
 use zeta_protocol::AgentRequestEnvelope;
 use zeta_protocol::ThreadUpdateEnvelope;
 
@@ -15,6 +16,7 @@ pub(crate) enum ClientEvent {
     PackageSourcesChanged,
     SkillsChanged,
     ThreadUpdated(Box<ThreadUpdateEnvelope>),
+    ThreadTranscriptUpdated(Box<ThreadTranscriptUpdateEnvelope>),
 }
 
 pub(crate) fn map_event(event: AppServerEvent) -> Option<ClientEvent> {
@@ -38,6 +40,9 @@ fn project_notification(notification: ServerNotification) -> Option<ClientEvent>
             Some(ClientEvent::GitStatusChanged(changed.status))
         }
         ServerNotification::SessionThreadUpdate(update) => Some(ClientEvent::ThreadUpdated(update)),
+        ServerNotification::SessionThreadTranscriptUpdate(update) => {
+            Some(ClientEvent::ThreadTranscriptUpdated(Box::new(update)))
+        }
         _ => None,
     }
 }

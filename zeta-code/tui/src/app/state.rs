@@ -627,19 +627,21 @@ impl App {
             AppEvent::SkillsViewReplaced(view) => self.replace_skills_view(view),
             AppEvent::ThemeViewClosed => self.close_theme_views(),
             AppEvent::ThemeViewOpened(view) => self.show_theme_view(view),
-            AppEvent::ThreadSnapshotReceived(thread) => self
-                .thread
-                .update(ThreadPresentationEvent::SnapshotReceived(thread)),
-            AppEvent::ThreadHistoryPageReceived(thread) => self
-                .thread
-                .update(ThreadPresentationEvent::HistoryPageReceived(thread)),
-            AppEvent::TransientThreadStreamReset => {
+            AppEvent::ThreadTranscriptSnapshotReceived(transcript) => {
                 self.thread
-                    .update(ThreadPresentationEvent::TransientStreamReset);
+                    .update(ThreadPresentationEvent::TranscriptSnapshotReceived(
+                        transcript,
+                    ))
             }
-            AppEvent::TransientThreadUpdateReceived(update) => self
+            AppEvent::ThreadTranscriptHistoryPageReceived(transcript) => {
+                self.thread
+                    .update(ThreadPresentationEvent::TranscriptHistoryPageReceived(
+                        transcript,
+                    ))
+            }
+            AppEvent::ThreadTranscriptUpdateReceived(update) => self
                 .thread
-                .update(ThreadPresentationEvent::TransientUpdateReceived(update)),
+                .update(ThreadPresentationEvent::TranscriptUpdateReceived(update)),
             AppEvent::TranscriptCleared => {
                 self.thread.update(ThreadPresentationEvent::Cleared);
                 self.transcript_scroll.follow_latest();

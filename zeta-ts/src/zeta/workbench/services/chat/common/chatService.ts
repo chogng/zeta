@@ -127,18 +127,48 @@ export interface TurnInteraction {
 
 export type ThreadCommittedEvent =
 	| { readonly type: "interactionRequested"; readonly interaction: TurnInteraction }
-	| { readonly type: "interactionResolved" }
-	| { readonly type: "interactionCancelled" }
-	| { readonly type: "turnCompleted" }
-	| { readonly type: "turnFailed" }
-	| { readonly type: "turnInterrupted" }
-	| { readonly type: "threadCreated" | "turnAccepted" | "turnStarted" | "turnSteered" | "planUpdated" | "modelUsageRecorded" | "itemCompleted" | "toolExecutionStarted" | "toolExecutionEscalated" | "turnCancelling" };
+	| { readonly type:
+		"threadCreated"
+		| "goalCreated"
+		| "goalUpdated"
+		| "goalCleared"
+		| "turnExecutionBound"
+		| "agentContextSeedCommitted"
+		| "historyImported"
+		| "contextCheckpointCommitted"
+		| "contextOverflowRecoveryCommitted"
+		| "turnAccepted"
+		| "turnStarted"
+		| "turnSteered"
+		| "turnSteerDelivered"
+		| "turnExecutionAttempted"
+		| "modelUsageRecorded"
+		| "itemCompleted"
+		| "planUpdated"
+		| "interactionResolved"
+		| "toolExecutionStarted"
+		| "toolExecutionEscalated"
+		| "interactionCancelled"
+		| "turnCompleted"
+		| "turnFailed"
+		| "turnCancelling"
+		| "turnInterrupted"
+		| "delegationRequested"
+		| "delegationStarted"
+		| "delegationCancellationRequested"
+		| "agentCancellationReceived"
+		| "delegationResultProduced"
+		| "delegationResultReceived"
+		| "agentMessageSent"
+		| "agentMessageReceived"
+		| "agentJoinRequested"
+		| "agentJoinSatisfied" };
 
 export type ThreadUpdate =
 	| { readonly type: "committed"; readonly event: ThreadCommittedEvent }
 	| { readonly type: "itemStarted"; readonly item: ThreadItem }
 	| { readonly type: "itemDelta"; readonly itemId: string; readonly delta: { readonly type: "agentMessage" | "reasoning" | "plan"; readonly text: string } }
-	| { readonly type: "toolOutputDelta" };
+	| { readonly type: "toolOutputDelta"; readonly turnId: string; readonly toolCallId: string; readonly stream: "stdout" | "stderr"; readonly text: string };
 
 export interface ThreadUpdateEnvelope {
 	readonly sessionId: SessionId;
@@ -148,8 +178,39 @@ export interface ThreadUpdateEnvelope {
 	readonly update: ThreadUpdate;
 }
 
+export type ThreadTranscriptEntry =
+	| { readonly type: "item"; readonly entryId: string; readonly turnId: string; readonly item: ThreadItem; readonly transient: boolean }
+	| { readonly type: "turnPlan"; readonly entryId: string; readonly turnId: string; readonly plan: PlanUpdate }
+	| { readonly type: "turnError"; readonly entryId: string; readonly turnId: string; readonly error: TurnError }
+	| { readonly type: "toolOutput"; readonly entryId: string; readonly turnId: string; readonly toolCallId: string; readonly stream: "stdout" | "stderr"; readonly text: string };
+
+export interface ThreadTranscriptSnapshot {
+	readonly sessionId: SessionId;
+	readonly threadId: ThreadId;
+	readonly durableSequence: number;
+	readonly entries: readonly ThreadTranscriptEntry[];
+}
+
+export type ThreadTranscriptChange =
+	| { readonly type: "upsert"; readonly entry: ThreadTranscriptEntry }
+	| { readonly type: "remove"; readonly entryIds: readonly string[] }
+	| { readonly type: "clearTransient" };
+
+export interface ThreadTranscriptUpdateEnvelope {
+	readonly sessionId: SessionId;
+	readonly threadId: ThreadId;
+	readonly durableSequence: number;
+	readonly changes: readonly ThreadTranscriptChange[];
+}
+
+export interface ThreadRead {
+	readonly thread: Thread;
+	readonly transcript: ThreadTranscriptSnapshot;
+}
+
 export interface ThreadSubscription {
 	readonly thread: Thread;
+	readonly transcript: ThreadTranscriptSnapshot;
 	readonly updates: readonly ThreadUpdateEnvelope[];
 }
 
@@ -162,6 +223,7 @@ export interface ResolveInteractionOptions extends InterruptTurnOptions { readon
 /** Frontend Chat operations, catalogs, and Thread update lifecycle. */
 export interface IChatService {
 	readonly onDidUpdateThread: Event<ThreadUpdateEnvelope>;
+	readonly onDidUpdateThreadTranscript: Event<ThreadTranscriptUpdateEnvelope>;
 	readonly onDidUpdateGoal: Event<ThreadGoalUpdate>;
 	readonly onDidBecomeReady: Event<void>;
 	readonly onDidChangeModels: Event<void>;
@@ -173,7 +235,7 @@ export interface IChatService {
 	setModelVisible(model: ModelRef, visible: boolean): Promise<void>;
 	listSlashCommands(): Promise<readonly SlashCommandDefinition[]>;
 	listSkillCommands(): Promise<readonly SkillCommandDefinition[]>;
-	readThread(sessionId: SessionId, threadId: ThreadId): Promise<Thread>;
+	readThread(sessionId: SessionId, threadId: ThreadId): Promise<ThreadRead>;
 	subscribeThread(sessionId: SessionId, threadId: ThreadId, afterSequence: number): Promise<ThreadSubscription>;
 	unsubscribeThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
 	startTurn(options: StartTurnOptions): Promise<void>;

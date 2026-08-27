@@ -524,7 +524,10 @@ fn thread_goal_rpc_round_trips_and_publishes_scoped_updates() {
             "params":{"threadId":thread_id}
         }),
     );
-    assert_eq!(get["result"]["goal"]["goalId"], set["result"]["goal"]["goalId"]);
+    assert_eq!(
+        get["result"]["goal"]["goalId"],
+        set["result"]["goal"]["goalId"]
+    );
 
     let clear = call(
         &server,
@@ -537,10 +540,12 @@ fn thread_goal_rpc_round_trips_and_publishes_scoped_updates() {
         }),
     );
     assert_eq!(clear["result"]["cleared"], true);
-    assert!(server
-        .drain_notifications(&mut connection)
-        .iter()
-        .any(|notification| notification.contains("\"method\":\"thread/goal/cleared\"")));
+    assert!(
+        server
+            .drain_notifications(&mut connection)
+            .iter()
+            .any(|notification| notification.contains("\"method\":\"thread/goal/cleared\""))
+    );
 
     let missing = call(
         &server,
@@ -1175,7 +1180,7 @@ fn initialize_advertises_the_server_slash_command_snapshot() {
     );
     assert_eq!(
         response["result"]["protocolVersion"],
-        serde_json::json!({ "major": 1, "revision": 1 })
+        serde_json::json!({ "major": 1, "revision": 2 })
     );
     assert_eq!(response["result"]["capabilities"]["sessions"], true);
     assert_eq!(

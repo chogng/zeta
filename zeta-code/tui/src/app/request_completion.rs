@@ -32,6 +32,7 @@ use zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory;
 use zeta_app_server_protocol::protocol::skills::SkillCatalogReloadDto;
 use zeta_app_server_protocol::protocol::skills::SkillListParams;
 use zeta_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
+use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
 use zeta_app_server_protocol::protocol::turn::TurnStartResult;
 use zeta_protocol::ApprovalMode;
 use zeta_protocol::SkillRef;
@@ -282,7 +283,7 @@ pub(super) fn apply_request_completion(
             if active_turn.is_none() {
                 *active_turn = Some(start.turn_id);
             }
-            apply_thread_snapshot(app, active_turn, snapshot.thread);
+            apply_thread_snapshot(app, active_turn, snapshot.thread, snapshot.transcript);
         }
         RequestCompletion::TurnStarted(Err(error)) => {
             report_turn_start_failure(app, active_turn, error.to_string());
@@ -291,7 +292,7 @@ pub(super) fn apply_request_completion(
             conversation.set_thread_sequence(snapshot.thread.sequence);
             thread_subscription.apply_latest_snapshot(&snapshot.thread, snapshot.boundary);
             app.update(AppEvent::SelectionViewClosed);
-            apply_thread_snapshot(app, active_turn, snapshot.thread);
+            apply_thread_snapshot(app, active_turn, snapshot.thread, snapshot.transcript);
         }
         RequestCompletion::InteractionResolved(Err(error)) => {
             app.update(AppEvent::FailureReported(error.to_string()));
@@ -311,7 +312,7 @@ pub(super) fn apply_request_completion(
             }
             conversation.set_thread_sequence(snapshot.thread.sequence);
             thread_subscription.apply_latest_snapshot(&snapshot.thread, snapshot.boundary);
-            apply_thread_snapshot(app, active_turn, snapshot.thread);
+            apply_thread_snapshot(app, active_turn, snapshot.thread, snapshot.transcript);
         }
         RequestCompletion::ThreadHistoryPage(Ok(page)) => {
             if page.thread.session_id != *conversation.session_id()
@@ -327,7 +328,9 @@ pub(super) fn apply_request_completion(
                 return None;
             }
             thread_subscription.apply_history_page(&page.thread, page.boundary);
-            app.update(AppEvent::ThreadHistoryPageReceived(page.thread));
+            app.update(AppEvent::ThreadTranscriptHistoryPageReceived(
+                page.transcript,
+            ));
         }
         RequestCompletion::ThreadHistoryPage(Err(error)) => {
             app.update(AppEvent::FailureReported(error.to_string()));
@@ -338,7 +341,7 @@ pub(super) fn apply_request_completion(
         RequestCompletion::TurnInterrupted(Ok(snapshot)) => {
             conversation.set_thread_sequence(snapshot.thread.sequence);
             thread_subscription.apply_latest_snapshot(&snapshot.thread, snapshot.boundary);
-            apply_thread_snapshot(app, active_turn, snapshot.thread);
+            apply_thread_snapshot(app, active_turn, snapshot.thread, snapshot.transcript);
         }
         RequestCompletion::TurnInterrupted(Err(error)) => {
             app.update(AppEvent::InterruptFailed(error.to_string()));
@@ -394,6 +397,7 @@ pub(super) fn apply_thread_snapshot(
     app: &mut App,
     active_turn: &mut Option<TurnId>,
     snapshot: Thread,
+    transcript: ThreadTranscriptSnapshot,
 ) {
     if active_turn.is_none() {
         *active_turn = recover_active_turn(&snapshot.turns);
@@ -409,7 +413,7 @@ pub(super) fn apply_thread_snapshot(
     } else {
         None
     };
-    app.update(AppEvent::ThreadSnapshotReceived(snapshot));
+    app.update(AppEvent::ThreadTranscriptSnapshotReceived(transcript));
     apply_active_turn_update(app, active_turn_update);
     if let Some(next_active_turn_update) = next_active_turn_update {
         apply_active_turn_update(app, next_active_turn_update);
@@ -437,13 +441,20 @@ fn finish_conversation_change(
     }
     *active_turn = None;
     match switch {
-        ThreadSwitch::Complete { snapshot } => {
+        ThreadSwitch::Complete {
+            snapshot,
+            transcript,
+        } => {
             conversation.set_thread_sequence(snapshot.sequence);
-            apply_thread_snapshot(app, active_turn, snapshot);
+            apply_thread_snapshot(app, active_turn, snapshot, transcript);
         }
-        ThreadSwitch::StaleSubscription { snapshot, error } => {
+        ThreadSwitch::StaleSubscription {
+            snapshot,
+            transcript,
+            error,
+        } => {
             conversation.set_thread_sequence(snapshot.sequence);
-            apply_thread_snapshot(app, active_turn, snapshot);
+            apply_thread_snapshot(app, active_turn, snapshot, transcript);
             app.update(AppEvent::FailureReported(format!(
                 "changed Thread, but could not unsubscribe the previous Thread: {error}"
             )));

@@ -1,11 +1,11 @@
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
-import type { AgentResponse, IChatService, ModelCatalogEntry, SkillCommandDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadItem, ThreadUpdateEnvelope, Turn, TurnInteraction } from "../../../../services/chat/common/chatService.js";
+import type { AgentResponse, IChatService, ModelCatalogEntry, SkillCommandDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnInteraction } from "../../../../services/chat/common/chatService.js";
 import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
 import type { ResolvedChatContext } from "../../../../services/chat/common/chatContextService.js";
 import type { IActiveSessionThread, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
-import { chatListItem, chatPlanListItem, chatTurnErrorListItem, type IChatListItem } from "../list/chatListItems.js";
+import { chatTranscriptListItem, type IChatListItem } from "../list/chatListItems.js";
 
 export type ChatPaneState =
 	| "loading"
@@ -13,23 +13,22 @@ export type ChatPaneState =
 	| "submitting"
 	| "error";
 
-/** The local or durable identity currently projected by a Chat pane. */
+/** The local or durable identity currently displayed by a Chat pane. */
 export type ChatPaneSelection =
 	| { readonly kind: "session"; readonly active: IActiveSessionThread }
 	| { readonly kind: "untitled"; readonly session: IUntitledChatSession };
 
 /**
- * Projection of one Chat tab, before or after it acquires a durable Thread.
+ * State for one Chat tab, before or after it acquires a durable Thread.
  *
- * Canonical committed state is refreshed from `session/thread/read`. Transient item
- * updates are layered by Item ID and discarded once the committed snapshot
- * contains the same item.
+ * Canonical committed state is refreshed from `session/thread/read`. Transcript
+ * entries arrive already assembled by App Server and are applied by stable ID.
  */
 export class ChatPaneModel extends Disposable {
 	private readonly chatService: IChatService;
 	private readonly sessionService: ISessionsManagementService;
 	private readonly _onDidChange = this._register(new Emitter<void>());
-	private readonly transientItems = new Map<string, ThreadItem>();
+	private transcriptEntries: ThreadTranscriptEntry[] = [];
 	private selection: ChatPaneSelection;
 	private _thread: Thread | undefined;
 	private _interaction: TurnInteraction | undefined;
@@ -40,9 +39,6 @@ export class ChatPaneModel extends Disposable {
 	private initializePromise: Promise<void> | undefined;
 	private subscriptionThreadId: ThreadId | undefined;
 	private subscriptionPromise: Promise<void> | undefined;
-	private streamInstanceId: string | undefined;
-	private streamSequence = 0;
-	private readonly retiredStreamInstanceIds = new Set<string>();
 	private _models: readonly ModelCatalogEntry[] = [];
 	private _slashCommands: readonly SlashCommandDefinition[] = [];
 	private _skillCommands: readonly SkillCommandDefinition[] = [];
@@ -55,6 +51,7 @@ export class ChatPaneModel extends Disposable {
 		this.sessionService = sessionService;
 		this.selection = selection;
 		this._register(chatService.onDidUpdateThread((update) => this.acceptUpdate(update)));
+		this._register(chatService.onDidUpdateThreadTranscript((update) => this.acceptTranscriptUpdate(update)));
 		this._register(chatService.onDidUpdateGoal((update) => {
 			if (update.threadId !== this.threadId || !this._thread) return;
 			this._thread = { ...this._thread, goal: update.goal ?? null };
@@ -67,8 +64,7 @@ export class ChatPaneModel extends Disposable {
 			this.generation++;
 			const active = this.activeSession;
 			if (active) void this.chatService.unsubscribeThread(active.session.sessionId, active.threadId);
-			this.transientItems.clear();
-			this.resetStreamCursor();
+			this.transcriptEntries = [];
 		}));
 		void this.initialize();
 	}
@@ -120,19 +116,10 @@ export class ChatPaneModel extends Disposable {
 	}
 
 	get items(): readonly IChatListItem[] {
-		const turns = this._thread?.turns ?? [];
-		const latestTurnId = turns.at(-1)?.turnId;
-		const committed = turns.flatMap((turn) => {
-			const items = turn.items.map((item) => chatListItem(item));
-			const plan = chatPlanListItem(turn);
-			const failure = chatTurnErrorListItem(turn, { actionsEnabled: turn.turnId === latestTurnId });
-			return [...items, ...(plan ? [plan] : []), ...(failure ? [failure] : [])];
-		});
-		const committedIds = new Set(committed.map((item) => item.id));
-		const transient = [...this.transientItems.values()]
-			.filter((item) => !committedIds.has(item.itemId))
-			.map((item) => chatListItem(item, true));
-		return [...committed, ...transient];
+		const latestTurnId = this._thread?.turns.at(-1)?.turnId;
+		return this.transcriptEntries.map((entry) => chatTranscriptListItem(entry, {
+			actionsEnabled: entry.turnId === latestTurnId,
+		}));
 	}
 
 	get interaction(): TurnInteraction | undefined {
@@ -394,8 +381,7 @@ export class ChatPaneModel extends Disposable {
 		const oldThreadId = this._thread?.threadId;
 		this._thread = undefined;
 		this._interaction = undefined;
-		this.transientItems.clear();
-		this.resetStreamCursor();
+		this.transcriptEntries = [];
 		this.setState("loading");
 		if (oldThreadId && oldThreadId !== active.threadId) {
 			void this.chatService.unsubscribeThread(active.session.sessionId, oldThreadId);
@@ -404,7 +390,7 @@ export class ChatPaneModel extends Disposable {
 			const result = await this.chatService.subscribeThread(active.session.sessionId, active.threadId, 0);
 			if (this.isDisposed || generation !== this.generation) return;
 			this._thread = result.thread;
-			this.discardCommittedTransientItems();
+			this.transcriptEntries = result.transcript.entries.map((entry) => cloneTranscriptEntry(entry));
 			for (const update of result.updates) {
 				if (update.durableSequence > result.thread.sequence) {
 					this.acceptUpdate(update);
@@ -421,23 +407,9 @@ export class ChatPaneModel extends Disposable {
 		const selectedThreadId = this._thread?.threadId ?? this.threadId;
 		if (!selectedThreadId) return;
 		if (update.threadId !== selectedThreadId) return;
-		if (!this.acceptStreamCursor(update)) return;
-		switch (update.update.type) {
-			case "committed":
-				this.acceptCommittedEvent(update);
-				this.scheduleRefresh();
-				break;
-			case "itemStarted":
-				this.transientItems.set(
-					update.update.item.itemId,
-					update.update.item,
-				);
-				this._onDidChange.fire();
-				break;
-			case "itemDelta":
-				this.applyDelta(update);
-				break;
-		}
+		if (update.update.type !== "committed") return;
+		this.acceptCommittedEvent(update);
+		this.scheduleRefresh();
 	}
 
 	private async reconnect(): Promise<void> {
@@ -446,34 +418,6 @@ export class ChatPaneModel extends Disposable {
 			active ? this.subscribe(active) : Promise.resolve(),
 			this.loadCatalogs(),
 		]);
-	}
-
-	private acceptStreamCursor(update: ThreadUpdateEnvelope): boolean {
-		const cursor = update.streamCursor;
-		if (!cursor) return true;
-		if (cursor.streamInstanceId !== this.streamInstanceId) {
-			if (this.retiredStreamInstanceIds.has(cursor.streamInstanceId)) return false;
-			if (this.streamInstanceId) this.retiredStreamInstanceIds.add(this.streamInstanceId);
-			this.streamInstanceId = cursor.streamInstanceId;
-			this.streamSequence = cursor.sequence;
-			this.transientItems.clear();
-			return true;
-		}
-		if (cursor.sequence <= this.streamSequence) return false;
-		if (cursor.sequence !== this.streamSequence + 1) {
-			this.streamSequence = cursor.sequence;
-			this.transientItems.clear();
-			this.scheduleRefresh();
-			return false;
-		}
-		this.streamSequence = cursor.sequence;
-		return true;
-	}
-
-	private resetStreamCursor(): void {
-		this.streamInstanceId = undefined;
-		this.streamSequence = 0;
-		this.retiredStreamInstanceIds.clear();
 	}
 
 	private acceptCommittedEvent(update: ThreadUpdateEnvelope): void {
@@ -497,16 +441,28 @@ export class ChatPaneModel extends Disposable {
 		}
 	}
 
-	private applyDelta(update: ThreadUpdateEnvelope): void {
-		if (update.update.type !== "itemDelta") return;
-		const item = this.transientItems.get(update.update.itemId);
-		if (!item || !("text" in item)) return;
-		const delta = update.update.delta;
-		if (delta.type !== item.type) return;
-		this.transientItems.set(item.itemId, {
-			...item,
-			text: item.text + delta.text,
-		});
+	private acceptTranscriptUpdate(update: ThreadTranscriptUpdateEnvelope): void {
+		const selectedThreadId = this._thread?.threadId ?? this.threadId;
+		if (!selectedThreadId || update.threadId !== selectedThreadId || update.sessionId !== this.sessionId) return;
+		for (const change of update.changes) {
+			switch (change.type) {
+				case "upsert": {
+					const index = this.transcriptEntries.findIndex((entry) => entry.entryId === change.entry.entryId);
+					const entry = cloneTranscriptEntry(change.entry);
+					if (index < 0) this.transcriptEntries.push(entry);
+					else this.transcriptEntries[index] = entry;
+					break;
+				}
+				case "remove": {
+					const removed = new Set(change.entryIds);
+					this.transcriptEntries = this.transcriptEntries.filter((entry) => !removed.has(entry.entryId));
+					break;
+				}
+				case "clearTransient":
+					this.transcriptEntries = this.transcriptEntries.filter((entry) => !isTransientTranscriptEntry(entry));
+					break;
+			}
+		}
 		this._onDidChange.fire();
 	}
 
@@ -525,14 +481,14 @@ export class ChatPaneModel extends Disposable {
 		const threadId = active.threadId;
 		const generation = this.generation;
 		try {
-			const thread = await this.chatService.readThread(active.session.sessionId, threadId);
+			const result = await this.chatService.readThread(active.session.sessionId, threadId);
 			if (
 				this.isDisposed ||
 				generation !== this.generation ||
-				thread.threadId !== this.threadId
+				result.thread.threadId !== this.threadId
 			) return;
-			this._thread = thread;
-			this.discardCommittedTransientItems();
+			this._thread = result.thread;
+			this.transcriptEntries = result.transcript.entries.map((entry) => cloneTranscriptEntry(entry));
 			this._error = undefined;
 			this._state = "ready";
 			this._onDidChange.fire();
@@ -540,17 +496,6 @@ export class ChatPaneModel extends Disposable {
 			if (!this.isDisposed && generation === this.generation) {
 				this.setError(error);
 			}
-		}
-	}
-
-	private discardCommittedTransientItems(): void {
-		const committedIds = new Set(
-			this._thread?.turns.flatMap(
-				(turn) => turn.items.map((item) => item.itemId),
-			) ?? [],
-		);
-		for (const itemId of this.transientItems.keys()) {
-			if (committedIds.has(itemId)) this.transientItems.delete(itemId);
 		}
 	}
 
@@ -604,4 +549,17 @@ function isSteerableTurn(turn: Turn): boolean {
 
 function sameModel(left: ModelRef | null | undefined, right: ModelRef | null | undefined): boolean {
 	return left?.provider === right?.provider && left?.model === right?.model;
+}
+
+function cloneTranscriptEntry(entry: ThreadTranscriptEntry): ThreadTranscriptEntry {
+	switch (entry.type) {
+		case "item": return { ...entry, item: { ...entry.item } };
+		case "turnPlan": return { ...entry, plan: { explanation: entry.plan.explanation, steps: entry.plan.steps.map((step) => ({ ...step })) } };
+		case "turnError": return { ...entry, error: { ...entry.error } };
+		case "toolOutput": return { ...entry };
+	}
+}
+
+function isTransientTranscriptEntry(entry: ThreadTranscriptEntry): boolean {
+	return entry.type === "toolOutput" || entry.type === "item" && entry.transient;
 }

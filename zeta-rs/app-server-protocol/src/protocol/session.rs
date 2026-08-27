@@ -18,6 +18,7 @@ use zeta_protocol::Session;
 use zeta_protocol::SessionUpdateEnvelope;
 use zeta_protocol::Thread;
 use zeta_protocol::ThreadUpdateEnvelope;
+use zeta_thread_transcript::ThreadTranscriptSnapshot;
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -207,6 +208,7 @@ pub struct SessionListResult {
 /// A child Thread snapshot and its committed gap carried by the Session subscription.
 pub struct SessionThreadProjection {
     pub thread: Thread,
+    pub transcript: ThreadTranscriptSnapshot,
     pub updates: Vec<ThreadUpdateEnvelope>,
 }
 
@@ -231,6 +233,7 @@ pub struct SessionThreadResult {
 #[serde(rename_all = "camelCase")]
 pub struct SessionThreadReadResult {
     pub thread: Thread,
+    pub transcript: ThreadTranscriptSnapshot,
     /// Present whenever the request selected bounded history.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -241,6 +244,7 @@ pub struct SessionThreadReadResult {
 #[serde(rename_all = "camelCase")]
 pub struct SessionThreadSubscribeResult {
     pub thread: Thread,
+    pub transcript: ThreadTranscriptSnapshot,
     pub updates: Vec<ThreadUpdateEnvelope>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]

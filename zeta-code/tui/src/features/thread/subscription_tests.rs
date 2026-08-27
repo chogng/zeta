@@ -184,13 +184,13 @@ fn duplicate_and_updates_for_another_thread_do_not_request_snapshot() {
 }
 
 #[test]
-fn session_mismatch_for_active_thread_requests_authoritative_snapshot() {
+fn session_mismatch_for_active_thread_is_ignored() {
     let snapshot = thread("session-1", "thread-1", 4);
     let mut subscription = ThreadSubscription::from_snapshot(&snapshot, HISTORY_PAGE_TURNS);
 
     assert_eq!(
         subscription.classify_update(&update("session-old", "thread-1", 4)),
-        ThreadUpdateDisposition::RefreshSnapshot
+        ThreadUpdateDisposition::Ignore
     );
 }
 
@@ -211,59 +211,12 @@ fn confirming_a_new_snapshot_suppresses_buffered_duplicates() {
 }
 
 #[test]
-fn transient_updates_are_applied_once_in_stream_order() {
+fn transient_thread_updates_are_ignored_because_transcript_updates_drive_display() {
     let snapshot = thread("session-1", "thread-1", 4);
     let mut subscription = ThreadSubscription::from_snapshot(&snapshot, HISTORY_PAGE_TURNS);
-    let transient = transient_update("stream-1", 1);
-
     assert_eq!(
-        subscription.classify_update(&transient),
-        ThreadUpdateDisposition::ApplyTransientAfterReset
-    );
-    assert_eq!(
-        subscription.classify_update(&transient),
+        subscription.classify_update(&transient_update("stream-1", 1)),
         ThreadUpdateDisposition::Ignore
-    );
-    assert_eq!(
-        subscription.classify_update(&transient_update("stream-1", 2)),
-        ThreadUpdateDisposition::ApplyTransient
-    );
-}
-
-#[test]
-fn transient_gap_resets_projection_and_requests_snapshot() {
-    let snapshot = thread("session-1", "thread-1", 4);
-    let mut subscription = ThreadSubscription::from_snapshot(&snapshot, HISTORY_PAGE_TURNS);
-    assert_eq!(
-        subscription.classify_update(&transient_update("stream-1", 1)),
-        ThreadUpdateDisposition::ApplyTransientAfterReset
-    );
-
-    assert_eq!(
-        subscription.classify_update(&transient_update("stream-1", 3)),
-        ThreadUpdateDisposition::ResetTransientAndRefreshSnapshot
-    );
-    subscription.confirm_sequence(5);
-    let mut next = transient_update("stream-1", 4);
-    next.durable_sequence = 5;
-    assert_eq!(
-        subscription.classify_update(&next),
-        ThreadUpdateDisposition::ApplyTransient
-    );
-}
-
-#[test]
-fn new_stream_instance_resets_the_previous_transient_projection() {
-    let snapshot = thread("session-1", "thread-1", 4);
-    let mut subscription = ThreadSubscription::from_snapshot(&snapshot, HISTORY_PAGE_TURNS);
-    assert_eq!(
-        subscription.classify_update(&transient_update("stream-1", 1)),
-        ThreadUpdateDisposition::ApplyTransientAfterReset
-    );
-
-    assert_eq!(
-        subscription.classify_update(&transient_update("stream-2", 1)),
-        ThreadUpdateDisposition::ApplyTransientAfterReset
     );
 }
 
@@ -279,6 +232,12 @@ fn switching_threads_unsubscribes_the_previous_session_and_thread() {
                 "id": 1,
                 "result": {
                     "thread": next,
+                    "transcript": {
+                        "sessionId": "session-2",
+                        "threadId": "thread-2",
+                        "durableSequence": 7,
+                        "entries": []
+                    },
                     "updates": [],
                     "history": { "hasOlderTurns": false, "oldestTurnId": null }
                 }
@@ -313,7 +272,15 @@ fn bounded_snapshot_without_a_history_boundary_is_rejected() {
         responses: VecDeque::from([serde_json::json!({
             "jsonrpc": "2.0",
             "id": 1,
-            "result": { "thread": snapshot.clone() }
+            "result": {
+                "thread": snapshot.clone(),
+                "transcript": {
+                    "sessionId": "session-1",
+                    "threadId": "thread-1",
+                    "durableSequence": 4,
+                    "entries": []
+                }
+            }
         })
         .to_string()]),
         requests: Arc::new(Mutex::new(Vec::new())),
@@ -338,6 +305,7 @@ fn thread(session_id: &str, thread_id: &str, sequence: u64) -> Thread {
         status: ThreadStatus::Active,
         sequence,
         usage: zeta_protocol::ModelUsageSummary::default(),
+        goal: None,
         turns: Vec::new(),
     }
 }

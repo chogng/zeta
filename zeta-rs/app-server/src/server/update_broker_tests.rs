@@ -10,9 +10,13 @@ use zeta_protocol::AgentInteractionKind;
 use zeta_protocol::AgentRequest;
 use zeta_protocol::AgentRequestEnvelope;
 use zeta_protocol::DynamicToolCall;
+use zeta_protocol::ItemDelta;
+use zeta_protocol::ItemId;
 use zeta_protocol::RequestId;
 use zeta_protocol::SessionEvent;
 use zeta_protocol::SessionUpdate;
+use zeta_protocol::StreamCursor;
+use zeta_protocol::StreamInstanceId;
 use zeta_protocol::ThreadEvent;
 use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadUpdate;
@@ -203,6 +207,145 @@ fn session_thread_subscription_can_be_removed_independently() {
     broker.unsubscribe_session_thread(1, &session_id, &thread_id);
     broker.publish_thread(&thread_id, &[thread_update(&session_id, &thread_id, 2)]);
     assert_eq!(queue.len(), 0);
+}
+
+#[test]
+fn thread_update_publishes_backend_assembled_transcript_entry() {
+    let broker = UpdateBroker::default();
+    let queue = NotificationQueue::default();
+    let session_id = SessionId::new("session_1").unwrap();
+    let thread_id = ThreadId::new("thread_1").unwrap();
+    broker.register(1, &queue);
+    broker.subscribe_session_thread(1, session_id.clone(), thread_id.clone(), 0);
+
+    broker.publish_thread_update(ThreadUpdateEnvelope {
+        session_id,
+        thread_id,
+        durable_sequence: 0,
+        stream_cursor: Some(StreamCursor {
+            stream_instance_id: StreamInstanceId::new("stream_1").unwrap(),
+            sequence: 1,
+        }),
+        update: ThreadUpdate::ItemDelta {
+            turn_id: TurnId::new("turn_1").unwrap(),
+            item_id: ItemId::new("item_1").unwrap(),
+            delta: ItemDelta::AgentMessage {
+                text: "Hello".into(),
+            },
+        },
+    });
+
+    let notifications = queue.drain();
+    assert_eq!(notifications.len(), 2);
+    assert_eq!(notifications[0]["method"], "session/thread/update");
+    assert_eq!(
+        notifications[1]["method"],
+        "session/thread/transcript/update"
+    );
+    assert_eq!(
+        notifications[1]["params"]["changes"][0]["entry"]["item"]["text"],
+        "Hello"
+    );
+}
+
+#[test]
+fn transcript_snapshot_includes_output_assembled_before_a_consumer_subscribes() {
+    let broker = UpdateBroker::default();
+    let session_id = SessionId::new("session_1").unwrap();
+    let thread_id = ThreadId::new("thread_1").unwrap();
+    broker.publish_thread_update(transient_thread_update(
+        &session_id,
+        &thread_id,
+        1,
+        "Hello before subscribe",
+    ));
+
+    let thread = zeta_protocol::Thread {
+        session_id,
+        thread_id,
+        title: "Thread".into(),
+        status: zeta_protocol::ThreadStatus::Active,
+        sequence: 0,
+        usage: zeta_protocol::ModelUsageSummary::default(),
+        goal: None,
+        turns: Vec::new(),
+    };
+    let snapshot = broker.thread_transcript_snapshot(&thread, true);
+
+    assert!(matches!(
+        &snapshot.entries[0],
+        zeta_thread_transcript::ThreadTranscriptEntry::Item {
+            item: zeta_protocol::ThreadItem::AgentMessage { text, .. },
+            transient: true,
+            ..
+        } if text == "Hello before subscribe"
+    ));
+}
+
+#[test]
+fn transcript_accumulator_survives_turn_boundaries() {
+    let broker = UpdateBroker::default();
+    let queue = NotificationQueue::default();
+    let session_id = SessionId::new("session_1").unwrap();
+    let thread_id = ThreadId::new("thread_1").unwrap();
+    broker.register(1, &queue);
+    broker.subscribe_session_thread(1, session_id.clone(), thread_id.clone(), 0);
+    broker.publish_thread_update(transient_thread_update(
+        &session_id,
+        &thread_id,
+        1,
+        "first turn",
+    ));
+    queue.drain();
+    broker.publish_thread_update(ThreadUpdateEnvelope {
+        session_id: session_id.clone(),
+        thread_id: thread_id.clone(),
+        durable_sequence: 1,
+        stream_cursor: None,
+        update: ThreadUpdate::Committed {
+            event: ThreadEvent::TurnCompleted {
+                thread_id: thread_id.clone(),
+                turn_id: TurnId::new("turn_1").unwrap(),
+            },
+        },
+    });
+    queue.drain();
+
+    broker.publish_thread_update(transient_thread_update(
+        &session_id,
+        &thread_id,
+        2,
+        "second turn",
+    ));
+
+    let notifications = queue.drain();
+    assert_eq!(notifications.len(), 2);
+    assert_eq!(
+        notifications[1]["params"]["changes"][0]["entry"]["item"]["text"],
+        "second turn"
+    );
+}
+
+fn transient_thread_update(
+    session_id: &SessionId,
+    thread_id: &ThreadId,
+    sequence: u64,
+    text: &str,
+) -> ThreadUpdateEnvelope {
+    ThreadUpdateEnvelope {
+        session_id: session_id.clone(),
+        thread_id: thread_id.clone(),
+        durable_sequence: 0,
+        stream_cursor: Some(StreamCursor {
+            stream_instance_id: StreamInstanceId::new("stream_1").unwrap(),
+            sequence,
+        }),
+        update: ThreadUpdate::ItemDelta {
+            turn_id: TurnId::new(format!("turn_{sequence}")).unwrap(),
+            item_id: ItemId::new(format!("item_{sequence}")).unwrap(),
+            delta: ItemDelta::AgentMessage { text: text.into() },
+        },
+    }
 }
 
 #[test]

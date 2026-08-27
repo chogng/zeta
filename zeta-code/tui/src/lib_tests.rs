@@ -83,15 +83,21 @@ fn completed_active_turn_only_updates_lifecycle_after_snapshot_mapping() {
         pending_interaction: None,
         error: None,
     };
-    app.update(AppEvent::ThreadSnapshotReceived(Thread {
+    let thread = Thread {
         session_id: SessionId::new("session_1").unwrap(),
         thread_id: ThreadId::new("thread_1").unwrap(),
         title: "Thread".into(),
         status: ThreadStatus::Active,
         sequence: 3,
         usage: zeta_protocol::ModelUsageSummary::default(),
+        goal: None,
         turns: vec![turn.clone()],
-    }));
+    };
+    app.update(AppEvent::ThreadTranscriptSnapshotReceived(
+        zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot::from_thread(
+            &thread,
+        ),
+    ));
 
     apply_active_turn_snapshot(&mut app, &mut active_turn, &[turn]);
 

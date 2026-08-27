@@ -10,6 +10,7 @@ pub use crate::protocol::registry::ServerNotification;
 pub use crate::protocol::registry::decode_server_notification;
 pub use crate::protocol::skills::SkillsChanged;
 pub use zeta_protocol::{SessionUpdateEnvelope, ThreadUpdateEnvelope};
+pub use zeta_thread_transcript::ThreadTranscriptUpdateEnvelope;
 
 #[cfg(test)]
 #[path = "notification_tests.rs"]

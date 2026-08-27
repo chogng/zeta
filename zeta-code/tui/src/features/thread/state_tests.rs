@@ -2,9 +2,10 @@ use super::ThreadFeatureState;
 use crate::components::transcript::CommandStatus;
 use crate::components::transcript::MessageRole;
 use crate::features::thread::ThreadPresentationEvent;
-use zeta_protocol::ContentDigest;
-use zeta_protocol::ImageAttachmentRef;
-use zeta_protocol::ImageMediaType;
+use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptChange;
+use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptEntry;
+use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
+use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptUpdateEnvelope;
 use zeta_protocol::ItemId;
 use zeta_protocol::PlanStep;
 use zeta_protocol::PlanStepStatus;
@@ -14,22 +15,17 @@ use zeta_protocol::Thread;
 use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadItem;
 use zeta_protocol::ThreadStatus;
-use zeta_protocol::ThreadUpdate;
-use zeta_protocol::ThreadUpdateEnvelope;
-use zeta_protocol::ToolCallId;
-use zeta_protocol::ToolName;
 use zeta_protocol::Turn;
 use zeta_protocol::TurnId;
 use zeta_protocol::TurnStatus;
 
 #[test]
-fn canonical_snapshot_replaces_optimistic_projection_and_preserves_identity() {
+fn transcript_snapshot_replaces_local_rows_and_preserves_rendering() {
     let mut state = ThreadFeatureState::default();
     state.update(ThreadPresentationEvent::UserSubmitted("optimistic".into()));
-    state.update(ThreadPresentationEvent::SnapshotReceived(thread_snapshot()));
-
-    assert_eq!(state.snapshot().unwrap().thread_id.as_str(), "thread_1");
-    assert_eq!(state.snapshot().unwrap().sequence, 7);
+    state.update(ThreadPresentationEvent::TranscriptSnapshotReceived(
+        ThreadTranscriptSnapshot::from_thread(&thread_snapshot()),
+    ));
     assert_eq!(
         state
             .messages()
@@ -39,232 +35,60 @@ fn canonical_snapshot_replaces_optimistic_projection_and_preserves_identity() {
         vec![
             (MessageRole::User, "canonical prompt"),
             (MessageRole::Reasoning, "inspect the code"),
-            (MessageRole::User, "[Image]"),
-            (MessageRole::User, "[Image]"),
-            (MessageRole::Plan, "1. inspect\n2. change"),
-            (MessageRole::Tool, "Tool · read_file"),
-            (MessageRole::Tool, "Tool result · read_file"),
             (MessageRole::Agent, "canonical response"),
         ]
     );
-    assert_eq!(
-        state.messages()[5].detail.as_deref(),
-        Some("{\n  \"path\": \"src/lib.rs\"\n}")
-    );
-    assert_eq!(state.messages()[6].detail.as_deref(), Some("file contents"));
 }
 
 #[test]
-fn canonical_snapshot_projects_the_latest_structured_turn_plan() {
-    let mut snapshot = thread_snapshot();
-    snapshot.turns[0].plan = Some(PlanUpdate {
-        explanation: Some("Implementation plan".into()),
-        steps: vec![
-            PlanStep {
-                step: "inspect".into(),
-                status: PlanStepStatus::Completed,
-            },
-            PlanStep {
-                step: "change".into(),
-                status: PlanStepStatus::InProgress,
-            },
-        ],
-    });
+fn history_snapshot_is_prepended_without_duplicate_entries() {
     let mut state = ThreadFeatureState::default();
-
-    state.update(ThreadPresentationEvent::SnapshotReceived(snapshot));
-
-    let plan = state.messages().last().unwrap();
-    assert_eq!(plan.role, MessageRole::Plan);
-    assert_eq!(plan.text, "Implementation plan\n[x] inspect\n[>] change");
-    assert_eq!(plan.source_id.as_deref(), Some("plan-update:turn_1"));
-}
-
-#[test]
-fn older_history_page_is_merged_before_the_loaded_snapshot() {
-    let mut state = ThreadFeatureState::default();
-    let current = thread_snapshot();
-    state.update(ThreadPresentationEvent::SnapshotReceived(current.clone()));
-    let older_turn_id = TurnId::new("turn_0").unwrap();
-    state.update(ThreadPresentationEvent::HistoryPageReceived(Thread {
-        sequence: 99,
-        turns: vec![Turn {
-            turn_id: older_turn_id.clone(),
-            status: TurnStatus::Completed,
-            model: None,
-            tool_profile: None,
-            usage: zeta_protocol::ModelUsageSummary::default(),
-            items: vec![ThreadItem::UserMessage {
-                item_id: ItemId::new("older_item").unwrap(),
-                turn_id: older_turn_id,
-                text: "older prompt".into(),
-            }],
-            plan: None,
-            pending_interaction: None,
-            error: None,
-        }],
-        ..current
-    }));
-
-    let snapshot = state.snapshot().unwrap();
-    assert_eq!(snapshot.sequence, 7);
-    assert_eq!(snapshot.turns.len(), 2);
-    assert_eq!(snapshot.turns[0].turn_id.as_str(), "turn_0");
-    assert_eq!(snapshot.turns[1].turn_id.as_str(), "turn_1");
+    state.update(ThreadPresentationEvent::TranscriptSnapshotReceived(
+        ThreadTranscriptSnapshot::from_thread(&thread_snapshot()),
+    ));
+    let older = thread_with_item("turn_0", "older_item", "older prompt");
+    state.update(ThreadPresentationEvent::TranscriptHistoryPageReceived(
+        ThreadTranscriptSnapshot::from_thread(&older),
+    ));
     assert_eq!(state.messages()[0].text, "older prompt");
+    assert_eq!(state.messages().len(), 4);
 }
 
 #[test]
-fn older_history_page_preserves_the_active_transient_projection() {
+fn complete_upsert_replaces_one_stable_transcript_row() {
     let mut state = ThreadFeatureState::default();
-    let current = thread_snapshot();
-    state.update(ThreadPresentationEvent::SnapshotReceived(current.clone()));
-    let turn_id = TurnId::new("turn_stream").unwrap();
-    let item_id = ItemId::new("item_stream").unwrap();
-    state.update(ThreadPresentationEvent::TransientUpdateReceived(Box::new(
-        transient(ThreadUpdate::ItemDelta {
-            turn_id: turn_id.clone(),
-            item_id: item_id.clone(),
-            delta: zeta_protocol::ItemDelta::AgentMessage {
-                text: "stream".into(),
-            },
-        }),
+    state.update(ThreadPresentationEvent::TranscriptSnapshotReceived(
+        empty_snapshot(),
+    ));
+    state.update(ThreadPresentationEvent::TranscriptUpdateReceived(Box::new(
+        update(vec![upsert_agent("stream item", true)]),
     )));
-
-    let older_turn_id = TurnId::new("turn_0").unwrap();
-    state.update(ThreadPresentationEvent::HistoryPageReceived(Thread {
-        turns: vec![Turn {
-            turn_id: older_turn_id.clone(),
-            status: TurnStatus::Completed,
-            model: None,
-            tool_profile: None,
-            usage: zeta_protocol::ModelUsageSummary::default(),
-            items: vec![ThreadItem::UserMessage {
-                item_id: ItemId::new("older_item").unwrap(),
-                turn_id: older_turn_id,
-                text: "older prompt".into(),
-            }],
-            plan: None,
-            pending_interaction: None,
-            error: None,
-        }],
-        ..current
-    }));
-    state.update(ThreadPresentationEvent::TransientUpdateReceived(Box::new(
-        transient(ThreadUpdate::ItemDelta {
-            turn_id,
-            item_id,
-            delta: zeta_protocol::ItemDelta::AgentMessage { text: "ing".into() },
-        }),
+    state.update(ThreadPresentationEvent::TranscriptUpdateReceived(Box::new(
+        update(vec![upsert_agent("complete text", true)]),
     )));
-
-    assert_eq!(state.messages()[0].text, "older prompt");
-    assert_eq!(state.messages().last().unwrap().text, "streaming");
-}
-
-#[test]
-fn transient_deltas_update_identity_stable_transcript_rows() {
-    let mut state = ThreadFeatureState::default();
-    state.update(ThreadPresentationEvent::SnapshotReceived(Thread {
-        turns: Vec::new(),
-        ..thread_snapshot()
-    }));
-    let turn_id = TurnId::new("turn_stream").unwrap();
-    let item_id = ItemId::new("item_stream").unwrap();
-    state.update(ThreadPresentationEvent::TransientUpdateReceived(Box::new(
-        transient(ThreadUpdate::ItemStarted {
-            turn_id: turn_id.clone(),
-            item: ThreadItem::AgentMessage {
-                item_id: item_id.clone(),
-                turn_id: turn_id.clone(),
-                text: String::new(),
-            },
-        }),
-    )));
-    for text in ["hel", "lo"] {
-        state.update(ThreadPresentationEvent::TransientUpdateReceived(Box::new(
-            transient(ThreadUpdate::ItemDelta {
-                turn_id: turn_id.clone(),
-                item_id: item_id.clone(),
-                delta: zeta_protocol::ItemDelta::AgentMessage { text: text.into() },
-            }),
-        )));
-    }
-
     assert_eq!(state.messages().len(), 1);
-    assert_eq!(state.messages()[0].role, MessageRole::Agent);
-    assert_eq!(state.messages()[0].text, "hello");
-}
-
-#[test]
-fn transient_projection_bounds_each_message_without_splitting_utf8() {
-    let mut state = ThreadFeatureState::default();
-    state.update(ThreadPresentationEvent::SnapshotReceived(Thread {
-        turns: Vec::new(),
-        ..thread_snapshot()
-    }));
-    let turn_id = TurnId::new("turn_stream").unwrap();
-    let item_id = ItemId::new("item_stream").unwrap();
-    state.update(ThreadPresentationEvent::TransientUpdateReceived(Box::new(
-        transient(ThreadUpdate::ItemDelta {
-            turn_id,
-            item_id,
-            delta: zeta_protocol::ItemDelta::AgentMessage {
-                text: "界".repeat(100_000),
-            },
-        }),
-    )));
-
-    let text = &state.messages()[0].text;
-    assert!(text.len() <= 256 * 1024);
-    assert!(text.ends_with("… transient output truncated …"));
-    assert!(std::str::from_utf8(text.as_bytes()).is_ok());
-}
-
-#[test]
-fn transient_projection_bounds_identity_cardinality() {
-    let mut state = ThreadFeatureState::default();
-    state.update(ThreadPresentationEvent::SnapshotReceived(Thread {
-        turns: Vec::new(),
-        ..thread_snapshot()
-    }));
-    let turn_id = TurnId::new("turn_stream").unwrap();
-    for index in 0..1_100 {
-        state.update(ThreadPresentationEvent::TransientUpdateReceived(Box::new(
-            transient(ThreadUpdate::ItemDelta {
-                turn_id: turn_id.clone(),
-                item_id: ItemId::new(format!("item_{index}")).unwrap(),
-                delta: zeta_protocol::ItemDelta::AgentMessage { text: "x".into() },
-            }),
-        )));
-    }
-
-    assert_eq!(state.messages().len(), 1_024);
+    assert_eq!(state.messages()[0].text, "complete text");
     assert_eq!(
         state.messages()[0].source_id.as_deref(),
-        Some("item:item_76")
+        Some("item:item_stream")
     );
 }
 
 #[test]
-fn transient_stream_reset_removes_only_transient_rows() {
+fn clear_transient_preserves_committed_and_local_rows() {
     let mut state = ThreadFeatureState::default();
-    state.update(ThreadPresentationEvent::SnapshotReceived(thread_snapshot()));
+    state.update(ThreadPresentationEvent::TranscriptSnapshotReceived(
+        ThreadTranscriptSnapshot::from_thread(&thread_snapshot()),
+    ));
     state.update(ThreadPresentationEvent::NoticeReceived(
         "local notice".into(),
     ));
-    state.update(ThreadPresentationEvent::TransientUpdateReceived(Box::new(
-        transient(ThreadUpdate::ItemDelta {
-            turn_id: TurnId::new("turn_stream").unwrap(),
-            item_id: ItemId::new("item_stream").unwrap(),
-            delta: zeta_protocol::ItemDelta::AgentMessage {
-                text: "temporary".into(),
-            },
-        }),
+    state.update(ThreadPresentationEvent::TranscriptUpdateReceived(Box::new(
+        update(vec![upsert_agent("temporary", true)]),
     )));
-
-    state.update(ThreadPresentationEvent::TransientStreamReset);
-
+    state.update(ThreadPresentationEvent::TranscriptUpdateReceived(Box::new(
+        update(vec![ThreadTranscriptChange::ClearTransient]),
+    )));
     assert!(
         state
             .messages()
@@ -286,74 +110,92 @@ fn transient_stream_reset_removes_only_transient_rows() {
 }
 
 #[test]
-fn local_presentation_events_share_the_thread_owner() {
+fn structured_turn_plan_is_rendered_by_the_tui() {
+    let mut thread = thread_snapshot();
+    thread.turns[0].plan = Some(PlanUpdate {
+        explanation: Some("Implementation plan".into()),
+        steps: vec![
+            PlanStep {
+                step: "inspect".into(),
+                status: PlanStepStatus::Completed,
+            },
+            PlanStep {
+                step: "change".into(),
+                status: PlanStepStatus::InProgress,
+            },
+        ],
+    });
     let mut state = ThreadFeatureState::default();
-
-    state.update(ThreadPresentationEvent::NoticeReceived("notice".into()));
-    state.update(ThreadPresentationEvent::FailureReported("failure".into()));
-    state.update(ThreadPresentationEvent::Interrupted);
-
-    assert_eq!(
-        state
-            .messages()
-            .iter()
-            .map(|message| (message.role, message.text.as_str()))
-            .collect::<Vec<_>>(),
-        vec![
-            (MessageRole::Notice, "notice"),
-            (MessageRole::Error, "failure"),
-            (MessageRole::Notice, "turn interrupted"),
-        ]
-    );
+    state.update(ThreadPresentationEvent::TranscriptSnapshotReceived(
+        ThreadTranscriptSnapshot::from_thread(&thread),
+    ));
+    let plan = state.messages().last().unwrap();
+    assert_eq!(plan.role, MessageRole::Plan);
+    assert_eq!(plan.text, "Implementation plan\n[x] inspect\n[>] change");
+    assert_eq!(plan.source_id.as_deref(), Some("turn-plan:turn_1"));
 }
 
 #[test]
 fn command_completion_groups_the_command_with_its_result() {
     let mut state = ThreadFeatureState::default();
-
     state.update(ThreadPresentationEvent::CommandStarted(
-        "/theme zeta-code-light".into(),
+        "/theme light".into(),
     ));
-    let running = state.messages().first().unwrap();
-    assert_eq!(running.command_status, Some(CommandStatus::Running));
-    assert_eq!(running.detail, None);
-
     state.update(ThreadPresentationEvent::CommandCompleted {
-        command: "/theme zeta-code-light".into(),
-        result: "Theme set to Zeta Code Light".into(),
+        command: "/theme light".into(),
+        result: "Theme set".into(),
     });
-
     let message = state.messages().first().unwrap();
-    assert_eq!(state.messages().len(), 1);
-    assert_eq!(message.role, MessageRole::Command);
-    assert_eq!(message.text, "/theme zeta-code-light");
-    assert_eq!(
-        message.detail.as_deref(),
-        Some("Theme set to Zeta Code Light")
-    );
     assert_eq!(message.command_status, Some(CommandStatus::Succeeded));
+    assert_eq!(message.detail.as_deref(), Some("Theme set"));
 }
 
-#[test]
-fn clearing_discards_snapshot_and_projection() {
-    let mut state = ThreadFeatureState::default();
-    state.update(ThreadPresentationEvent::SnapshotReceived(thread_snapshot()));
+fn update(changes: Vec<ThreadTranscriptChange>) -> ThreadTranscriptUpdateEnvelope {
+    ThreadTranscriptUpdateEnvelope {
+        session_id: session_id(),
+        thread_id: thread_id(),
+        durable_sequence: 7,
+        stream_cursor: None,
+        changes,
+    }
+}
 
-    state.update(ThreadPresentationEvent::Cleared);
+fn upsert_agent(text: &str, transient: bool) -> ThreadTranscriptChange {
+    let turn_id = TurnId::new("turn_stream").unwrap();
+    let item_id = ItemId::new("item_stream").unwrap();
+    ThreadTranscriptChange::Upsert {
+        entry: ThreadTranscriptEntry::Item {
+            entry_id: "item:item_stream".into(),
+            turn_id: turn_id.clone(),
+            item: ThreadItem::AgentMessage {
+                item_id,
+                turn_id,
+                text: text.into(),
+            },
+            transient,
+        },
+    }
+}
 
-    assert_eq!(state.snapshot(), None);
-    assert!(state.messages().is_empty());
+fn empty_snapshot() -> ThreadTranscriptSnapshot {
+    ThreadTranscriptSnapshot {
+        session_id: session_id(),
+        thread_id: thread_id(),
+        durable_sequence: 7,
+        entries: Vec::new(),
+    }
 }
 
 fn thread_snapshot() -> Thread {
     let turn_id = TurnId::new("turn_1").unwrap();
     Thread {
-        session_id: SessionId::new("session_1").unwrap(),
-        thread_id: ThreadId::new("thread_1").unwrap(),
+        session_id: session_id(),
+        thread_id: thread_id(),
         title: "Thread".into(),
         status: ThreadStatus::Active,
         sequence: 7,
         usage: zeta_protocol::ModelUsageSummary::default(),
+        goal: None,
         turns: vec![Turn {
             turn_id: turn_id.clone(),
             status: TurnStatus::Completed,
@@ -371,45 +213,8 @@ fn thread_snapshot() -> Thread {
                     turn_id: turn_id.clone(),
                     text: "inspect the code".into(),
                 },
-                ThreadItem::UserImage {
-                    item_id: ItemId::new("item_3").unwrap(),
-                    turn_id: turn_id.clone(),
-                    url: "data:image/png;base64,cG5n".into(),
-                },
-                ThreadItem::UserImageAttachment {
-                    item_id: ItemId::new("item_attachment").unwrap(),
-                    turn_id: turn_id.clone(),
-                    attachment: ImageAttachmentRef {
-                        content_digest: ContentDigest::sha256(b"png"),
-                        media_type: ImageMediaType::Png,
-                        encoded_bytes: 3,
-                        width: 1,
-                        height: 1,
-                    },
-                },
-                ThreadItem::Plan {
-                    item_id: ItemId::new("item_plan").unwrap(),
-                    turn_id: turn_id.clone(),
-                    text: "1. inspect\n2. change".into(),
-                },
-                ThreadItem::ToolCall {
-                    item_id: ItemId::new("item_tool_call").unwrap(),
-                    turn_id: turn_id.clone(),
-                    tool_call_id: ToolCallId::new("call_1").unwrap(),
-                    name: ToolName::new("read_file").unwrap(),
-                    arguments_json: r#"{"path":"src/lib.rs"}"#.into(),
-                    binding: None,
-                },
-                ThreadItem::ToolResult {
-                    item_id: ItemId::new("item_tool_result").unwrap(),
-                    turn_id: turn_id.clone(),
-                    tool_call_id: ToolCallId::new("call_1").unwrap(),
-                    text: "file contents".into(),
-                    content: None,
-                    is_error: false,
-                },
                 ThreadItem::AgentMessage {
-                    item_id: ItemId::new("item_4").unwrap(),
+                    item_id: ItemId::new("item_3").unwrap(),
                     turn_id,
                     text: "canonical response".into(),
                 },
@@ -421,12 +226,31 @@ fn thread_snapshot() -> Thread {
     }
 }
 
-fn transient(update: ThreadUpdate) -> ThreadUpdateEnvelope {
-    ThreadUpdateEnvelope {
-        session_id: SessionId::new("session_1").unwrap(),
-        thread_id: ThreadId::new("thread_1").unwrap(),
-        durable_sequence: 7,
-        stream_cursor: None,
-        update,
+fn thread_with_item(turn: &str, item: &str, text: &str) -> Thread {
+    let turn_id = TurnId::new(turn).unwrap();
+    Thread {
+        turns: vec![Turn {
+            turn_id: turn_id.clone(),
+            status: TurnStatus::Completed,
+            model: None,
+            tool_profile: None,
+            usage: zeta_protocol::ModelUsageSummary::default(),
+            items: vec![ThreadItem::UserMessage {
+                item_id: ItemId::new(item).unwrap(),
+                turn_id,
+                text: text.into(),
+            }],
+            plan: None,
+            pending_interaction: None,
+            error: None,
+        }],
+        ..thread_snapshot()
     }
+}
+
+fn session_id() -> SessionId {
+    SessionId::new("session_1").unwrap()
+}
+fn thread_id() -> ThreadId {
+    ThreadId::new("thread_1").unwrap()
 }

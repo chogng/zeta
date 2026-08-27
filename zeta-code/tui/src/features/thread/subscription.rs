@@ -1,5 +1,4 @@
 use super::request::require_history_boundary;
-use std::collections::BTreeMap;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
@@ -9,8 +8,8 @@ use zeta_app_server_protocol::protocol::session::SessionThreadSubscribeParams;
 use zeta_app_server_protocol::protocol::session::SessionThreadUnsubscribeParams;
 use zeta_app_server_protocol::protocol::session::ThreadHistoryBoundary;
 use zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory;
+use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
 use zeta_protocol::SessionId;
-use zeta_protocol::StreamInstanceId;
 use zeta_protocol::Thread;
 use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadUpdateEnvelope;
@@ -27,26 +26,24 @@ pub(crate) struct ThreadSubscription {
     history_turn_limit: u32,
     oldest_turn_id: Option<zeta_protocol::TurnId>,
     has_older_turns: bool,
-    stream_sequences: BTreeMap<StreamInstanceId, u64>,
 }
 
 const HISTORY_PAGE_TURNS: u32 = 50;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ThreadUpdateDisposition {
-    ApplyTransient,
-    ApplyTransientAfterReset,
     Ignore,
     RefreshSnapshot,
-    ResetTransientAndRefreshSnapshot,
 }
 
 pub(crate) enum ThreadSwitch {
     Complete {
         snapshot: Thread,
+        transcript: ThreadTranscriptSnapshot,
     },
     StaleSubscription {
         snapshot: Thread,
+        transcript: ThreadTranscriptSnapshot,
         error: ClientError,
     },
 }
@@ -56,7 +53,7 @@ impl ThreadSubscription {
         client: &mut AppServerClient<T>,
         session_id: &SessionId,
         thread_id: &ThreadId,
-    ) -> Result<(Self, Thread), ClientError>
+    ) -> Result<(Self, Thread, ThreadTranscriptSnapshot), ClientError>
     where
         T: JsonRpcTransport,
     {
@@ -69,9 +66,10 @@ impl ThreadSubscription {
             }),
         })?;
         validate_snapshot_scope(&result.thread, session_id, thread_id)?;
+        validate_transcript_scope(&result.transcript, session_id, thread_id)?;
         validate_update_scopes(&result.updates, session_id, thread_id)?;
 
-        let (snapshot, boundary) = if result
+        let (snapshot, transcript, boundary) = if result
             .updates
             .iter()
             .any(|update| update.durable_sequence > result.thread.sequence)
@@ -83,17 +81,19 @@ impl ThreadSubscription {
                     turn_limit: HISTORY_PAGE_TURNS,
                 }),
             })?;
+            validate_transcript_scope(&read.transcript, session_id, thread_id)?;
             let boundary = require_history_boundary(read.history)?;
-            (read.thread, boundary)
+            (read.thread, read.transcript, boundary)
         } else {
             let boundary = require_history_boundary(result.history)?;
-            (result.thread, boundary)
+            (result.thread, result.transcript, boundary)
         };
         validate_snapshot_scope(&snapshot, session_id, thread_id)?;
 
         Ok((
             Self::from_snapshot_with_boundary(&snapshot, HISTORY_PAGE_TURNS, Some(boundary)),
             snapshot,
+            transcript,
         ))
     }
 
@@ -113,6 +113,8 @@ impl ThreadSubscription {
                 history: Some(self.history()),
             })?;
             let snapshot = result.thread;
+            let transcript = result.transcript;
+            validate_transcript_scope(&transcript, session_id, thread_id)?;
             let boundary = require_history_boundary(result.history)?;
             validate_snapshot_scope(&snapshot, session_id, thread_id)?;
             *self = Self::from_snapshot_with_boundary(
@@ -120,20 +122,30 @@ impl ThreadSubscription {
                 self.history_turn_limit,
                 Some(boundary),
             );
-            return Ok(ThreadSwitch::Complete { snapshot });
+            return Ok(ThreadSwitch::Complete {
+                snapshot,
+                transcript,
+            });
         }
 
         let previous_session_id = self.session_id.clone();
         let previous_thread_id = self.thread_id.clone();
-        let (next, snapshot) = Self::start(client, session_id, thread_id)?;
+        let (next, snapshot, transcript) = Self::start(client, session_id, thread_id)?;
         *self = next;
         let cleanup = client.unsubscribe_session_thread(SessionThreadUnsubscribeParams {
             session_id: previous_session_id,
             thread_id: previous_thread_id,
         });
         match cleanup {
-            Ok(()) => Ok(ThreadSwitch::Complete { snapshot }),
-            Err(error) => Ok(ThreadSwitch::StaleSubscription { snapshot, error }),
+            Ok(()) => Ok(ThreadSwitch::Complete {
+                snapshot,
+                transcript,
+            }),
+            Err(error) => Ok(ThreadSwitch::StaleSubscription {
+                snapshot,
+                transcript,
+                error,
+            }),
         }
     }
 
@@ -141,42 +153,15 @@ impl ThreadSubscription {
         &mut self,
         update: &ThreadUpdateEnvelope,
     ) -> ThreadUpdateDisposition {
-        if update.thread_id != self.thread_id {
+        if update.thread_id != self.thread_id || update.session_id != self.session_id {
             return ThreadUpdateDisposition::Ignore;
         }
-        if update.session_id != self.session_id || update.durable_sequence > self.confirmed_sequence
+        if matches!(update.update, zeta_protocol::ThreadUpdate::Committed { .. })
+            && update.durable_sequence > self.confirmed_sequence
         {
             return ThreadUpdateDisposition::RefreshSnapshot;
         }
-        if update.durable_sequence < self.confirmed_sequence
-            || matches!(update.update, zeta_protocol::ThreadUpdate::Committed { .. })
-        {
-            return ThreadUpdateDisposition::Ignore;
-        }
-        let Some(cursor) = &update.stream_cursor else {
-            return ThreadUpdateDisposition::Ignore;
-        };
-        if let Some(sequence) = self.stream_sequences.get_mut(&cursor.stream_instance_id) {
-            if cursor.sequence <= *sequence {
-                return ThreadUpdateDisposition::Ignore;
-            }
-            let continuous = cursor.sequence == sequence.saturating_add(1);
-            *sequence = cursor.sequence;
-            return if continuous {
-                ThreadUpdateDisposition::ApplyTransient
-            } else {
-                ThreadUpdateDisposition::ResetTransientAndRefreshSnapshot
-            };
-        }
-
-        self.stream_sequences.clear();
-        self.stream_sequences
-            .insert(cursor.stream_instance_id.clone(), cursor.sequence);
-        if cursor.sequence == 1 {
-            ThreadUpdateDisposition::ApplyTransientAfterReset
-        } else {
-            ThreadUpdateDisposition::ResetTransientAndRefreshSnapshot
-        }
+        ThreadUpdateDisposition::Ignore
     }
 
     pub(crate) fn confirm_sequence(&mut self, sequence: u64) {
@@ -260,7 +245,6 @@ impl ThreadSubscription {
             history_turn_limit,
             oldest_turn_id,
             has_older_turns: boundary.is_some_and(|history| history.has_older_turns),
-            stream_sequences: BTreeMap::new(),
         }
     }
 }
@@ -276,6 +260,20 @@ fn validate_snapshot_scope(
     Err(ClientError::Protocol(format!(
         "thread subscription returned snapshot for {}/{}; expected {session_id}/{thread_id}",
         snapshot.session_id, snapshot.thread_id
+    )))
+}
+
+fn validate_transcript_scope(
+    transcript: &ThreadTranscriptSnapshot,
+    session_id: &SessionId,
+    thread_id: &ThreadId,
+) -> Result<(), ClientError> {
+    if transcript.session_id == *session_id && transcript.thread_id == *thread_id {
+        return Ok(());
+    }
+    Err(ClientError::Protocol(format!(
+        "thread subscription returned transcript for {}/{}; expected {session_id}/{thread_id}",
+        transcript.session_id, transcript.thread_id
     )))
 }
 

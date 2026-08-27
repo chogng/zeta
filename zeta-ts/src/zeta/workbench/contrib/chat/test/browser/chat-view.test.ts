@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import type { ModelRef, ServerNotification, SessionCreateParams, Thread } from "../../../../../../../generated/app-server/types.js";
+import type { ModelRef, ServerNotification, SessionCreateParams, Thread, ThreadTranscriptSnapshot } from "../../../../../../../generated/app-server/types.js";
 import type { SessionMutationParams, SessionOperationInput } from "../../../../../platform/sessions/common/sessionApi.js";
 import type { IRendererHost } from "../../../../../platform/renderer/common/rendererHost.js";
 import type { IAction } from "../../../../../base/common/actions.js";
@@ -1013,7 +1013,7 @@ test("AppServerSessionsManagementService changes the model only for the selected
 	assert.deepEqual(service.active?.session.model, model);
 });
 
-test("ChatPaneModel layers transient deltas over canonical Thread state", async () => {
+test("ChatPaneModel applies backend-assembled transcript entries", async () => {
 	const activeSession = session("session-1", "thread-1");
 	let currentThread = thread();
 	const fake = fakeApi({
@@ -1031,43 +1031,21 @@ test("ChatPaneModel layers transient deltas over canonical Thread state", async 
 
 	await model.initialize();
 	fake.emit({
-		method: "session/thread/update",
+		method: "session/thread/transcript/update",
 		params: {
 			sessionId: "session-1",
 			threadId: "thread-1",
 			durableSequence: 1,
-			streamCursor: {
-				streamInstanceId: "stream-1",
-				sequence: 1,
-			},
-			update: {
-				type: "itemStarted",
-				turnId: "turn-1",
-				item: {
-					type: "agentMessage",
-					itemId: "item-1",
+			changes: [{
+				type: "upsert",
+				entry: {
+					type: "item",
+					entryId: "item:item-1",
 					turnId: "turn-1",
-					text: "",
+					transient: true,
+					item: { type: "agentMessage", itemId: "item-1", turnId: "turn-1", text: "Hello" },
 				},
-			},
-		},
-	});
-	fake.emit({
-		method: "session/thread/update",
-		params: {
-			sessionId: "session-1",
-			threadId: "thread-1",
-			durableSequence: 1,
-			streamCursor: {
-				streamInstanceId: "stream-1",
-				sequence: 2,
-			},
-			update: {
-				type: "itemDelta",
-				turnId: "turn-1",
-				itemId: "item-1",
-				delta: { type: "agentMessage", text: "Hello" },
-			},
+			}],
 		},
 	});
 
@@ -1167,7 +1145,7 @@ test("ChatPaneModel projects and refreshes the canonical durable Turn plan", asy
 	assert.match(model.items[0]?.text ?? "", /In progress:\*\* Verify/);
 });
 
-test("ChatPaneModel refreshes on stream gaps and rejects retired incarnations", async () => {
+test("ChatPaneModel mechanically clears and replaces transient transcript entries", async () => {
 	const activeSession = session("session-1", "thread-1");
 	const fake = fakeApi({
 		sessions: [activeSession],
@@ -1183,37 +1161,34 @@ test("ChatPaneModel refreshes on stream gaps and rejects retired incarnations", 
 	}, sessions);
 
 	await model.initialize();
-	const emitStarted = (streamInstanceId: string, sequence: number, itemId: string): void => {
+	const emitChanges = (changes: Extract<ServerNotification, { method: "session/thread/transcript/update" }>["params"]["changes"]): void => {
 		fake.emit({
-			method: "session/thread/update",
+			method: "session/thread/transcript/update",
 			params: {
 				sessionId: "session-1",
 				threadId: "thread-1",
 				durableSequence: 1,
-				streamCursor: { streamInstanceId, sequence },
-				update: {
-					type: "itemStarted",
-					turnId: "turn-1",
-					item: {
-						type: "agentMessage",
-						itemId,
-						turnId: "turn-1",
-						text: itemId,
-					},
-				},
+				changes,
 			},
 		});
 	};
+	const item = (itemId: string) => ({
+		type: "upsert" as const,
+		entry: {
+			type: "item" as const,
+			entryId: `item:${itemId}`,
+			turnId: "turn-1",
+			transient: true,
+			item: { type: "agentMessage" as const, itemId, turnId: "turn-1", text: itemId },
+		},
+	});
 
-	emitStarted("stream-1", 1, "old-item");
+	emitChanges([item("old-item")]);
 	assert.deepEqual(model.items.map((item) => item.text), ["old-item"]);
-	emitStarted("stream-1", 3, "gap-item");
-	await nextTask();
+	emitChanges([{ type: "clearTransient" }]);
 	assert.equal(model.items.length, 0);
 
-	emitStarted("stream-2", 1, "new-item");
-	assert.deepEqual(model.items.map((item) => item.text), ["new-item"]);
-	emitStarted("stream-1", 4, "late-old-item");
+	emitChanges([item("new-item")]);
 	assert.deepEqual(model.items.map((item) => item.text), ["new-item"]);
 });
 
@@ -1649,9 +1624,13 @@ function fakeApi(options: FakeOptions = {}): {
 			list: async () => ({ generation: 1, skills: options.skills ?? [] }),
 		},
 		thread: {
-			read: async () => ({ thread: currentThread() }),
+			read: async () => {
+				const value = currentThread();
+				return { thread: value, transcript: transcript(value) };
+			},
 			subscribe: async () => ({
 				thread: currentThread(),
+				transcript: transcript(currentThread()),
 				updates: [],
 			}),
 			unsubscribe: async () => undefined,
@@ -1736,6 +1715,19 @@ function thread(agentText?: string): Thread {
 				}],
 			}]
 			: [],
+	};
+}
+
+function transcript(value: Thread): ThreadTranscriptSnapshot {
+	return {
+		sessionId: value.sessionId,
+		threadId: value.threadId,
+		durableSequence: value.sequence,
+		entries: value.turns.flatMap((turn) => [
+			...turn.items.map((item) => ({ type: "item" as const, entryId: `item:${item.itemId}`, turnId: turn.turnId, item, transient: false })),
+			...(turn.plan ? [{ type: "turnPlan" as const, entryId: `turn-plan:${turn.turnId}`, turnId: turn.turnId, plan: turn.plan }] : []),
+			...(turn.error ? [{ type: "turnError" as const, entryId: `turn-error:${turn.turnId}`, turnId: turn.turnId, error: turn.error }] : []),
+		]),
 	};
 }
 
