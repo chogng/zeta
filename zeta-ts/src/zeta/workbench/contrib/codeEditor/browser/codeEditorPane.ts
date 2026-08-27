@@ -69,6 +69,7 @@ export interface EditorPaneOptions {
 	readonly fontSize?: number;
 	readonly lineHeight?: number;
 	readonly fontLigatures?: boolean;
+	readonly experimentalGpuAcceleration?: EditorBrowserOptions["experimentalGpuAcceleration"];
 	readonly minimap?: EditorBrowserOptions["minimap"];
 	readonly activeLineHighlight?: EditorBrowserOptions["activeLineHighlight"];
 	readonly showLineNumbers?: boolean;
@@ -174,6 +175,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 				fontSize: this.options.fontSize,
 				lineHeight: this.options.lineHeight,
 				fontLigatures: this.options.fontLigatures,
+				experimentalGpuAcceleration: this.options.experimentalGpuAcceleration,
 				minimap: this.options.minimap,
 				activeLineHighlight: this.options.activeLineHighlight,
 				showLineNumbers: this.options.showLineNumbers,

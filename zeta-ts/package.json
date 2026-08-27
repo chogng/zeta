@@ -90,6 +90,7 @@
     "@types/jsdom": "^28.0.3",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^24.0.0",
+    "@webgpu/types": "0.1.66",
     "axe-playwright": "2.1.0",
     "concurrently": "^10.0.4",
     "cross-env": "^10.1.0",

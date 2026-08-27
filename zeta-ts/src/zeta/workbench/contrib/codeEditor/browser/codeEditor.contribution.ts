@@ -34,6 +34,7 @@ registerEditorPane({
 			fontSize: configuration?.getValue(CodeEditorConfiguration.fontSize),
 			lineHeight: configuration?.getValue(CodeEditorConfiguration.lineHeight),
 			fontLigatures: configuration?.getValue(CodeEditorConfiguration.fontLigatures),
+			experimentalGpuAcceleration: configuration?.getValue(CodeEditorConfiguration.experimentalGpuAcceleration),
 			lineWrapping: configuration?.getValue(CodeEditorConfiguration.wordWrap),
 			wrappingIndent: toWrappingIndent(configuration?.getValue(CodeEditorConfiguration.wrappingIndent)),
 			minimap: configuration?.getValue(CodeEditorConfiguration.minimapEnabled) === false ? EditorMinimap.Off : EditorMinimap.On,

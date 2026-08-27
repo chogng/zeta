@@ -132,7 +132,7 @@ The following facts describe the current Zeta implementation; they do not redefi
 | Virtualized visible rows | Current | `browser/viewparts/viewLines/viewLinesPart.ts` owns rendered row DOM and semantic text projection; text-bearing roots use ordinary layout positioning instead of permanent transform promotion |
 | Browser-shaped visible geometry | Current, partial | `browser/viewparts/viewportOverlay/domTextGeometry.ts` provides `Range` rectangles, caret positions, and DOM hit-testing where the rendered line is available |
 | Unified renderer-aware geometry contract | Proposed | Caret, selection, composition, pointer, decoration, and input consumers should use one explicit provider with exact/fallback state |
-| Replaceable DOM/GPU text renderer | Potential | Requires shared shaping/cluster data and measurements from real workload benchmarks |
+| Selectable DOM/WebGPU text renderer | Current, experimental | `browser/gpu` owns device, DPR, glyph rasterization, and atlas resources; `browser/viewparts/viewLinesGpu` draws eligible visible rows when `experimentalGpuAcceleration` is `on`. DOM rows remain the geometry and accessibility surface, and rows outside the GPU eligibility contract remain DOM-painted. |
 
 Current behavior must not be described as complete merely because a fallback exists. A fallback is a contract only when its precision, invalidation, and degraded behavior are explicit.
 
@@ -150,9 +150,9 @@ Use renderer-aware exact geometry for every visible case that affects caret, sel
 
 File alignment with mature editor implementations may follow after these responsibilities have stable owners. A filename change must not create duplicate caches or move common geometry into the browser layer.
 
-### Potential: add a GPU text backend or background shaping
+### Current: harden the WebGPU text backend
 
-Only introduce a GPU or worker-backed path after measuring startup, scroll, typing, IME, accessibility, and memory behavior on representative files. The new backend must consume the same logical and visual coordinate contracts.
+Measure startup, scroll, typing, IME, accessibility, and memory behavior on representative files before enabling WebGPU by default. Expand GPU eligibility only when the drawing path and visible geometry agree for the added text class; DOM remains authoritative for browser shaping cases the atlas path does not implement.
 
 ## Reference implementation mapping
 
@@ -171,7 +171,7 @@ The following VS Code modules are useful evidence when investigating a behavior.
 | `vs/editor/browser/viewParts/viewLines/viewLine.ts` | Per-rendered-line width and visible-range geometry | That a virtualized editor needs a global DOM line for every model line |
 | `vs/editor/browser/viewParts/viewLines/viewLines.ts` | Visible-line width aggregation and delayed work | That its historical scheduler and cache invalidation are universal |
 | `vs/editor/browser/view.ts` and `vs/editor/common/viewLayout/viewLayout.ts` | View facade and content-width propagation | That view host and common layout must share the same class boundaries |
-| `vs/editor/browser/viewParts/viewLinesGpu/viewLinesGpu.ts` | GPU-specific width and range calculation | That a GPU path is required before its workload justifies it |
+| `vs/editor/browser/gpu/*` and `vs/editor/browser/viewParts/viewLinesGpu/viewLinesGpu.ts` | Device/DPR/atlas ownership, glyph rasterization, line eligibility, and GPU draw scheduling | That Zeta should copy VS Code service dependencies or enable the experimental backend by default |
 | `vs/editor/browser/controller/editContext/*` | Input-surface and visible-range integration | That browser input types should leak into common model contracts |
 
 ## Long-term invariants

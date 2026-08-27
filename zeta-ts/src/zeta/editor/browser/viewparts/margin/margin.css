@@ -21,15 +21,61 @@
 .stanza-editor-feature-gutter {
   position: absolute;
   top: 0;
-  left: 0;
+  left: var(--stanza-editor-line-numbers-width, 0px);
   z-index: 5;
   width: var(--stanza-editor-feature-gutter-width, 0px);
   height: 100%;
   white-space: nowrap;
 }
 
+.stanza-editor-gutter-decoration {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  width: 20px;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--zeta-description-foreground);
+  font: inherit;
+  line-height: inherit;
+  text-align: center;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+.stanza-editor-gutter-decoration[hidden] {
+  display: none;
+}
+
+.stanza-editor-gutter-decoration > .zeta-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+}
+
+.stanza-editor-gutter-decoration > .zeta-icon [stroke] {
+  stroke: currentColor;
+}
+
+.stanza-editor-gutter-decoration > .zeta-icon [fill]:not([fill="none"]) {
+  fill: currentColor;
+}
+
+.stanza-editor-gutter-decoration:focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: -1px;
+}
+
 @media (forced-colors: active) {
   .stanza-editor-margin {
     background: Canvas;
+  }
+
+  .stanza-editor-gutter-decoration:focus-visible {
+    outline-color: Highlight;
   }
 }

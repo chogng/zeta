@@ -1,12 +1,5 @@
 .zeta-debug-breakpoint-gutter {
-  position: absolute;
-  inset: 0;
-  width: 20px;
-  height: 100%;
-  padding: 0;
-  cursor: pointer;
-  background: transparent;
-  border: 0;
+  color: var(--zeta-error-foreground);
 }
 
 .zeta-debug-breakpoint-gutter::before {
@@ -31,9 +24,4 @@
 
 .zeta-debug-breakpoint-gutter.checked:not(.verified)::before {
   background: transparent;
-}
-
-.zeta-debug-breakpoint-gutter:focus-visible {
-  outline: 1px solid var(--zeta-focus-border);
-  outline-offset: -1px;
 }

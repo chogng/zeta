@@ -1,33 +1,9 @@
 .stanza-editor-fold-toggle {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 5;
-  width: 20px;
-  height: 100%;
-  padding: 0;
   color: var(--zeta-description-foreground);
-  font: inherit;
-  line-height: inherit;
-  text-align: center;
-  cursor: pointer;
-  background: transparent;
-  border: 0;
 }
 
 .stanza-editor-fold-toggle:hover,
 .stanza-editor-fold-toggle:focus-visible {
   color: var(--zeta-editor-foreground);
   background: var(--zeta-button-hover-background);
-}
-
-.stanza-editor-fold-toggle:focus-visible {
-  outline: 1px solid var(--zeta-focus-border);
-  outline-offset: -1px;
-}
-
-@media (forced-colors: active) {
-  .stanza-editor-fold-toggle:focus-visible {
-    outline-color: Highlight;
-  }
 }

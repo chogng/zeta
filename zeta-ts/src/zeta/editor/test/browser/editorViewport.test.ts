@@ -375,6 +375,43 @@ test("EditorViewport rejects an unknown minimap mode", () => {
 	dom.window.close();
 });
 
+test("EditorViewport rejects an unknown GPU acceleration mode", () => {
+	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const container = requiredElement(dom.window.document, "main");
+	using model = new TextModel("alpha");
+	assert.throws(() => new EditorViewport({
+		container,
+		model,
+		lineHeight: 20,
+		textMeasurer: fixedTextMeasurer(),
+		experimentalGpuAcceleration: "automatic" as never,
+	}), /Unknown Stanza editor GPU acceleration mode/);
+	dom.window.close();
+});
+
+test("EditorViewport keeps DOM text visible when WebGPU initialization is unavailable", () => {
+	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const container = requiredElement(dom.window.document, "main");
+	const errors: Error[] = [];
+	using model = new TextModel("alpha");
+	using viewport = new EditorViewport({
+		container,
+		model,
+		lineHeight: 20,
+		textMeasurer: fixedTextMeasurer(),
+		experimentalGpuAcceleration: "on",
+		onGpuError: error => errors.push(error),
+	});
+	viewport.layout({ width: 300, height: 40 });
+
+	const canvas = requiredElement(viewport.element, ".stanza-editor-gpu-canvas") as HTMLCanvasElement;
+	assert.equal(canvas.hidden, true);
+	assert.equal(lineText(requiredLine(viewport.element, 0)).textContent, "alpha");
+	assert.equal(requiredLine(viewport.element, 0).classList.contains("gpu-rendered"), false);
+	assert.match(errors[0]?.message ?? "", /ResizeObserver/);
+	dom.window.close();
+});
+
 test("Scrolling virtualizes rows while preserving overlapping DOM identity", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
@@ -514,12 +551,17 @@ test("Folding model removes folded physical rows from the viewport projection", 
 		lineHeight: 20,
 		textMeasurer: fixedTextMeasurer(),
 		lineVisibilitySource: hiddenRanges,
-		lineGutterDecoration: new FoldingDecorationProvider(folding),
+		lineGutterDecorations: [new FoldingDecorationProvider(folding)],
 	});
 	viewport.layout({ width: 300, height: 20 });
+	assert.equal(viewport.element.style.getPropertyValue("--stanza-editor-line-numbers-width"), "24px");
+	assert.equal(viewport.element.style.getPropertyValue("--stanza-editor-feature-gutter-width"), "20px");
+	assert.equal(viewport.element.style.getPropertyValue("--stanza-editor-gutter-width"), "44px");
 	const initialToggle = requiredElement<HTMLButtonElement>(viewport.element, ".stanza-editor-fold-toggle");
 	assert.equal(initialToggle.getAttribute("aria-expanded"), "true");
-	assert.equal(initialToggle.textContent, "⌄");
+	assert.equal(initialToggle.textContent, "");
+	assert.equal(initialToggle.querySelectorAll("svg").length, 1);
+	assert.equal(initialToggle.dataset.iconId, "folding-expanded");
 	folding.setContainingLineCollapsed(0, true);
 
 	assert.equal(viewport.viewportLayout.contentSize.height, 40);
@@ -537,13 +579,14 @@ test("Folding model removes folded physical rows from the viewport projection", 
 		text: "after",
 	}]);
 	assert.deepEqual(viewport.getPositionContentCoordinates(TextPosition.at(1, 0)), {
-		left: 36,
+		left: 56,
 		top: 0,
 		height: 20,
 	});
 	const collapsedToggle = requiredElement<HTMLButtonElement>(viewport.element, ".stanza-editor-fold-toggle");
 	assert.equal(collapsedToggle.getAttribute("aria-expanded"), "false");
-	assert.equal(collapsedToggle.textContent, "›");
+	assert.equal(collapsedToggle.querySelectorAll("svg").length, 1);
+	assert.equal(collapsedToggle.dataset.iconId, "folding-collapsed");
 
 	dom.window.close();
 });

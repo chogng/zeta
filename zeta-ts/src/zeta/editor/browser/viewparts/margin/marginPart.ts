@@ -7,7 +7,7 @@ import { type EditorVisualLineProjection } from "../../../common/viewModel/model
 import { type TextMeasurer } from "../../config/fontMeasurements.js";
 import { type RenderedLine } from "../viewLines/renderedLine.js";
 import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
-import { type EditorLineGutterDecoration } from "./lineGutterDecoration.js";
+import { type EditorLineGutterRenderer } from "./lineGutterDecoration.js";
 
 const GUTTER_HORIZONTAL_PADDING = 16;
 
@@ -20,7 +20,7 @@ export interface MarginPartOptions {
 	readonly textMeasurer: TextMeasurer;
 	readonly presentation: MarginPresentation;
 	readonly showLineNumbers: boolean;
-	readonly lineGutterDecoration: EditorLineGutterDecoration | undefined;
+	readonly lineGutterRenderer: EditorLineGutterRenderer | undefined;
 	readonly readVisualProjection: () => EditorVisualLineProjection;
 	readonly readRenderedLines: () => ReadonlyMap<number, RenderedLine>;
 }
@@ -35,7 +35,7 @@ export class MarginPart extends EditorViewPart {
 	private readonly textMeasurer: TextMeasurer;
 	private readonly presentation: MarginPresentation;
 	private readonly showLineNumbers: boolean;
-	private readonly lineGutterDecoration: EditorLineGutterDecoration | undefined;
+	private readonly lineGutterRenderer: EditorLineGutterRenderer | undefined;
 	private readonly readVisualProjection: () => EditorVisualLineProjection;
 	private readonly readRenderedLines: () => ReadonlyMap<number, RenderedLine>;
 
@@ -47,7 +47,7 @@ export class MarginPart extends EditorViewPart {
 		this.textMeasurer = options.textMeasurer;
 		this.presentation = options.presentation;
 		this.showLineNumbers = options.showLineNumbers;
-		this.lineGutterDecoration = options.lineGutterDecoration;
+		this.lineGutterRenderer = options.lineGutterRenderer;
 		this.readVisualProjection = options.readVisualProjection;
 		this.readRenderedLines = options.readRenderedLines;
 		const domNode = h(options.host.ownerDocument, "div");
@@ -61,23 +61,17 @@ export class MarginPart extends EditorViewPart {
 
 	get gutterWidth(): number {
 		if (this.presentation === "embedded") return 0;
-		if (!this.showLineNumbers) return this.featureGutterWidth;
+		return this.lineNumbersWidth + this.featureGutterWidth;
+	}
+
+	private get lineNumbersWidth(): number {
+		if (this.presentation === "embedded" || !this.showLineNumbers) return 0;
 		const digitCount = String(this.model.lineCount).length;
-		return Math.ceil(
-			this.textMeasurer.measureLineWidth("9".repeat(digitCount)) +
-			GUTTER_HORIZONTAL_PADDING +
-			this.additionalFeatureGutterWidth,
-		);
+		return Math.ceil(this.textMeasurer.measureLineWidth("9".repeat(digitCount)) + GUTTER_HORIZONTAL_PADDING);
 	}
 
 	get featureGutterWidth(): number {
-		const decoration = this.lineGutterDecoration;
-		if (!decoration) return 0;
-		return "width" in decoration && typeof decoration.width === "number" ? decoration.width : 20;
-	}
-
-	get additionalFeatureGutterWidth(): number {
-		return Math.max(0, this.featureGutterWidth - 20);
+		return this.lineGutterRenderer?.width ?? 0;
 	}
 
 	get textLeft(): number {
@@ -87,21 +81,21 @@ export class MarginPart extends EditorViewPart {
 	render(context: EditorRenderingContext): void {
 		const layout = context.layout;
 		const gutterWidth = this.gutterWidth;
+		const lineNumbersWidth = this.lineNumbersWidth;
 		const featureGutterWidth = this.featureGutterWidth;
-		const additionalFeatureGutterWidth = this.additionalFeatureGutterWidth;
 		this.root.setWidth(gutterWidth);
 		this.root.setHeight(layout.contentSize.height);
 		this.root.setHidden(gutterWidth === 0);
 		for (const [visualLineIndex, line] of this.readRenderedLines()) {
 			const visualLine = this.readVisualProjection().lineAt(visualLineIndex);
 			if (!visualLine) continue;
-			this.lineGutterDecoration?.project(line.featureGutterElement, visualLine.logicalLineIndex, visualLine.firstForLogicalLine);
+			this.lineGutterRenderer?.render(line.featureGutterElement, visualLine.logicalLineIndex, visualLine.firstForLogicalLine);
 		}
 		this.host.style.setProperty("--stanza-editor-gutter-width", `${gutterWidth}px`);
+		this.host.style.setProperty("--stanza-editor-line-numbers-width", `${lineNumbersWidth}px`);
 		this.host.style.setProperty("--stanza-editor-feature-gutter-width", `${featureGutterWidth}px`);
-		this.host.style.setProperty("--stanza-editor-additional-feature-gutter-width", `${additionalFeatureGutterWidth}px`);
 		this.contentElement.style.setProperty("--stanza-editor-gutter-width", `${gutterWidth}px`);
+		this.contentElement.style.setProperty("--stanza-editor-line-numbers-width", `${lineNumbersWidth}px`);
 		this.contentElement.style.setProperty("--stanza-editor-feature-gutter-width", `${featureGutterWidth}px`);
-		this.contentElement.style.setProperty("--stanza-editor-additional-feature-gutter-width", `${additionalFeatureGutterWidth}px`);
 	}
 }

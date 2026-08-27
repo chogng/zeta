@@ -132,7 +132,7 @@ GPU 或 Canvas 后端可以提高密集文本的吞吐，但自身不提供原�
 | 可见行虚拟化 | Current / 已实现 | `browser/viewparts/viewLines/viewLinesPart.ts` 拥有渲染行 DOM 和 semantic text projection；承载文字的根节点使用普通布局定位，不长期提升为 transform 合成层 |
 | 浏览器 shaping 后的可见几何 | Current / 部分具备 | `browser/viewparts/viewportOverlay/domTextGeometry.ts` 在渲染行可用时提供 `Range` 矩形、光标位置和 DOM 命中测试 |
 | 统一的渲染器感知几何契约 | Proposed / 计划设计 | 光标、选区、composition、pointer、decoration 和输入消费者应使用一个显式提供者，并携带精确/fallback 状态 |
-| 可替换 DOM/GPU 文本渲染器 | Potential / 潜在方向 | 需要共享 shaping/cluster 数据以及真实工作负载基准 |
+| 可选择的 DOM/WebGPU 文本渲染器 | Current / 实验性 | `browser/gpu` 拥有 device、DPR、glyph rasterization 和 atlas 资源；`experimentalGpuAcceleration` 为 `on` 时，`browser/viewparts/viewLinesGpu` 绘制符合条件的可见行。DOM 行继续承担几何与无障碍表面，超出 GPU 适用范围的行仍由 DOM 绘制。 |
 
 不能因为存在 fallback 就把当前行为描述为完整。只有当 fallback 的精度、失效和降级行为明确时，它才是有效契约。
 
@@ -150,9 +150,9 @@ GPU 或 Canvas 后端可以提高密集文本的吞吐，但自身不提供原�
 
 这些职责拥有稳定 owner 后，再决定是否对齐成熟编辑器的文件布局。文件名变更不能产生重复缓存，也不能把 common 几何移动到 browser 层。
 
-### Potential：增加 GPU 文本后端或后台 shaping
+### Current：完善 WebGPU 文本后端
 
-只有在代表性文件上测量启动、滚动、输入、IME、无障碍和内存行为后，才引入 GPU 或 Worker 路径。新后端必须消费同一套逻辑和视觉坐标契约。
+在代表性文件上测量启动、滚动、输入、IME、无障碍和内存行为后，才能默认启用 WebGPU。只有新增文本类别的绘制结果与可见几何一致时，才扩大 GPU 适用范围；atlas 路径尚未实现的浏览器 shaping 情况仍以 DOM 为权威。
 
 ## 参考实现映射
 
@@ -171,7 +171,7 @@ GPU 或 Canvas 后端可以提高密集文本的吞吐，但自身不提供原�
 | `vs/editor/browser/viewParts/viewLines/viewLine.ts` | 已渲染行宽度和可见范围几何 | 虚拟化编辑器需要为每个模型行保留全局 DOM 行 |
 | `vs/editor/browser/viewParts/viewLines/viewLines.ts` | 可见行宽度聚合和延迟工作 | 它的历史 scheduler 和缓存失效规则普遍适用 |
 | `vs/editor/browser/view.ts` 与 `vs/editor/common/viewLayout/viewLayout.ts` | View facade 和 content-width 传递 | View host 和 common layout 必须拥有相同的类边界 |
-| `vs/editor/browser/viewParts/viewLinesGpu/viewLinesGpu.ts` | GPU 专用宽度和范围计算 | 在工作负载证明前 GPU 路径就是必需的 |
+| `vs/editor/browser/gpu/*` 与 `vs/editor/browser/viewParts/viewLinesGpu/viewLinesGpu.ts` | device/DPR/atlas 所有权、glyph rasterization、行适用性和 GPU 绘制调度 | Zeta 应复制 VS Code 的 service 依赖，或默认启用实验性后端 |
 | `vs/editor/browser/controller/editContext/*` | 输入表面与可见范围集成 | 浏览器输入类型应该泄漏到 common model 契约 |
 
 ## 长期不变量

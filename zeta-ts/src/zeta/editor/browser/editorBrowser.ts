@@ -20,7 +20,7 @@ import { type EditorLineWrapping, type WrappingIndent } from "../common/config/e
 import { type LanguageLocation } from "../contrib/gotoSymbol/common/languageNavigation.js";
 import { type LanguageWorkspaceEdit } from "../common/languages/languageWorkspaceEdit.js";
 import { type ILanguageDiagnosticsService } from "../common/services/languageDiagnosticsService.js";
-import { combineEditorLineGutterDecorations, type EditorLineGutterDecoration } from "./viewparts/margin/lineGutterDecoration.js";
+import { type EditorLineGutterDecoration } from "./viewparts/margin/lineGutterDecoration.js";
 import { type DecorationSource, type OwnedDecorationSource } from "./viewparts/decorations/decorationPresentation.js";
 import { type IDiffApi } from "../../platform/diff/common/diffApi.js";
 import { type IInstantiationService } from "../../platform/instantiation/common/instantiation.js";
@@ -120,6 +120,8 @@ export interface EditorBrowserOptions {
 	readonly insertFinalNewLine?: boolean;
 	/** Browser paragraph direction for this editor browser's DOM projection. */
 	readonly textDirection?: EditorTextDirection;
+	readonly experimentalGpuAcceleration?: 'on' | 'off';
+	readonly onGpuError?: (error: Error) => void;
 	readonly presentation?: EditorViewportPresentation;
 	/** Host-owned link opening callback; the editor never opens external targets directly. */
 	readonly onOpenLink?: (target: string) => void | Promise<void>;
@@ -256,7 +258,7 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 				onContributionError: onLanguageError,
 				viewport: {
 					lineVisibilitySource: lineProjection?.visibilitySource,
-					lineGutterDecoration: combineEditorLineGutterDecorations([...(lineProjection?.gutterDecoration ? [lineProjection.gutterDecoration] : []), ...lineGutterDecorations]),
+					lineGutterDecorations: [...(lineProjection?.gutterDecoration ? [lineProjection.gutterDecoration] : []), ...lineGutterDecorations],
 					decorationSources,
 					semanticTokenSource,
 					bracketColorizationSource,
@@ -271,6 +273,8 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 					minimap: options.minimap,
 					activeLineHighlight: options.activeLineHighlight,
 					textDirection: options.textDirection,
+					experimentalGpuAcceleration: options.experimentalGpuAcceleration,
+					onGpuError: options.onGpuError,
 					presentation: options.presentation,
 					indentation: options.indentation,
 				},

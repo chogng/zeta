@@ -11,9 +11,12 @@ Browser-owned responsibilities include:
 - viewport observation and DOM virtualization;
 - EditContext (native/textarea), keyboard, pointer, and composition-event adapters;
 - font and glyph measurement;
+- WebGPU device, DPR, glyph-atlas, and eligible visible-line rendering;
 - DOM selection, focus, scrolling, and pointer projection;
 - ARIA and screen-reader surfaces;
 - presentation of editor-owned decorations and semantic tokens.
+
+Line-gutter features contribute semantic items only. `EditorLineGutterRenderer` owns stable button DOM, icon mounting, ARIA state, slot geometry, and activation routing. Folding selects `folding-expanded` or `folding-collapsed`; neither folding nor Debug providers create browser elements or SVG markup.
 
 `TextAreaEditContext` provides the textarea fallback and `NativeEditContext` provides the browser `EditContext` implementation when available. Both satisfy one `EditContext` contract, and the existing edit-context boundary routes platform events into `ViewController` while keeping `ViewController` independent of a concrete DOM control. `TextAreaAccessibilityController` is attached only to the textarea implementation because it owns the screen-reader mirror; the native implementation keeps the browser edit buffer synchronized with the common model and never creates a second document authority.
 
@@ -61,7 +64,7 @@ The browser configuration seam is intentionally small. `editorConfiguration.ts` 
 
 Document views also own an optional `EditorMinimap` overlay. Its bounded `createMinimapRows` projection samples no more than 160 density rows and retains no document text. When WebGL is available, `GpuMinimapRenderer` draws that bounded density projection at device resolution; its context-loss and unsupported-browser path retains the existing DOM row projection. The minimap is a navigation preview rather than a second text renderer: a primary pointer press and subsequent document-level drag map directly to canonical viewport scroll state. Embedded views default it off, and it has no model, selection, semantic-token, or Rust-service ownership.
 
-Text-bearing virtual row roots use ordinary `top` positioning rather than permanent transform promotion. This keeps DOM glyph rasterization under the browser's normal text path; GPU rendering remains confined to the minimap until a measured text backend can provide shared shaping, cluster geometry, input, and accessibility behavior.
+Text-bearing virtual row roots use ordinary `top` positioning rather than permanent transform promotion. With `experimentalGpuAcceleration: "on"`, `browser/gpu/viewGpuContext.ts` owns the per-window WebGPU device request and per-view canvas/DPR/atlas lifecycle, while `viewparts/viewLinesGpu/viewLinesGpu.ts` owns glyph upload and visible-row drawing. This follows VS Code's ownership split without importing its service graph. The retained virtual DOM continues to own layout, browser geometry, input, and accessibility; a row becomes visually GPU-painted only after a complete GPU frame contains it. Right-to-left text, ligatures, unsupported token decorations, and overlong rows stay on the DOM painting path. Device initialization or loss is reported through `onGpuError` and never leaves retained text transparent.
 
 `MarginDecorationsPart` also projects diagnostic severity markers into the document minimap by reusing the existing decoration snapshot and overview-ruler aggregation. They carry only a closed named severity and proportional line span; minimap projection never retains diagnostic text, source text, or an syntax result. Arbitrary caller decoration markers and syntax-color minimaps remain outside this browser contract.
 

@@ -39,6 +39,18 @@ export const CodeEditorConfiguration = Object.freeze({
 		parse: value => parseBoolean(value, "editor.fontLigatures"),
 		setting: booleanSetting("Font ligatures", "Use programming ligatures when the selected font supports them."),
 	}),
+	experimentalGpuAcceleration: ConfigurationsRegistry.registerConfiguration<"on" | "off">({
+		key: "editor.experimentalGpuAcceleration",
+		defaultValue: "off",
+		parse(value: unknown): "on" | "off" {
+			if (value === "on" || value === "off") return value;
+			throw new TypeError(`editor.experimentalGpuAcceleration must be on or off; received ${String(value)}`);
+		},
+		setting: selectSetting("GPU acceleration", "Draw eligible visible editor text through the experimental WebGPU backend.", [
+			{ value: "off", label: "Off" },
+			{ value: "on", label: "On" },
+		]),
+	}),
 	wordWrap: ConfigurationsRegistry.registerConfiguration<EditorLineWrapping>({
 		key: "editor.wordWrap",
 		defaultValue: EditorLineWrapping.Off,

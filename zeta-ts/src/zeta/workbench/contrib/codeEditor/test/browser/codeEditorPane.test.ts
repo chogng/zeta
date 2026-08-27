@@ -213,6 +213,7 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 		fontSize: 16,
 		lineHeight: 26,
 		fontLigatures: true,
+		experimentalGpuAcceleration: "on",
 		lineWrapping: EditorLineWrapping.On,
 		minimap: EditorMinimap.Off,
 		activeLineHighlight: "off",
@@ -250,6 +251,7 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 	assert.equal(received?.fontSize, 16);
 	assert.equal(received?.lineHeight, 26);
 	assert.equal(received?.fontLigatures, true);
+	assert.equal(received?.experimentalGpuAcceleration, "on");
 	assert.equal(received?.minimap, EditorMinimap.Off);
 	assert.equal(received?.activeLineHighlight, "off");
 	assert.equal(received?.showLineNumbers, false);

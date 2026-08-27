@@ -34,7 +34,7 @@ import { getStanzaDomTextCaretLeft, getStanzaDomTextOffsetAtClientPoint } from '
 import { type BracketColorizationSource, type SemanticTokenSource } from './viewparts/semanticTokens/semanticTokenPresentation.js';
 import { type ActiveLineHighlight, type ViewportOverlayContext } from './viewparts/viewportOverlay/viewportOverlayPresentation.js';
 import { getTextGraphemeBoundaries } from '../common/core/textSegmentation.js';
-import { type EditorLineGutterDecoration } from './viewparts/margin/lineGutterDecoration.js';
+import { type EditorLineGutterDecoration, EditorLineGutterRenderer } from './viewparts/margin/lineGutterDecoration.js';
 import { MarginPart } from './viewparts/margin/marginPart.js';
 import { RulersPart, type EditorRuler } from './viewparts/rulers/rulersPart.js';
 import { EditorScrollbarPart } from './viewparts/editorScrollbar/editorScrollbarPart.js';
@@ -45,6 +45,7 @@ import { ScrollDecorationPart } from './viewparts/scrollDecoration/scrollDecorat
 import { EditorViewContext, EditorViewPartCollection } from './view/viewPart.js';
 import { ViewOverlays } from './view/viewOverlays.js';
 import { ViewLinesPart } from './viewparts/viewLines/viewLinesPart.js';
+import { ViewLinesGpu } from './viewparts/viewLinesGpu/viewLinesGpu.js';
 import { createEditorRenderingContext, createEditorViewportData, type EditorRenderingContext } from './view/renderingContext.js';
 import { ViewUserInputEvents } from './view/viewUserInputEvents.js';
 import { DOMLineBreaksComputer } from './view/domLineBreaksComputer.js';
@@ -350,6 +351,9 @@ export enum EditorTextDirection {
 	RightToLeft = "rtl",
 }
 
+/** Selects the VS Code-aligned browser text rendering backend. */
+export type EditorGpuAcceleration = 'on' | 'off';
+
 export interface EditorViewportOptions {
 	readonly container: HTMLElement;
 	readonly model: TextModel;
@@ -363,7 +367,7 @@ export interface EditorViewportOptions {
 	readonly semanticTokenSource?: SemanticTokenSource;
 	readonly bracketColorizationSource?: BracketColorizationSource;
 	readonly lineVisibilitySource?: EditorLineVisibilitySource;
-	readonly lineGutterDecoration?: EditorLineGutterDecoration;
+	readonly lineGutterDecorations?: readonly EditorLineGutterDecoration[];
 	readonly presentation?: EditorViewportPresentation;
 	/** `host` delegates the visible focus outline to the viewport's direct host. */
 	readonly focusOutlineOwner?: EditorFocusOutlineOwner;
@@ -381,6 +385,8 @@ export interface EditorViewportOptions {
 	readonly indentation?: EditorIndentationOptions;
 	/** Browser text-direction input; automatic direction is the default. */
 	readonly textDirection?: EditorTextDirection;
+	readonly experimentalGpuAcceleration?: EditorGpuAcceleration;
+	readonly onGpuError?: (error: Error) => void;
 }
 
 export interface EditorContentPosition {
@@ -408,12 +414,13 @@ export class View extends Disposable {
 	private readonly viewContext: EditorViewContext;
 	private readonly viewParts: EditorViewPartCollection;
 	private readonly viewLinesPart: ViewLinesPart;
+	private readonly viewLinesGpu: ViewLinesGpu | undefined;
 	private readonly marginPart: MarginPart;
 	private readonly viewOverlays: ViewOverlays;
 	private readonly textMeasurer: TextMeasurer;
 	private readonly lineWidths: LineWidthIndex;
 	private readonly viewModelLines: ViewModelLines;
-	private readonly lineGutterDecoration: EditorLineGutterDecoration | undefined;
+	private readonly lineGutterRenderer: EditorLineGutterRenderer | undefined;
 	private readonly selectionController: EditorSelectionController | undefined;
 	private readonly presentation: EditorViewportPresentation;
 	private readonly focusOutlineOwner: EditorFocusOutlineOwner;
@@ -459,6 +466,9 @@ export class View extends Disposable {
 			if (!Object.values(EditorTextDirection).includes(this.textDirection)) {
 				throw new TypeError("Unknown Stanza editor text direction");
 			}
+			if (options.experimentalGpuAcceleration !== undefined && options.experimentalGpuAcceleration !== 'on' && options.experimentalGpuAcceleration !== 'off') {
+				throw new TypeError("Unknown Stanza editor GPU acceleration mode");
+			}
 			if (this.focusOutlineOwner !== "editor" && this.focusOutlineOwner !== "host") {
 				throw new TypeError("Unknown Stanza editor focus outline owner");
 			}
@@ -480,7 +490,13 @@ export class View extends Disposable {
 			this.dispose();
 			throw error;
 		}
-		this.lineGutterDecoration = options.lineGutterDecoration ? this._register(options.lineGutterDecoration) : undefined;
+		this.lineGutterRenderer = options.lineGutterDecorations && options.lineGutterDecorations.length > 0
+			? this._register(new EditorLineGutterRenderer(
+				this.element,
+				Object.freeze([...options.lineGutterDecorations]),
+				() => this.project(this.viewport.layout),
+			))
+			: undefined;
 		this.element.className = "stanza-editor";
 		this.element.classList.add(`stanza-editor-${this.presentation}`);
 		this.element.classList.add(`stanza-editor-focus-owner-${this.focusOutlineOwner}`);
@@ -562,9 +578,25 @@ export class View extends Disposable {
 			readProjectionRevision: () => this.viewModelLines.revision,
 			semanticTokenSource: options.semanticTokenSource,
 			bracketColorizationSource: options.bracketColorizationSource,
-			lineGutterDecoration: this.lineGutterDecoration,
+			lineGutterRenderer: this.lineGutterRenderer,
 			textDirection: this.textDirection,
 		}));
+		this.viewLinesGpu = options.experimentalGpuAcceleration === 'on'
+			? this._register(new ViewLinesGpu({
+				host: this.element,
+				model: this.model,
+				readVisualLines: () => this.visualProjection,
+				readRenderedLines: () => this.viewLinesPart.renderedLines,
+				semanticTokenSource: options.semanticTokenSource,
+				bracketColorizationSource: options.bracketColorizationSource,
+				textMeasurer: this.textMeasurer,
+				readTextLeft: () => this.textLeft,
+				paddingTop: this.padding.top,
+				textDirection: this.textDirection,
+				fontLigatures: options.fontLigatures ?? false,
+				onError: options.onGpuError ?? (error => console.error('Stanza WebGPU text renderer failed', error)),
+			}))
+			: undefined;
 		this.marginPart = this.viewParts.register(new MarginPart({
 			host: this.element,
 			contentElement: this.contentElement,
@@ -572,7 +604,7 @@ export class View extends Disposable {
 			textMeasurer: this.textMeasurer,
 			presentation: this.presentation,
 			showLineNumbers: this.showLineNumbers,
-			lineGutterDecoration: this.lineGutterDecoration,
+			lineGutterRenderer: this.lineGutterRenderer,
 			readVisualProjection: () => this.visualProjection,
 			readRenderedLines: () => this.viewLinesPart.renderedLines,
 		}));
@@ -632,7 +664,6 @@ export class View extends Disposable {
 			scrollDecorationPart.domNode,
 		);
 		this._register(this.viewModelLines.onDidChange(() => this.project(viewport.layout)));
-		if (this.lineGutterDecoration) this._register(this.lineGutterDecoration.onDidChange(() => this.project(viewport.layout)));
 		this._register(this.viewOverlays.onDidChangeDecorations(() => this.project(viewport.layout)));
 		viewport.setContentWidth(this.measuredContentWidth);
 
@@ -665,6 +696,7 @@ export class View extends Disposable {
 		if (semanticTokenSource) {
 			this._register(semanticTokenSource.onDidChange(() => {
 				this.viewLinesPart.renderVisibleLineText();
+				this.viewLinesGpu?.render(this.viewport.layout);
 			}));
 		}
 		const fontSet = ownerDocument.fonts;
@@ -759,6 +791,7 @@ export class View extends Disposable {
 
 	refreshFontMetrics(): EditorViewportLayout {
 		if (!this.textMeasurer.refresh()) return this.viewport.layout;
+		this.viewLinesGpu?.invalidateFont();
 		this.lineWidths.refresh();
 		if (this.softWrapping) this.updateWrapWidth(this.viewport.layout.viewportSize.width);
 		const layout = this.viewport.setContentWidth(this.measuredContentWidth);
@@ -978,6 +1011,7 @@ export class View extends Disposable {
 		this.viewOverlays.prepareRender(context);
 		this.viewParts.render(context);
 		this.viewOverlays.render(context);
+		this.viewLinesGpu?.render(layout);
 		this.syncScrollPosition(layout);
 	}
 

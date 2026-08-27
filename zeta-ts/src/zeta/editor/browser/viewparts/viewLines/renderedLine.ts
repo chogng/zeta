@@ -1,6 +1,6 @@
 import { h } from "../../../../base/browser/dom.js";
 import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
-import { type EditorLineGutterDecoration } from "../margin/lineGutterDecoration.js";
+import { type EditorLineGutterRenderer } from "../margin/lineGutterDecoration.js";
 
 /** DOM nodes shared by the line renderer and row-level visual parts. */
 export interface RenderedLine {
@@ -18,11 +18,11 @@ export interface RenderedLine {
 }
 
 /** Creates one reusable virtual-line DOM subtree owned by the ViewLines part. */
-export function createStanzaRenderedLine(ownerDocument: Document, lineIndex: number, gutterDecoration: EditorLineGutterDecoration | undefined): RenderedLine {
+export function createStanzaRenderedLine(ownerDocument: Document, lineIndex: number, gutterRenderer: EditorLineGutterRenderer | undefined): RenderedLine {
 	const domNode = new FastDomNode(h(ownerDocument, "div"));
 	const numberDomNode = new FastDomNode(h(ownerDocument, "span"));
-	const featureGutterElement = gutterDecoration?.create(ownerDocument) ?? h(ownerDocument, "span");
-	if (!gutterDecoration) featureGutterElement.hidden = true;
+	const featureGutterElement = gutterRenderer?.create(ownerDocument) ?? h(ownerDocument, "span");
+	if (!gutterRenderer) featureGutterElement.hidden = true;
 	const diagnosticDomNode = new FastDomNode(h(ownerDocument, "span"));
 	const textElement = h(ownerDocument, "span");
 	const indentationElement = h(ownerDocument, "div");
