@@ -12,6 +12,7 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT / "build" / "release"))
 
+from zeta_package.cargo_selection import cargo_command_uses_v8  # noqa: E402
 from zeta_package.targets import TARGETS, default_target  # noqa: E402
 from zeta_package.v8 import DEFAULT_CACHE, DEFAULT_LOCK, resolve_v8_cargo_env  # noqa: E402
 
@@ -45,14 +46,15 @@ def main(arguments: list[str] | None = None) -> int:
     if target not in TARGETS:
         parser.error(f"unsupported V8 target: {target}")
     environment = os.environ.copy()
-    environment.update(
-        resolve_v8_cargo_env(
-            TARGETS[target],
-            environ=environment,
-            lock_path=args.v8_lock.expanduser().resolve(),
-            cache_root=args.v8_cache_root.expanduser().resolve(),
+    if cargo_command_uses_v8(args.cargo, cargo_arguments, REPOSITORY_ROOT):
+        environment.update(
+            resolve_v8_cargo_env(
+                TARGETS[target],
+                environ=environment,
+                lock_path=args.v8_lock.expanduser().resolve(),
+                cache_root=args.v8_cache_root.expanduser().resolve(),
+            )
         )
-    )
     return subprocess.run(
         [args.cargo, *cargo_arguments], cwd=REPOSITORY_ROOT, env=environment
     ).returncode

@@ -462,15 +462,14 @@ async function v8CargoEnvironment(target: string): Promise<NodeJS.ProcessEnv> {
   }
   const lock = JSON.parse(await readFile(v8LockPath, "utf8")) as V8RuntimeLock;
   const pair = selectV8ArtifactPair(lock, target);
-  const cacheDirectory = join(v8CacheRoot, pair.version, target);
-  const [archive, binding] = await Promise.all([
+  const cacheDirectory = join(v8CacheRoot, `v${pair.version}`);
+  await Promise.all([
     materializeV8File(pair.archive, cacheDirectory),
     materializeV8File(pair.binding, cacheDirectory),
   ]);
   return {
     ...process.env,
-    RUSTY_V8_ARCHIVE: archive,
-    RUSTY_V8_SRC_BINDING_PATH: binding,
+    RUSTY_V8_MIRROR: v8CacheRoot,
   };
 }
 

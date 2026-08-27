@@ -53,6 +53,14 @@ impl TerminalSession {
             .map(|size| Rect::new(0, 0, size.width, size.height))
     }
 
+    pub(crate) fn capture_mouse(&mut self) -> io::Result<()> {
+        self.modes.capture_mouse()
+    }
+
+    pub(crate) fn release_mouse(&mut self) -> io::Result<()> {
+        self.modes.release_mouse()
+    }
+
     /// Restores the parent terminal, suspends this process, and reacquires TUI modes on resume.
     pub(crate) fn suspend(&mut self) -> io::Result<()> {
         self.modes.restore();
@@ -88,6 +96,7 @@ struct TerminalModeGuard<O: TerminalModeOperations> {
     raw_mode: bool,
     alternate_screen: bool,
     bracketed_paste: bool,
+    mouse_capture_requested: bool,
     mouse_capture: bool,
 }
 
@@ -98,6 +107,7 @@ impl<O: TerminalModeOperations> TerminalModeGuard<O> {
             raw_mode: false,
             alternate_screen: false,
             bracketed_paste: false,
+            mouse_capture_requested: false,
             mouse_capture: false,
         };
 
@@ -113,14 +123,34 @@ impl<O: TerminalModeOperations> TerminalModeGuard<O> {
             self.alternate_screen = true;
             self.operations.enable_bracketed_paste()?;
             self.bracketed_paste = true;
-            self.operations.enable_mouse_capture()?;
-            self.mouse_capture = true;
+            if self.mouse_capture_requested {
+                self.operations.enable_mouse_capture()?;
+                self.mouse_capture = true;
+            }
             Ok(())
         })();
         if result.is_err() {
             self.restore();
         }
         result
+    }
+
+    fn capture_mouse(&mut self) -> io::Result<()> {
+        self.mouse_capture_requested = true;
+        if self.alternate_screen && !self.mouse_capture {
+            self.operations.enable_mouse_capture()?;
+            self.mouse_capture = true;
+        }
+        Ok(())
+    }
+
+    fn release_mouse(&mut self) -> io::Result<()> {
+        self.mouse_capture_requested = false;
+        if self.mouse_capture {
+            self.operations.disable_mouse_capture()?;
+            self.mouse_capture = false;
+        }
+        Ok(())
     }
 
     fn restore(&mut self) {

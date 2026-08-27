@@ -16,7 +16,8 @@ Use the smallest command that covers the changed behavior. Report a pass only af
 
 ## Rust
 
-- Use targeted `cargo test -p <crate>` or a narrower test target.
+- Use `just test <crate> [args]` for targeted tests. The command inspects the selected package graph and configures the locked V8 files only when the package depends on them.
+- Always select a package. A test-name filter does not limit workspace compilation, so do not run bare `cargo test <filter>` from the workspace root.
 
 ## app
 

@@ -27,8 +27,6 @@ fn acquired_terminal_modes_are_restored_in_reverse_order() {
             ENABLE_RAW_MODE,
             ENTER_ALTERNATE_SCREEN,
             ENABLE_BRACKETED_PASTE,
-            ENABLE_MOUSE_CAPTURE,
-            DISABLE_MOUSE_CAPTURE,
             DISABLE_BRACKETED_PASTE,
             LEAVE_ALTERNATE_SCREEN,
             DISABLE_RAW_MODE,
@@ -54,18 +52,6 @@ fn acquisition_failure_restores_only_modes_that_were_acquired() {
                 DISABLE_RAW_MODE,
             ],
         ),
-        (
-            ENABLE_MOUSE_CAPTURE,
-            vec![
-                ENABLE_RAW_MODE,
-                ENTER_ALTERNATE_SCREEN,
-                ENABLE_BRACKETED_PASTE,
-                ENABLE_MOUSE_CAPTURE,
-                DISABLE_BRACKETED_PASTE,
-                LEAVE_ALTERNATE_SCREEN,
-                DISABLE_RAW_MODE,
-            ],
-        ),
     ];
 
     for (failure, expected_calls) in cases {
@@ -82,13 +68,15 @@ fn acquisition_failure_restores_only_modes_that_were_acquired() {
 }
 
 #[test]
-fn explicit_restore_is_idempotent() {
+fn mouse_capture_is_enabled_and_disabled_independently() {
     let calls = Rc::new(RefCell::new(Vec::new()));
     let mut guard =
         TerminalModeGuard::acquire(FakeOperations::new(calls.clone(), None)).expect("acquire");
 
-    guard.restore();
-    guard.restore();
+    guard.capture_mouse().expect("capture mouse");
+    guard.capture_mouse().expect("capture mouse again");
+    guard.release_mouse().expect("release mouse");
+    guard.release_mouse().expect("release mouse again");
     drop(guard);
 
     assert_eq!(
@@ -107,11 +95,35 @@ fn explicit_restore_is_idempotent() {
 }
 
 #[test]
-fn suspend_cycle_restores_then_reacquires_all_modes() {
+fn explicit_restore_is_idempotent() {
     let calls = Rc::new(RefCell::new(Vec::new()));
     let mut guard =
         TerminalModeGuard::acquire(FakeOperations::new(calls.clone(), None)).expect("acquire");
 
+    guard.restore();
+    guard.restore();
+    drop(guard);
+
+    assert_eq!(
+        calls.borrow().as_slice(),
+        [
+            ENABLE_RAW_MODE,
+            ENTER_ALTERNATE_SCREEN,
+            ENABLE_BRACKETED_PASTE,
+            DISABLE_BRACKETED_PASTE,
+            LEAVE_ALTERNATE_SCREEN,
+            DISABLE_RAW_MODE,
+        ]
+    );
+}
+
+#[test]
+fn suspend_cycle_reacquires_requested_mouse_capture() {
+    let calls = Rc::new(RefCell::new(Vec::new()));
+    let mut guard =
+        TerminalModeGuard::acquire(FakeOperations::new(calls.clone(), None)).expect("acquire");
+
+    guard.capture_mouse().expect("capture mouse");
     guard.restore();
     guard.reacquire().expect("reacquire");
     drop(guard);

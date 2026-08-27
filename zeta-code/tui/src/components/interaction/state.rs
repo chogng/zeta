@@ -137,6 +137,10 @@ impl InteractionPane {
         self.composer.mention_popup()
     }
 
+    pub(crate) fn clickable_composer_popup_visible(&self) -> bool {
+        self.slash_popup().is_some() || self.mention_popup().is_some()
+    }
+
     pub(crate) fn mention_query(&self) -> Option<&str> {
         if !self.views.is_empty() {
             return None;

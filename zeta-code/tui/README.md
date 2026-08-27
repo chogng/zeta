@@ -97,9 +97,8 @@ Tool、approval policy 或 persistence。
   inert，连续两次 Esc 打开 Rewind Pane；
 - Unix `SIGINT`/`SIGTERM` 进入同一个 event loop 退出路径，确保 watcher 重启和 host termination
   仍执行 session shutdown 与 terminal RAII cleanup；
-- Ctrl-Z 在 Unix 上先恢复 mouse/bracketed-paste/alternate-screen/raw-mode，再发送 `SIGTSTP`；
-  `fg` 恢复后按原顺序重新获取所有 terminal mode 并清屏重绘；
-- raw mode、alternate screen、bracketed paste、mouse capture 与 cursor cleanup；
+- Ctrl-Z 在 Unix 上先恢复当前启用的鼠标捕获、bracketed paste、alternate screen 和 raw mode，再发送 `SIGTSTP`；`fg` 恢复后按原顺序重新获取所有 terminal mode 并清屏重绘；
+- raw mode、alternate screen、bracketed paste 与 cursor cleanup；鼠标捕获只在 slash/file-mention popup 可见时启用，popup 关闭后立即释放，使终端恢复拖拽文本选择；
 - 启动时通过 `zeta-theme` 读取共享用户主题；chrome 投影 accent/error/success/warning/muted/highlight，
   Theme Pane preview 投影有限的 syntax/diff token，并按 TrueColor、ANSI-256、ANSI-16 或
   Monochrome 能力确定性降级；`features/theme` 拥有 `/theme` 的固定八项 Zeta Code Pane、`Theme` 标题及其上下各一行间距、编号、
@@ -270,7 +269,8 @@ src/
 | `app::frame::draw` | crate-private | frame 分区并协调 feature/component renderer | 不改变 App state |
 | `app::frame::{slash_command_index_at,mention_index_at}` | crate-private | 复用 popup geometry 映射可见行点击 | 不执行命令、不改变选择状态 |
 | `components::transcript::row::estimated_wrapped_rows` | private | Unicode display-width based scroll estimate | width 0 不 panic |
-| `TerminalSession::open` | crate-private | 进入 raw/alternate/paste/mouse mode 并创建 backend | partial failure 必须 rollback |
+| `TerminalSession::open` | crate-private | 进入 raw/alternate/paste mode 并创建 backend | partial failure 必须 rollback；默认不捕获鼠标 |
+| `TerminalSession::{capture_mouse,release_mouse}` | crate-private | 根据可点击 popup 的可见状态切换终端全屏鼠标捕获 | 不判断 popup 状态、不处理点击坐标；重复调用保持幂等 |
 | `TerminalModeGuard::acquire` | private | 按顺序获取 terminal mode，并在任一步失败时逆序 rollback | 不创建 Ratatui backend、不处理产品状态 |
 | `TerminalModeGuard::restore` | private | 幂等地逆序释放已经获取的 mode | cleanup error 不覆盖原始错误 |
 | `Drop for TerminalSession` | private impl | 委托 guard 恢复 terminal modes，再显示 normal-screen cursor | 所有成功构造后的退出路径都依赖 RAII |
@@ -302,6 +302,8 @@ run(session, options)
    ├─ skills changed → queued background skills refresh
    ├─ newer active Thread durable update → queued session/thread/read snapshot resync
    ├─ transient update → cursor validation → bounded Thread projection
+   ├─ clickable popup visible → TerminalSession::capture_mouse
+   ├─ no clickable popup → TerminalSession::release_mouse
    ├─ TerminalSession::draw → app::frame::draw
    └─ terminal event
       ├─ key → App::handle_key

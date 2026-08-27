@@ -1,2 +1,5 @@
 [build]
 target-dir = ".build/cargo"
+
+[env]
+RUSTY_V8_MIRROR = { value = "third_party/.cache/v8", relative = true }

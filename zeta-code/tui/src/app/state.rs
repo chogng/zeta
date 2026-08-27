@@ -452,6 +452,10 @@ impl App {
         self.interaction_pane.mention_popup()
     }
 
+    pub(crate) fn clickable_composer_popup_visible(&self) -> bool {
+        self.interaction_pane.clickable_composer_popup_visible()
+    }
+
     fn show_selection_view(&mut self, model: PaneViewModel<SelectionViewModel>) {
         self.interaction_pane.show_selection_view(model);
         self.selection_actions.push(SelectionActions::ReadOnly);

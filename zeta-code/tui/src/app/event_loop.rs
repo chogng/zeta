@@ -127,7 +127,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     let mut thread_refresh_requested = false;
     let mut skills_refresh_requested = false;
     let mut connectors_refresh_requested = false;
-    if let Err(error) = terminal.draw(|terminal_frame| frame::draw(terminal_frame, &app)) {
+    if let Err(error) = draw_terminal(&mut terminal, &app) {
         let _ = pump.shutdown();
         return Err(error.into());
     }
@@ -723,7 +723,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         submission,
                         approval_mode,
                     } => {
-                        terminal.draw(|terminal_frame| frame::draw(terminal_frame, &app))?;
+                        draw_terminal(&mut terminal, &app)?;
                         if pending_request.is_none() {
                             let request_client = client.clone();
                             let scope = thread_request_scope(&conversation);
@@ -800,7 +800,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     connectors_refresh_requested = false;
                 }
             }
-            terminal.draw(|terminal_frame| frame::draw(terminal_frame, &app))?;
+            draw_terminal(&mut terminal, &app)?;
         }
     })();
     let pump_result = pump.shutdown();
@@ -809,6 +809,18 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         (Ok(_), Err(error)) => Err(error.into()),
         (Ok(exit), Ok(())) => Ok(exit),
     }
+}
+
+fn draw_terminal(
+    terminal: &mut terminal::TerminalSession,
+    app: &App,
+) -> Result<(), std::io::Error> {
+    if app.clickable_composer_popup_visible() {
+        terminal.capture_mouse()?;
+    } else {
+        terminal.release_mouse()?;
+    }
+    terminal.draw(|terminal_frame| frame::draw(terminal_frame, app))
 }
 
 fn poll_keybindings_resource(resource: &mut Option<ShortcutResource>, app: &mut App, now: Instant) {

@@ -1,5 +1,13 @@
 set working-directory := "."
 
+# Test one Rust package. V8 inputs are configured only when its dependency graph needs them.
+test package *args:
+    python3 -B build/cargo_with_v8.py test -p {{ package }} {{ args }}
+
+# Check one Rust package. V8 inputs are configured only when its dependency graph needs them.
+check package *args:
+    python3 -B build/cargo_with_v8.py check -p {{ package }} {{ args }}
+
 # Launch the zeta code TUI product from the current source tree.
 zeta *args:
     python3 -B build/cargo_with_v8.py build -p zeta-app-server-daemon --bin zeta-app-server-daemon

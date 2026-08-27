@@ -121,12 +121,11 @@ def resolve_v8_cargo_env(
         raise RuntimeError(
             "RUSTY_V8_ARCHIVE and RUSTY_V8_SRC_BINDING_PATH must be set together"
         )
+    if environment.get("RUSTY_V8_MIRROR"):
+        return {}
 
-    artifacts = resolve_v8_artifacts(spec, lock_path=lock_path, cache_root=cache_root)
-    return {
-        "RUSTY_V8_ARCHIVE": str(artifacts.archive),
-        "RUSTY_V8_SRC_BINDING_PATH": str(artifacts.binding),
-    }
+    resolve_v8_artifacts(spec, lock_path=lock_path, cache_root=cache_root)
+    return {"RUSTY_V8_MIRROR": str(cache_root)}
 
 
 def resolve_v8_artifacts(
@@ -136,7 +135,7 @@ def resolve_v8_artifacts(
     cache_root: Path = DEFAULT_CACHE,
 ) -> ResolvedV8ArtifactPair:
     pair = load_v8_lock(lock_path)[spec.target]
-    cache_directory = cache_root / pair.version / spec.target
+    cache_directory = cache_root / f"v{pair.version}"
     return ResolvedV8ArtifactPair(
         archive=materialize(pair.archive, cache_directory),
         binding=materialize(pair.binding, cache_directory),
@@ -156,7 +155,10 @@ def materialize(artifact: LockedFile, cache_directory: Path) -> Path:
     os.close(file_descriptor)
     temporary = Path(temporary_name)
     try:
-        request = Request(artifact.url, headers={"User-Agent": "zeta-v8-artifact-resolver"})
+        request = Request(
+            artifact.url,
+            headers={"User-Agent": "zeta-v8-artifact-resolver"},
+        )
         with urlopen(request, timeout=DOWNLOAD_TIMEOUT_SECONDS) as response:
             with temporary.open("wb") as output:
                 total = 0

@@ -45,6 +45,12 @@ class V8ArtifactTests(unittest.TestCase):
             self.assertIn(repository_fragment, target_build)
         self.assertEqual(8, module.count('["v8_enable_sandbox"]'))
 
+        cargo_config = (REPOSITORY_ROOT / ".cargo" / "config.toml").read_text()
+        self.assertIn(
+            'RUSTY_V8_MIRROR = { value = "third_party/.cache/v8", relative = true }',
+            cargo_config,
+        )
+
     def test_materialize_replaces_a_corrupt_cached_file(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -76,8 +82,36 @@ class V8ArtifactTests(unittest.TestCase):
         self.assertEqual(
             {}, resolve_v8_cargo_env(spec, environ={"V8_FROM_SOURCE": "true"})
         )
+        self.assertEqual(
+            {}, resolve_v8_cargo_env(spec, environ={"RUSTY_V8_MIRROR": "/mirror"})
+        )
         with self.assertRaisesRegex(RuntimeError, "must be set together"):
             resolve_v8_cargo_env(spec, environ={"RUSTY_V8_ARCHIVE": "/archive"})
+
+    def test_environment_uses_the_cargo_mirror_layout(self) -> None:
+        spec = TARGETS["aarch64-apple-darwin"]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            lock_path = root / "runtime-lock.json"
+            cache = root / "cache"
+            document = json.loads(DEFAULT_LOCK.read_text())
+            entry = document["artifacts"][spec.target]
+            mirror = cache / f"v{document['version']}"
+            mirror.mkdir(parents=True)
+            for kind, contents in (("archive", b"archive"), ("binding", b"binding")):
+                artifact = entry[kind]
+                artifact["sha256"] = hashlib.sha256(contents).hexdigest()
+                (mirror / artifact["name"]).write_bytes(contents)
+            lock_path.write_text(json.dumps(document))
+
+            environment = resolve_v8_cargo_env(
+                spec,
+                environ={},
+                lock_path=lock_path,
+                cache_root=cache,
+            )
+
+            self.assertEqual({"RUSTY_V8_MIRROR": str(cache)}, environment)
 
     def test_lock_rejects_a_target_gap(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

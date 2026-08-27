@@ -650,6 +650,27 @@ fn slash_popup_selection_executes_without_an_exact_query() {
 }
 
 #[test]
+fn clickable_composer_popups_own_the_mouse_capture_requirement() {
+    let mut app = App::new();
+    assert!(!app.clickable_composer_popup_visible());
+
+    app.insert_text("/");
+    assert!(app.clickable_composer_popup_visible());
+
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(!app.clickable_composer_popup_visible());
+
+    let workspace = temporary_workspace("mouse-interaction-mention");
+    fs::write(workspace.join("notes.md"), "notes").unwrap();
+    let mut app = App::for_workspace(&workspace);
+    app.insert_text("@notes");
+    wait_for_mention_results(&mut app, &workspace);
+
+    assert!(app.clickable_composer_popup_visible());
+    let _ = fs::remove_dir_all(workspace);
+}
+
+#[test]
 fn tab_completes_the_selected_slash_command_without_executing_it() {
     let mut app = App::new();
     app.insert_text("/q");
