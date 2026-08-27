@@ -1085,6 +1085,7 @@ test("ChatPaneModel projects and refreshes the canonical durable Turn plan", asy
 		turns: [{
 			turnId: "turn-1",
 			status: "running",
+			toolMode: "direct",
 			usage: emptyUsage(),
 			items: [],
 			plan: {
@@ -1204,6 +1205,7 @@ test("ChatPaneModel projects a durable Turn failure into the conversation", asyn
 		turns: [{
 			turnId: "turn-1",
 			status: "failed",
+			toolMode: "direct",
 			usage: emptyUsage(),
 			items: [],
 			error: {
@@ -1452,6 +1454,7 @@ test("ChatPaneModel steers an active Turn instead of starting another Turn", asy
 		turns: [{
 			turnId: "turn-running",
 			status: "running",
+			toolMode: "direct",
 			usage: emptyUsage(),
 			items: [{
 				type: "userMessage",
@@ -1706,6 +1709,7 @@ function thread(agentText?: string): Thread {
 			? [{
 				turnId: "turn-1",
 				status: "completed",
+				toolMode: "direct",
 				usage: emptyUsage(),
 				items: [{
 					type: "agentMessage",
@@ -1735,6 +1739,7 @@ function failedTurn(code: TurnError["code"], retryable: boolean, message = "Turn
 	return {
 		turnId: "turn-1",
 		status: "failed",
+		toolMode: "direct",
 		usage: emptyUsage(),
 		items: [],
 		error: { code, message, retryable },
