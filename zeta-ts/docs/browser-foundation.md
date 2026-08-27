@@ -140,7 +140,7 @@ components share the same navigation contract.
 ## Keyboard event boundaries
 
 Keyboard events support focus policy but do not belong to the focus model.
-The cross-product grammar and the boundary between Zeta, Zeterm, and Zeta Code are defined in [`docs/keybindings.md`](../../docs/keybindings.md).
+The cross-product grammar and the boundary between Zeta, App, and Zeta Code are defined in [`docs/keybindings.md`](../../docs/keybindings.md).
 
 - Local widget behavior uses the native `KeyboardEvent`. Tab, Escape, Enter,
   Home/End, and arrow navigation are semantic keys and should be compared

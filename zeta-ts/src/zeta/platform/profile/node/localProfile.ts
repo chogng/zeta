@@ -14,7 +14,7 @@ export interface LegacyLocalProfileMigrationOptions {
 	readonly profileRoot: string;
 }
 
-/** Resolves the cross-product user profile shared by Desktop, Zeta Code, and zeterm. */
+/** Resolves the cross-product user profile shared by Desktop, Zeta Code, and app. */
 export function resolveLocalProfileRoot(options: LocalProfileRootOptions): string {
 	const path = options.platform === "win32" ? win32 : posix;
 	const configured = options.environment.ZETA_PROFILE_ROOT;

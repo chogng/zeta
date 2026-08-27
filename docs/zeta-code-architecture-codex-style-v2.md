@@ -3,8 +3,8 @@
 > 日期：2026-07-25
 > 状态：开发期目标架构
 > 原则：按长期领域边界直接演进，不保留开发期旧 API 或旧持久化格式的兼容层。
-> 产品线映射：`zeta code` 是 TUI，`zeta` 是 Electron Desktop，`zeterm` 是纯 Rust Desktop；
-> 三者共享 Session-first Agent 产品契约。`zeterm` 的终端/PTY 宿主可以直接组合终端运行时，但
+> 产品线映射：`zeta code` 是 TUI，`zeta` 是 Electron Desktop，`app` 是纯 Rust Desktop；
+> 三者共享 Session-first Agent 产品契约。`app` 的终端/PTY 宿主可以直接组合终端运行时，但
 > 不得为 Agent 的 Session/Thread/Turn/Item 能力绕过 App Server。
 
 ## 快速理解
@@ -259,7 +259,7 @@ delta。客户端不得把二者压成一个 sequence。
 - 在客户端维护第二份领域状态机；
 - 依赖旧 `thread/start`、`thread/resume` 或 `thread/list`。
 
-`zeterm` 当前直接组合终端/PTY 运行时的路径只服务终端宿主，不是 Agent 产品接口；如果未来
+`app` 当前直接组合终端/PTY 运行时的路径只服务终端宿主，不是 Agent 产品接口；如果未来
 Native host 暴露 Session/Thread/Turn/Item，则必须使用同一 App Server protocol 和 dispatcher。
 
 Desktop preload 只暴露自包含的 `ISandboxGlobals`，其中没有 Node API、Electron event 或不受约束

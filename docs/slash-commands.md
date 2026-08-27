@@ -19,7 +19,7 @@ Slash Command 是一种真正可调用的命令；斜杠启动面板只是用户
 | 输入 `/` 后出现快速选择面板 | Slash Launcher | 产品选择并组合列表 |
 | TUI 展示可执行 `/command` | Slash Command list | `zeta-code` 的命令 adapter |
 | Desktop 展示可调用 Skills | Skill list | Desktop 的 Skill adapter |
-| zeterm 同时展示命令、Skills 或其他动作 | 多列表 Launcher | zeterm 选择所需列表及顺序 |
+| app 同时展示命令、Skills 或其他动作 | 多列表 Launcher | app 选择所需列表及顺序 |
 | 选中一项后真正执行或注入上下文 | 来源自己的 typed binding | 对应产品/领域 owner |
 
 App Server 当前在 `initialize.slashCommands` 发布 server commands；每个 client 再与自身真正可执行的
@@ -34,7 +34,7 @@ local commands 合并。命令定义、名称冲突、补全和提交解析属�
 
 - TUI 只传 Slash Command list；
 - Desktop 只传 Skill list；
-- zeterm 或未来产品按需拼接多个列表；
+- app 或未来产品按需拼接多个列表；
 - 新列表通过产品 adapter 加入，不修改 Launcher 的领域模型。
 
 选中项的业务 target、执行 handler、Skill 上下文注入和授权都留在列表来源。Launcher 不允许按展示

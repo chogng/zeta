@@ -80,7 +80,7 @@ fn jsonc_snapshot_uses_comment_capable_json_grammar() {
 
 #[test]
 fn shell_snapshot_highlights_command_operators_variables_and_comments() {
-    let source = "just zeterm-dev && echo \"$USER\" # restart zeterm\n";
+    let source = "just app-dev && echo \"$USER\" # restart app\n";
     let document = SyntaxDocument::open(SyntaxLanguage::Shell, DocumentRevision::new(6), source)
         .expect("Shell grammar should load");
 
@@ -95,7 +95,7 @@ fn shell_snapshot_highlights_command_operators_variables_and_comments() {
     assert!(highlighted.contains(&("just", SyntaxTokenKind::Function)));
     assert!(highlighted.contains(&("&&", SyntaxTokenKind::Operator)));
     assert!(highlighted.contains(&("echo", SyntaxTokenKind::Function)));
-    assert!(highlighted.contains(&("# restart zeterm", SyntaxTokenKind::Comment)));
+    assert!(highlighted.contains(&("# restart app", SyntaxTokenKind::Comment)));
     assert_eq!(SyntaxLanguage::Shell.id(), "shell");
 }
 

@@ -41,7 +41,7 @@ unbound Sessions remain readable but cannot be mutated implicitly.
 ## Integration obligations
 
 Desktop packages sibling `bin/zeta-server[.exe]` and `bin/zeta-app-server-daemon[.exe]` executables
-and invokes `app-server connect`; TUI and zeterm expose the
+and invokes `app-server connect`; TUI and app expose the
 same hidden command by delegating it to this crate. `app-server --listen stdio://` remains the direct,
 single-process compatibility/test mode. Product compatibility commands may delegate here, but
 product clients must not package `zeta-cli` as their backend. Adding TUI state, interactive prompts,

@@ -110,21 +110,21 @@ members = [
     "zeta-rs/server-host",
     "zeta-rs/zeta-api",
     "zeta-rs/zeta-client",
-    "zeterm",
-    "zeterm/commands",
-    "zeterm/composer",
-    "zeterm/editor",
-    "zeterm/icons",
-    "zeterm/keybinding-ui",
-    "zeterm/markdown",
-    "zeterm/native-keybindings",
-    "zeterm/settings",
-    "zeterm/ui",
-    "zeterm/workbench",
-    "zeterm/zui",
-    "zeterm/zui-demo",
+    "app",
+    "app/commands",
+    "app/composer",
+    "app/editor",
+    "app/icons",
+    "app/keybinding-ui",
+    "app/markdown",
+    "app/native-keybindings",
+    "app/settings",
+    "app/ui",
+    "app/workbench",
+    "app/zui",
+    "app/zui-demo",
 ]
-default-members = ["zeterm"]
+default-members = ["app"]
 resolver = "3"
 
 [workspace.package]
@@ -256,7 +256,7 @@ zeta-agent-import = { path = "zeta-rs/agent-import" }
 zeta-agents = { path = "zeta-rs/agents" }
 zeta-attachments = { path = "zeta-rs/attachments" }
 zeta-ansi-escape = { path = "zeta-code/ansi-escape" }
-zeta-commands = { path = "zeterm/commands" }
+zeta-commands = { path = "app/commands" }
 zeta-app-server = { path = "zeta-rs/app-server" }
 zeta-app-server-daemon = { path = "zeta-rs/app-server-daemon" }
 zeta-app-server-client = { path = "zeta-rs/app-server-client" }
@@ -281,7 +281,7 @@ zeta-context-engine = { path = "zeta-rs/context-engine" }
 zeta-core = { path = "zeta-rs/core" }
 zeta-diff = { path = "zeta-rs/diff" }
 zeta-debug-adapter = { path = "zeta-rs/debug-adapter" }
-zeta-editor = { path = "zeterm/editor" }
+zeta-editor = { path = "app/editor" }
 zeta-editor-core = { path = "zeta-rs/editor-core" }
 zeta-extension-api = { path = "zeta-rs/ext/extension-api" }
 zeta-connectors-extension = { path = "zeta-rs/ext/connectors" }
@@ -293,7 +293,7 @@ zeta-execpolicy = { path = "zeta-rs/execpolicy" }
 zeta-tool-executor = { path = "zeta-rs/tool-executor" }
 zeta-extensions = { path = "zeta-rs/extensions" }
 zeta-editor-extension-host = { path = "zeta-rs/editor-extension-host" }
-zeta-icons = { path = "zeterm/icons" }
+zeta-icons = { path = "app/icons" }
 zeta-file-icons = { path = "zeta-rs/file-icons" }
 zeta-file-identity = { path = "zeta-rs/file-identity" }
 zeta-file-search = { path = "zeta-rs/file-search" }
@@ -311,9 +311,9 @@ zeta-instructions = { path = "zeta-rs/instructions" }
 zeta-keyring-store = { path = "zeta-rs/keyring-store" }
 zeta-kimi = { path = "zeta-rs/kimi" }
 zeta-keybinding = { path = "zeta-rs/keybinding" }
-zeta-composer = { path = "zeterm/composer" }
-zeta-keybindings-host = { path = "zeterm/native-keybindings" }
-zeterm-keybinding-ui = { path = "zeterm/keybinding-ui" }
+zeta-composer = { path = "app/composer" }
+zeta-keybindings-host = { path = "app/native-keybindings" }
+app-keybinding-ui = { path = "app/keybinding-ui" }
 zeta-language-server-catalog = { path = "zeta-rs/language-server-catalog" }
 zeta-language-service = { path = "zeta-rs/language-service" }
 zeta-login = { path = "zeta-rs/login" }
@@ -321,7 +321,7 @@ zeta-marketplace-client = { path = "zeta-rs/marketplace-client" }
 zeta-marketplace-manager = { path = "zeta-rs/marketplace-manager" }
 zeta-linux-sandbox = { path = "zeta-rs/linux-sandbox" }
 zeta-lsp = { path = "zeta-rs/lsp" }
-zeta-markdown = { path = "zeterm/markdown" }
+zeta-markdown = { path = "app/markdown" }
 zeta-mcp = { path = "zeta-rs/mcp" }
 zeta-mcp-server = { path = "zeta-rs/mcp-server" }
 zeta-model-provider = { path = "zeta-rs/model-provider" }
@@ -344,7 +344,7 @@ zeta-search = { path = "zeta-rs/search" }
 zeta-server-host = { path = "zeta-rs/server-host" }
 zeta-secrets = { path = "zeta-rs/secrets" }
 zeta-session-store = { path = "zeta-rs/session-store" }
-zeta-settings = { path = "zeterm/settings" }
+zeta-settings = { path = "app/settings" }
 zeta-shell-command = { path = "zeta-rs/shell-command" }
 zeta-shell-completion = { path = "zeta-rs/shell-completion" }
 zeta-slash-commands = { path = "zeta-rs/slash-commands" }
@@ -361,8 +361,8 @@ zeta-thread-store = { path = "zeta-rs/thread-store" }
 zeta-tools = { path = "zeta-rs/tools" }
 zeta-tui = { path = "zeta-code/tui" }
 zeta-uds = { path = "zeta-rs/uds" }
-zeta-ui = { path = "zeterm/ui" }
-zeta-workbench = { path = "zeterm/workbench" }
+zeta-ui = { path = "app/ui" }
+zeta-workbench = { path = "app/workbench" }
 zeta-utils-image = { path = "zeta-rs/utils/image" }
 zeta-utils-path = { path = "zeta-rs/utils/path-utils" }
 zeta-utils-path-uri = { path = "zeta-rs/utils/path-uri" }
@@ -371,7 +371,7 @@ zeta-typst = { path = "zeta-rs/utils/typst" }
 zeta-utils-pty = { path = "zeta-rs/utils/pty" }
 zeta-windows-sandbox = { path = "zeta-rs/windows-sandbox-rs" }
 zeta-workspace = { path = "zeta-rs/workspace" }
-zui = { path = "zeterm/zui", default-features = false }
+zui = { path = "app/zui", default-features = false }
 
 [profile.dev]
 # Keep line tables and backtraces without generating full variable debug information.
@@ -380,7 +380,7 @@ debug = "limited"
 incremental = true
 opt-level = 1
 
-[profile.dev.package.zeterm]
+[profile.dev.package.app]
 # Keep the native product's unwind metadata below macOS compact-unwind encoding limits.
 opt-level = "s"
 

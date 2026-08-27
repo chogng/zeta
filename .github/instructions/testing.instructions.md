@@ -18,7 +18,7 @@ Use the smallest command that covers the changed behavior. Report a pass only af
 
 - Use targeted `cargo test -p <crate>` or a narrower test target.
 
-## zeterm
+## app
 
 - Assert state, commands, semantic identity, events, timing, output, and PTY lifecycle. Do not use screenshots or pixels as pass/fail evidence.
-- Validate the running product with `cargo run -p zeterm` or the built executable. Use `ZETERM_SESSION_TRACE=1`; add `ZETERM_SESSION_TRACE_FRAMES=1` only for frame timing.
+- Validate the running product with `cargo run -p app` or the built executable. Use `APP_SESSION_TRACE=1`; add `APP_SESSION_TRACE_FRAMES=1` only for frame timing.

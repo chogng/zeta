@@ -137,6 +137,6 @@ provider 上游的 Marketplace Manager 或 legacy `zeta-plugins` authority 完�
 [`zeta-editor-extension-host`](../editor-extension-host/README.md) 监管；静态 catalog 不会隐式进入该
 执行边界。
 
-未来若 Zeterm 需要同一静态 package 语义，应直接依赖本 crate；这只是明确的 extension point，当前
-仓库没有 Zeterm consumer。安装与信任控制面若需要演进，应与 Manager/legacy Plugin authority 明确对接，
+未来若 App 需要同一静态 package 语义，应直接依赖本 crate；这只是明确的 extension point，当前
+仓库没有 App consumer。安装与信任控制面若需要演进，应与 Manager/legacy Plugin authority 明确对接，
 不得把 mutable download 或 runtime process 塞入 `ExtensionCatalog`。

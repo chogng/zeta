@@ -126,7 +126,7 @@ repository root 快捷项；选择该项会把工作区切换到 repository root
 Native 的底栏分支按钮复用通用 `ContextMenu`，候选项来自 `git/branch/list`，切换通过
 `git/branch/switch`。Git 对脏工作树或 linked worktree 冲突保持权威：失败时不重试、不丢弃改动，
 菜单保留并显示失败；成功后使用新的 typed projection 刷新 Files、HEAD、Changes 和 MultiDiff。
-`zeterm/zeterm` 不再依赖 `zeta-git`。
+`app` 不再依赖 `zeta-git`。
 
 稳定失败边界为 `GitUnavailable`、`GitNotRepository` 和 `GitOperationFailed`。内部 executable、
 stderr、磁盘绝对路径和非 UTF-8 path 不进入 Renderer。

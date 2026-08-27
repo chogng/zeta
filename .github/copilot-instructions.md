@@ -10,7 +10,7 @@ Before changing a file, identify its owner and read every matching scoped instru
 | Editor implementation | [`editor.instructions.md`](instructions/editor.instructions.md) |
 | Browser UI or CSS | [`browser-ui.instructions.md`](instructions/browser-ui.instructions.md) |
 | Rust | [`rust.instructions.md`](instructions/rust.instructions.md) |
-| `zeta-rs/native` or `zeterm` | [`native.instructions.md`](instructions/native.instructions.md) |
+| `zeta-rs/native` or `app` | [`native.instructions.md`](instructions/native.instructions.md) |
 | Tests | [`testing.instructions.md`](instructions/testing.instructions.md) |
 | Markdown documentation | [`documentation.instructions.md`](instructions/documentation.instructions.md) |
 | `zeta-code` CLI/TUI | [`tui.instructions.md`](instructions/tui.instructions.md) |
@@ -28,14 +28,14 @@ Desktop frontend paths below are relative to `zeta-ts/`.
 | `src/zeta/editor` | Editor models, state, projection, and contributions |
 | `src/zeta/workbench` | Application shell, Parts, panes, and product composition |
 | `zeta-rs` | Shared Rust backend protocols, domains, storage, execution, terminal semantics, and backend-neutral server host |
-| `zeterm` | Native `zeterm` product, including `zui`, `zeta-ui`, renderer, `wgpu`, and `winit` |
+| `app` | Native `app` product, including `zui`, `zeta-ui`, renderer, `wgpu`, and `winit` |
 | `zeta-code` | `zeta code` CLI and Ratatui product host |
 
 Preserve the frontend dependency direction `base → platform → editor → workbench`. Lower layers must not import, specialize for, or copy state from higher layers. Multiple callers do not justify moving a domain concept into `base`; the abstraction must be domain-neutral and have a complete current consumer contract.
 
-`zeta-ts` and `zeterm` must not execute, package, import, or depend on `zeta-cli`, `zeta-tui`, `zeta-code/cli`, or the `zeta app-server` product command. Shared backend process entrypoints belong to `zeta-rs/server-host`.
+`zeta-ts` and `app` must not execute, package, import, or depend on `zeta-cli`, `zeta-tui`, `zeta-code/cli`, or the `zeta app-server` product command. Shared backend process entrypoints belong to `zeta-rs/server-host`.
 
-`zeta-rs`, `zeterm`, and `zeta-code` may remain in the same root Cargo workspace; workspace membership does not change implementation ownership.
+`zeta-rs`, `app`, and `zeta-code` may remain in the same root Cargo workspace; workspace membership does not change implementation ownership.
 
 When a request mentions Workbench, Sessions, or another frontend concept, locate it in the Renderer/Workbench first. Only route to `zeta-code` when the request explicitly concerns the terminal, Ratatui, the CLI, or `zeta-code`.
 

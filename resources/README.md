@@ -10,7 +10,7 @@ need a renderer-independent source of truth.
 `product-services.json` registers the product-selected HTTPS Marketplace registry and references the sibling
 `marketplace-root.json`; the root is public verification material, never a signing key.
 
-Packaged Desktop/server hosts, `zeta code`/TUI, and zeterm discover this file through the shared
+Packaged Desktop/server hosts, `zeta code`/TUI, and app discover this file through the shared
 App Server client + `zeta-install-context` boundary. Each host explicitly injects the typed result;
 an explicit `ZETA_PRODUCT_SERVICES_PATH` remains authoritative for development and specialized hosts.
 Marketplace URLs or root replacement must not move into user configuration or Plugin metadata.
@@ -88,19 +88,19 @@ Rust consumes the same source artwork through:
 
 ```text
 resources/icons/*.svg
-  -> build/zeterm/syncRustIcons.ts
-  -> zeterm/icons/src/generated.rs
+  -> build/app/syncRustIcons.ts
+  -> app/icons/src/generated.rs
   -> private artwork bindings
-  -> zeterm/icons/src/library.rs
+  -> app/icons/src/library.rs
   -> stable zeta-icons semantic library
   -> zeta-ui renderer and components
 ```
 
-Run `node build/zeterm/syncRustIcons.ts` after adding, removing, or renaming an
-icon; `node build/zeterm/syncRustIcons.ts --check` verifies that the checked-in
+Run `node build/app/syncRustIcons.ts` after adding, removing, or renaming an
+icon; `node build/app/syncRustIcons.ts --check` verifies that the checked-in
 output is current. The generated Rust source is checked in so Cargo and Bazel
 builds remain hermetic. Generated artwork is crate-private: resource filenames
 do not automatically become public icon IDs. Add or change public semantics in
-`zeterm/icons/src/library.rs`. `zeta-icons` classifies fixed non-symbolic colors
+`app/icons/src/library.rs`. `zeta-icons` classifies fixed non-symbolic colors
 as multicolor; `zeta-ui` preserves those colors in an sRGB atlas while routing
 black symbolic coverage through the caller-tinted mask atlas.

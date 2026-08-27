@@ -26,9 +26,9 @@ icon = "debug"
 command = "corepack pnpm dev:web:full:academic"
 
 [[actions]]
-name = "zeterm-dev"
+name = "app-dev"
 icon = "debug"
-command = "just zeterm-dev"
+command = "just app-dev"
 
 [[actions]]
 name = "electron-code"

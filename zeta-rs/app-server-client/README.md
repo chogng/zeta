@@ -23,7 +23,7 @@ Session/Thread coordinator 的存储，不改变 Config、Workspace、Tool 或 p
 
 发行服务发现由 `discovered_product_services_path` / `load_discovered_product_services` 统一实现，
 但不会自动进入 embedded composition。Embedded host 显式调用
-`InProcessClientOptions::with_discovered_product_services`；brokered Desktop、TUI 与 zeterm 由
+`InProcessClientOptions::with_discovered_product_services`；brokered Desktop、TUI 与 app 由
 `zeta-app-server-daemon` 按 connection composition 加载并按 adapter identity 复用。Marketplace trust/cache 边界见
 [`marketplace-integration.md`](../../docs/marketplace-integration.md)。
 
@@ -94,9 +94,9 @@ Notification 不依附 request completion；consumer 不得对 session handle �
 | `src/session.rs` | owned session、session transport、request/event threads、shutdown 与 connection lifecycle |
 | `src/session_stdio.rs` | child JSONL driver、response pairing、notification decode、child lifetime 与 stream failure boundary |
 | `src/in_process.rs` | embedded composition 与 initialized connection |
-| `src/profile.rs` | `ZETA_PROFILE_ROOT` 与跨 Desktop/Zeta Code/zeterm 的 `<home>/.zeta` profile root |
+| `src/profile.rs` | `ZETA_PROFILE_ROOT` 与跨 Desktop/Zeta Code/app 的 `<home>/.zeta` profile root |
 | `src/product_services.rs` | 发行版 product-services 发现、优先级与 typed load；不拥有 Marketplace catalog/cache |
-| `src/session_workspace.rs` | 跨 TUI/zeterm consumer 共用的 Session → Workspace authority 路由；只作 identity 判定，不授予 trust 或执行权限 |
+| `src/session_workspace.rs` | 跨 TUI/app consumer 共用的 Session → Workspace authority 路由；只作 identity 判定，不授予 trust 或执行权限 |
 | `src/lib.rs` | generic typed JSON-RPC methods、request ID/result pairing 与 public exports |
 | `src/notification.rs` | 解析 notification envelope，并把 method/payload 交给 protocol-owned canonical decoder |
 | `src/session_tests.rs` | owned lifecycle、idle wakeup、clone identity 与 shutdown contract |
@@ -147,7 +147,7 @@ Connection driver 在 request response completion 发送之前持有 delivery ba
 
 当前 event channel 已有界；transient purge 依赖 consumer 的 stream cursor gap → snapshot resync。
 显式 `Lagged` event 与通用 remote reconnect 尚未实现，connection/control overflow 后 consumer 仍需按
-`ConnectionClosed` 处理恢复；具体产品（当前 `zeterm`）可以在上层分别重新建立 Agent、Language
+`ConnectionClosed` 处理恢复；具体产品（当前 `app`）可以在上层分别重新建立 Agent、Language
 或 Terminal stdio session，并重读 durable snapshot、重同步打开文档或 attach PTY，但这不是本
 crate 的隐式行为。
 

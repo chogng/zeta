@@ -12,7 +12,7 @@ Schema 和模板由 Desktop registry 编译到 [`resources/design-tokens`](../..
 | `ThemeSnapshot` | 保存完整 resolved RGBA 与 typed scalar size token table；不包含 DOM、WGPU 或 Ratatui 类型 |
 | `ThemeLoader` | 有界读取主题入口、device configuration 与 `themes/*.json`，隔离单文件错误并选择主题 |
 | `ThemeLoader::choices` / `preview` / `select` | 枚举有效 built-in/user 主题；无副作用解析 preview；验证后原子保存 surface preference |
-| `ThemeLoadOptions::with_default_entry` | 由产品启动组合选择 `zeta`、`zeta-code` 或 `zeterm` 默认入口；组件和 token 不感知产品 |
+| `ThemeLoadOptions::with_default_entry` | 由产品启动组合选择 `zeta`、`zeta-code` 或 `app` 默认入口；组件和 token 不感知产品 |
 | `ThemeSurface` | 选择 graphical 或 terminal device preference；不把 UI preference 放进 `zeta-config` |
 
 Desktop 使用自己的 TypeScript resolver 和 CSS projection；Rust 与 TypeScript 通过同一 manifest、
@@ -50,7 +50,7 @@ contract 的唯一内部 owner；宿主不能再解析 token 引用。`read_pref
 读取、保留未知 device values 与原子替换的内部 owner。`read_theme_documents` 只枚举非递归 regular JSON，按路径
 排序并限制为 128 个。`read_bounded_text` 在分配完整文档前将配置和主题文件限制为 1 MiB。
 
-`theme-entries.json` 只为同一 token catalog 提供数据化默认覆盖。`zeta`、`zeta-code` 与 `zeterm`
+`theme-entries.json` 只为同一 token catalog 提供数据化默认覆盖。`zeta`、`zeta-code` 与 `app`
 不创建产品 token 或 resolver 分支；宿主只在 `ThemeLoadOptions` 选择入口。配置为 `system` 时，入口
 跟随系统明暗方案；配置为 `<entry>-light`、`<entry>-dark` 或用户主题 ID 时固定到对应主题。
 

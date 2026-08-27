@@ -853,4 +853,4 @@ Plugin dynamic exact packages → 用户目录”的顺序组合来源，把目�
 `extensions/list` 返回一个不可变目录代次。`extensions/resource/open` 绑定代次、扩展 ID 和包内相对
 路径；旧代请求明确失败，不会重新打开可变 package 文件。App Server 把目录诊断和错误映射到协议
 类别并拥有临时资源生命周期，但不解析 language、grammar、snippet、theme 或 debugger 贡献。未来
-Zeterm consumer 应直接依赖 `zeta-extensions`，不能导入 App Server 或 Desktop transport code。
+App consumer 应直接依赖 `zeta-extensions`，不能导入 App Server 或 Desktop transport code。

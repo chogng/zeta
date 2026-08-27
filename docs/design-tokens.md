@@ -28,7 +28,7 @@ Zeta 采用“单一声明目录、共享版本化 contract、各宿主独立投
 | Desktop 快照 | `colorTheme.ts` | 将 scheme、覆盖值和注册目录编译为只读颜色/尺寸表 |
 | Rust 快照与加载 | `zeta-rs/theme` | 嵌入同一 manifest，严格解析用户 JSON，选择 Graphical/Terminal 偏好并产生 RGBA snapshot |
 | 宿主投影 | Desktop theme binding、Native `shell_style`、TUI `ui/theme` | 把 snapshot 转成宿主组件公开的 palette/style；不注册新的产品语义 |
-| 产品主题偏好 | profile `configuration.json` | Desktop/zeterm 使用 graphical key，Zeta Code 使用 TUI key；不进入 App Server Config revision |
+| 产品主题偏好 | profile `configuration.json` | Desktop/app 使用 graphical key，Zeta Code 使用 TUI key；不进入 App Server Config revision |
 | 用户主题内容 | profile root 的 `themes/*.json` | 保存主题文档，不保存产品当前选择或 Config revision |
 | 离线治理 | `tokenCompiler.ts` 与 `build/desktop/compileDesignTokens.ts` | 校验所有 scheme，生成 manifest、Schema、模板和目录 |
 
@@ -69,7 +69,7 @@ flowchart LR
 
 - `light`、`dark` 与跟随操作系统的 `system` 偏好。
 - 语言中立的 `theme-entries.json` 为 Rust `ThemeLoader` 提供 `zeta`（Electron Desktop）、
-  `zeta-code`（TUI）与 `zeterm`（纯 Rust Desktop）默认入口；入口只覆盖统一 token，不创建产品
+  `zeta-code`（TUI）与 `app`（纯 Rust Desktop）默认入口；入口只覆盖统一 token，不创建产品
   token 或组件分支。Zeta Code 另有 `zeta-code-colorblind` 与 `zeta-code-ansi` 入口；前者把 diff
   成功/失败从红绿对改成蓝橙对，后者由 TUI 强制投影为 ANSI 16 色。标准与 colorblind syntax/diff
   角色取值跟随 [GitHub VS Code theme](https://github.com/primer/github-vscode-theme) 和
@@ -78,7 +78,7 @@ flowchart LR
   `system` 默认必须通过 `with_default_entry("zeta-code")` 选择它。
 - Desktop、Native 和 TUI 从同一 profile `configuration.json` 读取选择值，并使用 profile root 下的
   `themes/*.json` 加载用户主题内容；每个错误文件独立隔离，内置主题始终可回退。
-  Native `zeterm` 在没有显式用户主题时选择 `zeterm` 入口。
+  Native `app` 在没有显式用户主题时选择 `app` 入口。
 - 127 个语义颜色 token 与 23 个标准标量尺寸 token；四种 `ColorScheme` 均在编译期解析，高对比度当前继承对应明暗默认值。
 - 不可变颜色对象、注册贡献、主题快照和生成产物。
 - Stanza/Native CodeEditor 使用 source-neutral `editor.token.*` 角色；旧 `editor.semanticToken.*` 仅作为兼容覆盖入口。

@@ -1,0 +1,8 @@
+load("//app:defs.bzl", "app_rust_library")
+
+app_rust_library(
+    name = "keybinding-ui",
+    crate_name = "app_keybinding_ui",
+    package_name = "app/keybinding-ui",
+    unit_tests = True,
+)

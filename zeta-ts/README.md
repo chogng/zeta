@@ -48,7 +48,7 @@ corepack pnpm dev:web:full
 完整模式监听 `127.0.0.1:5174`，根地址同样会进入当前产品版本。Browser 通过 Vite 已认证的 HMR WebSocket 连接本地开发
 桥接器；桥接器当前仍为每个浏览器连接启动 direct `zeta-server app-server --listen stdio://`
 子进程，浏览器连接关闭时对应子进程也会被回收。Electron 产品改用 `app-server connect`，与
-TUI、zeterm 连接同一 profile/Workspace authority。Browser 命令同样通过设置或 URL 参数选择内置模式；`ZETA_WORKBENCH_MODE` 只覆盖开发进程的初始模式，不维护模式后缀命令。
+TUI、app 连接同一 profile/Workspace authority。Browser 命令同样通过设置或 URL 参数选择内置模式；`ZETA_WORKBENCH_MODE` 只覆盖开发进程的初始模式，不维护模式后缀命令。
 
 `dev:desktop` 与 `dev:web:full` 会先通过 Node 开发组装器生成
 `.build/desktop/dev/zeta-package`；其中包含 product-neutral `zeta-server` backend host、锁定版本的

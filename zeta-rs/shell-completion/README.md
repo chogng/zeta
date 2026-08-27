@@ -71,7 +71,7 @@ ShellCompletionEngine::complete
 
 当前内置 catalog 覆盖 Shell builtins、常见 POSIX 命令，以及 Git、Cargo、Docker Compose、kubectl、
 npm/pnpm/yarn/bun、Python/pytest、ripgrep、find 和 curl 的常用结构。PATH 中未收录 signature 的 executable
-仍会被识别为顶层命令，但其参数没有结构描述。alias 必须由产品宿主提供；Zeterm 当前尚未从交互 PTY
+仍会被识别为顶层命令，但其参数没有结构描述。alias 必须由产品宿主提供；App 当前尚未从交互 PTY
 采集 alias 或动态 completion snapshot。
 
 ## 验证

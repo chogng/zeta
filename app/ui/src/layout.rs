@@ -1,0 +1,32 @@
+//! App product pane topology built on backend-neutral [`zui`] layout contracts.
+//!
+//! The layout types resolve structural Part/Pane geometry only. Product hosts retain content,
+//! identity, focus semantics, event routing, and runtime state.
+
+mod pane_group;
+mod root;
+mod tab_container;
+mod terminal_workspace;
+mod workbench;
+
+/// Visibility projected by a host into a structural Part layout request.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum PartVisibility {
+    /// Do not include the Part leaf in the resolved layout.
+    #[default]
+    Collapsed,
+    /// Include the Part when the available width can preserve both panes.
+    Expanded,
+}
+
+pub use pane_group::PaneGroupLayout;
+pub use root::InspectorPane;
+pub use root::LogicalViewport;
+pub use root::RootLayout;
+pub use tab_container::TabContainerLayout;
+pub use tab_container::TabContainerLayoutSpec;
+pub use terminal_workspace::InspectorLayoutSpec;
+pub use terminal_workspace::TerminalWorkspaceLayout;
+pub use workbench::WorkbenchLayout;
+pub use workbench::WorkbenchLayoutSpec;
+pub use workbench::WorkbenchPart;

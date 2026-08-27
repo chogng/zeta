@@ -117,7 +117,7 @@ step. Windows jobs can supply `--windows-command-runner-bin` and
 `--windows-sandbox-setup-bin`; omitting either causes the missing first-party
 helper to be built for the selected target.
 
-For zeterm Remote delivery, one or more completed packaged-node directories can be serialized into
+For app Remote delivery, one or more completed packaged-node directories can be serialized into
 deterministic rootless archives and a strict local catalog:
 
 ```sh

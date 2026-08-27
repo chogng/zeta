@@ -194,10 +194,10 @@ manifest、TUF metadata 或 package bytes。用户显式 Browse/Search 时才要
 
 Desktop 只打包 `product-services.json` 和 `marketplace-root.json`，不编译、不复制、不监督任何
 Marketplace Manager executable。`zeta-app-server-client` 统一发现该发行资源，但产品宿主仍显式选择
-是否注入：Desktop/独立 `zeta-server`、`zeta code`/TUI 和 zeterm 的本地 authority 都注入同一
-typed `LocalProductServicesConfig`；远端 zeterm session 由远端 `zeta-server` 注入。各客户端读取
+是否注入：Desktop/独立 `zeta-server`、`zeta code`/TUI 和 app 的本地 authority 都注入同一
+typed `LocalProductServicesConfig`；远端 app session 由远端 `zeta-server` 注入。各客户端读取
 Marketplace 的方式始终是 App Server `marketplace/search`（空 query 即 list）等业务 RPC，而不是读取
-cache 文件。因此 PreferencesView 不拥有 cache，也不需要为 TUI/zeterm 维护第二份列表；三个产品的
+cache 文件。因此 PreferencesView 不拥有 cache，也不需要为 TUI/app 维护第二份列表；三个产品的
 兼容连接进入同一个 profile-scoped App Server daemon，共享一份 Manager、磁盘 cache 和安装状态；
 各前端只维护可丢弃的展示 projection。
 
@@ -207,7 +207,7 @@ Workspace connection 广播 `marketplace/changed { instanceId, generation }`。�
 `marketplace/listInstalled`
 同时返回当前 instance/generation；新连接或重连先 list 补读，在线连接把通知只当失效提示，再按需 list，不能把
 通知本身当成安装状态。Desktop 已按此规则失效 Browse snapshot；Zeta Code 把 Marketplace/Plugin
-source 变化投影为 Skill catalog 与已打开 Connector Pane 的刷新。zeterm 当前不缓存 Marketplace
+source 变化投影为 Skill catalog 与已打开 Connector Pane 的刷新。app 当前不缓存 Marketplace
 展示状态，可直接使用同一 typed client 方法；它尚无独立 Marketplace 浏览界面。
 
 广播不依赖某个 RPC 调用者“记得通知”。共享 profile runtime 为唯一 Manager 持有一个

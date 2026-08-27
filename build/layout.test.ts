@@ -10,7 +10,7 @@ test("repository build orchestration and developer scripts have separate root ow
     const path = join(repositoryRoot, directory);
     assert.equal(existsSync(path), false, `${directory} must not own repository tooling`);
   }
-  for (const category of ["desktop", "docs", "download", "lib", "pnpm", "release", "vite", "zeterm"]) {
+  for (const category of ["desktop", "docs", "download", "lib", "pnpm", "release", "vite", "app"]) {
     assert.equal(existsSync(join(import.meta.dirname, category)), true, category);
   }
   for (const entry of ["test.ts", "test-documentation.ts", "test-editor.ts", "test-extensions.ts", "test-integration.ts", "test-smoke.ts", "test-web-integration.ts", "test"]) {

@@ -83,7 +83,7 @@ cargo clippy -p zeta-slash-launcher --all-targets -- -D warnings
 ## 6. 当前状态与扩展点
 
 - **Current**：通用数据模型、列表组合、输入查询和交互状态已实现并由 crate 单测覆盖。
-- **Current limitation**：TUI、Desktop 和 zeterm 尚未切换到本 crate；现有交互继续按各产品当前路径
+- **Current limitation**：TUI、Desktop 和 app 尚未切换到本 crate；现有交互继续按各产品当前路径
   工作。
 - **Current limitation**：当前匹配是稳定的大小写无关前缀匹配，没有 fuzzy ranking、分页或协议模型。
 - **Extension point**：出现真实跨语言消费者后，再为同一 value contract 增加 protocol/TypeScript

@@ -118,16 +118,16 @@ Tool、approval policy 或 persistence。
 
 ## 产品支持边界
 
-`zeta code` 是键盘优先、低带宽的终端产品，不以复刻 `zeterm` Native rich UI 为完成条件。
+`zeta code` 是键盘优先、低带宽的终端产品，不以复刻 `app` Native rich UI 为完成条件。
 transcript 当前采用 plain-text wrapping；Native Agent Timeline 的 Markdown block、table、selection、
 折叠与虚拟化由
-[`native-agent-console.md`](../../zeterm/docs/native-agent-console.md) 和
-[`zeta-markdown`](../../zeterm/markdown/README.md) 拥有，不构成 TUI backlog。TUI 的 Mouse support
+[`native-agent-console.md`](../../app/docs/native-agent-console.md) 和
+[`zeta-markdown`](../../app/markdown/README.md) 拥有，不构成 TUI backlog。TUI 的 Mouse support
 只服务 slash/file-mention popup 的必要左键命中；完整 pointer/selection 交互属于 Native UI。
 `TextArea` 保留局部 keymap 扩展边界，但 Vim mode/motion/operator 不是当前 `zeta code` 产品要求。
 
 TUI 当前连接 CLI 提供的 profile/Workspace-scoped local App Server authority，不提供 remote
-connection selector 或自动 reconnect；Desktop 与 zeterm 在相同 authority partition 下可以实时读取
+connection selector 或自动 reconnect；Desktop 与 app 在相同 authority partition 下可以实时读取
 同一份 Session catalog 和 Thread event。若未来产品要求远程运行，必须先由
 `zeta-app-server-client` 接受 connection/recovery contract，TUI 只消费其 typed state，不能自建
 transport retry。workspace mention 当前插入 workspace-relative 原子文本路径；通用
@@ -528,7 +528,7 @@ follow-latest。`estimated_wrapped_rows` 使用
 - `app::frame::draw` 或 component view 修改 state、subscription 或发 RPC：view 与 coordination 耦合；
 - retry 逻辑生成新 CommandId 却重用同一 intent：idempotency semantic 被破坏；
 - 把 `TerminalSession`、RPC connection 和 product `Session` 命名/生命周期混为一谈；
-- docs 中把 `zeterm` rich presentation roadmap 或尚未接受的共享 contract 写成 TUI backlog；
+- docs 中把 `app` rich presentation roadmap 或尚未接受的共享 contract 写成 TUI backlog；
 - docs 中把 planned approval/streaming 写成当前能力。
 
 ## 同步修改关系

@@ -62,7 +62,7 @@ DiffEngine::compute[_bytes][_cancellable]
 bytes API 拒绝 NUL、无效 UTF-8，并分别返回 `BinaryInput`、`InvalidUtf8`。本 crate 不猜测编码、
 不读取磁盘，也不调用 Git：
 
-- `zeta-editor` 用 `DiffDocument` 驱动 side-by-side DiffEditor，`zeterm/zeterm` 只负责宿主接入；
+- `zeta-editor` 用 `DiffDocument` 驱动 side-by-side DiffEditor，`app` 只负责宿主接入；
 - `zeta-tui` 用同一 document 驱动 Ratatui 行渲染、左右导航和折叠；
 - `zeta-git` 继续拥有 Git patch check/apply、仓库进程和路径解析；
 - `zeta-ui` 继续拥有 TabList、文字和矩形 primitive，不依赖本 crate。

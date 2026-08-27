@@ -12,21 +12,21 @@ zeta-dev:
 zeta-desktop:
     corepack pnpm --dir zeta-ts dev
 
-# Launch the pure-Rust zeterm Desktop product.
-zeterm:
-    cargo run -p zeterm
+# Launch the pure-Rust app Desktop product.
+app:
+    cargo run -p app
 
-# Rebuild and restart the zeterm Desktop product when Rust or shader sources change.
-zeterm-dev:
-    watchexec --restart --exts rs,toml,wgsl -- cargo run -p zeterm
+# Rebuild and restart the app Desktop product when Rust or shader sources change.
+app-dev:
+    watchexec --restart --exts rs,toml,wgsl -- cargo run -p app
 
-# Stage an unsigned zeterm package; release CI signs and verifies the staged binary.
-zeterm-package *args:
-    python3 -B build/release/build_zeterm_package.py {{ args }}
+# Stage an unsigned app package; release CI signs and verifies the staged binary.
+app-package *args:
+    python3 -B build/release/build_app_package.py {{ args }}
 
-# Build, sign, and verify a zeterm package in a platform release job.
-zeterm-release:
-    build/release/release_zeterm_package.sh
+# Build, sign, and verify a app package in a platform release job.
+app-release:
+    build/release/release_app_package.sh
 
 # Build a canonical Zeta package; pass normal build_zeta_package.py flags.
 package *args:

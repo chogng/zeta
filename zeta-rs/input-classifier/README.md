@@ -20,7 +20,7 @@
 | `shell_completions` / `shell_completion_snapshot` | 从分类器持有的同一 Shell context 返回补全项；snapshot 另含当前 token 的精确匹配状态 | UI 可投影结果，但不能建立第二套 parser/registry |
 | `replace_shell_aliases` / `set_shell_path_entries` | 更新宿主提供的 Shell 环境快照 | 只能传入当前执行环境的事实；不得猜测 alias |
 
-Zeterm 只把 `InputRoute` 映射为 Composer 路由，并把真实 Turn 生命周期投影成
+App 只把 `InputRoute` 映射为 Composer 路由，并把真实 Turn 生命周期投影成
 `InputConversation` 和按顺序排列的 `InputHistoryEntry`。Shell parser、相似度计算、PATH/manifest
 检查和 fallback 不再属于产品宿主。
 
@@ -59,9 +59,9 @@ Shell token 阈值采用 Warp 当前严格方案：所有解析 token 都有 She
 | alias | 在分类前用当前会话的补全上下文展开 | engine 已实现有界展开；由产品宿主提供 alias snapshot |
 | 证据不足 | 交给 BERT-Tiny | 交给 BERT-Tiny |
 
-当前 Zeterm 的 Shell Turn 由 App Server 以 `/bin/sh -lc` 执行，尚未向 engine 提供交互 PTY alias 和动态
+当前 App 的 Shell Turn 由 App Server 以 `/bin/sh -lc` 执行，尚未向 engine 提供交互 PTY alias 和动态
 generator 候选；因此静态 command grammar、PATH 和 workspace evidence 已生效，alias API 暂时没有产品数据源。
-如果后续让 Composer 直接执行到交互 PTY，应由 Zeterm adapter 提供带环境 revision 的 alias/动态候选快照；
+如果后续让 Composer 直接执行到交互 PTY，应由 App adapter 提供带环境 revision 的 alias/动态候选快照；
 不应把 PTY 或命令执行运行时移进 `zeta-input-classifier` 或 `zeta-shell-completion`。
 
 `natural_language.rs` 的 fallback 会分别尝试排除和包含未完成的末 token，并按 1.0、0.8、
@@ -95,7 +95,7 @@ command-overlap 是为 Zeta 独立整理的集合。TextBlob 许可文本位于
 - `classifier::classify_with_model` 固定决策顺序与失败分支；改动会影响所有路由消费者。
 - `history::InputHistory` 拥有 0.9 相似度门槛和“最新匹配胜出”语义；宿主只提供有序事实。
 - `shell::ShellContext` 只适配 `zeta-shell-completion::ShellCompletionEngine` 与 classifier 阈值；parser、
-  command registry 和 completion 不得移回本 crate 或 Zeterm。
+  command registry 和 completion 不得移回本 crate 或 App。
 - `rules` 只放低风险、确定性的上下文和 allowlist 短路；模糊规则不得绕过模型。
 - `model::EmbeddedClassifier` 绑定模型图、tokenizer、标签和温度；任一资产变更都需要概率测试。
 - `natural_language::classify_with_fallback_heuristic` 只在模型不可用或 panic 后接管；它使用 Zeta
@@ -119,7 +119,7 @@ cargo clippy -p zeta-input-classifier --all-targets -- -D warnings
 `chmod 755 是什么意思`；普通推理错误保留当前路由，输入继续变化时由宿主再次分类。
 
 `InputClassifier::classify` 是同步调用；`start_background_warmup` 只提前解码模型和 tokenizer。
-当前 Zeterm 在编辑变更时直接调用分类，并从同一个 `InputClassifier` 请求 Shell completion；候选由
+当前 App 在编辑变更时直接调用分类，并从同一个 `InputClassifier` 请求 Shell completion；候选由
 `AgentComposer` 收敛为输入光标后的 ghost text，并通过 editor 的精确 text edit 应用；Slash/模型
 选择 Pane 不承载 Shell 候选。将模型推理移出 UI 线程、废弃
-过期结果和添加 debounce 属于 Zeterm adapter 的产品接线工作，不改变本 crate 的决策契约。
+过期结果和添加 debounce 属于 App adapter 的产品接线工作，不改变本 crate 的决策契约。

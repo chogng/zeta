@@ -18,12 +18,12 @@ runtime or a workspace plugin directory.
 
 This directory is a runtime input, not a download endpoint. Built-in packages committed here are
 copied into `zeta-resources/extensions/` during development and production packaging. Zeta reads
-that trusted package directory through `zeta-extensions`; Zeterm is only a future consumer extension
+that trusted package directory through `zeta-extensions`; App is only a future consumer extension
 point. A running application does not authenticate to a Git repository to load built-in extensions.
 
 If the package set later moves to a shared `zeta-extension-packs` repository, that repository may
 be private and may own upstream pinning, license/notice preservation, validation, and CI builds.
-It must publish versioned extension artifacts for Zeta and Zeterm to consume during their build or
+It must publish versioned extension artifacts for Zeta and App to consume during their build or
 release process. A running application must consume the packaged artifact or extracted extension
 directory, never Git credentials or an unversioned repository checkout.
 

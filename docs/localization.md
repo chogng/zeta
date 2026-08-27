@@ -69,7 +69,7 @@ from Marketplace.
 The interaction follows the same product shape as VS Code: English is always available, additional
 display languages are installed as Marketplace language packs, and the selected display language is
 persisted by the product. The App Server remains locale-neutral because it serves multiple clients;
-Desktop, a browser client, TUI, and zeterm connections select their locale independently. If a
+Desktop, a browser client, TUI, and app connections select their locale independently. If a
 future server-side Extension Host needs NLS, its locale must be supplied per connection/process and
 must not become global App Server state. The POSIX `locale` environment variable mentioned in the
 App Server terminal boundary is process environment inheritance, not the UI `workbench.locale`

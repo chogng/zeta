@@ -439,8 +439,8 @@
       }
     },
     {
-      "id": "zeterm",
-      "label": "zeterm",
+      "id": "app",
+      "label": "app",
       "colors": {
         "list.activeSelectionForeground": {
           "dark": "foreground",

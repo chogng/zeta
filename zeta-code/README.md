@@ -11,7 +11,7 @@ keyboard input, Ratatui layout, composer state, and TUI presentation state stay 
 zeta-code/cli  → zeta-code/tui → zeta-app-server-client → shared App Server crates
 ```
 
-The native `zeterm` product has a separate ownership boundary under `zeterm/`; its reusable GPU UI
+The native `app` product has a separate ownership boundary under `app/`; its reusable GPU UI
 crates, including `zeta-ui` and `zui`, must not be copied into this product.
 
 The CLI also exposes the native-host Remote management entrypoints used by Desktop and operators:

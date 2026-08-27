@@ -5,7 +5,7 @@
 > Stanza Text Engine 通过 TextMate 与有界 Rust syntax facts 提供语法能力。本文拥有跨编辑器的语法能力边界；底层解析契约见
 > [`zeta-syntax` README](../zeta-rs/syntax/README.md)，符号索引、Language Server、代码检索与未来代码图
 > 的跨系统演进见 [`code-intelligence.md`](code-intelligence.md)，Native 编辑器 API 见
-> [`zeta-editor` README](../zeterm/editor/README.md)。
+> [`zeta-editor` README](../app/editor/README.md)。
 
 ## 快速理解
 

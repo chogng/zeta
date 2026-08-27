@@ -161,7 +161,7 @@ App Server 或其他 composition root 必须：
 6. connection 断开、authority 撤销和 shutdown 时取消 owned invocations 并调用 `shutdown()`；
 7. 只暴露清洗后的 failure code/message，不把 absolute executable、cwd 或原始 stderr 放进 wire DTO。
 
-Zeterm 若接入同一执行语义应依赖本 crate，并提供自己的 composition adapter；不得依赖 Desktop 或把
+App 若接入同一执行语义应依赖本 crate，并提供自己的 composition adapter；不得依赖 Desktop 或把
 Host runtime 复制进产品 host。
 
 ## 8. 测试与修改影响

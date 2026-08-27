@@ -51,8 +51,8 @@ Zeta 的产品 authority、typed contract 和 crate dependency direction 仍由�
 
 本文只为已经接受的 `zeta code` 能力规定架构与迁移顺序。“某能力在 TUI 中不存在”不自动产生
 产品 backlog。Native Agent Timeline 的 Markdown、table、selection、折叠与虚拟化由
-[`zeterm/docs/native-agent-console.md`](../zeterm/docs/native-agent-console.md) 规划，具体 Native
-Markdown 组件由 [`zeterm/markdown`](../zeterm/markdown/README.md) 拥有；TUI 不追求与其 feature
+[`app/docs/native-agent-console.md`](../app/docs/native-agent-console.md) 规划，具体 Native
+Markdown 组件由 [`app/markdown`](../app/markdown/README.md) 拥有；TUI 不追求与其 feature
 parity。Vim、remote selector/reconnect、通用 structured Mention 和 durable blob 只有在产品文档
 接受需求并确定 canonical owner 后，才可能成为某条产品线的实施项。
 
@@ -1058,7 +1058,7 @@ lib_tests.rs
 
 - transcript 采用 bounded plain-text wrapping、分页键盘滚动、最后回复 copy 与当前已加载 history
   window 的 Markdown export。
-  Native Agent Timeline 的 Markdown/table、任意 pointer selection、折叠与虚拟化属于 `zeterm`，
+  Native Agent Timeline 的 Markdown/table、任意 pointer selection、折叠与虚拟化属于 `app`，
   不是 TUI 的“尚未完成”；
 - Mouse 只覆盖 slash/file-mention popup 的必要左键命中。完整 pointer/selection 交互不属于当前
   `zeta code` 要求；Vim mode/motion/operator 也没有被产品文档接受；

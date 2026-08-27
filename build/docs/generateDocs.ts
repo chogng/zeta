@@ -67,16 +67,16 @@ const groups: DocGroupDefinition[] = [
     ],
   },
   {
-    label: "zeterm 产品",
+    label: "app 产品",
     files: [
-      "zeterm/README",
-      "zeterm/native-agent-console",
-      "zeterm/native-terminal-ui",
-      "zeterm/native-text-input",
-      "zeterm/rendering-architecture",
-      "zeterm/native-deprecation-plan",
-      "zeterm/zeterm-app-migration-plan",
-      "zeterm/zeterm-release-graph",
+      "app/README",
+      "app/native-agent-console",
+      "app/native-terminal-ui",
+      "app/native-text-input",
+      "app/rendering-architecture",
+      "app/native-deprecation-plan",
+      "app-app-migration-plan",
+      "app-release-graph",
     ],
   },
   {
@@ -241,7 +241,7 @@ function parseDocument(path: string, slug: string, group: string): ParsedDocumen
 
 const systemDocRoots = [
   { directory: docsDirectory, prefix: "" },
-  { directory: join(repositoryRoot, "zeterm", "docs"), prefix: "zeterm/" },
+  { directory: join(repositoryRoot, "app", "docs"), prefix: "app/" },
 ];
 const systemDocEntries = systemDocRoots.flatMap(({ directory, prefix }) =>
   readdirSync(directory)
@@ -261,7 +261,7 @@ const systemDocs = systemDocEntries.map(({ path, slug }) =>
 
 const crateRoots = [
   { directory: join(repositoryRoot, "zeta-rs"), prefix: "", ignoredDirectories: [] },
-  { directory: join(repositoryRoot, "zeterm"), prefix: "zeterm/", ignoredDirectories: ["docs"] },
+  { directory: join(repositoryRoot, "app"), prefix: "app/", ignoredDirectories: ["docs"] },
 ];
 const crateDocs = crateRoots.flatMap(({ directory, prefix, ignoredDirectories }) => walkReadmes(directory, new Set(ignoredDirectories))
   .map((path) => {

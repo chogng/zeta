@@ -31,7 +31,7 @@ contract。这个 crate 只服务于需要 loopback Tunnel 的产品能力。
 ## App Server 与 Tunnel 的边界
 
 ```text
-product AppServerHost (zeterm / Desktop)
+product AppServerHost (app / Desktop)
   -> zeta-app-server-client  # typed session, initialize, events, shutdown
       ├─ Local App Server
       └─ Remote backend

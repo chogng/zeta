@@ -1,7 +1,0 @@
-load("//zeterm:defs.bzl", "zeterm_rust_library")
-
-zeterm_rust_library(
-    name = "commands",
-    crate_name = "zeta_commands",
-    package_name = "zeterm/commands",
-)

@@ -6,8 +6,8 @@ on:
       - ".github/workflows/zui-distribution.yml"
       - "Cargo.lock"
       - "Cargo.toml"
-      - "zeterm/zui/**"
-      - "zeterm/zui-demo/**"
+      - "app/zui/**"
+      - "app/zui-demo/**"
   push:
     branches: [main]
     tags: ["zui-v*"]
@@ -15,8 +15,8 @@ on:
       - ".github/workflows/zui-distribution.yml"
       - "Cargo.lock"
       - "Cargo.toml"
-      - "zeterm/zui/**"
-      - "zeterm/zui-demo/**"
+      - "app/zui/**"
+      - "app/zui-demo/**"
   workflow_dispatch:
 
 permissions:

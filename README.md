@@ -6,7 +6,7 @@ Zeta is a Rust-first agent workspace with three product lines sharing one App Se
 | --- | --- | --- | --- |
 | `zeta code` | CLI and TUI | [`zeta-code`](zeta-code) | `just zeta` |
 | `zeta` | Electron Desktop | [`zeta-ts`](zeta-ts) | `just zeta-desktop` |
-| `zeterm` | Native Rust Desktop terminal | [`zeterm`](zeterm) | `just zeterm` |
+| `app` | Native Rust Desktop terminal | [`app`](app) | `just app` |
 
 `zeta-rs` contains the shared Rust backend. The product-neutral backend executable is
 `zeta-server`, owned by [`zeta-server-host`](zeta-rs/server-host/README.md). Electron's `code` and
@@ -67,12 +67,12 @@ corepack pnpm dev:web:full # Rust-backed UI at http://127.0.0.1:5174/
 
 The full Web mode is a local development integration, not a deployable Web service.
 
-### `zeterm`
+### `app`
 
 ```bash
-just zeterm
+just app
 # or:
-cargo run -p zeterm
+cargo run -p app
 ```
 
 ## Repository map
@@ -81,7 +81,7 @@ cargo run -p zeterm
 - [`zeta-code`](zeta-code): CLI command host and TUI presentation.
 - [`zeta-ts`](zeta-ts): Electron Main, Preload, Renderer, and Browser Workbench.
 - [`build`](build): checked-in build orchestration; generated artifacts go to `.build/`.
-- [`zeterm`](zeterm): native window, terminal, renderer, and product UI.
+- [`app`](app): native window, terminal, renderer, and product UI.
 - [`docs`](docs): architecture and system documentation; start with [`docs/README.md`](docs/README.md).
 
 ## Where to read next
@@ -93,7 +93,7 @@ cargo run -p zeterm
 - [Shared Rust architecture](docs/zeta-rs-architecture.md)
 - [Remote development](docs/remote-development.md)
 - [Packaging](build/release/zeta_package/README.md)
-- [`zeterm` release graph](zeterm/docs/zeterm-release-graph.md)
+- [`app` release graph](app/docs/app-release-graph.md)
 
 Crate-level implementation details live in the `README.md` next to each crate.
 

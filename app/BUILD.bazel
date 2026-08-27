@@ -1,0 +1,158 @@
+load("//app:defs.bzl", "app_rust_binary", "app_rust_library")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+
+package(default_visibility = ["//visibility:public"])
+
+app_rust_library(
+    name = "app_lib",
+    crate_name = "app",
+    package_name = "app",
+)
+
+app_rust_binary(
+    name = "app",
+    crate_name = "app",
+    crate_root = "src/bin/app.rs",
+    package_name = "app",
+    deps = [":app_lib"],
+)
+
+exports_files([
+    "Cargo.toml",
+])
+
+filegroup(
+    name = "app_sources",
+    srcs = glob([
+        "src/**/*.rs",
+        "Cargo.toml",
+    ]) + [
+        "//:Cargo.lock",
+        "//:Cargo.toml",
+        "//app/commands:commands_sources",
+        "//app/composer:composer_sources",
+        "//app/editor:editor_sources",
+        "//app/icons:icons_sources",
+        "//zeta-rs/keybinding:keybinding_sources",
+        "//app/keybinding-ui:keybinding-ui_sources",
+        "//app/markdown:markdown_sources",
+        "//app/native-keybindings:native-keybindings_sources",
+        "//app/settings:settings_sources",
+        "//app/ui:ui_sources",
+        "//app/workbench:workbench_sources",
+        "//app/zui:zui_sources",
+        "//app/zui-demo:zui_demo_sources",
+    ],
+)
+
+filegroup(
+    name = "app_package_contract",
+    srcs = [
+        "packaging/app-package-contract.json",
+        "packaging/app-signing-policy.json",
+    ],
+)
+
+filegroup(
+    name = "app_package_tool",
+    srcs = [
+        "//build/release:build_remote_runtime_bundle.py",
+        "//build/release:build_app_package.py",
+        "//build/release:remote_runtime_bundle.py",
+    ],
+)
+
+filegroup(
+    name = "app_release_inputs",
+    srcs = [
+        ":app_package_contract",
+        ":app_package_tool",
+        ":app_sources",
+    ],
+)
+
+sh_test(
+    name = "app_boundary_test",
+    srcs = ["//build/release:check_app_boundary.sh"],
+    args = [
+        "$(location //build/release:check_app_boundary.py)",
+        "$(location //:Cargo.toml)",
+        "$(location Cargo.toml)",
+        "$(location //:Cargo.lock)",
+    ],
+    data = [
+        ":app_sources",
+        "//:Cargo.lock",
+        "//:Cargo.toml",
+        "Cargo.toml",
+        "//build/release:check_app_boundary.py",
+    ],
+    size = "small",
+)
+
+sh_test(
+    name = "app_package_test",
+    srcs = ["//build/release:test_app_package.sh"],
+    args = ["$(location //build/release:test_app_package.py)"],
+    data = [
+        "//app:app_package_contract",
+        "//build/release:build_app_package.py",
+        "//build/release:remote_runtime_bundle.py",
+        "//build/release:test_remote_runtime_bundle.py",
+        "//build/release:test_app_package.py",
+    ],
+    size = "small",
+)
+
+sh_test(
+    name = "remote_runtime_bundle_test",
+    srcs = ["//build/release:test_remote_runtime_bundle.sh"],
+    args = ["$(location //build/release:test_remote_runtime_bundle.py)"],
+    data = [
+        "//build/release:remote_runtime_bundle.py",
+        "//build/release:test_remote_runtime_bundle.py",
+    ],
+    size = "small",
+)
+
+sh_test(
+    name = "app_release_contract_test",
+    srcs = ["//build/release:check_app_release_contract.sh"],
+    args = [
+        "$(location //build/release:check_app_release_contract.py)",
+        "$(location packaging/app-package-contract.json)",
+        "$(location packaging/app-signing-policy.json)",
+    ],
+    data = [
+        "packaging/app-package-contract.json",
+        "packaging/app-signing-policy.json",
+        "//build/release:check_app_release_contract.py",
+    ],
+    size = "small",
+)
+
+sh_test(
+    name = "app_signing_test",
+    srcs = ["//build/release:test_app_signing.sh"],
+    args = ["$(location //build/release:test_app_signing.py)"],
+    data = [
+        "//app:app_package_contract",
+        "//build/release:build_app_package.py",
+        "//build/release:remote_runtime_bundle.py",
+        "//build/release:test_remote_runtime_bundle.py",
+        "//build/release:test_app_signing.py",
+        "//build/release:app_signing.py",
+    ],
+    size = "small",
+)
+
+test_suite(
+    name = "app_ci",
+    tests = [
+        ":remote_runtime_bundle_test",
+        ":app_boundary_test",
+        ":app_package_test",
+        ":app_release_contract_test",
+        ":app_signing_test",
+    ],
+)

@@ -1,0 +1,7 @@
+load("//app:defs.bzl", "app_rust_library")
+
+app_rust_library(
+    name = "composer",
+    crate_name = "zeta_composer",
+    package_name = "app/composer",
+)

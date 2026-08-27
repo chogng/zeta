@@ -75,8 +75,8 @@ Workbench 的 `contrib/workspace` 拥有当前 Workspace 的 Restricted/Trusted 
 | 入口 | trust 来源 | 是否持久化 |
 | --- | --- | --- |
 | `zeta` CLI 的启动 cwd / 显式 root | `HostConfiguration` | ❌，仅该进程 |
-| `zeterm` 启动 cwd | `HostConfiguration` | ❌，仅该 App Server session |
-| `zeterm` 本地目录 picker | `HostConfiguration` | ❌，仅该 App Server session |
+| `app` 启动 cwd | `HostConfiguration` | ❌，仅该 App Server session |
+| `app` 本地目录 picker | `HostConfiguration` | ❌，仅该 App Server session |
 | Desktop 启动 folder / Open Folder | Electron Main 复用已有决定或收集明确用户决定 | ✅，写入 User Config |
 
 User Config 变化也是主动撤销信号。App Server 会失效共享 capability lease，移除本地

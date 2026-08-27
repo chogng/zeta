@@ -3,6 +3,7 @@ module(name = "zeta")
 bazel_dep(name = "platforms", version = "1.1.0")
 bazel_dep(name = "rules_rs", version = "0.0.96")
 bazel_dep(name = "rules_shell", version = "0.6.1")
+bazel_dep(name = "rules_platform", version = "0.1.0")
 bazel_dep(name = "apple_support", version = "2.1.0")
 bazel_dep(name = "llvm", version = "0.8.11")
 
@@ -106,3 +107,8 @@ crate.from_cargo(
 )
 
 use_repo(crate, "crates")
+
+zeta_release_archive = use_extension(
+    "//bazel/extensions:zeta_release_archive.bzl",
+    "zeta_release_archive",
+)

@@ -2,20 +2,20 @@
 
 > 本文件是跨产品 `docs/` 的索引。新增跨产品文档必须同时加入本索引和
 > [`build/docs/generateDocs.ts`](../build/docs/generateDocs.ts) 的分组。
-> `zeterm` 专属系统文档由 [`zeterm/docs/README.md`](../zeterm/docs/README.md) 索引，避免产品宿主
+> `app` 专属系统文档由 [`app/docs/README.md`](../app/docs/README.md) 索引，避免产品宿主
 > 文档和共享系统文档混在同一目录。
 > 系统性的阅读方法（先系统后 crate、两层文档职责）见
 > [`documentation-guidelines.md`](documentation-guidelines.md)。
 
 ## 快速理解
 
-这份索引只负责跨产品、跨 crate 的系统文档；`zeterm` 的产品宿主、渲染、终端和输入文档集中在
-[`zeterm/docs/README.md`](../zeterm/docs/README.md)。按下面的边界选择入口：
+这份索引只负责跨产品、跨 crate 的系统文档；`app` 的产品宿主、渲染、终端和输入文档集中在
+[`app/docs/README.md`](../app/docs/README.md)。按下面的边界选择入口：
 
 | 目标 | 入口 |
 | --- | --- |
 | 理解共享 backend、协议、执行和存储 | 本目录对应的系统文档与 `zeta-rs/*/README.md` |
-| 理解 `zeterm` 产品行为 | [`zeterm/docs/README.md`](../zeterm/docs/README.md) |
+| 理解 `app` 产品行为 | [`app/docs/README.md`](../app/docs/README.md) |
 | 理解某个 crate 的实现契约 | 对应 crate 的 `README.md` |
 | 查看 docs-site 如何收录文档 | [`build/docs/generateDocs.ts`](../build/docs/generateDocs.ts) |
 
@@ -41,7 +41,7 @@
 | 改 Desktop UI | [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md) → [`ui-styling-ownership.md`](ui-styling-ownership.md) |
 | 设计或修改三端快捷键 | [`keybindings.md`](keybindings.md) → 对应端的实现 README |
 | 开发 SSH Remote Workspace | [`remote-development.md`](remote-development.md) → [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md) → [`app-server-client.md`](app-server-client.md) |
-| 改 `zeterm` 产品行为 | [`zeterm/docs/README.md`](../zeterm/docs/README.md) → 对应产品文档 → [`zeterm/README.md`](../zeterm/README.md) |
+| 改 `app` 产品行为 | [`app/docs/README.md`](../app/docs/README.md) → 对应产品文档 → [`app/README.md`](../app/README.md) |
 | 写 / 改文档本身 | [`documentation-guidelines.md`](documentation-guidelines.md) |
 
 ## 2. 文档类型
@@ -114,9 +114,9 @@
 [`tui.md`](tui.md)、
 [`chat-session-inspector.md`](chat-session-inspector.md)、[`pdf.md`](pdf.md)、[`typst.md`](typst.md)
 
-### zeterm 产品
+### app 产品
 
-[`zeterm/docs/README.md`](../zeterm/docs/README.md) 是产品文档入口，包含 Agent Console、Terminal
+[`app/docs/README.md`](../app/docs/README.md) 是产品文档入口，包含 Agent Console、Terminal
 Surface、Native Text Input、Rendering、UI 迁移、Native 弃用、应用迁移和发布图。
 
 ### 平台与产品
@@ -131,9 +131,9 @@ Surface、Native Text Input、Rendering、UI 迁移、Native 弃用、应用迁�
 | 文档 | 状态 |
 | --- | --- |
 | [`zeta-code-architecture-codex-style-v2.md`](zeta-code-architecture-codex-style-v2.md) | 长期演进方向 |
-| [`zeterm/docs/native-deprecation-plan.md`](../zeterm/docs/native-deprecation-plan.md) | Native 弃用迁移 |
-| [`zeterm/docs/zeterm-app-migration-plan.md`](../zeterm/docs/zeterm-app-migration-plan.md) | Zeterm 迁移 |
-| [`zeterm/docs/zeterm-release-graph.md`](../zeterm/docs/zeterm-release-graph.md) | Zeterm 发布依赖 |
+| [`app/docs/native-deprecation-plan.md`](../app/docs/native-deprecation-plan.md) | Native 弃用迁移 |
+| [`app/docs/app-migration-plan.md`](../app/docs/app-migration-plan.md) | App 迁移 |
+| [`app/docs/app-release-graph.md`](../app/docs/app-release-graph.md) | App 发布依赖 |
 
 ## 4. 维护规则
 

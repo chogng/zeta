@@ -1,7 +1,0 @@
-load("//zeterm:defs.bzl", "zeterm_rust_library")
-
-zeterm_rust_library(
-    name = "editor",
-    crate_name = "zeta_editor",
-    package_name = "zeterm/editor",
-)

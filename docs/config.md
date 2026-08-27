@@ -72,7 +72,7 @@ Skill catalog、credential 和 action policy 继续由各自领域拥有。App S
 | Authority | 拥有 | 不拥有 |
 | --- | --- | --- |
 | User Config authority | Agent 默认值、Provider 配置、独立 MCP server、Skill source、Plugin request、Hook declaration、execution-policy rules、按 canonical root identity 的 Workspace trust decision | installed Plugin package、live connection、Hook execution、secret、runtime health、前端设备偏好、窗口位置 |
-| Device settings authority | Desktop/TUI/zeterm 的主题选择、可访问性、hover、sash 等 presentation preference | Agent、Provider、MCP、Skill、Workspace trust、运行时健康状态 |
+| Device settings authority | Desktop/TUI/app 的主题选择、可访问性、hover、sash 等 presentation preference | Agent、Provider、MCP、Skill、Workspace trust、运行时健康状态 |
 | Product services distribution authority | Marketplace endpoint、trusted root、刷新策略、允许的 publisher、公开 OAuth client/broker 输入 | 用户偏好、secret、安装状态、catalog 内容、运行时连接状态 |
 | Workspace config document | Workspace Agent 默认值、独立 MCP 声明、Plugin 请求、Workspace Skill source、Hook 请求、只收紧的 execution-policy rules | 自动安装、扩权 grant、Hook 执行、credential value、运行时状态 |
 | Plugin authority | installed exact package、effective activation、activation grant、credential-slot binding、rollback | TOML request、MCP session、Skill catalog、per-call approval |
@@ -186,11 +186,11 @@ best-effort 执行，全部安全点遵守 cancellation，并在配置变更后�
 
 产品主题和 Desktop accessibility/hover/sash 偏好由 profile 下的 `configuration.json` 承载。
 Desktop 的 Configuration service 负责 strict validation、CAS revision、atomic replace 与 watcher；
-Rust `zeta-theme` 只读取/原子更新它拥有的主题 key。TUI 和 zeterm 因为使用同一个 profile root，
+Rust `zeta-theme` 只读取/原子更新它拥有的主题 key。TUI 和 app 因为使用同一个 profile root，
 能直接读到相同 JSON 资源。窗口位置和 Electron/Chromium 运行时状态不进入该文件，也不能成为
 Agent、Provider、MCP、Skill、Session 或 Thread 的第二 authority。
 
-发行版的 `product-services.json` 也不进入 User Config。它是 Desktop、`zeta code`/TUI、zeterm
+发行版的 `product-services.json` 也不进入 User Config。它是 Desktop、`zeta code`/TUI、app
 和独立 `zeta-server` 共同发现的只读 host input，并由每个产品宿主显式注入 App Server。普通用户
 后端和跨运行时设置写入 profile 的 `config.toml`；前端设备设置写入 `configuration.json`。产品服务
 文件只选择发行信任和公共服务接入，不能保存 token、安装列表或用户期望状态。因而“统一 Settings”
@@ -665,11 +665,11 @@ Workspace Config → grant or secret authority
 | MCP server adapter | `mcp_invocation_receipts`、`mcp_thread_bindings` | principal-scoped invocation replay 与 Thread authorization；不拥有 Agent state |
 | Schema | `zeta_schema_migrations` | component 独立 version gate；不支持的版本 fail closed |
 
-Desktop、`zeta code`/TUI 与 zeterm 的本地 App Server 都以 durable mode 打开这一 authority。产品
+Desktop、`zeta code`/TUI 与 app 的本地 App Server 都以 durable mode 打开这一 authority。产品
 通过 `session/list` 发现会话，并以 `session/read`、`session/subscribe` 和
 `session/thread/read` 恢复同一份对话；UI 不直接查询 SQLite。关闭并重新打开任一产品时，会从
 共享 event history 重建 Session/Thread projection。同一 canonical profile 与 protocol schema 的
-Desktop、`zeta code`/TUI 和 zeterm 连接到同一个 profile daemon；product-services 作为 connection
+Desktop、`zeta code`/TUI 和 app 连接到同一个 profile daemon；product-services 作为 connection
 adapter key 选择对应 composition，但不再切分 profile authority。Session
 catalog 和订阅通知因此能在已运行产品及不同 Workspace 之间实时传播，不需要轮询 SQLite 或重新打开
 Settings。daemon 内部以 canonical Workspace root + trust source 建立隔离 runtime，产品切换 Workspace

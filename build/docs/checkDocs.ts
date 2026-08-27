@@ -364,7 +364,7 @@ function walkReadmes(directory: string): string[] {
 }
 
 function sourceDocuments(): string[] {
-  const systemDocs = [join(repositoryRoot, "docs"), join(repositoryRoot, "zeterm", "docs")].flatMap((directory) =>
+  const systemDocs = [join(repositoryRoot, "docs"), join(repositoryRoot, "app", "docs")].flatMap((directory) =>
     readdirSync(directory)
       .filter((entry) => entry.endsWith(".md"))
       .map((entry) => join(directory, entry)),

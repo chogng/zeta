@@ -67,20 +67,20 @@ fn embedded_entries_keep_one_token_contract_and_select_product_defaults() {
     let zeta_code = catalog
         .built_in_entry("zeta-code", ColorScheme::Light)
         .unwrap();
-    let zeterm = catalog
-        .built_in_entry("zeterm", ColorScheme::Light)
+    let app = catalog
+        .built_in_entry("app", ColorScheme::Light)
         .unwrap();
 
     assert_eq!(zeta.id(), "zeta-light");
     assert_eq!(zeta_code.id(), "zeta-code-light");
-    assert_eq!(zeterm.id(), "zeterm-light");
+    assert_eq!(app.id(), "app-light");
     assert_eq!(
         zeta.colors().keys().collect::<Vec<_>>(),
         zeta_code.colors().keys().collect::<Vec<_>>()
     );
     assert_eq!(
         zeta.colors().keys().collect::<Vec<_>>(),
-        zeterm.colors().keys().collect::<Vec<_>>()
+        app.colors().keys().collect::<Vec<_>>()
     );
     assert_eq!(
         zeta.required_color(tokens::LIST_ACTIVE_SELECTION_BACKGROUND)
@@ -88,16 +88,16 @@ fn embedded_entries_keep_one_token_contract_and_select_product_defaults() {
         Rgba::rgb(0, 96, 192)
     );
     assert_eq!(
-        zeterm
+        app
             .required_color(tokens::LIST_ACTIVE_SELECTION_BACKGROUND)
             .unwrap(),
         Rgba::rgb(235, 235, 237)
     );
     assert_eq!(
-        zeterm
+        app
             .required_color("list.activeSelectionForeground")
             .unwrap(),
-        zeterm.required_color(tokens::FOREGROUND).unwrap()
+        app.required_color(tokens::FOREGROUND).unwrap()
     );
 }
 
@@ -148,10 +148,10 @@ fn loader_uses_the_host_entry_when_device_preference_follows_system() {
 
     let loaded = ThemeLoader::embedded().unwrap().load(
         ThemeLoadOptions::new(&root, ThemeSurface::Graphical, ColorScheme::Light)
-            .with_default_entry("zeterm"),
+            .with_default_entry("app"),
     );
 
-    assert_eq!(loaded.snapshot.id(), "zeterm-light");
+    assert_eq!(loaded.snapshot.id(), "app-light");
     assert!(loaded.follows_system);
     assert!(loaded.diagnostics.is_empty());
     fs::remove_dir_all(root).unwrap();
@@ -211,7 +211,7 @@ fn terminal_surface_consumes_its_optional_preference_and_isolates_broken_files()
 
     let loaded = ThemeLoader::embedded().unwrap().load(
         ThemeLoadOptions::new(&root, ThemeSurface::Terminal, ColorScheme::Dark)
-            .with_default_entry("zeterm"),
+            .with_default_entry("app"),
     );
 
     assert_eq!(loaded.snapshot.id(), "terminal-test");

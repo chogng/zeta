@@ -1,14 +1,14 @@
 # 编辑器核心：Native Rust 与 Stanza TypeScript 边界
 
-> 状态：Current。`zeta-editor-core` 是 Zeterm Native editor 的纯 Rust document core；Stanza 是 Zeta
+> 状态：Current。`zeta-editor-core` 是 App Native editor 的纯 Rust document core；Stanza 是 Zeta
 > Renderer 内独立的 TypeScript editor，不通过 WASM 或 App Server RPC 复用该同步 core。Rust 实现契约见
 > [`zeta-editor-core`](../zeta-rs/editor-core/README.md)，app presentation 见
-> [`zeta-editor`](../zeterm/editor/README.md)，Stanza 实现见
+> [`zeta-editor`](../app/editor/README.md)，Stanza 实现见
 > [`zeta-ts/src/zeta/editor/text-engine.md`](../zeta-ts/src/zeta/editor/text-engine.md)。
 
 ## 当前所有权
 
-| 能力 | Stanza（Zeta TS Renderer） | Zeterm（Native Rust） |
+| 能力 | Stanza（Zeta TS Renderer） | App（Native Rust） |
 | --- | --- | --- |
 | 文本存储、transaction、version | `TextModel` / `TextBuffer` | `EditorCoreDocument` / `CodeEditorDocument` |
 | undo/redo 与 typing grouping | `TextModelHistory` | `EditorCoreDocument` + Native command policy |
@@ -17,7 +17,7 @@
 | 文件、LSP、workspace search | 异步调用 Rust App Server service | Native product adapter 按需组合 Rust crate |
 
 两套 editor 共享产品语义和 conformance 目标，但不共享同步运行时状态。Stanza 的输入必须在 Renderer 当前事件
-循环内完成；逐键 IPC、WASM 双写或远端 undo authority 都会破坏 IME、selection 和渲染一致性。Zeterm 则直接链接
+循环内完成；逐键 IPC、WASM 双写或远端 undo authority 都会破坏 IME、selection 和渲染一致性。App 则直接链接
 Rust crate，不需要 Browser transport。
 
 ## Stanza 与 Rust 后端的数据流
@@ -53,6 +53,6 @@ committed text、selection、revision 与 history；Native text projection 只�
 
 - Stanza 的同步 text/history/selection authority 在 TypeScript Renderer。
 - Rust App Server 结果必须携带并比较 Stanza document version；后端不可阻塞输入。
-- Zeterm Native 直接消费 Rust editor/core/UI crate，不绕经 Electron 或 Browser API。
+- App Native 直接消费 Rust editor/core/UI crate，不绕经 Electron 或 Browser API。
 - `zeta-editor-core` 不依赖 presentation 或 transport；Stanza 不依赖 `zeta-editor-core`。
 - 只有基准与真实消费者证明必要时才提取共享 wire contract，不能以潜在复用代替当前所有权。

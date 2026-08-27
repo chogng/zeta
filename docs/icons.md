@@ -3,7 +3,7 @@
 > 状态：Current。
 > 本文拥有跨 Desktop、Rust native 与 renderer 的 product-icon ownership。Canonical SVG
 > 文件操作见 [`resources/README.md`](../resources/README.md)，Rust API 与生成路径见
-> [`zeta-icons`](../zeterm/icons/README.md)。
+> [`zeta-icons`](../app/icons/README.md)。
 
 ## 快速理解
 
@@ -72,8 +72,8 @@ Native shell 从 `zeta-icons::icons` 选择语义 icon，再交给 component；t
 ## 5. 修改路径
 
 ```bash
-node build/zeterm/syncRustIcons.ts
-node build/zeterm/syncRustIcons.ts --check
+node build/app/syncRustIcons.ts
+node build/app/syncRustIcons.ts --check
 cargo test --manifest-path Cargo.toml -p zeta-icons -p zeta-ui
 ```
 

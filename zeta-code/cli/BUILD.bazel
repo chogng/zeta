@@ -1,4 +1,5 @@
 load("//:defs.bzl", "zeta_rust_binary")
+load("//bazel/platforms:release_binaries.bzl", "multiplatform_binaries")
 
 zeta_rust_binary(
     name = "zeta",
@@ -11,3 +12,5 @@ alias(
     name = "cli",
     actual = ":zeta",
 )
+
+multiplatform_binaries(name = "zeta")

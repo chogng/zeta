@@ -1,7 +1,7 @@
 # `zeta-terminal`
 
 > Native 终端产品结构、用户语义和分阶段演进由
-> [`zeterm/docs/native-terminal-ui.md`](../../zeterm/docs/native-terminal-ui.md) 统一说明。本 README 只拥有
+> [`app/docs/native-terminal-ui.md`](../../app/docs/native-terminal-ui.md) 统一说明。本 README 只拥有
 > terminal model 的当前实现契约、内部接口和修改路径；PTY process plumbing 见
 > [`zeta-utils-pty`](../utils/pty/README.md)。
 
@@ -34,12 +34,12 @@ output 组织为有界 BlockList。它不启动进程、不拥有窗口、GPU、
 依赖方向：
 
 ```text
-zeterm/zeterm
+app
 ├─ zeta-terminal → vte
 └─ zeta-utils-pty
 ```
 
-`zeta-terminal` 不得反向依赖 `zeterm/zeterm`、`zeta-ui`、`zeta-wgpu` 或 PTY backend。Renderer
+`zeta-terminal` 不得反向依赖 `app`、`zeta-ui`、`zeta-wgpu` 或 PTY backend。Renderer
 从 public projection 读取 state；不能把 UI `Color`、`Rect` 或 process handles 放进 model。
 
 ## 公共契约

@@ -667,7 +667,7 @@ Marketplace catalog，也不接受 Renderer 提交宿主文件路径。远端信
 
 正式 package 把只读配置和公开信任根放在
 `zeta-resources/product-services/{product-services.json,marketplace-root.json}`。Desktop/server、
-`zeta code`/TUI 与 zeterm 通过共享 App Server client + `zeta-install-context` 边界发现该资源，默认注册 `https://chogng.github.io/marketplace/` 的 `zeta`
+`zeta code`/TUI 与 app 通过共享 App Server client + `zeta-install-context` 边界发现该资源，默认注册 `https://chogng.github.io/marketplace/` 的 `zeta`
 Marketplace；`ZETA_PRODUCT_SERVICES_PATH` 与 App Server 的 `--product-services PATH` 仍是产品宿主的
 显式覆盖入口。远端 metadata、Plugin、用户配置和 Workspace 都不能更换这份 root。发行源仓库仍为
 private，Pages 只暴露经过 Marketplace 自身独立 validator 和 TUF verifier 复核的 `metadata/` 与

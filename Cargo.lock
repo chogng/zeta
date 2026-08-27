@@ -281,6 +281,63 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
+name = "app"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "app-keybinding-ui",
+ "base64 0.22.1",
+ "flate2",
+ "serde_json",
+ "sha2 0.10.9",
+ "signal-hook",
+ "tar",
+ "tempfile",
+ "tokio",
+ "unicode-width 0.2.0",
+ "zeta-app-server-client",
+ "zeta-app-server-daemon",
+ "zeta-app-server-protocol",
+ "zeta-commands",
+ "zeta-composer",
+ "zeta-diff",
+ "zeta-editor",
+ "zeta-file-search",
+ "zeta-icons",
+ "zeta-input-classifier",
+ "zeta-install-context",
+ "zeta-keybinding",
+ "zeta-keybindings-host",
+ "zeta-language-server-catalog",
+ "zeta-language-service",
+ "zeta-protocol",
+ "zeta-remote",
+ "zeta-remote-connections",
+ "zeta-remote-host",
+ "zeta-server-host",
+ "zeta-settings",
+ "zeta-slash-commands",
+ "zeta-terminal",
+ "zeta-text-file",
+ "zeta-theme",
+ "zeta-ui",
+ "zeta-utils-path",
+ "zeta-utils-pty",
+ "zeta-workbench",
+ "zeta-workspace",
+ "zui",
+]
+
+[[package]]
+name = "app-keybinding-ui"
+version = "0.1.0"
+dependencies = [
+ "zeta-keybinding",
+ "zeta-ui",
+ "zui",
+]
+
+[[package]]
 name = "approx"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11915,63 +11972,6 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "ts-rs",
-]
-
-[[package]]
-name = "zeterm"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64 0.22.1",
- "flate2",
- "serde_json",
- "sha2 0.10.9",
- "signal-hook",
- "tar",
- "tempfile",
- "tokio",
- "unicode-width 0.2.0",
- "zeta-app-server-client",
- "zeta-app-server-daemon",
- "zeta-app-server-protocol",
- "zeta-commands",
- "zeta-composer",
- "zeta-diff",
- "zeta-editor",
- "zeta-file-search",
- "zeta-icons",
- "zeta-input-classifier",
- "zeta-install-context",
- "zeta-keybinding",
- "zeta-keybindings-host",
- "zeta-language-server-catalog",
- "zeta-language-service",
- "zeta-protocol",
- "zeta-remote",
- "zeta-remote-connections",
- "zeta-remote-host",
- "zeta-server-host",
- "zeta-settings",
- "zeta-slash-commands",
- "zeta-terminal",
- "zeta-text-file",
- "zeta-theme",
- "zeta-ui",
- "zeta-utils-path",
- "zeta-utils-pty",
- "zeta-workbench",
- "zeta-workspace",
- "zeterm-keybinding-ui",
- "zui",
-]
-
-[[package]]
-name = "zeterm-keybinding-ui"
-version = "0.1.0"
-dependencies = [
- "zeta-keybinding",
- "zeta-ui",
- "zui",
 ]
 
 [[package]]

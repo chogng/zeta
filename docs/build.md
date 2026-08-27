@@ -66,7 +66,7 @@ Desktop 的 `code` 与 `academic` 仍通过同一个 `build:desktop` 入口构�
 
 `.cargo/config.toml` 把默认 Cargo `target-dir` 固定为 `.build/cargo`；显式 `CARGO_TARGET_DIR` 仍可覆盖它。`.bazelrc` 只把工作区便捷链接放入 `.build/`，Bazel 自己的输出用户根仍由 Bazel 管理。
 
-根 Cargo profile 在 `dev` 与 `test` 中对完整依赖图使用轻量优化，并对 `zeterm`、`zeta-app-server` 与 `zeta-app-server-client` 的超大最终链接单元使用 size optimization；debug assertions、各 profile 既有的调试信息与增量编译仍然保留。该配置把 macOS 产物的 `__eh_frame` 控制在 compact-unwind 的 16 MiB 编码上限内，不能用关闭 `linker_messages` 代替。
+根 Cargo profile 在 `dev` 与 `test` 中对完整依赖图使用轻量优化，并对 `app`、`zeta-app-server` 与 `zeta-app-server-client` 的超大最终链接单元使用 size optimization；debug assertions、各 profile 既有的调试信息与增量编译仍然保留。该配置把 macOS 产物的 `__eh_frame` 控制在 compact-unwind 的 16 MiB 编码上限内，不能用关闭 `linker_messages` 代替。
 
 ## 构建源码与仓库脚本边界
 
@@ -81,7 +81,7 @@ Desktop 的 `code` 与 `academic` 仍通过同一个 `build:desktop` 入口构�
 | `build/docs/` | 文档规范检查与文档站数据生成 |
 | `build/vite/` | Renderer 入口、Vite 配置、开发桥接与热重载插件 |
 | `build/download/` | 受锁文件约束的第三方构建运行时下载器 |
-| `build/zeterm/` | zeterm 生成器 |
+| `build/app/` | app 生成器 |
 | `build/release/` | Python/Shell 发布打包、签名、验证以及 Bazel 入口 |
 | `build/clean.ts` | 根清理入口 |
 | `build/package.json` | 构建工具自身的依赖、测试和类型检查入口 |

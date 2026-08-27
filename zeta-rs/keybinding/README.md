@@ -7,7 +7,7 @@
 
 `zeta-keybinding` 把标准化按键、条件和有序规则解析成命令、阻止、等待下一段 Chord 或不匹配；它也能把一份内存中的严格用户 JSON 编译成产品提供的 command/condition 类型。它不接收 DOM、winit、Crossterm 事件，不读文件，不绘制 UI，也不执行产品命令。
 
-Zeterm 和 Zeta Code 直接依赖这个 crate；Zeta Renderer 保留同步 TypeScript 实现，并与它读取同一份 [`conformance.json`](../../resources/keybindings/conformance.json)。
+App 和 Zeta Code 直接依赖这个 crate；Zeta Renderer 保留同步 TypeScript 实现，并与它读取同一份 [`conformance.json`](../../resources/keybindings/conformance.json)。
 
 ## 当前所有权
 
@@ -24,7 +24,7 @@ Zeterm 和 Zeta Code 直接依赖这个 crate；Zeta Renderer 保留同步 TypeS
 依赖方向固定为：
 
 ```text
-Zeterm adapter ─┐
+App adapter ─┐
                 ├─→ zeta-keybinding
 Zeta Code TUI ──┘
 ```

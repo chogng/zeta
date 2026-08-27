@@ -60,7 +60,7 @@ fn theme_choices_and_selection_use_the_tui_device_preference() {
         catalog
             .choices
             .iter()
-            .all(|choice| !choice.label.contains("zeterm"))
+            .all(|choice| !choice.label.contains("app"))
     );
 
     super::select_theme_at(

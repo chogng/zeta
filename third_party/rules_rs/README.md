@@ -16,16 +16,16 @@ The repository pins `rules_rs 0.0.96` through the archive override in the root
   the Windows execution ABI and assemble its runtime DLLs from platform constraints.
 
 The Cargo graph intentionally has one root workspace. `rules_rs` therefore sees
-`zeterm`, its direct child crates, and `zeta-rs/*` in one `cargo metadata` result. Zeterm-owned
+`app`, its direct child crates, and `zeta-rs/*` in one `cargo metadata` result. App-owned
 and shared crates resolve to the same `@crates` hub; no cross-workspace metadata
 bridge or duplicate product hub is required.
 
 Verify the integration from the repository root:
 
 ```bash
-bazel query //zeterm:zeterm
-bazel build //zeterm:zeterm_sources
-bazel test //zeterm:zeterm_ci
+bazel query //app:app
+bazel build //app:app_sources
+bazel test //app:app_ci
 ```
 
 If a newer rules_rs release is adopted, first remove the archive override in a

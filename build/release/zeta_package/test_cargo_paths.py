@@ -44,11 +44,11 @@ class CargoPathsTests(unittest.TestCase):
     def test_reads_executables_and_diagnostics_from_cargo_messages(self) -> None:
         artifact = parse_cargo_message(
             '{"reason":"compiler-artifact","target":{"kind":["bin"],'
-            '"name":"zeterm"},"executable":"/custom/target/zeterm"}'
+            '"name":"app"},"executable":"/custom/target/app"}'
         )
         self.assertEqual(
-            cargo_artifact_executable(artifact, "zeterm"),
-            "/custom/target/zeterm",
+            cargo_artifact_executable(artifact, "app"),
+            "/custom/target/app",
         )
         self.assertIsNone(cargo_artifact_executable(artifact, "other"))
         self.assertEqual(

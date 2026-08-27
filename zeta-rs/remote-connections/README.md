@@ -1,6 +1,6 @@
 # `zeta-remote-connections`
 
-`zeta-remote-connections` 是 `zeterm`、Desktop Main 和其他原生产品可复用的本机 Remote backend
+`zeta-remote-connections` 是 `app`、Desktop Main 和其他原生产品可复用的本机 Remote backend
 连接层。它负责构造本机 OpenSSH 子进程命令，为 `zeta-app-server-client` 提供 Remote App Server
 stdio backend，并提供 POSIX 平台探测、
 不可变完整包安装、发布认证后的网络制品物化、无凭据运行时代际存储和命名目标目录。它不负责
@@ -79,7 +79,7 @@ staging 中工作，可恢复陈旧 PID 锁，最后提交到：
 不能让不完整对象成为可选 runtime。
 
 远端宿主不会下载制品。SHA-256 只证明传输与内容身份，不证明发布者来源；本机产品必须在构造
-`RemoteRuntimeCatalogRelease` 或 `RemoteRuntimeArtifact` 前认证发布元数据。打包后的 `zeterm` 可把
+`RemoteRuntimeCatalogRelease` 或 `RemoteRuntimeArtifact` 前认证发布元数据。打包后的 `app` 可把
 目录 URL 与摘要编译进已签名二进制；Electron Main 从签名 Desktop 产品包读取同一 URL 与摘要。
 离线产品包仍可直接认证本地 catalog。共享 updater 只负责安全物化，不选择 channel、版本升级时机或
 publisher key。
@@ -104,12 +104,12 @@ SSH executable、任意 option、密码、私钥或 agent socket。使用 canoni
 JSON 进程边界。Desktop Electron Main 用 `list` 提供展示，以 `save/update/remove` 承接严格限定为
 name、host 和工作区路径的图形管理请求，并在安排产品重启前按 canonical name 再执行一次精确 `get`。
 图形 `save` 固定为 create，Renderer 不能请求 replace；连接动作不能提交 host 或工作区，任何动作都
-不能提交凭据或 OpenSSH option。`zeterm` 直接链接目录实现，但保持相同记录语义。
+不能提交凭据或 OpenSSH option。`app` 直接链接目录实现，但保持相同记录语义。
 
 `RemoteConnectionProfileStore` 按精确 `SshTarget`（OpenSSH host 与远端工作区）保存一个
 `RemoteConnectionProfileRecord`。记录只含 active `RemoteRuntime` 和至多一代 previous runtime；
 JSON schema 明确没有密码、私钥、SSH 路径、agent socket 或任意 SSH option。调用方决定资源位置，
-`zeterm` 当前使用 `<local-profile-root>/remote/connections.json`。
+`app` 当前使用 `<local-profile-root>/remote/connections.json`。
 
 每次读写都先在 `acquire_lease` 取得同级 advisory lock；随后 `load_unlocked` 校验完整的版本化、有界
 文档。`write_unlocked` 编码 `ProfileDocument` 并委托 `zeta_utils_path::write_atomically` 做替换。
@@ -121,13 +121,13 @@ symlink 或非普通文件、未知字段、重复 target、错误身份、重�
 刚验证的 previous profile，避免另一个进程让调用方切换到未验证的运行时代际；它还保存验证期间解析
 出的精确可执行路径。
 
-`zeta remote profile rollback` 把上述契约与可用性、兼容性探测组合起来。`zeterm` 在进程内调用，
+`zeta remote profile rollback` 把上述契约与可用性、兼容性探测组合起来。`app` 在进程内调用，
 Desktop Main 则调用 CLI adapter；只有条件交换成功后，Desktop 才替换 App Server 连接。
 
 ## 执行路径
 
 ```text
-zeterm `AppServerHost` / Electron Main
+app `AppServerHost` / Electron Main
   -> AppServerSession (shared Local/Remote contract)
   -> optional RemoteConnectionCatalog target selection
   -> product-authenticated local catalog or RemoteRuntimeCatalogRelease
@@ -148,9 +148,9 @@ zeterm `AppServerHost` / Electron Main
 `connect` 与 `probe_compatibility` 使用同一兼容性 gate。Schema mismatch 属于
 `RemoteConnectionFailureKind::ProtocolIncompatible`，服务端拒绝属于 `ServerRejected`。产品协调器
 因此可按 `probe_runtime -> probe_compatibility -> connect` 执行，并只在运行时缺失或显式协议不兼容
-时安装。`zeterm` 在打开原生窗口前执行该 preflight；常规 Agent 和终端连接仍进行自己的权威握手。
+时安装。`app` 在打开原生窗口前执行该 preflight；常规 Agent 和终端连接仍进行自己的权威握手。
 
-`zeterm` 当前为 Agent、language 和每个 Remote terminal runtime 打开独立的本机 App Server 连接。
+`app` 当前为 Agent、language 和每个 Remote terminal runtime 打开独立的本机 App Server 连接。
 独立 language connection 避免慢 LSP 响应阻塞 Agent 和文件系统请求；未来 SSH pool 可复用逻辑连接
 而不改变其生命周期。Agent 和 language 协调器分别执行 30 秒有界重连，在断开时拒绝命令和语言请求，
 不会重放未知结果操作；恢复后分别重读持久 Session/Thread 状态或重新同步打开文档。Remote terminal
@@ -158,8 +158,8 @@ zeterm `AppServerHost` / Electron Main
 SSH 连接尝试，重试策略属于产品宿主。
 
 `SshTunnelOptions` 是首个宿主侧 Tunnel primitive。它使用 `ExitOnForwardFailure=yes` 和固定
-`127.0.0.1` bind address 启动 `ssh -N`。Desktop 有窗口级协调器；`zeterm remote tunnel` 直接作为
-前台命令使用 primitive，Remote zeterm 窗口则通过 Native tunnel host 和管理器监督它。
+`127.0.0.1` bind address 启动 `ssh -N`。Desktop 有窗口级协调器；`app remote tunnel` 直接作为
+前台命令使用 primitive，Remote app 窗口则通过 Native tunnel host 和管理器监督它。
 `select_available_loopback_port` 在 OpenSSH 启动前立即释放临时 listener，因此端口竞争仍由
 `ExitOnForwardFailure=yes` 权威判断。
 
@@ -189,9 +189,9 @@ OpenSSH spawn failure、输出关闭、错误 JSONL 和无法配对的 response 
 
 发布频道发现、publisher 签名验证、协议不兼容升级策略、不可变对象垃圾回收和产品级
 Tunnel/recovery policy 都属于本 crate 上层；共享的本机 Tunnel 生命周期协调位于
-[`zeta-remote-host`](../remote-host/README.md)。`zeterm` 已通过 Native picker/manager 消费命名目录；Desktop 通过本机
+[`zeta-remote-host`](../remote-host/README.md)。`app` 已通过 Native picker/manager 消费命名目录；Desktop 通过本机
 `zeta remote connections` adapter 提供命令面板 saved-host picker/manager，并通过重启进入选中的 authority。
-`zeterm` 同时通过前台 CLI 与 Remote 窗口 Native manager 消费 Tunnel primitive。Desktop Browser
+`app` 同时通过前台 CLI 与 Remote 窗口 Native manager 消费 Tunnel primitive。Desktop Browser
 与 Browser Automation 通过 Electron Main 的 Remote navigation adapter 自动为 loopback 顶层导航持有
 窗口级 Tunnel lease；requested/load URL 映射和 Browser history 生命周期仍属于 Desktop，而不是本
 crate。其他产品可以拥有自己的生命周期和 UI。

@@ -1,7 +1,0 @@
-load("//zeterm:defs.bzl", "zeterm_rust_library")
-
-zeterm_rust_library(
-    name = "ui",
-    crate_name = "zeta_ui",
-    package_name = "zeterm/ui",
-)

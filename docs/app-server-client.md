@@ -1,7 +1,7 @@
 # App Server 客户端架构与演进方案
 
 > 物理位置：`zeta-rs/app-server-client/`  
-> 主要消费者：`zeta-exec` 非交互执行宿主、`zeta-tui`、`zeterm`
+> 主要消费者：`zeta-exec` 非交互执行宿主、`zeta-tui`、`app`
 > Wire contract：[`zeta-app-server-api.md`](zeta-app-server-api.md)  
 > Canonical 产品模型：[`protocol.md`](protocol.md)  
 > Headless 与远程调度：[`exec.md`](exec.md)
@@ -46,7 +46,7 @@ zeta-tui ──┘             │
 ```
 
 直接依赖和启动 `zeta-app-server` 是 embedded backend 的职责，不是依赖方向错误。当前
-`AppServerSession::start_stdio` 已能在同一 public facade 下连接 product-selected child，`zeterm`
+`AppServerSession::start_stdio` 已能在同一 public facade 下连接 product-selected child，`app`
 用它承载 SSH Remote App Server；它仍只连接相同的 App Server contract，不是 scheduler protocol，
 也不是 remote process executor。Desktop 的 JSONL/stdio client 仍不要求复用这个 Rust crate。
 
@@ -143,7 +143,7 @@ execution 已迁移到独立 `zeta-tool-executor`。后续 remote scheduler 仍�
 “执行一个 tool process”和“宿主化完整 App Server”重新共享同一个模块或协议。
 
 backend 选择应由产品宿主显式建模，但不应把 Remote 再做成
-`zeta-app-server-client` 的上层入口。客户端只负责统一的 session contract；例如 `zeterm`
+`zeta-app-server-client` 的上层入口。客户端只负责统一的 session contract；例如 `app`
 在自己的 `AppServerHost` 中选择 Local 或 Remote backend，然后把两者都转换为
 `AppServerSession`：
 
@@ -158,12 +158,12 @@ pub(crate) enum AppServerBackend {
 - Remote backend 由 `zeta-remote-connections` 建立 SSH/stdio 连接，再交给相同的
   `AppServerSession`；
 - 两者暴露相同 typed request handle、event stream 与 shutdown contract；
-- `AppServerHost` 是 `zeterm` 的产品级横向协调层，不是 `zeta-rs` 的通用 App Server API；
+- `AppServerHost` 是 `app` 的产品级横向协调层，不是 `zeta-rs` 的通用 App Server API；
 - remote scheduler 仍位于 `zeta-exec` 上层，不属于 App Server backend。
 
-在 zeterm 中，这个产品边界位于 `zeterm/src/app_server/`。Agent、Language 和 Terminal 通过
+在 app 中，这个产品边界位于 `app/src/app_server/`。Agent、Language 和 Terminal 通过
 `crate::app_server` 使用它导出的 session/event contract；`zui`、`zeta-ui`、Agent Sidebar
-等 UI crate 不依赖 App Server client。这样 `zeta-rs` 提供核心协议和通用 client，zeterm 提供
+等 UI crate 不依赖 App Server client。这样 `zeta-rs` 提供核心协议和通用 client，app 提供
 产品启动、Workspace、Remote backend 与重连协调，两边不会再各自复制一套 client。
 
 ## 4. 启动流程
@@ -350,7 +350,7 @@ protocol registry（method + payload + decoder）
 AppServerEvents::Notification(ServerNotification)
                     │
                     ├─► TUI notification projection ─► ClientEvent
-                    ├─► zeterm agent/session projection ─► AgentSessionEvent
+                    ├─► app agent/session projection ─► AgentSessionEvent
                     └─► headless completion projection
 ```
 
@@ -472,7 +472,7 @@ TUI 不再接收一个同步 `&mut AppServerClient<T>`，也不调用 `drain_not
   connection，当前供 MCP HTTP session 共享一个 embedded composition；
 - `InProcessTransport::from_shared_server` 明确表达共享 host，不要求每个 transport 重建
   SQLite repository/config/model composition；
-- typed client methods，包括 zeterm Remote 编辑器消费的文档同步、关闭、Hover、Completion 与位置请求；
+- typed client methods，包括 app Remote 编辑器消费的文档同步、关闭、Hover、Completion 与位置请求；
 - protocol method registry；
 - external JSON-RPC request/response 编解码；
 - response ID 校验；
