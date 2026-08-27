@@ -744,6 +744,13 @@ error。
 - 日志预览与 model-facing full output 分离；
 - external context provenance。
 
+统一截断算法由 `zeta-utils-output-truncation` 持有；`zeta-tools::ToolOutput::truncate_text` 只负责
+把 `ToolContent` 的多个 text part 交给这个 utility，并保留非文本 part。算法只在文本超过明确预算
+时从中间截断，保留 UTF-8 边界和头尾，并写入原始 token 数与行数；当前的 image 不会被切坏。
+`Bytes` 是硬字节预算，`ApproximateTokens` 只用于确定性近似，不能替代 Context/Model Provider
+层的精确 token measurement。MCP 使用自己的配置预算调用同一 utility，可执行工具 adapter 使用
+`DEFAULT_TOOL_OUTPUT_MAX_BYTES`，因此不同来源不会各自维护一套截断算法。
+
 ### 9.2 执行结果
 
 ```rust

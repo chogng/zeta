@@ -82,8 +82,10 @@ byte 数，拒绝空/重复 cursor 与重复 remote tool name。`exposed_name` �
 server cancellation 和 elicitation。它不会原地修改 catalog；宿主必须在 safe point 重建
 runtime。
 
-`project_tool_result` 保留 text 和合法 `image/*` block，将其他 RMCP block 序列化为 text，并对
-最终 text/data URL 按 UTF-8 byte 数执行 output limit。MCP `isError` 映射为
+`project_tool_result` 保留 text 和合法 `image/*` block，将其他 RMCP block 序列化为 text，并把
+text 交给 `zeta-utils-output-truncation`（通过 `zeta-tools::ToolOutput::truncate_text` 适配）按配置
+预算做确定性 UTF-8 截断。图片 data URL 不能被切坏，因此仍作为不可截断的硬字节边界校验。MCP
+`isError` 映射为
 `ToolOutputStatus::Error`，不是 transport failure。
 
 ## 失败、取消与恢复
@@ -91,7 +93,7 @@ runtime。
 - 调用前 cancellation、非 object arguments 和 stale binding：`McpCallError::NotStarted`。
 - 请求发送后的 cancellation、timeout、断线或协议错误：
   `McpCallError::OutcomeUncertain`；上层不得自动重放有副作用调用。
-- 无法安全投影或超过 output limit：`McpCallError::InvalidResult`。
+- 无法安全投影或图片超过 output limit：`McpCallError::InvalidResult`；普通 text 超限会被截断。
 - `McpRuntime::shutdown(self)` 消费 runtime，逐 server shutdown 并返回失败诊断。
 
 `McpSession` 实现必须将 cancellation 传入 transport；production adapter 使用

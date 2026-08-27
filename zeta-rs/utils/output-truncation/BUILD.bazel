@@ -1,0 +1,6 @@
+load("//:defs.bzl", "zeta_rust_crate")
+
+zeta_rust_crate(
+    name = "output-truncation",
+    crate_name = "zeta_utils_output_truncation",
+)

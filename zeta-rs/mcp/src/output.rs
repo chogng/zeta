@@ -1,5 +1,5 @@
 use zeta_rmcp_client::{CallToolResult, ContentBlock};
-use zeta_tools::{ImageDetail, ToolContent, ToolOutput};
+use zeta_tools::{ImageDetail, ToolContent, ToolOutput, ToolOutputTruncationPolicy};
 
 use crate::McpCallError;
 
@@ -8,7 +8,7 @@ pub(crate) fn project_tool_result(
     maximum_bytes: usize,
 ) -> Result<ToolOutput, McpCallError> {
     let mut content = Vec::new();
-    let mut bytes = 0usize;
+    let mut image_bytes = 0usize;
     for block in result.content {
         let projected = match block {
             ContentBlock::Text(text) => ToolContent::Text(text.text),
@@ -23,34 +23,31 @@ pub(crate) fn project_tool_result(
                     .map_err(|error| McpCallError::InvalidResult(error.to_string()))?,
             ),
         };
-        bytes = bytes
-            .checked_add(content_bytes(&projected))
-            .ok_or_else(|| McpCallError::InvalidResult("output byte count overflow".into()))?;
-        if bytes > maximum_bytes {
-            return Err(McpCallError::InvalidResult(
-                "tool output byte limit exceeded".into(),
-            ));
+        if let ToolContent::Image { url, .. } = &projected {
+            image_bytes = image_bytes
+                .checked_add(url.len())
+                .ok_or_else(|| McpCallError::InvalidResult("output byte count overflow".into()))?;
         }
         content.push(projected);
     }
     if let Some(structured) = result.structured_content {
         let structured = serde_json::to_string(&structured)
             .map_err(|error| McpCallError::InvalidResult(error.to_string()))?;
-        bytes = bytes
-            .checked_add(structured.len())
-            .ok_or_else(|| McpCallError::InvalidResult("output byte count overflow".into()))?;
-        if bytes > maximum_bytes {
-            return Err(McpCallError::InvalidResult(
-                "tool output byte limit exceeded".into(),
-            ));
-        }
         content.push(ToolContent::Text(structured));
     }
-    if result.is_error.unwrap_or(false) {
-        Ok(ToolOutput::error(content))
-    } else {
-        Ok(ToolOutput::success(content))
+
+    if image_bytes > maximum_bytes {
+        return Err(McpCallError::InvalidResult(
+            "tool output image byte limit exceeded".into(),
+        ));
     }
+    let output = if result.is_error.unwrap_or(false) {
+        ToolOutput::error(content)
+    } else {
+        ToolOutput::success(content)
+    };
+    let text_budget = maximum_bytes.saturating_sub(image_bytes);
+    Ok(output.truncate_text(ToolOutputTruncationPolicy::Bytes(text_budget)))
 }
 
 fn valid_image_mime(mime: &str) -> bool {
@@ -58,13 +55,6 @@ fn valid_image_mime(mime: &str) -> bool {
         && mime
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'+' | b'.' | b'-'))
-}
-
-fn content_bytes(content: &ToolContent) -> usize {
-    match content {
-        ToolContent::Text(text) => text.len(),
-        ToolContent::Image { url, .. } => url.len(),
-    }
 }
 
 #[cfg(test)]

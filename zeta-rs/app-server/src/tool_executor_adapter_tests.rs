@@ -228,3 +228,25 @@ fn executor_runtime_preserves_original_image_detail_until_model_capability_gate(
             }]
     ));
 }
+
+#[test]
+fn executor_output_adapter_truncates_text_before_protocol_and_streaming() {
+    let mut sink = RecordingSink::default();
+    let output = super::returned_output_with_policy(
+        ToolOutput::success(vec![ToolContent::Text("executor output ".repeat(32))]),
+        &mut sink,
+        zeta_tools::ToolOutputTruncationPolicy::Bytes(128),
+    )
+    .expect("tool output should adapt");
+
+    let text = match output {
+        ToolExecutionOutput::SuccessContent(content) => match &content[..] {
+            [zeta_protocol::ContentPart::Text(text)] => text.clone(),
+            other => panic!("unexpected content: {other:?}"),
+        },
+        other => panic!("unexpected output: {other:?}"),
+    };
+    assert!(text.len() <= 128);
+    assert!(text.contains("Warning: truncated output"));
+    assert_eq!(sink.values, vec![(ToolOutputStream::Stdout, text.clone())]);
+}

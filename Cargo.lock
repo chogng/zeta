@@ -11809,6 +11809,7 @@ dependencies = [
  "zeta-async-utils",
  "zeta-protocol",
  "zeta-sandboxing",
+ "zeta-utils-output-truncation",
 ]
 
 [[package]]
@@ -11874,6 +11875,10 @@ dependencies = [
  "sha2 0.10.9",
  "thiserror 2.0.19",
 ]
+
+[[package]]
+name = "zeta-utils-output-truncation"
+version = "0.1.0"
 
 [[package]]
 name = "zeta-utils-path"

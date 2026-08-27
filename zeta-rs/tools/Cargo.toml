@@ -16,6 +16,7 @@ regex = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 zeta-async-utils = { workspace = true }
+zeta-utils-output-truncation = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-sandboxing = { workspace = true }
 

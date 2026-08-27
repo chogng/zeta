@@ -2,6 +2,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use zeta_config::McpServerId;
 use zeta_rmcp_client::Tool;
+use zeta_tools::DEFAULT_TOOL_OUTPUT_MAX_BYTES;
 use zeta_tools::{
     McpOutputSchemaProjection, McpToolProjection, ToolDefinition, ToolDefinitionDigest,
     ToolLoading, ToolName, from_mcp_tool_projection, to_protocol_tool_definition,
@@ -24,7 +25,7 @@ impl Default for McpCatalogLimits {
             maximum_pages_per_server: 32,
             maximum_tools_per_server: 512,
             maximum_catalog_bytes_per_server: 2 * 1024 * 1024,
-            maximum_tool_output_bytes: 1024 * 1024,
+            maximum_tool_output_bytes: DEFAULT_TOOL_OUTPUT_MAX_BYTES,
         }
     }
 }
