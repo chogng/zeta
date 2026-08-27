@@ -704,9 +704,7 @@ cargo test --manifest-path Cargo.toml -p zeta-app-server-protocol
 如果改动进入 App Server external contract，还必须：
 
 ```bash
-cargo run --manifest-path Cargo.toml \
-  -p zeta-app-server-protocol --bin write_schema_fixtures
-node build/desktop/resources/syncAppServerProtocol.ts
+corepack pnpm run generate:protocol
 corepack pnpm --dir zeta-ts run typecheck:renderer
 ```
 

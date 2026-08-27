@@ -424,6 +424,9 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains(r#""status": "success""#));
     assert!(typescript.contains("export type TurnInteraction ="));
     assert!(typescript.contains("export type PendingInteraction ="));
+    assert!(
+        typescript.contains("export type ToolMode = \"direct\" | \"codeMode\" | \"codeModeOnly\";")
+    );
     assert!(typescript.contains("export const APP_SERVER_NOTIFICATIONS:"));
     assert!(!typescript.contains("ThreadStartParams"));
 }
@@ -446,6 +449,7 @@ fn dto_driven_schema_contains_registered_rpc_envelopes() {
     assert!(definitions.contains_key("SkillSourceConfigDto"));
     assert!(definitions.contains_key("Session"));
     assert!(definitions.contains_key("ThreadItem"));
+    assert!(definitions.contains_key("ToolMode"));
     assert!(definitions.contains_key("TypstCompileParams"));
     assert!(definitions.contains_key("TypstCompileResult"));
     assert!(definitions.contains_key("WorkspaceSearchStartParams"));
@@ -661,8 +665,8 @@ fn schema_hash_is_stable_sha256_of_the_generated_schema() {
 
 #[test]
 fn schema_fixtures_match_the_generators() {
-    let typescript_fixture = include_str!("../schema/types.ts");
-    let schema = include_str!("../schema/schema.json");
+    let typescript_fixture = include_str!("../schema/typescript/types.ts");
+    let schema = include_str!("../schema/json/schema.json");
 
     assert_eq!(typescript_fixture, typescript());
     assert_eq!(schema, json_schema());

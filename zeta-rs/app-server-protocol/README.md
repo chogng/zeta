@@ -67,11 +67,14 @@ zeta-rs/app-server-protocol/
 │   ├── export.rs             # pure deterministic generators
 │   ├── schema_fixtures.rs    # contract/golden tests
 │   └── bin/
-│       ├── export.rs
-│       └── write_schema_fixtures.rs
+│       └── generate_protocol.rs
+├── scripts/
+│   └── write_schema_fixtures.py
 └── schema/
-    ├── schema.json
-    └── types.ts
+    ├── json/
+    │   └── schema.json
+    └── typescript/
+        └── types.ts
 ```
 
 ## 公共契约
@@ -165,7 +168,8 @@ policy，Server → Client browser request 使用与其隔离的非空字符串 
 | `schema_hash()` | `sha256:` + generated schema 的 deterministic digest |
 | `JSON_SCHEMA_FIXTURE` / `TYPESCRIPT_FIXTURE` | checked-in artifact 相对路径 |
 
-Generator 只返回字符串，不读写 filesystem。只有 `write_schema_fixtures` binary 拥有 fixture 写入。
+Library generator 只返回字符串，不读写 filesystem。`generate_protocol` binary 负责把指定 artifact
+直接写入调用方给出的目录；`scripts/write_schema_fixtures.py` 只声明 checked-in fixture 的目标目录。
 
 ## 内部接口地图
 
@@ -184,8 +188,8 @@ Generator 只返回字符串，不读写 filesystem。只有 `write_schema_fixtu
 | `type_name<T>` / `declaration<T>` | private | ts-rs adapter functions | 不手写 DTO field shape |
 | `ProtocolSchema` | private | JSON Schema root：client/host request/response、notification/error | artifact coverage 的唯一 root |
 | `protocol_schema` | private | `schema_for!(ProtocolSchema)` | hash 与 JSON 必须调用同一函数 |
-| `Artifact::{parse,contents}` | binary-private | stdout exporter format selection | 不影响 library contract |
-| `write_fixture` | binary-private | explicit golden fixture overwrite | tests 不能隐式调用 |
+| `Command::parse` | binary-private | 校验 artifact 和 `--out` 目录 | 不影响 library contract |
+| `write_artifact` | binary-private | 将单个 artifact 写入调用方目录 | 不推断 Desktop 路径 |
 
 `TYPESCRIPT_BINDINGS` 是一个容易遗漏的同步点。例如新增 canonical enum 被 RPC DTO 引用时，若
 ts-rs 无法从 outer declaration 自动内联，就必须显式加入这里。编译通过不代表 TypeScript fixture
@@ -280,8 +284,8 @@ FIFO/shared-read 调度；connection-resource key 由 runtime 再加入 connecti
 2. 在 client_methods! 中注册 method + types + serialization scope
 3. 若新增 TS dependency，更新 typescript_bindings!
 4. 更新 zeta-app-server dispatcher exhaustive match
-5. 运行 write_schema_fixtures
-6. 审阅 schema/schema.json 与 schema/types.ts
+5. 运行 scripts/write_schema_fixtures.py
+6. 审阅 schema/json/schema.json 与 schema/typescript/types.ts
 7. 运行 contract tests
 8. 更新 docs/zeta-app-server-api.md 与 client
 ```
@@ -296,15 +300,15 @@ handler。host method 不填写 `SerializationScopeDefinition`，因为其顺序
 
 Fixture 更新必须显式执行：
 
-```text
-cargo run -p zeta-app-server-protocol --bin write_schema_fixtures
+```bash
+python -B zeta-rs/app-server-protocol/scripts/write_schema_fixtures.py
 ```
 
-只查看生成结果：
+生成到指定调用方目录：
 
-```text
-cargo run -p zeta-app-server-protocol --bin export -- json
-cargo run -p zeta-app-server-protocol --bin export -- typescript
+```bash
+cargo run -p zeta-app-server-protocol --bin generate_protocol -- \
+  typescript --out zeta-ts/generated/app-server
 ```
 
 ## 模式哈希与兼容性
@@ -343,7 +347,7 @@ bazel test //zeta-rs/app-server-protocol:app-server-protocol-unit-tests
 数据结构。该方法注册为全局独占，并通过 `ServerCapabilities::typst` 公布。PDF 内容由
 `ResourceMetadataResult` 引用，字节不会嵌入编译响应。
 
-修改这些数据结构时，必须重新生成 `schema/schema.json` 和 `schema/types.ts`，同步
+修改这些数据结构时，必须重新生成 `schema/json/schema.json`、`schema/typescript/types.ts` 和
 `zeta-ts/generated/app-server/types.ts`，并更新
 [`docs/typst.md`](../../docs/typst.md) 中的跨进程契约。
 

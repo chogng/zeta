@@ -950,16 +950,14 @@ Kimi 订阅登录使用 device-code flow，没有本地 callback listener：App 
 ## 12. 权威来源
 
 - Rust DTO 与 registry：`zeta-rs/app-server-protocol/src/protocol/`
-- JSON Schema：`zeta-rs/app-server-protocol/schema/schema.json`
-- TypeScript：`zeta-rs/app-server-protocol/schema/types.ts`
-- Desktop 同步产物：`zeta-ts/generated/app-server/types.ts`
+- JSON Schema：`zeta-rs/app-server-protocol/schema/json/schema.json`
+- TypeScript：`zeta-rs/app-server-protocol/schema/typescript/types.ts`
+- Desktop 生成产物：`zeta-ts/generated/app-server/types.ts`
 
 修改契约后执行：
 
 ```bash
-cargo run --manifest-path Cargo.toml \
-  -p zeta-app-server-protocol --bin write_schema_fixtures
-node build/desktop/resources/syncAppServerProtocol.ts
+corepack pnpm run generate:protocol
 ```
 
 生成产物、Rust contract tests 和 Desktop TypeScript 编译必须同时通过。

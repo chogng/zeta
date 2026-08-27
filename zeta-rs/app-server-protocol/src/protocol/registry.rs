@@ -396,6 +396,7 @@ use zeta_protocol::Personality;
 use zeta_protocol::ReasoningEffort;
 use zeta_protocol::ToolCallBinding;
 use zeta_protocol::ToolCallCaller;
+use zeta_protocol::ToolMode;
 use zeta_protocol::ToolSourceProvenance;
 use zeta_protocol::WorkspaceBinding;
 use zeta_protocol::WorkspaceTrustId;
@@ -2298,6 +2299,7 @@ typescript_bindings! {
     ModelUsage,
     ModelUsageTotal,
     ModelUsageSummary,
+    ToolMode,
     ToolProfileSnapshot,
     Turn,
     Thread,
