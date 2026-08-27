@@ -13,6 +13,7 @@ interface GpuEditorState {
 	readonly glyphMarginTouchesLineNumber: boolean;
 	readonly lineNumberTouchesFolding: boolean;
 	readonly foldingPrecedesText: boolean;
+	readonly punctuationLineAdvanceMatchesDom: boolean;
 }
 
 interface ClearedGpuEditorState {
@@ -77,6 +78,7 @@ function healthyGpuEditorState(): GpuEditorState {
 		glyphMarginTouchesLineNumber: true,
 		lineNumberTouchesFolding: true,
 		foldingPrecedesText: true,
+		punctuationLineAdvanceMatchesDom: true,
 	};
 }
 
@@ -100,6 +102,10 @@ async function gpuEditorState(page: Page): Promise<GpuEditorState> {
 		const lineNumberRectangle = lineNumber.getBoundingClientRect();
 		const foldingRectangle = folding.getBoundingClientRect();
 		const textRectangle = text.getBoundingClientRect();
+		const punctuationLine = rows.find(row => row.textContent === 'console.log(describe(sample));');
+		const punctuationText = punctuationLine?.querySelector<HTMLElement>('.stanza-editor-line-text');
+		const punctuationRange = document.createRange();
+		if (punctuationText) punctuationRange.selectNodeContents(punctuationText);
 		const equal = (left: number, right: number) => Math.abs(left - right) < 0.01;
 		const canvasWasHidden = canvas.hidden;
 		canvas.hidden = true;
@@ -116,6 +122,9 @@ async function gpuEditorState(page: Page): Promise<GpuEditorState> {
 			glyphMarginTouchesLineNumber: equal(glyphMarginRectangle.right, lineNumberRectangle.left),
 			lineNumberTouchesFolding: equal(lineNumberRectangle.right, foldingRectangle.left),
 			foldingPrecedesText: foldingRectangle.right <= textRectangle.left,
+			punctuationLineAdvanceMatchesDom: !!punctuationText && Math.abs(
+				window.zetaGpuTextIntegration.measureGpuAdvance(punctuationText.textContent ?? '') - punctuationRange.getBoundingClientRect().width,
+			) < 0.1,
 		};
 	});
 }

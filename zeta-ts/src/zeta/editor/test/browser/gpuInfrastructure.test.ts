@@ -48,7 +48,7 @@ test('ContentSegmenter returns one entry for a complete grapheme', () => {
 	assert.equal(segmenter.getSegmentAtIndex(text.length - 1), 'B');
 });
 
-test('Full-file GPU rendering starts text at the canonical content coordinate', () => {
+test('Full-file GPU rendering starts at canonical coordinates and leaves subpixel placement to the atlas', () => {
 	using model = new TextModel('abcd');
 	const visualLines = EditorVisualLineProjection.fromBreakColumns(model, [[2, 4]], [16]);
 	using strategy = new FullFileRenderStrategy({ devicePixelRatio: 1 } as unknown as GlyphRasterizer);
@@ -69,16 +69,18 @@ test('Full-file GPU rendering starts text at the canonical content coordinate', 
 		visibleLineIndexes: new Set([0, 1]),
 		semanticTokenSource: undefined,
 		bracketColorizationSource: undefined,
-		textLeft: 44,
+		textLeft: 44.2,
 		paddingTop: 0,
 		textDirection: ViewLineTextDirection.LeftToRight,
 		fontLigatures: false,
 		rootStyle: gpuRootStyle(),
-		atlas: fixedGlyphAtlas(),
+		atlas: fixedGlyphAtlas(8.25),
 	});
 
 	assert.equal(frame.vertices[0], 44);
+	assert.equal(frame.vertices[30], 52);
 	assert.equal(frame.vertices[60], 60);
+	assert.equal(frame.vertices[90], 68);
 	assert.equal(frame.vertices.length, 4 * 6 * 5);
 	const glyphBounds = Array.from({ length: 4 }, (_, glyphIndex) => {
 		const yCoordinates = Array.from({ length: 6 }, (_, vertexIndex) => frame.vertices[glyphIndex * 30 + vertexIndex * 5 + 1]!);
@@ -156,7 +158,7 @@ function gpuRootStyle(): CSSStyleDeclaration {
 	} as unknown as CSSStyleDeclaration;
 }
 
-function fixedGlyphAtlas(): TextureAtlas {
+function fixedGlyphAtlas(advance = 8): TextureAtlas {
 	return {
 		getGlyph: () => ({
 			pageIndex: 0,
@@ -167,7 +169,7 @@ function fixedGlyphAtlas(): TextureAtlas {
 			h: 10,
 			originOffsetX: 0,
 			originOffsetY: 0,
-			advance: 8,
+			advance,
 			fontBoundingBoxAscent: 8,
 			fontBoundingBoxDescent: 2,
 		}),

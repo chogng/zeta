@@ -1,5 +1,7 @@
 import { DisposableStore, toDisposable } from '../../../src/zeta/base/common/lifecycle.js';
 import * as stanzaApi from '../../../src/zeta/editor/editor.main.js';
+import { GlyphRasterizer } from '../../../src/zeta/editor/browser/gpu/raster/glyphRasterizer.js';
+import { type IGpuGlyphStyle } from '../../../src/zeta/editor/browser/gpu/raster/raster.js';
 import '../../../src/zeta/editor/editor.code.all.js';
 
 const initialText = `interface GeometrySample {
@@ -24,6 +26,7 @@ console.log(describe(sample));
 interface GpuTextIntegrationHarness {
 	readonly initialText: string;
 	getValue(): string;
+	measureGpuAdvance(text: string): number;
 	resetGpuFrameTrace(): void;
 	readGpuFrameTrace(): readonly GpuRenderPassTrace[];
 	dispose(): void;
@@ -71,10 +74,28 @@ editor.focus();
 window.zetaGpuTextIntegration = {
 	initialText,
 	getValue: () => editor.getValue(),
+	measureGpuAdvance: text => measureGpuAdvance(text),
 	resetGpuFrameTrace: () => gpuFrameTrace.reset(),
 	readGpuFrameTrace: () => gpuFrameTrace.read(),
 	dispose: () => disposables.dispose(),
 };
+
+function measureGpuAdvance(text: string): number {
+	const editorElement = container.querySelector<HTMLElement>('.stanza-editor');
+	if (!editorElement) throw new Error('GPU integration editor is missing');
+	const style = getComputedStyle(editorElement);
+	const rasterizer = new GlyphRasterizer(document, devicePixelRatio);
+	const glyphStyle: IGpuGlyphStyle = {
+		color: style.color,
+		fontFamily: style.fontFamily,
+		fontSize: Number.parseFloat(style.fontSize),
+		fontStyle: style.fontStyle || 'normal',
+		fontVariant: style.fontVariantCaps || 'normal',
+		fontWeight: style.fontWeight || '400',
+		letterSpacing: style.letterSpacing === 'normal' ? 0 : Number.parseFloat(style.letterSpacing) || 0,
+	};
+	return [...text].reduce((width, character) => width + rasterizer.rasterizeGlyph(character, glyphStyle, 0).advance, 0) / devicePixelRatio;
+}
 
 function installGpuFrameTrace(): GpuFrameTraceController {
 	const gpu = navigator.gpu;

@@ -23,13 +23,14 @@ export class GlyphRasterizer implements IGlyphRasterizer {
 	}
 
 	public getTextMetrics(text: string, style: IGpuGlyphStyle): TextMetrics {
-		this.applyFont(style);
+		this.applyFont(style, style.fontSize * this.devicePixelRatio);
 		return this.context.measureText(text);
 	}
 
 	public rasterizeGlyph(chars: string, style: IGpuGlyphStyle, subPixelX: number): IRasterizedGlyph {
 		if (!chars) throw new TypeError('WebGPU glyph text must not be empty');
-		this.applyFont(style);
+		const advance = this.getTextMetrics(chars, style).width + style.letterSpacing * this.devicePixelRatio;
+		this.applyRasterFont(style);
 		const metrics = this.context.measureText(chars);
 		const actualAscent = Math.max(0, metrics.actualBoundingBoxAscent);
 		const actualDescent = Math.max(0, metrics.actualBoundingBoxDescent);
@@ -43,7 +44,7 @@ export class GlyphRasterizer implements IGlyphRasterizer {
 			this.canvas.height = height;
 		}
 		this.context.clearRect(0, 0, width, height);
-		this.applyFont(style);
+		this.applyRasterFont(style);
 		this.context.textBaseline = 'alphabetic';
 		this.context.fillStyle = style.color;
 		this.context.fillText(chars, padding + actualLeft + subPixelX, padding + actualAscent);
@@ -53,14 +54,17 @@ export class GlyphRasterizer implements IGlyphRasterizer {
 			source: this.canvas,
 			boundingBox: Object.freeze({ left: 0, top: 0, right: width - 1, bottom: height - 1 }),
 			originOffset: Object.freeze({ x: -actualLeft - padding, y: -actualAscent - padding }),
-			advance: metrics.width + style.letterSpacing * this.devicePixelRatio,
+			advance,
 			fontBoundingBoxAscent: fontAscent,
 			fontBoundingBoxDescent: fontDescent,
 		});
 	}
 
-	private applyFont(style: IGpuGlyphStyle): void {
-		const fontSize = Math.ceil(style.fontSize * this.devicePixelRatio);
+	private applyRasterFont(style: IGpuGlyphStyle): void {
+		this.applyFont(style, Math.ceil(style.fontSize * this.devicePixelRatio));
+	}
+
+	private applyFont(style: IGpuGlyphStyle, fontSize: number): void {
 		this.context.font = createCanvasFontShorthand({
 			style: style.fontStyle,
 			variant: style.fontVariant,

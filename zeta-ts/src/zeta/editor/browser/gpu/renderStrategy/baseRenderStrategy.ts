@@ -33,7 +33,7 @@ export abstract class BaseRenderStrategy extends Disposable implements IGpuRende
 			const tokens = input.semanticTokenSource?.getLineTokens(visualLine.logicalLineIndex) ?? [];
 			const brackets = input.bracketColorizationSource?.getLineBrackets(visualLine.logicalLineIndex) ?? [];
 			if (!this.canRenderLine(input, text, tokens)) continue;
-			const lineStart = Math.ceil((input.textLeft + (visualLine.wrappedTextIndentWidth ?? 0)) * this.glyphRasterizer.devicePixelRatio);
+			const lineStart = (input.textLeft + (visualLine.wrappedTextIndentWidth ?? 0)) * this.glyphRasterizer.devicePixelRatio;
 			let deviceX = lineStart;
 			const lineTop = (input.paddingTop + visualLineIndex * input.layout.lineHeight) * this.glyphRasterizer.devicePixelRatio;
 			const segments = createContentSegmenter(text, { isBasicASCII: /^[\x00-\x7f]*$/u.test(text), useMonospaceOptimizations: false });
@@ -51,7 +51,7 @@ export abstract class BaseRenderStrategy extends Disposable implements IGpuRende
 				const glyph = input.atlas.getGlyph(this.glyphRasterizer, segment.segment, style, deviceX);
 				const fontHeight = glyph.fontBoundingBoxAscent + glyph.fontBoundingBoxDescent;
 				const baseline = lineTop + (input.layout.lineHeight * this.glyphRasterizer.devicePixelRatio - fontHeight) / 2 + glyph.fontBoundingBoxAscent;
-				appendGlyphQuad(vertices, glyph, deviceX + glyph.originOffsetX, baseline + glyph.originOffsetY);
+				appendGlyphQuad(vertices, glyph, Math.floor(deviceX) + glyph.originOffsetX, baseline + glyph.originOffsetY);
 				deviceX += glyph.advance;
 			}
 			if (input.visibleLineIndexes.has(visualLineIndex)) gpuLineIndexes.add(visualLineIndex);
