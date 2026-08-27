@@ -159,6 +159,10 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"editor.academic.all.ts",
 		"editor.all.ts",
 		"editor.api.ts",
+		"editor.main.ts",
+		"standalone/browser/standaloneServices.ts",
+		"standalone/browser/standaloneEditor.ts",
+		"standalone/browser/standaloneModelService.ts",
 		"README.md",
 		"text-engine.md",
 		"document-engine.md",
@@ -258,7 +262,7 @@ test("Stanza owns its public protocol and DOM vocabulary without renaming the ed
 		readFileSync(join(editorRoot, "contrib/formatting/browser/formattingContribution.ts"), "utf8"),
 		readFileSync(join(workbenchRoot, "contrib/documentEditor/browser/documentEditorPane.ts"), "utf8"),
 	].join("\n");
-	assert.match(api, /Stable DOM-free Stanza API/u);
+	assert.match(api, /Stable Stanza API for standalone editors/u);
 	assert.match(codeInput, /stanza\.editor\.code/u);
 	assert.match(documentInput, /stanza\.editor\.document/u);
 	assert.match(diffInput, /stanza\.editor\.diff/u);

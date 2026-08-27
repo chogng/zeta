@@ -3,7 +3,6 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../base/common/uri.js";
 import { TextModel } from "../../common/model/textModel.js";
-import { type TextModelReference } from "../../common/services/textModelService.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -25,12 +24,12 @@ test("minimal text editor assembly creates only the engine surface", () => {
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	const model = new TextModel("const value = (1);");
-	const reference = modelReference(URI.file("C:\\project\\minimal.ts"), model);
+	const resource = URI.file("C:\\project\\minimal.ts");
 	const editor = new EditorBrowser({
 		container,
-		input: { resource: reference.resource, label: "minimal.ts" },
+		input: { resource, label: "minimal.ts" },
 		languageId: "typescript",
-		modelReference: reference,
+		model,
 		placeholder: "Not installed",
 	});
 	editor.layout({ width: 480, height: 120 });
@@ -48,26 +47,6 @@ test("minimal text editor assembly creates only the engine surface", () => {
 	assert.equal(copy.defaultPrevented, false);
 
 	editor.dispose();
+	model.dispose();
 	dom.window.close();
 });
-
-function modelReference(resource: URI, model: TextModel): TextModelReference {
-	let disposed = false;
-	const dispose = () => {
-		if (disposed) return;
-		disposed = true;
-		model.dispose();
-	};
-	return {
-		resource,
-		model,
-		get isDirty() { return false; },
-		get hasExternalChange() { return false; },
-		onDidChangeDirty: () => ({ dispose() {}, [Symbol.dispose]() {} }),
-		onDidChangeExternalChange: () => ({ dispose() {}, [Symbol.dispose]() {} }),
-		save: () => Promise.resolve(),
-		revert: () => Promise.resolve(),
-		dispose,
-		[Symbol.dispose]: dispose,
-	};
-}

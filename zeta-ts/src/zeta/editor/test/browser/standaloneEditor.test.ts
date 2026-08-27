@@ -1,0 +1,118 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { JSDOM } from "jsdom";
+import { URI } from "../../../base/common/uri.js";
+import { LanguageFeaturesService } from "../../common/services/languageService.js";
+import { StandaloneServiceCollection } from "../../standalone/browser/standaloneServices.js";
+
+const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+let createdWorkerCount = 0;
+let terminatedWorkerCount = 0;
+class TestWorker extends browserEnvironment.window.EventTarget {
+	constructor() {
+		super();
+		createdWorkerCount += 1;
+	}
+	postMessage(): void {}
+	terminate(): void { terminatedWorkerCount += 1; }
+}
+for (const [name, value] of Object.entries({
+	window: browserEnvironment.window,
+	document: browserEnvironment.window.document,
+	Node: browserEnvironment.window.Node,
+	Element: browserEnvironment.window.Element,
+	HTMLElement: browserEnvironment.window.HTMLElement,
+	Event: browserEnvironment.window.Event,
+	InputEvent: browserEnvironment.window.InputEvent,
+	Worker: TestWorker,
+})) Object.defineProperty(globalThis, name, { configurable: true, value });
+
+const stanza = await import("../../editor.main.js");
+
+test.after(() => browserEnvironment.window.close());
+
+test("standalone service collection honors explicit first-scope overrides", () => {
+	const languages = new LanguageFeaturesService();
+	const services = new StandaloneServiceCollection({ languageFeaturesService: languages });
+	assert.equal(services.languageFeaturesService, languages);
+	services.dispose();
+	assert.equal(languages.isDisposed, false);
+	languages.dispose();
+});
+
+test("standalone API registers URI and language identity with model lifecycle events", () => {
+	const resource = URI.parse("inmemory://stanza/registry.ts");
+	const created: string[] = [];
+	const disposed: string[] = [];
+	const languages: string[] = [];
+	using createListener = stanza.editor.onDidCreateModel(model => created.push(stanza.editor.getModelResource(model).toString()));
+	using disposeListener = stanza.editor.onWillDisposeModel(model => disposed.push(stanza.editor.getModelResource(model).toString()));
+	using languageListener = stanza.editor.onDidChangeModelLanguage(event => languages.push(`${event.oldLanguageId}->${event.newLanguageId}`));
+
+	const model = stanza.editor.createModel("const value = 1;", "typescript", resource);
+	assert.equal(stanza.editor.getModel(resource), model);
+	assert.equal(stanza.editor.getModelLanguage(model), "typescript");
+	assert.deepEqual(created, [resource.toString()]);
+	assert.throws(() => stanza.editor.createModel("duplicate", "typescript", resource), /already exists/);
+
+	stanza.editor.setModelLanguage(model, "javascript");
+	assert.deepEqual(languages, ["typescript->javascript"]);
+	model.dispose();
+	assert.equal(stanza.editor.getModel(resource), undefined);
+	assert.deepEqual(disposed, [resource.toString()]);
+});
+
+test("standalone editors share caller-owned models and dispose independently", () => {
+	const dom = new JSDOM("<!doctype html><body><main></main><aside></aside></body>");
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const model = stanza.editor.createModel("shared", "plaintext", URI.parse("inmemory://stanza/shared.txt"));
+	const first = stanza.editor.create(dom.window.document.querySelector<HTMLElement>("main")!, { model });
+	const second = stanza.editor.create(dom.window.document.querySelector<HTMLElement>("aside")!, { model });
+
+	assert.equal(stanza.editor.getEditors().includes(first), true);
+	assert.equal(stanza.editor.getEditors().includes(second), true);
+	first.setValue("shared model");
+	assert.equal(second.getValue(), "shared model");
+	first.dispose();
+	assert.equal(model.getText(), "shared model");
+	assert.equal(stanza.editor.getEditors().includes(first), false);
+
+	second.dispose();
+	assert.equal(model.getText(), "shared model");
+	model.dispose();
+	dom.window.close();
+});
+
+test("standalone editor owns only the implicit model it creates", () => {
+	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const editor = stanza.editor.create(dom.window.document.querySelector<HTMLElement>("main")!, {
+		value: "owned",
+		languageId: "plaintext",
+		resource: URI.parse("inmemory://stanza/owned.txt"),
+	});
+	const model = editor.getModel();
+	const workersCreatedByEditor = createdWorkerCount - terminatedWorkerCount;
+	assert.equal(workersCreatedByEditor > 0, true);
+
+	editor.dispose();
+	assert.equal(model.isDisposed, true);
+	assert.equal(createdWorkerCount, terminatedWorkerCount);
+	assert.equal(stanza.editor.getModel(URI.parse("inmemory://stanza/owned.txt")), undefined);
+	dom.window.close();
+});
+
+test("standalone editor rejects unregistered models and conflicting model options", () => {
+	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const model = new stanza.TextModel("unregistered");
+	assert.throws(() => stanza.editor.create(dom.window.document.querySelector<HTMLElement>("main")!, { model }), /not registered/);
+	model.dispose();
+
+	const registered = stanza.editor.createModel("registered", "plaintext", URI.parse("inmemory://stanza/conflict.txt"));
+	assert.throws(() => stanza.editor.create(dom.window.document.querySelector<HTMLElement>("main")!, { model: registered, value: "conflict" }), /cannot be combined/);
+	registered.dispose();
+	const lateOverride = new LanguageFeaturesService();
+	assert.throws(() => stanza.editor.create(dom.window.document.querySelector<HTMLElement>("main")!, {}, { languageFeaturesService: lateOverride }), /already initialized/);
+	lateOverride.dispose();
+	dom.window.close();
+});

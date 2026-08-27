@@ -2,7 +2,7 @@ import "./media/editorPane.css";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { type IDimension } from "../../../../base/browser/geometry.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
-import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { assertDefined } from "../../../../base/common/types.js";
 import type { URI } from "../../../../base/common/uri.js";
@@ -39,10 +39,7 @@ export interface EditorPanePart extends IDisposable {
 	getViewState?(): EditorTextViewState;
 	restoreViewState?(state: EditorTextViewState): void;
 	announceAccessibilityStatus?(message: string): void;
-	readonly isDirty?: boolean;
-	readonly hasExternalChange?: boolean;
-	save?(): Promise<void>;
-	revert?(): Promise<void>;
+	prepareSave?(): Promise<void>;
 }
 
 export interface EditorPanePartOptions extends EditorBrowserOptions {
@@ -107,8 +104,8 @@ export interface EditorPaneOptions {
 export class CodeEditorPane extends Disposable implements IEditorPane {
 	readonly id = CODE_EDITOR_ID;
 	readonly viewStateTypeId = "stanza.code.textView";
-	private readonly part = this._register(new MutableDisposable<EditorPanePart>());
 	private readonly workingCopySlot = this._register(new MutableDisposable<IWorkingCopy>());
+	private readonly part = this._register(new MutableDisposable<EditorPanePart>());
 	private readonly statusListener = this._register(new MutableDisposable<IDisposable>());
 	private readonly statusChangeEmitter = this._register(new Emitter<void>());
 	private readonly modelService: ITextModelService;
@@ -155,6 +152,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 		throwIfCancelled(signal, "Code editor input loading was cancelled");
 		const modelReference = await this.modelService.acquire(input, signal);
 		let part: EditorPanePart | undefined;
+		let workingCopy: EditorWorkingCopy | undefined;
 		try {
 			throwIfCancelled(signal, "Code editor input loading was cancelled");
 			const languageId = languageForEditorInput({ ...input, firstLine: modelReference.model.getLineContent(0) }, this.options.languageFeaturesService);
@@ -162,7 +160,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 				container,
 				input,
 				languageId,
-				modelReference,
+				model: modelReference.model,
 				textMateService: this.options.textMateService,
 				languageFeaturesService: this.options.languageFeaturesService,
 				syntaxApi: this.options.syntaxApi,
@@ -202,36 +200,40 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 				showUnicodeHighlights: this.options.showUnicodeHighlights,
 				insertFinalNewLine: this.options.insertFinalNewLine,
 				fontZoom: this.options.fontZoom,
-				onSave: input.resource.scheme === "untitled"
-					? this.options.onSave
-					: () => modelReference.save(new AbortController().signal),
-				onRevert: () => modelReference.revert(new AbortController().signal),
 			});
+			workingCopy = new EditorWorkingCopy(
+				modelReference,
+				this.resourceStore,
+				input,
+				this.options.workingCopyService,
+				input.resource.scheme === "untitled" ? this.options.onSave : undefined,
+			);
 			throwIfCancelled(signal, "Code editor input loading was cancelled");
 		} catch (error) {
 			part?.dispose();
-			if (!part) modelReference.dispose();
+			workingCopy?.dispose();
+			if (!workingCopy) modelReference.dispose();
 			throw error;
 		}
-		this.workingCopySlot.clear();
+		this.statusListener.clear();
 		this.part.value = part;
+		this.workingCopySlot.value = workingCopy;
 		this.languageId = languageForEditorInput({ ...input, firstLine: modelReference.model.getLineContent(0) }, this.options.languageFeaturesService);
-		this.statusListener.value = part.onDidChange?.(() => this.statusChangeEmitter.fire());
-		this.workingCopySlot.value = new EditorWorkingCopy(
-			modelReference,
-			this.resourceStore,
-			input,
-			this.options.workingCopyService,
-			input.resource.scheme === "untitled" ? this.options.onSave : undefined,
-		);
+		const statusListeners = new DisposableStore();
+		if (part.onDidChange) statusListeners.add(part.onDidChange(() => this.statusChangeEmitter.fire()));
+		statusListeners.add(modelReference.onDidChangeExternalChange(() => {
+			if (modelReference.hasExternalChange) part.announceAccessibilityStatus?.("File changed on disk. Local edits are preserved.");
+			this.statusChangeEmitter.fire();
+		}));
+		this.statusListener.value = statusListeners;
 		part.layout(this.dimension);
 		this.statusChangeEmitter.fire();
 	}
 
 	clearInput(): void {
 		this.statusListener.clear();
-		this.workingCopySlot.clear();
 		this.part.clear();
+		this.workingCopySlot.clear();
 		this.languageId = undefined;
 		this.statusChangeEmitter.fire();
 	}
@@ -268,19 +270,20 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 	}
 
 	get isDirty(): boolean {
-		return this.part.value?.isDirty ?? false;
+		return this.workingCopy?.isDirty ?? false;
 	}
 
 	get hasExternalChange(): boolean {
-		return this.part.value?.hasExternalChange ?? false;
+		return this.workingCopy?.hasExternalChange ?? false;
 	}
 
 	async save(): Promise<void> {
-		await this.part.value?.save?.();
+		await this.part.value?.prepareSave?.();
+		await this.workingCopy?.save(new AbortController().signal);
 	}
 
 	async revert(): Promise<void> {
-		await this.part.value?.revert?.();
+		await this.workingCopy?.revert(new AbortController().signal);
 	}
 
 	revealRange(range: TextRange): void {
@@ -355,6 +358,7 @@ class EditorWorkingCopy extends Disposable implements IWorkingCopy {
 		private readonly saveUntitled: (() => Promise<void | boolean>) | undefined,
 	) {
 		super();
+		this._register(reference);
 		this.resource = input.resource;
 		this.backupLanguageId = input.languageId;
 		this.backupContentType = input.contentType;

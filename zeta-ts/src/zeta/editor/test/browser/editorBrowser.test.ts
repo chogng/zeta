@@ -3,7 +3,6 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { DisposableTracker, installDisposableTracker } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
-import { type TextModelReference } from "../../common/services/textModelService.js";
 import { LanguageFeaturesService } from "../../common/services/languageService.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";
@@ -31,16 +30,16 @@ test("Stanza editor browser composes native input, local language syntax, and pr
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	const model = new TextModel("{\"name\": \"alpha\"");
-	const reference = modelReference(URI.file("C:\\project\\settings.json"), model);
+	const resource = URI.file("C:\\project\\settings.json");
 	const errors: unknown[] = [];
 	const editorPart = new EditorBrowser({
 		container,
 		input: {
-			resource: reference.resource,
+			resource,
 			label: "settings.json",
 		},
 		languageId: "json",
-		modelReference: reference,
+		model,
 		onLanguageError: error => errors.push(error),
 	});
 	editorPart.layout({ width: 500, height: 240 });
@@ -67,7 +66,8 @@ test("Stanza editor browser composes native input, local language syntax, and pr
 	await Promise.resolve();
 	assert.deepEqual(errors, []);
 	assert.equal(container.children.length, 0);
-	assert.throws(() => model.getText(), /disposed/);
+	assert.equal(model.getText().startsWith("x{"), true);
+	model.dispose();
 	dom.window.close();
 });
 
@@ -79,10 +79,11 @@ test("Stanza editor browser gives language editing one disposable owner", () => 
 		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 		const container = dom.window.document.querySelector<HTMLElement>("main")!;
 		const model = new TextModel("const value = { nested: true };");
-		const reference = modelReference(URI.file("C:\\project\\main.ts"), model);
-		const editorPart = new EditorBrowser({ container, input: { resource: reference.resource, label: "main.ts" }, languageId: "typescript", modelReference: reference });
+		const resource = URI.file("C:\\project\\main.ts");
+		const editorPart = new EditorBrowser({ container, input: { resource, label: "main.ts" }, languageId: "typescript", model });
 
 		editorPart.dispose();
+		model.dispose();
 		dom.window.close();
 	}
 
@@ -94,15 +95,15 @@ test("Stanza editor browser derives indentation folds and projects their gutter 
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	const model = new TextModel("root\n  child\nafter");
-	const reference = modelReference(URI.file("C:\\project\\fold.txt"), model);
+	const resource = URI.file("C:\\project\\fold.txt");
 	const editorPart = new EditorBrowser({
 		container,
 		input: {
-			resource: reference.resource,
+			resource,
 			label: "fold.txt",
 		},
 		languageId: "plaintext",
-		modelReference: reference,
+		model,
 	});
 	editorPart.layout({ width: 500, height: 120 });
 
@@ -112,6 +113,7 @@ test("Stanza editor browser derives indentation folds and projects their gutter 
 	assert.deepEqual([...container.querySelectorAll<HTMLElement>(".stanza-editor-line")].map(line => line.dataset.logicalLineIndex), ["0", "2"]);
 
 	editorPart.dispose();
+	model.dispose();
 	dom.window.close();
 });
 
@@ -120,7 +122,7 @@ test("Stanza editor disposal cancels an in-flight folding provider before late r
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	const model = new TextModel("root\n  child\nafter");
-	const reference = modelReference(URI.file("C:\\project\\async-fold.txt"), model);
+	const resource = URI.file("C:\\project\\async-fold.txt");
 	using languageFeatures = new LanguageFeaturesService();
 	let resolveRanges: ((ranges: readonly { readonly startLineIndex: number; readonly endLineIndex: number }[]) => void) | undefined;
 	let providerSignal: AbortSignal | undefined;
@@ -132,7 +134,7 @@ test("Stanza editor disposal cancels an in-flight folding provider before late r
 		},
 	});
 	const errors: unknown[] = [];
-	const editorPart = new EditorBrowser({ container, input: { resource: reference.resource, label: "async-fold.txt" }, languageId: "plaintext", modelReference: reference, languageFeaturesService: languageFeatures, onLanguageError: error => errors.push(error) });
+	const editorPart = new EditorBrowser({ container, input: { resource, label: "async-fold.txt" }, languageId: "plaintext", model, languageFeaturesService: languageFeatures, onLanguageError: error => errors.push(error) });
 
 	assert.equal(providerSignal?.aborted, false);
 	editorPart.dispose();
@@ -143,6 +145,7 @@ test("Stanza editor disposal cancels an in-flight folding provider before late r
 
 	assert.deepEqual(errors, []);
 	assert.equal(container.children.length, 0);
+	model.dispose();
 	dom.window.close();
 });
 
@@ -151,12 +154,12 @@ test("Stanza editor browser honors a read-only input without disabling selection
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	const model = new TextModel("alpha");
-	const reference = modelReference(URI.file("C:\\project\\preview.txt"), model);
+	const resource = URI.file("C:\\project\\preview.txt");
 	const editorPart = new EditorBrowser({
 		container,
-		input: { resource: reference.resource, label: "preview.txt", readOnly: true },
+		input: { resource, label: "preview.txt", readOnly: true },
 		languageId: "plaintext",
-		modelReference: reference,
+		model,
 	});
 
 	const input = editorPart.view.textArea!;
@@ -174,6 +177,7 @@ test("Stanza editor browser honors a read-only input without disabling selection
 	editorPart.selections.setSelections(editorPart.selections.selections);
 
 	editorPart.dispose();
+	model.dispose();
 	dom.window.close();
 });
 
@@ -182,12 +186,12 @@ test("Stanza editor browser mounts text drop as an optional full-editor contribu
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	const model = new TextModel("alpha");
-	const reference = modelReference(URI.file("C:\\project\\drop.txt"), model);
+	const resource = URI.file("C:\\project\\drop.txt");
 	const editorPart = new EditorBrowser({
 		container,
-		input: { resource: reference.resource, label: "drop.txt" },
+		input: { resource, label: "drop.txt" },
 		languageId: "plaintext",
-		modelReference: reference,
+		model,
 	});
 	editorPart.layout({ width: 120, height: 20 });
 	editorPart.viewport.element.getBoundingClientRect = () => rectangle(120, 20);
@@ -198,35 +202,35 @@ test("Stanza editor browser mounts text drop as an optional full-editor contribu
 	assert.equal(drop.defaultPrevented, true);
 	assert.equal(editorPart.getValue(), "alphadropped");
 	editorPart.dispose();
+	model.dispose();
 	dom.window.close();
 });
 
-test("Stanza editor browser applies selected before-save contributions through explicit save", async () => {
+test("Stanza editor browser prepares selected before-save contributions for host persistence", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	const model = new TextModel("alpha");
-	const reference = modelReference(URI.file("C:\\project\\save.txt"), model);
+	const resource = URI.file("C:\\project\\save.txt");
 	using languageFeatures = new LanguageFeaturesService();
 	using formatting = languageFeatures.registerFormattingProvider({
 		languageIds: ["plaintext"],
 		provideDocumentFormattingEdits: () => [{ range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 5)), text: "formatted" }],
 	});
-	let savedText = "";
 	const editorPart = new EditorBrowser({
 		container,
-		input: { resource: reference.resource, label: "save.txt" },
+		input: { resource, label: "save.txt" },
 		languageId: "plaintext",
 		languageFeaturesService: languageFeatures,
-		modelReference: reference,
+		model,
 		formatOnSave: true,
 		insertFinalNewLine: true,
-		onSave: async () => { savedText = model.getText(); },
 	});
-	await editorPart.save();
-	assert.equal(savedText, "formatted\n");
+	await editorPart.prepareSave();
+	assert.equal(model.getText(), "formatted\n");
 
 	editorPart.dispose();
+	model.dispose();
 	dom.window.close();
 });
 
@@ -235,12 +239,12 @@ test("Stanza editor browser omits disabled presentation and language-assistance 
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	const model = new TextModel("function example() {\n  return 1;\n}");
-	const reference = modelReference(URI.file("C:\\project\\minimal.ts"), model);
+	const resource = URI.file("C:\\project\\minimal.ts");
 	const editorPart = new EditorBrowser({
 		container,
-		input: { resource: reference.resource, label: "minimal.ts" },
+		input: { resource, label: "minimal.ts" },
 		languageId: "typescript",
-		modelReference: reference,
+		model,
 		showLineNumbers: false,
 		showIndentationGuides: false,
 		bracketPairColorization: false,
@@ -262,6 +266,7 @@ test("Stanza editor browser omits disabled presentation and language-assistance 
 	assert.equal(container.querySelectorAll(".stanza-editor-parameter-hints").length, 0);
 
 	editorPart.dispose();
+	model.dispose();
 	dom.window.close();
 });
 
@@ -270,8 +275,8 @@ test("Code editor keeps large files editable while disabling full-document backg
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	const model = new TextModel("let value = 1;\n".repeat(300_001));
-	const reference = modelReference(URI.file("C:\\project\\large.ts"), model);
-	const editorPart = new EditorBrowser({ container, input: { resource: reference.resource, label: "large.ts" }, languageId: "typescript", modelReference: reference });
+	const resource = URI.file("C:\\project\\large.ts");
+	const editorPart = new EditorBrowser({ container, input: { resource, label: "large.ts" }, languageId: "typescript", model });
 	try {
 		editorPart.layout({ width: 500, height: 40 });
 		assert.equal(model.largeFile.tooLargeForTokenization, true, "large-file policy");
@@ -281,6 +286,7 @@ test("Code editor keeps large files editable while disabling full-document backg
 		assert.equal(editorPart.getValue().startsWith("xlet value = 1;\n"), true, "basic editing");
 	} finally {
 		editorPart.dispose();
+		model.dispose();
 		dom.window.close();
 	}
 });
@@ -315,53 +321,23 @@ const [{ EditorContributionInstantiation, registerEditorContribution }, { create
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const model = new TextModel("runtime");
-	const reference = modelReference(URI.file("C:\\project\\runtime.txt"), model);
+	const resource = URI.file("C:\\project\\runtime.txt");
 	const editorPart = new EditorBrowser({
 		container: dom.window.document.querySelector<HTMLElement>("main")!,
-		input: { resource: reference.resource },
+		input: { resource },
 		languageId: "plaintext",
-		modelReference: reference,
+		model,
 		instantiationService,
 	});
 
-	assert.equal(receivedResource, reference.resource.toString());
+	assert.equal(receivedResource, resource.toString());
 	assert.equal(receivedService, "window-service");
 	assert.equal(disposed, false);
 	editorPart.dispose();
+	model.dispose();
 	assert.equal(disposed, true);
 	dom.window.close();
 });
-
-function modelReference(resource: URI, model: TextModel): TextModelReference {
-	let disposed = false;
-	const dispose = (): void => {
-		if (disposed) return;
-		disposed = true;
-		model.dispose();
-	};
-	return {
-		resource,
-		model,
-		get isDirty(): boolean {
-			return false;
-		},
-		onDidChangeDirty: () => ({
-			dispose() {},
-			[Symbol.dispose]() {},
-		}),
-		get hasExternalChange(): boolean {
-			return false;
-		},
-		onDidChangeExternalChange: () => ({
-			dispose() {},
-			[Symbol.dispose]() {},
-		}),
-		async save(): Promise<void> {},
-		async revert(): Promise<void> {},
-		dispose,
-		[Symbol.dispose]: dispose,
-	};
-}
 
 function nextTask(): Promise<void> {
 	return new Promise(resolve => setTimeout(resolve, 0));

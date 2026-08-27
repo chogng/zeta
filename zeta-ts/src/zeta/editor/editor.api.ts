@@ -1,4 +1,15 @@
-/** Stable DOM-free Stanza API for programmatic text and line-document consumers. */
+/** Stable Stanza API for standalone editors and programmatic document consumers. */
+import { createStandaloneEditorApi } from "./standalone/browser/standaloneEditor.js";
+
+export const editor = createStandaloneEditorApi();
+
+export { URI } from "../base/common/uri.js";
+export { EditorLineWrapping, WrappingIndent } from "./common/config/editorOptions.js";
+export { EditorMinimap, EditorTextDirection } from "./browser/view.js";
+export { darkColorTheme, lightColorTheme } from "../platform/theme/common/colorTheme.js";
+export type { IColorTheme } from "../platform/theme/common/colorTheme.js";
+export type { IStandaloneCodeEditor, IStandaloneEditorApi, IStandaloneEditorConstructionOptions } from "./standalone/browser/standaloneEditor.js";
+export type { StandaloneServiceOverrides } from "./standalone/browser/standaloneServices.js";
 export { TextPosition } from "./common/core/position.js";
 export type { IPosition } from "./common/core/position.js";
 export { TextRange } from "./common/core/range.js";

@@ -1,0 +1,17 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Stanza Editor - Standalone",
+			"type": "chrome",
+			"request": "launch",
+			"url": "http://127.0.0.1:5199/build/vite/stanza/index.html",
+			"webRoot": "${workspaceFolder}",
+			"preLaunchTask": "Launch Stanza Vite",
+			"presentation": {
+				"group": "stanza",
+				"order": 1
+			}
+		}
+	]
+}

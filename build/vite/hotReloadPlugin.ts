@@ -35,7 +35,7 @@ export function hotReloadPlugin(options: HotReloadPluginOptions = {}): ZetaHotRe
     apply: "serve",
     transformIndexHtml: {
       order: "pre",
-      handler: () => [{ tag: "script", attrs: { type: "module", src: `/@fs${normalizePath(setupPath)}` }, injectTo: "head-prepend" }],
+      handler: () => [{ tag: "script", attrs: { type: "module", src: viteFileUrl(setupPath) }, injectTo: "head-prepend" }],
     },
     transform: {
       order: "pre",
@@ -79,6 +79,10 @@ function injectHotReloadBoundary(code: string, exportNames: readonly string[], m
 
 function cleanModuleId(id: string): string {
   return id.split("?", 1)[0];
+}
+
+function viteFileUrl(file: string): string {
+  return `/@fs/${normalizePath(file).replace(/^\/+/, "")}`;
 }
 
 function neutralModuleId(file: string, root: string): string {

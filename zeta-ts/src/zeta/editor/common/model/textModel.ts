@@ -79,6 +79,7 @@ const DEFAULT_HISTORY_TEXT_UNITS = 16 * 1_024 * 1_024;
  * The model has no DOM, URI, persistence, language, or presentation dependency.
  */
 export class TextModel extends Disposable {
+	private readonly willDisposeEmitter = this._register(new Emitter<void>());
 	private readonly changeEmitter = this._register(new Emitter<TextModelChange>());
 	private readonly trackedRanges = this._register(new TrackedRangeCollection(
 		offset => this.positionAt(offset),
@@ -99,6 +100,8 @@ export class TextModel extends Disposable {
 	private _version = 1;
 
 	readonly onDidChange: Event<TextModelChange> = this.changeEmitter.event;
+	/** Fires once so registries can release model identity before teardown completes. */
+	readonly onWillDispose: Event<void> = this.willDisposeEmitter.event;
 
 	constructor(initialText = "", options: TextModelOptions = {}) {
 		super();
@@ -848,6 +851,11 @@ export class TextModel extends Disposable {
 
 	private ensureDirectTextMutationAllowed(): void {
 		if (this.blockState) throw new Error("TextModel edits must update schema-backed Blocks through dispatch()");
+	}
+
+	protected override disposeCore(): void {
+		this.willDisposeEmitter.fire();
+		super.disposeCore();
 	}
 
 }

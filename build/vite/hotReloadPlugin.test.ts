@@ -18,7 +18,14 @@ test("Vite hot reload injects setup and a generic export-handler boundary", () =
   assert.match(transformed, /\$hotReload_applyNewExports/u);
   assert.match(transformed, /import\.meta\.hot\.accept/u);
   assert.doesNotMatch(transformed, /\$zetaHotReload_registerClass/u);
-  assert.deepEqual(htmlTags, [{ tag: "script", attrs: { type: "module", src: `/@fs${normalizePath(setupPath)}` }, injectTo: "head-prepend" }]);
+  assert.deepEqual(htmlTags, [{ tag: "script", attrs: { type: "module", src: `/@fs/${normalizePath(setupPath).replace(/^\/+/, "")}` }, injectTo: "head-prepend" }]);
+});
+
+test("Vite hot reload emits a valid Windows file URL for setup", () => {
+  const plugin = hotReloadPlugin({ desktopRoot: "C:\\workspace\\zeta-ts", setupPath: "C:\\workspace\\build\\vite\\setup-dev.ts" });
+  const htmlTags = plugin.transformIndexHtml.handler();
+
+  assert.deepEqual(htmlTags, [{ tag: "script", attrs: { type: "module", src: "/@fs/C:/workspace/build/vite/setup-dev.ts" }, injectTo: "head-prepend" }]);
 });
 
 test("Vite hot reload supports explicit prototype-patch opt in", () => {

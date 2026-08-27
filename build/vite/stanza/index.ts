@@ -1,0 +1,67 @@
+import { addDisposableListener } from "../../../zeta-ts/src/zeta/base/browser/dom.js";
+import { DisposableStore, toDisposable } from "../../../zeta-ts/src/zeta/base/common/lifecycle.js";
+import * as stanzaApi from "../../../zeta-ts/src/zeta/editor/editor.main.js";
+import "./style.css";
+
+declare global {
+  var stanza: typeof stanzaApi;
+}
+
+globalThis.stanza = stanzaApi;
+
+const initialText = `interface GeometrySample {
+\treadonly label: string;
+\treadonly columns: readonly number[];
+}
+
+const greeting = "你好，Stanza 👋";
+const sample: GeometrySample = {
+\tlabel: greeting,
+\tcolumns: [0, 4, 8, 16, 32, 64, 80],
+};
+
+export function describe(sample: GeometrySample): string {
+\tconst longLine = "Edit this deliberately long line to inspect wrapping, cursor placement, selections, horizontal geometry, and viewport updates without starting the Zeta Workbench.";
+\treturn \`\${sample.label}: \${sample.columns.join(", ")} — \${longLine}\`;
+}
+
+console.log(describe(sample));
+`;
+
+const container = requiredElement("editor-root");
+const resource = stanzaApi.URI.parse("inmemory://stanza/standalone.ts");
+const disposables = new DisposableStore();
+const model = disposables.add(stanzaApi.editor.createModel(initialText, "typescript", resource));
+const editor = disposables.add(stanzaApi.editor.create(container, {
+  model,
+  lineWrapping: stanzaApi.EditorLineWrapping.On,
+  showLineNumbers: true,
+  showIndentationGuides: true,
+  bracketPairColorization: true,
+  stickyScroll: true,
+  suggestions: true,
+  inlineCompletions: true,
+  parameterHints: true,
+  inlayHints: true,
+  codeLens: true,
+  placeholder: "Start typing…",
+}));
+
+const resizeObserver = new ResizeObserver(() => layoutEditor());
+resizeObserver.observe(container);
+disposables.add(toDisposable(() => resizeObserver.disconnect()));
+
+function layoutEditor(): void {
+  editor.layout({ width: container.clientWidth, height: container.clientHeight });
+}
+
+layoutEditor();
+editor.focus();
+
+disposables.add(addDisposableListener(window, "pagehide", () => disposables.dispose(), { once: true }));
+
+function requiredElement(id: string): HTMLElement {
+  const element = document.getElementById(id);
+  if (!(element instanceof HTMLElement)) throw new Error(`Missing Stanza debug element '#${id}'`);
+  return element;
+}

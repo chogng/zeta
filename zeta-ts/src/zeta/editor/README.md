@@ -11,8 +11,8 @@ Stanza 采用与 VS Code `src/vs/editor` 一致的扁平职责分区：`common` 
 | 完整行式实现 | `editor.all.ts` | Code 使用的完整行式 contribution 集合；不注册 Workbench pane |
 | Code 功能实现 | `editor.code.all.ts` | 加载完整行式实现，由 Code Workbench 注册 code/diff pane |
 | Academic 功能实现 | `editor.academic.all.ts` | 只加载 Academic 富文档 contribution；不加载 Code bundle 或 Code pane |
-| DOM-free 程序化调用 | `editor.api.ts` | `TextModel`、`LineDocumentSnapshot`、五类语义 store、schema、transaction 和坐标值对象；不注册 pane |
-| 完整程序化入口 | `editor.main.ts` | `editor.all.ts` 与 `editor.api.ts` 的组合 |
+| 程序化调用 | `editor.api.ts` | `editor.create/createModel`、standalone model registry、`TextModel`、schema、transaction 和坐标值对象；不注册 pane |
+| 完整 standalone 入口 | `editor.main.ts` | 先加载 `editor.all.ts` 的完整行式 contribution，再导出 `editor.api.ts` |
 
 ## 核心文档
 
@@ -35,6 +35,7 @@ Editor 只维护三个核心入口。实现 README 可以补充局部细节，�
 | `common/model` | `common/core`、`base/common` | `TextModel`、`TextBuffer`、有序逻辑行、LineId、mark/atom/facet/region/relation、history、schema、transaction、serialization | 文件传输、浏览器 focus、产品 profile |
 | `common/cursor`、`common/viewModel`、`common/viewLayout` | 文本内核与 `base/common` | 行式编辑器实例状态和纯布局投影 | DOM 和产品判断 |
 | `browser` | `common`、`base/browser` 和显式前端 service contract | code/document/diff/multi-diff widget、输入、viewport、contribution registry 与 editor-facing runtime adapter | Workbench pane/input、文件/working-copy 生命周期、Workbench 模式选择 |
+| `standalone/browser` | `editor/browser`、`editor/common`、`platform` | 单窗口 services、URI/language model registry、`editor.create/createModel` 生命周期 | 文件 dirty/save/revert、Workbench service 或 pane |
 | `contrib/<feature>` | 对应 engine 的最小 contract | 可移除的编辑能力及其命令、状态和投影 | 第二套 model、产品级 `if code/academic` |
 | `editor.*.all.ts` | contribution entry | 静态 editor 能力装配 | Workbench pane/input 注册、模型或功能实现 |
 | `workbench/contrib/{codeEditor,multiDiffEditor,documentEditor,academic}` | Editor 与 Workbench contract | pane/input、产品 profile、factory 注入和服务接线 | 编辑事务、selection、viewport 或 feature controller |
@@ -53,7 +54,7 @@ Stanza 是整个编辑器的名称，但 Code 与 Academic 是两套独立的 fe
 
 ### 行式文本 engine
 
-`TextModel` 是文本、分行、版本、transaction、undo/redo、tracked range 和 snapshot 的唯一同步权威。`CodeEditorWidget` 与 Code implementation 的 `EditorBrowser` 投影它，但不拥有共享 model。`browser/editorBrowser.ts` 是稳定的 browser composition root，负责语言与 typed capability 装配；`browser/widget/codeEditor/codeEditorWidget.ts` 拥有编辑器操作和 view state，`codeEditorContributions.ts` 统一拥有 contribution 实例化阶段与生命周期；`browser/editorDom.ts` 提供稳定 DOM root 与布局。Editor-owned `BrowserTextModelService` 管理普通文件的 model reference、dirty/conflict 和保存语义；Workbench 用 `BrowserTextResourceStore` 注入文件 I/O，并拥有保存快捷键、结果呈现和 Pane 生命周期。
+`TextModel` 是文本、分行、版本、transaction、undo/redo、tracked range 和 snapshot 的唯一同步权威。`CodeEditorWidget` 与 Code implementation 的 `EditorBrowser` 投影它，但不拥有共享 model。`browser/editorBrowser.ts` 是稳定的 browser composition root，负责语言与 typed capability 装配，并只提供持久化前的 `prepareSave()` hook；`browser/widget/codeEditor/codeEditorWidget.ts` 拥有编辑器操作和 view state，`codeEditorContributions.ts` 统一拥有 contribution 实例化阶段与生命周期；`browser/editorDom.ts` 提供稳定 DOM root 与布局。`BrowserTextModelService` 管理普通文件的 model reference、dirty/conflict 和保存语义；Workbench 的 working copy 持有 reference，并拥有保存、回退、快捷键、结果呈现和 Pane 生命周期。Standalone 则由 `standalone/browser` 管理 URI/language identity；外部传入 model 时 editor 不拥有 model，使用 `value` 隐式创建时 editor 拥有 model。
 
 ### 富文档 engine
 
@@ -82,8 +83,9 @@ Code build mode ───────┬→ editor.code.all.ts → editor.all.ts
 Academic build mode ───┬→ editor.academic.all.ts → document contribution only
                        └→ workbench/contrib/academic ──────→ profile + document pane registration
 
-editor.api.ts ─────────────→ TextModel + optional structure APIs
+editor.api.ts ─────────────→ editor.create/createModel + TextModel/document APIs
 editor.main.ts ────────────→ editor.all.ts + editor.api.ts
+standalone/browser ────────→ window services + model/editor registries; never Workbench persistence
 ```
 
 Workbench 模式 contribution 是唯一能力选择点。Code 与 Academic 各自加载一个功能实现 bundle，并与对应 Workbench contribution 配对；Academic 不以 `editor.all.ts` 为基底。共享入口在窗口启动时只加载一个 bundle；切换模式通过 reload 创建新的 Renderer 生命周期。新增模式必须先登记 `WorkbenchModeId` 并补齐 Browser/Electron 的穷尽 loader 映射；不得在共享 Workbench、widget 或 model 内增加模式分支。
@@ -96,6 +98,7 @@ Workbench 模式 contribution 是唯一能力选择点。Code 与 Academic 各�
 | `LineDocumentSnapshot` | 有序逻辑行与 mark/atom/facet/region/relation 的单版本只读视图 | schema projection、codec、renderer、model tests |
 | `TextBuffer` | 字符与物理行存储 contract；PieceTree 是当前私有实现 | TextModel edit、snapshot、worker mirror、maintenance |
 | `CodeEditorWidget` | Code 模式的行式 DOM projection 与 input/navigation surface | viewport、accessibility、contributed controllers |
+| `StandaloneServices` | standalone 窗口级 model/language/theme/worker 服务，只允许首次初始化覆盖 | `editor.api.ts`、standalone 生命周期测试、调试入口 |
 | `registerEditorContribution` | 所有 Stanza capability 的进程级静态注册 | `editor.*.all.ts`、text/document 挂载点和 contribution 顺序 |
 | `RichTextEditorWidget` | 结构化节点、marks、selection 与 node-view lifecycle | schema profile、clipboard、collaboration decoration |
 | `EditorProfile` | schema、empty document、node view、toolbar、plugin 和 collaboration schema ID 的稳定组合 | Academic bundle、持久格式兼容性、协作房间兼容性 |

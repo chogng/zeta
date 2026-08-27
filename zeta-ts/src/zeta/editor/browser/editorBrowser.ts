@@ -11,7 +11,7 @@ import { TextPosition, type TextRange } from "../common/core/text.js";
 import { type LanguageCompletionWorkerFactory } from "../common/languages/completion/languageCompletionService.js";
 import { type SyntaxWorkerFactory } from "../common/languages/syntax/syntaxService.js";
 import { LanguageFeaturesService, type ILanguageFeaturesService } from "../common/services/languageService.js";
-import { type TextModelReference } from "../common/services/textModelService.js";
+import { type TextModel } from "../common/model/textModel.js";
 import { type EditorIndentationOptions } from "../common/editorIndentation.js";
 import { type EditorActiveLineHighlight, type EditorLanguageEditingAdapter, type EditorMinimap, type EditorRuler, type EditorTextDirection, type EditorView, type EditorViewport, type EditorViewportPresentation } from "./view.js";
 import { CodeEditorWidget, type CodeEditorViewPositionState, type CodeEditorViewSelectionState, type CodeEditorViewState } from "./widget/codeEditor/codeEditorWidget.js";
@@ -87,15 +87,14 @@ export interface EditorBrowserOptions {
 	readonly accessibilityPageSize?: number;
 	/** Optional host service that synchronizes open models and supplies push diagnostics. */
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
-	readonly modelReference: TextModelReference;
+	/** Caller-owned text model rendered by this editor. */
+	readonly model: TextModel;
 	readonly syntaxWorkerFactory?: SyntaxWorkerFactory;
 	readonly completionWorkerFactory?: LanguageCompletionWorkerFactory;
 	readonly languageSupport?: IDisposable;
 	readonly onDidChangeLanguageSupport?: Event<void>;
 	readonly whenLanguageSupportReady?: () => Promise<unknown>;
 	readonly onLanguageError?: (error: unknown) => void;
-	readonly onSave?: () => Promise<void | boolean>;
-	readonly onRevert?: () => Promise<void>;
 	readonly indentation?: EditorIndentationOptions;
 	readonly lineWrapping?: EditorLineWrapping;
 	readonly wrappingIndent?: WrappingIndent;
@@ -156,17 +155,12 @@ export interface IEditorBrowser extends IDisposable {
 	revealRange(range: TextRange): void;
 	getViewState(): EditorTextViewState;
 	restoreViewState(state: EditorTextViewState): void;
-	readonly isDirty: boolean;
-	readonly hasExternalChange: boolean;
-	save(): Promise<void>;
-	revert(): Promise<void>;
+	/** Runs editor-local formatting and normalization before the host persists the model. */
+	prepareSave(): Promise<void>;
 }
 
 /** Browser composition root for the line editor. */
 export class EditorBrowser extends Disposable implements IEditorBrowser {
-	private readonly modelReference: TextModelReference;
-	private readonly onSave: (() => Promise<void | boolean>) | undefined;
-	private readonly onRevert: (() => Promise<void>) | undefined;
 	private readonly beforeSaveHooks: Array<() => void | Promise<void>> = [];
 	readonly onDidChange: Event<void>;
 	readonly codeEditor: CodeEditorWidget;
@@ -182,11 +176,8 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 			const tabFocus = options.tabFocus ?? this._register(new TabFocus());
 			const languageId = options.languageId;
 			const onLanguageError = options.onLanguageError ?? reportLanguageError;
-			this.onSave = options.onSave;
-			this.onRevert = options.onRevert;
 			if (options.languageSupport) this._register(options.languageSupport);
-			const modelReference = this.modelReference = this._register(options.modelReference);
-			const model = modelReference.model;
+			const model = options.model;
 			this.onDidChange = listener => model.onDidChange(() => listener());
 			const languageFeaturesService = options.languageFeaturesService ?? this._register(new LanguageFeaturesService());
 			const configurations = languageFeaturesService.configurations;
@@ -299,9 +290,6 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 			}));
 			this.viewport = this.codeEditor.viewport;
 			this.view = this.codeEditor.view;
-			this._register(modelReference.onDidChangeExternalChange(() => {
-				if (modelReference.hasExternalChange) this.codeEditor.announceAccessibilityStatus("File changed on disk. Local edits are preserved.");
-			}));
 			const installContext: TextEditorContributionContext = {
 				kind: "text",
 				options,
@@ -350,13 +338,9 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 	revealRange(range: TextRange): void { this.codeEditor.revealRange(range); }
 	getViewState(): EditorTextViewState { return this.codeEditor.saveViewState(); }
 	restoreViewState(state: EditorTextViewState): void { this.codeEditor.restoreViewState(state); }
-	get isDirty(): boolean { return this.modelReference.isDirty; }
-	get hasExternalChange(): boolean { return this.modelReference.hasExternalChange; }
-	async save(): Promise<void> {
+	async prepareSave(): Promise<void> {
 		for (const hook of [...this.beforeSaveHooks]) await hook();
-		await this.onSave?.();
 	}
-	async revert(): Promise<void> { await this.onRevert?.(); }
 }
 
 function isViewPosition(value: unknown): value is EditorTextViewPositionState {
@@ -372,8 +356,8 @@ function isViewScrollPosition(value: unknown): value is EditorTextViewState["scr
 }
 
 function validateOptions(options: EditorBrowserOptions): void {
-	if (!options || typeof options !== "object" || !options.container || !options.modelReference) {
-		throw new TypeError("Editor browser requires a container and model reference");
+	if (!options || typeof options !== "object" || !options.container || !options.model) {
+		throw new TypeError("Editor browser requires a container and text model");
 	}
 	if (options.input?.readOnly !== undefined && typeof options.input.readOnly !== "boolean") {
 		throw new TypeError("Editor input read-only mode must be boolean");
@@ -383,12 +367,6 @@ function validateOptions(options: EditorBrowserOptions): void {
 	}
 	if (options.onLanguageError !== undefined && typeof options.onLanguageError !== "function") {
 		throw new TypeError("Editor language error handler must be a function");
-	}
-	if (options.onSave !== undefined && typeof options.onSave !== "function") {
-		throw new TypeError("Editor save must be a function");
-	}
-	if (options.onRevert !== undefined && typeof options.onRevert !== "function") {
-		throw new TypeError("Editor revert must be a function");
 	}
 	if (options.insertFinalNewLine !== undefined && typeof options.insertFinalNewLine !== "boolean") {
 		throw new TypeError("Editor final newline option must be boolean");
