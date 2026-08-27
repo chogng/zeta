@@ -14,8 +14,7 @@ Zeta 使用 `build/` 保存构建系统实现，使用 `scripts/` 保存开发�
 | `docs-site/dist/` | Sites 要求的文档站部署暂存目录 | 否 | 是，运行 `corepack pnpm clean` |
 | `zeta-ts/generated/` | 协议和图标生成后参与编译的源码 | 部分文件按生成规则管理 | 否，必须由对应同步命令更新 |
 | `zeta-ts/docs/`、`zeta-ts/licenses/` | Desktop 的文档和打包输入 | 是 | 否 |
-| `node_modules/` | pnpm workspace 的依赖链接和虚拟依赖树 | 否 | 可通过 `corepack pnpm install` 重新安装 |
-| `.tooling/pnpm/store/` | pnpm 11 的工作区内容寻址缓存 | 否 | 可重新下载，不由产品构建清理 |
+| `node_modules/` | pnpm workspace 的依赖链接和虚拟依赖树；内容寻址 store 使用用户级默认缓存 | 否 | 可通过 `corepack pnpm install` 重新安装 |
 | `.zeta/` | 当前工作区的 Zeta 配置或运行状态 | 按工作区用途决定 | 不应由构建清理 |
 
 ## 构建入口
@@ -91,7 +90,7 @@ Desktop 的 `code` 与 `academic` 仍通过同一个 `build:desktop` 入口构�
 
 `scripts/` 可以调用 `build/` 的构建准备能力，`build/` 不得依赖或调用 `scripts/`。测试内容和 fixture 仍归对应产品目录拥有，仓库脚本只负责稳定入口、进程编排和临时测试输出生命周期。
 
-根 `package.json`、`pnpm-workspace.yaml` 和 `pnpm-lock.yaml` 必须留在仓库根，因为它们是 pnpm 发现 workspace 和执行根命令的协议文件；安装策略与校验实现由 `build/pnpm/` 拥有。`build`、`scripts`、`zeta-ts` 和 `docs-site` 共用根锁文件、TypeScript 版本和 `.tooling/pnpm/store/` 内容缓存，子项目不得再声明独立 `packageManager`、`pnpm` 策略或 npm 锁文件。
+根 `package.json`、`pnpm-workspace.yaml` 和 `pnpm-lock.yaml` 必须留在仓库根，因为它们是 pnpm 发现 workspace 和执行根命令的协议文件；安装策略与校验实现由 `build/pnpm/` 拥有。`build`、`scripts`、`zeta-ts` 和 `docs-site` 共用根锁文件与 TypeScript 版本，pnpm 内容寻址 store 使用用户级默认缓存，子项目不得再声明独立 `packageManager`、`pnpm` 策略或 npm 锁文件。
 
 同理，`.bazelrc`、根 `BUILD.bazel`、`.cargo/config.toml` 和 `tsconfig.base.json` 是对应工具从仓库根发现的协议文件，不能为了让 `build/` 看起来更大而移动。`docs-site/vite.config.ts`、`next.config.ts`、`postcss.config.mjs`、`eslint.config.mjs` 和 `.openai/hosting.json` 是站点框架在项目根发现的适配配置；共享生成、打包和验收实现仍归 `build/docs/`。
 

@@ -3,7 +3,6 @@ packages:
   - scripts
   - zeta-ts
   - docs-site
-storeDir: .tooling/pnpm/store
 patchedDependencies:
   native-keymap@3.3.9: patches/native-keymap@3.3.9.patch
 allowBuilds:

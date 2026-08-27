@@ -1,6 +1,5 @@
 # Canonical local build products
 .build/
-/.tooling/
 
 # Legacy output paths remain ignored so older tools cannot re-add them.
 target/
