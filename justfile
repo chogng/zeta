@@ -5,10 +5,6 @@ zeta *args:
     python3 -B build/cargo_with_v8.py build -p zeta-app-server-daemon --bin zeta-app-server-daemon
     python3 -B build/cargo_with_v8.py run -p zeta-cli --bin zeta -- {{ args }}
 
-# Rebuild and restart the zeta code TUI product when its sources change.
-zeta-dev:
-    watchexec --restart --exts rs,toml -- just zeta
-
 # Launch the zeta Electron Desktop product.
 zeta-desktop:
     corepack pnpm --dir zeta-ts dev
