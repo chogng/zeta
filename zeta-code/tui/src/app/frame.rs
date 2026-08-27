@@ -6,7 +6,6 @@ use crate::components::key_hint_bar;
 use crate::components::pane;
 use crate::components::selection;
 use crate::components::transcript;
-use crate::features::status_line;
 use crate::ui::InteractionLayout;
 use crate::ui::background;
 use crate::ui::foreground;
@@ -33,6 +32,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
         areas.history,
         app.messages(),
         app.transcript_scroll(),
+        app.welcome(),
         presentation_highlight,
     );
     if let Some(view) = app.selection_pane() {
@@ -42,7 +42,6 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
     } else {
         composer::draw_slash_popup(frame, areas.history, app.slash_popup());
         composer::draw_mention_popup(frame, areas.history, app.mention_popup());
-        status_line::draw(frame, areas.status_line, app.status_line());
         let cursor = if app.accepts_input() {
             composer::ComposerCursor::Visible
         } else {
@@ -91,5 +90,5 @@ fn interaction_layout(app: &App, terminal_area: Rect) -> InteractionLayout {
 }
 
 #[cfg(test)]
-#[path = "frame_tests.rs"]
+#[path = "frame/frame_tests.rs"]
 mod tests;

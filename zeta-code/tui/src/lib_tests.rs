@@ -46,13 +46,17 @@ fn remote_workspace_is_displayed_without_enabling_local_path_search() {
 }
 
 #[test]
-fn profile_root_selects_the_product_scoped_keybindings_resource() {
+fn profile_root_selects_product_scoped_tui_resources() {
     let profile_root = PathBuf::from("/profile");
     let options = crate::TuiOptions::new("Keybindings").with_profile_root(&profile_root);
 
     assert_eq!(
         options.keybindings_path,
         Some(profile_root.join("zeta-code").join("keybindings.json"))
+    );
+    assert_eq!(
+        options.status_line_path,
+        Some(profile_root.join("zeta-code").join("statusline.json"))
     );
 }
 

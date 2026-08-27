@@ -17,15 +17,7 @@ fn config_pane_organizes_the_snapshot_into_searchable_tabs() {
             .iter()
             .map(|tab| tab.label())
             .collect::<Vec<_>>(),
-        vec![
-            "Overview",
-            "Providers",
-            "MCP",
-            "Skill sources",
-            "Plugins",
-            "Hooks",
-            "Language servers",
-        ]
+        vec!["Overview", "Providers", "Language servers",]
     );
     assert_eq!(state.visible_items()[0].label(), "Revision");
     assert_eq!(state.visible_items()[0].description(), Some("4"));

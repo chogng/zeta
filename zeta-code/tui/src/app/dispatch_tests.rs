@@ -254,7 +254,10 @@ fn model_command_updates_and_clears_preferred_model_with_config_revision() {
     let selected = configured.preferred_model.unwrap();
     assert_eq!(selected.provider, "test");
     assert_eq!(selected.model, "model-one");
-    assert_eq!(app.status_line().text_for_width(80), "test/model-one · .");
+    assert_eq!(
+        app.status_line().text_for_width(80, app.approval_mode()),
+        "◉ ask permissions on · test/model-one"
+    );
 
     conversation.execute(
         &mut client,
@@ -262,7 +265,10 @@ fn model_command_updates_and_clears_preferred_model_with_config_revision() {
         &mut app,
     );
     assert_eq!(client.read_config().unwrap().preferred_model, None);
-    assert_eq!(app.status_line().text_for_width(80), ".");
+    assert_eq!(
+        app.status_line().text_for_width(80, app.approval_mode()),
+        "◉ ask permissions on"
+    );
     assert_eq!(app.status(), &Status::Ready);
 
     drop(client);

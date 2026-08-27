@@ -9,6 +9,8 @@ use crate::features::sessions::SessionSelectionView;
 use crate::features::sessions::ThreadSelectionView;
 use crate::features::shortcuts::ShortcutView;
 use crate::features::skills::SkillSelectionView;
+use crate::features::status_line::StatusLineSelectionView;
+use crate::features::status_line::StatusLineSettings;
 use crate::features::theme::ThemeSelectionView;
 use crate::features::thread::TurnActivity;
 use crate::features::workspace_files::FileSelectionView;
@@ -36,6 +38,9 @@ pub(crate) enum AppEvent {
     InteractionViewOpened(InteractionSelectionView),
     ShortcutViewOpened(ShortcutView),
     ShortcutViewsClosed,
+    StatusLineSettingsReceived(StatusLineSettings),
+    StatusLineViewOpened(StatusLineSelectionView),
+    StatusLineViewReplaced(StatusLineSelectionView),
     McpViewOpened(McpSelectionView),
     McpViewReplaced(McpSelectionView),
     ModelViewOpened(ModelSelectionView),

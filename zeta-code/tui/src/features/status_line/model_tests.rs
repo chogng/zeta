@@ -1,53 +1,94 @@
 use super::*;
-use std::path::Path;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_app_server_protocol::protocol::git::GitHeadDto;
 use zeta_app_server_protocol::protocol::git::GitStatusResult;
+use zeta_protocol::ApprovalMode;
 use zeta_protocol::StreamInstanceId;
 
 #[test]
-fn wide_status_line_prefers_full_model_and_workspace_values() {
-    let mut status_line = StatusLineModel::for_workspace(Path::new("/work/zeta"));
+fn status_line_orders_permissions_model_branch_and_changes() {
+    let mut status_line = StatusLineModel::new();
     status_line.apply_preferred_model(Some(&model("anthropic", "claude-sonnet")));
+    status_line.apply_git_status(&git_status(1));
 
     assert_eq!(
-        status_line.text_for_width(80),
-        "anthropic/claude-sonnet · /work/zeta"
+        status_line.text_for_width(100, ApprovalMode::AskPermissions),
+        "◉ ask permissions on · anthropic/claude-sonnet · main · 1 change"
     );
 }
 
 #[test]
-fn narrow_status_line_uses_compact_values_before_hiding_workspace() {
-    let mut status_line = StatusLineModel::for_workspace(Path::new("/work/zeta"));
+fn configured_items_can_be_hidden_independently() {
+    let mut status_line = StatusLineModel::new();
     status_line.apply_preferred_model(Some(&model("anthropic", "claude-sonnet")));
+    status_line.apply_git_status(&git_status(1));
+    let mut settings = StatusLineSettings::default();
+    settings.set(StatusLineItem::Permissions, false);
+    settings.set(StatusLineItem::GitBranch, false);
+    status_line.apply_settings(settings);
 
-    assert_eq!(status_line.text_for_width(20), "claude-sonnet · zeta");
-    assert_eq!(status_line.text_for_width(13), "claude-sonnet");
+    assert_eq!(
+        status_line.text_for_width(80, ApprovalMode::AutoReview),
+        "anthropic/claude-sonnet · 1 change"
+    );
 }
 
 #[test]
-fn status_line_without_a_configured_model_shows_the_workspace() {
-    let status_line = StatusLineModel::for_workspace(Path::new("/work/zeta"));
+fn narrow_status_line_keeps_configured_order_and_uses_compact_values() {
+    let mut status_line = StatusLineModel::new();
+    status_line.apply_preferred_model(Some(&model("anthropic", "claude-sonnet")));
+    status_line.apply_git_status(&git_status(1));
+    let mut settings = StatusLineSettings::default();
+    settings.set(StatusLineItem::Permissions, false);
+    status_line.apply_settings(settings);
 
-    assert_eq!(status_line.text_for_width(80), "/work/zeta");
-    assert_eq!(status_line.text_for_width(4), "zeta");
+    assert_eq!(
+        status_line.text_for_width(24, ApprovalMode::AskPermissions),
+        "claude-sonnet · main · *"
+    );
+}
+
+#[test]
+fn status_line_with_every_item_disabled_is_empty() {
+    let mut status_line = StatusLineModel::new();
+    let mut settings = StatusLineSettings::default();
+    for item in StatusLineItem::ALL {
+        settings.set(item, false);
+    }
+    status_line.apply_settings(settings);
+
+    assert_eq!(
+        status_line.text_for_width(80, ApprovalMode::AskPermissions),
+        ""
+    );
 }
 
 #[test]
 fn very_narrow_status_line_truncates_on_character_boundaries() {
-    let mut status_line = StatusLineModel::for_workspace(Path::new("/work/zeta"));
+    let mut status_line = StatusLineModel::new();
     status_line.apply_preferred_model(Some(&model("provider", "模型alpha")));
+    let mut settings = StatusLineSettings::default();
+    for item in StatusLineItem::ALL {
+        settings.set(item, item == StatusLineItem::Model);
+    }
+    status_line.apply_settings(settings);
 
-    assert_eq!(status_line.text_for_width(5), "模型…");
-    assert_eq!(status_line.text_for_width(1), "…");
-    assert_eq!(status_line.text_for_width(0), "");
+    assert_eq!(
+        status_line.text_for_width(5, ApprovalMode::AskPermissions),
+        "模型…"
+    );
+    assert_eq!(
+        status_line.text_for_width(1, ApprovalMode::AskPermissions),
+        "…"
+    );
+    assert_eq!(
+        status_line.text_for_width(0, ApprovalMode::AskPermissions),
+        ""
+    );
 }
 
-#[test]
-fn git_status_adds_branch_and_dirty_state_without_displacing_the_model_first() {
-    let mut status_line = StatusLineModel::for_workspace(Path::new("/work/zeta"));
-    status_line.apply_preferred_model(Some(&model("anthropic", "claude-sonnet")));
-    status_line.apply_git_status(&GitStatusResult {
+fn git_status(change_count: usize) -> GitStatusResult {
+    GitStatusResult {
         repository_id: "repository-1".into(),
         stream_instance_id: StreamInstanceId::new("git-stream").unwrap(),
         revision: 3,
@@ -57,14 +98,8 @@ fn git_status_adds_branch_and_dirty_state_without_displacing_the_model_first() {
             object_id: "0123456789abcdef".into(),
             upstream: None,
         },
-        changes: vec![test_change()],
-    });
-
-    assert_eq!(
-        status_line.text_for_width(100),
-        "anthropic/claude-sonnet · git:main (1 changes) · /work/zeta"
-    );
-    assert_eq!(status_line.text_for_width(23), "claude-sonnet · main*");
+        changes: (0..change_count).map(|_| test_change()).collect(),
+    }
 }
 
 fn test_change() -> zeta_app_server_protocol::protocol::git::GitRepositoryChangeDto {

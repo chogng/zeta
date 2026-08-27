@@ -52,6 +52,7 @@ pub struct TuiOptions {
     host_workspace_root: PathBuf,
     host_file_search_root: Option<PathBuf>,
     keybindings_path: Option<PathBuf>,
+    status_line_path: Option<PathBuf>,
     recovery: Option<TuiRecoveryState>,
 }
 
@@ -64,6 +65,7 @@ impl TuiOptions {
             host_workspace_root: workspace_root.clone(),
             host_file_search_root: Some(workspace_root),
             keybindings_path: None,
+            status_line_path: None,
             recovery: None,
         }
     }
@@ -93,12 +95,9 @@ impl TuiOptions {
     /// Product-scoped storage prevents desktop-only command identifiers from invalidating the
     /// TUI resource while preserving the shared JSON grammar and resolver precedence.
     pub fn with_profile_root(mut self, profile_root: impl Into<PathBuf>) -> Self {
-        self.keybindings_path = Some(
-            profile_root
-                .into()
-                .join("zeta-code")
-                .join("keybindings.json"),
-        );
+        let product_root = profile_root.into().join("zeta-code");
+        self.keybindings_path = Some(product_root.join("keybindings.json"));
+        self.status_line_path = Some(product_root.join("statusline.json"));
         self
     }
 

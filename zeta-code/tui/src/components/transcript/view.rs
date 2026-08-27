@@ -4,6 +4,7 @@ use super::MessageRole;
 use super::TranscriptScroll;
 use super::row::estimated_wrapped_rows;
 use crate::components::welcome;
+use crate::components::welcome::WelcomeModel;
 use crate::ui::accent;
 use crate::ui::danger;
 use crate::ui::horizontal_margin;
@@ -26,11 +27,12 @@ pub(crate) fn draw(
     area: Rect,
     messages: &[Message],
     scroll: &TranscriptScroll,
+    welcome: &WelcomeModel,
     presentation_highlight: Color,
 ) {
     let content_area = horizontal_margin(area, 2);
     if messages.is_empty() {
-        welcome::draw(frame, area, presentation_highlight);
+        welcome::draw(frame, area, welcome, presentation_highlight);
         return;
     }
 

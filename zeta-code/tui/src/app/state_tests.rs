@@ -10,6 +10,8 @@ use crate::features::rewind::rewind_selection_view;
 use crate::features::shortcuts::ShortcutEditIntent;
 use crate::features::shortcuts::ShortcutEditKind;
 use crate::features::shortcuts::shortcut_view;
+use crate::features::status_line::StatusLineItem;
+use crate::features::status_line::StatusLineResource;
 use crate::features::theme::ThemePickerCatalog;
 use crate::features::theme::ThemePickerChoice;
 use crate::features::theme::ThemePickerTarget;
@@ -490,6 +492,36 @@ fn shortcut_slash_command_is_owned_by_the_local_host() {
 
     assert_eq!(action, Some(AppCommand::OpenShortcutsPane));
     assert!(app.messages().is_empty());
+}
+
+#[test]
+fn statusline_slash_command_is_owned_by_the_local_host() {
+    let mut app = App::new();
+    app.insert_text("/statusline");
+
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_eq!(action, Some(AppCommand::OpenStatusLinePane));
+    assert!(app.messages().is_empty());
+}
+
+#[test]
+fn statusline_selection_emits_a_revision_bound_edit() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut resource = StatusLineResource::new(directory.path().join("statusline.json"));
+    resource.refresh().unwrap();
+    let mut app = App::new();
+    app.update(AppEvent::StatusLineViewOpened(resource.setup_view()));
+
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert!(matches!(
+        action,
+        Some(AppCommand::EditStatusLine(edit))
+            if edit.expected_revision == 1
+                && edit.item == StatusLineItem::Permissions
+                && !edit.enabled
+    ));
 }
 
 #[test]

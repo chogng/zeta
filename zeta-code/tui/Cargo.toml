@@ -13,7 +13,9 @@ path = "src/lib.rs"
 [dependencies]
 base64 = { workspace = true }
 crossterm = { workspace = true }
+dirs = { workspace = true }
 ratatui = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
@@ -40,6 +42,7 @@ arboard = { workspace = true }
 image = { workspace = true, features = ["gif", "jpeg", "png", "webp"] }
 
 [dev-dependencies]
+tempfile = { workspace = true }
 zeta-client = { workspace = true }
 
 [lints]

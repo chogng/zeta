@@ -7,6 +7,7 @@ fn builtins_follow_enum_presentation_order() {
         built_in_slash_commands(),
         vec![
             ("status", TuiSlashCommandAction::Status),
+            ("statusline", TuiSlashCommandAction::StatusLine),
             ("skills", TuiSlashCommandAction::Skills),
             ("mcp", TuiSlashCommandAction::Mcp),
             ("resume", TuiSlashCommandAction::Resume),
@@ -30,7 +31,7 @@ fn builtins_follow_enum_presentation_order() {
             ("exit", TuiSlashCommandAction::Exit),
         ]
     );
-    assert_eq!(built_in_slash_command_definitions().len(), 22);
+    assert_eq!(built_in_slash_command_definitions().len(), 23);
 }
 
 #[test]

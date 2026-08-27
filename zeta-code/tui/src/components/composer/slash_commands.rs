@@ -12,6 +12,8 @@ use zeta_slash_commands::SlashCommandCatalog;
 #[strum(serialize_all = "kebab-case")]
 pub(crate) enum TuiSlashCommandAction {
     Status,
+    #[strum(serialize = "statusline")]
+    StatusLine,
     Skills,
     Mcp,
     Resume,
@@ -43,6 +45,7 @@ impl TuiSlashCommandAction {
     pub(crate) fn description(self) -> &'static str {
         match self {
             Self::Status => "show the active session, thread, and model",
+            Self::StatusLine => "choose the items shown in the footer status line",
             Self::Skills => "browse configured skill sources",
             Self::Mcp => "list configured MCP tools",
             Self::Connectors => "show external service connections",

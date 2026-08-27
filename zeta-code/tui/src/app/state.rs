@@ -10,6 +10,7 @@ use crate::components::selection::SelectionViewModel;
 use crate::components::selection::SelectionViewState;
 use crate::components::transcript::Message;
 use crate::components::transcript::TranscriptScroll;
+use crate::components::welcome::WelcomeModel;
 use crate::features::connectors::ConnectorSelectionAction;
 use crate::features::connectors::ConnectorSelectionView;
 use crate::features::interactions::InteractionSelectionOutcome;
@@ -35,6 +36,8 @@ use crate::features::shortcuts::action_menu;
 use crate::features::shortcuts::capture_view;
 use crate::features::skills::{SkillSelectionAction, SkillSelectionView};
 use crate::features::status_line::StatusLineModel;
+use crate::features::status_line::StatusLineSelectionAction;
+use crate::features::status_line::StatusLineSelectionView;
 use crate::features::theme::ThemeSelectionAction;
 use crate::features::theme::ThemeSelectionView;
 use crate::features::thread::ThreadFeatureState;
@@ -76,6 +79,7 @@ pub(crate) struct App {
     pub(super) app_keymap: AppKeymap,
     thread: ThreadFeatureState,
     transcript_scroll: TranscriptScroll,
+    welcome: WelcomeModel,
     selection_actions: Vec<SelectionActions>,
     last_root_escape: Option<Instant>,
     status: Status,
@@ -95,6 +99,7 @@ enum SelectionActions {
     Sessions(BTreeMap<SelectionItemId, SessionSelectionAction>),
     Threads(BTreeMap<SelectionItemId, ThreadSelectionAction>),
     Skills(BTreeMap<SelectionItemId, SkillSelectionAction>),
+    StatusLine(BTreeMap<SelectionItemId, StatusLineSelectionAction>),
     Theme(BTreeMap<SelectionItemId, ThemeSelectionAction>),
     Shortcuts(BTreeMap<SelectionItemId, ShortcutAction>),
     ShortcutCapture(ShortcutCaptureState),
@@ -108,10 +113,11 @@ impl App {
             app_keymap: AppKeymap::default(),
             thread: ThreadFeatureState::default(),
             transcript_scroll: TranscriptScroll::default(),
+            welcome: WelcomeModel::for_workspace(Path::new(".")),
             selection_actions: Vec::new(),
             last_root_escape: None,
             status: Status::Ready,
-            status_line: StatusLineModel::for_workspace(Path::new(".")),
+            status_line: StatusLineModel::new(),
             approval_mode: ApprovalMode::AskPermissions,
         }
     }
@@ -133,10 +139,11 @@ impl App {
             app_keymap: AppKeymap::default(),
             thread: ThreadFeatureState::default(),
             transcript_scroll: TranscriptScroll::default(),
+            welcome: WelcomeModel::for_workspace(workspace_root),
             selection_actions: Vec::new(),
             last_root_escape: None,
             status: Status::Ready,
-            status_line: StatusLineModel::for_workspace(workspace_root),
+            status_line: StatusLineModel::new(),
             approval_mode: ApprovalMode::AskPermissions,
         }
     }
@@ -305,6 +312,11 @@ impl App {
                     skill_id,
                     enablement,
                 }),
+            },
+            SelectionActions::StatusLine(actions) => match actions.get(item_id)? {
+                StatusLineSelectionAction::SetEnabled(edit) => {
+                    Some(AppCommand::EditStatusLine(edit.clone()))
+                }
             },
             SelectionActions::Theme(actions) => match actions.get(item_id)? {
                 ThemeSelectionAction::Select { preference } => Some(AppCommand::SetTheme {
@@ -574,6 +586,22 @@ impl App {
             .push(SelectionActions::Shortcuts(view.actions));
     }
 
+    fn show_status_line_view(&mut self, view: StatusLineSelectionView) {
+        self.interaction_pane.show_selection_view(view.model);
+        self.selection_actions
+            .push(SelectionActions::StatusLine(view.actions));
+    }
+
+    fn replace_status_line_view(&mut self, view: StatusLineSelectionView) {
+        self.interaction_pane.replace_selection_view(view.model);
+        match self.selection_actions.last_mut() {
+            Some(actions) => *actions = SelectionActions::StatusLine(view.actions),
+            None => self
+                .selection_actions
+                .push(SelectionActions::StatusLine(view.actions)),
+        }
+    }
+
     fn close_shortcut_views(&mut self) {
         while matches!(
             self.selection_actions.last(),
@@ -644,6 +672,10 @@ impl App {
 
     pub(crate) fn transcript_scroll(&self) -> &TranscriptScroll {
         &self.transcript_scroll
+    }
+
+    pub(crate) fn welcome(&self) -> &WelcomeModel {
+        &self.welcome
     }
 
     pub(crate) fn status(&self) -> &Status {
@@ -717,6 +749,11 @@ impl App {
             AppEvent::InteractionViewOpened(view) => self.show_interaction_view(view),
             AppEvent::ShortcutViewOpened(view) => self.show_shortcut_view(view),
             AppEvent::ShortcutViewsClosed => self.close_shortcut_views(),
+            AppEvent::StatusLineSettingsReceived(settings) => {
+                self.status_line.apply_settings(settings)
+            }
+            AppEvent::StatusLineViewOpened(view) => self.show_status_line_view(view),
+            AppEvent::StatusLineViewReplaced(view) => self.replace_status_line_view(view),
             AppEvent::ConnectorViewOpened(view) => self.show_connector_view(view),
             AppEvent::ConnectorViewReplaced(view) => self.replace_connector_view(view),
             AppEvent::McpViewOpened(view) => self.show_mcp_view(view),
@@ -890,6 +927,11 @@ impl App {
                 if invocation.arguments.is_empty() =>
             {
                 Some(AppCommand::OpenShortcutsPane)
+            }
+            (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::StatusLine))
+                if invocation.arguments.is_empty() =>
+            {
+                Some(AppCommand::OpenStatusLinePane)
             }
             (SlashCommandOrigin::Server, _) => {
                 let submission = invocation.into_forwarded_submission();

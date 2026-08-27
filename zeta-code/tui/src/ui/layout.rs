@@ -1,12 +1,10 @@
 use ratatui::layout::Rect;
 
 const MIN_HISTORY_HEIGHT: u16 = 4;
-const STATUS_LINE_HEIGHT: u16 = 1;
 const FOOTER_HEIGHT: u16 = 1;
 
 pub(crate) struct FrameAreas {
     pub(crate) history: Rect,
-    pub(crate) status_line: Rect,
     pub(crate) interaction: Rect,
     pub(crate) footer: Rect,
 }
@@ -19,39 +17,24 @@ pub(crate) enum InteractionLayout {
 
 pub(crate) fn frame_areas(area: Rect, interaction_layout: InteractionLayout) -> FrameAreas {
     let available_height = area.height;
-    let (requested_status_line_height, requested_interaction_height, requested_footer_height) =
-        match interaction_layout {
-            InteractionLayout::Composer { desired_height } => {
-                (STATUS_LINE_HEIGHT, desired_height.max(3), FOOTER_HEIGHT)
-            }
-            InteractionLayout::Expanded { desired_height } => (0, desired_height, 0),
-        };
+    let (requested_interaction_height, requested_footer_height) = match interaction_layout {
+        InteractionLayout::Composer { desired_height } => (desired_height.max(3), FOOTER_HEIGHT),
+        InteractionLayout::Expanded { desired_height } => (desired_height, 0),
+    };
     let footer_height = requested_footer_height.min(available_height);
     let available_above_footer = available_height.saturating_sub(footer_height);
     let history_height = MIN_HISTORY_HEIGHT.min(available_above_footer);
     let interaction_height =
         requested_interaction_height.min(available_above_footer.saturating_sub(history_height));
-    let status_line_height = requested_status_line_height.min(
-        available_above_footer
-            .saturating_sub(history_height)
-            .saturating_sub(interaction_height),
-    );
-
     let bottom = area.y.saturating_add(area.height);
     let footer_y = bottom.saturating_sub(footer_height);
     let interaction_y = footer_y.saturating_sub(interaction_height);
-    let status_line_y = interaction_y.saturating_sub(status_line_height);
     let history_y = area.y;
 
     FrameAreas {
         history: Rect {
             y: history_y,
-            height: status_line_y.saturating_sub(history_y),
-            ..area
-        },
-        status_line: Rect {
-            y: status_line_y,
-            height: status_line_height,
+            height: interaction_y.saturating_sub(history_y),
             ..area
         },
         interaction: Rect {

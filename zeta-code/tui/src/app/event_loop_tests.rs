@@ -53,10 +53,10 @@ fn pointer_move_selects_the_hovered_popup_row_and_preserves_it_outside() {
     app.insert_text("/");
     let area = Rect::new(0, 0, 80, 20);
 
-    select_hovered_popup_item(&mut app, area, 2, 11);
+    select_hovered_popup_item(&mut app, area, 2, 12);
     assert_eq!(app.slash_popup().unwrap().selected, 2);
 
-    select_hovered_popup_item(&mut app, area, 1, 11);
+    select_hovered_popup_item(&mut app, area, 1, 12);
     assert_eq!(app.slash_popup().unwrap().selected, 2);
 }
 

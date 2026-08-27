@@ -1,3 +1,4 @@
+use super::WelcomeModel;
 use super::draw;
 use crate::ui::accent;
 use crate::ui::composer_chrome;
@@ -5,6 +6,7 @@ use crate::ui::highlight;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::style::Modifier;
+use std::path::Path;
 
 #[test]
 fn wide_banner_uses_the_two_column_welcome_presentation() {
@@ -17,6 +19,7 @@ fn wide_banner_uses_the_two_column_welcome_presentation() {
 
     assert!(rendered.contains(concat!("Zeta Code v", env!("CARGO_PKG_VERSION"))));
     assert!(rendered.contains("Welcome back!"));
+    assert!(rendered.contains("/work/zeta"));
     assert!(rendered.contains("Tips for getting started"));
     assert!(rendered.contains("Use @ to mention workspace files"));
     assert!(rendered.contains("Try asking"));
@@ -43,6 +46,7 @@ fn narrow_banner_uses_the_compact_single_column_copy() {
         .collect::<String>();
 
     assert!(rendered.contains("Welcome back!"));
+    assert!(rendered.contains("/work/zeta"));
     assert!(rendered.contains("Use @ for workspace files"));
     assert!(rendered.contains("Explain this workspace"));
     assert!(!rendered.contains("╭─────╮"));
@@ -52,7 +56,14 @@ fn render(width: u16, height: u16) -> ratatui::buffer::Buffer {
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| draw(frame, frame.area(), highlight()))
+        .draw(|frame| {
+            draw(
+                frame,
+                frame.area(),
+                &WelcomeModel::for_workspace(Path::new("/work/zeta")),
+                highlight(),
+            )
+        })
         .unwrap();
     terminal.backend().buffer().clone()
 }

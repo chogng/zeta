@@ -1,19 +1,24 @@
 use super::StatusLineModel;
 use crate::ui::composer_chrome;
-use crate::ui::horizontal_margin;
 use ratatui::Frame;
-use ratatui::layout::Alignment;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::Paragraph;
+use zeta_protocol::ApprovalMode;
 
-pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, status_line: &StatusLineModel) {
-    let area = horizontal_margin(area, 2);
-    let text = status_line.text_for_width(area.width as usize);
+pub(crate) fn draw(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    status_line: &StatusLineModel,
+    approval_mode: ApprovalMode,
+) {
+    if area.is_empty() {
+        return;
+    }
+
     frame.render_widget(
-        Paragraph::new(text)
-            .style(Style::default().fg(composer_chrome()))
-            .alignment(Alignment::Right),
+        Paragraph::new(status_line.text_for_width(usize::from(area.width), approval_mode))
+            .style(Style::default().fg(composer_chrome())),
         area,
     );
 }

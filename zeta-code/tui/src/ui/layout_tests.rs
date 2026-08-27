@@ -7,8 +7,7 @@ fn composer_frame_surfaces_are_anchored_to_bottom() {
 
     let areas = frame_areas(area, InteractionLayout::Composer { desired_height: 3 });
 
-    assert_eq!(areas.history, Rect::new(0, 0, 80, 19));
-    assert_eq!(areas.status_line, Rect::new(0, 19, 80, 1));
+    assert_eq!(areas.history, Rect::new(0, 0, 80, 20));
     assert_eq!(areas.interaction, Rect::new(0, 20, 80, 3));
     assert_eq!(areas.footer, Rect::new(0, 23, 80, 1));
 }
@@ -27,8 +26,6 @@ fn expanded_interaction_grows_upward_from_bottom() {
     assert_eq!(taller.history.height + 4, shorter.history.height);
     assert_eq!(shorter.footer.height, 0);
     assert_eq!(taller.footer.height, 0);
-    assert_eq!(shorter.status_line.height, 0);
-    assert_eq!(taller.status_line.height, 0);
 }
 
 #[test]
@@ -37,8 +34,7 @@ fn multiline_composer_grows_upward_without_displacing_the_footer() {
 
     let areas = frame_areas(area, InteractionLayout::Composer { desired_height: 6 });
 
-    assert_eq!(areas.history, Rect::new(0, 0, 80, 16));
-    assert_eq!(areas.status_line, Rect::new(0, 16, 80, 1));
+    assert_eq!(areas.history, Rect::new(0, 0, 80, 17));
     assert_eq!(areas.interaction, Rect::new(0, 17, 80, 6));
     assert_eq!(areas.footer, Rect::new(0, 23, 80, 1));
 }
@@ -50,7 +46,6 @@ fn oversized_interaction_preserves_minimum_history_height() {
     let areas = frame_areas(area, InteractionLayout::Expanded { desired_height: 99 });
 
     assert_eq!(areas.history, Rect::new(0, 0, 80, 4));
-    assert_eq!(areas.status_line.height, 0);
     assert_eq!(areas.interaction, Rect::new(0, 4, 80, 20));
 }
 
@@ -61,7 +56,6 @@ fn bottom_anchor_respects_nonzero_terminal_origin() {
     let areas = frame_areas(area, InteractionLayout::Expanded { desired_height: 12 });
 
     assert_eq!(areas.history, Rect::new(5, 7, 80, 12));
-    assert_eq!(areas.status_line, Rect::new(5, 19, 80, 0));
     assert_eq!(areas.interaction, Rect::new(5, 19, 80, 12));
     assert_eq!(areas.footer, Rect::new(5, 31, 80, 0));
 }

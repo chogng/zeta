@@ -1,5 +1,6 @@
 //! Responsive empty-Thread welcome banner presentation.
 
+use super::WelcomeModel;
 use crate::ui::horizontal_margin;
 use crate::ui::{accent, composer_chrome, muted};
 use ratatui::Frame;
@@ -20,9 +21,14 @@ use ratatui::widgets::Wrap;
 
 const EXPANDED_MIN_WIDTH: u16 = 70;
 const EXPANDED_HEIGHT: u16 = 11;
-const COMPACT_HEIGHT: u16 = 11;
+const COMPACT_HEIGHT: u16 = 12;
 
-pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, presentation_highlight: Color) {
+pub(crate) fn draw(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    model: &WelcomeModel,
+    presentation_highlight: Color,
+) {
     let available = horizontal_margin(area, 2);
     if available.is_empty() {
         return;
@@ -67,13 +73,18 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, presentation_highlight: Co
     draw_title(frame, title_area);
 
     if expanded {
-        draw_expanded(frame, content, presentation_highlight);
+        draw_expanded(frame, content, model, presentation_highlight);
     } else {
-        draw_compact(frame, content);
+        draw_compact(frame, content, model);
     }
 }
 
-fn draw_expanded(frame: &mut Frame<'_>, area: Rect, presentation_highlight: Color) {
+fn draw_expanded(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    model: &WelcomeModel,
+    presentation_highlight: Color,
+) {
     let columns = expanded_columns(area);
     frame.render_widget(
         Block::default()
@@ -106,6 +117,10 @@ fn draw_expanded(frame: &mut Frame<'_>, area: Rect, presentation_highlight: Colo
             Line::default(),
             Line::from(Span::styled(
                 "Ready when you are",
+                Style::default().fg(muted()),
+            )),
+            Line::from(Span::styled(
+                model.directory(),
                 Style::default().fg(muted()),
             )),
         ])
@@ -166,7 +181,7 @@ fn draw_title(frame: &mut Frame<'_>, area: Rect) {
     );
 }
 
-fn draw_compact(frame: &mut Frame<'_>, area: Rect) {
+fn draw_compact(frame: &mut Frame<'_>, area: Rect, model: &WelcomeModel) {
     let content = horizontal_margin(area, 1);
     let content = Rect {
         y: content.y.saturating_add(1),
@@ -182,6 +197,10 @@ fn draw_compact(frame: &mut Frame<'_>, area: Rect) {
                 ),
                 Span::styled("  ·  Ready when you are", Style::default().fg(muted())),
             ]),
+            Line::from(Span::styled(
+                model.directory(),
+                Style::default().fg(muted()),
+            )),
             Line::default(),
             heading("Tips for getting started"),
             Line::from("Use @ for workspace files and / for commands."),

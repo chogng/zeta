@@ -33,7 +33,7 @@ Tool、approval policy 或 persistence。
   后按需加载；`skills/changed` 会刷新这部分动态命令；
 - `/resume`、`/thread`、`/archive-thread`、`/rewind`、`/clear`、`/files`、`/fork`、`/model`、`/theme` 与 `/new` 可解析 inline arguments，并在执行前展开
   large-paste placeholder；product command 明确拒绝 image arguments；
-- command popup 只注册已有真实执行流的 built-ins：`/status`、`/skills`、`/mcp`、`/connectors`、`/resume`、
+- command popup 只注册已有真实执行流的 built-ins：`/status`、`/statusline`、`/skills`、`/mcp`、`/connectors`、`/resume`、
   `/thread`、`/archive-thread`、`/archive-session`、`/rewind`、`/clear`、`/config`、`/files`、
   `/fork`、`/help`、`/shortcuts`、`/copy`、`/export`、`/model`、`/theme`、`/new`、`/quit` 与 `/exit`；
 - `/help` 使用保留 composer 的 interaction view stack 打开可搜索的命令列表；Space 进入搜索模式，上下键循环选择，Esc/Ctrl-C 返回 composer；快捷键只由 `/shortcuts` 展示；
@@ -77,7 +77,7 @@ Tool、approval policy 或 persistence。
 - owner-directed `agent/request` 支持 approval（approve once/decline）和多问题 user input；只有
   App Server 选中的、声明对应 capability 且订阅该 Thread 的 connection 能 resolve。交互不可用
   Esc 关闭，但可 Ctrl-C interrupt；deadline 由 App Server 执行并投影为稳定 Turn failure；
-- footer 显示当前 Turn 权限模式和真正的运行状态，不常驻展示快捷键；Shift-Tab 在 `ask permissions on`、`auto review on` 与
+- footer 按“权限模式、模型、Git 分支、Git 变更”的固定顺序显示 `/statusline` 启用的项目，不显示 Turn 运行状态，也不常驻展示快捷键；Shift-Tab 在 `ask permissions on`、`auto review on` 与
   `bypass permissions on` 之间循环。提交时把当前模式写入 typed `StartTurn`，因此切换只影响之后
   提交的 Turn；TUI 不解释策略结果，也不自行签发执行授权；
 - 根级 `keymap.rs` 只保留运行时入口和 `AppKeymap`，`keymap/bindings.rs`、`keymap/chords.rs` 与 `keymap/input.rs` 分别拥有动作绑定、Chord 生命周期和 Crossterm 转换；共享 Resolver 处理 Shift-Tab、根级 Esc 与 Ctrl-C/D/O/V/Z，并生成设置界面只读快照。`features/shortcuts.rs` 读取 `<profile>/zeta-code/keybindings.json`，每秒热重载 User command/blocker、平台覆盖与 `when`，并为 `/shortcuts` 汇总可配置绑定和固定操作键，提供搜索、诊断、单键/两段 Chord 录制、revision 校验和原子保存；坏更新或保存失败保留上一份有效规则。composer 编辑、selection 导航和 transcript 滚动仍由各 component 拥有；
@@ -87,8 +87,7 @@ Tool、approval policy 或 persistence。
   合并页面；TUI 不保存 Thread history；
 - `/copy` 或 Ctrl-O 把最后一条 Agent response 写入系统剪贴板；`/export [relative-path]` 以
   Markdown 导出当前已加载的 transcript history window，路径限制在 workspace 内且绝不覆盖已有文件；
-- 顶部显示低干扰的运行状态；composer 上方右对齐显示 preferred model、workspace 与 typed Git
-  branch/dirty state，并按宽度降级；composer 只使用上下两条浅灰分隔线，footer 只显示权限模式与当前运行状态；
+- 空会话 Welcome Banner 在 `Ready when you are` 下方显示以 `~` 缩写用户主目录的 workspace 路径；composer 上方不常驻 workspace 信息。composer 只使用上下两条浅灰分隔线，底部 footer 区域由 status line 按配置显示权限模式、preferred model、typed Git branch 与变更数，并按宽度降级；Chord 等必须立即处理的提示临时覆盖 status line；
 - Ctrl-C 或 Ctrl-D（空输入）在 idle 时退出，active 时请求 interrupt；单次 Esc 在根界面保持
   inert，连续两次 Esc 打开 Rewind Pane；
 - Unix `SIGINT`/`SIGTERM` 进入同一个 event loop 退出路径，确保 watcher 重启和 host termination
@@ -122,11 +121,7 @@ transport retry。workspace mention 当前插入 workspace-relative 原子文本
 
 图片 bytes 的持久化由共享 `zeta-attachments` content-addressed store 拥有；TUI 只在草稿期间保留
 本地 data URL，并在 `StartTurn` 前通过 App Server 分块上传或安全导入远程 URL，最终只提交 typed
-`ImageAttachmentRef`。usage 和 status-line item/order 同样必须等待已接受的 typed snapshot/config
-contract，不能从 transcript 推导。缺少 typed backend contract 的 login、compact、service tier 等
-命令不会进入 registry。Config 页面能读取 provider、MCP、Skill source、Plugin request、Hook 与
-language-server 状态，但只有当前已有 typed mutation 的 model/MCP/Skill 项可在 TUI 修改；它不会
-复制 Desktop-only 的外部 Agent 导入或凭据配置流程。
+`ImageAttachmentRef`。usage 必须等待已接受的 typed snapshot contract，不能从 transcript 推导。缺少 typed backend contract 的 login、compact、service tier 等命令不会进入 registry。`/statusline` 使用 `<profile>/zeta-code/statusline.json` 保存权限、模型、Git 分支和 Git 变更四个显示开关；Config 页面只读取 Overview、Provider 与 Language Server 状态，不再重复 MCP、Skill、Plugin 和 Hook 的只读列表。
 
 从 repository root 启动当前 TUI：
 
@@ -176,7 +171,8 @@ src/
 │   ├── event.rs / command.rs      # completed facts / typed side-effect intents
 │   ├── dispatch.rs                # built-in product command coordination
 │   ├── bootstrap.rs / help.rs     # startup registry validation / help model
-│   └── frame/                     # top-level frame and footer assembly
+│   ├── frame.rs                   # top-level frame assembly
+│   └── frame/                     # footer content selection and frame tests
 ├── client/
 │   ├── command_id.rs              # stable logical command identity allocation
 │   ├── event_pump.rs              # terminal + AppServerEvents wakeup/multiplexing
@@ -187,13 +183,15 @@ src/
 │   ├── selection/                 # reusable selection state and view
 │   └── transcript/                # transcript projection rendering and row estimation
 ├── features/
-│   ├── config/                    # config/MCP/model typed requests and presentation results
+│   ├── config.rs                  # config feature module root
+│   ├── config/                    # config snapshot, provider/language-server view and model update
 │   ├── sessions/                  # active Session/Thread selection and lifecycle requests
 │   ├── thread/                    # canonical snapshot, requests, subscription and projection
 │   ├── skills/                    # skill request and selection presentation mapping
 │   ├── shortcuts.rs               # shortcut catalog, profile polling and atomic edits
 │   ├── shortcuts/                 # searchable view, action menu and key/chord capture
-│   ├── status_line/               # model/workspace model and pure view
+│   ├── status_line.rs             # status-line module root
+│   ├── status_line/               # item settings, profile resource, setup view and pure footer view
 │   └── workspace_files/           # bounded async file-search runtime
 ├── mouse.rs                        # shared mouse-mode contract for pages and terminal lifecycle
 ├── host/
@@ -226,7 +224,9 @@ src/
 | `ui::layout` | private module | 跨 surface 复用的纯 geometry | 不读取 App/feature、不调用 terminal 或 RPC |
 | `ui::theme` | private module | 将 `zeta-theme::ThemeSnapshot` 的明确子集投影到终端能力 | 不复制完整 Desktop token catalog、不拥有用户文件加载、不定义产品状态 |
 | `Status` | crate-private | Ready/Working/waiting/Cancelling/Error display state | 只能由 canonical snapshot/result驱动 |
-| `StatusLineModel` | crate-private | 把 preferred model、workspace 与 Git 的窄输入变成长短展示值并执行宽度降级 | 不接收完整 config aggregate、不查询接口、不保存领域 authority、不渲染 |
+| `StatusLineModel` | crate-private | 按配置顺序把当前权限、preferred model、Git 分支和变更映射为长短展示值并执行宽度降级 | 不接收完整 config aggregate、不查询接口、不保存权限或 Turn authority、不渲染 |
+| `StatusLineResource` | crate-private | 有界读取、revision 校验并原子保存 `<profile>/zeta-code/statusline.json` | 只保存四个显示开关，不进入 App Server 配置、不拥有被显示的数据 |
+| `components::welcome::WelcomeModel` | crate-private | 在 App 构造阶段把 workspace 路径缩写为 `~/...`，供空会话 Welcome Banner 使用 | 不在 draw 中读取环境，不把路径复制到 status line |
 | `App::update` | crate-private | 将一个 `AppEvent` 应用到唯一 presentation state owner | 不执行 I/O、不访问 runtime resource |
 | `App::handle_key` | crate-private | 先路由 Chord prefix；其他键先委托局部输入，再处理未消费的应用级键 | 不直接调用 client |
 | `AppKeymap` | private | 把 Crossterm key 转为共享 `KeyStroke`，解析应用级 action，并拥有 Chord pending/超时/取消/提示生命周期 | 不处理 composer 编辑、selection 导航、滚动、I/O 或命令副作用 |
@@ -287,7 +287,8 @@ run(session, options)
 ├─ TerminalSession::open
 ├─ EventPump::start → terminal source + App Server source
 ├─ FileSearchManager::new
-├─ App::for_workspace → StatusLineModel::for_workspace
+├─ App::for_workspace → WelcomeModel::for_workspace + StatusLineModel::new
+├─ StatusLineResource::refresh → AppEvent::StatusLineSettingsReceived → App::update
 ├─ client.read_config / git_status → AppEvent → App::update
 └─ loop
    ├─ EventPump::recv
@@ -494,20 +495,13 @@ Ctrl-Z 复用同一个 `restore → SIGTSTP → reacquire` 生命周期；reacqu
 
 ## 渲染
 
-当前 layout 在 composer 模式是底部锚定的四段：
+当前 layout 在 composer 模式是底部锚定的三段：
 
-1. expandable、无外框的 transcript；空会话显示由 `components::welcome` 拥有的 responsive
-   Welcome Banner，宽终端使用双栏，窄终端降级为单栏；
-2. 一行右对齐 status line，显示现有接口提供的 model/workspace/Git context；
-3. 三至八行 composer：上下浅灰水平线，正文随逻辑行增长、最多显示六行，首行以浅灰 `❯`
-   开始；超过可见高度时跟随光标纵向滚动；
-4. 一行左对齐状态 footer；显示当前权限模式，以及 working、retry 或 interrupting 等当前运行状态。
+1. expandable、无外框的 transcript；空会话显示由 `components::welcome` 拥有的 responsive Welcome Banner，宽终端使用双栏，窄终端降级为单栏，并在 `Ready when you are` 下方显示 home-relative workspace 路径；
+2. 三至八行 composer：上下浅灰水平线，正文随逻辑行增长、最多显示六行，首行以浅灰 `❯` 开始；超过可见高度时跟随光标纵向滚动；
+3. 一行 footer 布局区域；普通状态由 `features::status_line` 从左到右显示已启用的权限、模型、Git 分支和 Git 变更，宽度不足时使用短值并从右侧省略。Chord 等操作提示由 `app/frame/footer.rs` 临时覆盖普通 status line。
 
-所有 interaction surface 都以 terminal 底部为锚点：composer/footer 固定在底部，slash/mention
-popup 从 composer 上沿向上展开；temporary interaction view active 时替换 composer/footer 区域，
-底边保持不动并按 view 的 desired height 只向上扩张，transcript 至少保留四行。
-temporary view active 时 status line 不占行。普通 composer 模式下，status line 只消费
-`StatusLineModel`，不在 draw 中调用 config、Git 或 Thread 接口。
+所有 interaction surface 都以 terminal 底部为锚点：composer/footer 固定在底部，slash/mention popup 从 composer 上沿向上展开；temporary interaction view active 时替换 composer/footer 区域，底边保持不动并按 view 的 desired height 只向上扩张，transcript 至少保留四行。temporary view active 时 footer 不占行。普通 composer 模式下，status line 只消费 `StatusLineModel` 与当前 `ApprovalMode`，不显示本地 `Status`，也不在 draw 中调用 config、Git 或 Thread 接口。
 Selection surface 当前包含顶部分隔线、可配置上下间距的标题、可换行 Tabs、搜索框、可滚动窗口和 view-local
 footer；关闭后恢复一直保留的 composer state。
 
@@ -565,8 +559,7 @@ composer 保留、tabs wrap/左右循环切换、
 approval 与多问题 option/free-form user input、blocked Esc/Ctrl-C semantics、搜索过滤/选择修复、
 selection render，以及 snapshot
 terminal/wait/resume mapping，以及 transcript chrome、error 去重、role
-label/Unicode/zero-width wrapping、bounded scroll/history window、copy/export，以及 status-line Git/长短值降级、Unicode-safe truncation 和
-composer 上方的右对齐渲染，以及 terminal mode acquisition failure、逆序 rollback、suspend/reacquire 与幂等
+label/Unicode/zero-width wrapping、bounded scroll/history window、copy/export，以及 status-line item 顺序/开关、profile 保存、Git 长短值降级、Unicode-safe truncation、welcome home-relative 路径，以及 terminal mode acquisition failure、逆序 rollback、suspend/reacquire 与幂等
 restore；还覆盖 request task 非阻塞 completion、request intent 保序、Session/Thread picker/archive、
 workspace directory/preview 和 interaction deadline。
 
@@ -575,10 +568,7 @@ workspace directory/preview 和 interaction deadline。
 `ConfigReadResult` 新字段在 App Server 或消费该字段的 feature 中被静默忽略。相反，直接构造
 `ThreadItem` variant 的测试必须明确填写其全部字段，因为这些字段属于被测试对象本身的领域语义。
 
-生产路径同样按能力收窄：`config/read` 的完整聚合只停留在 request adapter 和 `/config` 总览；
-Model Pane 只接收 preferred model，MCP Pane 只接收 server map，status line 只通过
-`AppEvent::PreferredModelReceived` 接收模型选择。新增 Tool Search 或 CodeIndex 配置字段不会扩散到
-这些不拥有该能力的展示组件。
+生产路径同样按能力收窄：`config/read` 的完整聚合只停留在 request adapter 和 `/config` 的 Overview、Provider、Language Server 页面；Model Pane 只接收 preferred model，MCP Pane 只接收 server map，status line 通过 `AppEvent::PreferredModelReceived` 与 `AppEvent::GitStatusReceived` 接收展示数据，通过本地 `StatusLineResource` 接收显示开关。新增 Tool Search 或 CodeIndex 配置字段不会扩散到这些不拥有该能力的展示组件。
 
 Render tests 使用 Ratatui `TestBackend` 固定 empty/error surface，transcript component tests
 固定 row estimation；命令行状态测试是通过依据，没有截图/像素基线。完整 fake-transport `run`

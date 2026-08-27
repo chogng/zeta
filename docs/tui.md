@@ -287,8 +287,8 @@ zeta-code/tui/
 │   │   │   ├── search.rs
 │   │   │   ├── completion.rs
 │   │   │   └── workspace_files_tests.rs
+│   │   ├── status_line.rs
 │   │   └── status_line/
-│   │       ├── mod.rs
 │   │       ├── model.rs
 │   │       ├── refresh.rs
 │   │       ├── layout.rs
@@ -653,10 +653,12 @@ Git、配置或 Thread。
 | Item | 权威接口 | TUI 的职责 | 当前状态 |
 | --- | --- | --- | --- |
 | preferred model | `AppServerClient::read_config` | 把 `ConfigReadResult::preferred_model` 映射为长/短文案 | 已实现 |
-| workspace | `TuiOptions::workspace_root` | 保留完整路径和 basename 两种展示值 | 已实现 |
-| Git branch/state | App Server `git/status` + `git/statusChanged`，其 owner 调用 `zeta-git` | startup/read 与 notification 映射 branch/dirty/count | 已实现 |
+| Welcome workspace | `TuiOptions::workspace_root` | `WelcomeModel` 在 App 构造阶段把用户主目录缩写为 `~`，只供空会话 Welcome Banner 显示 | 已实现；不属于 status line |
+| Git branch | App Server `git/status` + `git/statusChanged`，其 owner 调用 `zeta-git` | startup/read 与 notification 映射 branch | 已实现 |
+| Git changes | App Server `git/status` + `git/statusChanged`，其 owner 调用 `zeta-git` | 映射变更数量，干净时省略 | 已实现 |
+| permission mode | App 持有的当前 `ApprovalMode` | 只格式化当前模式，不复制或推进权限状态 | 已实现 |
 | Thread/Turn/usage | App Server typed snapshot/update | 消费 contract 已提供的字段，不从 transcript 推导 | Thread usage contract 已提供；status line 尚未接入 |
-| connection/runtime state | `client/` 与 `app/` 本地状态 | 只在已接受的用户场景中映射 | Potential；embedded TUI 当前无独立 connection UI 需求 |
+| connection state | `client/` 本地状态 | 只在已接受的用户场景中映射 | Potential；embedded TUI 当前无独立 connection UI 需求 |
 
 依赖方向固定为：
 
@@ -673,15 +675,9 @@ owning crate interface / typed App Server result
           pure layout + Ratatui render
 ```
 
-`status_line/` 未来可以定义稳定的 item identity、用户选择与顺序、separator、alignment 和
-overflow policy；配置持久化必须先进入 typed config contract，不能由 renderer 私存。昂贵或
-异步接口在后台完成后以 event 更新模型；失败只影响对应 item，并保留其明确的 unavailable/
-stale 语义。任何新 item 都应先回答“哪个 crate/interface 拥有这个事实”，再添加展示映射和
-宽度测试。
+`status_line/` 定义稳定的 item identity、固定顺序、用户开关、separator 和 overflow policy；`StatusLineResource` 把四个产品显示开关保存到 CLI 显式提供的 `<profile>/zeta-code/statusline.json`，资源不进入 App Server，renderer 也不读取文件。昂贵或异步接口在后台完成后以 event 更新模型；失败只影响对应 item，并保留其明确的 unavailable/stale 语义。任何新 item 都应先回答“哪个 crate/interface 拥有这个事实”，再添加展示映射和宽度测试。
 
-当前实现由 `features/status_line/model.rs` 拥有 model、Git projection 与宽度降级，
-`features/status_line/view.rs` 只负责右对齐渲染。usage 和可配置 item/order 缺少已接受的
-typed contract，因此不是当前 TUI 完成项。
+当前实现由 `features/status_line/model.rs` 按“权限、模型、Git 分支、Git 变更”顺序拥有展示映射与宽度降级，`features/status_line/resource.rs` 拥有显示开关的有界读取、revision 校验和原子保存，`features/status_line/setup.rs` 为 `/statusline` 生成左侧 item、右侧 `true/false` 的操作页面，`features/status_line/view.rs` 在唯一 footer 区域内从左向右渲染已启用项目。Turn 运行状态不属于 status line。`app/frame/footer.rs` 只决定 Chord 等临时操作提示何时覆盖普通 status line，`components/welcome::WelcomeModel` 单独拥有空会话 workspace 路径文案。
 
 ## 12. `host/`：窄宿主能力
 
@@ -939,6 +935,7 @@ features/
 ├── interactions.rs + interactions/
 ├── sessions/
 ├── skills/
+├── status_line.rs
 ├── status_line/
 ├── thread/
 │   ├── presentation.rs
@@ -999,7 +996,7 @@ lib_tests.rs
   tabs 与 replacement lifecycle 由同一 feature 拥有；
 - `features/interactions` 把 owner-directed full request 转成 approval 或多问题 user-input Pane，
   只返回 exact typed response；owner selection、deadline 与 cancellation 留在 App Server；
-- `features/config/request.rs` 与 `features/skills/request.rs` 分别拥有已有 typed config/MCP/model
+- `features/config/request.rs` 与 `features/skills/request.rs` 分别拥有已有 typed config/model
   与 Skill catalog/enablement 调用，App 不再内联这些领域 payload；
 - `components/selection` 已同时拥有 generic tabs/query/filter/selection state、输入 outcome 与
   Ratatui view；`InteractionPane`、App 和产品 view builder 只消费该 component contract；
@@ -1023,15 +1020,13 @@ lib_tests.rs
   `Space` 将 exact `SkillId` 转成 revision-checked `skill/enablement/set`，成功后刷新页面；
   `skills/changed` 也会刷新前台页面。enablement 不等于正文 activation，TUI 当前没有
   Skill context injection；
-- `app/frame/` 只装配 frame；各 component/feature view 拥有自己的 surface。layout 把所有
+- `app/frame.rs` 只装配 frame，`app/frame/footer.rs` 只选择普通 status line 或临时操作提示；各 component/feature view 拥有自己的 surface。layout 把所有
   interaction surface 显式锚定在 terminal 底部：composer/footer
   固定到底部，slash/mention popup 从 composer 上沿向上展开，temporary view 保持底边不动并
   只向上占用 transcript 空间；
 - `TerminalModeGuard` 在任一 mode 获取失败时按逆序恢复已经获取的 terminal mode，显式
   restore 和 Drop 共享幂等清理路径；
-- `StatusLineModel` 直接映射 typed config/Git result 与 `TuiOptions::workspace_root`；
-  `features/status_line/view.rs` 只读取模型，并按可用宽度从完整 model/workspace/Git 降级到短值
-  或省略号；
+- `StatusLineModel` 直接映射 typed config/Git result 与 App 显式提供的权限模式，`StatusLineResource` 保存四个本地显示开关，`features/status_line/view.rs` 在 footer 区域内按固定顺序渲染并按可用宽度降级到短值或从右侧省略；`WelcomeModel` 在 App 构造阶段把 `TuiOptions::workspace_root` 缩写为 home-relative 文案，draw 不读取环境；
 - `ChatComposer` 协调提交、popup keys、range completion application 与 structured local
   command dispatch；`zeta-slash-commands` 拥有 slash grammar、catalog、matches、selection 与
   dismiss，Ratatui popup renderer 根据自身 viewport 投影可见范围，`TextArea` 只拥有 UTF-8
@@ -1068,11 +1063,8 @@ lib_tests.rs
 - 图片输入已形成“本地路径/系统 clipboard → 草稿 data URL → App Server 分块上传 →
   `ImageAttachmentRef` → durable `UserImageAttachment` → provider 临时 image block”纵切。TUI
   不建立私有 blob store；Thread history 与 command receipt 不持久化 data URL；
-- status line 已有 model/workspace/Git；usage 与稳定 item/order 没有 typed contract，因此不是通过
-  transcript 推导的 TUI 缺口；
-- Config surface 可读 provider、MCP、Skill source、Plugin request、Hook、language server 状态；
-  当前只有已有 typed mutation 的 model/MCP/Skill 可修改，TUI 不接管 Desktop-only 外部 Agent
-  导入或凭据配置。
+- status line 已按固定顺序显示可独立开关的权限模式、模型、Git 分支和 Git 变更；workspace 路径只在空会话 Welcome Banner 显示，Turn 运行状态不进入该行，usage 也不从 transcript 推导；
+- Config surface 只保留 Overview、Provider 与 Language Server 状态；MCP、Skill、Plugin 和 Hook 不再作为 Config tab 重复展示，已有 `/mcp` 与 `/skills` 页面继续拥有各自能力。
 
 新增能力必须先证明是 `zeta code` 产品要求，再按 canonical contract 和垂直 feature 接入；不能
 因为 Native 已有 richer component，或某能力技术上可实现，就把它复制成 TUI backlog。

@@ -30,6 +30,7 @@ use crate::features::sessions::ResumeOutcome;
 use crate::features::shortcuts::ShortcutResource;
 use crate::features::shortcuts::ShortcutResourcePoll;
 use crate::features::skills;
+use crate::features::status_line::StatusLineResource;
 use crate::features::theme as theme_feature;
 use crate::features::thread::ThreadRequestScope;
 use crate::features::thread::ThreadSubscription;
@@ -74,6 +75,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         host_workspace_root,
         host_file_search_root,
         keybindings_path,
+        status_line_path,
         recovery,
     } = options;
     let server_slash_commands = client.initialization()?.slash_commands.clone();
@@ -107,6 +109,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     );
     let now = Instant::now();
     let mut keybindings_resource = keybindings_path.map(|path| ShortcutResource::new(path, now));
+    let mut status_line_resource = status_line_path.map(StatusLineResource::new);
     app.replace_slash_commands(slash_registry.catalog, slash_registry.skills);
     apply_thread_snapshot(
         &mut app,
@@ -115,6 +118,12 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         initial_transcript,
     );
     poll_keybindings_resource(&mut keybindings_resource, &mut app, now);
+    if let Some(resource) = status_line_resource.as_mut() {
+        match resource.refresh() {
+            Ok(settings) => app.update(AppEvent::StatusLineSettingsReceived(settings)),
+            Err(error) => app.update(AppEvent::FailureReported(error)),
+        }
+    }
     if let Ok(config) = client.read_config() {
         app.update(AppEvent::PreferredModelReceived(config.preferred_model));
     }
@@ -321,6 +330,33 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         }
                         None => app.update(AppEvent::FailureReported(
                             "shortcuts are unavailable because no active profile root was configured"
+                                .to_owned(),
+                        )),
+                    },
+                    AppCommand::OpenStatusLinePane => match status_line_resource.as_mut() {
+                        Some(resource) => match resource.refresh() {
+                            Ok(settings) => {
+                                app.update(AppEvent::StatusLineSettingsReceived(settings));
+                                app.update(AppEvent::StatusLineViewOpened(resource.setup_view()));
+                            }
+                            Err(error) => app.update(AppEvent::FailureReported(error)),
+                        },
+                        None => app.update(AppEvent::FailureReported(
+                            "status-line settings are unavailable because no active profile root was configured"
+                                .to_owned(),
+                        )),
+                    },
+                    AppCommand::EditStatusLine(edit) => match status_line_resource.as_mut() {
+                        Some(resource) => match resource.apply_edit(&edit) {
+                            Ok((settings, view, notice)) => {
+                                app.update(AppEvent::StatusLineSettingsReceived(settings));
+                                app.update(AppEvent::StatusLineViewReplaced(view));
+                                app.update(AppEvent::HostOperationCompleted(Ok(notice)));
+                            }
+                            Err(error) => app.update(AppEvent::FailureReported(error)),
+                        },
+                        None => app.update(AppEvent::FailureReported(
+                            "status-line settings are unavailable because no active profile root was configured"
                                 .to_owned(),
                         )),
                     },
@@ -906,7 +942,9 @@ fn uses_request_task(action: &AppCommand) -> bool {
             | AppCommand::Suspend
             | AppCommand::CopyLastResponse
             | AppCommand::OpenShortcutsPane
+            | AppCommand::OpenStatusLinePane
             | AppCommand::EditShortcut(_)
+            | AppCommand::EditStatusLine(_)
             | AppCommand::ExportTranscript { .. }
             | AppCommand::ReadClipboardImage
             | AppCommand::OpenCustomThemePane

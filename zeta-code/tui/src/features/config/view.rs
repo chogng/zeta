@@ -6,11 +6,7 @@ use crate::components::selection::SelectionViewModel;
 use crate::features::config::preferred_model;
 use zeta_app_server_protocol::protocol::config::ApprovalReviewModelSelectionDto;
 use zeta_app_server_protocol::protocol::config::ConfigReadResult;
-use zeta_app_server_protocol::protocol::config::HookEnablementDto;
 use zeta_app_server_protocol::protocol::config::LanguageServerModeDto;
-use zeta_app_server_protocol::protocol::config::McpServerEnablementDto;
-use zeta_app_server_protocol::protocol::config::PluginRequestEnablementDto;
-use zeta_app_server_protocol::protocol::config::SkillSourceEnablementDto;
 
 pub(crate) fn config_view(config: &ConfigReadResult) -> PaneViewModel<SelectionViewModel> {
     PaneViewModel::new(
@@ -19,10 +15,6 @@ pub(crate) fn config_view(config: &ConfigReadResult) -> PaneViewModel<SelectionV
             vec![
                 SelectionTab::new("Overview", overview(config)),
                 SelectionTab::new("Providers", providers(config)),
-                SelectionTab::new("MCP", mcp_servers(config)),
-                SelectionTab::new("Skill sources", skill_sources(config)),
-                SelectionTab::new("Plugins", plugins(config)),
-                SelectionTab::new("Hooks", hooks(config)),
                 SelectionTab::new("Language servers", language_servers(config)),
             ],
         )
@@ -45,10 +37,6 @@ fn overview(config: &ConfigReadResult) -> Vec<SelectionItem> {
             approval_review_model(&config.approval_review_model),
         ),
         detail("Providers", config.providers.len().to_string()),
-        detail("MCP servers", config.mcp_servers.len().to_string()),
-        detail("Skill sources", config.skill_sources.len().to_string()),
-        detail("Plugins", config.plugin_requests.len().to_string()),
-        detail("Hooks", config.hooks.len().to_string()),
         detail(
             "Language servers",
             config.language_servers.len().to_string(),
@@ -71,77 +59,6 @@ fn providers(config: &ConfigReadResult) -> Vec<SelectionItem> {
             })
             .collect(),
         "No providers configured",
-    )
-}
-
-fn mcp_servers(config: &ConfigReadResult) -> Vec<SelectionItem> {
-    or_empty(
-        config
-            .mcp_servers
-            .values()
-            .map(|server| {
-                let state = match server.enablement {
-                    McpServerEnablementDto::Disabled => "disabled",
-                    McpServerEnablementDto::Enabled => "enabled",
-                };
-                detail(&server.display_name, format!("{}  ·  {state}", server.id))
-            })
-            .collect(),
-        "No MCP servers configured",
-    )
-}
-
-fn skill_sources(config: &ConfigReadResult) -> Vec<SelectionItem> {
-    or_empty(
-        config
-            .skill_sources
-            .values()
-            .map(|source| {
-                let state = match source.enablement {
-                    SkillSourceEnablementDto::Disabled => "disabled",
-                    SkillSourceEnablementDto::Enabled => "enabled",
-                };
-                detail(&source.id, format!("{state}  ·  {}", source.root_reference))
-            })
-            .collect(),
-        "No skill sources configured",
-    )
-}
-
-fn plugins(config: &ConfigReadResult) -> Vec<SelectionItem> {
-    or_empty(
-        config
-            .plugin_requests
-            .values()
-            .map(|plugin| {
-                let state = match plugin.enablement {
-                    PluginRequestEnablementDto::Disabled => "disabled",
-                    PluginRequestEnablementDto::Enabled => "enabled",
-                };
-                detail(&plugin.plugin_id, format!("{}  ·  {state}", plugin.version))
-            })
-            .collect(),
-        "No plugins configured",
-    )
-}
-
-fn hooks(config: &ConfigReadResult) -> Vec<SelectionItem> {
-    or_empty(
-        config
-            .hooks
-            .values()
-            .map(|hook| {
-                let state = match hook.enablement {
-                    HookEnablementDto::Disabled => "disabled",
-                    HookEnablementDto::Enabled => "enabled",
-                };
-                detail(
-                    &hook.id,
-                    format!("{:?}  ·  {state}", hook.event).to_lowercase(),
-                )
-            })
-            .collect(),
-        "No hooks configured",
     )
 }
 

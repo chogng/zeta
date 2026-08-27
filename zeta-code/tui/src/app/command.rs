@@ -2,6 +2,7 @@ use crate::components::composer::ComposerSubmission;
 use crate::components::composer::SlashCommandInvocation;
 use crate::features::interactions::InteractionResponse;
 use crate::features::shortcuts::ShortcutEdit;
+use crate::features::status_line::StatusLineEdit;
 use std::path::PathBuf;
 use zeta_app_server_protocol::protocol::config::McpServerEnablementDto;
 use zeta_app_server_protocol::protocol::skills::SkillEnablementDto;
@@ -19,7 +20,9 @@ pub(crate) enum AppCommand {
     Suspend,
     CopyLastResponse,
     OpenShortcutsPane,
+    OpenStatusLinePane,
     EditShortcut(ShortcutEdit),
+    EditStatusLine(StatusLineEdit),
     ConnectConnectorDeviceOAuth {
         connector_id: String,
         connection_generation: u64,

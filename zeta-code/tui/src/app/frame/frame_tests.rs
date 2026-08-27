@@ -29,6 +29,7 @@ use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
+use zeta_app_server_protocol::protocol::config::ModelRefDto;
 
 #[test]
 fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
@@ -42,19 +43,88 @@ fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
     assert!(!rendered.contains("enter send"));
     assert!(!rendered.contains("ctrl-v image"));
     let footer = rendered.lines().last().unwrap();
-    assert_eq!(footer.trim_end(), "ask permissions on");
+    assert_eq!(footer.trim_end(), "◉ ask permissions on");
 }
 
 #[test]
-fn status_line_renders_workspace_context_above_the_composer() {
-    let app = App::for_workspace(Path::new("/work/zeta"));
+fn footer_uses_a_distinct_symbol_for_each_approval_mode() {
+    let mut app = App::new();
+    let ask_permissions = render(&app, 80, 20)
+        .lines()
+        .last()
+        .unwrap()
+        .trim_end()
+        .to_owned();
+
+    app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
+    let auto_review = render(&app, 80, 20)
+        .lines()
+        .last()
+        .unwrap()
+        .trim_end()
+        .to_owned();
+
+    app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
+    let bypass_permissions = render(&app, 80, 20)
+        .lines()
+        .last()
+        .unwrap()
+        .trim_end()
+        .to_owned();
+
+    assert_eq!(
+        [ask_permissions, auto_review, bypass_permissions],
+        [
+            "◉ ask permissions on",
+            "◎ auto review on",
+            "⊘ bypass permissions on",
+        ]
+    );
+}
+
+#[test]
+fn workspace_path_is_only_visible_in_the_empty_welcome_banner() {
+    let mut app = App::for_workspace(Path::new("/work/zeta"));
+
+    let empty = render(&app, 80, 20);
+    assert!(empty.contains("/work/zeta"));
+    assert!(!empty.lines().last().unwrap().contains("/work/zeta"));
+
+    app.update(AppEvent::ProductNotice("Conversation started.".into()));
+    assert!(!render(&app, 80, 20).contains("/work/zeta"));
+}
+
+#[test]
+fn status_line_renders_model_in_the_footer() {
+    let mut app = App::new();
+    app.update(AppEvent::PreferredModelReceived(Some(ModelRefDto {
+        provider: "anthropic".into(),
+        model: "claude-sonnet".into(),
+    })));
+
     let buffer = render_buffer(&app, 80, 20);
-    let status_row = (0..80)
-        .map(|x| buffer[(x, 15)].symbol())
+    let footer = (0..80)
+        .map(|x| buffer[(x, 19)].symbol())
         .collect::<String>();
 
-    assert!(status_row.contains("/work/zeta"));
-    assert_eq!(buffer[(77, 15)].fg, composer_chrome());
+    assert!(footer.starts_with("◉ ask permissions on"));
+    assert!(footer.trim_end().ends_with("anthropic/claude-sonnet"));
+    assert_eq!(buffer[(0, 19)].fg, composer_chrome());
+}
+
+#[test]
+fn narrow_footer_keeps_the_first_configured_item() {
+    let mut app = App::new();
+    app.update(AppEvent::PreferredModelReceived(Some(ModelRefDto {
+        provider: "anthropic".into(),
+        model: "claude-sonnet".into(),
+    })));
+
+    let rendered = render(&app, 24, 20);
+    let footer = rendered.lines().last().unwrap();
+
+    assert_eq!(footer.trim_end(), "◉ ask permissions on");
+    assert!(!footer.contains("claude"));
 }
 
 #[test]
@@ -83,18 +153,18 @@ fn multiline_composer_grows_upward_and_keeps_all_lines_visible() {
     assert!(rows[15].contains("first"));
     assert!(rows[16].contains("second"));
     assert!(rows[17].contains("third"));
-    assert_eq!(rows[19].trim_end(), "ask permissions on");
+    assert_eq!(rows[19].trim_end(), "◉ ask permissions on");
 }
 
 #[test]
-fn working_footer_keeps_policy_and_status_without_shortcut_prompts() {
+fn working_footer_keeps_the_configured_context_without_runtime_text() {
     let mut app = App::new();
     app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
 
     let rendered = render(&app, 80, 20);
     let footer = rendered.lines().last().unwrap();
 
-    assert_eq!(footer.trim_end(), "ask permissions on · working…");
+    assert_eq!(footer.trim_end(), "◉ ask permissions on");
     assert!(!footer.contains("enter queue"));
     assert!(!footer.contains("ctrl-c interrupt"));
 }
@@ -202,7 +272,8 @@ fn error_detail_is_rendered_once_and_the_footer_only_offers_recovery() {
             .count(),
         1
     );
-    assert!(rendered.contains("ask permissions on · ready to retry"));
+    assert!(rendered.contains("ask permissions on"));
+    assert!(!rendered.contains("ready to retry"));
     assert!(!rendered.contains("esc esc rewind"));
     assert!(!rendered.contains("StableTurnError"));
 }
@@ -231,11 +302,11 @@ fn bare_slash_renders_the_first_command_window() {
     let rendered = render(&app, 80, 20);
 
     assert!(rendered.contains("/status"));
+    assert!(rendered.contains("/statusline"));
     assert!(rendered.contains("/skills"));
     assert!(rendered.contains("/mcp"));
     assert!(rendered.contains("/resume"));
     assert!(rendered.contains("/thread"));
-    assert!(rendered.contains("/archive-thread"));
     assert!(!rendered.contains("/login"));
     assert!(!rendered.contains("/plugins"));
 }
@@ -246,8 +317,8 @@ fn slash_popup_inherits_the_theme_surface_and_bolds_the_selected_command() {
     app.insert_text("/");
 
     let buffer = render_buffer(&app, 80, 20);
-    let selected = &buffer[(2, 9)];
-    let unselected = &buffer[(2, 10)];
+    let selected = &buffer[(2, 10)];
+    let unselected = &buffer[(2, 11)];
     let surface_background = buffer[(0, 0)].bg;
 
     assert_eq!(selected.fg, highlight());
@@ -266,16 +337,16 @@ fn slash_popup_hit_testing_maps_visible_rows_and_rejects_outside_clicks() {
     app.insert_text("/");
     let terminal_area = Rect::new(0, 0, 80, 20);
 
-    assert_eq!(slash_command_index_at(&app, terminal_area, 2, 9), Some(0));
-    assert_eq!(slash_command_index_at(&app, terminal_area, 77, 14), Some(5));
-    assert_eq!(slash_command_index_at(&app, terminal_area, 1, 9), None);
-    assert_eq!(slash_command_index_at(&app, terminal_area, 2, 15), None);
+    assert_eq!(slash_command_index_at(&app, terminal_area, 2, 10), Some(0));
+    assert_eq!(slash_command_index_at(&app, terminal_area, 77, 15), Some(5));
+    assert_eq!(slash_command_index_at(&app, terminal_area, 1, 10), None);
+    assert_eq!(slash_command_index_at(&app, terminal_area, 2, 16), None);
 
     for _ in 0..7 {
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
-    assert_eq!(slash_command_index_at(&app, terminal_area, 2, 9), Some(2));
-    assert_eq!(slash_command_index_at(&app, terminal_area, 2, 14), Some(7));
+    assert_eq!(slash_command_index_at(&app, terminal_area, 2, 10), Some(2));
+    assert_eq!(slash_command_index_at(&app, terminal_area, 2, 15), Some(7));
 }
 
 #[test]
@@ -347,7 +418,7 @@ fn mention_popup_renders_workspace_paths_and_exposes_the_same_click_rows() {
     for (row, matched) in popup.matches.iter().take(2).enumerate() {
         for (column, character) in matched.path.chars().enumerate() {
             assert_eq!(
-                buffer[(column as u16 + 2, row as u16 + 13)].symbol(),
+                buffer[(column as u16 + 2, row as u16 + 14)].symbol(),
                 character.to_string()
             );
         }
@@ -358,18 +429,18 @@ fn mention_popup_renders_workspace_paths_and_exposes_the_same_click_rows() {
         .find(|index| !second.indices.contains(index))
         .unwrap();
     assert!(
-        buffer[(matched_index as u16 + 2, 14)]
+        buffer[(matched_index as u16 + 2, 15)]
             .modifier
             .contains(Modifier::BOLD)
     );
     assert!(
-        !buffer[(unmatched_index as u16 + 2, 14)]
+        !buffer[(unmatched_index as u16 + 2, 15)]
             .modifier
             .contains(Modifier::BOLD)
     );
-    assert_eq!(mention_index_at(&app, terminal_area, 2, 13), Some(0));
-    assert_eq!(mention_index_at(&app, terminal_area, 2, 14), Some(1));
-    assert_eq!(mention_index_at(&app, terminal_area, 1, 14), None);
+    assert_eq!(mention_index_at(&app, terminal_area, 2, 14), Some(0));
+    assert_eq!(mention_index_at(&app, terminal_area, 2, 15), Some(1));
+    assert_eq!(mention_index_at(&app, terminal_area, 1, 15), None);
     let _ = fs::remove_dir_all(workspace);
 }
 
