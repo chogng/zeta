@@ -7,7 +7,7 @@ import { type EditorVisualLineProjection } from "../../../common/viewModel/model
 import { type TextMeasurer } from "../../../common/viewModel/textMeasurer.js";
 import { EmptyRangeRendering, createStanzaRangeRectangles } from "../../../common/viewModel/rangeGeometry.js";
 import { createStanzaVisualRangeRectangles } from "../../../common/viewModel/visualRangeGeometry.js";
-import { type EditorLineRange } from "../../../common/viewLayout/linesLayout.js";
+import { type EditorLineRange } from "../../../common/viewModel.js";
 
 export enum DecorationPresentation {
 	SearchMatch = "search-match",

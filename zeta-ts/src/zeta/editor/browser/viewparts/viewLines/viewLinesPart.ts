@@ -1,8 +1,8 @@
 import './viewLines.css';
 import { DisposableOwner } from '../../../../base/common/lifecycle.js';
 import { type EditorVisualLine, type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
-import { type EditorLineRange } from '../../../common/viewLayout/linesLayout.js';
-import { type EditorViewportLayout } from '../../../common/viewLayout/viewLayout.js';
+import { type EditorLineRange } from '../../../common/viewModel.js';
+import { type ViewportData } from '../../../common/viewLayout/viewLinesViewportData.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type BracketColorizationSource, type ResolvedSemanticToken, type SemanticTokenSource, projectStanzaSemanticTokenLine } from '../semanticTokens/semanticTokenPresentation.js';
 import { type EditorLineGutterDecoration } from '../margin/lineGutterDecoration.js';
@@ -67,8 +67,8 @@ export class ViewLinesPart extends DisposableOwner {
 		return this.layer.renderedLines;
 	}
 
-	render(layout: EditorViewportLayout): void {
-		this.layer.render(layout);
+	render(viewportData: ViewportData): void {
+		this.layer.render(viewportData);
 	}
 
 	/** Reprojects semantic tokens without rebuilding the visible row window. */

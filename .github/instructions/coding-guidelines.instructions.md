@@ -1,18 +1,19 @@
 ---
-description: Zeta TypeScript frontend naming, formatting, API, and code quality rules.
-applyTo: "**/src/**/*.ts,**/src/**/*.cts,**/test/**/*.ts"
+description: Zeta coding guidelines — naming, style, types, strings, and code quality rules. Reference when writing or reviewing code.
+applyTo: src/zeta/**
 ---
 
-# TypeScript Coding Guidelines
+# Coding Guidelines
 
-Applies to the entire frontend. Domain instructions may add rules, but must not redefine them.
+Canonical reference: https://github.com/microsoft/vscode/wiki/Coding-Guidelines
+
+Also see the [Source Code Organization](https://github.com/microsoft/vscode/wiki/Source-Code-Organization) wiki page.
 
 ## Formatting
 
 - Use tabs, single quotes, and semicolons.
 - Keep each import declaration on one physical line.
 - Keep short calls, signatures, conditions, and expressions on one line.
-- Use about 120 columns as the normal working width. Imports may exceed it.
 - When wrapping, use one logical item per line and a trailing comma. Do not wrap for hypothetical growth.
 - Always use braces; put the opening brace on the same line.
 - Use blank lines only between real reading phases.
@@ -23,7 +24,7 @@ Existing files are not yet migrated. Preserve their indentation, quotes, and pri
 
 - PascalCase for classes, interfaces, types, enums, and enum members.
 - camelCase for functions, methods, properties, parameters, and local variables.
-- Use whole, precise domain words. Avoid generic `Context`, `Manager`, `Helper`, and `Data` names.
+- Use whole words when possible.
 - Boolean names normally start with `is`, `has`, `can`, or `should`.
 - Event handlers use `handle*`. Events use `onDid*`.
 
@@ -89,4 +90,3 @@ private visible = false;
 - Keep short, complete algorithms together. Do not extract helpers that only rename consecutive steps.
 - Extract shared semantics, independent lifecycle, complex mechanism, or substantial duplication.
 - Judge complexity by concepts and cross-file jumps, not line count alone.
-- Use roughly 800 lines as a review trigger, not an extraction criterion. When a file remains near or above that size, inspect it for independently owned responsibilities; do not split a cohesive implementation only to reduce line count.

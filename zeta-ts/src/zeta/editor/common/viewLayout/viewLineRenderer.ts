@@ -91,7 +91,8 @@ function createLineParts(lineContent: string, segments: readonly { readonly star
 		const startOffset = sorted[index]!;
 		const endOffset = sorted[index + 1]!;
 		const segment = segments.find(candidate => candidate.startOffset === startOffset && candidate.endOffset === endOffset);
-		parts.push(new LinePart(endOffset, segment?.className ?? '', segment?.metadata ?? 0));
+		const whitespaceMetadata = isWhitespace(lineContent, startOffset, endOffset) ? LinePartMetadata.IS_WHITESPACE : 0;
+		parts.push(new LinePart(endOffset, segment?.className ?? '', (segment?.metadata ?? 0) | whitespaceMetadata));
 	}
 	if (parts.length === 0) parts.push(new LinePart(0, '', 0));
 	return parts;
@@ -121,6 +122,14 @@ function renderText(text: string, input: RenderLineInput, offset: number): strin
 function renderControlCharacter(character: string): string {
 	const code = character.charCodeAt(0);
 	return code < 32 ? `\\u${code.toString(16).padStart(4, '0')}` : character;
+}
+
+function isWhitespace(lineContent: string, startOffset: number, endOffset: number): boolean {
+	if (startOffset === endOffset) return false;
+	for (let offset = startOffset; offset < endOffset; offset += 1) {
+		if (lineContent[offset] !== ' ' && lineContent[offset] !== '\t') return false;
+	}
+	return true;
 }
 
 function escapeHtml(value: string): string {

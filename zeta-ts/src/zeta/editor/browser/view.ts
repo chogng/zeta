@@ -12,9 +12,10 @@ import { resolveEditorIndentationOptions, type EditorIndentationOptions, type Re
 import { TextPosition, type TextRange } from '../common/core/text.js';
 import { type TextModel } from '../common/model/textModel.js';
 import { type EditorVisualLineProjection } from '../common/viewModel/modelLineProjection.js';
+import { type EditorScrollPosition } from '../common/viewModel.js';
 import { EditorLineWrapping, isWrappingIndent, WrappingIndent } from '../common/config/editorOptions.js';
 import { type EditorLineVisibilitySource, ViewModelLines } from '../common/viewModel/viewModelLines.js';
-import { type EditorScrollPosition, type EditorViewportChange, type EditorViewportLayout, ViewLayout } from '../common/viewLayout/viewLayout.js';
+import { type EditorViewportChange, type EditorViewportLayout, ViewLayout } from '../common/viewLayout/viewLayout.js';
 import { CompositionController } from './controller/compositionController.js';
 import { createEditContext } from './controller/editContext/factory.js';
 import { type EditContext, type EditContextCharacterBounds } from './controller/editContext/editContext.js';
@@ -23,7 +24,6 @@ import { ScreenReaderSupport } from './controller/editContext/native/screenReade
 import { TextAreaAccessibilityController } from './controller/editContext/textArea/textAreaAccessibilityController.js';
 import { TextAreaEditContext } from './controller/editContext/textArea/textAreaEditContext.js';
 import { ViewController, type EditorCommandContext, type EditorCommandTransformer, type EditorLanguageEditingAdapter, type EditorViewDidEditEvent, type EditorViewTextUpdateEvent } from './view/viewController.js';
-import { ViewInputController } from './view/viewInputController.js';
 import { type ClientPoint, type EditorHitTarget, EditorHitTargetKind, hitTestStanzaVisualEditorPoint } from '../common/viewModel/pointerHitTest.js';
 import { applyEditorFontInfo } from './config/domFontInfo.js';
 import { ElementSizeObserver } from './config/elementSizeObserver.js';
@@ -45,7 +45,7 @@ import { ScrollDecorationPart } from './viewparts/scrollDecoration/scrollDecorat
 import { EditorViewContext, EditorViewPartCollection } from './view/viewPart.js';
 import { ViewOverlays } from './view/viewOverlays.js';
 import { ViewLinesPart } from './viewparts/viewLines/viewLinesPart.js';
-import { createEditorRenderingContext, type EditorRenderingContext } from './view/renderingContext.js';
+import { createEditorRenderingContext, createEditorViewportData, type EditorRenderingContext } from './view/renderingContext.js';
 import { ViewUserInputEvents } from './view/viewUserInputEvents.js';
 import { DOMLineBreaksComputer } from './view/domLineBreaksComputer.js';
 import './media/editorViewport.css';
@@ -81,8 +81,8 @@ export interface EditorViewOptions {
  * The browser view/input boundary for one line editor.
  *
  * This follows the VS Code split: the view selects and owns the concrete
- * EditContext and ViewInputController own browser input, while ViewController
- * routes semantic input into common commands.
+ * EditContext adapters own browser input, while ViewController routes semantic
+ * input into common commands.
  * View owns DOM projection and rendering; feature contributions own
  * policies such as completion.
  */
@@ -170,14 +170,10 @@ export class EditorView extends DisposableOwner {
 				selectionController,
 				{ languageEditing, wordPattern: viewOptions.wordPattern, userInputEvents: this.userInputEvents },
 			));
-			const viewInputController = this.own(new ViewInputController(
-				this.editContext,
-				this.viewController,
-				this.compositionController,
-			));
-			this.onWillBeforeInput = viewInputController.onWillBeforeInput;
-			this.onWillTextUpdate = viewInputController.onWillTextUpdate;
-			this.onWillKeydown = viewInputController.onWillKeydown;
+			this.editContext.connectViewController(this.viewController, this.compositionController);
+			this.onWillBeforeInput = this.editContext.onWillBeforeInput;
+			this.onWillTextUpdate = this.editContext.onWillTextUpdate;
+			this.onWillKeydown = this.editContext.onWillKeydown;
 			this.onDidEdit = this.viewController.onDidEdit;
 			this.own(this.viewController.onDidChangeOvertype(overtyping => {
 				this.viewport.element.classList.toggle('overtype', overtyping);
@@ -971,8 +967,9 @@ export class View extends DisposableOwner {
 	private project(layout: EditorViewportLayout): void {
 		this.observeRenderedLineWidths(layout);
 		if (layout !== this.viewport.layout) return;
-		this.viewLinesPart.render(layout);
-		const context = this.createRenderingContext(layout);
+		const viewportData = createEditorViewportData(layout);
+		this.viewLinesPart.render(viewportData);
+		const context = this.createRenderingContext(layout, viewportData);
 		this.element.classList.toggle("horizontally-scrollable", layout.maximumScrollPosition.left > 0);
 		this.element.classList.toggle("vertically-scrollable", layout.maximumScrollPosition.top > 0);
 		this.contentNode.setWidth(layout.contentSize.width);
@@ -1015,7 +1012,7 @@ export class View extends DisposableOwner {
 			: `Line ${position.lineIndex + 1}, column ${position.columnIndex + 1}, ${selectedLength} characters selected`);
 	}
 
-	private createRenderingContext(layout: EditorViewportLayout): EditorRenderingContext {
+	private createRenderingContext(layout: EditorViewportLayout, viewportData = createEditorViewportData(layout)): EditorRenderingContext {
 		const overlay: ViewportOverlayContext = {
 			ownerDocument: this.element.ownerDocument,
 			model: this.model,
@@ -1027,7 +1024,7 @@ export class View extends DisposableOwner {
 			useDomTextGeometry: this.textDirection !== EditorTextDirection.LeftToRight,
 			activeLineHighlight: this.activeLineHighlight,
 		};
-		return createEditorRenderingContext(layout, overlay);
+		return createEditorRenderingContext(layout, overlay, viewportData);
 	}
 
 	private get visualProjection() {

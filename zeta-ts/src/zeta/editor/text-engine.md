@@ -160,7 +160,7 @@ this.viewParts.render(context);
 
 Browser controller 的职责是把一个 DOM event 解析成一个 editor intent，然后调用 common command 或 selection transition。它不得重新实现事务、range mapping 或 model history。
 
-- `EditContext`：browser input contract；`NativeEditContext` 使用浏览器原生 EditContext，`TextAreaEditContext` 是 textarea fallback；`EditorView` 选择实现并拥有输入生命周期，`ViewInputController` 将 beforeinput/textupdate/keydown 路由到语义命令，`ViewController` 执行 common command，`CompositionController` 拥有 IME 事务，`SuggestController` 作为独立 contribution 拥有 completion 请求与 widget，textarea accessibility 仍由 `TextAreaAccessibilityController` 负责；language-aware typing 通过显式 `EditorLanguageEditingAdapter` 注入。
+- `EditContext`：browser input contract；`NativeEditContext` 使用浏览器原生 EditContext，`TextAreaEditContext` 是 textarea fallback；两个适配器通过现有 `EditContext` 边界把 beforeinput/textupdate/keydown 路由到 `ViewController`，`ViewController` 执行 common command，`CompositionController` 拥有 IME 事务，`SuggestController` 作为独立 contribution 拥有 completion 请求与 widget，textarea accessibility 仍由 `TextAreaAccessibilityController` 负责；language-aware typing 通过显式 `EditorLanguageEditingAdapter` 注入。
 - `CompositionController`：浏览器 composition sequence 与 common composition session 的适配。
 - `KeyboardNavigationController`：平台 chord 到 DOM-free navigation command。
 - `PointerHandler`：pointer dispatch、drag session 和 native capture 的 browser adapter。

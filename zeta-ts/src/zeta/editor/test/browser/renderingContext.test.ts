@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { type EditorViewportLayout } from '../../common/viewLayout/viewLayout.js';
+import { type ViewportData } from '../../common/viewLayout/viewLinesViewportData.js';
 import { type ViewportOverlayContext } from '../../browser/viewparts/viewportOverlay/viewportOverlayPresentation.js';
 import { createEditorRenderingContext, type EditorRenderingContext } from '../../browser/view/renderingContext.js';
 import { EditorViewContext, EditorViewPart, EditorViewPartCollection } from '../../browser/view/viewPart.js';
@@ -63,6 +64,7 @@ test('EditorViewContext creates a rendering context from the current layout', ()
 
 test('createEditorRenderingContext omits stale overlay geometry', () => {
 	const layout = {} as EditorViewportLayout;
+	const viewportData = {} as ViewportData;
 	const matchingOverlay = {
 		model: { version: 4 },
 		visualLineProjection: { modelVersion: 4 },
@@ -72,10 +74,11 @@ test('createEditorRenderingContext omits stale overlay geometry', () => {
 		visualLineProjection: { modelVersion: 4 },
 	} as unknown as ViewportOverlayContext;
 
-	const current = createEditorRenderingContext(layout, matchingOverlay);
-	const stale = createEditorRenderingContext(layout, staleOverlay);
+	const current = createEditorRenderingContext(layout, matchingOverlay, viewportData);
+	const stale = createEditorRenderingContext(layout, staleOverlay, viewportData);
 
 	assert.equal(current.overlay, matchingOverlay);
 	assert.equal(stale.overlay, undefined);
+	assert.equal(current.viewportData, viewportData);
 	assert.equal(Object.isFrozen(current), true);
 });

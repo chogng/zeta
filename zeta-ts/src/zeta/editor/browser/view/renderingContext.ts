@@ -1,4 +1,5 @@
 import { type EditorViewportLayout } from '../../common/viewLayout/viewLayout.js';
+import { ViewportData } from '../../common/viewLayout/viewLinesViewportData.js';
 import { type ViewportOverlayContext } from '../viewparts/viewportOverlay/viewportOverlayPresentation.js';
 
 /**
@@ -10,13 +11,26 @@ import { type ViewportOverlayContext } from '../viewparts/viewportOverlay/viewpo
  */
 export interface EditorRenderingContext {
 	readonly layout: EditorViewportLayout;
+	readonly viewportData: ViewportData;
 	readonly overlay: ViewportOverlayContext | undefined;
 }
 
 /** Creates the version-bound context used by one render pass. */
-export function createEditorRenderingContext(layout: EditorViewportLayout, overlay: ViewportOverlayContext): EditorRenderingContext {
+export function createEditorRenderingContext(layout: EditorViewportLayout, overlay: ViewportOverlayContext, viewportData = createEditorViewportData(layout)): EditorRenderingContext {
 	return Object.freeze({
 		layout,
+		viewportData,
 		overlay: overlay.visualLineProjection.modelVersion === overlay.model.version ? overlay : undefined,
+	});
+}
+
+/** Adapts the common layout snapshot to the line-rendering viewport contract. */
+export function createEditorViewportData(layout: EditorViewportLayout): ViewportData {
+	return new ViewportData({
+		modelVersion: layout.modelVersion,
+		lineHeight: layout.lineHeight,
+		visibleLines: layout.visibleLines,
+		renderLines: layout.renderLines,
+		renderTop: layout.renderTop,
 	});
 }

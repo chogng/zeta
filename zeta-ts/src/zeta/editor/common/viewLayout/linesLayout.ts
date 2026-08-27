@@ -1,23 +1,13 @@
-import { type Event } from '../../../base/common/event.js';
 import { isFiniteNumber, isNonNegativeSafeInteger, isPositiveSafeInteger } from '../../../base/common/numbers.js';
-import { type TextModel } from '../model/textModel.js';
+import { type EditorLineHeightChangeAccessor, type EditorLineRange, type EditorViewportLineSource } from '../viewModel.js';
 import { CustomLineHeightData, LineHeightsManager } from './lineHeights.js';
 
-export interface EditorLineRange {
-	readonly startLineIndex: number;
-	readonly endLineIndexExclusive: number;
-}
+export type { EditorLineRange, EditorViewportLineSource } from '../viewModel.js';
 
 /** Vertical space reserved around the projected line collection. */
 export interface EditorViewportVerticalPadding {
 	readonly top: number;
 	readonly bottom: number;
-}
-
-/** Supplies the current visual-line count to the common layout without owning the projection. */
-export interface EditorViewportLineSource {
-	readonly lineCount: number;
-	readonly onDidChange: Event<void>;
 }
 
 export interface LinesLayoutViewport {
@@ -26,6 +16,7 @@ export interface LinesLayoutViewport {
 	readonly visibleLines: EditorLineRange;
 	readonly renderLines: EditorLineRange;
 	readonly renderTop: number;
+	readonly relativeVerticalOffset: readonly number[];
 }
 
 /**
@@ -90,6 +81,22 @@ export class LinesLayout {
 		this.overscanLineCount = nonNegativeSafeInteger(overscanLineCount, 'overscanLineCount');
 	}
 
+	public changeLineHeights(callback: (accessor: EditorLineHeightChangeAccessor) => void): boolean {
+		if (typeof callback !== 'function') throw new TypeError('Line-height changes require a callback');
+		let hadAChange = false;
+		callback({
+			insertOrChangeCustomLineHeight: (decorationId, startLineNumber, endLineNumber, lineHeight) => {
+				hadAChange = true;
+				this.lineHeights.insertOrChangeCustomLineHeight(decorationId, startLineNumber, endLineNumber, lineHeight);
+			},
+			removeCustomLineHeight: decorationId => {
+				hadAChange = true;
+				this.lineHeights.removeCustomLineHeight(decorationId);
+			},
+		});
+		return hadAChange;
+	}
+
 	public getLinesTotalHeight(): number {
 		return this.paddingTop + this.lineHeights.getTotalHeight(this.lineCount) + this.paddingBottom;
 	}
@@ -110,7 +117,7 @@ export class LinesLayout {
 			throw new RangeError('Line viewport coordinates must be finite and non-negative');
 		}
 		const lineCount = this.lineCount;
-		const lineHeight = this.lineHeights.getTotalHeight(lineCount);
+		const totalLineHeight = this.lineHeights.getTotalHeight(lineCount);
 		const visibleLines = getVisibleLineRange(
 			lineCount,
 			this.lineHeights,
@@ -128,10 +135,14 @@ export class LinesLayout {
 			: visibleLines);
 		return Object.freeze({
 			lineCount,
-			contentHeight: this.paddingTop + lineHeight + this.paddingBottom,
+			contentHeight: this.paddingTop + totalLineHeight + this.paddingBottom,
 			visibleLines,
 			renderLines,
 			renderTop: this.getVerticalOffsetForLineIndex(renderLines.startLineIndex),
+			relativeVerticalOffset: Object.freeze(Array.from(
+				{ length: renderLines.endLineIndexExclusive - renderLines.startLineIndex },
+				(_, index) => this.getVerticalOffsetForLineIndex(renderLines.startLineIndex + index),
+			)),
 		});
 	}
 
@@ -141,17 +152,6 @@ export class LinesLayout {
 		const lineOffset = verticalOffset - this.paddingTop;
 		return this.lineHeights.getLineIndexAtVerticalOffset(lineOffset, lineCount);
 	}
-}
-
-/** Creates the default one-row-per-model-line source used by an unwrapped view. */
-export function createTextModelLineSource(model: TextModel): EditorViewportLineSource {
-	if (!model || typeof model !== 'object') throw new TypeError('Text model line source requires a model');
-	return Object.freeze({
-		get lineCount(): number {
-			return model.lineCount;
-		},
-		onDidChange: (listener: () => void) => model.onDidChange(() => listener()),
-	});
 }
 
 export function getVisibleLineRange(

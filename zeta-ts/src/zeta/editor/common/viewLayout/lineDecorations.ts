@@ -1,20 +1,5 @@
-import { type TextRange } from '../core/text.js';
+import { InlineDecorationType, type InlineDecoration } from '../viewModel/inlineDecorations.js';
 import { LinePartMetadata } from './linePart.js';
-
-/** Decoration kinds understood by the common line renderer. */
-export enum InlineDecorationType {
-	Regular = 'regular',
-	RegularAffectingLetterSpacing = 'regularAffectingLetterSpacing',
-	Before = 'before',
-	After = 'after',
-}
-
-/** Common decoration input kept independent from browser CSS and DOM. */
-export interface InlineDecoration {
-	readonly range: TextRange;
-	readonly inlineClassName: string;
-	readonly type: InlineDecorationType;
-}
 
 /** One zero-based source span after line decorations have been clipped. */
 export class LineDecoration {
@@ -44,10 +29,11 @@ export class LineDecoration {
 			throw new RangeError('Wrapped line offsets must be ordered non-negative safe integers');
 		}
 		return decorations.flatMap(decoration => {
+			if (decoration.endColumn <= startOffset || decoration.startColumn >= endOffset) return [];
 			const startColumn = Math.max(0, decoration.startColumn - startOffset);
 			const endColumn = Math.min(endOffset - startOffset, decoration.endColumn - startOffset);
-			return endColumn > startColumn || decoration.type === InlineDecorationType.Before || decoration.type === InlineDecorationType.After
-				? [new LineDecoration(startColumn, Math.max(startColumn, endColumn), decoration.className, decoration.type)]
+			return endColumn >= startColumn
+				? [new LineDecoration(startColumn, endColumn, decoration.className, decoration.type)]
 				: [];
 		});
 	}
@@ -66,7 +52,11 @@ export class LineDecoration {
 			if (decoration.range.empty && (decoration.type === InlineDecorationType.Regular || decoration.type === InlineDecorationType.RegularAffectingLetterSpacing)) return [];
 			const startColumn = decoration.range.start.lineIndex === lineIndex ? decoration.range.start.columnIndex : minColumn;
 			const endColumn = decoration.range.end.lineIndex === lineIndex ? decoration.range.end.columnIndex : maxColumn;
-			return [new LineDecoration(Math.max(minColumn, startColumn), Math.min(maxColumn, Math.max(startColumn, endColumn)), decoration.inlineClassName, decoration.type)];
+			const clippedStartColumn = Math.max(minColumn, startColumn);
+			const clippedEndColumn = Math.min(maxColumn, endColumn);
+			if (clippedEndColumn < clippedStartColumn) return [];
+			if (clippedEndColumn === clippedStartColumn && (decoration.type === InlineDecorationType.Regular || decoration.type === InlineDecorationType.RegularAffectingLetterSpacing)) return [];
+			return [new LineDecoration(clippedStartColumn, clippedEndColumn, decoration.inlineClassName, decoration.type)];
 		});
 	}
 
@@ -92,11 +82,16 @@ export class LineDecorationsNormalizer {
 	public static normalize(lineContent: string, decorations: readonly LineDecoration[]): readonly DecorationSegment[] {
 		if (typeof lineContent !== 'string') throw new TypeError('Line content must be a string');
 		if (decorations.length === 0) return Object.freeze([]);
+		const normalizedDecorations = decorations.map(decoration => ({
+			decoration,
+			startColumn: moveSurrogateBoundary(lineContent, decoration.startColumn),
+			endColumn: moveSurrogateBoundary(lineContent, decoration.endColumn),
+		}));
 		const boundaries = new Set<number>([0, lineContent.length]);
-		for (const decoration of decorations) {
-			if (decoration.endColumn > lineContent.length) throw new RangeError('Line decoration exceeds line content');
-			boundaries.add(decoration.startColumn);
-			boundaries.add(decoration.endColumn);
+		for (const { startColumn, endColumn } of normalizedDecorations) {
+			if (endColumn > lineContent.length) throw new RangeError('Line decoration exceeds line content');
+			boundaries.add(startColumn);
+			boundaries.add(endColumn);
 		}
 		const sortedBoundaries = [...boundaries].sort((left, right) => left - right);
 		const result: DecorationSegment[] = [];
@@ -104,20 +99,20 @@ export class LineDecorationsNormalizer {
 			const startOffset = sortedBoundaries[index]!;
 			const endOffset = sortedBoundaries[index + 1]!;
 			if (endOffset <= startOffset) continue;
-			const active = decorations.filter(decoration => decoration.startColumn <= startOffset && decoration.endColumn >= endOffset);
+			const active = normalizedDecorations.filter(({ startColumn, endColumn }) => startColumn <= startOffset && endColumn >= endOffset);
 			if (active.length === 0) continue;
 			result.push(new DecorationSegment(
 				startOffset,
 				endOffset,
-				active.map(decoration => decoration.className).join(' '),
-				active.reduce((metadata, decoration) => metadata | metadataFor(decoration.type), 0),
+				active.map(({ decoration }) => decoration.className).join(' '),
+				active.reduce((metadata, { decoration }) => metadata | metadataFor(decoration.type), 0),
 			));
 		}
-		for (const decoration of decorations) {
-			if (decoration.startColumn !== decoration.endColumn) continue;
+		for (const { decoration, startColumn, endColumn } of normalizedDecorations) {
+			if (startColumn !== endColumn) continue;
 			const metadata = metadataFor(decoration.type);
 			if (metadata === 0) continue;
-			result.push(new DecorationSegment(decoration.startColumn, decoration.endColumn, decoration.className, metadata));
+			result.push(new DecorationSegment(startColumn, endColumn, decoration.className, metadata));
 		}
 		return Object.freeze(result.sort((left, right) => left.startOffset - right.startOffset || left.endOffset - right.endOffset));
 	}
@@ -127,4 +122,14 @@ function metadataFor(type: InlineDecorationType): number {
 	return type === InlineDecorationType.Before
 		? LinePartMetadata.PSEUDO_BEFORE
 		: type === InlineDecorationType.After ? LinePartMetadata.PSEUDO_AFTER : 0;
+}
+
+function moveSurrogateBoundary(lineContent: string, column: number): number {
+	return column > 0 && column < lineContent.length && isHighSurrogate(lineContent.charCodeAt(column - 1))
+		? column - 1
+		: column;
+}
+
+function isHighSurrogate(charCode: number): boolean {
+	return charCode >= 0xD800 && charCode <= 0xDBFF;
 }

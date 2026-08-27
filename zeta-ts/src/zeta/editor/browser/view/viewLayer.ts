@@ -3,8 +3,8 @@ import { h, reset, fragment as createFragment } from '../../../base/browser/dom.
 import { FastDomNode } from '../../../base/browser/fastDomNode.js';
 import { DisposableOwner } from '../../../base/common/lifecycle.js';
 import { type EditorVisualLine, type EditorVisualLineProjection } from '../../common/viewModel/modelLineProjection.js';
-import { type EditorLineRange } from '../../common/viewLayout/linesLayout.js';
-import { type EditorViewportLayout } from '../../common/viewLayout/viewLayout.js';
+import { type EditorLineRange } from '../../common/viewModel.js';
+import { type ViewportData } from '../../common/viewLayout/viewLinesViewportData.js';
 
 export interface ViewLayerLineRenderer<TLine> {
 	createLine(visualLineIndex: number): TLine;
@@ -56,36 +56,36 @@ export class ViewLayer<TLine> extends DisposableOwner {
 		return this.renderedRange;
 	}
 
-	render(layout: EditorViewportLayout): void {
-		this.root.setTransform(`translate3d(0, ${layout.renderTop}px, 0)`);
+	render(viewportData: ViewportData): void {
+		this.root.setTransform(`translate3d(0, ${viewportData.renderTop}px, 0)`);
 		const visualProjection = this.readVisualProjection();
 		const projectionRevision = this.readProjectionRevision();
-		if (visualProjection.modelVersion !== layout.modelVersion) return;
+		if (visualProjection.modelVersion !== viewportData.modelVersion) return;
 		if (
-			this.renderedModelVersion === layout.modelVersion &&
-			this.renderedLineHeight === layout.lineHeight &&
+			this.renderedModelVersion === viewportData.modelVersion &&
+			this.renderedLineHeight === viewportData.lineHeight &&
 			this.renderedProjectionRevision === projectionRevision &&
-			lineRangesEqual(this.renderedRange, layout.renderLines)
+			lineRangesEqual(this.renderedRange, viewportData.renderLines)
 		) return;
 
 		const fragment = createFragment(this.domNode.ownerDocument);
 		const next = new Map<number, TLine>();
-		for (let visualLineIndex = layout.renderLines.startLineIndex; visualLineIndex < layout.renderLines.endLineIndexExclusive; visualLineIndex += 1) {
+		for (let visualLineIndex = viewportData.renderLines.startLineIndex; visualLineIndex < viewportData.renderLines.endLineIndexExclusive; visualLineIndex += 1) {
 			const visualLine = visualProjection.lineAt(visualLineIndex);
 			if (!visualLine) throw new Error('Viewport render range exceeds the visual line projection');
 			const existing = this.lines.get(visualLineIndex);
 			const line = existing ?? this.lineRenderer.createLine(visualLineIndex);
-			const needsLineRender = !existing || this.renderedModelVersion !== layout.modelVersion || this.renderedProjectionRevision !== projectionRevision;
+			const needsLineRender = !existing || this.renderedModelVersion !== viewportData.modelVersion || this.renderedProjectionRevision !== projectionRevision;
 			if (needsLineRender) this.lineRenderer.renderLine(line, visualLine);
-			if (!existing || this.renderedLineHeight !== layout.lineHeight) this.lineRenderer.layoutLine(line, layout.lineHeight);
+			if (!existing || this.renderedLineHeight !== viewportData.lineHeight) this.lineRenderer.layoutLine(line, viewportData.lineHeight);
 			next.set(visualLineIndex, line);
 			fragment.append(this.lineRenderer.getDomNode(line));
 		}
 		reset(this.domNode, fragment);
 		this.lines = next;
-		this.renderedRange = layout.renderLines;
-		this.renderedModelVersion = layout.modelVersion;
-		this.renderedLineHeight = layout.lineHeight;
+		this.renderedRange = viewportData.renderLines;
+		this.renderedModelVersion = viewportData.modelVersion;
+		this.renderedLineHeight = viewportData.lineHeight;
 		this.renderedProjectionRevision = projectionRevision;
 	}
 }

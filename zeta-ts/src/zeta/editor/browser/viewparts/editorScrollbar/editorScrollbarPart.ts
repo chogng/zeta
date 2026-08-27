@@ -3,7 +3,7 @@ import { isFiniteNumber } from "../../../../base/common/numbers.js";
 import { HorizontalScrollbar } from "../../../../base/browser/ui/scrollbar/horizontalScrollbar.js";
 import { VerticalScrollbar } from "../../../../base/browser/ui/scrollbar/verticalScrollbar.js";
 import { createScrollbarAxisMetrics, type ScrollbarAxisMetrics } from "../../../../base/browser/ui/scrollbar/scrollbarState.js";
-import { type EditorScrollPosition } from "../../../common/viewLayout/viewLayout.js";
+import { type EditorScrollPosition } from "../../../common/viewModel.js";
 import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
 
 export type EditorScrollbarVisibility = "auto" | "visible" | "hidden";

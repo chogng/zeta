@@ -1,18 +1,14 @@
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { type ISize } from '../../../base/common/layout.js';
 import { DisposableOwner } from '../../../base/common/lifecycle.js';
-import { clamp, isFiniteNumber, isNonNegativeSafeInteger } from '../../../base/common/numbers.js';
+import { clamp, isFiniteNumber, isNonNegativeSafeInteger, isPositiveSafeInteger } from '../../../base/common/numbers.js';
 import { type TextModelChange } from '../core/text.js';
-import { type TextModel } from '../model/textModel.js';
-import { createTextModelLineSource, LinesLayout, type EditorLineRange, type EditorViewportLineSource, type EditorViewportVerticalPadding } from './linesLayout.js';
-import { ViewportData } from './viewLinesViewportData.js';
+import { type EditorLineHeightChangeAccessor, type EditorLineRange, type EditorScrollPosition, type EditorViewportLineSource, type EditorViewportModelSource } from '../viewModel.js';
+import { LinesLayout, type EditorViewportVerticalPadding } from './linesLayout.js';
+import { type CustomLineHeightData } from './lineHeights.js';
 
-export type { EditorLineRange, EditorViewportLineSource, EditorViewportVerticalPadding } from './linesLayout.js';
-
-export interface EditorScrollPosition {
-	readonly left: number;
-	readonly top: number;
-}
+export type { EditorLineHeightChangeAccessor, EditorLineRange, EditorScrollPosition, EditorViewportLineSource, EditorViewportModelSource } from '../viewModel.js';
+export type { EditorViewportVerticalPadding } from './linesLayout.js';
 
 export interface EditorViewportLayout {
 	readonly modelVersion: number;
@@ -46,6 +42,7 @@ export interface EditorViewportOptions {
 	readonly overscanLineCount?: number;
 	readonly lineSource?: EditorViewportLineSource;
 	readonly padding?: EditorViewportVerticalPadding;
+	readonly customLineHeightData?: readonly CustomLineHeightData[];
 }
 
 /**
@@ -65,9 +62,9 @@ export class ViewLayout extends DisposableOwner {
 
 	public readonly onDidChange: Event<EditorViewportChange> = this.changeEmitter.event;
 
-	public constructor(private readonly model: TextModel, options: EditorViewportOptions) {
+	public constructor(private readonly model: EditorViewportModelSource, options: EditorViewportOptions) {
 		super();
-		if (!model || typeof model !== 'object') throw new TypeError('View layout requires a text model');
+		validateModelSource(model);
 		if (!options || typeof options !== 'object') throw new TypeError('View layout requires options');
 		const lineHeight = positiveFinite(options.lineHeight, 'lineHeight');
 		const overscanLineCount = nonNegativeSafeInteger(options.overscanLineCount ?? 2, 'overscanLineCount');
@@ -79,6 +76,7 @@ export class ViewLayout extends DisposableOwner {
 			padding.top,
 			padding.bottom,
 			overscanLineCount,
+			options.customLineHeightData,
 		);
 		this.currentLayout = this.createLayout();
 		this.own(model.onDidChange(change => this.publish(EditorViewportChangeReason.Model, change)));
@@ -93,10 +91,6 @@ export class ViewLayout extends DisposableOwner {
 
 	public get lineCount(): number {
 		return this.linesLayout.lineCount;
-	}
-
-	public getViewportData(): ViewportData {
-		return new ViewportData(this.currentLayout);
 	}
 
 	public setViewportSize(size: ISize): EditorViewportLayout {
@@ -132,16 +126,18 @@ export class ViewLayout extends DisposableOwner {
 		return this.currentLayout;
 	}
 
+	public changeLineHeights(callback: (accessor: EditorLineHeightChangeAccessor) => void): EditorViewportLayout {
+		if (!this.linesLayout.changeLineHeights(callback)) return this.currentLayout;
+		this.publish(EditorViewportChangeReason.LineHeight);
+		return this.currentLayout;
+	}
+
 	public setScrollPosition(position: EditorScrollPosition): EditorViewportLayout {
 		const next = readScrollPosition(position);
 		if (scrollPositionsEqual(this.requestedScrollPosition, next)) return this.currentLayout;
 		this.requestedScrollPosition = next;
 		this.publish(EditorViewportChangeReason.Scroll);
 		return this.currentLayout;
-	}
-
-	public getLinesLayout(): LinesLayout {
-		return this.linesLayout;
 	}
 
 	private publish(reason: EditorViewportChangeReason, modelChange?: TextModelChange): void {
@@ -178,6 +174,23 @@ export class ViewLayout extends DisposableOwner {
 			renderTop: viewportData.renderTop,
 		});
 	}
+}
+
+/** Creates the default one-row-per-model-line source used by an unwrapped view. */
+function createTextModelLineSource(model: EditorViewportModelSource): EditorViewportLineSource {
+	validateModelSource(model);
+	return Object.freeze({
+		get lineCount(): number {
+			return model.lineCount;
+		},
+		onDidChange: (listener: () => void) => model.onDidChange(() => listener()),
+	});
+}
+
+function validateModelSource(model: EditorViewportModelSource): void {
+	if (!model || typeof model !== 'object' || typeof model.onDidChange !== 'function') throw new TypeError('View layout requires a model source');
+	if (!isPositiveSafeInteger(model.lineCount)) throw new RangeError('View layout model line count must be a positive safe integer');
+	if (!isNonNegativeSafeInteger(model.version)) throw new RangeError('View layout model version must be a non-negative safe integer');
 }
 
 function readPadding(padding: EditorViewportVerticalPadding | undefined): EditorViewportVerticalPadding {

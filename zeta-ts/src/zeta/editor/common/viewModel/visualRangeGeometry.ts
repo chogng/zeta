@@ -1,7 +1,7 @@
 import { type TextRange } from "../core/text.js";
 import { type TextModel } from "../model/textModel.js";
 import { type EditorVisualLineProjection } from "./modelLineProjection.js";
-import { type EditorLineRange } from "../viewLayout/linesLayout.js";
+import { type EditorLineRange } from "../viewModel.js";
 import { type TextMeasurer } from "./textMeasurer.js";
 import { EmptyRangeRendering } from "./rangeGeometry.js";
 

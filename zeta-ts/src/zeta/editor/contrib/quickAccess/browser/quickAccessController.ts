@@ -6,7 +6,7 @@ import { operatingSystem, OperatingSystem } from "../../../../base/common/platfo
 import { parseStanzaGotoLocation, type GotoLocationParseResult } from "../../../common/commands/gotoLocation.js";
 import { EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
-import { type EditorScrollPosition } from "../../../common/viewLayout/viewLayout.js";
+import { type EditorScrollPosition } from "../../../common/viewModel.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 export interface GotoLineControllerOptions {
