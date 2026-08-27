@@ -1,0 +1,15 @@
+package(default_visibility = ["//visibility:public"])
+
+load(":foreign_platform_binary.bzl", "foreign_platform_binary")
+
+exports_files(["foreign_platform_binary.bzl"])
+
+# This target is manual and Windows-compatible only; it provides a concrete
+# consumer for the generic transition rule without entering the normal build.
+foreign_platform_binary(
+    name = "zeta-cli-windows-x86_64-gnullvm",
+    binary = "//zeta-code/cli:zeta",
+    platform = "//:windows_x86_64_gnullvm",
+    tags = ["manual"],
+    target_compatible_with = ["@platforms//os:windows"],
+)
