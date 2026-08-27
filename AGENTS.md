@@ -13,3 +13,7 @@ Before modifying this repository:
 - Lead with the conclusion and use surrounding prose only for important boundaries or caveats.
 - When comparing responsibilities, capabilities, implementation status, or design options, prefer a compact conclusion-oriented table when it makes the distinction clearer.
 - Use `✅` and `❌` only for genuinely binary judgments. Use explicit labels such as `部分具备`, `尚未完成`, `协调`, or `委托` for nuanced states.
+
+- 禁止往app/src中写入代码
+- 回复时请说人话
+- 禁止native命名

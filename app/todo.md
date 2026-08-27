@@ -1,0 +1,5 @@
+- 交互式终端是给zeta code的, app 不需要
+- 禁止timeline, chat 负责统一打印msg，包括终端日志,用户消息 and agent answer
+- 分为workbench-host, workbench, ui and 
+- 禁止native 概念在app这里
+- 设计理念为 agent-first, 一切功能都是为了提升agent的能力
