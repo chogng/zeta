@@ -6,9 +6,10 @@ use zui::ui::NavigationAxis;
 
 use super::identity::{
     FIRST_TAB_CONTAINER_SESSION_TAB, FIRST_TITLEBAR_SESSION_TAB, TAB_CONTAINER,
-    TAB_CONTAINER_SETTINGS_TAB, TITLEBAR, TITLEBAR_SETTINGS_TAB, TITLEBAR_TAB_CONTAINER, WINDOW,
-    session_tab_close_id, session_tab_id, tab_group_list_id, titlebar_session_tab_close_id,
-    titlebar_session_tab_id, titlebar_tab_group_list_id,
+    TAB_CONTAINER_SETTINGS_CLOSE, TAB_CONTAINER_SETTINGS_TAB, TITLEBAR, TITLEBAR_SETTINGS_CLOSE,
+    TITLEBAR_SETTINGS_TAB, TITLEBAR_TAB_CONTAINER, WINDOW, session_tab_close_id, session_tab_id,
+    tab_group_list_id, titlebar_session_tab_close_id, titlebar_session_tab_id,
+    titlebar_tab_group_list_id,
 };
 use crate::TabGroupId;
 use crate::TabId;
@@ -57,6 +58,13 @@ impl TabContainerPlacement {
         match self {
             Self::Body => TAB_CONTAINER_SETTINGS_TAB,
             Self::Titlebar => TITLEBAR_SETTINGS_TAB,
+        }
+    }
+
+    pub(super) const fn settings_close_id(self) -> ElementId {
+        match self {
+            Self::Body => TAB_CONTAINER_SETTINGS_CLOSE,
+            Self::Titlebar => TITLEBAR_SETTINGS_CLOSE,
         }
     }
 
@@ -165,6 +173,13 @@ pub enum TabIntent {
 
 /// Resolves a tab or close-button identity without depending on current tab order.
 pub fn tab_intent_for_element(tab_part: &TabPart, element: ElementId) -> Option<TabIntent> {
+    if element == TabContainerPlacement::Body.settings_close_id()
+        || element == TabContainerPlacement::Titlebar.settings_close_id()
+    {
+        return tab_part
+            .input(&TabInputKey::Settings)
+            .map(|_| TabIntent::Close(TabInputKey::Settings));
+    }
     if element == TabContainerPlacement::Body.settings_id()
         || element == TabContainerPlacement::Titlebar.settings_id()
     {
@@ -226,7 +241,7 @@ impl<'a> WorkbenchTab<'a> {
         placement: TabContainerPlacement,
     ) -> Self {
         if input.is_settings() {
-            Self::settings(placement.settings_id())
+            Self::settings(placement.settings_id(), placement.settings_close_id())
         } else {
             let tab_id = tab_part
                 .tab_id(input.key())
@@ -261,10 +276,10 @@ impl<'a> WorkbenchTab<'a> {
         }
     }
 
-    pub fn settings(id: ElementId) -> Self {
+    pub fn settings(id: ElementId, close_id: ElementId) -> Self {
         Self {
             id,
-            close_id: id,
+            close_id,
             kind: WorkbenchTabKind::Settings,
             name: "Settings",
             workspace: "Application",

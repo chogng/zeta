@@ -98,6 +98,30 @@ fn settings_tab_mounts_a_settings_pane_when_activated() {
 }
 
 #[test]
+fn settings_tab_close_removes_its_container_and_activation_recreates_it() {
+    let mut workbench = Workbench::new();
+    assert!(workbench.activate_settings());
+
+    let closed = workbench
+        .close_tab(&TabInputKey::Settings)
+        .expect("closed Settings tab");
+
+    assert_eq!(closed.key(), &TabInputKey::Settings);
+    assert!(workbench.tab_part().input(&TabInputKey::Settings).is_none());
+    assert!(workbench.pane_container(&TabInputKey::Settings).is_none());
+
+    assert!(workbench.activate_settings());
+    assert!(workbench.tab_part().input(&TabInputKey::Settings).is_some());
+    assert_eq!(
+        workbench
+            .pane_part(&TabInputKey::Settings)
+            .and_then(|part| part.active_input(part.root_group()))
+            .map(PaneInput::kind),
+        Some(PaneInputKind::Settings)
+    );
+}
+
+#[test]
 fn session_and_settings_tabs_select_their_one_to_one_pane_containers() {
     let mut workbench = Workbench::new();
     let session = session("session-1", "Terminal");

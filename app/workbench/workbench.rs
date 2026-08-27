@@ -140,7 +140,7 @@ impl Workbench {
             .map(PaneContainer::take_panes)
     }
 
-    /// Closes a Session tab and its owned pane container as one logical operation.
+    /// Closes a tab and its owned pane container as one logical operation.
     pub fn close_tab(&mut self, tab_key: &TabInputKey) -> Option<ClosedTab> {
         self.tab_part.close_tab(tab_key)?;
         let panes = self
@@ -163,8 +163,11 @@ impl Workbench {
         self.activate_tab(TabInputKey::session(session_id.clone()))
     }
 
-    /// Activates the singleton Settings tab.
+    /// Opens or activates the singleton Settings tab.
     pub fn activate_settings(&mut self) -> bool {
+        self.pane_containers
+            .entry(TabInputKey::Settings)
+            .or_insert_with(|| PaneContainer::with_input(PaneInput::settings()));
         self.tab_part.activate_settings()
     }
 

@@ -288,7 +288,7 @@ fn removing_an_active_session_selects_the_nearest_remaining_tab() {
 }
 
 #[test]
-fn removing_the_last_session_falls_back_to_settings_and_keeps_settings_singleton() {
+fn settings_can_close_and_reopen_as_the_same_logical_input_type() {
     let only = session("session-1", "Only");
     let key = TabInputKey::session(only.session_id.clone());
     let mut part = TabPart::default();
@@ -299,5 +299,11 @@ fn removing_the_last_session_falls_back_to_settings_and_keeps_settings_singleton
     assert_eq!(part.selected_session(), None);
     assert_eq!(part.input_count(), 1);
     assert!(part.inputs().next().unwrap().is_settings());
-    assert!(part.close_tab(&TabInputKey::Settings).is_none());
+    assert!(part.close_tab(&TabInputKey::Settings).is_some());
+    assert_eq!(part.input_count(), 0);
+    assert_eq!(part.active_tab_key(), None);
+
+    assert!(part.activate_settings());
+    assert_eq!(part.input_count(), 1);
+    assert_eq!(part.active_tab_key(), Some(&TabInputKey::Settings));
 }

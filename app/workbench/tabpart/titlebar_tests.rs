@@ -1,14 +1,13 @@
 use super::Titlebar;
 use super::TitlebarInsets;
 use crate::Color;
-use crate::Component;
 use crate::PaneInputKind;
 use crate::Point;
 use crate::Rect;
 use crate::TabPart;
-use crate::UiScene;
 use crate::tabpart::identity::{
-    TAB_CONTAINER_TOGGLE, TITLEBAR, TITLEBAR_SETTINGS_TAB, WORKSPACE_PANE_TOGGLE,
+    TAB_CONTAINER_TOGGLE, TITLEBAR, TITLEBAR_SETTINGS_CLOSE, TITLEBAR_SETTINGS_TAB,
+    TITLEBAR_TAB_CONTAINER, WORKSPACE_PANE_TOGGLE,
 };
 use crate::tabpart::test_style;
 use zeta_icons::icons;
@@ -35,16 +34,18 @@ fn titlebar_mounts_tabs_between_window_controls_and_actions() {
     );
     frame.draw_component(&titlebar);
 
-    assert_eq!(frame.scene().icons().len(), 3);
+    assert_eq!(frame.scene().icons().len(), 4);
     assert_eq!(frame.scene().icons()[0].icon(), icons::GEAR);
     assert_eq!(
-        frame.scene().icons()[1].icon(),
+        frame.scene().icons()[2].icon(),
         icons::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY
     );
     assert_eq!(
-        frame.scene().icons()[2].icon(),
+        frame.scene().icons()[3].icon(),
         icons::LAYOUT_SIDEBAR_RIGHT_OFF_EMPTY
     );
+    assert_eq!(frame.scene().icons()[1].icon(), icons::CLOSE);
+    assert!(frame.interaction().node(TITLEBAR_SETTINGS_CLOSE).is_some());
     assert!(
         frame
             .scene()
@@ -90,7 +91,7 @@ fn titlebar_mounts_tabs_between_window_controls_and_actions() {
 }
 
 #[test]
-fn expanded_tab_container_and_workspace_pane_use_the_active_icons() {
+fn expanded_tab_container_omits_horizontal_tabs_and_uses_the_active_icons() {
     let part = TabPart::default();
     let dispatch = UiDispatch::default();
     let titlebar = Titlebar::new(
@@ -103,10 +104,19 @@ fn expanded_tab_container_and_workspace_pane_use_the_active_icons() {
         TitlebarInsets::NONE,
         &dispatch,
     );
-    let mut scene = UiScene::new(Color::TRANSPARENT);
+    let mut frame = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
 
-    titlebar.paint(&mut scene);
+    frame.draw_component(&titlebar);
 
-    assert_eq!(scene.icons()[1].icon(), icons::LAYOUT_SIDEBAR_LEFT);
-    assert_eq!(scene.icons()[2].icon(), icons::LAYOUT_SIDEBAR_RIGHT);
+    assert_eq!(frame.scene().icons().len(), 2);
+    assert_eq!(frame.scene().icons()[0].icon(), icons::LAYOUT_SIDEBAR_LEFT);
+    assert_eq!(frame.scene().icons()[1].icon(), icons::LAYOUT_SIDEBAR_RIGHT);
+    assert!(
+        frame
+            .scene()
+            .text_blocks()
+            .iter()
+            .all(|text| text.text() != "Settings")
+    );
+    assert!(frame.interaction().node(TITLEBAR_TAB_CONTAINER).is_none());
 }

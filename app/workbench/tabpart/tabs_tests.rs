@@ -16,8 +16,9 @@ use crate::TabIntent;
 use crate::TabPart;
 use crate::TabStatus;
 use crate::tabpart::identity::{
-    FIRST_TAB_CONTAINER_SESSION_TAB, FIRST_TITLEBAR_SESSION_TAB, TAB_CONTAINER_SETTINGS_TAB,
-    TITLEBAR_SETTINGS_TAB, session_tab_id, tab_group_list_id, titlebar_session_tab_close_id,
+    FIRST_TAB_CONTAINER_SESSION_TAB, FIRST_TITLEBAR_SESSION_TAB, TAB_CONTAINER_SETTINGS_CLOSE,
+    TAB_CONTAINER_SETTINGS_TAB, TITLEBAR_SETTINGS_CLOSE, TITLEBAR_SETTINGS_TAB,
+    session_tab_close_id, session_tab_id, tab_group_list_id, titlebar_session_tab_close_id,
     titlebar_session_tab_id,
 };
 use crate::tabpart::test_style;
@@ -227,6 +228,79 @@ fn close_button_is_a_child_action_and_resolves_to_the_stable_tab_key() {
         tab_intent_for_element(&part, close_id),
         Some(TabIntent::Close(first_key))
     );
+}
+
+#[test]
+fn every_tab_has_a_close_button_in_each_mount() {
+    let (part, first_key, second_key) = part_with_two_sessions();
+    let dispatch = UiDispatch::default();
+    let first_id = part.tab_id(&first_key).unwrap();
+    let second_id = part.tab_id(&second_key).unwrap();
+    let mounts = [
+        (
+            TabContainerPlacement::Body,
+            Rect::from_xywh(0.0, 36.0, 220.0, 664.0),
+            [
+                session_tab_close_id(first_id),
+                session_tab_close_id(second_id),
+                TAB_CONTAINER_SETTINGS_CLOSE,
+            ],
+        ),
+        (
+            TabContainerPlacement::Titlebar,
+            Rect::from_xywh(40.0, 0.0, 700.0, 32.0),
+            [
+                titlebar_session_tab_close_id(first_id),
+                titlebar_session_tab_close_id(second_id),
+                TITLEBAR_SETTINGS_CLOSE,
+            ],
+        ),
+    ];
+
+    for (placement, bounds, close_ids) in mounts {
+        let container = TabContainer::from_tab_part(
+            bounds,
+            bounds,
+            &part,
+            Some(&first_key),
+            placement,
+            test_style(),
+            &dispatch,
+        );
+        let mut frame = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
+        frame.draw_component(&container);
+        let nodes = frame.interaction().accessibility_nodes(&dispatch);
+
+        assert_eq!(
+            close_ids.map(|id| {
+                let node = nodes.iter().find(|node| node.id == id).unwrap();
+                (node.role, tab_intent_for_element(&part, id))
+            }),
+            [
+                (
+                    AccessibilityRole::Button,
+                    Some(TabIntent::Close(first_key.clone())),
+                ),
+                (
+                    AccessibilityRole::Button,
+                    Some(TabIntent::Close(second_key.clone())),
+                ),
+                (
+                    AccessibilityRole::Button,
+                    Some(TabIntent::Close(TabInputKey::Settings)),
+                ),
+            ]
+        );
+        assert_eq!(
+            frame
+                .scene()
+                .icons()
+                .iter()
+                .filter(|icon| icon.icon() == zeta_icons::icons::CLOSE)
+                .count(),
+            3
+        );
+    }
 }
 
 #[test]

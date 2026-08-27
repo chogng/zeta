@@ -190,8 +190,13 @@ impl TabPart {
         self.activate_tab(TabInputKey::session(session_id.clone()))
     }
 
-    /// Activates the Settings singleton.
+    /// Opens or activates the Settings singleton.
     pub fn activate_settings(&mut self) -> bool {
+        if self.input(&TabInputKey::Settings).is_none() {
+            self.group_mut(TabGroupId::DEFAULT)
+                .expect("default TabGroup must remain present")
+                .push_input(TabInput::from_settings());
+        }
         self.activate_tab(TabInputKey::Settings)
     }
 
@@ -301,11 +306,8 @@ impl TabPart {
         true
     }
 
-    /// Removes a Session input and selects the nearest remaining tab in flattened group order.
+    /// Removes an input and selects the nearest remaining tab in flattened group order.
     pub fn close_tab(&mut self, key: &TabInputKey) -> Option<TabInput> {
-        if !key.is_session() {
-            return None;
-        }
         let ordered_keys = self
             .inputs()
             .map(|input| input.key().clone())

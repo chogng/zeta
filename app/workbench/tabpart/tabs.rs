@@ -272,9 +272,7 @@ impl<'a> TabContainer<'a> {
                         continue;
                     }
                     context.draw_component(&self.tab_region(tab, tab_bounds, layout.list_id));
-                    if tab.kind == WorkbenchTabKind::Session {
-                        context.draw_component(&self.close_region(tab, tab_bounds));
-                    }
+                    context.draw_component(&self.close_region(tab, tab_bounds));
                 }
             }
             context.scene_mut().with_clip(self.content_bounds, |scene| {
@@ -390,11 +388,7 @@ impl<'a> TabContainer<'a> {
             self.paint_status_dot(scene, tab, status_bounds);
         }
         let text_x = status_bounds.right() + STATUS_CONTENT_GAP;
-        let text_right = if tab.kind == WorkbenchTabKind::Session {
-            self.close_bounds(tab_bounds).origin.x - 6.0
-        } else {
-            tab_bounds.right() - TAB_CONTENT_PADDING
-        };
+        let text_right = self.close_bounds(tab_bounds).origin.x - 6.0;
         let text_width = (text_right - text_x).max(1.0);
         scene.draw_text(TextBlock::new(
             tab.name,
@@ -408,9 +402,7 @@ impl<'a> TabContainer<'a> {
             Size::new(text_width, 15.0),
             TextStyle::new(11.0, self.style.text_muted).with_line_height(15.0),
         ));
-        if tab.kind == WorkbenchTabKind::Session {
-            self.paint_close_icon(scene, tab_bounds);
-        }
+        self.paint_close_icon(scene, tab_bounds);
     }
 
     fn paint_titlebar_tab(&self, scene: &mut UiScene, tab: &WorkbenchTab<'_>, tab_bounds: Rect) {
@@ -448,20 +440,14 @@ impl<'a> TabContainer<'a> {
                 text_x = pin_bounds.right() + 4.0;
             }
         }
-        let text_right = if tab.kind == WorkbenchTabKind::Session {
-            self.close_bounds(tab_bounds).origin.x - 4.0
-        } else {
-            tab_bounds.right() - TAB_CONTENT_PADDING
-        };
+        let text_right = self.close_bounds(tab_bounds).origin.x - 4.0;
         scene.draw_text(TextBlock::new(
             tab.name,
             Point::new(text_x, tab_bounds.origin.y + 3.0),
             Size::new((text_right - text_x).max(1.0), 18.0),
             TextStyle::new(12.0, self.style.text).with_line_height(18.0),
         ));
-        if tab.kind == WorkbenchTabKind::Session {
-            self.paint_close_icon(scene, tab_bounds);
-        }
+        self.paint_close_icon(scene, tab_bounds);
     }
 
     fn paint_pinned_status(&self, scene: &mut UiScene, tab: &WorkbenchTab<'_>, bounds: Rect) {

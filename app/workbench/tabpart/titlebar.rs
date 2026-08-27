@@ -40,7 +40,7 @@ pub struct Titlebar<'a> {
     style: WorkbenchUiStyle,
     left_action_bar: ActionBar,
     right_action_bar: ActionBar,
-    tab_container: TabContainer<'a>,
+    tab_container: Option<TabContainer<'a>>,
     tab_container_toggle_label: &'static str,
     workspace_toggle_label: &'static str,
 }
@@ -161,15 +161,17 @@ impl<'a> Titlebar<'a> {
             style: style.clone(),
             left_action_bar,
             right_action_bar,
-            tab_container: TabContainer::from_tab_part(
-                tabs_bounds,
-                tabs_bounds,
-                tab_part,
-                active_tab,
-                TabContainerPlacement::Titlebar,
-                style,
-                dispatch,
-            ),
+            tab_container: (!tabs_expanded).then(|| {
+                TabContainer::from_tab_part(
+                    tabs_bounds,
+                    tabs_bounds,
+                    tab_part,
+                    active_tab,
+                    TabContainerPlacement::Titlebar,
+                    style,
+                    dispatch,
+                )
+            }),
             tab_container_toggle_label,
             workspace_toggle_label,
         }
@@ -235,7 +237,9 @@ impl Component for Titlebar<'_> {
                 self.style.border,
             )),
         );
-        context.draw_component(&self.tab_container);
+        if let Some(tab_container) = &self.tab_container {
+            context.draw_component(tab_container);
+        }
         context.draw_component(&self.left_action_bar);
         context.draw_component(&self.right_action_bar);
     }
@@ -247,7 +251,9 @@ impl Component for Titlebar<'_> {
                 self.style.border,
             )),
         );
-        scene.draw_component(&self.tab_container);
+        if let Some(tab_container) = &self.tab_container {
+            scene.draw_component(tab_container);
+        }
         scene.draw_component(&self.left_action_bar);
         scene.draw_component(&self.right_action_bar);
     }
