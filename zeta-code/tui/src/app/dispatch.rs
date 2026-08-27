@@ -267,7 +267,7 @@ impl ActiveConversation {
             }
             TuiSlashCommandAction::Copy
             | TuiSlashCommandAction::Export
-            | TuiSlashCommandAction::Keymap => {
+            | TuiSlashCommandAction::Shortcuts => {
                 return Err(CommandExecutionError(
                     "host command reached the App Server dispatcher".into(),
                 ));

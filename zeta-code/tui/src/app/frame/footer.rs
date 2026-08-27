@@ -23,33 +23,26 @@ pub(super) fn draw(frame: &mut Frame<'_>, area: Rect, app: &App) {
         zeta_protocol::ApprovalMode::BypassPermissions => "bypass permissions on",
     };
     let (text, style) = match app.status() {
-        Status::Ready => (
-            format!(
-                "{mode} · shift-tab switch · enter send · ctrl-v image · esc esc rewind · ctrl-c quit"
-            ),
-            Style::default().fg(muted()),
-        ),
-        Status::Working => (
-            format!(
-                "{mode} · shift-tab switch · working… · enter queue · shift-enter newline · ctrl-c interrupt"
-            ),
-            Style::default().fg(warning()),
-        ),
+        Status::Ready => (mode.into(), Style::default().fg(muted())),
+        Status::Working => (format!("{mode} · working…"), Style::default().fg(warning())),
         Status::WaitingForApproval => (
-            "approval required · ctrl-c interrupt".into(),
+            format!("{mode} · approval required"),
             Style::default().fg(warning()),
         ),
         Status::WaitingForUserInput => (
-            "input required · ctrl-c interrupt".into(),
+            format!("{mode} · input required"),
             Style::default().fg(warning()),
         ),
         Status::WaitingForCapability => (
-            "capability required · ctrl-c interrupt".into(),
+            format!("{mode} · capability required"),
             Style::default().fg(warning()),
         ),
-        Status::Cancelling => ("interrupting…".into(), Style::default().fg(warning())),
+        Status::Cancelling => (
+            format!("{mode} · interrupting…"),
+            Style::default().fg(warning()),
+        ),
         Status::Error => (
-            format!("{mode} · shift-tab switch · ready to retry · esc esc rewind · ctrl-c quit"),
+            format!("{mode} · ready to retry"),
             Style::default().fg(danger()),
         ),
     };

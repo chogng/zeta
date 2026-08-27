@@ -5,7 +5,6 @@ use super::AppKeymapAction;
 use super::AppKeymapCondition;
 use super::AppKeymapContext;
 use super::KEY_CHORD_TIMEOUT;
-use super::app_keybinding_help_items;
 use super::compile_app_user_bindings;
 use super::compose_config_chord;
 use super::key_event_to_config_key;
@@ -33,8 +32,6 @@ fn chord_keymap() -> AppKeymap {
         keybinding: "ctrl+k ctrl+o",
         action: AppKeymapAction::CopyLastResponse,
         condition: AppKeymapCondition::Always,
-        help_label: "Ctrl-K Ctrl-O",
-        help_description: "test chord",
     }])
 }
 
@@ -252,8 +249,6 @@ fn plain_escape_is_reserved_for_cancelling_pending_chords() {
         keybinding: "ctrl+k escape",
         action: AppKeymapAction::CopyLastResponse,
         condition: AppKeymapCondition::Always,
-        help_label: "Ctrl-K Esc",
-        help_description: "invalid test chord",
     }]);
 }
 
@@ -264,29 +259,7 @@ fn plain_character_prefix_cannot_intercept_composer_text() {
         keybinding: "k ctrl+o",
         action: AppKeymapAction::CopyLastResponse,
         condition: AppKeymapCondition::Always,
-        help_label: "K Ctrl-O",
-        help_description: "invalid test chord",
     }]);
-}
-
-#[test]
-fn app_help_is_derived_from_every_registered_binding() {
-    let labels = app_keybinding_help_items()
-        .map(|(label, _)| label)
-        .collect::<Vec<_>>();
-
-    assert_eq!(
-        labels,
-        vec![
-            "Shift-Tab",
-            "Esc Esc",
-            "Ctrl-V",
-            "Ctrl-C",
-            "Ctrl-D",
-            "Ctrl-O",
-            "Ctrl-Z",
-        ],
-    );
 }
 
 #[test]

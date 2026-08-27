@@ -25,6 +25,14 @@ use crate::features::sessions::SessionSelectionAction;
 use crate::features::sessions::SessionSelectionView;
 use crate::features::sessions::ThreadSelectionAction;
 use crate::features::sessions::ThreadSelectionView;
+use crate::features::shortcuts::ShortcutAction;
+use crate::features::shortcuts::ShortcutCaptureOutcome;
+use crate::features::shortcuts::ShortcutCaptureState;
+use crate::features::shortcuts::ShortcutEdit;
+use crate::features::shortcuts::ShortcutEditKind;
+use crate::features::shortcuts::ShortcutView;
+use crate::features::shortcuts::action_menu;
+use crate::features::shortcuts::capture_view;
 use crate::features::skills::{SkillSelectionAction, SkillSelectionView};
 use crate::features::status_line::StatusLineModel;
 use crate::features::theme::ThemeSelectionAction;
@@ -38,14 +46,6 @@ use crate::keymap::AppChordMatch;
 use crate::keymap::AppKeymap;
 use crate::keymap::AppKeymapAction;
 use crate::keymap::AppKeymapContext;
-use crate::keymap_setup::KeymapCaptureOutcome;
-use crate::keymap_setup::KeymapCaptureState;
-use crate::keymap_setup::KeymapEdit;
-use crate::keymap_setup::KeymapEditKind;
-use crate::keymap_setup::KeymapSetupAction;
-use crate::keymap_setup::KeymapSetupView;
-use crate::keymap_setup::action_menu;
-use crate::keymap_setup::capture_view;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -95,8 +95,8 @@ enum SelectionActions {
     Threads(BTreeMap<SelectionItemId, ThreadSelectionAction>),
     Skills(BTreeMap<SelectionItemId, SkillSelectionAction>),
     Theme(BTreeMap<SelectionItemId, ThemeSelectionAction>),
-    Keymap(BTreeMap<SelectionItemId, KeymapSetupAction>),
-    KeymapCapture(KeymapCaptureState),
+    Shortcuts(BTreeMap<SelectionItemId, ShortcutAction>),
+    ShortcutCapture(ShortcutCaptureState),
 }
 
 impl App {
@@ -147,22 +147,22 @@ impl App {
     fn handle_key_at(&mut self, key: KeyEvent, now: Instant) -> Option<AppCommand> {
         if matches!(
             self.selection_actions.last(),
-            Some(SelectionActions::KeymapCapture(_))
+            Some(SelectionActions::ShortcutCapture(_))
         ) {
             let outcome = match self.selection_actions.last_mut() {
-                Some(SelectionActions::KeymapCapture(capture)) => capture.handle_key(key),
-                _ => unreachable!("the keymap capture state was checked above"),
+                Some(SelectionActions::ShortcutCapture(capture)) => capture.handle_key(key),
+                _ => unreachable!("the shortcut capture state was checked above"),
             };
             return match outcome {
-                KeymapCaptureOutcome::Pending(model) => {
+                ShortcutCaptureOutcome::Pending(model) => {
                     self.interaction_pane.replace_selection_view(model);
                     None
                 }
-                KeymapCaptureOutcome::Cancelled => {
+                ShortcutCaptureOutcome::Cancelled => {
                     self.close_selection_view();
                     None
                 }
-                KeymapCaptureOutcome::Edit(edit) => Some(AppCommand::EditKeymap(edit)),
+                ShortcutCaptureOutcome::Edit(edit) => Some(AppCommand::EditShortcut(edit)),
             };
         }
         let temporary_interaction_active = self.selection_view().is_some()
@@ -229,9 +229,9 @@ impl App {
             let outcome = state.activate_item(item_id)?;
             return self.apply_interaction_selection_outcome(outcome);
         }
-        if let Some(SelectionActions::Keymap(actions)) = self.selection_actions.last() {
+        if let Some(SelectionActions::Shortcuts(actions)) = self.selection_actions.last() {
             let action = actions.get(item_id)?.clone();
-            return self.apply_keymap_setup_action(action);
+            return self.apply_shortcut_action(action);
         }
         match self.selection_actions.last()? {
             SelectionActions::ReadOnly => None,
@@ -316,17 +316,17 @@ impl App {
                 }
                 ThemeSelectionAction::OpenCustomThemes => Some(AppCommand::OpenCustomThemePane),
             },
-            SelectionActions::Keymap(_) | SelectionActions::KeymapCapture(_) => None,
+            SelectionActions::Shortcuts(_) | SelectionActions::ShortcutCapture(_) => None,
         }
     }
 
-    fn apply_keymap_setup_action(&mut self, action: KeymapSetupAction) -> Option<AppCommand> {
+    fn apply_shortcut_action(&mut self, action: ShortcutAction) -> Option<AppCommand> {
         match action {
-            KeymapSetupAction::OpenAction { action, revision } => {
-                self.show_keymap_view(action_menu(action, revision));
+            ShortcutAction::OpenAction { action, revision } => {
+                self.show_shortcut_view(action_menu(action, revision));
                 None
             }
-            KeymapSetupAction::BeginCapture {
+            ShortcutAction::BeginCapture {
                 action,
                 revision,
                 intent,
@@ -335,16 +335,16 @@ impl App {
                 let (model, capture) = capture_view(action, revision, intent, mode);
                 self.interaction_pane.show_selection_view(model);
                 self.selection_actions
-                    .push(SelectionActions::KeymapCapture(capture));
+                    .push(SelectionActions::ShortcutCapture(capture));
                 None
             }
-            KeymapSetupAction::ClearCustom {
+            ShortcutAction::ClearCustom {
                 command_id,
                 revision,
-            } => Some(AppCommand::EditKeymap(KeymapEdit {
+            } => Some(AppCommand::EditShortcut(ShortcutEdit {
                 expected_revision: revision,
                 command_id,
-                kind: KeymapEditKind::ClearCustom,
+                kind: ShortcutEditKind::ClearCustom,
             })),
         }
     }
@@ -559,16 +559,16 @@ impl App {
             .push(SelectionActions::Theme(view.actions));
     }
 
-    fn show_keymap_view(&mut self, view: KeymapSetupView) {
+    fn show_shortcut_view(&mut self, view: ShortcutView) {
         self.interaction_pane.show_selection_view(view.model);
         self.selection_actions
-            .push(SelectionActions::Keymap(view.actions));
+            .push(SelectionActions::Shortcuts(view.actions));
     }
 
-    fn close_keymap_views(&mut self) {
+    fn close_shortcut_views(&mut self) {
         while matches!(
             self.selection_actions.last(),
-            Some(SelectionActions::Keymap(_) | SelectionActions::KeymapCapture(_))
+            Some(SelectionActions::Shortcuts(_) | SelectionActions::ShortcutCapture(_))
         ) {
             self.interaction_pane.pop_selection_view();
             self.selection_actions.pop();
@@ -693,8 +693,8 @@ impl App {
                 self.status = Status::Ready;
             }
             AppEvent::InteractionViewOpened(view) => self.show_interaction_view(view),
-            AppEvent::KeymapViewOpened(view) => self.show_keymap_view(view),
-            AppEvent::KeymapViewsClosed => self.close_keymap_views(),
+            AppEvent::ShortcutViewOpened(view) => self.show_shortcut_view(view),
+            AppEvent::ShortcutViewsClosed => self.close_shortcut_views(),
             AppEvent::ConnectorViewOpened(view) => self.show_connector_view(view),
             AppEvent::ConnectorViewReplaced(view) => self.replace_connector_view(view),
             AppEvent::McpViewOpened(view) => self.show_mcp_view(view),
@@ -864,10 +864,10 @@ impl App {
                     .then(|| PathBuf::from(invocation.display_arguments.trim()));
                 Some(AppCommand::ExportTranscript { requested_path })
             }
-            (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Keymap))
+            (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Shortcuts))
                 if invocation.arguments.is_empty() =>
             {
-                Some(AppCommand::OpenKeymapPane)
+                Some(AppCommand::OpenShortcutsPane)
             }
             (SlashCommandOrigin::Server, _) => {
                 let submission = invocation.into_forwarded_submission();

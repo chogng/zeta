@@ -20,7 +20,7 @@ fn builtins_follow_enum_presentation_order() {
             ("files", TuiSlashCommandAction::Files),
             ("fork", TuiSlashCommandAction::Fork),
             ("help", TuiSlashCommandAction::Help),
-            ("keymap", TuiSlashCommandAction::Keymap),
+            ("shortcuts", TuiSlashCommandAction::Shortcuts),
             ("copy", TuiSlashCommandAction::Copy),
             ("export", TuiSlashCommandAction::Export),
             ("model", TuiSlashCommandAction::Model),

@@ -6,11 +6,11 @@ use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 
-use super::KeymapEdit;
-use super::KeymapEditIntent;
-use super::KeymapEditKind;
-use super::KeymapSetupResource;
-use super::KeymapSetupResourcePoll;
+use super::ShortcutEdit;
+use super::ShortcutEditIntent;
+use super::ShortcutEditKind;
+use super::ShortcutResource;
+use super::ShortcutResourcePoll;
 use crate::keymap::AppKeymap;
 use crate::keymap::AppKeymapAction;
 use crate::keymap::AppKeymapContext;
@@ -33,12 +33,12 @@ fn valid_updates_replace_user_rules_and_missing_resource_restores_builtins() {
     )
     .unwrap();
     let started = Instant::now();
-    let mut resource = KeymapSetupResource::new(path.clone(), started);
+    let mut resource = ShortcutResource::new(path.clone(), started);
     let mut keymap = AppKeymap::default();
 
     assert_eq!(
         resource.poll(started, &mut keymap),
-        KeymapSetupResourcePoll::Updated
+        ShortcutResourcePoll::Updated
     );
     assert_eq!(
         keymap.resolve_single(
@@ -51,7 +51,7 @@ fn valid_updates_replace_user_rules_and_missing_resource_restores_builtins() {
     fs::remove_file(&path).unwrap();
     assert_eq!(
         resource.poll(started + Duration::from_secs(1), &mut keymap),
-        KeymapSetupResourcePoll::Updated
+        ShortcutResourcePoll::Updated
     );
     assert_eq!(
         keymap.resolve_single(
@@ -71,14 +71,14 @@ fn rejected_update_preserves_the_last_valid_keymap() {
     )
     .unwrap();
     let started = Instant::now();
-    let mut resource = KeymapSetupResource::new(path.clone(), started);
+    let mut resource = ShortcutResource::new(path.clone(), started);
     let mut keymap = AppKeymap::default();
     resource.poll(started, &mut keymap);
 
     fs::write(&path, br#"[{"key":"ctrl+k escape","command":null}]"#).unwrap();
     assert!(matches!(
         resource.poll(started + Duration::from_secs(1), &mut keymap),
-        KeymapSetupResourcePoll::Rejected(message) if message.contains("plain Escape")
+        ShortcutResourcePoll::Rejected(message) if message.contains("plain Escape")
     ));
     assert_eq!(
         keymap.resolve_single(
@@ -92,7 +92,7 @@ fn rejected_update_preserves_the_last_valid_keymap() {
 }
 
 #[test]
-fn setup_edit_preserves_unrelated_rules_and_rejects_stale_revision() {
+fn shortcut_edit_preserves_unrelated_rules_and_rejects_stale_revision() {
     let path = temporary_resource("edit");
     fs::write(
         &path,
@@ -100,18 +100,18 @@ fn setup_edit_preserves_unrelated_rules_and_rejects_stale_revision() {
     )
     .unwrap();
     let started = Instant::now();
-    let mut resource = KeymapSetupResource::new(path.clone(), started);
+    let mut resource = ShortcutResource::new(path.clone(), started);
     let mut keymap = AppKeymap::default();
     assert_eq!(
         resource.poll(started, &mut keymap),
-        KeymapSetupResourcePoll::Updated
+        ShortcutResourcePoll::Updated
     );
-    let edit = KeymapEdit {
+    let edit = ShortcutEdit {
         expected_revision: 1,
         command_id: "zetaCode.action.copyLastResponse".into(),
-        kind: KeymapEditKind::Set {
+        kind: ShortcutEditKind::Set {
             key: "ctrl+y".into(),
-            intent: KeymapEditIntent::AddAlternate,
+            intent: ShortcutEditIntent::AddAlternate,
         },
     };
 

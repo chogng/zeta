@@ -9,6 +9,7 @@ use crate::components::search_box::SearchBoxModel;
 use crate::components::selection::SelectionItem;
 use crate::components::selection::SelectionTab;
 use crate::components::selection::SelectionViewModel;
+use crate::features::thread::TurnActivity;
 use crate::features::workspace_files::FileSearchManager;
 use crate::ui::composer_chrome;
 use crate::ui::highlight;
@@ -38,9 +39,10 @@ fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
     assert!(rendered.contains("Welcome back!"));
     assert!(rendered.contains("Tips for getting started"));
     assert!(rendered.contains("Try asking"));
-    assert!(rendered.contains("ask permissions on · shift-tab switch · enter send · ctrl-v image"));
+    assert!(!rendered.contains("enter send"));
+    assert!(!rendered.contains("ctrl-v image"));
     let footer = rendered.lines().last().unwrap();
-    assert!(footer.starts_with("ask permissions on"));
+    assert_eq!(footer.trim_end(), "ask permissions on");
 }
 
 #[test]
@@ -81,7 +83,20 @@ fn multiline_composer_grows_upward_and_keeps_all_lines_visible() {
     assert!(rows[15].contains("first"));
     assert!(rows[16].contains("second"));
     assert!(rows[17].contains("third"));
-    assert!(rows[19].contains("enter send"));
+    assert_eq!(rows[19].trim_end(), "ask permissions on");
+}
+
+#[test]
+fn working_footer_keeps_policy_and_status_without_shortcut_prompts() {
+    let mut app = App::new();
+    app.update(AppEvent::TurnActivityChanged(TurnActivity::Working));
+
+    let rendered = render(&app, 80, 20);
+    let footer = rendered.lines().last().unwrap();
+
+    assert_eq!(footer.trim_end(), "ask permissions on · working…");
+    assert!(!footer.contains("enter queue"));
+    assert!(!footer.contains("ctrl-c interrupt"));
 }
 
 #[test]
@@ -187,10 +202,8 @@ fn error_detail_is_rendered_once_and_the_footer_only_offers_recovery() {
             .count(),
         1
     );
-    assert!(
-        rendered
-            .contains("ask permissions on · shift-tab switch · ready to retry · esc esc rewind")
-    );
+    assert!(rendered.contains("ask permissions on · ready to retry"));
+    assert!(!rendered.contains("esc esc rewind"));
     assert!(!rendered.contains("StableTurnError"));
 }
 

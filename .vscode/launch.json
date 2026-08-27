@@ -5,7 +5,7 @@
 			"name": "Run Zeta Code",
 			"type": "node-terminal",
 			"request": "launch",
-			"command": "just zeta",
+			"command": "just zeta-dev",
 			"cwd": "${workspaceFolder}",
 			"presentation": {
 				"group": "zeta-code",

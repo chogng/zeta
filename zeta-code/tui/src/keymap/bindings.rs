@@ -141,8 +141,6 @@ pub(super) struct AppKeybindingSpec {
     pub(super) keybinding: &'static str,
     pub(super) action: AppKeymapAction,
     pub(super) condition: AppKeymapCondition,
-    pub(super) help_label: &'static str,
-    pub(super) help_description: &'static str,
 }
 
 const APP_KEYBINDINGS: &[AppKeybindingSpec] = &[
@@ -150,50 +148,36 @@ const APP_KEYBINDINGS: &[AppKeybindingSpec] = &[
         keybinding: "shift+tab",
         action: AppKeymapAction::CycleApprovalMode,
         condition: AppKeymapCondition::PressWithInputWithoutSelection,
-        help_label: "Shift-Tab",
-        help_description: "cycle approval mode for the next turn",
     },
     AppKeybindingSpec {
         keybinding: "escape",
         action: AppKeymapAction::RootEscape,
         condition: AppKeymapCondition::PressWithInput,
-        help_label: "Esc Esc",
-        help_description: "open rewind checkpoints from the root view",
     },
     AppKeybindingSpec {
         keybinding: "ctrl+v",
         action: AppKeymapAction::ReadClipboardImage,
         condition: AppKeymapCondition::AcceptsInput,
-        help_label: "Ctrl-V",
-        help_description: "attach an image from the system clipboard",
     },
     AppKeybindingSpec {
         keybinding: "ctrl+c",
         action: AppKeymapAction::InterruptOrQuit,
         condition: AppKeymapCondition::Always,
-        help_label: "Ctrl-C",
-        help_description: "interrupt an active turn or exit while idle",
     },
     AppKeybindingSpec {
         keybinding: "ctrl+d",
         action: AppKeymapAction::InterruptOrQuit,
         condition: AppKeymapCondition::EmptyComposer,
-        help_label: "Ctrl-D",
-        help_description: "interrupt or exit when the composer is empty",
     },
     AppKeybindingSpec {
         keybinding: "ctrl+o",
         action: AppKeymapAction::CopyLastResponse,
         condition: AppKeymapCondition::Always,
-        help_label: "Ctrl-O",
-        help_description: "copy the latest Zeta response",
     },
     AppKeybindingSpec {
         keybinding: "ctrl+z",
         action: AppKeymapAction::Suspend,
         condition: AppKeymapCondition::Always,
-        help_label: "Ctrl-Z",
-        help_description: "suspend Zeta on Unix and restore it after fg",
     },
 ];
 
@@ -338,12 +322,6 @@ impl AppKeymap {
             | ResolveResult::Blocked { .. } => None,
         }
     }
-}
-
-pub(crate) fn app_keybinding_help_items() -> impl Iterator<Item = (&'static str, &'static str)> {
-    APP_KEYBINDINGS
-        .iter()
-        .map(|binding| (binding.help_label, binding.help_description))
 }
 
 pub(crate) fn compile_app_user_bindings(

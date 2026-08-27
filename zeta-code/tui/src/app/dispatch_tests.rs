@@ -154,6 +154,7 @@ fn status_config_mcp_connectors_skills_and_help_return_real_surfaces() {
         selection.tabs()[selection.active_tab_index()].label(),
         "Commands"
     );
+    assert_eq!(selection.tabs().len(), 1);
 
     drop(client);
     let _ = fs::remove_dir_all(state_root);

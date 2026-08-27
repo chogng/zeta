@@ -7,6 +7,9 @@ use crate::components::composer::ComposerSubmission;
 use crate::components::composer::built_in_slash_command_definitions;
 use crate::components::transcript::MessageRole;
 use crate::features::rewind::rewind_selection_view;
+use crate::features::shortcuts::ShortcutEditIntent;
+use crate::features::shortcuts::ShortcutEditKind;
+use crate::features::shortcuts::shortcut_view;
 use crate::features::theme::ThemePickerCatalog;
 use crate::features::theme::ThemePickerChoice;
 use crate::features::theme::ThemePickerTarget;
@@ -16,9 +19,6 @@ use crate::features::theme::theme_selection_view;
 use crate::features::thread::TurnActivity;
 use crate::features::workspace_files::FileSearchManager;
 use crate::keymap::AppKeymap;
-use crate::keymap_setup::KeymapEditIntent;
-use crate::keymap_setup::KeymapEditKind;
-use crate::keymap_setup::keymap_picker;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -462,27 +462,27 @@ fn product_command_is_delegated_to_the_typed_dispatcher() {
 }
 
 #[test]
-fn keymap_slash_command_is_owned_by_the_local_host() {
+fn shortcut_slash_command_is_owned_by_the_local_host() {
     let mut app = App::new();
-    app.insert_text("/keymap");
+    app.insert_text("/shortcuts");
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    assert_eq!(action, Some(AppCommand::OpenKeymapPane));
+    assert_eq!(action, Some(AppCommand::OpenShortcutsPane));
     assert!(app.messages().is_empty());
 }
 
 #[test]
-fn keymap_capture_emits_a_revision_bound_edit() {
+fn shortcut_capture_emits_a_revision_bound_edit() {
     let mut app = App::new();
-    app.update(AppEvent::KeymapViewOpened(keymap_picker(
+    app.update(AppEvent::ShortcutViewOpened(shortcut_view(
         AppKeymap::default().setup_actions(),
         Path::new("/profile/zeta-code/keybindings.json"),
         &[],
         7,
     )));
 
-    assert_eq!(app.selection_view().unwrap().title(), "Keymap");
+    assert_eq!(app.selection_view().unwrap().title(), "Shortcuts");
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         None
@@ -497,14 +497,16 @@ fn keymap_capture_emits_a_revision_bound_edit() {
     let edit = app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL));
     assert_eq!(
         edit,
-        Some(AppCommand::EditKeymap(crate::keymap_setup::KeymapEdit {
-            expected_revision: 7,
-            command_id: "zetaCode.action.cycleApprovalMode".into(),
-            kind: KeymapEditKind::Set {
-                key: "ctrl+y".into(),
-                intent: KeymapEditIntent::ReplaceCustom,
-            },
-        }))
+        Some(AppCommand::EditShortcut(
+            crate::features::shortcuts::ShortcutEdit {
+                expected_revision: 7,
+                command_id: "zetaCode.action.cycleApprovalMode".into(),
+                kind: ShortcutEditKind::Set {
+                    key: "ctrl+y".into(),
+                    intent: ShortcutEditIntent::ReplaceCustom,
+                },
+            }
+        ))
     );
 }
 

@@ -7,11 +7,11 @@ use crate::features::models::ModelSelectionView;
 use crate::features::rewind::RewindSelectionView;
 use crate::features::sessions::SessionSelectionView;
 use crate::features::sessions::ThreadSelectionView;
+use crate::features::shortcuts::ShortcutView;
 use crate::features::skills::SkillSelectionView;
 use crate::features::theme::ThemeSelectionView;
 use crate::features::thread::TurnActivity;
 use crate::features::workspace_files::FileSelectionView;
-use crate::keymap_setup::KeymapSetupView;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_app_server_protocol::protocol::git::GitStatusResult;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
@@ -34,8 +34,8 @@ pub(crate) enum AppEvent {
     InterruptFailed(String),
     ProductNotice(String),
     InteractionViewOpened(InteractionSelectionView),
-    KeymapViewOpened(KeymapSetupView),
-    KeymapViewsClosed,
+    ShortcutViewOpened(ShortcutView),
+    ShortcutViewsClosed,
     McpViewOpened(McpSelectionView),
     McpViewReplaced(McpSelectionView),
     ModelViewOpened(ModelSelectionView),

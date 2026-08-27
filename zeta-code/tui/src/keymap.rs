@@ -18,7 +18,6 @@ use bindings::AppKeybindingSpec;
 pub(crate) use bindings::AppKeymapAction;
 pub(crate) use bindings::AppKeymapContext;
 pub(crate) use bindings::KeymapActionSnapshot;
-pub(crate) use bindings::app_keybinding_help_items;
 pub(crate) use bindings::compile_app_user_bindings;
 pub(crate) use chords::AppChordMatch;
 #[cfg(test)]

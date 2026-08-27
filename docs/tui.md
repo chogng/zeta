@@ -904,9 +904,10 @@ keymap/
 ├── bindings.rs
 ├── chords.rs
 └── input.rs
-keymap_setup.rs
-keymap_setup/
-└── view.rs
+features/
+├── shortcuts.rs
+└── shortcuts/
+    └── view.rs
 app/
 ├── mod.rs
 ├── bootstrap.rs
@@ -1005,8 +1006,8 @@ lib_tests.rs
 - `ui/layout.rs` 拥有跨 presentation surface 复用的纯 geometry；`ui/theme.rs` 只拥有共享主题
   snapshot 到终端色彩能力的窄投影，用户文件解析与完整 token catalog 留在 `zeta-theme`；
   component 不反向依赖 frame coordinator；
-- 根级 `keymap.rs` 已通过产品无关 `zeta-keybinding` 注册 Shift-Tab、根级 Esc 与 Ctrl-C/D/O/V/Z，并从同一静态声明生成 Resolver 规则、`/help` 项和设置界面只读快照；Crossterm event 单向转换为标准 `KeyStroke`，修饰键精确匹配。运行时结构 `AppKeymap` 已拥有一至四段 Chord 的 pending、1 秒超时、上下文变化/Esc 取消、错误后续键透传和 footer 提示；当前内建表仍只声明单段组合。普通单键保持 component-first，只有 Chord prefix 在 component 前路由；composer 编辑、selection 导航与 transcript 滚动继续由局部 component 拥有；
-- 根级 `keymap_setup.rs` 已读取 CLI 显式提供的 active profile 下 `zeta-code/keybindings.json`，在 event-loop Tick 中有界热重载 User command/blocker、平台覆盖与 `when`；`/keymap` 提供可搜索的 All/Customized/Diagnostics 列表、action 菜单、单键/两段 Chord 录制和资源路径。保存要求打开界面时的 revision 仍有效，完整编译和 TUI Chord 安全校验成功后才原子替换文件与 `AppKeymap`；坏更新或保存失败保留上一份有效映射。资源不进入 App Server，也不从 Remote Workspace 读取客户端按键配置；
+- 根级 `keymap.rs` 已通过产品无关 `zeta-keybinding` 注册 Shift-Tab、根级 Esc 与 Ctrl-C/D/O/V/Z，并从同一静态声明生成 Resolver 规则和 `/shortcuts` 可配置项；Crossterm event 单向转换为标准 `KeyStroke`，修饰键精确匹配。运行时结构 `AppKeymap` 已拥有一至四段 Chord 的 pending、1 秒超时、上下文变化/Esc 取消、错误后续键透传和 footer 提示；当前内建表仍只声明单段组合。普通单键保持 component-first，只有 Chord prefix 在 component 前路由；composer 编辑、selection 导航与 transcript 滚动继续由局部 component 拥有；
+- `features/shortcuts` 已读取 CLI 显式提供的 active profile 下 `zeta-code/keybindings.json`，在 event-loop Tick 中有界热重载 User command/blocker、平台覆盖与 `when`；`/shortcuts` 汇总固定操作键和可配置应用级绑定，并提供可搜索的 All/Customized/Diagnostics 列表、action 菜单、单键/两段 Chord 录制和资源路径。保存要求打开界面时的 revision 仍有效，完整编译和 TUI Chord 安全校验成功后才原子替换文件与 `AppKeymap`；坏更新或保存失败保留上一份有效映射。资源不进入 App Server，也不从 Remote Workspace 读取客户端按键配置；
 - `App` 处理 presentation coordination 与 Keymap action，并直接委托 `InteractionPane` 的
   composer/temporary-view 输入；`ChatWidget` 与过渡目录 `toppane/` 已移除，不再存在第二份
   transcript 或模糊的 top-pane owner；
@@ -1016,8 +1017,7 @@ lib_tests.rs
   completed/waiting/failed/interrupted 映射为 presentation lifecycle；active Turn 的定时
   snapshot polling 已移除，Turn completion 不再单独追加 agent 文本；
 - `InteractionPane` 保留 composer 并拥有 temporary view stack；generic selection view 已支持
-  tabs、直接输入搜索、过滤、循环选择、左右/Tab 切页和 Esc/Ctrl-C 出栈；`/help` 提供
-  Commands/Keys，`/skills` 从 typed `skills/list` 提供
+  tabs、直接输入搜索、过滤、循环选择、左右/Tab 切页和 Esc/Ctrl-C 出栈；`/help` 只提供命令列表，`/shortcuts` 提供统一快捷键目录，`/skills` 从 typed `skills/list` 提供
   All/Enabled/Disabled/Errors catalog tabs；
 - `/skills` 只消费 App Server catalog snapshot，不读取 `zeta-skills` filesystem；
   `Space` 将 exact `SkillId` 转成 revision-checked `skill/enablement/set`，成功后刷新页面；
