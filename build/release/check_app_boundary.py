@@ -17,12 +17,16 @@ EXPECTED_APP_MEMBERS = {
     "app/markdown",
     "app/keybindings",
     "app/settings",
+    "app/terminal-workspace",
     "app/ui",
+    "app/workbench-controller",
     "app/zui",
     "app/zui-demo",
 }
 
 RETIRED_PRODUCT_PATHS = {
+    "app/src/workbench_host",
+    "app/src/workbench_host.rs",
     "zeta-rs/native",
     "zeta-rs/agent-sidebar",
     "zeta-rs/editor",

@@ -1,8 +1,8 @@
 //! Session-facing feature surfaces projected into the Workbench application layer.
 //!
 //! These modules own Session canvas, search, context actions, and switching diagnostics. Workbench
-//! Tab projection lives in `workbench_host`, while reusable UI primitives continue to live in
-//! `zeta-ui`/`zui`.
+//! tabs live in `zeta-ui`, while Session state and product effects stay with their owning
+//! capability modules.
 
 #[path = "session/session_canvas.rs"]
 pub(crate) mod session_canvas;

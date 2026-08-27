@@ -1,7 +1,7 @@
-use crate::terminal_session::TerminalSessionKey;
-use crate::workbench_host::{PaneInput, PaneInputKind};
+use zeta_terminal_workspace::TerminalSessionKey;
+use zeta_workbench::{PaneInput, PaneInputKind};
 
-/// Runtime currently attached to a workbench pane by the Native host.
+/// Runtime currently attached to a Workbench pane by the product controller.
 ///
 /// This mapping is deliberately product-local. The workbench description stays free of PTY and
 /// terminal-session handles while app resolves a Session into its runtime key here.
@@ -15,22 +15,22 @@ enum PaneRuntime {
 /// The logical [`PaneInput`] is owned by `zeta_workbench::PaneGroup`. This type deliberately keeps
 /// only the product-local runtime handle so there is no second logical-input owner in the host.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct PaneBinding {
+pub struct PaneBinding {
     runtime: Option<PaneRuntime>,
 }
 
 impl PaneBinding {
-    pub(crate) const fn new() -> Self {
+    pub const fn new() -> Self {
         Self { runtime: None }
     }
 
-    pub(crate) const fn terminal(key: TerminalSessionKey) -> Self {
+    pub const fn terminal(key: TerminalSessionKey) -> Self {
         Self {
             runtime: Some(PaneRuntime::Terminal(key)),
         }
     }
 
-    pub(crate) fn terminal_key(&self) -> Option<TerminalSessionKey> {
+    pub fn terminal_key(&self) -> Option<TerminalSessionKey> {
         match self.runtime {
             Some(PaneRuntime::Terminal(key)) => Some(key),
             None => None,
@@ -38,7 +38,7 @@ impl PaneBinding {
     }
 
     /// Attaches a Terminal runtime only when this binding describes the matching Session.
-    pub(crate) fn bind_terminal(
+    pub fn bind_terminal(
         &mut self,
         input: &PaneInput,
         session_id: &zeta_protocol::SessionId,
@@ -55,5 +55,5 @@ impl PaneBinding {
 }
 
 #[cfg(test)]
-#[path = "pane_input_tests.rs"]
+#[path = "binding_tests.rs"]
 mod tests;

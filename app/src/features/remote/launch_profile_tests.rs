@@ -1,7 +1,7 @@
+use crate::launch::AppLaunch;
 use crate::launch::LaunchParseError;
 use crate::launch::RemoteRuntimeCatalogSource;
 use crate::launch::RemoteRuntimeSource;
-use crate::launch::AppLaunch;
 
 use zeta_remote::RemoteProfile;
 use zeta_remote::RemoteRuntime;

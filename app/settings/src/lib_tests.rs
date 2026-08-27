@@ -159,7 +159,7 @@ fn selected_section_is_projected_to_the_navigation_semantics() {
 }
 
 #[test]
-fn surface_mode_leaves_the_workbench_host_interactive() {
+fn surface_mode_leaves_the_workbench_interactive() {
     let dispatch = UiDispatch::default();
     let input = zeta_ui::TextInput::default();
     let mut text_layout = TextInputLayoutEngine::new();

@@ -1,0 +1,8 @@
+load("//app:defs.bzl", "app_rust_library")
+
+app_rust_library(
+    name = "terminal-workspace",
+    crate_name = "zeta_terminal_workspace",
+    package_name = "app/terminal-workspace",
+    unit_tests = True,
+)

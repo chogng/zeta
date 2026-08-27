@@ -104,7 +104,7 @@ impl NativeApp {
         fallback_size: GridSize,
     ) {
         let Some(tab_key) = self
-            .workbench_host
+            .workbench
             .workbench()
             .tab_part()
             .active_tab_key()
@@ -113,7 +113,7 @@ impl NativeApp {
             self.terminal_workspace.resize_all(fallback_size);
             return;
         };
-        let Some(layout) = self.workbench_host.workbench().pane_part(&tab_key) else {
+        let Some(layout) = self.workbench.workbench().pane_part(&tab_key) else {
             self.terminal_workspace.resize_all(fallback_size);
             return;
         };
@@ -131,7 +131,7 @@ impl NativeApp {
         let resize_requests = panes
             .into_iter()
             .filter_map(|(pane, bounds)| {
-                self.workbench_host
+                self.workbench
                     .pane_host()
                     .binding(&(PaneHostScope::Tab(tab_key.clone()), pane))
                     .and_then(PaneBinding::terminal_key)

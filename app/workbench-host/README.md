@@ -1,10 +1,10 @@
 # `zeta-workbench-host`
 
-`zeta-workbench-host` 是 Workbench 模型与产品内容 runtime 之间的通用协调层。它持有一个 `Workbench` 和一个泛型 `PaneHost<B>`，但不解释 `B`，因此 Terminal、Agent、Editor 和其他产品 runtime 可以复用同一套 binding contract。
+`zeta-workbench-host` 是 Workbench 模型与产品内容运行状态之间的通用协调层。它持有一个 `Workbench` 和一个泛型 `PaneHost<B>`，但不解释 `B`，因此 Terminal、Agent、Editor 和其他产品运行状态可以复用同一套 binding contract。
 
 ## 边界
 
-`PaneHost` 使用 `PaneHostScope::Tab(TabInputKey)` 和 `PaneKey` 查找 Pane binding，并以 `PaneMount` 返回 Pane 输入、逻辑 Pane identity 和不透明 `PaneBindingId`。Tab 关闭由 `WorkbenchHost::close_tab` 原子地移除逻辑 Tab 以及该 Tab 的所有 binding；返回的 binding 由产品宿主负责释放具体 runtime。
+每个 Tab 在 `Workbench` 中一对一拥有一个 `PaneContainer`，容器再拥有 PaneGroup 拓扑与 PaneInput。`PaneHost` 使用 `PaneHostScope::Tab(TabInputKey)` 和 `PaneKey` 查找 Pane binding，并以 `PaneMount` 返回 Pane 输入、逻辑 Pane identity 和不透明 `PaneBindingId`。Tab 关闭由 `WorkbenchHost::close_tab` 原子地移除逻辑 Tab、对应 PaneContainer 以及该容器的所有 binding；返回的 binding 由产品宿主负责释放具体运行状态。
 
 `WorkbenchHost::workbench`、`workbench_mut`、`pane_host` 和 `pane_host_mut` 是显式访问边界，不通过 `Deref` 隐藏模型所有权。`layout` 只委托给 `zeta-workbench-layout`，不参与渲染。
 

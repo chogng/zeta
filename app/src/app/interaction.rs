@@ -193,14 +193,14 @@ impl NativeApp {
         }
         if let Some(index) = shell_interaction::session_tab_index(
             id,
-            0..self.workbench_host.workbench().tab_part().session_count(),
+            0..self.workbench.workbench().tab_part().session_count(),
         ) {
             session_switch_trace::event(
                 None,
                 "session-tab-hit",
                 format_args!(
                     "element={id:?} index={index} tab_count={}",
-                    self.workbench_host.workbench().tab_part().session_count()
+                    self.workbench.workbench().tab_part().session_count()
                 ),
             );
             self.activate_session_tab(index);

@@ -1,6 +1,6 @@
+use zeta_commands::AppCommandId;
 use zeta_commands::CommandRegistry;
 use zeta_commands::CommandRequest;
-use zeta_commands::AppCommandId;
 use zui::ui::ElementId;
 
 use crate::NativeApp;
@@ -8,7 +8,7 @@ use crate::session::session_switch_trace;
 use crate::shell_interaction::{
     self, ContextAction, SessionContextMenuAction, WorkspacePaneSelection,
 };
-use crate::workbench_host::PaneSplitDirection;
+use zeta_workbench_controller::PaneSplitDirection;
 
 pub(crate) type NativeCommandRegistry = CommandRegistry<NativeApp>;
 
@@ -121,19 +121,13 @@ pub(crate) fn builtin_command_registry() -> NativeCommandRegistry {
         .register(AppCommandId::AddSession, execute_add_session)
         .expect("built-in command IDs must be unique");
     registry
-        .register(
-            AppCommandId::ShowAgentChanges,
-            execute_show_agent_changes,
-        )
+        .register(AppCommandId::ShowAgentChanges, execute_show_agent_changes)
         .expect("built-in command IDs must be unique");
     registry
         .register(AppCommandId::ShowAgentFiles, execute_show_agent_files)
         .expect("built-in command IDs must be unique");
     registry
-        .register(
-            AppCommandId::RefreshAgentFiles,
-            execute_refresh_agent_files,
-        )
+        .register(AppCommandId::RefreshAgentFiles, execute_refresh_agent_files)
         .expect("built-in command IDs must be unique");
     registry
         .register(
@@ -181,10 +175,7 @@ pub(crate) fn builtin_command_registry() -> NativeCommandRegistry {
         .register(AppCommandId::PickGitBranch, execute_pick_git_branch)
         .expect("built-in command IDs must be unique");
     registry
-        .register(
-            AppCommandId::ShowWorkspaceDiff,
-            execute_show_workspace_diff,
-        )
+        .register(AppCommandId::ShowWorkspaceDiff, execute_show_workspace_diff)
         .expect("built-in command IDs must be unique");
     registry
         .register(
@@ -202,10 +193,7 @@ pub(crate) fn builtin_command_registry() -> NativeCommandRegistry {
         .register(AppCommandId::FocusNextPane, execute_focus_next_pane)
         .expect("built-in command IDs must be unique");
     registry
-        .register(
-            AppCommandId::FocusPreviousPane,
-            execute_focus_previous_pane,
-        )
+        .register(AppCommandId::FocusPreviousPane, execute_focus_previous_pane)
         .expect("built-in command IDs must be unique");
     registry
         .register(AppCommandId::ClosePane, execute_close_pane)
@@ -305,8 +293,8 @@ fn execute_toggle_workspace_pane(app: &mut NativeApp, _request: &CommandRequest)
         return;
     }
     match app.active_workspace_pane_kind() {
-        Some(crate::workbench_host::PaneInputKind::Files)
-        | Some(crate::workbench_host::PaneInputKind::Diff) => app.show_agent_pane(),
+        Some(zeta_workbench_controller::PaneInputKind::Files)
+        | Some(zeta_workbench_controller::PaneInputKind::Diff) => app.show_agent_pane(),
         _ => app.select_workspace_pane_view(crate::workspace_pane_host::WorkspacePaneView::Files),
     }
 }

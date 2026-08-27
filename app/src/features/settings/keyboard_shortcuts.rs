@@ -1,9 +1,9 @@
 use std::time::Instant;
 
-use zeta_keybindings_host::recording_chord;
 use app_keybinding_ui::KeyboardShortcutRow;
 use app_keybinding_ui::KeyboardShortcutsIds;
 use app_keybinding_ui::KeyboardShortcutsState as GenericKeyboardShortcutsState;
+use zeta_keybindings_host::recording_chord;
 use zui::input::{ElementState, Key, KeyEvent, NamedKey};
 use zui::ui::ElementId;
 
@@ -63,7 +63,7 @@ impl NativeApp {
             self.keyboard_shortcuts.close();
         } else if let Some(command) = command_for_row(id) {
             if !self.keyboard_shortcuts.is_visible() {
-                if !self.workbench_host.workbench().tab_part().is_settings()
+                if !self.workbench.workbench().tab_part().is_settings()
                     || self.settings_section != SettingsPageSection::Keybindings
                 {
                     return false;

@@ -115,8 +115,9 @@ fn closing_a_workbench_tab_cleans_up_its_bindings() {
     let tab_key = zeta_workbench::TabInputKey::session(session_id);
     let pane = host
         .workbench()
-        .pane_part(&tab_key)
-        .expect("session pane should exist")
+        .pane_container(&tab_key)
+        .expect("session pane container should exist")
+        .pane_part()
         .root_group();
     let key = (PaneHostScope::Tab(tab_key.clone()), pane);
     host.pane_host_mut().insert(key.clone(), "runtime");

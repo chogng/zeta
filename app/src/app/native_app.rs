@@ -35,11 +35,6 @@ use crate::terminal_selection::TerminalSelection;
 use crate::terminal_session::{TerminalSession, TerminalSessionEvent, TerminalSessionKey};
 use crate::thread_projection::ThreadProjection;
 use crate::thread_timeline_scroll::ThreadTimelineScroll;
-use crate::workbench_host::{InspectorPartState, TabContainerState, TabInputKey};
-use crate::workbench_host::{
-    PaneBinding, PaneHostScope, PaneId, PaneInput, PaneInputKind, PaneSplitDirection, PaneSplitId,
-    TerminalReadyOutcome, TerminalWorkspace, WorkbenchHost,
-};
 use crate::workspace_context::WorkspaceContext;
 use crate::workspace_pane_host::{WorkspacePaneHost, WorkspacePaneView};
 use crate::workspace_panes::WorkspacePaneAction;
@@ -51,11 +46,21 @@ use zeta_protocol::SessionId;
 use zeta_settings::SettingsPageSection;
 use zeta_terminal::{BlockStatus, GridSize, ScreenBuffer};
 use zeta_theme::{ColorScheme, ThemeLoadOptions, ThemeLoader, ThemeSurface, default_device_root};
-use zeta_ui::{CaretBlinkAdvance, CaretBlinkController, Point, TextInputLayoutEngine};
+use zeta_ui::{
+    CaretBlinkAdvance, CaretBlinkController, Point, TabContainerState, TextInputLayoutEngine,
+};
 use zeta_ui::{
     Resizable, SashOrientation, SashPointerPresence, SplitViewOrientation, SplitViewResizeSnapshot,
 };
+use zeta_workbench_controller::{
+    InspectorPartState, PaneBinding, PaneGroupId as PaneId, PaneHostScope, PaneInput,
+    PaneInputKind, PaneSplitDirection, PaneSplitId, TabInputKey, WorkbenchController,
+};
 use zeta_workbench_layout::LogicalViewport;
+
+type TerminalWorkspace =
+    zeta_terminal_workspace::TerminalWorkspace<TerminalSession, TerminalSessionEvent>;
+type TerminalReadyOutcome = zeta_terminal_workspace::TerminalReadyOutcome<TerminalSessionEvent>;
 use zui::app::AccessibilityAction;
 use zui::app::AccessibilityActionKind;
 use zui::app::App;
@@ -232,10 +237,9 @@ pub(crate) mod thread_projection;
 pub(crate) mod thread_timeline;
 #[path = "../features/agent/thread_timeline_scroll.rs"]
 pub(crate) mod thread_timeline_scroll;
-#[path = "../workbench_host.rs"]
-pub(crate) mod workbench_host;
-#[path = "../workbench_host/runtime.rs"]
-mod workbench_runtime;
+mod workbench;
+mod workbench_resize;
+mod workbench_tabs_resize;
 #[path = "../features/workspace/workspace_context.rs"]
 pub(crate) mod workspace_context;
 #[path = "../features/workspace/workspace_pane_host.rs"]

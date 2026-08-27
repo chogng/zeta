@@ -1,38 +1,36 @@
 use super::Titlebar;
-use crate::shell_interaction::TAB_CONTAINER_TOGGLE;
-use crate::shell_interaction::TITLEBAR;
-use crate::shell_interaction::TITLEBAR_SETTINGS_TAB;
-use crate::shell_interaction::WORKSPACE_PANE_TOGGLE;
-use crate::shell_style::SHELL_PALETTE;
-use crate::workbench_host::PaneInputKind;
-use crate::workbench_host::TabContainerState;
+use super::TitlebarInsets;
+use crate::Color;
+use crate::Component;
+use crate::Point;
+use crate::Rect;
+use crate::UiScene;
+use crate::workbench::identity::{
+    TAB_CONTAINER_TOGGLE, TITLEBAR, TITLEBAR_SETTINGS_TAB, WORKSPACE_PANE_TOGGLE,
+};
+use crate::workbench::test_style;
 use zeta_icons::icons;
-use zeta_ui::Color;
-use zeta_ui::Component;
-use zeta_ui::Point;
-use zeta_ui::Rect;
-use zeta_ui::UiScene;
-use crate::workbench_host::TabPart;
+use zeta_workbench::PaneInputKind;
+use zeta_workbench::TabPart;
 use zui::ui::InteractionFrame;
 use zui::ui::UiDispatch;
 use zui::ui::UiFrame;
 use zui::ui::UiIntent;
-use zui::window::WindowControlInsets;
 
 #[test]
-fn titlebar_mounts_tabs_between_native_window_controls_and_actions() {
+fn titlebar_mounts_tabs_between_window_controls_and_actions() {
     let mut part = TabPart::default();
     part.activate_settings();
     let mut frame = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
     let mut dispatch = UiDispatch::default();
     let titlebar = Titlebar::new(
         Rect::from_xywh(0.0, 0.0, 1000.0, 32.0),
-        SHELL_PALETTE,
+        test_style(),
         &part,
         part.active_tab_key(),
-        TabContainerState::collapsed(),
+        false,
         None,
-        WindowControlInsets::from_logical_sides(70.0, 110.0),
+        TitlebarInsets::new(70.0, 110.0),
         &dispatch,
     );
     frame.draw_component(&titlebar);
@@ -97,12 +95,12 @@ fn expanded_tab_container_and_workspace_pane_use_the_active_icons() {
     let dispatch = UiDispatch::default();
     let titlebar = Titlebar::new(
         Rect::from_xywh(0.0, 0.0, 1000.0, 32.0),
-        SHELL_PALETTE,
+        test_style(),
         &part,
         part.active_tab_key(),
-        TabContainerState::expanded(),
+        true,
         Some(PaneInputKind::Files),
-        WindowControlInsets::NONE,
+        TitlebarInsets::NONE,
         &dispatch,
     );
     let mut scene = UiScene::new(Color::TRANSPARENT);

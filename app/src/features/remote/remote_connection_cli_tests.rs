@@ -1,11 +1,11 @@
 use tempfile::TempDir;
 use zeta_remote_connections::RemoteConnectionCatalog;
 
-use crate::launch::RemoteRuntimeSource;
 use crate::launch::AppLaunch;
-use crate::remote_connection_cli::RemoteConnectionCommandParseError;
+use crate::launch::RemoteRuntimeSource;
 use crate::remote_connection_cli::AppInvocation;
 use crate::remote_connection_cli::AppInvocationParseError;
+use crate::remote_connection_cli::RemoteConnectionCommandParseError;
 
 #[test]
 fn non_remote_commands_preserve_the_existing_launch_surface() {
@@ -116,8 +116,7 @@ fn save_list_replace_remove_and_connect_form_one_credential_free_workflow() {
     assert_eq!(ssh_executable.unwrap().to_string_lossy(), "/usr/bin/ssh");
     assert_eq!(runtime_source, RemoteRuntimeSource::ExplicitRuntime);
 
-    let remove =
-        AppInvocation::parse(["remote".into(), "remove".into(), "build".into()]).unwrap();
+    let remove = AppInvocation::parse(["remote".into(), "remove".into(), "build".into()]).unwrap();
     remove.resolve_with_catalog(&catalog, &mut output).unwrap();
     assert!(catalog.connections().unwrap().is_empty());
 }

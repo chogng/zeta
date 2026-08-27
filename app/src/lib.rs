@@ -10,9 +10,8 @@ mod app;
 #[path = "component_composition_tests.rs"]
 mod component_composition_tests;
 
-// Keep the product modules available at the crate boundary while making `app::native_app` the
-// actual composition boundary. Workbench model types and Native host adapters are grouped under
-// `workbench_host`; the crate does not expose duplicate compatibility modules for them.
+// Keep product modules available at the crate boundary while making `app::native_app` the actual
+// composition boundary. Reusable Workbench contracts are imported from their owning crates.
 #[allow(unused_imports)]
 pub(crate) use app::native_app::{
     NativeApp, PRODUCT_DISPLAY_NAME, agent_session, app_server, command_dispatch, composer_host,
@@ -28,7 +27,7 @@ pub(crate) use app::native_app::{
     settings_sections, shell_interaction, shell_scene, shell_style, terminal_blocks,
     terminal_input, terminal_output_scroll_view, terminal_pane_view, terminal_pointer,
     terminal_projection, terminal_scrollback, terminal_selection, terminal_session,
-    thread_projection, thread_timeline, thread_timeline_scroll, workbench_host, workspace_context,
+    thread_projection, thread_timeline, thread_timeline_scroll, workspace_context,
     workspace_pane_host, workspace_panes, workspace_path_picker, workspace_path_picker_input,
     workspace_surface,
 };

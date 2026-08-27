@@ -1,28 +1,19 @@
-//! Mapping from orientation-neutral Workbench tabs into one Native UI identity scope.
+//! Mapping from orientation-neutral Workbench tabs into one UI identity scope.
 
-use zeta_ui::TabListOrientation;
+use crate::TabListOrientation;
 use zui::ui::ElementId;
 use zui::ui::NavigationAxis;
 
-use crate::shell_interaction::FIRST_TAB_CONTAINER_SESSION_TAB;
-use crate::shell_interaction::FIRST_TITLEBAR_SESSION_TAB;
-use crate::shell_interaction::TAB_CONTAINER;
-use crate::shell_interaction::TAB_CONTAINER_SETTINGS_TAB;
-use crate::shell_interaction::TITLEBAR;
-use crate::shell_interaction::TITLEBAR_SETTINGS_TAB;
-use crate::shell_interaction::TITLEBAR_TAB_CONTAINER;
-use crate::shell_interaction::session_tab_id;
-use crate::shell_interaction::tab_group_list_id;
-use crate::shell_interaction::titlebar_session_tab_id;
-use crate::shell_interaction::titlebar_tab_group_list_id;
-use crate::workbench_host::TabInput;
-use crate::workbench_host::TabGroupId;
-use crate::workbench_host::TabInputKey;
-use crate::workbench_host::TabPart;
+use super::super::identity::{
+    FIRST_TAB_CONTAINER_SESSION_TAB, FIRST_TITLEBAR_SESSION_TAB, TAB_CONTAINER,
+    TAB_CONTAINER_SETTINGS_TAB, TITLEBAR, TITLEBAR_SETTINGS_TAB, TITLEBAR_TAB_CONTAINER, WINDOW,
+    session_tab_id, tab_group_list_id, titlebar_session_tab_id, titlebar_tab_group_list_id,
+};
+use zeta_workbench::{TabGroupId, TabInput, TabInputKey, TabPart};
 
 /// UI mount that projects the same logical Tab Part into a concrete Workbench location.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum TabContainerPlacement {
+pub enum TabContainerPlacement {
     Body,
     Titlebar,
 }
@@ -51,7 +42,7 @@ impl TabContainerPlacement {
 
     pub(super) const fn parent_id(self) -> ElementId {
         match self {
-            Self::Body => crate::shell_interaction::WINDOW,
+            Self::Body => WINDOW,
             Self::Titlebar => TITLEBAR,
         }
     }
@@ -85,7 +76,7 @@ pub(super) enum WorkbenchTabKind {
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct WorkbenchTab<'a> {
+pub struct WorkbenchTab<'a> {
     pub(super) id: ElementId,
     pub(super) kind: WorkbenchTabKind,
     pub(super) name: &'a str,
@@ -94,7 +85,7 @@ pub(crate) struct WorkbenchTab<'a> {
 }
 
 #[derive(Clone)]
-pub(crate) struct WorkbenchTabGroup<'a> {
+pub struct WorkbenchTabGroup<'a> {
     pub(super) id: TabGroupId,
     pub(super) label: Option<&'a str>,
     pub(super) collapsed: bool,
@@ -102,7 +93,7 @@ pub(crate) struct WorkbenchTabGroup<'a> {
 }
 
 impl<'a> WorkbenchTabGroup<'a> {
-    pub(crate) fn new(
+    pub fn new(
         id: TabGroupId,
         label: Option<&'a str>,
         collapsed: bool,
@@ -116,17 +107,17 @@ impl<'a> WorkbenchTabGroup<'a> {
         }
     }
 
-    pub(crate) const fn id(&self) -> TabGroupId {
+    pub const fn id(&self) -> TabGroupId {
         self.id
     }
 
-    pub(crate) fn insert_tab(&mut self, index: usize, tab: WorkbenchTab<'a>) {
+    pub fn insert_tab(&mut self, index: usize, tab: WorkbenchTab<'a>) {
         self.tabs.insert(index.min(self.tabs.len()), tab);
     }
 }
 
-/// Resolves one projection's element identity without leaking UI identity into Workbench state.
-pub(crate) fn tab_input_element_id(
+/// Resolves one presentation's element identity without leaking UI identity into Workbench state.
+pub fn tab_input_element_id(
     tab_part: &TabPart,
     selected: Option<&TabInputKey>,
     placement: TabContainerPlacement,
@@ -151,7 +142,7 @@ pub(crate) fn tab_input_element_id(
     }
 }
 
-pub(crate) fn project_tab_groups<'a>(
+pub fn workbench_tab_groups<'a>(
     tab_part: &'a TabPart,
     placement: TabContainerPlacement,
     include: impl Fn(&TabInput) -> bool,
@@ -180,11 +171,7 @@ pub(crate) fn project_tab_groups<'a>(
 }
 
 impl<'a> WorkbenchTab<'a> {
-    pub(crate) fn from_input(
-        index: usize,
-        input: &'a TabInput,
-        placement: TabContainerPlacement,
-    ) -> Self {
+    pub fn from_input(index: usize, input: &'a TabInput, placement: TabContainerPlacement) -> Self {
         if input.is_settings() {
             Self::settings(placement.settings_id())
         } else {
@@ -197,7 +184,7 @@ impl<'a> WorkbenchTab<'a> {
         }
     }
 
-    pub(crate) const fn new(
+    pub const fn new(
         id: ElementId,
         name: &'a str,
         workspace: &'a str,
@@ -212,7 +199,7 @@ impl<'a> WorkbenchTab<'a> {
         }
     }
 
-    pub(crate) const fn settings(id: ElementId) -> Self {
+    pub const fn settings(id: ElementId) -> Self {
         Self {
             id,
             kind: WorkbenchTabKind::Settings,

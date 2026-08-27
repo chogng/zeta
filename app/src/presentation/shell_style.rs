@@ -14,6 +14,7 @@ use zeta_ui::ActionBarStyle;
 use zeta_ui::Border;
 use zeta_ui::ButtonBackgrounds;
 use zeta_ui::ButtonStyle;
+use zeta_ui::WorkbenchUiStyle;
 use zeta_ui::{
     Color, CornerRadii, Edges, FontFamily, FontWeight, InputBoxStateColors, InputBoxStyle,
     ScrollViewStyle, ScrollbarStyle, SearchBoxStyle, TextStyle,
@@ -102,6 +103,25 @@ pub(crate) const SHELL_PALETTE: ShellPalette = ShellPalette {
 };
 
 impl ShellPalette {
+    pub(crate) fn workbench_ui_style(self) -> WorkbenchUiStyle {
+        WorkbenchUiStyle::new(
+            self.surface,
+            self.surface_raised,
+            self.surface_hovered,
+            self.border,
+            self.text,
+            self.text_muted,
+            self.session_tab_highlight,
+            self.session_search_style(),
+            icons::GEAR,
+            icons::ADD,
+            icons::LAYOUT_SIDEBAR_LEFT,
+            icons::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY,
+            icons::LAYOUT_SIDEBAR_RIGHT,
+            icons::LAYOUT_SIDEBAR_RIGHT_OFF_EMPTY,
+        )
+    }
+
     pub(crate) fn scm_pane_style(self) -> ScmPaneStyle {
         ScmPaneStyle {
             surface: self.surface,

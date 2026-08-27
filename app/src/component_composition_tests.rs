@@ -167,8 +167,8 @@ fn component_crate_remains_graphics_backend_neutral() {
 #[test]
 fn product_uses_only_zui_for_native_framework_hosting() {
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let product_manifest = fs::read_to_string(workspace.join("Cargo.toml"))
-        .expect("app manifest should be readable");
+    let product_manifest =
+        fs::read_to_string(workspace.join("Cargo.toml")).expect("app manifest should be readable");
     assert!(
         product_manifest
             .lines()
@@ -222,8 +222,8 @@ fn app_app_server_adapter_owns_the_zeta_rs_client_boundary() {
         violations.join("\n")
     );
 
-    let product_manifest = fs::read_to_string(workspace.join("Cargo.toml"))
-        .expect("app manifest should be readable");
+    let product_manifest =
+        fs::read_to_string(workspace.join("Cargo.toml")).expect("app manifest should be readable");
     assert!(
         product_manifest
             .lines()
@@ -284,8 +284,9 @@ fn native_app_state_is_private_to_the_app_composition_boundary() {
         "app/frame.rs",
         "app/interaction.rs",
         "app/runtime.rs",
-        "workbench_host/runtime.rs",
-        "workbench_host.rs",
+        "app/workbench.rs",
+        "app/workbench_resize.rs",
+        "app/workbench_tabs_resize.rs",
     ] {
         let source = fs::read_to_string(source_root.join(relative_path))
             .unwrap_or_else(|error| panic!("could not read {relative_path}: {error}"));

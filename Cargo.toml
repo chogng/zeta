@@ -132,8 +132,10 @@ members = [
     "app/remote-ui",
     "app/session-ui",
     "app/settings",
+    "app/terminal-workspace",
     "app/ui",
     "app/workbench",
+    "app/workbench-controller",
     "app/workbench-layout",
     "app/workbench-host",
     "app/workspace-ui",
@@ -384,6 +386,7 @@ zeta-storage = { path = "zeta-rs/storage" }
 zeta-symbol-index = { path = "zeta-rs/symbol-index" }
 zeta-syntax = { path = "zeta-rs/syntax" }
 zeta-terminal = { path = "zeta-rs/terminal" }
+zeta-terminal-workspace = { path = "app/terminal-workspace" }
 zeta-terminal-detection = { path = "zeta-rs/terminal-detection" }
 zeta-text-file = { path = "zeta-rs/text-file" }
 zeta-theme = { path = "zeta-rs/theme" }
@@ -394,6 +397,7 @@ zeta-tui = { path = "zeta-code/tui" }
 zeta-uds = { path = "zeta-rs/uds" }
 zeta-ui = { path = "app/ui" }
 zeta-workbench = { path = "app/workbench" }
+zeta-workbench-controller = { path = "app/workbench-controller" }
 zeta-workbench-host = { path = "app/workbench-host" }
 zeta-workbench-layout = { path = "app/workbench-layout" }
 zeta-workspace-ui = { path = "app/workspace-ui" }

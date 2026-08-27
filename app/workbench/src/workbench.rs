@@ -4,6 +4,7 @@ use zeta_protocol::Session;
 use zeta_protocol::SessionId;
 
 use crate::Pane;
+use crate::PaneContainer;
 use crate::PaneId;
 use crate::PaneInput;
 use crate::PaneInputId;
@@ -47,15 +48,16 @@ impl ClosedTab {
 
 /// The Workbench state model.
 ///
-/// `TabPart` owns projection-neutral groups and tab inputs, `TitlebarPart` is the command surface,
-/// and the Workbench owns one [`PanePart`] per tab input. Product hosts can project the same Tab
-/// Part vertically or horizontally without moving renderer, terminal, or App Server state into
-/// this model.
+/// `TabPart` owns orientation-neutral groups and tab inputs, `TitlebarPart` is the command surface,
+/// and the Workbench owns one [`PaneContainer`] per tab input. Each container owns its complete
+/// [`PanePart`] group topology and tab-local pane state. Product hosts can present the same Tab Part
+/// vertically or horizontally without moving renderer, terminal, or App Server state into this
+/// model.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Workbench {
     titlebar_part: TitlebarPart,
     tab_part: TabPart,
-    pane_parts: HashMap<TabInputKey, PanePart>,
+    pane_containers: HashMap<TabInputKey, PaneContainer>,
 }
 
 impl Workbench {
@@ -74,34 +76,55 @@ impl Workbench {
         self.titlebar_part()
     }
 
-    /// Returns the projection-neutral Tab Part.
+    /// Returns the orientation-neutral Tab Part.
     pub const fn tab_part(&self) -> &TabPart {
         &self.tab_part
     }
 
-    /// Returns the mutable projection-neutral Tab Part.
+    /// Returns the mutable orientation-neutral Tab Part.
     pub fn tab_part_mut(&mut self) -> &mut TabPart {
         &mut self.tab_part
     }
 
-    /// Returns the Pane Part owned by a tab item.
+    /// Returns the pane container owned by a tab item.
+    pub fn pane_container(&self, tab_key: &TabInputKey) -> Option<&PaneContainer> {
+        self.pane_containers.get(tab_key)
+    }
+
+    /// Returns the active tab's pane container.
+    pub fn active_pane_container(&self) -> Option<&PaneContainer> {
+        self.tab_part
+            .active_tab_key()
+            .and_then(|tab_key| self.pane_container(tab_key))
+    }
+
+    /// Returns the Pane Part inside a tab's pane container.
     pub fn pane_part(&self, tab_key: &TabInputKey) -> Option<&PanePart> {
-        self.pane_parts.get(tab_key)
+        self.pane_container(tab_key).map(PaneContainer::pane_part)
     }
 
-    /// Returns the mutable Pane Part owned by a tab item.
+    /// Returns the mutable pane container owned by a tab item.
+    pub(crate) fn pane_container_mut(
+        &mut self,
+        tab_key: &TabInputKey,
+    ) -> Option<&mut PaneContainer> {
+        self.pane_containers.get_mut(tab_key)
+    }
+
+    /// Returns the mutable Pane Part inside a tab's pane container.
     pub(crate) fn pane_part_mut(&mut self, tab_key: &TabInputKey) -> Option<&mut PanePart> {
-        self.pane_parts.get_mut(tab_key)
+        self.pane_container_mut(tab_key)
+            .map(PaneContainer::pane_part_mut)
     }
 
-    /// Returns the Pane Part for a tab item, creating an empty one when necessary.
-    pub(crate) fn ensure_pane_part(&mut self, tab_key: TabInputKey) -> &mut PanePart {
-        self.pane_parts.entry(tab_key).or_insert_with(PanePart::new)
+    /// Returns the pane container for a tab item, creating an empty one when necessary.
+    pub(crate) fn ensure_pane_container(&mut self, tab_key: TabInputKey) -> &mut PaneContainer {
+        self.pane_containers.entry(tab_key).or_default()
     }
 
     /// Ensures a tab has an input in its root group without replacing existing content.
     pub fn ensure_root_pane(&mut self, tab_key: TabInputKey, input: PaneInput) -> PaneId {
-        let pane_part = self.ensure_pane_part(tab_key);
+        let pane_part = self.ensure_pane_container(tab_key).pane_part_mut();
         let root_group = pane_part.root_group();
         if pane_part.active_input(root_group).is_none() {
             pane_part.mount_input(root_group, input);
@@ -109,20 +132,22 @@ impl Workbench {
         root_group
     }
 
-    /// Returns all tab keys that have a Pane Part.
-    pub fn pane_part_keys(&self) -> impl Iterator<Item = &TabInputKey> {
-        self.pane_parts.keys()
+    /// Returns all tab keys that have a pane container.
+    pub fn pane_container_keys(&self) -> impl Iterator<Item = &TabInputKey> {
+        self.pane_containers.keys()
     }
 
-    /// Removes a tab's Pane Part and returns all logical inputs it owned.
-    pub fn remove_pane_part(&mut self, tab_key: &TabInputKey) -> Option<Vec<Pane>> {
-        self.pane_parts.remove(tab_key).map(PanePart::take_panes)
+    /// Removes a tab's pane container and returns all logical panes it owned.
+    pub fn remove_pane_container(&mut self, tab_key: &TabInputKey) -> Option<Vec<Pane>> {
+        self.pane_containers
+            .remove(tab_key)
+            .map(PaneContainer::take_panes)
     }
 
-    /// Closes a Session tab and its owned Pane Part as one logical operation.
+    /// Closes a Session tab and its owned pane container as one logical operation.
     pub fn close_tab(&mut self, tab_key: &TabInputKey) -> Option<ClosedTab> {
         self.tab_part.close_tab(tab_key)?;
-        let panes = self.remove_pane_part(tab_key).unwrap_or_default();
+        let panes = self.remove_pane_container(tab_key).unwrap_or_default();
         Some(ClosedTab {
             key: tab_key.clone(),
             panes,
@@ -182,7 +207,7 @@ impl Workbench {
     ) -> Option<PaneId> {
         let tab_key = self.tab_part.active_tab_key()?.clone();
         let titlebar_part = self.titlebar_part;
-        let pane_part = self.ensure_pane_part(tab_key);
+        let pane_part = self.ensure_pane_container(tab_key).pane_part_mut();
         Some(titlebar_part.create_pane_with_direction(pane_part, input, direction))
     }
 
@@ -300,31 +325,30 @@ impl Workbench {
 
     /// Saves a product input to restore when this tab returns from a workspace surface.
     pub fn remember_workspace_return(&mut self, tab_key: &TabInputKey, input: PaneInput) -> bool {
-        let Some(pane_part) = self.pane_part_mut(tab_key) else {
+        let Some(container) = self.pane_container_mut(tab_key) else {
             return false;
         };
-        pane_part.remember_workspace_return(input);
+        container.remember_workspace_return(input);
         true
     }
 
     /// Takes a saved workspace input for a specific tab.
     pub fn take_workspace_return(&mut self, tab_key: &TabInputKey) -> Option<PaneInput> {
-        self.pane_part_mut(tab_key)?.take_workspace_return()
+        self.pane_container_mut(tab_key)?.take_workspace_return()
     }
 
     /// Drops a saved workspace input for a specific tab.
     pub fn clear_workspace_return(&mut self, tab_key: &TabInputKey) -> bool {
-        let Some(pane_part) = self.pane_part_mut(tab_key) else {
+        let Some(container) = self.pane_container_mut(tab_key) else {
             return false;
         };
-        pane_part.clear_workspace_return();
+        container.clear_workspace_return();
         true
     }
 
     /// Returns the active pane in the active tab.
     pub fn active_pane(&self) -> Option<Pane> {
-        let tab_key = self.tab_part.active_tab_key()?;
-        let pane_part = self.pane_part(tab_key)?;
+        let pane_part = self.active_pane_container()?.pane_part();
         pane_part.pane(pane_part.active_group())
     }
 

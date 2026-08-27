@@ -1,5 +1,5 @@
 [package]
-name = "zeta-ui"
+name = "zeta-workbench-controller"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -7,17 +7,14 @@ publish.workspace = true
 
 [lib]
 doctest = false
-name = "zeta_ui"
+name = "zeta_workbench_controller"
 path = "src/lib.rs"
 
 [dependencies]
+zeta-protocol = { workspace = true }
+zeta-terminal-workspace = { workspace = true }
 zeta-workbench = { workspace = true }
-zeta-workbench-layout = { workspace = true }
-zui = { workspace = true, default-features = false }
+zeta-workbench-host = { workspace = true }
 
 [lints]
 workspace = true
-
-[dev-dependencies]
-zeta-icons = { workspace = true }
-zeta-protocol = { workspace = true }

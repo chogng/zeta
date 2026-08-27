@@ -21,7 +21,7 @@ fn thread(id: &str) -> ThreadId {
 }
 
 #[test]
-fn workbench_is_composed_of_a_default_tab_part_and_empty_pane_parts() {
+fn workbench_is_composed_of_a_default_tab_part_and_empty_pane_containers() {
     let workbench = Workbench::new();
 
     assert_eq!(workbench.tab_part().input_count(), 1);
@@ -33,11 +33,11 @@ fn workbench_is_composed_of_a_default_tab_part_and_empty_pane_parts() {
             .expect("Settings input")
             .is_settings()
     );
-    assert!(workbench.pane_part_keys().next().is_none());
+    assert!(workbench.pane_container_keys().next().is_none());
 }
 
 #[test]
-fn tab_creation_initializes_the_matching_pane_part_terminal_pane() {
+fn tab_creation_initializes_the_matching_pane_container_terminal_pane() {
     let mut workbench = Workbench::new();
     let session = session("session-1", "Terminal");
     let key = TabInputKey::session(session.session_id.clone());
@@ -46,8 +46,9 @@ fn tab_creation_initializes_the_matching_pane_part_terminal_pane() {
 
     assert_eq!(workbench.tab_part().active_tab_key(), Some(&key));
     let panes = workbench
-        .pane_part(&key)
-        .expect("session Pane Part")
+        .pane_container(&key)
+        .expect("session pane container")
+        .pane_part()
         .panes();
     assert_eq!(panes.len(), 1);
     assert_eq!(panes[0].id().value(), 1);
@@ -73,6 +74,30 @@ fn settings_tab_mounts_a_settings_pane_when_activated() {
         .expect("settings pane");
     assert_eq!(pane.input().kind(), PaneInputKind::Settings);
     assert_eq!(workbench.active_pane().expect("active settings pane"), pane);
+}
+
+#[test]
+fn session_and_settings_tabs_select_their_one_to_one_pane_containers() {
+    let mut workbench = Workbench::new();
+    let session = session("session-1", "Terminal");
+    let session_key = TabInputKey::session(session.session_id.clone());
+    workbench.upsert_session(&session, "/workspace");
+
+    assert_eq!(
+        workbench.active_pane().map(|pane| pane.input().kind()),
+        Some(PaneInputKind::Terminal)
+    );
+    assert!(workbench.activate_settings());
+    assert_eq!(
+        workbench.active_pane().map(|pane| pane.input().kind()),
+        Some(PaneInputKind::Settings)
+    );
+    assert!(workbench.activate_tab(session_key));
+    assert_eq!(
+        workbench.active_pane().map(|pane| pane.input().kind()),
+        Some(PaneInputKind::Terminal)
+    );
+    assert_eq!(workbench.pane_container_keys().count(), 2);
 }
 
 #[test]
@@ -182,7 +207,7 @@ fn pane_part_routes_group_input_changes_by_stable_ids() {
 }
 
 #[test]
-fn each_tab_keeps_its_own_pane_part_group() {
+fn switching_tabs_switches_their_complete_pane_containers() {
     let mut workbench = Workbench::new();
     let first = session("session-1", "First");
     let second = session("session-2", "Second");
@@ -194,8 +219,9 @@ fn each_tab_keeps_its_own_pane_part_group() {
     workbench.upsert_session(&second, "/second");
     assert_eq!(
         workbench
-            .pane_part(&second_key)
-            .expect("second Pane Part")
+            .active_pane_container()
+            .expect("second pane container")
+            .pane_part()
             .group_ids()
             .len(),
         1
@@ -204,8 +230,9 @@ fn each_tab_keeps_its_own_pane_part_group() {
     assert!(workbench.activate_tab(first_key.clone()));
     assert_eq!(
         workbench
-            .pane_part(&first_key)
-            .expect("first Pane Part")
+            .active_pane_container()
+            .expect("first pane container")
+            .pane_part()
             .group_ids()
             .len(),
         2
@@ -214,11 +241,11 @@ fn each_tab_keeps_its_own_pane_part_group() {
         workbench.active_pane().unwrap().input().kind(),
         PaneInputKind::Files
     );
-    assert!(workbench.pane_part(&second_key).is_some());
+    assert!(workbench.pane_container(&second_key).is_some());
 }
 
 #[test]
-fn closing_a_tab_removes_its_pane_part_and_selects_the_next_tab() {
+fn closing_a_tab_removes_its_pane_container_and_selects_the_next_tab() {
     let mut workbench = Workbench::new();
     let first = session("session-1", "First");
     let second = session("session-2", "Second");
@@ -232,8 +259,8 @@ fn closing_a_tab_removes_its_pane_part_and_selects_the_next_tab() {
     assert_eq!(closed.key(), &first_key);
     assert_eq!(closed.panes().len(), 1);
     assert_eq!(closed.active_tab(), Some(&second_key));
-    assert!(workbench.pane_part(&first_key).is_none());
-    assert!(workbench.pane_part(&second_key).is_some());
+    assert!(workbench.pane_container(&first_key).is_none());
+    assert!(workbench.pane_container(&second_key).is_some());
     assert_eq!(workbench.tab_part().active_tab_key(), Some(&second_key));
 }
 

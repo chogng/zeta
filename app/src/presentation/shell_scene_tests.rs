@@ -23,10 +23,6 @@ use crate::shell_interaction::{
     TITLEBAR, WORKSPACE_PANE, WORKSPACE_PANE_NAVIGATION, WORKSPACE_PANE_TOOLBAR,
 };
 use crate::thread_projection::ThreadProjection;
-use crate::workbench_host::{InspectorPartState, TabContainerState, TabInputKey, TabPart};
-use crate::workbench_host::{
-    PaneBinding, PaneHost, PaneHostScope, PaneInput, PanePart, PaneSplitDirection,
-};
 use crate::workspace_context::WorkspaceContext;
 use crate::workspace_pane_host::WorkspacePaneHost;
 use crate::workspace_path_picker::WorkspacePathPickerState;
@@ -37,9 +33,14 @@ use zeta_editor::CodeEditorStyle;
 use zeta_settings::SettingsPageSection;
 use zeta_terminal::{GridSize, ScreenBuffer, TerminalCore};
 use zeta_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSnapshot};
+use zeta_ui::TabContainerState;
 use zeta_ui::{
     CaretVisibility, Color, Edges, Point, Rect, ScrollbarPresentation, TextInputCommand,
     TextInputLayoutEngine, UiScene,
+};
+use zeta_workbench_controller::{
+    InspectorPartState, PaneBinding, PaneHost, PaneHostScope, PaneInput, PanePart,
+    PaneSplitDirection, TabInputKey, TabPart,
 };
 use zui::runtime::AccessibilityNode;
 use zui::ui::{AccessibilityRole, CursorFeedback, DispatchInvalidation, UiDispatch, UiIntent};

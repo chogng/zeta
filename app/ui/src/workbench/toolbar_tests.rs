@@ -1,9 +1,9 @@
-//! Body-mounted Tab Container toolbar projection tests.
+//! Body-mounted Workbench toolbar tests.
 
 use super::{TOOLBAR_CONTENT_GAP, TOOLBAR_HEIGHT, TabContainerToolbar};
-use crate::shell_interaction::{ADD_SESSION, SESSION_SEARCH_INPUT, TAB_CONTAINER_ACTION_BAR};
-use crate::shell_style::SHELL_PALETTE;
-use zeta_ui::{CaretVisibility, Color, Point, Rect, TextInput, TextInputLayoutEngine};
+use crate::workbench::identity::{ADD_SESSION, SESSION_SEARCH_INPUT, TAB_CONTAINER_ACTION_BAR};
+use crate::workbench::test_style;
+use crate::{CaretVisibility, Color, Point, Rect, TextInput, TextInputLayoutEngine};
 use zui::ui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
 
 #[test]
@@ -15,7 +15,7 @@ fn toolbar_fills_the_container_row_with_search_and_add_action() {
         part_bounds,
         &TextInput::new(),
         CaretVisibility::Visible,
-        SHELL_PALETTE,
+        test_style(),
         &mut text_layout,
         &dispatch,
     );

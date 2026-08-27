@@ -1,9 +1,9 @@
 use tempfile::TempDir;
 use zeta_remote_connections::RemoteConnectionCatalog;
 
-use crate::remote_connection_cli::RemoteConnectionCommandParseError;
 use crate::remote_connection_cli::AppInvocation;
 use crate::remote_connection_cli::AppInvocationParseError;
+use crate::remote_connection_cli::RemoteConnectionCommandParseError;
 
 #[test]
 fn tunnel_requires_valid_ports_and_rejects_duplicate_options() {

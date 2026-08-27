@@ -1,26 +1,23 @@
-//! Workbench Tab Container projection tests.
+//! Workbench tabs tests.
 
 use super::TabContainer;
 use super::TabContainerPlacement;
 use super::tab_input_element_id;
-use crate::shell_interaction::FIRST_TAB_CONTAINER_SESSION_TAB;
-use crate::shell_interaction::FIRST_TITLEBAR_SESSION_TAB;
-use crate::shell_interaction::TAB_CONTAINER_SETTINGS_TAB;
-use crate::shell_interaction::TITLEBAR_SETTINGS_TAB;
-use crate::shell_interaction::session_tab_id;
-use crate::shell_interaction::tab_group_list_id;
-use crate::shell_interaction::titlebar_session_tab_id;
-use crate::shell_style::SHELL_PALETTE;
-use crate::workbench_host::TabGroupId;
-use crate::workbench_host::TabInputKey;
+use crate::Color;
+use crate::FontWeight;
+use crate::Point;
+use crate::Rect;
+use crate::workbench::identity::{
+    FIRST_TAB_CONTAINER_SESSION_TAB, FIRST_TITLEBAR_SESSION_TAB, TAB_CONTAINER_SETTINGS_TAB,
+    TITLEBAR_SETTINGS_TAB, session_tab_id, tab_group_list_id, titlebar_session_tab_id,
+};
+use crate::workbench::test_style;
 use zeta_protocol::Session;
 use zeta_protocol::SessionId;
 use zeta_protocol::SessionStatus;
-use zeta_ui::Color;
-use zeta_ui::FontWeight;
-use zeta_ui::Point;
-use zeta_ui::Rect;
-use crate::workbench_host::TabPart;
+use zeta_workbench::TabGroupId;
+use zeta_workbench::TabInputKey;
+use zeta_workbench::TabPart;
 use zui::ui::AccessibilityRole;
 use zui::ui::AccessibilitySelection;
 use zui::ui::InteractionFrame;
@@ -88,7 +85,7 @@ fn body_mount_arranges_tabs_vertically_with_two_line_session_information() {
         &part,
         Some(&first_key),
         TabContainerPlacement::Body,
-        SHELL_PALETTE,
+        test_style(),
         &dispatch,
     );
     let layouts = container.group_layouts();
@@ -96,7 +93,7 @@ fn body_mount_arranges_tabs_vertically_with_two_line_session_information() {
     let second_bounds = layouts[0].tab_list.tab_bounds(1).unwrap();
     assert_eq!(second_bounds.origin.y - first_bounds.bottom(), 6.0);
     drop(layouts);
-    let mut frame = UiFrame::<InteractionFrame>::new(SHELL_PALETTE.background);
+    let mut frame = UiFrame::<InteractionFrame>::new(Color::WHITE);
 
     frame.draw_component(&container);
 
@@ -145,7 +142,7 @@ fn titlebar_mount_arranges_tabs_horizontally_and_emits_activation() {
         &part,
         Some(&first_key),
         TabContainerPlacement::Titlebar,
-        SHELL_PALETTE,
+        test_style(),
         &dispatch,
     );
     let layouts = container.group_layouts();
@@ -190,7 +187,7 @@ fn browser_style_groups_project_as_separate_tab_lists_with_group_labels() {
         &part,
         part.active_tab_key(),
         TabContainerPlacement::Body,
-        SHELL_PALETTE,
+        test_style(),
         &dispatch,
     );
     let mut frame = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);

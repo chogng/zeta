@@ -13,8 +13,8 @@ use zeta_remote_connections::RemoteConnectionNameError;
 use zeta_remote_connections::RemoteConnectionSaveMode;
 
 use crate::app_server::local_profile_root;
-use crate::launch::LaunchParseError;
 use crate::launch::AppLaunch;
+use crate::launch::LaunchParseError;
 use crate::remote_connection_tunnel::RemoteTunnelCommand;
 
 /// One complete command-line invocation before the native event loop starts.

@@ -12,7 +12,7 @@ pub(super) fn with_shell_presentation_model<R>(
     let NativeApp {
         palette,
         retained_runtime,
-        workbench_host,
+        workbench,
         pane_view_states,
         active_pane: _,
         terminal_pane_resize,
@@ -52,8 +52,8 @@ pub(super) fn with_shell_presentation_model<R>(
         text_layout,
         ..
     } = app;
-    let workbench = workbench_host.workbench();
-    let pane_host = workbench_host.pane_host();
+    let pane_host = workbench.pane_host();
+    let workbench = workbench.workbench();
     let file_editor_diagnostics = language_service.active_editor_diagnostics(file_editor_host);
     let language_hover = language_service.active_hover(file_editor_host);
     let language_completions = language_service.active_completions(file_editor_host);

@@ -1,20 +1,17 @@
 use std::time::Instant;
 
 use crate::NativeApp;
-use crate::shell_interaction::INSPECTOR_RESIZE_HANDLE;
-use crate::shell_scene::inspector_resize_snapshot_for_viewport;
+use crate::shell_interaction::TAB_CONTAINER_RESIZE_HANDLE;
 use zeta_ui::Point;
 use zui::input::ElementState;
 use zui::ui::DispatchInvalidation;
 
 impl NativeApp {
-    pub(crate) fn route_inspector_resize_move(&mut self, point: Point) -> bool {
-        if !self.inspector_resizable.is_dragging() {
+    pub(super) fn route_tab_container_resize_move(&mut self, point: Point) -> bool {
+        if !self.tab_container.is_resizing() {
             return false;
         }
-        if let Some(next) = self.inspector_resizable.resize_to(point)
-            && self.inspector_part.set_preferred_width(next.next_size())
-        {
+        if self.tab_container.resize_to(point) {
             self.terminal_selection.clear();
             self.rebuild_presentation();
             self.request_redraw();
@@ -23,7 +20,7 @@ impl NativeApp {
         true
     }
 
-    pub(crate) fn route_inspector_resize_button(&mut self, state: ElementState) -> bool {
+    pub(super) fn route_tab_container_resize_button(&mut self, state: ElementState) -> bool {
         let now = Instant::now();
         match state {
             ElementState::Pressed => {
@@ -32,22 +29,19 @@ impl NativeApp {
                 };
                 let over_handle = self.presentation.as_ref().is_some_and(|presentation| {
                     presentation.interaction_frame().target_at(point)
-                        == Some(INSPECTOR_RESIZE_HANDLE)
+                        == Some(TAB_CONTAINER_RESIZE_HANDLE)
                 });
-                let Some(snapshot) = inspector_resize_snapshot_for_viewport(
-                    self.logical_viewport(),
-                    self.tab_container,
-                    self.inspector_part,
-                ) else {
-                    return false;
-                };
-                if !over_handle || !self.inspector_resizable.begin_drag(snapshot, point, now) {
+                if !over_handle
+                    || !self
+                        .tab_container
+                        .start_resizing(self.logical_viewport().width, point, now)
+                {
                     return false;
                 }
             }
             ElementState::Released => {
-                let presence = self.sash_pointer_presence(INSPECTOR_RESIZE_HANDLE);
-                if !self.inspector_resizable.end_drag(presence, now) {
+                let presence = self.sash_pointer_presence(TAB_CONTAINER_RESIZE_HANDLE);
+                if !self.tab_container.finish_resizing(presence, now) {
                     return false;
                 }
             }
@@ -70,8 +64,8 @@ impl NativeApp {
         true
     }
 
-    pub(crate) fn cancel_inspector_resize(&mut self) {
-        if self.inspector_resizable.cancel() {
+    pub(super) fn cancel_tab_container_resize(&mut self) {
+        if self.tab_container.cancel_resizing() {
             self.rebuild_presentation();
             self.update_cursor();
             self.request_redraw();

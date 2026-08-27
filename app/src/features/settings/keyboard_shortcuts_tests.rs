@@ -1,5 +1,7 @@
 use super::{KeyboardShortcutsState, keyboard_shortcut_rows, keyboard_shortcuts_ids, row_element};
 use crate::keybindings::NativeKeybindings;
+use app_keybinding_ui::KeyboardShortcuts;
+use app_keybinding_ui::paint_chord_hint;
 use std::time::{Duration, Instant};
 use zeta_commands::AppCommandId;
 use zeta_keybinding::Chord;
@@ -7,8 +9,6 @@ use zeta_keybinding::HostPlatform;
 use zeta_keybinding::ShortcutModifiers;
 use zeta_keybinding::serialize_key_sequence;
 use zeta_ui::{Color, Point, Rect, UiScene};
-use app_keybinding_ui::KeyboardShortcuts;
-use app_keybinding_ui::paint_chord_hint;
 use zui::ui::{InteractionFrame, UiDispatch, UiFrame};
 
 #[test]

@@ -10,7 +10,7 @@ use crate::shell_scene::{
     terminal_mouse_position_for_viewport, terminal_pane_mouse_position_for_viewport,
 };
 use crate::terminal_session::TerminalSession;
-use crate::workbench_host::PaneId;
+use zeta_workbench_controller::PaneGroupId as PaneId;
 
 #[derive(Debug, Eq, PartialEq)]
 pub(crate) enum PointerInput {
@@ -159,12 +159,8 @@ impl NativeApp {
         &self,
         point: zeta_ui::Point,
     ) -> Option<(PaneId, TerminalMousePosition)> {
-        let tab_key = self
-            .workbench_host
-            .workbench()
-            .tab_part()
-            .active_tab_key()?;
-        let layout = self.workbench_host.workbench().pane_part(tab_key)?;
+        let tab_key = self.workbench.workbench().tab_part().active_tab_key()?;
+        let layout = self.workbench.workbench().pane_part(tab_key)?;
         terminal_pane_mouse_position_for_viewport(
             self.logical_viewport(),
             self.active_screen(),
@@ -180,7 +176,7 @@ impl NativeApp {
             return false;
         };
         let Some(tab_key) = self
-            .workbench_host
+            .workbench
             .workbench()
             .tab_part()
             .active_tab_key()
@@ -201,7 +197,7 @@ impl NativeApp {
         if let Some((pane, position)) = self.terminal_pane_hit(point) {
             return (self.active_pane
                 == Some((
-                    self.workbench_host
+                    self.workbench
                         .workbench()
                         .tab_part()
                         .active_tab_key()?

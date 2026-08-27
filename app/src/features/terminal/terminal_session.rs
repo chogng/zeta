@@ -4,6 +4,8 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use tokio::runtime::Runtime;
 use zeta_terminal::{GridSize, TerminalCore};
+use zeta_terminal_workspace::TerminalReady;
+pub(crate) use zeta_terminal_workspace::TerminalSessionKey;
 use zeta_utils_pty::{ProcessHandle, SpawnedProcess, TerminalSize, spawn_pty_process};
 use zui::app::AppProxy;
 
@@ -17,20 +19,6 @@ mod remote;
 use remote::RemoteTerminalBackend;
 
 const SHELL_BOOTSTRAP_MARKER: &[u8] = b"\x1b]9;app-ready\x07";
-
-/// Process-local identity for one native PTY runtime.
-///
-/// App Server `SessionId` values are assigned asynchronously, while the first PTY is spawned
-/// during native window startup. The host binds this identity to an App Server Session when its
-/// first authoritative snapshot arrives.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub(crate) struct TerminalSessionKey(u64);
-
-impl TerminalSessionKey {
-    pub(crate) const fn new(value: u64) -> Self {
-        Self(value)
-    }
-}
 
 #[derive(Debug)]
 pub(crate) enum TerminalSessionEvent {
@@ -49,15 +37,7 @@ impl TerminalSessionEventEnvelope {
     }
 }
 
-/// Result posted to the native event loop after a terminal runtime has been created off-thread.
-///
-/// PTY creation can involve synchronous platform calls such as `openpty` and child-process
-/// startup. The event loop must receive the completed runtime instead of waiting for those calls
-/// while handling a tab click or the initial window lifecycle.
-pub(crate) struct TerminalSessionReady {
-    pub(crate) key: TerminalSessionKey,
-    pub(crate) result: std::result::Result<TerminalSession, String>,
-}
+pub(crate) type TerminalSessionReady = TerminalReady<TerminalSession>;
 
 impl TerminalSessionEvent {
     fn apply_to(self, core: &mut TerminalCore) {
@@ -121,7 +101,7 @@ impl TerminalSession {
                     "terminal-spawn-finished",
                     format_args!("key={key:?} success={}", result.is_ok()),
                 );
-                let _ = event_proxy.send_event(TerminalSessionReady { key, result }.into());
+                let _ = event_proxy.send_event(TerminalReady::new(key, result).into());
             })
             .context("could not start terminal spawn worker")?;
         Ok(())

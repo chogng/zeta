@@ -1,7 +1,17 @@
 use std::ops::Range;
 use zui::ui::ElementId;
 
-use crate::workbench_host::{PaneId, TabGroupId};
+pub(crate) use zeta_ui::{
+    ADD_SESSION, FIRST_TAB_CONTAINER_SESSION_TAB, SESSION_SEARCH_INPUT, TAB_CONTAINER_SETTINGS_TAB,
+    TAB_CONTAINER_TOGGLE, TITLEBAR_SETTINGS_TAB, WINDOW, WORKSPACE_PANE_TOGGLE, session_tab_id,
+    titlebar_session_tab_id,
+};
+#[cfg(test)]
+pub(crate) use zeta_ui::{
+    FIRST_TITLEBAR_SESSION_TAB, TAB_CONTAINER_ACTION_BAR, TAB_CONTAINER_LIST,
+    TAB_CONTAINER_TOOLBAR, TITLEBAR, TITLEBAR_TAB_LIST,
+};
+use zeta_workbench_controller::{PaneGroupId as PaneId, PaneSplitId};
 
 #[cfg(test)]
 pub(crate) use zeta_session_ui::interaction::SESSION_CONTEXT_MENU;
@@ -20,16 +30,10 @@ pub(crate) use crate::workspace_panes::WorkspacePaneSelection;
 
 const SHELL_SCOPE: u32 = 1;
 const FILE_EDITOR_ACTION_SCOPE: u32 = 7;
-const TAB_CONTAINER_SCOPE: u32 = 14;
 const TERMINAL_PANE_SCOPE: u32 = 15;
 #[cfg(test)]
 const SESSION_CONTENT_SCOPE: u32 = 16;
-const TITLEBAR_TAB_SCOPE: u32 = 17;
-const TAB_CONTAINER_GROUP_SCOPE: u32 = 18;
-const TITLEBAR_TAB_GROUP_SCOPE: u32 = 19;
 
-pub(crate) const WINDOW: ElementId = ElementId::scoped(SHELL_SCOPE, 1);
-pub(crate) const TITLEBAR: ElementId = ElementId::scoped(SHELL_SCOPE, 2);
 pub(crate) const MAIN_SURFACE: ElementId = ElementId::scoped(SHELL_SCOPE, 3);
 pub(crate) const TERMINAL_OUTPUT: ElementId = ElementId::scoped(SHELL_SCOPE, 4);
 pub(crate) const COMPOSER_PANEL: ElementId = ElementId::scoped(SHELL_SCOPE, 5);
@@ -39,23 +43,8 @@ pub(crate) const CONTEXT_LOCATION: ElementId = ElementId::scoped(SHELL_SCOPE, 8)
 pub(crate) const CONTEXT_WORKING_DIRECTORY: ElementId = ElementId::scoped(SHELL_SCOPE, 9);
 pub(crate) const CONTEXT_GIT_BRANCH: ElementId = ElementId::scoped(SHELL_SCOPE, 10);
 pub(crate) const CONTEXT_DIFF: ElementId = ElementId::scoped(SHELL_SCOPE, 11);
-pub(crate) const TAB_CONTAINER_TOGGLE: ElementId = ElementId::scoped(SHELL_SCOPE, 12);
-pub(crate) const TAB_CONTAINER: ElementId = ElementId::scoped(SHELL_SCOPE, 13);
-pub(crate) const TAB_CONTAINER_LIST: ElementId = ElementId::scoped(TAB_CONTAINER_GROUP_SCOPE, 1);
-pub(crate) const FIRST_TAB_CONTAINER_SESSION_TAB: ElementId =
-    ElementId::scoped(TAB_CONTAINER_SCOPE, 2);
-pub(crate) const TAB_CONTAINER_SETTINGS_TAB: ElementId = ElementId::scoped(TAB_CONTAINER_SCOPE, 4);
-pub(crate) const TITLEBAR_TAB_CONTAINER: ElementId = ElementId::scoped(SHELL_SCOPE, 53);
-pub(crate) const TITLEBAR_TAB_LIST: ElementId = ElementId::scoped(TITLEBAR_TAB_GROUP_SCOPE, 1);
-pub(crate) const FIRST_TITLEBAR_SESSION_TAB: ElementId = ElementId::scoped(TITLEBAR_TAB_SCOPE, 2);
-pub(crate) const TITLEBAR_SETTINGS_TAB: ElementId = ElementId::scoped(TITLEBAR_TAB_SCOPE, 4);
 pub(crate) const TAB_CONTAINER_RESIZE_HANDLE: ElementId = ElementId::scoped(SHELL_SCOPE, 16);
-pub(crate) const WORKSPACE_PANE_TOGGLE: ElementId = ElementId::scoped(SHELL_SCOPE, 22);
 pub(crate) const INSPECTOR_RESIZE_HANDLE: ElementId = ElementId::scoped(SHELL_SCOPE, 51);
-pub(crate) const TAB_CONTAINER_TOOLBAR: ElementId = ElementId::scoped(SHELL_SCOPE, 24);
-pub(crate) const SESSION_SEARCH_INPUT: ElementId = ElementId::scoped(SHELL_SCOPE, 25);
-pub(crate) const TAB_CONTAINER_ACTION_BAR: ElementId = ElementId::scoped(SHELL_SCOPE, 26);
-pub(crate) const ADD_SESSION: ElementId = ElementId::scoped(SHELL_SCOPE, 27);
 pub(crate) const THREAD_TIMELINE: ElementId = ElementId::scoped(SHELL_SCOPE, 40);
 pub(crate) const COMPOSER_INTERACTION: ElementId = ElementId::scoped(SHELL_SCOPE, 42);
 pub(crate) const COMPOSER_INFO_BAR: ElementId = ElementId::scoped(SHELL_SCOPE, 43);
@@ -78,7 +67,6 @@ const FILE_EDITOR_FIND_NEXT: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SC
 const FILE_EDITOR_REPLACE_CURRENT: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 9);
 const FILE_EDITOR_REPLACE_ALL: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 10);
 const FILE_EDITOR_CLOSE_SEARCH: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 11);
-const FIRST_SESSION_TAB: u32 = 100;
 const FIRST_TERMINAL_PANE: u32 = 100;
 const FIRST_TERMINAL_PANE_SASH: u32 = 1;
 const FIRST_COMPOSER_INTERACTION_ITEM: u32 = 100;
@@ -101,44 +89,6 @@ pub(crate) fn composer_interaction_item_index(
     visible_range.find(|index| composer_interaction_item_id(*index) == id)
 }
 
-pub(crate) fn session_tab_id(index: usize) -> ElementId {
-    if index == 0 {
-        return FIRST_TAB_CONTAINER_SESSION_TAB;
-    }
-    dynamic_element_id_in_scope(
-        TAB_CONTAINER_SCOPE,
-        FIRST_SESSION_TAB,
-        index - 1,
-        "session tab",
-    )
-}
-
-pub(crate) fn titlebar_session_tab_id(index: usize) -> ElementId {
-    if index == 0 {
-        return FIRST_TITLEBAR_SESSION_TAB;
-    }
-    dynamic_element_id_in_scope(
-        TITLEBAR_TAB_SCOPE,
-        FIRST_SESSION_TAB,
-        index - 1,
-        "titlebar session tab",
-    )
-}
-
-pub(crate) fn tab_group_list_id(group: TabGroupId) -> ElementId {
-    if group == TabGroupId::DEFAULT {
-        return TAB_CONTAINER_LIST;
-    }
-    tab_group_element_id(TAB_CONTAINER_GROUP_SCOPE, group, "tab group list")
-}
-
-pub(crate) fn titlebar_tab_group_list_id(group: TabGroupId) -> ElementId {
-    if group == TabGroupId::DEFAULT {
-        return TITLEBAR_TAB_LIST;
-    }
-    tab_group_element_id(TITLEBAR_TAB_GROUP_SCOPE, group, "titlebar tab group list")
-}
-
 pub(crate) fn session_tab_index(id: ElementId, mounted: Range<usize>) -> Option<usize> {
     mounted
         .clone()
@@ -158,7 +108,7 @@ pub(crate) fn terminal_pane_id(pane: PaneId) -> ElementId {
     ElementId::scoped(TERMINAL_PANE_SCOPE, local)
 }
 
-pub(crate) fn terminal_pane_sash_id(split: crate::workbench_host::PaneSplitId) -> ElementId {
+pub(crate) fn terminal_pane_sash_id(split: PaneSplitId) -> ElementId {
     let local = u32::try_from(split.value())
         .ok()
         .and_then(|value| FIRST_TERMINAL_PANE_SASH.checked_add(value))
@@ -199,12 +149,6 @@ fn dynamic_element_id_in_scope(scope: u32, first: u32, index: usize, label: &str
         .ok()
         .and_then(|index| first.checked_add(index))
         .unwrap_or_else(|| panic!("{label} index must fit its element scope"));
-    ElementId::scoped(scope, local)
-}
-
-fn tab_group_element_id(scope: u32, group: TabGroupId, label: &str) -> ElementId {
-    let local = u32::try_from(group.value())
-        .unwrap_or_else(|_| panic!("{label} identity must fit its element scope"));
     ElementId::scoped(scope, local)
 }
 

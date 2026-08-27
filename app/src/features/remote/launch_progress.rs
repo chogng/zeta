@@ -6,8 +6,8 @@ use zeta_remote_connections::RemoteRuntimeDownloadProgress;
 use zeta_remote_connections::RemoteRuntimeInstallDisposition;
 use zeta_remote_connections::RemoteRuntimeInstallProgress;
 
-use crate::launch::RemoteRuntimePreparationProgress;
 use crate::launch::AppLaunch;
+use crate::launch::RemoteRuntimePreparationProgress;
 
 pub(crate) const REMOTE_LAUNCH_PROGRESS_ENV: &str = "APP_REMOTE_LAUNCH_PROGRESS";
 const REMOTE_LAUNCH_PROGRESS_FORMAT: &str = "json-lines";

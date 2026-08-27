@@ -52,10 +52,7 @@ fn supported_shell_bootstrap_disables_echo_and_hides_the_native_prompt() {
 fn bootstrap_output_filter_discards_startup_output_across_chunk_boundaries() {
     let mut filter = BootstrapOutputFilter::new(SHELL_BOOTSTRAP_MARKER);
 
-    assert_eq!(
-        filter.push(b"prompt bootstrap\x1b]9;app-".to_vec()),
-        None
-    );
+    assert_eq!(filter.push(b"prompt bootstrap\x1b]9;app-".to_vec()), None);
     assert_eq!(
         filter.push(b"ready\x07command-output".to_vec()),
         Some(b"command-output".to_vec())

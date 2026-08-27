@@ -12,9 +12,9 @@ use crate::composer_host::update_composer_classifier;
 use crate::session::session_switch_trace;
 use crate::session::session_switch_trace::SwitchId;
 use crate::thread_projection::ThreadProjectionUpdate;
-use crate::workbench_host::TabInputChange;
-use crate::workbench_host::TabInputKey;
 use crate::workspace_pane_host::WorkspacePaneView;
+use zeta_workbench_controller::TabInputChange;
+use zeta_workbench_controller::TabInputKey;
 
 pub(crate) use zeta_agent_session::AgentSession;
 pub(crate) use zeta_agent_session::AgentSessionEvent;
@@ -45,8 +45,8 @@ impl NativeApp {
     /// guard must be bypassed once.
     pub(crate) fn activate_session_tab_after_close(&mut self, tab_key: &TabInputKey) {
         let Some(index) =
-            (0..self.workbench_host.workbench().tab_part().session_count()).find(|index| {
-                self.workbench_host
+            (0..self.workbench.workbench().tab_part().session_count()).find(|index| {
+                self.workbench
                     .workbench()
                     .tab_part()
                     .session_input_at(*index)
@@ -61,7 +61,7 @@ impl NativeApp {
     fn activate_session_tab_at(&mut self, index: usize, force: bool) {
         let switch_id = session_switch_trace::SwitchId::next();
         let Some(tab) = self
-            .workbench_host
+            .workbench
             .workbench()
             .tab_part()
             .session_input_at(index)
@@ -87,15 +87,8 @@ impl NativeApp {
             "activation-request",
             format_args!("index={index} session_id={session_id}"),
         );
-        if !force
-            && self
-                .workbench_host
-                .workbench()
-                .tab_part()
-                .selected_session()
-                == Some(&session_id)
-        {
-            if self.workbench_host.workbench().tab_part().is_settings() {
+        if !force && self.workbench.workbench().tab_part().selected_session() == Some(&session_id) {
+            if self.workbench.workbench().tab_part().is_settings() {
                 self.activate_session_workbench_tab();
                 self.rebuild_presentation_on_next_redraw();
             } else {
@@ -163,9 +156,7 @@ impl NativeApp {
         {
             return;
         }
-        self.workbench_host
-            .workbench_mut()
-            .activate_session(&session_id);
+        self.workbench.workbench_mut().activate_session(&session_id);
         self.activate_session_workbench_tab();
         let terminal_activated = self.activate_terminal_for_session(&session_id);
         if !was_terminal {
@@ -190,7 +181,7 @@ impl NativeApp {
     fn upsert_session_tab(&mut self, session: &Session) {
         let workspace = self.workspace_context.working_directory_label().to_owned();
         let result = self
-            .workbench_host
+            .workbench
             .workbench_mut()
             .upsert_session(session, &workspace);
         let (label, input_key) = match result {
@@ -203,7 +194,7 @@ impl NativeApp {
             format_args!(
                 "session_id={} input={input_key:?} tab_count={}",
                 session.session_id,
-                self.workbench_host.workbench().tab_part().session_count()
+                self.workbench.workbench().tab_part().session_count()
             ),
         );
     }
@@ -211,7 +202,7 @@ impl NativeApp {
     fn upsert_session_catalog(&mut self, sessions: &[Session]) {
         let workspace = self.workspace_context.working_directory_label().to_owned();
         for session in sessions {
-            self.workbench_host
+            self.workbench
                 .workbench_mut()
                 .upsert_catalog_session(session, &workspace);
         }
@@ -354,8 +345,10 @@ impl NativeApp {
             .workspace_pane_host
             .replace_workspace(&self.workspace_context);
         let view = match pane_kind {
-            Some(crate::workbench_host::PaneInputKind::Diff) => Some(WorkspacePaneView::Changes),
-            Some(crate::workbench_host::PaneInputKind::Files) => Some(WorkspacePaneView::Files),
+            Some(zeta_workbench_controller::PaneInputKind::Diff) => {
+                Some(WorkspacePaneView::Changes)
+            }
+            Some(zeta_workbench_controller::PaneInputKind::Files) => Some(WorkspacePaneView::Files),
             _ => None,
         };
         if let Some(view) = view {

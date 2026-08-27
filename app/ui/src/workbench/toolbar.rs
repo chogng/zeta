@@ -1,7 +1,6 @@
-//! Session search and creation controls for the body-mounted Tab Container.
+//! Session search and creation controls for body-mounted Workbench tabs.
 
-use zeta_icons::icons;
-use zeta_ui::{
+use crate::{
     ActionBar, ActionBarButton, ActionBarItem, ActionBarOrientation, ActionBarStyle,
     ButtonBackgrounds, ButtonState, ButtonStyle, CaretVisibility, Component, ComponentContext,
     ComponentElement, ComputedElement, CornerRadii, Edges, Element, InteractionRegion, Rect,
@@ -12,20 +11,20 @@ use zui::ui::{
     NodeAction, UiDispatch, UiNode,
 };
 
-use crate::shell_interaction::{
+use super::WorkbenchUiStyle;
+use super::identity::{
     ADD_SESSION, SESSION_SEARCH_INPUT, TAB_CONTAINER, TAB_CONTAINER_ACTION_BAR,
     TAB_CONTAINER_TOOLBAR,
 };
-use crate::shell_style::ShellPalette;
 
-pub(crate) const PART_PADDING: f32 = 10.0;
-pub(crate) const TOOLBAR_HEIGHT: f32 = 24.0;
-pub(crate) const TOOLBAR_CONTENT_GAP: f32 = 4.0;
+pub const PART_PADDING: f32 = 10.0;
+pub const TOOLBAR_HEIGHT: f32 = 24.0;
+pub const TOOLBAR_CONTENT_GAP: f32 = 4.0;
 const ACTION_SIZE: f32 = TOOLBAR_HEIGHT;
 const TOOLBAR_GAP: f32 = 6.0;
 
 /// Tab Container toolbar with a leading Session SearchBox and trailing creation ActionBar.
-pub(crate) struct TabContainerToolbar {
+pub struct TabContainerToolbar {
     bounds: Rect,
     search_box: SearchBox,
     search_value: String,
@@ -33,11 +32,11 @@ pub(crate) struct TabContainerToolbar {
 }
 
 impl TabContainerToolbar {
-    pub(crate) fn new(
+    pub fn new(
         part_bounds: Rect,
         search_input: &TextInput,
         caret_visibility: CaretVisibility,
-        palette: ShellPalette,
+        style: WorkbenchUiStyle,
         text_layout: &mut TextInputLayoutEngine,
         dispatch: &UiDispatch,
     ) -> Self {
@@ -61,11 +60,11 @@ impl TabContainerToolbar {
             content_bounds.size.height,
         );
         let search_state = if dispatch.is_focused(SESSION_SEARCH_INPUT) {
-            zeta_ui::InputBoxState::Focused(caret_visibility)
+            crate::InputBoxState::Focused(caret_visibility)
         } else if dispatch.is_hovered(SESSION_SEARCH_INPUT) {
-            zeta_ui::InputBoxState::Hovered
+            crate::InputBoxState::Hovered
         } else {
-            zeta_ui::InputBoxState::Resting
+            crate::InputBoxState::Resting
         };
         let button_state = if dispatch.is_pressed(ADD_SESSION) {
             ButtonState::Pressed
@@ -76,11 +75,11 @@ impl TabContainerToolbar {
         } else {
             ButtonState::Resting
         };
-        let button_backgrounds = ButtonBackgrounds::new(zeta_ui::Color::TRANSPARENT)
-            .with_hovered(palette.session_tab_highlight)
-            .with_focused(palette.session_tab_highlight)
-            .with_pressed(palette.session_tab_highlight);
-        let button_style = ButtonStyle::new(button_backgrounds, TextStyle::new(12.0, palette.text))
+        let button_backgrounds = ButtonBackgrounds::new(crate::Color::TRANSPARENT)
+            .with_hovered(style.selected)
+            .with_focused(style.selected)
+            .with_pressed(style.selected);
+        let button_style = ButtonStyle::new(button_backgrounds, TextStyle::new(12.0, style.text))
             .with_corner_radii(CornerRadii::uniform(4.0))
             .with_padding(Edges::uniform(3.0))
             .with_icon_size(18.0);
@@ -90,7 +89,7 @@ impl TabContainerToolbar {
                 search_bounds,
                 "Search sessions...",
                 search_state,
-                palette.session_search_style(),
+                style.search,
                 search_input,
                 text_layout,
             ),
@@ -99,7 +98,7 @@ impl TabContainerToolbar {
                 action_bounds,
                 ActionBarOrientation::Horizontal,
                 vec![ActionBarItem::Button(ActionBarButton::icon(
-                    icons::ADD,
+                    style.add_icon,
                     "Add new session",
                     button_state,
                 ))],
@@ -150,11 +149,11 @@ impl TabContainerToolbar {
         ]
     }
 
-    pub(crate) const fn search_caret_bounds(&self) -> Option<Rect> {
+    pub const fn search_caret_bounds(&self) -> Option<Rect> {
         self.search_box.caret_bounds()
     }
 
-    pub(crate) fn content_bounds(part_bounds: Rect) -> Rect {
+    pub fn content_bounds(part_bounds: Rect) -> Rect {
         Rect::from_xywh(
             part_bounds.origin.x + PART_PADDING,
             part_bounds.origin.y + PART_PADDING + TOOLBAR_HEIGHT + TOOLBAR_CONTENT_GAP,
@@ -209,5 +208,5 @@ impl Component for TabContainerToolbar {
 }
 
 #[cfg(test)]
-#[path = "tab_container_toolbar_tests.rs"]
+#[path = "toolbar_tests.rs"]
 mod tests;

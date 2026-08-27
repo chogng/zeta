@@ -1,31 +1,43 @@
-use zeta_icons::icons;
-use zeta_ui::{
+use super::WorkbenchUiStyle;
+use crate::{
     ActionBar, ActionBarButton, ActionBarItem, ActionBarOrientation, ActionBarStyle, Border,
     ButtonBackgrounds, ButtonState, ButtonStyle, Component, ComponentContext, ComponentElement,
     ComputedElement, CornerRadii, Edges, Element, InteractionRegion, PaintRect, Rect, Size,
     TextStyle, UiScene,
 };
 
-use crate::shell_interaction::{TAB_CONTAINER_TOGGLE, TITLEBAR, WINDOW, WORKSPACE_PANE_TOGGLE};
-use crate::shell_style::ShellPalette;
-use crate::workbench_host::PaneInputKind;
-use crate::workbench_host::TabContainerState;
-use crate::workbench_host::TabInputKey;
-use crate::workbench_host::TabPart;
-use crate::workbench_host::tab_container::TabContainer;
-use crate::workbench_host::tab_container::TabContainerPlacement;
+use super::identity::{TAB_CONTAINER_TOGGLE, TITLEBAR, WINDOW, WORKSPACE_PANE_TOGGLE};
+use super::tabs::TabContainer;
+use super::tabs::TabContainerPlacement;
+use zeta_workbench::PaneInputKind;
+use zeta_workbench::TabInputKey;
+use zeta_workbench::TabPart;
 use zui::ui::{AccessibilityRole, CursorFeedback, FocusBehavior, NodeAction, UiDispatch, UiNode};
-use zui::window::WindowControlInsets;
 
-pub(crate) const TITLEBAR_HEIGHT: f32 = 32.0;
+pub const TITLEBAR_HEIGHT: f32 = 32.0;
 const TITLEBAR_ACTION_GAP: f32 = 8.0;
 const TOGGLE_SIZE: f32 = 24.0;
 const TOGGLE_ICON_SIZE: f32 = 18.0;
 
+/// Logical space reserved for platform window controls on each titlebar edge.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct TitlebarInsets {
+    left: f32,
+    right: f32,
+}
+
+impl TitlebarInsets {
+    pub const NONE: Self = Self::new(0.0, 0.0);
+
+    pub const fn new(left: f32, right: f32) -> Self {
+        Self { left, right }
+    }
+}
+
 /// Product-owned draggable titlebar for the single terminal surface.
-pub(crate) struct Titlebar<'a> {
+pub struct Titlebar<'a> {
     bounds: Rect,
-    palette: ShellPalette,
+    style: WorkbenchUiStyle,
     left_action_bar: ActionBar,
     right_action_bar: ActionBar,
     tab_container: TabContainer<'a>,
@@ -34,18 +46,18 @@ pub(crate) struct Titlebar<'a> {
 }
 
 impl<'a> Titlebar<'a> {
-    pub(crate) fn new(
+    pub fn new(
         bounds: Rect,
-        palette: ShellPalette,
+        style: WorkbenchUiStyle,
         tab_part: &'a TabPart,
         active_tab: Option<&TabInputKey>,
-        tab_container: TabContainerState,
+        tabs_expanded: bool,
         active_pane_kind: Option<PaneInputKind>,
-        window_control_insets: WindowControlInsets,
+        window_control_insets: TitlebarInsets,
         dispatch: &'a UiDispatch,
     ) -> Self {
-        let content_left = bounds.origin.x + window_control_insets.left();
-        let content_right = (bounds.right() - window_control_insets.right()).max(content_left);
+        let content_left = bounds.origin.x + window_control_insets.left;
+        let content_right = (bounds.right() - window_control_insets.right).max(content_left);
         let tab_container_toggle_x = (content_left + TITLEBAR_ACTION_GAP)
             .min((content_right - TOGGLE_SIZE).max(content_left));
         let tab_container_toggle_bounds = Rect::from_xywh(
@@ -82,15 +94,15 @@ impl<'a> Titlebar<'a> {
         } else {
             ButtonState::Resting
         };
-        let tab_container_toggle_label = if tab_container.is_expanded() {
+        let tab_container_toggle_label = if tabs_expanded {
             "Collapse tabs"
         } else {
             "Expand tabs"
         };
-        let tab_container_toggle_icon = if tab_container.is_expanded() {
-            icons::LAYOUT_SIDEBAR_LEFT
+        let tab_container_toggle_icon = if tabs_expanded {
+            style.tabs_expanded_icon
         } else {
-            icons::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY
+            style.tabs_collapsed_icon
         };
         let workspace_pane_visible = matches!(
             active_pane_kind,
@@ -102,16 +114,16 @@ impl<'a> Titlebar<'a> {
             "Show workspace files"
         };
         let workspace_toggle_icon = if workspace_pane_visible {
-            icons::LAYOUT_SIDEBAR_RIGHT
+            style.workspace_visible_icon
         } else {
-            icons::LAYOUT_SIDEBAR_RIGHT_OFF_EMPTY
+            style.workspace_hidden_icon
         };
         let button_style = ButtonStyle::new(
-            ButtonBackgrounds::new(palette.surface_raised)
-                .with_hovered(palette.surface_hovered)
-                .with_focused(palette.surface_hovered)
-                .with_pressed(palette.border),
-            TextStyle::new(12.0, palette.text_muted),
+            ButtonBackgrounds::new(style.surface_raised)
+                .with_hovered(style.surface_hovered)
+                .with_focused(style.surface_hovered)
+                .with_pressed(style.border),
+            TextStyle::new(12.0, style.text_muted),
         )
         .with_corner_radii(CornerRadii::uniform(4.0))
         .with_padding(Edges::uniform(3.0))
@@ -146,7 +158,7 @@ impl<'a> Titlebar<'a> {
         );
         Self {
             bounds,
-            palette,
+            style: style.clone(),
             left_action_bar,
             right_action_bar,
             tab_container: TabContainer::from_tab_part(
@@ -155,7 +167,7 @@ impl<'a> Titlebar<'a> {
                 tab_part,
                 active_tab,
                 TabContainerPlacement::Titlebar,
-                palette,
+                style,
                 dispatch,
             ),
             tab_container_toggle_label,
@@ -218,9 +230,9 @@ impl Component for Titlebar<'_> {
             context.draw_component(&region);
         }
         context.scene_mut().draw_rect(
-            PaintRect::new(self.bounds, self.palette.surface_raised).with_border(Border::new(
+            PaintRect::new(self.bounds, self.style.surface_raised).with_border(Border::new(
                 Edges::new(0.0, 0.0, 1.0, 0.0),
-                self.palette.border,
+                self.style.border,
             )),
         );
         context.draw_component(&self.tab_container);
@@ -230,9 +242,9 @@ impl Component for Titlebar<'_> {
 
     fn paint(&self, scene: &mut UiScene) {
         scene.draw_rect(
-            PaintRect::new(self.bounds, self.palette.surface_raised).with_border(Border::new(
+            PaintRect::new(self.bounds, self.style.surface_raised).with_border(Border::new(
                 Edges::new(0.0, 0.0, 1.0, 0.0),
-                self.palette.border,
+                self.style.border,
             )),
         );
         scene.draw_component(&self.tab_container);

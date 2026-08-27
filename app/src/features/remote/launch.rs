@@ -493,9 +493,9 @@ fn bundled_remote_runtime_catalog_source() -> Result<Option<RemoteRuntimeCatalog
             }))
         }
         (None, None) => Ok(None),
-        (Some(_), None) => Err(
-            "app embeds a Remote runtime catalog URL without its signed SHA-256 binding".into(),
-        ),
+        (Some(_), None) => {
+            Err("app embeds a Remote runtime catalog URL without its signed SHA-256 binding".into())
+        }
     }
 }
 

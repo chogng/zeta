@@ -291,9 +291,7 @@ fn builtin_bindings(platform: HostPlatform) -> BindingSet<NativeBindingCondition
     bindings
 }
 
-fn register_text_input_clipboard(
-    bindings: &mut BindingSet<NativeBindingCondition, AppCommandId>,
-) {
+fn register_text_input_clipboard(bindings: &mut BindingSet<NativeBindingCondition, AppCommandId>) {
     register(
         bindings,
         "c",

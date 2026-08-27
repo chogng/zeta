@@ -1,30 +1,10 @@
-//! Native projection of the Workbench Tab Part.
+//! Workbench tabs rendered in the body or titlebar.
 
-use zeta_icons::icons;
-use zeta_ui::Color;
-use zeta_ui::Component;
-use zeta_ui::ComponentContext;
-use zeta_ui::ComponentElement;
-use zeta_ui::ComputedElement;
-use zeta_ui::CornerRadii;
-use zeta_ui::Element;
-use zeta_ui::FontWeight;
-use zeta_ui::InteractionRegion;
-use zeta_ui::PaintIcon;
-use zeta_ui::PaintRect;
-use zeta_ui::Point;
-use zeta_ui::Rect;
-use zeta_ui::Size;
-use zeta_ui::Tab;
-use zeta_ui::TabBackgrounds;
-use zeta_ui::TabList;
-use zeta_ui::TabListStyle;
-use zeta_ui::TabSelection;
-use zeta_ui::TabState;
-use zeta_ui::TabStyle;
-use zeta_ui::TextBlock;
-use zeta_ui::TextStyle;
-use zeta_ui::UiScene;
+use crate::{
+    Color, Component, ComponentContext, ComponentElement, ComputedElement, CornerRadii, Element,
+    FontWeight, InteractionRegion, PaintIcon, PaintRect, Point, Rect, Size, Tab, TabBackgrounds,
+    TabList, TabListStyle, TabSelection, TabState, TabStyle, TextBlock, TextStyle, UiScene,
+};
 use zui::ui::AccessibilityRole;
 use zui::ui::AccessibilitySelection;
 use zui::ui::CursorFeedback;
@@ -35,19 +15,19 @@ use zui::ui::NodeAction;
 use zui::ui::UiDispatch;
 use zui::ui::UiNode;
 
-use crate::shell_style::ShellPalette;
-use crate::workbench_host::TabInputKey;
-use crate::workbench_host::TabPart;
+use super::WorkbenchUiStyle;
+use zeta_workbench::TabInputKey;
+use zeta_workbench::TabPart;
 
-#[path = "tab_container/projection.rs"]
-mod projection;
+#[path = "tabs/model.rs"]
+mod model;
 
-pub(crate) use projection::TabContainerPlacement;
-pub(crate) use projection::WorkbenchTab;
-pub(crate) use projection::WorkbenchTabGroup;
-use projection::WorkbenchTabKind;
-pub(crate) use projection::project_tab_groups;
-pub(crate) use projection::tab_input_element_id;
+pub use model::TabContainerPlacement;
+pub use model::WorkbenchTab;
+pub use model::WorkbenchTabGroup;
+use model::WorkbenchTabKind;
+pub use model::tab_input_element_id;
+pub use model::workbench_tab_groups;
 
 const BODY_TAB_HEIGHT: f32 = 52.0;
 const BODY_TAB_GAP: f32 = 6.0;
@@ -71,24 +51,24 @@ struct GroupLayout<'a> {
 }
 
 /// Product-owned container that projects browser-style Tab Groups at one UI mount.
-pub(crate) struct TabContainer<'a> {
+pub struct TabContainer<'a> {
     bounds: Rect,
     content_bounds: Rect,
     groups: Vec<WorkbenchTabGroup<'a>>,
     selected_id: ElementId,
     placement: TabContainerPlacement,
-    palette: ShellPalette,
+    style: WorkbenchUiStyle,
     dispatch: &'a UiDispatch,
 }
 
 impl<'a> TabContainer<'a> {
-    pub(crate) fn new(
+    pub fn new(
         mut bounds: Rect,
         content_bounds: Rect,
         groups: Vec<WorkbenchTabGroup<'a>>,
         selected_id: ElementId,
         placement: TabContainerPlacement,
-        palette: ShellPalette,
+        style: WorkbenchUiStyle,
         dispatch: &'a UiDispatch,
     ) -> Self {
         match placement {
@@ -118,27 +98,27 @@ impl<'a> TabContainer<'a> {
             groups,
             selected_id,
             placement,
-            palette,
+            style,
             dispatch,
         }
     }
 
-    pub(crate) fn from_tab_part(
+    pub fn from_tab_part(
         bounds: Rect,
         content_bounds: Rect,
         tab_part: &'a TabPart,
         selected: Option<&TabInputKey>,
         placement: TabContainerPlacement,
-        palette: ShellPalette,
+        style: WorkbenchUiStyle,
         dispatch: &'a UiDispatch,
     ) -> Self {
         Self::new(
             bounds,
             content_bounds,
-            project_tab_groups(tab_part, placement, |_| true),
+            workbench_tab_groups(tab_part, placement, |_| true),
             tab_input_element_id(tab_part, selected, placement),
             placement,
-            palette,
+            style,
             dispatch,
         )
     }
@@ -212,7 +192,7 @@ impl<'a> TabContainer<'a> {
     }
 
     fn tab_list(&self, group: &WorkbenchTabGroup<'_>, bounds: Rect) -> TabList {
-        let highlight = self.palette.session_tab_highlight;
+        let highlight = self.style.selected;
         let backgrounds = TabBackgrounds::new(Color::TRANSPARENT)
             .with_hovered(highlight)
             .with_focused(highlight)
@@ -336,7 +316,7 @@ impl<'a> TabContainer<'a> {
                 label,
                 Point::new(bounds.origin.x, bounds.origin.y + 2.0),
                 bounds.size,
-                TextStyle::new(11.0, self.palette.text_muted)
+                TextStyle::new(11.0, self.style.text_muted)
                     .with_weight(FontWeight::Bold)
                     .with_line_height(16.0),
             ));
@@ -365,7 +345,7 @@ impl<'a> TabContainer<'a> {
             STATUS_CONTAINER_SIZE,
         );
         scene.draw_rect(
-            PaintRect::new(status_bounds, self.palette.surface)
+            PaintRect::new(status_bounds, self.style.surface)
                 .with_corner_radii(CornerRadii::uniform(STATUS_CONTAINER_SIZE * 0.5)),
         );
         if tab.kind == WorkbenchTabKind::Settings {
@@ -377,13 +357,13 @@ impl<'a> TabContainer<'a> {
             tab.name,
             Point::new(text_x, tab_bounds.origin.y + 7.0),
             Size::new(text_width, 18.0),
-            TextStyle::new(13.0, self.palette.text).with_weight(FontWeight::Bold),
+            TextStyle::new(13.0, self.style.text).with_weight(FontWeight::Bold),
         ));
         scene.draw_text(TextBlock::new(
             tab.workspace,
             Point::new(text_x, tab_bounds.origin.y + 27.0),
             Size::new(text_width, 15.0),
-            TextStyle::new(11.0, self.palette.text_muted).with_line_height(15.0),
+            TextStyle::new(11.0, self.style.text_muted).with_line_height(15.0),
         ));
     }
 
@@ -406,7 +386,7 @@ impl<'a> TabContainer<'a> {
                 (tab_bounds.right() - text_x - TAB_CONTENT_PADDING).max(1.0),
                 18.0,
             ),
-            TextStyle::new(12.0, self.palette.text).with_line_height(18.0),
+            TextStyle::new(12.0, self.style.text).with_line_height(18.0),
         ));
     }
 
@@ -418,9 +398,9 @@ impl<'a> TabContainer<'a> {
             icon_size,
         );
         scene.draw_icon(PaintIcon::new(
-            icons::GEAR,
+            self.style.settings_icon,
             icon_bounds,
-            self.palette.text_muted,
+            self.style.text_muted,
         ));
     }
 }
@@ -458,5 +438,5 @@ impl Component for TabContainer<'_> {
 }
 
 #[cfg(test)]
-#[path = "tab_container_tests.rs"]
+#[path = "tabs_tests.rs"]
 mod tests;

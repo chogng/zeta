@@ -105,7 +105,6 @@ pub struct PanePart {
     active: PaneGroupId,
     next_group_id: u64,
     next_split_id: u64,
-    workspace_return: Option<PaneInput>,
 }
 
 impl Default for PanePart {
@@ -126,7 +125,6 @@ impl PanePart {
             active: root,
             next_group_id: root.0 + 1,
             next_split_id: 1,
-            workspace_return: None,
         }
     }
 
@@ -323,21 +321,6 @@ impl PanePart {
             return None;
         }
         self.close_active()
-    }
-
-    /// Saves a logical input to restore when this Pane Part returns from Files or Diff.
-    pub fn remember_workspace_return(&mut self, input: PaneInput) {
-        self.workspace_return = Some(input);
-    }
-
-    /// Takes the logical input saved for this Pane Part, if any.
-    pub fn take_workspace_return(&mut self) -> Option<PaneInput> {
-        self.workspace_return.take()
-    }
-
-    /// Drops the saved workspace return for this Pane Part.
-    pub fn clear_workspace_return(&mut self) {
-        self.workspace_return = None;
     }
 
     /// Destroys the active group and returns every input it owned.

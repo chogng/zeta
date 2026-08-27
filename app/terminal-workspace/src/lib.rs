@@ -1,32 +1,51 @@
+//! Terminal runtime ownership across Workbench sessions and panes.
+
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use anyhow::Context;
 use anyhow::Result;
 use zeta_protocol::SessionId;
 use zeta_terminal::GridSize;
-use zui::app::AppProxy;
 
-use crate::app_server::AppServerHost;
-use crate::native_event::NativeEvent;
-use crate::session::session_switch_trace;
-use crate::terminal_session::TerminalSession;
-use crate::terminal_session::TerminalSessionEvent;
-use crate::terminal_session::TerminalSessionKey;
-use crate::terminal_session::TerminalSessionReady;
+/// Process-local identity for one terminal runtime.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct TerminalSessionKey(u64);
 
-/// Owns the native TerminalSession runtimes associated with App Server Sessions.
+impl TerminalSessionKey {
+    pub const fn new(value: u64) -> Self {
+        Self(value)
+    }
+}
+
+/// Completion of an asynchronously created terminal runtime.
+pub struct TerminalReady<T> {
+    pub key: TerminalSessionKey,
+    pub result: std::result::Result<T, String>,
+}
+
+impl<T> TerminalReady<T> {
+    pub fn new(key: TerminalSessionKey, result: std::result::Result<T, String>) -> Self {
+        Self { key, result }
+    }
+}
+
+type TerminalStarter = Arc<dyn Fn(TerminalSessionKey, GridSize) -> Result<()> + Send + Sync>;
+type TerminalResizer<T> = fn(&mut T, GridSize) -> Result<()>;
+
+/// Owns the terminal runtimes associated with App Server Sessions.
 ///
 /// The first PTY is created before the asynchronous App Server Session snapshot arrives, so this
 /// layer assigns a process-local key first and binds it to the authoritative `SessionId` later.
 /// It keeps inactive PTYs alive while the host renders another Session Tab.
-pub(crate) struct TerminalWorkspace {
-    event_proxy: AppProxy<NativeEvent>,
-    target: AppServerHost,
+pub struct TerminalWorkspace<T, E> {
+    start_terminal: TerminalStarter,
+    resize_terminal: TerminalResizer<T>,
     state: TerminalWorkspaceState,
-    active: Option<(TerminalSessionKey, TerminalSession)>,
-    inactive: HashMap<TerminalSessionKey, TerminalSession>,
-    pending_events: HashMap<TerminalSessionKey, Vec<TerminalSessionEvent>>,
+    active: Option<(TerminalSessionKey, T)>,
+    inactive: HashMap<TerminalSessionKey, T>,
+    pending_events: HashMap<TerminalSessionKey, Vec<E>>,
     requested_sizes: HashMap<TerminalSessionKey, GridSize>,
     requested_size: GridSize,
 }
@@ -220,14 +239,14 @@ impl TerminalWorkspaceState {
     }
 }
 
-pub(crate) enum TerminalReadyOutcome {
+pub enum TerminalReadyOutcome<E> {
     Active {
         key: TerminalSessionKey,
-        buffered_events: Vec<TerminalSessionEvent>,
+        buffered_events: Vec<E>,
     },
     Inactive {
         key: TerminalSessionKey,
-        buffered_events: Vec<TerminalSessionEvent>,
+        buffered_events: Vec<E>,
     },
     Failed {
         key: TerminalSessionKey,
@@ -238,11 +257,14 @@ pub(crate) enum TerminalReadyOutcome {
     },
 }
 
-impl TerminalWorkspace {
-    pub(crate) fn new(event_proxy: AppProxy<NativeEvent>, target: AppServerHost) -> Self {
+impl<T, E> TerminalWorkspace<T, E> {
+    pub fn new(
+        start_terminal: impl Fn(TerminalSessionKey, GridSize) -> Result<()> + Send + Sync + 'static,
+        resize_terminal: TerminalResizer<T>,
+    ) -> Self {
         Self {
-            event_proxy,
-            target,
+            start_terminal: Arc::new(start_terminal),
+            resize_terminal,
             state: TerminalWorkspaceState::default(),
             active: None,
             inactive: HashMap::new(),
@@ -252,7 +274,7 @@ impl TerminalWorkspace {
         }
     }
 
-    pub(crate) fn spawn_initial(&mut self, size: GridSize) -> Result<()> {
+    pub fn spawn_initial(&mut self, size: GridSize) -> Result<()> {
         if self.active.is_some() || self.state.initial_key.is_some() {
             return Ok(());
         }
@@ -269,34 +291,34 @@ impl TerminalWorkspace {
         Ok(())
     }
 
-    pub(crate) fn active_key(&self) -> Option<TerminalSessionKey> {
+    pub fn active_key(&self) -> Option<TerminalSessionKey> {
         self.active.as_ref().map(|(key, _)| *key)
     }
 
-    pub(crate) fn terminal(&self, key: TerminalSessionKey) -> Option<&TerminalSession> {
+    pub fn terminal(&self, key: TerminalSessionKey) -> Option<&T> {
         if self.active_key() == Some(key) {
             return self.active.as_ref().map(|(_, terminal)| terminal);
         }
         self.inactive.get(&key)
     }
 
-    pub(crate) fn terminal_mut(&mut self, key: TerminalSessionKey) -> Option<&mut TerminalSession> {
+    pub fn terminal_mut(&mut self, key: TerminalSessionKey) -> Option<&mut T> {
         if self.active_key() == Some(key) {
             return self.active.as_mut().map(|(_, terminal)| terminal);
         }
         self.inactive.get_mut(&key)
     }
 
-    pub(crate) fn session_id_for_key(&self, key: TerminalSessionKey) -> Option<SessionId> {
+    pub fn session_id_for_key(&self, key: TerminalSessionKey) -> Option<SessionId> {
         self.state.session_id_for_key(key)
     }
 
-    pub(crate) fn key_for_session(&self, session_id: &SessionId) -> Option<TerminalSessionKey> {
+    pub fn key_for_session(&self, session_id: &SessionId) -> Option<TerminalSessionKey> {
         self.state.session_terminal_keys.get(session_id).copied()
     }
 
     /// Starts a fresh terminal runtime for a new Pane in the current TabInput.
-    pub(crate) fn spawn_pane(&mut self, size: GridSize) -> Result<TerminalSessionKey> {
+    pub fn spawn_pane(&mut self, size: GridSize) -> Result<TerminalSessionKey> {
         self.requested_size = size;
         let key = self.state.reserve_standalone();
         self.requested_sizes.insert(key, size);
@@ -308,11 +330,11 @@ impl TerminalWorkspace {
         Ok(key)
     }
 
-    pub(crate) fn bind_key_to_session(&mut self, key: TerminalSessionKey, session_id: SessionId) {
+    pub fn bind_key_to_session(&mut self, key: TerminalSessionKey, session_id: SessionId) {
         self.state.bind_key_to_session(key, session_id);
     }
 
-    pub(crate) fn activate_key(&mut self, key: TerminalSessionKey) -> bool {
+    pub fn activate_key(&mut self, key: TerminalSessionKey) -> bool {
         match self.state.activation_for_key(key) {
             ActivationDecision::Missing => false,
             ActivationDecision::AlreadyActive => true,
@@ -331,13 +353,14 @@ impl TerminalWorkspace {
         }
     }
 
-    pub(crate) fn resize_key(&mut self, key: TerminalSessionKey, size: GridSize) {
+    pub fn resize_key(&mut self, key: TerminalSessionKey, size: GridSize) {
+        let resize = self.resize_terminal;
         if let Some(terminal) = self.terminal_mut(key) {
-            resize_terminal(terminal, size);
+            resize_terminal(resize, terminal, size);
         }
     }
 
-    pub(crate) fn remove_key(&mut self, key: TerminalSessionKey) -> bool {
+    pub fn remove_key(&mut self, key: TerminalSessionKey) -> bool {
         let removed = if self.active_key() == Some(key) {
             self.active.take().is_some()
         } else {
@@ -352,31 +375,11 @@ impl TerminalWorkspace {
         removed || was_known
     }
 
-    pub(crate) fn ensure_for_session(
-        &mut self,
-        session_id: &SessionId,
-        size: GridSize,
-    ) -> Result<()> {
-        let _trace = session_switch_trace::Span::new(None, "terminal-workspace-ensure");
-        session_switch_trace::event(
-            None,
-            "terminal-ensure",
-            format_args!(
-                "session_id={session_id} known={}",
-                self.state.session_terminal_keys.contains_key(session_id)
-            ),
-        );
+    pub fn ensure_for_session(&mut self, session_id: &SessionId, size: GridSize) -> Result<()> {
         self.requested_size = size;
         let reservation = self.state.ensure_for_session(session_id);
         let pending = match reservation {
-            EnsureReservation::Ready(key) => {
-                session_switch_trace::event(
-                    None,
-                    "terminal-ensure-ready",
-                    format_args!("session_id={session_id} key={key:?}"),
-                );
-                return Ok(());
-            }
+            EnsureReservation::Ready(_) => return Ok(()),
             EnsureReservation::Pending(reservation) => reservation,
         };
         let PendingTerminalReservation::Start(key) = pending else {
@@ -392,8 +395,8 @@ impl TerminalWorkspace {
         Ok(())
     }
 
-    pub(crate) fn handle_ready(&mut self, ready: TerminalSessionReady) -> TerminalReadyOutcome {
-        let TerminalSessionReady { key, result } = ready;
+    pub fn handle_ready(&mut self, ready: TerminalReady<T>) -> TerminalReadyOutcome<E> {
+        let TerminalReady { key, result } = ready;
         let buffered_events = self.pending_events.remove(&key).unwrap_or_default();
         if !self.state.is_pending(key) {
             return TerminalReadyOutcome::Ignored { key };
@@ -409,17 +412,9 @@ impl TerminalWorkspace {
                     .requested_sizes
                     .remove(&key)
                     .unwrap_or(self.requested_size);
-                resize_terminal(&mut terminal, requested_size);
+                resize_terminal(self.resize_terminal, &mut terminal, requested_size);
                 match placement {
                     TerminalReadyPlacement::Active => {
-                        session_switch_trace::event(
-                            None,
-                            "terminal-ready",
-                            format_args!(
-                                "key={key:?} placement=active buffered_events={}",
-                                buffered_events.len()
-                            ),
-                        );
                         if let Some((current_key, current_terminal)) = self.active.take() {
                             self.inactive.insert(current_key, current_terminal);
                         }
@@ -430,14 +425,6 @@ impl TerminalWorkspace {
                         }
                     }
                     TerminalReadyPlacement::Inactive => {
-                        session_switch_trace::event(
-                            None,
-                            "terminal-ready",
-                            format_args!(
-                                "key={key:?} placement=inactive buffered_events={}",
-                                buffered_events.len()
-                            ),
-                        );
                         self.inactive.insert(key, terminal);
                         TerminalReadyOutcome::Inactive {
                             key,
@@ -454,11 +441,7 @@ impl TerminalWorkspace {
         placement
     }
 
-    pub(crate) fn buffer_event_if_pending(
-        &mut self,
-        key: TerminalSessionKey,
-        event: TerminalSessionEvent,
-    ) -> bool {
+    pub fn buffer_event_if_pending(&mut self, key: TerminalSessionKey, event: E) -> bool {
         if !self.state.is_pending(key) {
             return false;
         }
@@ -466,34 +449,32 @@ impl TerminalWorkspace {
         true
     }
 
-    pub(crate) fn is_pending(&self, key: TerminalSessionKey) -> bool {
+    pub fn is_pending(&self, key: TerminalSessionKey) -> bool {
         self.state.is_pending(key)
     }
 
-    pub(crate) fn resize_all(&mut self, size: GridSize) {
+    pub fn resize_all(&mut self, size: GridSize) {
         self.requested_size = size;
         if let Some((_, terminal)) = self.active.as_mut() {
-            resize_terminal(terminal, size);
+            resize_terminal(self.resize_terminal, terminal, size);
         }
         for terminal in self.inactive.values_mut() {
-            resize_terminal(terminal, size);
+            resize_terminal(self.resize_terminal, terminal, size);
         }
     }
 
     fn start_terminal(&mut self, key: TerminalSessionKey, size: GridSize) -> Result<()> {
-        TerminalSession::spawn_async(key, size, self.event_proxy.clone(), self.target.clone())
+        (self.start_terminal)(key, size)
             .with_context(|| format!("could not queue terminal runtime {key:?} creation"))
     }
 }
 
-fn resize_terminal(terminal: &mut TerminalSession, size: GridSize) {
-    if terminal.core().grid().size() != size
-        && let Err(error) = terminal.resize(size)
-    {
+fn resize_terminal<T>(resize: TerminalResizer<T>, terminal: &mut T, size: GridSize) {
+    if let Err(error) = resize(terminal, size) {
         eprintln!("could not resize terminal: {error}");
     }
 }
 
 #[cfg(test)]
-#[path = "terminal_workspace_tests.rs"]
+#[path = "tests.rs"]
 mod tests;

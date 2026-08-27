@@ -1,6 +1,6 @@
+use crate::launch::AppLaunch;
 use crate::launch::LaunchParseError;
 use crate::launch::RemoteRuntimeSource;
-use crate::launch::AppLaunch;
 #[cfg(unix)]
 use crate::launch_test_support::make_executable;
 #[cfg(unix)]

@@ -117,8 +117,8 @@ impl NativeApp {
         if !matches!(
             self.active_workspace_pane_kind(),
             Some(
-                crate::workbench_host::PaneInputKind::Files
-                    | crate::workbench_host::PaneInputKind::Diff,
+                zeta_workbench_controller::PaneInputKind::Files
+                    | zeta_workbench_controller::PaneInputKind::Diff,
             )
         ) {
             let _ = self.bind_agent_pane();

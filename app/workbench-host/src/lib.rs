@@ -9,6 +9,7 @@ use std::collections::HashMap;
 pub use zeta_workbench::ClosedTab;
 pub use zeta_workbench::InspectorPartState;
 pub use zeta_workbench::Pane;
+pub use zeta_workbench::PaneContainer;
 pub use zeta_workbench::PaneGroup;
 pub use zeta_workbench::PaneGroupId;
 pub use zeta_workbench::PaneId;

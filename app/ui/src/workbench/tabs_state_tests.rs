@@ -1,10 +1,10 @@
-//! Body-mounted Tab Container sizing and visibility tests.
+//! Body-mounted Workbench tabs sizing and visibility tests.
 
 use std::time::Instant;
 
 use super::{MINIMUM_MAIN_WIDTH, TabContainerState};
-use zeta_ui::Point;
-use zeta_ui::SashPointerPresence;
+use crate::Point;
+use crate::SashPointerPresence;
 
 #[test]
 fn tab_container_is_expanded_by_default_and_can_still_be_collapsed() {

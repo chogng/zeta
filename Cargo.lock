@@ -322,11 +322,13 @@ dependencies = [
  "zeta-settings",
  "zeta-slash-commands",
  "zeta-terminal",
+ "zeta-terminal-workspace",
  "zeta-text-file",
  "zeta-theme",
  "zeta-ui",
  "zeta-utils-path",
  "zeta-utils-pty",
+ "zeta-workbench-controller",
  "zeta-workbench-host",
  "zeta-workbench-layout",
  "zeta-workspace",
@@ -12159,6 +12161,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-terminal-workspace"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "zeta-protocol",
+ "zeta-terminal",
+]
+
+[[package]]
 name = "zeta-text-file"
 version = "0.1.0"
 
@@ -12264,6 +12275,10 @@ dependencies = [
 name = "zeta-ui"
 version = "0.1.0"
 dependencies = [
+ "zeta-icons",
+ "zeta-protocol",
+ "zeta-workbench",
+ "zeta-workbench-layout",
  "zui",
 ]
 
@@ -12383,6 +12398,16 @@ name = "zeta-workbench"
 version = "0.1.0"
 dependencies = [
  "zeta-protocol",
+]
+
+[[package]]
+name = "zeta-workbench-controller"
+version = "0.1.0"
+dependencies = [
+ "zeta-protocol",
+ "zeta-terminal-workspace",
+ "zeta-workbench",
+ "zeta-workbench-host",
 ]
 
 [[package]]

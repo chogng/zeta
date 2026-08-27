@@ -47,12 +47,14 @@ zeta-server-host = { workspace = true }
 zeta-slash-commands = { workspace = true }
 zeta-session-ui = { workspace = true }
 zeta-terminal = { workspace = true }
+zeta-terminal-workspace = { workspace = true }
 zeta-text-file = { workspace = true }
 zeta-theme = { workspace = true }
 zeta-commands = { workspace = true }
 zeta-composer = { workspace = true }
 zeta-ui = { workspace = true }
 zeta-workbench-host = { workspace = true }
+zeta-workbench-controller = { workspace = true }
 zeta-workbench-layout = { workspace = true }
 zeta-workspace-ui = { workspace = true }
 zeta-utils-path = { workspace = true }

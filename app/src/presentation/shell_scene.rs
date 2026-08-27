@@ -48,18 +48,6 @@ use crate::terminal_output_scroll_view::TerminalOutputScrollView;
 use crate::terminal_selection::{TerminalSelectionRange, paint_terminal_selection};
 use crate::thread_projection::ThreadProjection;
 use crate::thread_timeline::{ThreadTimeline, thread_timeline_style};
-use crate::workbench_host::tab_container::TabContainer;
-use crate::workbench_host::tab_container::TabContainerPlacement;
-use crate::workbench_host::tab_container::WorkbenchTab;
-use crate::workbench_host::tab_container::WorkbenchTabGroup;
-use crate::workbench_host::tab_container::project_tab_groups;
-use crate::workbench_host::tab_container::tab_input_element_id;
-use crate::workbench_host::tab_container_toolbar::TabContainerToolbar;
-use crate::workbench_host::titlebar::{TITLEBAR_HEIGHT, Titlebar};
-use crate::workbench_host::{
-    InspectorPartState, TabContainerState, TabInput, TabInputKey, TabPart,
-};
-use crate::workbench_host::{PaneId, PaneInputKind, PanePart, PaneSplitId, PaneViewMount};
 use crate::workspace_context::WorkspaceContext;
 use crate::workspace_pane_host::WorkspacePaneHost;
 use crate::workspace_pane_host::WorkspacePaneView;
@@ -73,6 +61,17 @@ use crate::workspace_path_picker::{WorkspacePathPicker, WorkspacePathPickerState
 use crate::workspace_surface::WorkspaceSurfaceKind;
 use zeta_composer::Composer;
 use zeta_composer::ComposerPanelLayout;
+use zeta_ui::{
+    TITLEBAR_HEIGHT, TabContainer, TabContainerPlacement, TabContainerState, TabContainerToolbar,
+    Titlebar, TitlebarInsets, WorkbenchTab, WorkbenchTabGroup, tab_input_element_id,
+    workbench_tab_groups,
+};
+use zeta_workbench_controller::{
+    InspectorPartState, PaneBinding, PaneGroupId as PaneId, PaneInputKind, PaneMount, PanePart,
+    PaneSplitId, TabGroupId, TabInput, TabInputKey, TabPart,
+};
+
+type PaneViewMount<'a> = PaneMount<'a, PaneBinding>;
 use zeta_editor::CodeEditorStyle;
 use zeta_settings::SettingsPage;
 use zeta_settings::SettingsPageActionAvailability;
@@ -539,12 +538,15 @@ fn build_shell_presentation_with_bindings(
     );
     let titlebar = Titlebar::new(
         layout.titlebar(),
-        palette,
+        palette.workbench_ui_style(),
         model.tab_part,
         model.active_tab_input,
-        model.tab_container,
+        model.tab_container.is_expanded(),
         model.active_pane.map(|pane| pane.kind()),
-        model.window_control_insets,
+        TitlebarInsets::new(
+            model.window_control_insets.left(),
+            model.window_control_insets.right(),
+        ),
         model.dispatch,
     );
     frame.draw_component(&titlebar);
@@ -1214,14 +1216,14 @@ fn draw_tab_container(
         bounds,
         view.search.input(),
         view.caret_visibility,
-        palette,
+        palette.workbench_ui_style(),
         text_layout,
         view.dispatch,
     );
     let search_caret = toolbar.search_caret_bounds();
     context.draw_component(&toolbar);
     let has_session_input = view.tab_part.inputs().any(TabInput::is_session);
-    let mut groups = project_tab_groups(view.tab_part, TabContainerPlacement::Body, |input| {
+    let mut groups = workbench_tab_groups(view.tab_part, TabContainerPlacement::Body, |input| {
         input.is_settings() || view.search.matches_session_name(input.title())
     });
     if !has_session_input && view.search.matches_session_name(view.title) {
@@ -1233,12 +1235,12 @@ fn draw_tab_container(
         );
         if let Some(group) = groups
             .iter_mut()
-            .find(|group| group.id() == crate::workbench_host::TabGroupId::DEFAULT)
+            .find(|group| group.id() == TabGroupId::DEFAULT)
         {
             group.insert_tab(0, fallback);
         } else {
             groups.push(WorkbenchTabGroup::new(
-                crate::workbench_host::TabGroupId::DEFAULT,
+                TabGroupId::DEFAULT,
                 None,
                 false,
                 vec![fallback],
@@ -1251,7 +1253,7 @@ fn draw_tab_container(
         groups,
         view.selected_id,
         TabContainerPlacement::Body,
-        palette,
+        palette.workbench_ui_style(),
         view.dispatch,
     );
     context.draw_component(&tab_container);
