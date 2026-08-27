@@ -12408,6 +12408,7 @@ dependencies = [
  "zeta-terminal-workspace",
  "zeta-workbench",
  "zeta-workbench-host",
+ "zeta-workbench-ui",
 ]
 
 [[package]]

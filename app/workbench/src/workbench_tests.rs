@@ -2,6 +2,9 @@
 
 use super::{PaneInput, PaneSplitDirection, TabInputKey, Workbench};
 use crate::PaneInputKind;
+use crate::TabInput;
+use crate::TabInputChange;
+use crate::TabInputMetadata;
 use zeta_protocol::{Session, SessionId, SessionStatus, ThreadId};
 
 fn session(id: &str, title: &str) -> Session {
@@ -20,8 +23,18 @@ fn thread(id: &str) -> ThreadId {
     ThreadId::new(id).expect("test thread ID is non-empty")
 }
 
+fn upsert_session(workbench: &mut Workbench, session: &Session, workspace: &str) -> TabInputChange {
+    workbench.upsert_session_input(
+        TabInput::session(
+            session.session_id.clone(),
+            TabInputMetadata::new(&session.title, workspace).with_status_label("Active"),
+        ),
+        PaneInput::terminal(session.session_id.clone()),
+    )
+}
+
 #[test]
-fn workbench_is_composed_of_a_default_tab_part_and_empty_pane_containers() {
+fn workbench_initializes_one_container_for_its_settings_tab() {
     let workbench = Workbench::new();
 
     assert_eq!(workbench.tab_part().input_count(), 1);
@@ -33,7 +46,14 @@ fn workbench_is_composed_of_a_default_tab_part_and_empty_pane_containers() {
             .expect("Settings input")
             .is_settings()
     );
-    assert!(workbench.pane_container_keys().next().is_none());
+    assert_eq!(workbench.pane_container_keys().count(), 1);
+    assert_eq!(
+        workbench
+            .pane_part(&TabInputKey::Settings)
+            .and_then(|part| part.active_input(part.root_group()))
+            .map(PaneInput::kind),
+        Some(PaneInputKind::Settings)
+    );
 }
 
 #[test]
@@ -42,7 +62,7 @@ fn tab_creation_initializes_the_matching_pane_container_terminal_pane() {
     let session = session("session-1", "Terminal");
     let key = TabInputKey::session(session.session_id.clone());
 
-    workbench.upsert_session(&session, "/workspace");
+    upsert_session(&mut workbench, &session, "/workspace");
 
     assert_eq!(workbench.tab_part().active_tab_key(), Some(&key));
     let panes = workbench
@@ -81,7 +101,7 @@ fn session_and_settings_tabs_select_their_one_to_one_pane_containers() {
     let mut workbench = Workbench::new();
     let session = session("session-1", "Terminal");
     let session_key = TabInputKey::session(session.session_id.clone());
-    workbench.upsert_session(&session, "/workspace");
+    upsert_session(&mut workbench, &session, "/workspace");
 
     assert_eq!(
         workbench.active_pane().map(|pane| pane.input().kind()),
@@ -101,12 +121,12 @@ fn session_and_settings_tabs_select_their_one_to_one_pane_containers() {
 }
 
 #[test]
-fn titlebar_creates_or_destroys_active_panes() {
+fn workbench_creates_or_destroys_active_panes() {
     let mut workbench = Workbench::new();
     let session = session("session-1", "Terminal");
     let session_id = session.session_id.clone();
     let key = TabInputKey::session(session_id.clone());
-    workbench.upsert_session(&session, "/workspace");
+    upsert_session(&mut workbench, &session, "/workspace");
 
     let pane = workbench
         .create_pane_with_direction(
@@ -145,7 +165,7 @@ fn pane_part_routes_group_input_changes_by_stable_ids() {
     let mut workbench = Workbench::new();
     let session = session("session-1", "Terminal");
     let key = TabInputKey::session(session.session_id.clone());
-    workbench.upsert_session(&session, "/workspace");
+    upsert_session(&mut workbench, &session, "/workspace");
 
     let group_id = workbench
         .pane_part(&key)
@@ -214,9 +234,9 @@ fn switching_tabs_switches_their_complete_pane_containers() {
     let first_key = TabInputKey::session(first.session_id.clone());
     let second_key = TabInputKey::session(second.session_id.clone());
 
-    workbench.upsert_session(&first, "/first");
+    upsert_session(&mut workbench, &first, "/first");
     workbench.create_pane(PaneInput::files("/first".into()));
-    workbench.upsert_session(&second, "/second");
+    upsert_session(&mut workbench, &second, "/second");
     assert_eq!(
         workbench
             .active_pane_container()
@@ -251,8 +271,8 @@ fn closing_a_tab_removes_its_pane_container_and_selects_the_next_tab() {
     let second = session("session-2", "Second");
     let first_key = TabInputKey::session(first.session_id.clone());
     let second_key = TabInputKey::session(second.session_id.clone());
-    workbench.upsert_session(&first, "/first");
-    workbench.upsert_session(&second, "/second");
+    upsert_session(&mut workbench, &first, "/first");
+    upsert_session(&mut workbench, &second, "/second");
     assert!(workbench.activate_tab(first_key.clone()));
 
     let closed = workbench.close_tab(&first_key).expect("closed session tab");
@@ -269,7 +289,7 @@ fn workbench_routes_pane_changes_by_logical_ids() {
     let mut workbench = Workbench::new();
     let session = session("session-1", "Terminal");
     let tab_key = TabInputKey::session(session.session_id.clone());
-    workbench.upsert_session(&session, "/workspace");
+    upsert_session(&mut workbench, &session, "/workspace");
     let root = workbench.active_pane_for(&tab_key).expect("root pane").id();
     let input_id = workbench
         .pane(&tab_key, root)

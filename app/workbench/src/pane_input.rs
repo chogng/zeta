@@ -6,11 +6,11 @@ use zeta_protocol::ThreadId;
 
 /// Product content kind that can be mounted into one PaneGroup input.
 ///
-/// The kind is independent from layout identity. A [`PaneId`](crate::PaneId) identifies a leaf
-/// in a [`PaneGroup`](crate::PaneGroup); this value identifies what the group is showing.
+/// The kind is independent from layout identity. A [`PaneGroupId`](crate::PaneGroupId) identifies
+/// a leaf in a [`PaneGroup`](crate::PaneGroup); this value identifies what the group is showing.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum PaneInputKind {
-    /// A terminal compatibility surface described by one product-level Session.
+    /// A terminal surface described by one product-level Session.
     Terminal,
     /// An Agent conversation or thread surface.
     Agent,

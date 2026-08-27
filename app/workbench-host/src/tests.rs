@@ -100,17 +100,13 @@ fn workbench_host_delegates_layout_without_mutating_model() {
 fn closing_a_workbench_tab_cleans_up_its_bindings() {
     let mut host = WorkbenchHost::<&'static str>::new();
     let session_id = zeta_protocol::SessionId::new("session-1").expect("valid session id");
-    host.workbench_mut().upsert_session(
-        &zeta_protocol::Session {
-            session_id: session_id.clone(),
-            title: "Session".to_owned(),
-            status: zeta_protocol::SessionStatus::Active,
-            model: None,
-            workspace: None,
-            sequence: 1,
-            threads: Vec::new(),
-        },
-        "/workspace",
+    host.workbench_mut().upsert_session_input(
+        zeta_workbench::TabInput::session(
+            session_id.clone(),
+            zeta_workbench::TabInputMetadata::new("Session", "/workspace")
+                .with_status_label("Active"),
+        ),
+        zeta_workbench::PaneInput::terminal(session_id.clone()),
     );
     let tab_key = zeta_workbench::TabInputKey::session(session_id);
     let pane = host

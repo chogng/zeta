@@ -1,7 +1,11 @@
 //! Tab Part and browser-style group behavior tests.
 
 use super::TabPart;
-use crate::{TabGroupId, TabInputChange, TabInputKey};
+use crate::TabGroupId;
+use crate::TabInput;
+use crate::TabInputChange;
+use crate::TabInputKey;
+use crate::TabInputMetadata;
 use zeta_protocol::{Session, SessionId, SessionStatus};
 
 fn session(id: &str, title: &str) -> Session {
@@ -16,6 +20,25 @@ fn session(id: &str, title: &str) -> Session {
     }
 }
 
+fn input(session: &Session, workspace: &str) -> TabInput {
+    TabInput::session(
+        session.session_id.clone(),
+        TabInputMetadata::new(&session.title, workspace).with_status_label("Active"),
+    )
+}
+
+fn upsert_session(part: &mut TabPart, session: &Session, workspace: &str) -> TabInputChange {
+    part.upsert_session_input(input(session, workspace))
+}
+
+fn upsert_catalog_session(
+    part: &mut TabPart,
+    session: &Session,
+    workspace: &str,
+) -> TabInputChange {
+    part.upsert_catalog_session_input(input(session, workspace))
+}
+
 #[test]
 fn session_upsert_creates_inputs_and_selects_the_newest() {
     let first = session("session-1", "First terminal");
@@ -25,11 +48,11 @@ fn session_upsert_creates_inputs_and_selects_the_newest() {
     let mut part = TabPart::default();
 
     assert_eq!(
-        part.upsert_session(&first, "~/first"),
+        upsert_session(&mut part, &first, "~/first"),
         TabInputChange::Added(first_key)
     );
     assert_eq!(
-        part.upsert_session(&second, "~/second"),
+        upsert_session(&mut part, &second, "~/second"),
         TabInputChange::Added(second_key.clone())
     );
     assert_eq!(part.session_count(), 2);
@@ -44,14 +67,14 @@ fn session_upsert_creates_inputs_and_selects_the_newest() {
 fn session_upsert_updates_an_existing_input_without_replacing_its_identity() {
     let first = session("session-1", "First terminal");
     let mut part = TabPart::default();
-    part.upsert_session(&first, "~/first");
+    upsert_session(&mut part, &first, "~/first");
 
     let mut renamed = first.clone();
     renamed.title = "First terminal renamed".to_owned();
     let key = TabInputKey::session(first.session_id.clone());
 
     assert_eq!(
-        part.upsert_session(&renamed, "~/first"),
+        upsert_session(&mut part, &renamed, "~/first"),
         TabInputChange::Updated(key.clone())
     );
     assert_eq!(part.session_count(), 1);
@@ -64,11 +87,11 @@ fn catalog_upsert_does_not_change_the_active_input() {
     let active = session("session-active", "Active");
     let saved = session("session-saved", "Saved");
     let mut part = TabPart::default();
-    part.upsert_session(&active, "~/zeta");
+    upsert_session(&mut part, &active, "~/zeta");
     let active_before_catalog = part.active_tab_key().cloned();
 
     assert_eq!(
-        part.upsert_catalog_session(&saved, "~/zeta"),
+        upsert_catalog_session(&mut part, &saved, "~/zeta"),
         TabInputChange::Added(TabInputKey::session(saved.session_id.clone()))
     );
     assert_eq!(part.active_tab_key().cloned(), active_before_catalog);
@@ -79,7 +102,7 @@ fn activation_rejects_unknown_inputs_and_updates_known_inputs() {
     let known = session("session-known", "Known");
     let unknown = SessionId::new("session-unknown").unwrap();
     let mut part = TabPart::default();
-    part.upsert_session(&known, "~/known");
+    upsert_session(&mut part, &known, "~/known");
 
     assert!(!part.activate_session(&unknown));
     assert_eq!(part.selected_session(), Some(&known.session_id));
@@ -97,8 +120,8 @@ fn status_updates_are_scoped_to_the_logical_input() {
     let first_key = TabInputKey::session(first.session_id.clone());
     let second_key = TabInputKey::session(second.session_id.clone());
     let mut part = TabPart::default();
-    part.upsert_session(&first, "~/first");
-    part.upsert_session(&second, "~/second");
+    upsert_session(&mut part, &first, "~/first");
+    upsert_session(&mut part, &second, "~/second");
 
     part.update_status(&first.session_id, "Exited");
 
@@ -114,7 +137,7 @@ fn settings_is_a_first_class_input_and_preserves_the_last_session() {
     assert_eq!(part.input_count(), 1);
     assert!(part.inputs().next().unwrap().is_settings());
     assert!(part.activate_settings());
-    part.upsert_session(&first, "~/first");
+    upsert_session(&mut part, &first, "~/first");
 
     assert!(part.is_settings());
     assert_eq!(part.active_tab_key(), Some(&TabInputKey::Settings));
@@ -135,8 +158,8 @@ fn browser_style_grouping_preserves_global_selection_and_input_identity() {
     let first_key = TabInputKey::session(first.session_id.clone());
     let second_key = TabInputKey::session(second.session_id.clone());
     let mut part = TabPart::default();
-    part.upsert_session(&first, "~/first");
-    part.upsert_session(&second, "~/second");
+    upsert_session(&mut part, &first, "~/first");
+    upsert_session(&mut part, &second, "~/second");
 
     let grouped = part
         .group_tabs([first_key.clone(), second_key.clone()], "Terminal work")
@@ -166,8 +189,8 @@ fn groups_can_merge_without_changing_the_active_tab() {
     let first_key = TabInputKey::session(first.session_id.clone());
     let second_key = TabInputKey::session(second.session_id.clone());
     let mut part = TabPart::default();
-    part.upsert_session(&first, "~/first");
-    part.upsert_session(&second, "~/second");
+    upsert_session(&mut part, &first, "~/first");
+    upsert_session(&mut part, &second, "~/second");
     let first_group = part.group_tabs([first_key.clone()], "First group").unwrap();
     let second_group = part
         .group_tabs([second_key.clone()], "Second group")
@@ -189,9 +212,9 @@ fn removing_an_active_session_selects_the_nearest_remaining_tab() {
     let second_key = TabInputKey::session(second.session_id.clone());
     let third_key = TabInputKey::session(third.session_id.clone());
     let mut part = TabPart::default();
-    part.upsert_session(&first, "~/first");
-    part.upsert_session(&second, "~/second");
-    part.upsert_session(&third, "~/third");
+    upsert_session(&mut part, &first, "~/first");
+    upsert_session(&mut part, &second, "~/second");
+    upsert_session(&mut part, &third, "~/third");
     assert!(part.activate_tab(first_key.clone()));
 
     assert!(part.close_tab(&first_key).is_some());
@@ -208,7 +231,7 @@ fn removing_the_last_session_falls_back_to_settings_and_keeps_settings_singleton
     let only = session("session-1", "Only");
     let key = TabInputKey::session(only.session_id.clone());
     let mut part = TabPart::default();
-    part.upsert_session(&only, "~/only");
+    upsert_session(&mut part, &only, "~/only");
 
     assert!(part.close_tab(&key).is_some());
     assert_eq!(part.active_tab_key(), Some(&TabInputKey::Settings));

@@ -41,15 +41,3 @@ fn container_owns_multiple_groups_and_each_group_owns_multiple_panes() {
         Some(PaneInputKind::Terminal)
     );
 }
-
-#[test]
-fn workspace_return_state_belongs_to_the_container_not_the_group_layout() {
-    let mut container = PaneContainer::new();
-    container.remember_workspace_return(PaneInput::settings());
-
-    assert_eq!(
-        container.take_workspace_return().map(|input| input.kind()),
-        Some(PaneInputKind::Settings)
-    );
-    assert!(container.take_workspace_return().is_none());
-}

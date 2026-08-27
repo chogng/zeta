@@ -15,6 +15,7 @@ zeta-protocol = { workspace = true }
 zeta-terminal-workspace = { workspace = true }
 zeta-workbench = { workspace = true }
 zeta-workbench-host = { workspace = true }
+zeta-workbench-ui = { workspace = true }
 
 [lints]
 workspace = true

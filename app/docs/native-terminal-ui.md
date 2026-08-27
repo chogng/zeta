@@ -137,10 +137,10 @@ Workbench
 | `PaneContainer` | 保存一个 TabInput 的完整 pane container，并作为 Tab 切换和关闭的单位 | `zeta-workbench::PaneContainer`；一对一归属于 TabInput，持有 PanePart 和 Tab 级恢复状态 |
 | `PanePart` | 保存 PaneGroup split tree、active group、split/close/focus transition 与 ratio | `zeta-workbench::PanePart`；只负责容器内部拓扑，不拥有 Tab 级状态 |
 | `PaneGroup` | 一个可见矩形区域，保存多个 PaneInput 和其中一个 active input | `zeta-workbench::PaneGroup`；不保存 renderer node 或 feature runtime |
-| `Pane` | 描述一个内容承载位置；`PaneId` 是布局实例 identity，不等于内容类型 | `zeta-workbench::Pane`；通过 host binding 关联一个 `PaneInput` 和可丢弃 view state |
+| `Pane` | 描述一个内容承载位置；`PaneGroupId` 标识布局叶子，不等于内容类型 | `zeta-workbench::Pane`；通过 host binding 关联一个 `PaneInput` 和可丢弃 view state |
 | `PaneInput` | 描述 Pane 当前承载的内容类型与逻辑 identity，不是 UI widget，也不保存 geometry | `zeta-workbench::PaneInput`；当前定义 `Terminal`、`Agent`、`Files`、`Diff`、`Settings` descriptor，具体 payload 由对应 feature owner 解释 |
 | `PaneInputKind` | 供 host 做能力路由和组合策略判断的稳定内容类型 | `zeta-workbench::PaneInputKind`；`Agent-1`、`Agent-2`、`Agent-3` 是同一 kind 下的不同 thread/session identity，不是三种 Pane type |
-| `Pane binding` | 把 `(PaneHostScope, PaneId)` 映射到 `PaneInput`，再连接到具体 runtime/view state | `zeta-workbench-host::PaneHost`；产品侧 `PaneBinding` 通过 `PaneBindingId` 连接 Terminal、Agent、Files、Diff 或其他 runtime，Inspector 不属于该 PaneGroup |
+| `Pane binding` | 把 `(PaneHostScope, PaneGroupId)` 映射到 `PaneInput`，再连接到具体 runtime/view state | `zeta-workbench-host::PaneHost`；产品侧 `PaneBinding` 通过 `PaneBindingId` 连接 Terminal、Agent、Files、Diff 或其他 runtime，Inspector 不属于该 PaneGroup |
 | `PaneView` | 按 PaneInput 绘制内容并消费 feature-owned state 的 view contract | 各自 feature crate / Native host；不要求所有内容共用 TerminalSession |
 | `PanePart` layout projection | 把 Workbench-owned split tree 投影为 PaneGroup bounds、owning split 和 sash geometry | `zeta-workbench-layout::PaneGroupLayout` 组合 `zui::GridLayout`；只返回几何，不修改 PanePart |
 | `PaneHost` | 按 Pane bounds 组装具体内容并路由 keyboard、pointer、resize 与 accessibility | `zeta-workbench-host::PaneHost`；按 `PaneHostScope` 和 `PaneKey` 产生含不透明 `PaneBindingId` 的 mount，产品层再解释具体 runtime |
@@ -149,9 +149,9 @@ Workbench
 
 `PanePart` 的几何输入由 `zeta-workbench-layout` 消费，`zui::GridLayout` 负责递归计算 SplitView bounds；PaneContainer 和 PanePart mutation 留在 `zeta-workbench`，TabInput 到 PaneContainer 的一对一关系由 Workbench 持有，通用 Pane binding 由 `zeta-workbench-host` 协调。PaneGroup/PaneInput 到 Session/PTY 或其他 feature runtime 的 binding，以及每个 Pane 的 scroll、selection、input 和 runtime 状态留在产品 host 或具体内容 crate。
 
-本次实现先建立异构 `PaneInput` 的 host contract，并让 `TerminalPaneInput` 接入现有 Session PaneContainer 的 PanePart：split 创建独立 terminal Pane，active Pane 接收输入，Pane 各自 resize、绘制和保存 view state。Changes/Files 选择会把当前 Session PaneContainer 的 root binding 更新为 `PaneInput::Diff`/`PaneInput::Files`，并通过现有 feature-owned `EditorPane`/`FilesPane` 绘制；titlebar action 可以在 workspace pane 与 Agent pane 之间切换。右侧 `InspectorPartState` 只作为文件编辑器 Inspector 的 shell 状态，不参与 Files/Diff 的 Pane topology。
+本次实现先建立异构 `PaneInput` 的 host contract，并让 `TerminalPaneInput` 接入现有 Session PaneContainer 的 PanePart：split 创建独立 terminal Pane，active Pane 接收输入，Pane 各自 resize、绘制和保存 view state。Changes/Files 选择会把当前 Session PaneContainer 的 root binding 更新为 `PaneInput::Diff`/`PaneInput::Files`，并通过现有 feature-owned `EditorPane`/`FilesPane` 绘制；titlebar action 可以在 workspace pane 与 Agent pane 之间切换。右侧 `zeta-workbench-ui::InspectorPartState` 只作为文件编辑器 Inspector 的 shell 状态，不参与 Files/Diff 的 Pane topology。
 
-选择 `PaneInput` 而不是 `EditorInput`，是因为 Terminal、Agent、Files、Diff 和 Settings 并不都是 editor。`PaneInput` 表示“要在这个 Pane 位置打开什么”；`Pane` 表示“这个内容当前位于哪一个布局叶子”；`PaneView` 才负责把输入投影成具体 UI。一个 `PaneGroup` 可以有多个 `PaneInput` kind，但一个可见 Pane 只绑定一个 PaneInput；同一个逻辑 input 若需要同时打开多次，应由不同的 PaneId 或 feature instance identity 区分。
+选择 `PaneInput` 而不是 `EditorInput`，是因为 Terminal、Agent、Files、Diff 和 Settings 并不都是 editor。`PaneInput` 表示“要在这个 Pane 位置打开什么”；`Pane` 表示“这个内容当前位于哪一个布局叶子”；`PaneView` 才负责把输入转换成具体 UI。一个 `PaneGroup` 可以有多个 `PaneInput` kind，但一个可见 Pane 只绑定一个 PaneInput；同一个逻辑 input 若需要同时打开多次，应由不同的 `PaneGroupId` 或功能实例标识区分。
 
 PaneGroup 拥有 UI-neutral 的 PaneInput descriptor 与 active input identity，但不拥有对应的 renderer、TerminalSession 或 feature runtime。host 可以使用 `PaneInputKind` 做允许组合、快捷键和输入路由判断，再把内容绘制委托给对应 crate；`zeta-ui-components` 只接收 PanePart 的几何 spec，不识别这些 kind。
 
@@ -168,7 +168,7 @@ PaneGroup 的纯结构模型位于 `zeta-workbench`。产品 pane binding 由 `z
 | PaneInput descriptor 与 Pane binding | `zeta-workbench::PaneInput` + `zeta-workbench-host::{PaneHost,PaneHostScope}` | 区分 Pane layout identity、Terminal/Agent/Files/Diff/Settings content kind 与可选 runtime；产品层使用 `PaneBindingId` 连接具体 runtime |
 | PaneGroup 的递归叶子 bounds 与 owning-split sash | `zeta-workbench-layout::PaneGroupLayout` + `zui::GridLayout` | 消费 Workbench 提供的 `PaneNode`；只计算 bounds/sash，不拥有 PaneTree mutation 或 active Pane |
 | Tab Container 显隐与 preferred width；产品 resize gesture | `zeta-workbench-ui::TabContainerState` | 使用通用 Split/Sash geometry；状态保存尺寸、显隐和 drag snapshot，产品 app 负责命中与 pointer 路由；不拥有 TabInput 或 Session lifecycle |
-| InspectorPart 显隐与 preferred width；产品 resize gesture | `zeta-workbench::InspectorPartState` | 使用通用 Split/Sash geometry；产品 app 负责命中与 pointer 路由；默认 520px、限制为 360–800px，并为 main Pane 保留至少 400px；不拥有 Files/Diff feature state |
+| InspectorPart 显隐与 preferred width；产品 resize gesture | `zeta-workbench-ui::InspectorPartState` | 使用通用 Split/Sash geometry；产品 app 负责命中与 pointer 路由；默认 520px、限制为 360–800px，并为 main Pane 保留至少 400px；不拥有 Files/Diff feature state |
 | Main workspace Files/Diff composition | `zeta-workbench-host::PaneHost` + [`features/workspace`](../src/features/workspace/workspace_panes.rs) 的 `WorkspacePaneNavigation` / `FilesPane` / `EditorPane` | 产品 host 按 `PaneInputKind` 挂载主工作区 Pane；workspace feature 只拥有 Files/SCM state 与具体 view，不拥有外层 Workbench geometry |
 | Files 树、模糊搜索与领先/落后显示 | [`features/workspace`](../src/features/workspace/workspace_panes.rs) / `zeta-file-search` / `zeta-git` | `features/workspace::files::FilesState` 保存可丢弃 UI 状态；app 适配目录 DTO 并执行动作，Git 命令解析和模糊匹配器仍由各自 crate 拥有 |
 | 多文件差异内容与视口 binding | `features/workspace::scm::EditorPane` / `zeta-editor::MultiDiffEditor` | SCM feature 保存 changed-file collection 与每文件 `DiffEditorState`；Native 只提供 SCM 投影 |
@@ -406,7 +406,7 @@ TabInput(Session)
             }
 ```
 
-Terminal Pane Splitter 复用当前 `GridLayout`、`SplitViewLayout` 与 `Sash` geometry，但 PaneTree、PaneInput binding、active Pane、ratio、逐 Pane scroll/selection/input 和 Terminal Session lifecycle 仍只属于 Session PaneContainer owner。当前 command surface 包括 split horizontal、split vertical、focus next/previous Pane 和 close Pane；Sash 拖动会把受约束的尺寸写回对应 split ratio，最后一个 Pane 不能被关闭。当前每个 TerminalPaneInput 都绑定一个独立 TerminalSession runtime；Files/Diff root Pane 也使用同一套 PaneHost binding 机制，右侧 InspectorPartState 仅保存文件编辑器 Inspector 的 shell 状态。
+Terminal Pane Splitter 复用当前 `GridLayout`、`SplitViewLayout` 与 `Sash` geometry，但 PaneTree、PaneInput binding、active Pane、ratio、逐 Pane scroll/selection/input 和 Terminal Session lifecycle 仍只属于 Session PaneContainer owner。当前 command surface 包括 split horizontal、split vertical、focus next/previous Pane 和 close Pane；Sash 拖动会把受约束的尺寸写回对应 split ratio，最后一个 Pane 不能被关闭。当前每个 TerminalPaneInput 都绑定一个独立 TerminalSession runtime；Files/Diff root Pane 也使用同一套 PaneHost binding 机制，右侧 `zeta-workbench-ui::InspectorPartState` 仅保存文件编辑器 Inspector 的 shell 状态。
 通用 presentation primitive 不等于可以注册任意产品区域的 Workbench Part/Sash 系统。
 
 ## 7. 明确不做什么

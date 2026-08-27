@@ -7,13 +7,12 @@
 use std::collections::HashMap;
 
 pub use zeta_workbench::ClosedTab;
-pub use zeta_workbench::InspectorPartState;
 pub use zeta_workbench::Pane;
 pub use zeta_workbench::PaneContainer;
 pub use zeta_workbench::PaneGroup;
 pub use zeta_workbench::PaneGroupId;
-pub use zeta_workbench::PaneId;
 pub use zeta_workbench::PaneInput;
+pub use zeta_workbench::PaneInputId;
 pub use zeta_workbench::PaneInputKind;
 pub use zeta_workbench::PaneNode;
 pub use zeta_workbench::PanePart;
@@ -24,8 +23,8 @@ pub use zeta_workbench::TabGroupId;
 pub use zeta_workbench::TabInput;
 pub use zeta_workbench::TabInputChange;
 pub use zeta_workbench::TabInputKey;
+pub use zeta_workbench::TabInputMetadata;
 pub use zeta_workbench::TabPart;
-pub use zeta_workbench::TitlebarPart;
 pub use zeta_workbench::Workbench;
 use zeta_workbench_layout::LogicalViewport;
 use zeta_workbench_layout::WorkbenchLayout;

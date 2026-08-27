@@ -3,7 +3,6 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use zeta_protocol::Session;
 use zeta_protocol::SessionId;
 
 /// Stable logical identity for one input that can be shown by a Workbench tab.
@@ -44,33 +43,54 @@ impl TabInputKey {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TabInput {
     key: TabInputKey,
+    metadata: TabInputMetadata,
+}
+
+/// Display metadata supplied by the product owner for one Workbench tab.
+///
+/// The Workbench stores the current values used by its tab surfaces, but it does not derive them
+/// from Session protocol records or decide product copy.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TabInputMetadata {
     title: String,
     workspace: String,
     workspace_root: Option<PathBuf>,
     status_label: String,
 }
 
-impl TabInput {
-    pub fn from_settings() -> Self {
+impl TabInputMetadata {
+    pub fn new(title: impl Into<String>, workspace: impl Into<String>) -> Self {
         Self {
-            key: TabInputKey::Settings,
-            title: "Settings".to_owned(),
-            workspace: "Application".to_owned(),
+            title: title.into(),
+            workspace: workspace.into(),
             workspace_root: None,
             status_label: String::new(),
         }
     }
 
-    pub fn from_session(session: &Session, workspace: &str) -> Self {
+    pub fn with_workspace_root(mut self, workspace_root: PathBuf) -> Self {
+        self.workspace_root = Some(workspace_root);
+        self
+    }
+
+    pub fn with_status_label(mut self, status_label: impl Into<String>) -> Self {
+        self.status_label = status_label.into();
+        self
+    }
+}
+
+impl TabInput {
+    pub fn from_settings() -> Self {
         Self {
-            key: TabInputKey::session(session.session_id.clone()),
-            title: session.title.clone(),
-            workspace: workspace_label(session, workspace),
-            workspace_root: session
-                .workspace
-                .as_ref()
-                .map(|binding| binding.root.clone()),
-            status_label: "Active".to_owned(),
+            key: TabInputKey::Settings,
+            metadata: TabInputMetadata::new("Settings", "Application"),
+        }
+    }
+
+    pub fn session(session_id: SessionId, metadata: TabInputMetadata) -> Self {
+        Self {
+            key: TabInputKey::session(session_id),
+            metadata,
         }
     }
 
@@ -91,34 +111,28 @@ impl TabInput {
     }
 
     pub fn title(&self) -> &str {
-        &self.title
+        &self.metadata.title
     }
 
     pub fn workspace(&self) -> &str {
-        &self.workspace
+        &self.metadata.workspace
     }
 
     pub fn workspace_root(&self) -> Option<&Path> {
-        self.workspace_root.as_deref()
+        self.metadata.workspace_root.as_deref()
     }
 
     pub fn status_label(&self) -> &str {
-        &self.status_label
+        &self.metadata.status_label
     }
 
-    pub(crate) fn update_from_session(&mut self, session: &Session, workspace: &str) {
-        debug_assert_eq!(self.session_id(), Some(&session.session_id));
-        self.title = session.title.clone();
-        self.workspace = workspace_label(session, workspace);
-        self.workspace_root = session
-            .workspace
-            .as_ref()
-            .map(|binding| binding.root.clone());
-        self.status_label = "Active".to_owned();
+    pub(crate) fn update_from(&mut self, input: Self) {
+        debug_assert_eq!(self.key, input.key);
+        self.metadata = input.metadata;
     }
 
     pub fn update_status(&mut self, status_label: impl Into<String>) {
-        self.status_label = status_label.into();
+        self.metadata.status_label = status_label.into();
     }
 }
 
@@ -127,15 +141,4 @@ impl TabInput {
 pub enum TabInputChange {
     Added(TabInputKey),
     Updated(TabInputKey),
-}
-
-fn workspace_label<'a>(session: &'a Session, fallback: &'a str) -> String {
-    session
-        .workspace
-        .as_ref()
-        .and_then(|binding| binding.root.file_name())
-        .and_then(|name| name.to_str())
-        .filter(|name| !name.is_empty())
-        .map(str::to_owned)
-        .unwrap_or_else(|| fallback.to_owned())
 }

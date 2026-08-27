@@ -16,9 +16,6 @@ impl PaneGroupId {
     }
 }
 
-/// Backwards-compatible name for the identity of one visible pane region.
-pub type PaneId = PaneGroupId;
-
 /// Stable identity for one owning split inside a [`PanePart`].
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct PaneSplitId(u64);
@@ -140,8 +137,8 @@ impl PanePart {
         self.active
     }
 
-    /// Compatibility name for callers that refer to visible regions as panes.
-    pub const fn active_pane(&self) -> PaneId {
+    /// Returns the identity of the active visible pane region.
+    pub const fn active_pane(&self) -> PaneGroupId {
         self.active
     }
 
@@ -150,8 +147,8 @@ impl PanePart {
         PaneGroupId::ROOT
     }
 
-    /// Compatibility name for callers that refer to visible regions as panes.
-    pub const fn root_pane(&self) -> PaneId {
+    /// Returns the identity of the root visible pane region.
+    pub const fn root_pane(&self) -> PaneGroupId {
         PaneGroupId::ROOT
     }
 
@@ -170,11 +167,6 @@ impl PanePart {
         let mut groups = Vec::new();
         self.root.collect_leaves(&mut groups);
         groups
-    }
-
-    /// Compatibility name for callers that refer to visible regions as panes.
-    pub fn leaf_ids(&self) -> Vec<PaneId> {
-        self.group_ids()
     }
 
     /// Returns the active input in one visible group.

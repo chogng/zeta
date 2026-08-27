@@ -1,4 +1,4 @@
-use zeta_protocol::{Session, SessionId};
+use zeta_protocol::SessionId;
 
 use crate::{TabGroup, TabGroupId, TabInput, TabInputChange, TabInputKey};
 
@@ -271,20 +271,21 @@ impl TabPart {
     }
 
     /// Inserts or refreshes a Session input using normal selection semantics.
-    pub fn upsert_session(&mut self, session: &Session, workspace: &str) -> TabInputChange {
-        let key = TabInputKey::session(session.session_id.clone());
+    pub fn upsert_session_input(&mut self, input: TabInput) -> TabInputChange {
+        assert!(input.is_session(), "only Session inputs can be upserted");
+        let key = input.key().clone();
         let was_settings = self.is_settings();
-        if let Some(input) = self.input_mut(&key) {
-            input.update_from_session(session, workspace);
-            self.last_session = Some(session.session_id.clone());
+        if let Some(existing) = self.input_mut(&key) {
+            existing.update_from(input);
+            self.last_session = key.session_id().cloned();
             if !was_settings {
                 self.active = Some(key.clone());
             }
             return TabInputChange::Updated(key);
         }
 
-        self.insert_session_into_default_group(TabInput::from_session(session, workspace));
-        self.last_session = Some(session.session_id.clone());
+        self.insert_session_into_default_group(input);
+        self.last_session = key.session_id().cloned();
         if !was_settings {
             self.active = Some(key.clone());
         }
@@ -292,14 +293,15 @@ impl TabPart {
     }
 
     /// Inserts or refreshes a catalog Session without changing the active input.
-    pub fn upsert_catalog_session(&mut self, session: &Session, workspace: &str) -> TabInputChange {
-        let key = TabInputKey::session(session.session_id.clone());
-        if let Some(input) = self.input_mut(&key) {
-            input.update_from_session(session, workspace);
+    pub fn upsert_catalog_session_input(&mut self, input: TabInput) -> TabInputChange {
+        assert!(input.is_session(), "only Session inputs can be upserted");
+        let key = input.key().clone();
+        if let Some(existing) = self.input_mut(&key) {
+            existing.update_from(input);
             return TabInputChange::Updated(key);
         }
 
-        self.insert_session_into_default_group(TabInput::from_session(session, workspace));
+        self.insert_session_into_default_group(input);
         TabInputChange::Added(key)
     }
 

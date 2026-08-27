@@ -1,5 +1,3 @@
-//! Inspector logical-state contract tests.
-
 use super::InspectorPartState;
 
 #[test]

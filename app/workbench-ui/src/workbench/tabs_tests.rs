@@ -16,7 +16,9 @@ use zeta_protocol::Session;
 use zeta_protocol::SessionId;
 use zeta_protocol::SessionStatus;
 use zeta_workbench::TabGroupId;
+use zeta_workbench::TabInput;
 use zeta_workbench::TabInputKey;
+use zeta_workbench::TabInputMetadata;
 use zeta_workbench::TabPart;
 use zui::ui::AccessibilityRole;
 use zui::ui::AccessibilitySelection;
@@ -43,8 +45,14 @@ fn part_with_two_sessions() -> (TabPart, TabInputKey, TabInputKey) {
     let first_key = TabInputKey::session(first.session_id.clone());
     let second_key = TabInputKey::session(second.session_id.clone());
     let mut part = TabPart::default();
-    part.upsert_session(&first, "~/first");
-    part.upsert_session(&second, "~/second");
+    part.upsert_session_input(TabInput::session(
+        first.session_id,
+        TabInputMetadata::new(first.title, "~/first").with_status_label("Active"),
+    ));
+    part.upsert_session_input(TabInput::session(
+        second.session_id,
+        TabInputMetadata::new(second.title, "~/second").with_status_label("Active"),
+    ));
     (part, first_key, second_key)
 }
 

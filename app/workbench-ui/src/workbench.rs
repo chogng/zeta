@@ -1,6 +1,7 @@
 //! Reusable Workbench tabs, titlebar, and their stable interaction identity.
 
 mod identity;
+mod inspector_state;
 mod style;
 mod tabs;
 mod tabs_state;
@@ -14,6 +15,7 @@ pub use identity::{
     TITLEBAR_TAB_CONTAINER, TITLEBAR_TAB_LIST, WINDOW, WORKSPACE_PANE_TOGGLE, session_tab_id,
     tab_group_list_id, titlebar_session_tab_id, titlebar_tab_group_list_id,
 };
+pub use inspector_state::InspectorPartState;
 pub use style::WorkbenchUiStyle;
 pub use tabs::{
     TabContainer, TabContainerPlacement, WorkbenchTab, WorkbenchTabGroup, tab_input_element_id,
