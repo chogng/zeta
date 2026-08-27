@@ -68,7 +68,7 @@ impl InspectorLayoutSpec {
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 enum WorkspaceLeafId {
-    ActiveTerminal,
+    Main,
     Inspector,
 }
 
@@ -77,19 +77,19 @@ enum WorkspaceSplitId {
     Root,
 }
 
-/// Resolved terminal workspace and optional right-hand Inspector geometry.
+/// Resolved workspace and optional right-hand Inspector geometry.
 ///
 /// This type owns only topology and resize geometry. The host retains ownership of terminal,
 /// agent, or editor state and may use the returned bounds to compose those domains.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct TerminalWorkspaceLayout {
+pub struct WorkspaceLayout {
     active_pane_bounds: Rect,
     inspector_bounds: Option<Rect>,
     inspector_sash_track: Option<Rect>,
     inspector_resize_snapshot: Option<SplitViewResizeSnapshot>,
 }
 
-impl TerminalWorkspaceLayout {
+impl WorkspaceLayout {
     /// Resolves the active workspace and optional Inspector from a host-neutral sizing policy.
     pub fn for_bounds(bounds: Rect, inspector: InspectorLayoutSpec) -> Self {
         let inspector_is_visible = inspector.is_visible_for(bounds.size.width);
@@ -103,7 +103,7 @@ impl TerminalWorkspaceLayout {
             SplitViewOrientation::Horizontal,
             vec![
                 GridPane::new(
-                    GridNode::leaf(WorkspaceLeafId::ActiveTerminal),
+                    GridNode::leaf(WorkspaceLeafId::Main),
                     SplitViewPane::new(
                         active_preferred_width,
                         inspector.minimum_main_width(),
@@ -120,8 +120,8 @@ impl TerminalWorkspaceLayout {
         let layout = GridLayout::new(bounds, &root);
         let inspector_sash = layout.sashes().first().copied();
         let active_pane_bounds = layout
-            .leaf(WorkspaceLeafId::ActiveTerminal)
-            .expect("Terminal Workspace Grid must retain its active leaf")
+            .leaf(WorkspaceLeafId::Main)
+            .expect("Workspace Grid must retain its active leaf")
             .bounds();
         let inspector_bounds = layout
             .leaf(WorkspaceLeafId::Inspector)
@@ -134,7 +134,7 @@ impl TerminalWorkspaceLayout {
         }
     }
 
-    /// Returns the active terminal/editor pane bounds.
+    /// Returns the active main workspace bounds.
     pub const fn active_pane_bounds(self) -> Rect {
         self.active_pane_bounds
     }
@@ -156,5 +156,5 @@ impl TerminalWorkspaceLayout {
 }
 
 #[cfg(test)]
-#[path = "terminal_workspace_tests.rs"]
+#[path = "workspace_tests.rs"]
 mod tests;

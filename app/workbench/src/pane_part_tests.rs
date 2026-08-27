@@ -1,7 +1,6 @@
 //! Recursive split-layout contract tests.
 
 use super::{PaneGroupId, PaneInput, PanePart, PaneSplitDirection};
-use zeta_ui::Rect;
 
 #[test]
 fn a_layout_starts_with_one_active_group() {
@@ -54,27 +53,18 @@ fn focus_wraps_over_visual_group_order() {
 }
 
 #[test]
-fn resizing_a_split_persists_its_ratio_in_the_next_layout() {
-    let mut layout = PanePart::new();
-    layout.split_active(PaneSplitDirection::Horizontal);
-    let initial = layout.layout(Rect::from_xywh(0.0, 0.0, 800.0, 600.0));
-    let sash = initial.sashes()[0];
-    let resize = sash.resize_snapshot().resize(120.0);
-
-    assert!(layout.resize_split(sash.split_id(), resize));
-
-    let resized = layout.layout(Rect::from_xywh(0.0, 0.0, 800.0, 600.0));
-    assert!(resized.leaf(PaneGroupId::ROOT).unwrap().bounds().size.width > 400.0);
-}
-
-#[test]
-fn layout_exposes_one_leaf_per_group_and_sash_per_split() {
+fn split_ratio_is_stored_in_the_logical_tree() {
     let mut layout = PanePart::with_input(PaneInput::settings());
-    let second = layout.split_active(PaneSplitDirection::Horizontal);
-    let _third = layout.split_active(PaneSplitDirection::Vertical);
-    let projected = layout.layout(Rect::from_xywh(0.0, 0.0, 900.0, 600.0));
+    layout.split_active(PaneSplitDirection::Horizontal);
+    let split_id = match layout.tree() {
+        super::PaneNode::Split { id, .. } => *id,
+        super::PaneNode::Leaf(_) => panic!("split should create a logical split"),
+    };
 
-    assert_eq!(projected.leaves().len(), 3);
-    assert_eq!(projected.sashes().len(), 2);
-    assert!(projected.leaf(second).is_some());
+    assert!(layout.set_split_ratio(split_id, 0.7));
+    assert!(!layout.set_split_ratio(split_id, f32::NAN));
+    match layout.tree() {
+        super::PaneNode::Split { ratio, .. } => assert_eq!(*ratio, 0.7),
+        super::PaneNode::Leaf(_) => panic!("split should remain in the logical tree"),
+    }
 }

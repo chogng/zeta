@@ -14,7 +14,6 @@ use crate::TabInputChange;
 use crate::TabInputKey;
 use crate::TabPart;
 use crate::TitlebarPart;
-use zui::ui::SplitViewResize;
 
 /// Logical state removed together with one Workbench tab.
 #[derive(Clone, Debug, PartialEq)]
@@ -288,15 +287,15 @@ impl Workbench {
         Some(self.pane_part_mut(tab_key)?.focus_previous())
     }
 
-    /// Resizes one split through stable tab and split identities.
+    /// Applies a normalized first-child ratio to one split through stable tab and split identities.
     pub fn resize_split(
         &mut self,
         tab_key: &TabInputKey,
         split_id: PaneSplitId,
-        resize: SplitViewResize,
+        ratio: f32,
     ) -> bool {
         self.pane_part_mut(tab_key)
-            .is_some_and(|pane_part| pane_part.resize_split(split_id, resize))
+            .is_some_and(|pane_part| pane_part.set_split_ratio(split_id, ratio))
     }
 
     /// Saves a product input to restore when this tab returns from a workspace surface.

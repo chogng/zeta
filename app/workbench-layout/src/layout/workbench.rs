@@ -4,7 +4,7 @@ use zui::ui::SplitViewResizeSnapshot;
 use super::InspectorLayoutSpec;
 use super::LogicalViewport;
 use super::TabContainerLayoutSpec;
-use super::TerminalWorkspaceLayout;
+use super::WorkspaceLayout;
 
 const MINIMUM_VIEWPORT_WIDTH: f32 = 240.0;
 const MINIMUM_VIEWPORT_HEIGHT: f32 = 180.0;
@@ -15,7 +15,7 @@ const MINIMUM_VIEWPORT_HEIGHT: f32 = 180.0;
 /// remain owned by their product hosts and are mounted into these leaves by the caller.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum WorkbenchPart {
-    /// Native window titlebar content.
+    /// Window titlebar content.
     Titlebar,
     /// Optional body-mounted Tab Container projection.
     TabContainer,
@@ -66,8 +66,7 @@ impl WorkbenchLayoutSpec {
             (viewport.height - titlebar.size.height).max(0.0),
         );
         let tab_container = self.tab_container.for_bounds(body);
-        let workspace =
-            TerminalWorkspaceLayout::for_bounds(tab_container.main_bounds(), self.inspector);
+        let workspace = WorkspaceLayout::for_bounds(tab_container.main_bounds(), self.inspector);
 
         Some(WorkbenchLayout {
             titlebar,

@@ -1,6 +1,6 @@
 use super::InspectorLayoutSpec;
 use super::PartVisibility;
-use super::TerminalWorkspaceLayout;
+use super::WorkspaceLayout;
 use zui::ui::Rect;
 
 fn inspector(visibility: PartVisibility) -> InspectorLayoutSpec {
@@ -11,7 +11,7 @@ fn inspector(visibility: PartVisibility) -> InspectorLayoutSpec {
 fn collapsed_inspector_projects_only_the_active_workspace_leaf() {
     let bounds = Rect::from_xywh(200.0, 32.0, 800.0, 668.0);
 
-    let layout = TerminalWorkspaceLayout::for_bounds(bounds, inspector(PartVisibility::Collapsed));
+    let layout = WorkspaceLayout::for_bounds(bounds, inspector(PartVisibility::Collapsed));
 
     assert_eq!(layout.active_pane_bounds(), bounds);
     assert_eq!(layout.inspector_bounds(), None);
@@ -21,7 +21,7 @@ fn collapsed_inspector_projects_only_the_active_workspace_leaf() {
 fn expanded_inspector_is_the_rightmost_grid_leaf() {
     let bounds = Rect::from_xywh(200.0, 32.0, 800.0, 668.0);
 
-    let layout = TerminalWorkspaceLayout::for_bounds(bounds, inspector(PartVisibility::Expanded));
+    let layout = WorkspaceLayout::for_bounds(bounds, inspector(PartVisibility::Expanded));
 
     assert_eq!(
         layout.active_pane_bounds(),
@@ -48,7 +48,7 @@ fn expanded_inspector_is_the_rightmost_grid_leaf() {
 fn constrained_grid_omits_the_expanded_inspector_leaf() {
     let bounds = Rect::from_xywh(0.0, 32.0, 479.0, 668.0);
 
-    let layout = TerminalWorkspaceLayout::for_bounds(bounds, inspector(PartVisibility::Expanded));
+    let layout = WorkspaceLayout::for_bounds(bounds, inspector(PartVisibility::Expanded));
 
     assert_eq!(layout.active_pane_bounds(), bounds);
     assert_eq!(layout.inspector_bounds(), None);

@@ -28,6 +28,7 @@ pub(super) fn with_shell_presentation_model<R>(
         ui_dispatch,
         tab_container,
         inspector_part,
+        terminal_workspace,
         workspace_pane_host,
         file_editor_host,
         file_editor_input,
@@ -51,11 +52,8 @@ pub(super) fn with_shell_presentation_model<R>(
         text_layout,
         ..
     } = app;
-    let crate::workbench_host::WorkbenchHost {
-        model: workbench,
-        pane_host,
-        terminal_workspace,
-    } = workbench_host;
+    let workbench = workbench_host.workbench();
+    let pane_host = workbench_host.pane_host();
     let file_editor_diagnostics = language_service.active_editor_diagnostics(file_editor_host);
     let language_hover = language_service.active_hover(file_editor_host);
     let language_completions = language_service.active_completions(file_editor_host);
@@ -87,7 +85,7 @@ pub(super) fn with_shell_presentation_model<R>(
                     let pane_id = mount.pane_id();
                     let kind = mount.kind();
                     let terminal_key = (kind == PaneInputKind::Terminal)
-                        .then(|| mount.terminal_key())
+                        .then(|| mount.binding().terminal_key())
                         .flatten();
                     let (scroll_offset, scrollbar_presentation, selection) =
                         if active_pane_id == Some(pane_id) {
@@ -122,7 +120,9 @@ pub(super) fn with_shell_presentation_model<R>(
     let terminal_key = active_tab_input
         .zip(active_pane_id)
         .and_then(|(tab_key, pane)| {
-            pane_host.terminal_key(&(PaneHostScope::Tab(tab_key.clone()), pane))
+            pane_host
+                .binding(&(PaneHostScope::Tab(tab_key.clone()), pane))
+                .and_then(PaneBinding::terminal_key)
         })
         .or_else(|| terminal_workspace.active_key());
     operation(

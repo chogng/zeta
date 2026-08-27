@@ -1,13 +1,5 @@
 use std::collections::HashMap;
 
-use zeta_ui::layout::PaneGroupLayout;
-use zui::ui::GridNode;
-use zui::ui::GridPane;
-use zui::ui::Rect;
-use zui::ui::SplitViewOrientation;
-use zui::ui::SplitViewPane;
-use zui::ui::SplitViewResize;
-
 use crate::PaneGroup;
 use crate::PaneInput;
 use crate::PaneInputId;
@@ -46,16 +38,7 @@ pub enum PaneSplitDirection {
     Vertical,
 }
 
-impl PaneSplitDirection {
-    const fn orientation(self) -> SplitViewOrientation {
-        match self {
-            Self::Horizontal => SplitViewOrientation::Horizontal,
-            Self::Vertical => SplitViewOrientation::Vertical,
-        }
-    }
-}
-
-/// A logical input mounted in one visible workbench group.
+/// A logical input mounted in one visible Workbench group.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Pane {
     group_id: PaneGroupId,
@@ -88,14 +71,25 @@ impl Pane {
     }
 }
 
+/// Immutable logical topology for the visible groups in a [`PanePart`].
+///
+/// The layout crate converts this tree into geometry. The node deliberately contains no renderer,
+/// framework layout, or product runtime types.
 #[derive(Clone, Debug, PartialEq)]
-enum PaneNode {
+pub enum PaneNode {
+    /// One visible group leaf.
     Leaf(PaneGroupId),
+    /// A split with a stable identity and a normalized first-child ratio.
     Split {
+        /// Stable identity of the owning split.
         id: PaneSplitId,
+        /// Logical direction of the split.
         direction: PaneSplitDirection,
+        /// Fraction of the primary axis assigned to the first child.
         ratio: f32,
+        /// First child in visual tree order.
         first: Box<Self>,
+        /// Second child in visual tree order.
         second: Box<Self>,
     },
 }
@@ -382,24 +376,17 @@ impl PanePart {
         self.active
     }
 
-    /// Applies the constrained result of one visible split sash drag.
-    pub fn resize_split(&mut self, split_id: PaneSplitId, resize: SplitViewResize) -> bool {
-        let total = resize.previous_size() + resize.next_size();
-        if !total.is_finite() || total <= 0.0 {
+    /// Returns the immutable logical topology used by the layout projection.
+    pub const fn tree(&self) -> &PaneNode {
+        &self.root
+    }
+
+    /// Applies a normalized first-child ratio to one visible split.
+    pub fn set_split_ratio(&mut self, split_id: PaneSplitId, ratio: f32) -> bool {
+        if !ratio.is_finite() {
             return false;
         }
-        let ratio = (resize.previous_size() / total).clamp(0.0, 1.0);
-        set_split_ratio(&mut self.root, split_id, ratio)
-    }
-
-    /// Builds a backend-neutral recursive geometry input for the current layout.
-    pub fn grid_node(&self, bounds: Rect) -> GridNode<PaneGroupId, PaneSplitId> {
-        self.root.grid_node(bounds)
-    }
-
-    /// Resolves the current layout into leaf and sash geometry for one frame.
-    pub fn layout(&self, bounds: Rect) -> PaneGroupLayout<PaneGroupId, PaneSplitId> {
-        PaneGroupLayout::new(bounds, &self.grid_node(bounds))
+        set_split_ratio(&mut self.root, split_id, ratio.clamp(0.0, 1.0))
     }
 
     /// Takes all visible groups in visual tree order for tab teardown.
@@ -457,44 +444,6 @@ impl PaneNode {
         match self {
             Self::Leaf(id) => *id == target,
             Self::Split { first, second, .. } => first.contains(target) || second.contains(target),
-        }
-    }
-
-    fn grid_node(&self, bounds: Rect) -> GridNode<PaneGroupId, PaneSplitId> {
-        match self {
-            Self::Leaf(id) => GridNode::leaf(*id),
-            Self::Split {
-                id,
-                direction,
-                ratio,
-                first,
-                second,
-            } => {
-                let orientation = direction.orientation();
-                let primary = match orientation {
-                    SplitViewOrientation::Horizontal => bounds.size.width,
-                    SplitViewOrientation::Vertical => bounds.size.height,
-                };
-                let first_size = (primary * *ratio).clamp(0.0, primary.max(0.0));
-                let second_size = (primary - first_size).max(0.0);
-                let first_bounds = child_bounds(bounds, orientation, 0.0, first_size);
-                let second_bounds = child_bounds(bounds, orientation, first_size, second_size);
-                let minimum = 48.0;
-                GridNode::split(
-                    *id,
-                    orientation,
-                    vec![
-                        GridPane::new(
-                            first.grid_node(first_bounds),
-                            SplitViewPane::new(first_size, minimum, f32::INFINITY),
-                        ),
-                        GridPane::new(
-                            second.grid_node(second_bounds),
-                            SplitViewPane::new(second_size, minimum, f32::INFINITY),
-                        ),
-                    ],
-                )
-            }
         }
     }
 }
@@ -576,28 +525,6 @@ fn set_split_ratio(node: &mut PaneNode, split_id: PaneSplitId, ratio: f32) -> bo
                 set_split_ratio(first, split_id, ratio) || set_split_ratio(second, split_id, ratio)
             }
         }
-    }
-}
-
-fn child_bounds(
-    bounds: Rect,
-    orientation: SplitViewOrientation,
-    offset: f32,
-    primary_size: f32,
-) -> Rect {
-    match orientation {
-        SplitViewOrientation::Horizontal => Rect::from_xywh(
-            bounds.origin.x + offset,
-            bounds.origin.y,
-            primary_size,
-            bounds.size.height,
-        ),
-        SplitViewOrientation::Vertical => Rect::from_xywh(
-            bounds.origin.x,
-            bounds.origin.y + offset,
-            bounds.size.width,
-            primary_size,
-        ),
     }
 }
 

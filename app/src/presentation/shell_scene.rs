@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 
+use app_keybinding_ui::KeyboardShortcuts;
+use app_keybinding_ui::paint_chord_hint;
 use zeta_terminal::{GridSize, ScreenBuffer, TerminalColor, TerminalCore, TerminalMousePosition};
 use zeta_ui::{
     Border, CaretVisibility, Color, CornerRadii, FontFamily, FontWeight, InteractionRegion,
@@ -7,8 +9,6 @@ use zeta_ui::{
     ScrollbarPresentation, SplitViewOrientation, SplitViewResizeSnapshot, TextBlock,
     TextInputLayoutEngine, TextStyle, UiScene,
 };
-use app_keybinding_ui::KeyboardShortcuts;
-use app_keybinding_ui::paint_chord_hint;
 
 use crate::PRODUCT_DISPLAY_NAME;
 use crate::composer_panel::{ComposerPanelView, draw_composer_panel};
@@ -48,6 +48,7 @@ use crate::terminal_output_scroll_view::TerminalOutputScrollView;
 use crate::terminal_selection::{TerminalSelectionRange, paint_terminal_selection};
 use crate::thread_projection::ThreadProjection;
 use crate::thread_timeline::ThreadTimeline;
+use crate::workbench_host::inspector_part::inspector_layout_spec;
 use crate::workbench_host::tab_container::TabContainer;
 use crate::workbench_host::tab_container::TabContainerPlacement;
 use crate::workbench_host::tab_container::WorkbenchTab;
@@ -78,8 +79,9 @@ use zeta_settings::SettingsPage;
 use zeta_settings::SettingsPageActionAvailability;
 use zeta_settings::SettingsPageMode;
 use zeta_settings::SettingsPageSection;
-use zeta_ui::layout::WorkbenchLayout;
-use zeta_ui::layout::WorkbenchLayoutSpec;
+use zeta_workbench_layout::PaneGroupLayout;
+use zeta_workbench_layout::WorkbenchLayout;
+use zeta_workbench_layout::WorkbenchLayoutSpec;
 use zui::ui::{
     AccessibilityRole, ComponentContext, CursorFeedback, ElementId, InteractionFrame,
     InteractionFrameCheckpoint, UiDispatch, UiFrame,
@@ -91,7 +93,7 @@ const TERMINAL_LINE_HEIGHT: f32 = 18.0;
 const TERMINAL_PADDING: f32 = 24.0;
 const COMPOSER_HEIGHT: f32 = 44.0;
 
-pub(crate) use zeta_ui::layout::LogicalViewport;
+pub(crate) use zeta_workbench_layout::LogicalViewport;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct ShellLayout {
@@ -175,7 +177,7 @@ impl ShellLayout {
         let workbench = WorkbenchLayoutSpec::new(
             TITLEBAR_HEIGHT,
             tab_container.layout_spec(),
-            inspector_part.layout_spec(),
+            inspector_layout_spec(inspector_part),
         )
         .for_viewport(viewport)?;
         let main = workbench.main();
@@ -440,22 +442,30 @@ pub(crate) fn build_shell_presentation(
     model: ShellPresentationModel<'_>,
     text_layout: &mut TextInputLayoutEngine,
 ) -> ShellPresentation {
-    build_shell_presentation_with_bindings(viewport, model, text_layout, None)
+    build_shell_presentation_with_bindings(viewport, model, text_layout, SashState::Resting, None)
 }
 
 pub(crate) fn build_shell_presentation_with_animation_bindings(
     viewport: LogicalViewport,
     model: ShellPresentationModel<'_>,
     text_layout: &mut TextInputLayoutEngine,
+    inspector_sash_state: SashState,
     animation_bindings: &mut dyn zui::ui::AnimationBinding,
 ) -> ShellPresentation {
-    build_shell_presentation_with_bindings(viewport, model, text_layout, Some(animation_bindings))
+    build_shell_presentation_with_bindings(
+        viewport,
+        model,
+        text_layout,
+        inspector_sash_state,
+        Some(animation_bindings),
+    )
 }
 
 fn build_shell_presentation_with_bindings(
     viewport: LogicalViewport,
     model: ShellPresentationModel<'_>,
     text_layout: &mut TextInputLayoutEngine,
+    inspector_sash_state: SashState,
     mut animation_bindings: Option<&mut dyn zui::ui::AnimationBinding>,
 ) -> ShellPresentation {
     let palette = model.palette;
@@ -638,7 +648,7 @@ fn build_shell_presentation_with_bindings(
                 context,
                 bounds,
                 SashOrientation::Vertical,
-                model.inspector_part.sash_state(),
+                inspector_sash_state,
                 INSPECTOR_RESIZE_HANDLE,
                 "InspectorPartResizeHandle",
                 "Resize inspector",
@@ -944,8 +954,7 @@ pub(crate) fn terminal_pane_bounds_for_viewport(
         return Vec::new();
     };
     let bounds = terminal_content_bounds(layout, active_screen);
-    group
-        .layout(bounds)
+    PaneGroupLayout::for_tree(bounds, group.tree())
         .leaves()
         .iter()
         .map(|leaf| (leaf.id(), leaf.bounds()))
@@ -983,7 +992,7 @@ pub(crate) fn terminal_pane_mouse_position_for_viewport(
         return None;
     };
     let content_bounds = terminal_content_bounds(layout, active_screen);
-    let pane_geometry = group.layout(content_bounds);
+    let pane_geometry = PaneGroupLayout::for_tree(content_bounds, group.tree());
     let leaf = pane_geometry
         .leaves()
         .iter()
@@ -1421,7 +1430,8 @@ fn draw_main(
                                     );
                                 });
                             } else if let Some(group) = view.pane_group {
-                                let pane_geometry = group.layout(terminal_bounds);
+                                let pane_geometry =
+                                    PaneGroupLayout::for_tree(terminal_bounds, group.tree());
                                 for pane in view.terminal_panes {
                                     if pane.kind != PaneInputKind::Terminal {
                                         continue;
@@ -1588,8 +1598,7 @@ fn terminal_bounds_for_pane(
     pane_id: Option<PaneId>,
 ) -> Option<Rect> {
     let pane_id = pane_id?;
-    group?
-        .layout(bounds)
+    PaneGroupLayout::for_tree(bounds, group?.tree())
         .leaf(pane_id)
         .map(|leaf| leaf.bounds())
 }
@@ -1603,7 +1612,8 @@ pub(crate) fn terminal_pane_sash_for_viewport(
     point: zeta_ui::Point,
 ) -> Option<(PaneSplitId, SplitViewOrientation, SplitViewResizeSnapshot)> {
     let layout = ShellLayout::for_viewport(viewport, tab_container, inspector_part)?;
-    let pane_geometry = group.layout(terminal_content_bounds(layout, active_screen));
+    let pane_geometry =
+        PaneGroupLayout::for_tree(terminal_content_bounds(layout, active_screen), group.tree());
     pane_geometry.sashes().iter().find_map(|sash| {
         let orientation = match sash.orientation() {
             SplitViewOrientation::Horizontal => SashOrientation::Vertical,
@@ -1662,7 +1672,7 @@ fn draw_terminal_in_bounds(
 
 fn draw_terminal_pane_sashes(
     context: &mut ComponentContext<'_, '_>,
-    layout: &zeta_ui::layout::PaneGroupLayout<PaneId, PaneSplitId>,
+    layout: &zeta_workbench_layout::PaneGroupLayout<PaneId, PaneSplitId>,
     palette: ShellPalette,
     dispatch: &UiDispatch,
     active_split: Option<PaneSplitId>,

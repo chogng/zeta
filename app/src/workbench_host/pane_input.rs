@@ -1,5 +1,5 @@
 use crate::terminal_session::TerminalSessionKey;
-use zeta_workbench::{PaneInput, PaneInputKind};
+use crate::workbench_host::{PaneInput, PaneInputKind};
 
 /// Runtime currently attached to a workbench pane by the Native host.
 ///

@@ -159,8 +159,12 @@ impl NativeApp {
         &self,
         point: zeta_ui::Point,
     ) -> Option<(PaneId, TerminalMousePosition)> {
-        let tab_key = self.workbench_host.tab_part().active_tab_key()?;
-        let layout = self.workbench_host.pane_part(tab_key)?;
+        let tab_key = self
+            .workbench_host
+            .workbench()
+            .tab_part()
+            .active_tab_key()?;
+        let layout = self.workbench_host.workbench().pane_part(tab_key)?;
         terminal_pane_mouse_position_for_viewport(
             self.logical_viewport(),
             self.active_screen(),
@@ -175,7 +179,13 @@ impl NativeApp {
         let Some((pane, _position)) = self.terminal_pane_hit(point) else {
             return false;
         };
-        let Some(tab_key) = self.workbench_host.tab_part().active_tab_key().cloned() else {
+        let Some(tab_key) = self
+            .workbench_host
+            .workbench()
+            .tab_part()
+            .active_tab_key()
+            .cloned()
+        else {
             return false;
         };
         self.activate_pane_context(tab_key, pane)
@@ -191,7 +201,11 @@ impl NativeApp {
         if let Some((pane, position)) = self.terminal_pane_hit(point) {
             return (self.active_pane
                 == Some((
-                    self.workbench_host.tab_part().active_tab_key()?.clone(),
+                    self.workbench_host
+                        .workbench()
+                        .tab_part()
+                        .active_tab_key()?
+                        .clone(),
                     pane,
                 )))
             .then_some(position);

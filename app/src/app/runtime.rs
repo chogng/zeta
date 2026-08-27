@@ -38,6 +38,7 @@ impl NativeApp {
         };
         let Some(pane) = self
             .workbench_host
+            .workbench()
             .pane_part(&tab_key)
             .map(|pane_part| pane_part.root_pane())
         else {
@@ -46,6 +47,7 @@ impl NativeApp {
         let host_key = (PaneHostScope::Tab(tab_key.clone()), pane);
         let current = self
             .workbench_host
+            .workbench()
             .pane_part(&tab_key)
             .and_then(|pane_part| pane_part.pane_input(pane))
             .cloned();
@@ -55,6 +57,7 @@ impl NativeApp {
             if let Some(current) = current {
                 let _ = self
                     .workbench_host
+                    .workbench_mut()
                     .remember_workspace_return(&tab_key, current);
             }
         }
@@ -66,10 +69,12 @@ impl NativeApp {
                 PaneInput::files(self.workspace_context.working_directory().to_path_buf())
             }
         };
-        self.workbench_host.mount_input(&tab_key, pane, input);
-        self.workbench_host.pane_host.remove(&host_key);
         self.workbench_host
-            .pane_host
+            .workbench_mut()
+            .mount_input(&tab_key, pane, input);
+        self.workbench_host.pane_host_mut().remove(&host_key);
+        self.workbench_host
+            .pane_host_mut()
             .insert(host_key, PaneBinding::new());
         self.workspace_surface.show_agent();
         self.inspector_part.collapse();
@@ -102,19 +107,26 @@ impl NativeApp {
         };
         let Some(pane) = self
             .workbench_host
+            .workbench()
             .pane_part(&tab_key)
             .map(|pane_part| pane_part.root_pane())
         else {
             return false;
         };
-        self.workbench_host
-            .mount_input(&tab_key, pane, PaneInput::agent(session_id, thread_id));
+        self.workbench_host.workbench_mut().mount_input(
+            &tab_key,
+            pane,
+            PaneInput::agent(session_id, thread_id),
+        );
         let host_key = (PaneHostScope::Tab(tab_key.clone()), pane);
-        self.workbench_host.pane_host.remove(&host_key);
+        self.workbench_host.pane_host_mut().remove(&host_key);
         self.workbench_host
-            .pane_host
+            .pane_host_mut()
             .insert(host_key, PaneBinding::new());
-        let _ = self.workbench_host.clear_workspace_return(&tab_key);
+        let _ = self
+            .workbench_host
+            .workbench_mut()
+            .clear_workspace_return(&tab_key);
         self.activate_pane_context(tab_key, pane)
     }
 
@@ -122,9 +134,11 @@ impl NativeApp {
         let tab_key = self.active_session_tab_key()?;
         let pane = self
             .workbench_host
+            .workbench()
             .pane_part(&tab_key)
             .map(|pane_part| pane_part.active_pane())?;
         self.workbench_host
+            .workbench()
             .pane_part(&tab_key)
             .and_then(|pane_part| pane_part.pane_input(pane))
             .map(PaneInput::kind)
@@ -136,7 +150,11 @@ impl NativeApp {
             self.show_agent_pane();
             return;
         };
-        let Some(input) = self.workbench_host.take_workspace_return(&tab_key) else {
+        let Some(input) = self
+            .workbench_host
+            .workbench_mut()
+            .take_workspace_return(&tab_key)
+        else {
             let _ = self.bind_agent_pane();
             return;
         };
@@ -146,16 +164,19 @@ impl NativeApp {
         }
         let Some(pane) = self
             .workbench_host
+            .workbench()
             .pane_part(&tab_key)
             .map(|pane_part| pane_part.root_pane())
         else {
             return;
         };
-        self.workbench_host.mount_input(&tab_key, pane, input);
-        let host_key = (PaneHostScope::Tab(tab_key.clone()), pane);
-        self.workbench_host.pane_host.remove(&host_key);
         self.workbench_host
-            .pane_host
+            .workbench_mut()
+            .mount_input(&tab_key, pane, input);
+        let host_key = (PaneHostScope::Tab(tab_key.clone()), pane);
+        self.workbench_host.pane_host_mut().remove(&host_key);
+        self.workbench_host
+            .pane_host_mut()
             .insert(host_key, PaneBinding::new());
         self.workspace_surface.show_agent();
         let _ = self.activate_pane_context(tab_key, pane);

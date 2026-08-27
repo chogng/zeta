@@ -52,11 +52,7 @@ impl App<NativeEvent> for NativeApp {
             self.tab_container,
             self.inspector_part,
         );
-        if let Err(error) = self
-            .workbench_host
-            .terminal_workspace
-            .spawn_initial(terminal_size)
-        {
+        if let Err(error) = self.terminal_workspace.spawn_initial(terminal_size) {
             self.fail(error);
             context.exit();
             return;
@@ -245,7 +241,7 @@ impl App<NativeEvent> for NativeApp {
                 return;
             }
             NativeEvent::TerminalReady(ready) => {
-                match self.workbench_host.terminal_workspace.handle_ready(ready) {
+                match self.terminal_workspace.handle_ready(ready) {
                     TerminalReadyOutcome::Active {
                         key,
                         buffered_events,
@@ -304,7 +300,7 @@ impl App<NativeEvent> for NativeApp {
         let scrollbar_changed = self.workspace_pane_host.advance_multi_diff_scrollbar(now);
         let terminal_scrollbar_changed = self.terminal_scroll.advance_scrollbar(now);
         let vertical_tab_sash_changed = self.tab_container.advance_sash(now);
-        let inspector_sash_changed = self.inspector_part.advance_sash(now);
+        let inspector_sash_changed = self.inspector_resizable.advance(now);
         let sash_changed = vertical_tab_sash_changed || inspector_sash_changed;
         let retained_runtime_due = self
             .retained_runtime
@@ -330,7 +326,7 @@ impl App<NativeEvent> for NativeApp {
             self.terminal_scroll.scrollbar_deadline(),
             self.retained_runtime.next_deadline(),
             self.tab_container.sash_deadline(),
-            self.inspector_part.sash_deadline(),
+            self.inspector_resizable.next_deadline(),
             self.keybindings.chord_deadline(),
             self.keyboard_shortcuts_deadline(),
             Some(self.keybindings_resource.next_deadline()),

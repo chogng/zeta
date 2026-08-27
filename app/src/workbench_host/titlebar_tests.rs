@@ -12,7 +12,7 @@ use zeta_ui::Component;
 use zeta_ui::Point;
 use zeta_ui::Rect;
 use zeta_ui::UiScene;
-use zeta_workbench::TabPart;
+use crate::workbench_host::TabPart;
 use zui::ui::InteractionFrame;
 use zui::ui::UiDispatch;
 use zui::ui::UiFrame;

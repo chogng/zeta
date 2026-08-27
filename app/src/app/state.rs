@@ -6,6 +6,7 @@ pub(crate) struct NativeApp {
     pub(super) frame_scheduler: FrameScheduler,
     pub(super) retained_runtime: RetainedRuntime,
     pub(super) inspector_part: InspectorPartState,
+    pub(super) inspector_resizable: Resizable,
     pub(super) workspace_pane_host: WorkspacePaneHost,
     pub(super) file_editor_host: FileEditorHost,
     pub(super) file_editor_input: FileEditorInputState,
@@ -14,6 +15,7 @@ pub(crate) struct NativeApp {
     pub(super) tab_container: TabContainerState,
     pub(super) session_search: SessionSearch,
     pub(super) workbench_host: WorkbenchHost,
+    pub(super) terminal_workspace: TerminalWorkspace,
     pub(super) pane_view_states: HashMap<(TabInputKey, PaneId), TerminalPaneViewState>,
     /// Last host view projection used to save and restore feature-specific view state.
     ///
@@ -114,6 +116,7 @@ impl NativeApp {
             frame_scheduler: FrameScheduler::default(),
             retained_runtime: RetainedRuntime::default(),
             inspector_part: InspectorPartState::default(),
+            inspector_resizable: Resizable::new(SashOrientation::Vertical),
             workspace_pane_host,
             file_editor_input: FileEditorInputState::default(),
             file_editor_search: file_editor_search::FileEditorSearchState::default(),
@@ -121,7 +124,11 @@ impl NativeApp {
             file_editor_host: FileEditorHost::default(),
             tab_container: TabContainerState::default(),
             session_search: SessionSearch::default(),
-            workbench_host: WorkbenchHost::new(event_proxy.clone(), app_server_host.clone()),
+            workbench_host: WorkbenchHost::new(),
+            terminal_workspace: TerminalWorkspace::new(
+                event_proxy.clone(),
+                app_server_host.clone(),
+            ),
             pane_view_states: HashMap::new(),
             active_pane: None,
             terminal_pane_resize: None,

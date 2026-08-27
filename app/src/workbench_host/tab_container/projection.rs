@@ -1,7 +1,6 @@
 //! Mapping from orientation-neutral Workbench tabs into one Native UI identity scope.
 
 use zeta_ui::TabListOrientation;
-use zeta_workbench::TabGroupId;
 use zui::ui::ElementId;
 use zui::ui::NavigationAxis;
 
@@ -17,6 +16,7 @@ use crate::shell_interaction::tab_group_list_id;
 use crate::shell_interaction::titlebar_session_tab_id;
 use crate::shell_interaction::titlebar_tab_group_list_id;
 use crate::workbench_host::TabInput;
+use crate::workbench_host::TabGroupId;
 use crate::workbench_host::TabInputKey;
 use crate::workbench_host::TabPart;
 

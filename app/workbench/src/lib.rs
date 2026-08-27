@@ -19,7 +19,9 @@ mod workbench;
 pub use inspector_part::InspectorPartState;
 pub use pane_group::{PaneGroup, PaneInputId};
 pub use pane_input::{PaneInput, PaneInputKind};
-pub use pane_part::{Pane, PaneGroupId, PaneId, PanePart, PaneSplitDirection, PaneSplitId};
+pub use pane_part::{
+    Pane, PaneGroupId, PaneId, PaneNode, PanePart, PaneSplitDirection, PaneSplitId,
+};
 pub use tab_group::{TabGroup, TabGroupId};
 pub use tab_input::{TabInput, TabInputChange, TabInputKey};
 pub use tab_part::TabPart;

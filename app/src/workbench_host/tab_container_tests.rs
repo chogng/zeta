@@ -11,6 +11,7 @@ use crate::shell_interaction::session_tab_id;
 use crate::shell_interaction::tab_group_list_id;
 use crate::shell_interaction::titlebar_session_tab_id;
 use crate::shell_style::SHELL_PALETTE;
+use crate::workbench_host::TabGroupId;
 use crate::workbench_host::TabInputKey;
 use zeta_protocol::Session;
 use zeta_protocol::SessionId;
@@ -19,7 +20,7 @@ use zeta_ui::Color;
 use zeta_ui::FontWeight;
 use zeta_ui::Point;
 use zeta_ui::Rect;
-use zeta_workbench::TabPart;
+use crate::workbench_host::TabPart;
 use zui::ui::AccessibilityRole;
 use zui::ui::AccessibilitySelection;
 use zui::ui::InteractionFrame;
@@ -125,7 +126,7 @@ fn body_mount_arranges_tabs_vertically_with_two_line_session_information() {
     assert_eq!(selected.selection, AccessibilitySelection::Selected);
     assert_eq!(
         selected.parent,
-        Some(tab_group_list_id(zeta_workbench::TabGroupId::DEFAULT))
+        Some(tab_group_list_id(TabGroupId::DEFAULT))
     );
     assert_eq!(
         frame.scene().text_blocks()[0].style().weight(),

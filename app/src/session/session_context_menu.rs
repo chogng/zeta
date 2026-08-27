@@ -352,12 +352,16 @@ impl NativeApp {
             return false;
         };
         let Some(index) = target.and_then(|target| {
-            session_tab_index(target, 0..self.workbench_host.tab_part().session_count())
+            session_tab_index(
+                target,
+                0..self.workbench_host.workbench().tab_part().session_count(),
+            )
         }) else {
             return self.dismiss_session_context_menu();
         };
         let Some(target_tab) = self
             .workbench_host
+            .workbench()
             .tab_part()
             .session_input_at(index)
             .map(|input| input.key().clone())

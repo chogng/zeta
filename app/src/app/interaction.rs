@@ -33,7 +33,7 @@ impl NativeApp {
                 SashOrientation::Vertical => CursorIcon::ColResize,
                 SashOrientation::Horizontal => CursorIcon::RowResize,
             }
-        } else if self.tab_container.is_resizing() || self.inspector_part.is_resizing() {
+        } else if self.tab_container.is_resizing() || self.inspector_resizable.is_dragging() {
             CursorIcon::ColResize
         } else {
             match feedback {
@@ -88,8 +88,8 @@ impl NativeApp {
             .tab_container
             .sash_pointer_presence(session_presence, now);
         let agent_changed = self
-            .inspector_part
-            .sash_pointer_presence(agent_presence, now);
+            .inspector_resizable
+            .pointer_presence(agent_presence, now);
         session_changed || agent_changed
     }
 
@@ -193,14 +193,14 @@ impl NativeApp {
         }
         if let Some(index) = shell_interaction::session_tab_index(
             id,
-            0..self.workbench_host.tab_part().session_count(),
+            0..self.workbench_host.workbench().tab_part().session_count(),
         ) {
             session_switch_trace::event(
                 None,
                 "session-tab-hit",
                 format_args!(
                     "element={id:?} index={index} tab_count={}",
-                    self.workbench_host.tab_part().session_count()
+                    self.workbench_host.workbench().tab_part().session_count()
                 ),
             );
             self.activate_session_tab(index);

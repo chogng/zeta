@@ -1,6 +1,6 @@
 # Native UI：编写与样式契约
 
-> 状态：Current contract。本文是 `zui`、`zeta-ui` 与 `app` product host 之间的 Native UI 编写和样式边界；具体 crate API 由 [`zui` README](../zui/README.md) 和 [`zeta-ui` README](../ui/README.md) 维护。
+> 状态：Current contract。本文是 `zui`、`zeta-ui`、`zeta-workbench-layout` 与 `app` product host 之间的 UI 编写和样式边界；具体 crate API 由 [`zui` README](../zui/README.md)、[`zeta-ui` README](../ui/README.md) 和 [`zeta-workbench-layout` README](../workbench-layout/README.md) 维护。
 
 ## 快速理解
 
@@ -119,7 +119,7 @@ let button_style = ButtonStyle::new(
 
 ### 4.2 外部布局与组件内部布局分开
 
-`zui::layout::{SplitViewLayout,GridLayout}` 负责 caller-owned Pane geometry 和 resize constraints；它们不替代 `Element`，也不持有产品 Pane state。
+`zeta-workbench-layout` 负责 Workbench/Pane 的外部结构几何，并使用 `zui::ui::{SplitViewLayout,GridLayout}` 计算通用约束；它们不替代 `Element`，也不持有产品 Pane state。`zeta-ui` 只负责组件内部的 Button、Tab、scrollbar、input chrome 和浮层布局。
 
 组件内部的 Button content、Tab item、scrollbar、input chrome 和浮层 content 由对应 `zeta-ui` 组件 style 与 Element tree 负责。产品 host 只提供外部 bounds、数据投影和 interaction identity。
 

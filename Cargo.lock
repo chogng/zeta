@@ -323,7 +323,8 @@ dependencies = [
  "zeta-ui",
  "zeta-utils-path",
  "zeta-utils-pty",
- "zeta-workbench",
+ "zeta-workbench-host",
+ "zeta-workbench-layout",
  "zeta-workspace",
  "zui",
 ]
@@ -11957,7 +11958,22 @@ name = "zeta-workbench"
 version = "0.1.0"
 dependencies = [
  "zeta-protocol",
- "zeta-ui",
+]
+
+[[package]]
+name = "zeta-workbench-host"
+version = "0.1.0"
+dependencies = [
+ "zeta-protocol",
+ "zeta-workbench",
+ "zeta-workbench-layout",
+]
+
+[[package]]
+name = "zeta-workbench-layout"
+version = "0.1.0"
+dependencies = [
+ "zeta-workbench",
  "zui",
 ]
 

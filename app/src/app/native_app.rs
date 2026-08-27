@@ -38,7 +38,7 @@ use crate::thread_timeline_scroll::ThreadTimelineScroll;
 use crate::workbench_host::{InspectorPartState, TabContainerState, TabInputKey};
 use crate::workbench_host::{
     PaneBinding, PaneHostScope, PaneId, PaneInput, PaneInputKind, PaneSplitDirection, PaneSplitId,
-    TerminalReadyOutcome, WorkbenchHost,
+    TerminalReadyOutcome, TerminalWorkspace, WorkbenchHost,
 };
 use crate::workspace_context::WorkspaceContext;
 use crate::workspace_pane_host::{WorkspacePaneHost, WorkspacePaneView};
@@ -51,11 +51,11 @@ use zeta_protocol::SessionId;
 use zeta_settings::SettingsPageSection;
 use zeta_terminal::{BlockStatus, GridSize, ScreenBuffer};
 use zeta_theme::{ColorScheme, ThemeLoadOptions, ThemeLoader, ThemeSurface, default_device_root};
-use zeta_ui::layout::LogicalViewport;
 use zeta_ui::{CaretBlinkAdvance, CaretBlinkController, Point, TextInputLayoutEngine};
 use zeta_ui::{
     Resizable, SashOrientation, SashPointerPresence, SplitViewOrientation, SplitViewResizeSnapshot,
 };
+use zeta_workbench_layout::LogicalViewport;
 use zui::app::AccessibilityAction;
 use zui::app::AccessibilityActionKind;
 use zui::app::App;

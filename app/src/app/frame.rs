@@ -20,6 +20,7 @@ impl NativeApp {
             .as_ref()
             .map(WindowHandle::window_control_insets)
             .unwrap_or(WindowControlInsets::NONE);
+        let inspector_sash_state = self.inspector_resizable.presentation();
         let mut presentation = with_shell_presentation_model(
             self,
             window_control_insets,
@@ -28,6 +29,7 @@ impl NativeApp {
                     viewport,
                     model,
                     text_layout,
+                    inspector_sash_state,
                     animation_bindings,
                 )
             },
@@ -48,6 +50,7 @@ impl NativeApp {
                 .reconcile_focus(presentation.interaction_frame(), preferred_focus)
         };
         if focus_outcome.invalidation != DispatchInvalidation::None {
+            let inspector_sash_state = self.inspector_resizable.presentation();
             presentation = with_shell_presentation_model(
                 self,
                 window_control_insets,
@@ -56,6 +59,7 @@ impl NativeApp {
                         viewport,
                         model,
                         text_layout,
+                        inspector_sash_state,
                         animation_bindings,
                     )
                 },
@@ -69,6 +73,7 @@ impl NativeApp {
             outcome.invalidation != DispatchInvalidation::None || sash_changed
         });
         if pointer_requires_rebuild {
+            let inspector_sash_state = self.inspector_resizable.presentation();
             presentation = with_shell_presentation_model(
                 self,
                 window_control_insets,
@@ -77,6 +82,7 @@ impl NativeApp {
                         viewport,
                         model,
                         text_layout,
+                        inspector_sash_state,
                         animation_bindings,
                     )
                 },
@@ -97,16 +103,18 @@ impl NativeApp {
         active_screen: ScreenBuffer,
         fallback_size: GridSize,
     ) {
-        let Some(tab_key) = self.workbench_host.tab_part().active_tab_key().cloned() else {
-            self.workbench_host
-                .terminal_workspace
-                .resize_all(fallback_size);
+        let Some(tab_key) = self
+            .workbench_host
+            .workbench()
+            .tab_part()
+            .active_tab_key()
+            .cloned()
+        else {
+            self.terminal_workspace.resize_all(fallback_size);
             return;
         };
-        let Some(layout) = self.workbench_host.pane_part(&tab_key) else {
-            self.workbench_host
-                .terminal_workspace
-                .resize_all(fallback_size);
+        let Some(layout) = self.workbench_host.workbench().pane_part(&tab_key) else {
+            self.terminal_workspace.resize_all(fallback_size);
             return;
         };
         let panes = terminal_pane_bounds_for_viewport(
@@ -117,22 +125,21 @@ impl NativeApp {
             layout,
         );
         if panes.is_empty() {
-            self.workbench_host
-                .terminal_workspace
-                .resize_all(fallback_size);
+            self.terminal_workspace.resize_all(fallback_size);
             return;
         }
         let resize_requests = panes
             .into_iter()
             .filter_map(|(pane, bounds)| {
                 self.workbench_host
-                    .pane_host
-                    .terminal_key(&(PaneHostScope::Tab(tab_key.clone()), pane))
+                    .pane_host()
+                    .binding(&(PaneHostScope::Tab(tab_key.clone()), pane))
+                    .and_then(PaneBinding::terminal_key)
                     .map(|key| (key, terminal_grid_size_for_bounds(bounds)))
             })
             .collect::<Vec<_>>();
         for (key, size) in resize_requests {
-            self.workbench_host.terminal_workspace.resize_key(key, size);
+            self.terminal_workspace.resize_key(key, size);
         }
     }
 

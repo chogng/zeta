@@ -121,6 +121,8 @@ members = [
     "app/settings",
     "app/ui",
     "app/workbench",
+    "app/workbench-layout",
+    "app/workbench-host",
     "app/zui",
     "app/zui-demo",
 ]
@@ -363,6 +365,8 @@ zeta-tui = { path = "zeta-code/tui" }
 zeta-uds = { path = "zeta-rs/uds" }
 zeta-ui = { path = "app/ui" }
 zeta-workbench = { path = "app/workbench" }
+zeta-workbench-host = { path = "app/workbench-host" }
+zeta-workbench-layout = { path = "app/workbench-layout" }
 zeta-utils-image = { path = "zeta-rs/utils/image" }
 zeta-utils-path = { path = "zeta-rs/utils/path-utils" }
 zeta-utils-path-uri = { path = "zeta-rs/utils/path-uri" }

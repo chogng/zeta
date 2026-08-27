@@ -1,5 +1,5 @@
 [package]
-name = "zeta-workbench"
+name = "zeta-workbench-host"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -7,11 +7,15 @@ publish.workspace = true
 
 [lib]
 doctest = false
-name = "zeta_workbench"
+name = "zeta_workbench_host"
 path = "src/lib.rs"
 
 [dependencies]
-zeta-protocol = { workspace = true }
+zeta-workbench = { workspace = true }
+zeta-workbench-layout = { workspace = true }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+zeta-protocol = { workspace = true }

@@ -20,7 +20,7 @@ use zeta_settings::SettingsPageSection;
 
 impl NativeApp {
     pub(super) fn activate_language_server_settings_element(&mut self, id: ElementId) -> bool {
-        if !self.workbench_host.tab_part().is_settings() {
+        if !self.workbench_host.workbench().tab_part().is_settings() {
             return false;
         }
         match id {
@@ -59,7 +59,9 @@ impl NativeApp {
     }
 
     pub(super) fn route_language_server_settings_keyboard(&mut self, event: &KeyEvent) -> bool {
-        if !self.workbench_host.tab_part().is_settings() || event.state != ElementState::Pressed {
+        if !self.workbench_host.workbench().tab_part().is_settings()
+            || event.state != ElementState::Pressed
+        {
             return false;
         }
         if event.logical_key == Key::Named(NamedKey::Escape) {

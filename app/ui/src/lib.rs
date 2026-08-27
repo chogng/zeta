@@ -1,7 +1,6 @@
-//! Reusable native UI components built on [`zui`].
+//! Reusable UI components built on [`zui`].
 
 mod components;
-pub mod layout;
 
 pub use zui::ui::*;
 

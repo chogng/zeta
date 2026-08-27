@@ -9,9 +9,9 @@ use zeta_ui::Resizable;
 use zeta_ui::SashOrientation;
 use zeta_ui::SashPointerPresence;
 use zeta_ui::SashState;
-use zeta_ui::layout::PartVisibility;
-use zeta_ui::layout::TabContainerLayout;
-use zeta_ui::layout::TabContainerLayoutSpec;
+use zeta_workbench_layout::PartVisibility;
+use zeta_workbench_layout::TabContainerLayout;
+use zeta_workbench_layout::TabContainerLayoutSpec;
 use zui::input::ElementState;
 use zui::ui::DispatchInvalidation;
 

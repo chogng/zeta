@@ -3,16 +3,41 @@ use std::time::Instant;
 use crate::NativeApp;
 use crate::shell_interaction::INSPECTOR_RESIZE_HANDLE;
 use crate::shell_scene::inspector_resize_snapshot_for_viewport;
+use crate::workbench_host::InspectorPartState;
 use zeta_ui::Point;
+use zeta_workbench_layout::InspectorLayoutSpec;
+use zeta_workbench_layout::PartVisibility;
 use zui::input::ElementState;
 use zui::ui::DispatchInvalidation;
 
+const MINIMUM_WIDTH: f32 = 360.0;
+const MAXIMUM_WIDTH: f32 = 800.0;
+const MINIMUM_MAIN_WIDTH: f32 = 400.0;
+
+pub(crate) fn inspector_layout_spec(
+    inspector: InspectorPartState,
+) -> InspectorLayoutSpec {
+    InspectorLayoutSpec::new(
+        if inspector.is_expanded() {
+            PartVisibility::Expanded
+        } else {
+            PartVisibility::Collapsed
+        },
+        inspector.preferred_width(),
+        MINIMUM_WIDTH,
+        MAXIMUM_WIDTH,
+        MINIMUM_MAIN_WIDTH,
+    )
+}
+
 impl NativeApp {
     pub(crate) fn route_inspector_resize_move(&mut self, point: Point) -> bool {
-        if !self.inspector_part.is_resizing() {
+        if !self.inspector_resizable.is_dragging() {
             return false;
         }
-        if self.inspector_part.resize_to(point) {
+        if let Some(next) = self.inspector_resizable.resize_to(point)
+            && self.inspector_part.set_preferred_width(next.next_size())
+        {
             self.terminal_selection.clear();
             self.rebuild_presentation();
             self.request_redraw();
@@ -39,13 +64,13 @@ impl NativeApp {
                 ) else {
                     return false;
                 };
-                if !over_handle || !self.inspector_part.start_resizing(snapshot, point, now) {
+                if !over_handle || !self.inspector_resizable.begin_drag(snapshot, point, now) {
                     return false;
                 }
             }
             ElementState::Released => {
                 let presence = self.sash_pointer_presence(INSPECTOR_RESIZE_HANDLE);
-                if !self.inspector_part.finish_resizing(presence, now) {
+                if !self.inspector_resizable.end_drag(presence, now) {
                     return false;
                 }
             }
@@ -69,7 +94,7 @@ impl NativeApp {
     }
 
     pub(crate) fn cancel_inspector_resize(&mut self) {
-        if self.inspector_part.cancel_resizing() {
+        if self.inspector_resizable.cancel() {
             self.rebuild_presentation();
             self.update_cursor();
             self.request_redraw();

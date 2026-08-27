@@ -1,8 +1,7 @@
 use std::ops::Range;
-use zeta_workbench::TabGroupId;
 use zui::ui::ElementId;
 
-use crate::workbench_host::PaneId;
+use crate::workbench_host::{PaneId, TabGroupId};
 
 pub(crate) const WORKSPACE_PANE: ElementId = ElementId::scoped(1, 23);
 pub(crate) const AGENT_EXPLORER_PANE: ElementId = ElementId::scoped(1, 28);
