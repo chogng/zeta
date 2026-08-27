@@ -1,0 +1,4 @@
+interface:
+  display_name: "Upstream File Convergence"
+  short_description: "Align TypeScript with VS Code and Rust with Codex"
+  default_prompt: "Use $upstream-file-convergence to refactor or retire the named files against the correct language-specific upstream repository."
