@@ -124,13 +124,11 @@ interaction、animation、deadline 和 retained lifecycle 由 `zui` canonical ow
 
 ## app-side feature crates
 
-`app/src` 的拆分按“能力和依赖隔离”进行。新 crate 只接收宿主快照和已解析样式，返回 typed action；
-文件、网络、进程、窗口和平台输入仍由 `app/src` 执行。这样可以缩小组合根，同时不把产品状态
-下沉到共享 backend。
+`app/src` 的拆分按“能力和依赖隔离”进行。能力 crate 接管自己的状态、worker 和后端请求；`app/src` 只提供产品连接目标、窗口事件投递以及 UI action 的应用，不复制能力状态。
 
 | crate | 负责 | `app/src` 保留 |
 | --- | --- | --- |
-| [`zeta-agent-session`](agent-session) | Agent Session 命令/事件、队列和重连策略 | App Server worker、文件/Git/LSP 请求和事件循环 |
+| [`zeta-agent-session`](agent-session) | App Server Session client、worker、订阅、文件/Git/LSP 请求、命令/事件队列和重连策略 | Local/Remote 连接目标、窗口事件投递和 UI reducer |
 | [`zeta-session-ui`](session-ui) | Thread 增量合并、时间线、滚动、Session 菜单和搜索 | 宿主快照、Session 切换和 action 执行 |
 | [`zeta-workspace-ui`](workspace-ui) | Files/Changes pane、目录树、搜索、分支和路径选择状态 | App Server DTO 转换、文件打开、目录加载和分支操作 |
 | [`zeta-editor-host`](editor-host) | Editor Tab 辅助状态、查找替换、诊断、补全和自动滚动 | 文档读写、保存冲突、LSP 请求和平台输入 |

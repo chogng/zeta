@@ -18,9 +18,7 @@ pub(crate) use zeta_app_server_client::AppServerRequestHandle;
 pub(crate) use zeta_app_server_client::AppServerSession;
 pub(crate) use zeta_app_server_client::ClientError;
 pub(crate) use zeta_app_server_client::ServerNotification;
-pub(crate) use zeta_app_server_client::SessionWorkspaceRoute;
 pub(crate) use zeta_app_server_client::local_profile_root;
-pub(crate) use zeta_app_server_client::route_session_workspace;
 
 #[cfg(test)]
 pub(crate) mod testing {

@@ -144,6 +144,29 @@ impl AppServerHost {
     }
 }
 
+impl zeta_agent_session::AgentSessionTarget for AppServerHost {
+    fn is_remote(&self) -> bool {
+        AppServerHost::is_remote(self)
+    }
+
+    fn workspace_root(&self) -> &Path {
+        AppServerHost::workspace_root(self)
+    }
+
+    fn retarget(
+        &self,
+        root: &Path,
+    ) -> zeta_agent_session::CommandResult<Box<dyn zeta_agent_session::AgentSessionTarget>> {
+        self.with_workspace_root(root)
+            .map(|target| Box::new(target) as Box<dyn zeta_agent_session::AgentSessionTarget>)
+            .map_err(|error| error.to_string())
+    }
+
+    fn start(&self) -> zeta_agent_session::CommandResult<zeta_app_server_client::AppServerSession> {
+        AppServerHost::start(self).map_err(|error| error.to_string())
+    }
+}
+
 pub(crate) fn local_app_server_command(
     executable: PathBuf,
     profile_root: PathBuf,

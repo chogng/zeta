@@ -10835,6 +10835,8 @@ dependencies = [
 name = "zeta-agent-session"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "zeta-app-server-client",
  "zeta-app-server-protocol",
  "zeta-protocol",
  "zeta-text-file",

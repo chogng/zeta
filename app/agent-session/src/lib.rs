@@ -1,332 +1,334 @@
-//! Typed contracts between the app host and the Agent Session worker.
+//! App-side Agent Session worker and its typed product boundary.
 //!
-//! The worker implementation remains host-owned while its queue vocabulary is kept here. That
-//! lets the worker communicate with the product shell without importing window, focus, or UI
-//! types into this crate.
+//! This crate owns the App Server connection, subscription, command queue, file and Git requests,
+//! and reconnect lifecycle. The product host supplies only a connection target and an event sink;
+//! window, focus, panes, and rendering stay outside this crate.
 
+use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, SyncSender};
-use std::time::Duration;
+use std::sync::mpsc::SyncSender;
+use std::thread;
+use std::thread::JoinHandle;
 
-use zeta_app_server_protocol::protocol::config::{
-    ConfigCommandResult, ConfigReadResult, LanguageServerConfigDto,
-};
-use zeta_app_server_protocol::protocol::fs::{FsChanged, FsReadDirectoryEntry};
-use zeta_app_server_protocol::protocol::git::{GitBranchDto, GitTextDiffResult};
-use zeta_app_server_protocol::protocol::model::ModelCatalogEntry;
-use zeta_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
-use zeta_protocol::{ModelRef, Session, SessionId, Thread, ThreadUpdateEnvelope};
-use zeta_text_file::{TextFileDiskVersion, TextFileSaveRequest, TextFileSnapshot};
+use anyhow::Context;
+use anyhow::Result;
+use anyhow::anyhow;
+use zeta_app_server_protocol::protocol::config::ConfigCommandResult;
+use zeta_app_server_protocol::protocol::config::LanguageServerConfigDto;
+use zeta_app_server_protocol::protocol::fs::FsReadDirectoryEntry;
+use zeta_app_server_protocol::protocol::git::GitBranchDto;
+use zeta_app_server_protocol::protocol::git::GitTextDiffResult;
+use zeta_protocol::ModelRef;
+use zeta_protocol::SessionId;
+use zeta_text_file::TextFileDiskVersion;
+use zeta_text_file::TextFileSaveRequest;
+use zeta_text_file::TextFileSnapshot;
 
-/// The default number of commands that may wait for the worker.
-pub const DEFAULT_COMMAND_QUEUE_CAPACITY: usize = 32;
+mod contract;
+mod worker;
 
-/// Error returned when a command arrives while the worker has no live connection.
-pub const AGENT_UNAVAILABLE_COMMAND_ERROR: &str =
-    "Agent session is not connected; the command was not sent";
+pub use contract::AGENT_UNAVAILABLE_COMMAND_ERROR;
+pub use contract::AgentSessionCommand;
+pub use contract::AgentSessionCommandReceiver;
+pub use contract::AgentSessionCommandSender;
+pub use contract::AgentSessionEvent;
+pub use contract::CommandResult;
+pub use contract::DEFAULT_COMMAND_QUEUE_CAPACITY;
+pub use contract::MAX_RECONNECT_DELAY;
+pub use contract::RECONNECT_WINDOW;
+pub use contract::SessionSwitchId;
+pub use contract::WorkspaceSwitchResult;
+pub use contract::command_channel;
+pub use contract::command_channel_with_capacity;
+pub use contract::reconnect_delay;
+pub use contract::reconnect_delay_within_window;
+pub use contract::reject_disconnected_command;
 
-/// Maximum time spent trying to recover a lost remote connection.
-pub const RECONNECT_WINDOW: Duration = Duration::from_secs(30);
+/// Connection authority supplied by the product host.
+///
+/// Implementations preserve their Local or Remote transport identity when retargeted to another
+/// Workspace. The Agent worker uses this contract without importing product composition types.
+pub trait AgentSessionTarget: Send + Sync {
+    /// Returns whether transport loss should use the bounded reconnect policy.
+    fn is_remote(&self) -> bool;
 
-const INITIAL_RECONNECT_DELAY: Duration = Duration::from_millis(250);
-/// Maximum delay between two remote reconnect attempts.
-pub const MAX_RECONNECT_DELAY: Duration = Duration::from_secs(2);
+    /// Returns the Workspace root represented by this target.
+    fn workspace_root(&self) -> &Path;
 
-/// The result type used by request/response commands.
-pub type CommandResult<T> = std::result::Result<T, String>;
+    /// Creates the same connection authority retargeted to another Workspace.
+    fn retarget(&self, root: &Path) -> CommandResult<Box<dyn AgentSessionTarget>>;
 
-/// Product-owned correlation id for one Session Tab activation.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct SessionSwitchId(u64);
+    /// Opens and initializes one App Server protocol session.
+    fn start(&self) -> CommandResult<zeta_app_server_client::AppServerSession>;
+}
 
-impl SessionSwitchId {
-    /// Creates an id from the host's monotonically increasing counter.
-    pub const fn new(value: u64) -> Self {
-        Self(value)
+type AgentSessionEventSink = Arc<dyn Fn(AgentSessionEvent) -> CommandResult<()> + Send + Sync>;
+/// Running Agent Session worker handle used by the product host.
+pub struct AgentSession {
+    available: Arc<AtomicBool>,
+    commands: SyncSender<AgentSessionCommand>,
+    worker: Option<JoinHandle<()>>,
+}
+
+impl AgentSession {
+    /// Starts one worker for the supplied App Server target and product event sink.
+    pub fn spawn<T, F>(target: T, event_sink: F) -> Result<Self>
+    where
+        T: AgentSessionTarget + 'static,
+        F: Fn(AgentSessionEvent) -> CommandResult<()> + Send + Sync + 'static,
+    {
+        let (commands, command_receiver) = command_channel();
+        let available = Arc::new(AtomicBool::new(false));
+        let worker_availability = Arc::clone(&available);
+        let event_sink: AgentSessionEventSink = Arc::new(event_sink);
+        let worker = thread::Builder::new()
+            .name("app-agent-session".into())
+            .spawn(move || {
+                worker::run_agent_session(
+                    event_sink,
+                    command_receiver,
+                    Box::new(target),
+                    worker_availability,
+                )
+            })
+            .context("could not start Agent Session worker")?;
+        Ok(Self {
+            available,
+            commands,
+            worker: Some(worker),
+        })
     }
 
-    /// Returns the counter value for host-side diagnostics.
-    pub const fn get(self) -> u64 {
-        self.0
-    }
-}
-
-/// The result prepared before the host reconnects to another workspace.
-#[derive(Debug)]
-pub struct WorkspaceSwitchResult {
-    /// The workspace root that the next connection should use.
-    pub root: PathBuf,
-    /// The Git snapshot read while preparing the next connection, if available.
-    pub git: Option<GitTextDiffResult>,
-}
-
-/// Events emitted by the Agent Session worker.
-#[derive(Debug)]
-pub enum AgentSessionEvent {
-    /// Catalog data needed by the composer.
-    Catalog {
-        /// Slash commands advertised by the server.
-        slash_commands: Vec<SlashCommandDefinition>,
-        /// Models advertised by the server.
-        models: Vec<ModelCatalogEntry>,
-    },
-    /// Current language-service configuration.
-    Configuration(ConfigReadResult),
-    /// Session list for the current workspace.
-    SessionCatalog(Vec<Session>),
-    /// Authoritative snapshot for the active thread.
-    Snapshot {
-        /// Session containing the active thread.
-        session: Session,
-        /// Current thread state.
-        thread: Thread,
-        /// Optional activation that caused this snapshot.
-        switch_id: Option<SessionSwitchId>,
-    },
-    /// One incremental Thread update from the server.
-    Update(Box<ThreadUpdateEnvelope>),
-    /// Latest Git diff snapshot, or `None` when the workspace has no repository.
-    GitSnapshot(Option<GitTextDiffResult>),
-    /// Filesystem changes reported by the server.
-    FilesChanged(FsChanged),
-    /// A worker or transport error.
-    Error(String),
-    /// The worker has stopped and will emit no more events.
-    Closed,
-}
-
-/// Commands accepted by the Agent Session worker.
-pub enum AgentSessionCommand {
-    /// Create and activate a new Session.
-    CreateSession,
-    /// Stop a Session and return the server result.
-    StopSession {
-        /// Session to stop.
-        session_id: SessionId,
-        /// Completion channel.
-        response: SyncSender<CommandResult<()>>,
-    },
-    /// Activate a Session and optionally prepare a workspace reconnect.
-    ActivateSession {
-        /// Session to activate.
-        session_id: SessionId,
-        /// Host-owned activation correlation id.
-        switch_id: SessionSwitchId,
-        /// Completion channel.
-        response: SyncSender<CommandResult<Option<WorkspaceSwitchResult>>>,
-    },
-    /// Submit a text turn to the active Thread.
-    SubmitAgentMessage(String),
-    /// Submit a shell turn to the active Thread.
-    SubmitShellCommand(String),
-    /// Change the model for the active Session.
-    SelectModel(ModelRef),
-    /// Refresh the active Session and Thread snapshot.
-    Refresh,
-    /// Refresh the Git snapshot.
-    RefreshGit,
-    /// Read directory entries from the current workspace.
-    ReadDirectory {
-        /// Directory path relative to the workspace.
-        path: PathBuf,
-        /// Completion channel.
-        response: SyncSender<CommandResult<Vec<FsReadDirectoryEntry>>>,
-    },
-    /// Read a text file from the current workspace.
-    ReadFile {
-        /// File path relative to the workspace.
-        path: PathBuf,
-        /// Completion channel.
-        response: SyncSender<CommandResult<TextFileSnapshot>>,
-    },
-    /// Save a text file in the current workspace.
-    WriteFile {
-        /// Save request including the expected disk version.
-        request: TextFileSaveRequest,
-        /// Completion channel.
-        response: SyncSender<CommandResult<TextFileDiskVersion>>,
-    },
-    /// Read local Git branches.
-    ListGitBranches(SyncSender<CommandResult<Vec<GitBranchDto>>>),
-    /// Switch the current Git branch and return its new diff snapshot.
-    SwitchGitBranch {
-        /// Branch name to select.
-        name: String,
-        /// Completion channel.
-        response: SyncSender<CommandResult<GitTextDiffResult>>,
-    },
-    /// Prepare a connection to another workspace.
-    SwitchWorkspace {
-        /// Workspace root to use for the next connection.
-        root: PathBuf,
-        /// Completion channel.
-        response: SyncSender<CommandResult<WorkspaceSwitchResult>>,
-    },
-    /// Persist one language-server configuration change.
-    ConfigureLanguageServer {
-        /// Revision the host read before opening the form.
-        expected_revision: u64,
-        /// Server id being configured.
-        server_id: String,
-        /// New server configuration.
-        config: LanguageServerConfigDto,
-        /// Completion channel.
-        response: SyncSender<CommandResult<ConfigCommandResult>>,
-    },
-    /// Remove one language-server configuration.
-    RemoveLanguageServerConfiguration {
-        /// Revision the host read before opening the form.
-        expected_revision: u64,
-        /// Server id being removed.
-        server_id: String,
-        /// Completion channel.
-        response: SyncSender<CommandResult<ConfigCommandResult>>,
-    },
-    /// Ask the worker to stop after draining no further work.
-    Shutdown,
-}
-
-/// Sender half of the bounded Agent Session command queue.
-pub type AgentSessionCommandSender = SyncSender<AgentSessionCommand>;
-
-/// Receiver half of the bounded Agent Session command queue.
-pub type AgentSessionCommandReceiver = Receiver<AgentSessionCommand>;
-
-/// Creates the standard-sized Agent Session command queue.
-pub fn command_channel() -> (AgentSessionCommandSender, AgentSessionCommandReceiver) {
-    command_channel_with_capacity(DEFAULT_COMMAND_QUEUE_CAPACITY)
-}
-
-/// Creates a bounded Agent Session command queue for a host or a focused test.
-pub fn command_channel_with_capacity(
-    capacity: usize,
-) -> (AgentSessionCommandSender, AgentSessionCommandReceiver) {
-    mpsc::sync_channel(capacity)
-}
-
-/// Returns the exponential-backoff delay for a reconnect attempt.
-pub fn reconnect_delay(attempt: usize) -> Duration {
-    let multiplier = 1_u32 << (attempt.min(31) as u32);
-    (INITIAL_RECONNECT_DELAY * multiplier).min(MAX_RECONNECT_DELAY)
-}
-
-/// Returns a reconnect delay only when it fits inside the recovery window.
-pub fn reconnect_delay_within_window(elapsed: Duration, attempt: usize) -> Option<Duration> {
-    let remaining = RECONNECT_WINDOW.checked_sub(elapsed)?;
-    let delay = reconnect_delay(attempt);
-    (delay <= remaining).then_some(delay)
-}
-
-/// Rejects queued commands while disconnected and completes request/response commands with a
-/// stable error. Returns `true` when the worker should stop instead of recovering.
-pub fn reject_disconnected_command(command: AgentSessionCommand) -> bool {
-    match command {
-        AgentSessionCommand::Shutdown => return true,
-        AgentSessionCommand::ReadDirectory { response, .. } => {
-            let _ = response.send(disconnected_command_error());
-        }
-        AgentSessionCommand::ReadFile { response, .. } => {
-            let _ = response.send(disconnected_command_error());
-        }
-        AgentSessionCommand::WriteFile { response, .. } => {
-            let _ = response.send(disconnected_command_error());
-        }
-        AgentSessionCommand::ListGitBranches(response) => {
-            let _ = response.send(disconnected_command_error());
-        }
-        AgentSessionCommand::SwitchGitBranch { response, .. } => {
-            let _ = response.send(disconnected_command_error());
-        }
-        AgentSessionCommand::SwitchWorkspace { response, .. } => {
-            let _ = response.send(disconnected_command_error());
-        }
-        AgentSessionCommand::ActivateSession { response, .. } => {
-            let _ = response.send(disconnected_command_error());
-        }
-        AgentSessionCommand::StopSession { response, .. } => {
-            let _ = response.send(disconnected_command_error());
-        }
-        AgentSessionCommand::ConfigureLanguageServer { response, .. } => {
-            let _ = response.send(disconnected_command_error());
-        }
-        AgentSessionCommand::RemoveLanguageServerConfiguration { response, .. } => {
-            let _ = response.send(disconnected_command_error());
-        }
-        AgentSessionCommand::CreateSession
-        | AgentSessionCommand::SubmitAgentMessage(_)
-        | AgentSessionCommand::SubmitShellCommand(_)
-        | AgentSessionCommand::SelectModel(_)
-        | AgentSessionCommand::Refresh
-        | AgentSessionCommand::RefreshGit => {}
-    }
-    false
-}
-
-fn disconnected_command_error<T>() -> CommandResult<T> {
-    Err(AGENT_UNAVAILABLE_COMMAND_ERROR.to_owned())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn command_queue_is_bounded() {
-        let (sender, receiver) = command_channel_with_capacity(1);
-        sender.send(AgentSessionCommand::Refresh).unwrap();
-
-        assert!(sender.try_send(AgentSessionCommand::Refresh).is_err());
-        assert!(matches!(
-            receiver.recv().unwrap(),
-            AgentSessionCommand::Refresh
-        ));
+    /// Returns whether the worker currently accepts commands.
+    pub fn is_available(&self) -> bool {
+        self.available.load(Ordering::Acquire)
     }
 
-    #[test]
-    fn switch_id_round_trips_without_host_types() {
-        let id = SessionSwitchId::new(42);
-        assert_eq!(id.get(), 42);
+    /// Submits one text turn to the active Thread.
+    pub fn submit_agent_message(&self, text: String) -> Result<()> {
+        self.try_send(
+            AgentSessionCommand::SubmitAgentMessage(text),
+            "Agent submission queue is unavailable",
+        )
     }
 
-    #[test]
-    fn remote_reconnect_backoff_is_bounded() {
-        assert_eq!(reconnect_delay(0), Duration::from_millis(250));
-        assert_eq!(reconnect_delay(1), Duration::from_millis(500));
-        assert_eq!(reconnect_delay(3), Duration::from_secs(2));
-        assert_eq!(reconnect_delay(32), MAX_RECONNECT_DELAY);
+    /// Creates and activates a Session in the current Workspace.
+    pub fn create_session(&self) -> Result<()> {
+        self.try_send(
+            AgentSessionCommand::CreateSession,
+            "Agent session creation queue is unavailable",
+        )
     }
 
-    #[test]
-    fn remote_reconnect_never_schedules_past_its_recovery_window() {
-        assert_eq!(
-            reconnect_delay_within_window(Duration::ZERO, 0),
-            Some(Duration::from_millis(250))
-        );
-        assert_eq!(
-            reconnect_delay_within_window(RECONNECT_WINDOW - Duration::from_secs(2), 8),
-            Some(Duration::from_secs(2))
-        );
-        assert_eq!(
-            reconnect_delay_within_window(RECONNECT_WINDOW - Duration::from_millis(100), 0),
-            None
-        );
-        assert_eq!(reconnect_delay_within_window(RECONNECT_WINDOW, 0), None);
-    }
-
-    #[test]
-    fn disconnected_request_is_completed_without_replay() {
+    /// Stops an active Session.
+    pub fn stop_session(&self, session_id: SessionId) -> Result<()> {
         let (response, result) = mpsc::sync_channel(1);
-        assert!(!reject_disconnected_command(
-            AgentSessionCommand::ReadDirectory {
-                path: PathBuf::from("src"),
+        self.try_send(
+            AgentSessionCommand::StopSession {
+                session_id,
                 response,
-            }
-        ));
-        assert_eq!(
-            result.recv().unwrap(),
-            Err(AGENT_UNAVAILABLE_COMMAND_ERROR.to_owned())
-        );
-        assert!(reject_disconnected_command(AgentSessionCommand::Shutdown));
+            },
+            "Agent session stop queue is unavailable",
+        )?;
+        result
+            .recv()
+            .context("Agent session stop worker stopped")?
+            .map_err(anyhow::Error::msg)
+    }
+
+    /// Activates a Session and reports a Workspace replacement prepared by the worker.
+    pub fn activate_session(
+        &self,
+        session_id: SessionId,
+        switch_id: SessionSwitchId,
+    ) -> Result<Option<WorkspaceSwitchResult>> {
+        let (response, result) = mpsc::sync_channel(1);
+        self.try_send(
+            AgentSessionCommand::ActivateSession {
+                session_id,
+                switch_id,
+                response,
+            },
+            "Agent session activation queue is unavailable",
+        )?;
+        result
+            .recv()
+            .context("Agent session activation worker stopped")?
+            .map_err(anyhow::Error::msg)
+    }
+
+    /// Submits one shell turn to the active Thread.
+    pub fn submit_shell_command(&self, command: String) -> Result<()> {
+        self.try_send(
+            AgentSessionCommand::SubmitShellCommand(command),
+            "Shell submission queue is unavailable",
+        )
+    }
+
+    /// Selects the model used by the active Session.
+    pub fn select_model(&self, model: ModelRef) -> Result<()> {
+        self.try_send(
+            AgentSessionCommand::SelectModel(model),
+            "Agent model selection queue is unavailable",
+        )
+    }
+
+    /// Refreshes the active Session subscription.
+    pub fn refresh(&self) -> Result<()> {
+        self.try_send(
+            AgentSessionCommand::Refresh,
+            "Agent refresh queue is unavailable",
+        )
+    }
+
+    /// Refreshes the Git projection.
+    pub fn refresh_git(&self) -> Result<()> {
+        self.try_send(
+            AgentSessionCommand::RefreshGit,
+            "Git refresh queue is unavailable",
+        )
+    }
+
+    /// Reads a Workspace directory through App Server.
+    pub fn read_directory(&self, path: PathBuf) -> Result<Vec<FsReadDirectoryEntry>> {
+        let (response, result) = mpsc::sync_channel(1);
+        self.try_send(
+            AgentSessionCommand::ReadDirectory { path, response },
+            "Workspace directory query queue is unavailable",
+        )?;
+        result
+            .recv()
+            .context("Workspace directory query worker stopped")?
+            .map_err(anyhow::Error::msg)
+    }
+
+    /// Reads one stable text-file snapshot through App Server.
+    pub fn read_file(&self, path: PathBuf) -> Result<TextFileSnapshot> {
+        let (response, result) = mpsc::sync_channel(1);
+        self.try_send(
+            AgentSessionCommand::ReadFile { path, response },
+            "Workspace file query queue is unavailable",
+        )?;
+        result
+            .recv()
+            .context("Workspace file query worker stopped")?
+            .map_err(anyhow::Error::msg)
+    }
+
+    /// Saves one text file through App Server.
+    pub fn write_file(&self, request: TextFileSaveRequest) -> Result<TextFileDiskVersion> {
+        let (response, result) = mpsc::sync_channel(1);
+        self.try_send(
+            AgentSessionCommand::WriteFile { request, response },
+            "Workspace file mutation queue is unavailable",
+        )?;
+        result
+            .recv()
+            .context("Workspace file mutation worker stopped")?
+            .map_err(anyhow::Error::msg)
+    }
+
+    /// Lists local Git branches through App Server.
+    pub fn local_branches(&self) -> Result<Vec<GitBranchDto>> {
+        let (response, result) = mpsc::sync_channel(1);
+        self.try_send(
+            AgentSessionCommand::ListGitBranches(response),
+            "Git branch query queue is unavailable",
+        )?;
+        result
+            .recv()
+            .context("Git branch query worker stopped")?
+            .map_err(anyhow::Error::msg)
+    }
+
+    /// Switches the current Git branch through App Server.
+    pub fn switch_git_branch(&self, name: String) -> Result<GitTextDiffResult> {
+        let (response, result) = mpsc::sync_channel(1);
+        self.try_send(
+            AgentSessionCommand::SwitchGitBranch { name, response },
+            "Git branch mutation queue is unavailable",
+        )?;
+        result
+            .recv()
+            .context("Git branch mutation worker stopped")?
+            .map_err(anyhow::Error::msg)
+    }
+
+    /// Prepares and switches the worker to another Workspace.
+    pub fn switch_workspace(&self, root: PathBuf) -> Result<WorkspaceSwitchResult> {
+        let (response, result) = mpsc::sync_channel(1);
+        self.try_send(
+            AgentSessionCommand::SwitchWorkspace { root, response },
+            "Workspace switch queue is unavailable",
+        )?;
+        result
+            .recv()
+            .context("Workspace switch worker stopped")?
+            .map_err(anyhow::Error::msg)
+    }
+
+    /// Persists one language-server configuration.
+    pub fn configure_language_server(
+        &self,
+        expected_revision: u64,
+        server_id: String,
+        config: LanguageServerConfigDto,
+    ) -> Result<ConfigCommandResult> {
+        let (response, result) = mpsc::sync_channel(1);
+        self.try_send(
+            AgentSessionCommand::ConfigureLanguageServer {
+                expected_revision,
+                server_id,
+                config,
+                response,
+            },
+            "Language server configuration queue is unavailable",
+        )?;
+        result
+            .recv()
+            .context("Language server configuration worker stopped")?
+            .map_err(anyhow::Error::msg)
+    }
+
+    /// Removes one language-server configuration.
+    pub fn remove_language_server_configuration(
+        &self,
+        expected_revision: u64,
+        server_id: String,
+    ) -> Result<ConfigCommandResult> {
+        let (response, result) = mpsc::sync_channel(1);
+        self.try_send(
+            AgentSessionCommand::RemoveLanguageServerConfiguration {
+                expected_revision,
+                server_id,
+                response,
+            },
+            "Language server configuration queue is unavailable",
+        )?;
+        result
+            .recv()
+            .context("Language server configuration worker stopped")?
+            .map_err(anyhow::Error::msg)
+    }
+
+    fn try_send(&self, command: AgentSessionCommand, queue_error: &'static str) -> Result<()> {
+        if !self.is_available() {
+            return Err(anyhow!(AGENT_UNAVAILABLE_COMMAND_ERROR));
+        }
+        self.commands.try_send(command).context(queue_error)
+    }
+}
+
+impl Drop for AgentSession {
+    fn drop(&mut self) {
+        self.available.store(false, Ordering::Release);
+        let _ = self.commands.send(AgentSessionCommand::Shutdown);
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
     }
 }

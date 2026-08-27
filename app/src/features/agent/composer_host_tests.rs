@@ -39,13 +39,14 @@ fn thread_projection_preserves_prompt_and_direct_shell_history_order() {
         status: ThreadStatus::Active,
         sequence: 1,
         usage: Default::default(),
+        goal: None,
         turns: vec![
             Turn {
                 turn_id: agent_turn_id.clone(),
                 status: TurnStatus::Completed,
                 model: None,
-                resource_budget: None,
                 tool_profile: None,
+                tool_mode: Default::default(),
                 usage: Default::default(),
                 items: vec![ThreadItem::UserMessage {
                     item_id: ItemId::new("item-user").unwrap(),
@@ -60,8 +61,8 @@ fn thread_projection_preserves_prompt_and_direct_shell_history_order() {
                 turn_id: shell_turn_id.clone(),
                 status: TurnStatus::Completed,
                 model: None,
-                resource_budget: None,
                 tool_profile: None,
+                tool_mode: Default::default(),
                 usage: Default::default(),
                 items: vec![ThreadItem::ToolCall {
                     item_id: ItemId::new("item-shell").unwrap(),

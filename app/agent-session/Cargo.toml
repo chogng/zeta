@@ -11,6 +11,8 @@ name = "zeta_agent_session"
 path = "src/lib.rs"
 
 [dependencies]
+anyhow = { workspace = true }
+zeta-app-server-client = { workspace = true }
 zeta-app-server-protocol = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-text-file = { workspace = true }

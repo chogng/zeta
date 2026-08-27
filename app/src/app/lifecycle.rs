@@ -66,15 +66,19 @@ impl App<NativeEvent> for NativeApp {
             context.exit();
             return;
         }
-        self.agent_session =
-            match AgentSession::spawn(self.event_proxy.clone(), self.app_server_host.clone()) {
-                Ok(session) => Some(session),
-                Err(error) => {
-                    self.fail(error);
-                    context.exit();
-                    return;
-                }
-            };
+        let event_proxy = self.event_proxy.clone();
+        self.agent_session = match AgentSession::spawn(self.app_server_host.clone(), move |event| {
+            event_proxy
+                .send_event(event.into())
+                .map_err(|_| "application event loop is unavailable".to_owned())
+        }) {
+            Ok(session) => Some(session),
+            Err(error) => {
+                self.fail(error);
+                context.exit();
+                return;
+            }
+        };
         self.window = Some(window);
         self.rebuild_presentation();
         self.sync_input_focus();

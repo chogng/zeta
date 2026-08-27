@@ -152,34 +152,24 @@ hub 消费 rules_rs 生成的 package deps。`bazel build //app:app` 已在当�
 
 ### `app/src` 拆分审计（2026-08-27）
 
-本轮没有把任何完整产品功能原样搬到已有 crate，也没有直接删除仍由组合入口使用的生产模块。已有
-`zeta-composer`、`zeta-editor`、`zeta-workbench*`、`zeta-ui`、`zeta-terminal`、`zeta-remote*`
-和 LSP crate 继续拥有底层能力；`app/src` 只向它们提供产品数据、样式、宿主 effect 和输入路由。
+Agent Session 的完整 App Server 执行链已经进入 `zeta-agent-session`；`app/src` 不再持有它的 worker、订阅、文件、Git 或配置请求。其他已有 `zeta-composer`、`zeta-editor`、`zeta-workbench*`、`zeta-ui`、`zeta-terminal`、`zeta-remote*` 和 LSP crate 继续拥有各自能力，`app/src` 负责产品数据、样式、窗口事件和输入路由。
 
 新增的 app-side crate 如下：
 
 | crate | 进入的职责 | 留在 `app/src` 的职责 |
 | --- | --- | --- |
-| `zeta-agent-session` | typed Session 命令/事件、队列、重连退避和断线期拒绝策略 | App Server worker、文件/Git/LSP 调用和窗口事件 |
+| `zeta-agent-session` | App Server Session client、worker、订阅、文件/Git/LSP 调用、typed 命令/事件、队列和重连策略 | Local/Remote 连接目标、窗口事件投递和 UI reducer |
 | `zeta-session-ui` | Thread 状态合并、时间线、滚动、Session canvas、菜单和搜索 | Session 切换、宿主快照和 action 执行 |
 | `zeta-workspace-ui` | Files/Changes pane、目录树、文件搜索、分支菜单和路径选择器 | DTO 转换以及打开文件、加载目录、切换分支 |
 | `zeta-editor-host` | Editor Tab 辅助状态、查找替换、诊断、补全和自动滚动 | 文档生命周期、保存冲突、LSP 请求和平台输入 |
 | `zeta-remote-ui` | 连接列表、picker、连接管理和 Tunnel 状态/视图 | SSH/runtime/子进程启动、profile 和窗口事件 |
 
-所有新 crate 都在 `app/`，不进入 `zeta-rs`，也不依赖 `app` package。它们通过宿主输入快照接收
-中性数据，返回 typed action；副作用统一由 `app/src` 执行。`shell_style` 和
-`shell_interaction` 只负责把产品主题和稳定 ID 转成各 crate 的样式/交互值，避免新 crate 反向
-依赖组合根。
+所有新 crate 都在 `app/`，不进入 `zeta-rs`，也不依赖 `app` package。UI 能力通过宿主输入快照返回 typed action；Agent Session 直接持有自己的 App Server 请求和 worker。`shell_style` 和
+`shell_interaction` 只负责把产品主题和稳定 ID 转成各 crate 的样式/交互值，避免新 crate 反向依赖组合根。
 
-已清理的重复实现包括 Workspace pane、Session UI 辅助状态以及 Editor 辅助状态；相应测试随实现
-迁移到新 crate，保留 Terminal 状态/视图、Shell 和宿主路由测试。`terminal_pane_view.rs`、
-`remote_tunnel_process.rs`、App Server worker、平台输入、命令执行和组合层仍然保留，因为它们
-拥有跨功能协调或文件/网络/进程副作用。
+已清理的重复实现包括 Workspace pane、Session UI 辅助状态、Editor 辅助状态和 Agent Session App Server worker；相应测试随实现迁移到新 crate。`terminal_pane_view.rs`、`remote_tunnel_process.rs`、平台输入、命令执行和组合层继续保留，因为它们拥有产品协调或平台边界。
 
-独立 crate 的单元测试和 Bazel target 已通过；产品 `app` 检查在当前工作树会继续执行到 app，随后
-被已有的 App Server protocol/schema dirty change 阻断（例如 `StartTurn` 字段和测试 fixture 不一致）。
-这类基线问题不归因于本轮 `app/src` 拆分；正式修复 protocol 基线后再完成 `cargo check -p app
---all-targets`、`cargo test -p app` 和 `APP_SESSION_TRACE=1 cargo run -p app`。
+Agent Session 的验证入口由 [`zeta-agent-session` README](../agent-session/README.md#验证) 维护；协议 fixture 必须与当前 `goal`、`transcript` 和 `tool_mode` contract 同步。
 
 ### 当前审计结论（2026-08-03）
 
