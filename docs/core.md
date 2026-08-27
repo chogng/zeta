@@ -501,8 +501,10 @@ request，已越过 execution-start boundary 的调用保持 unknown outcome，�
 一个 Turn 固定（durable policy revision binding 已实现；完整 execution limits/agent role
 快照仍为**部分**，见
 [`zeta-agent-runtime-architecture.md` R1](zeta-agent-runtime-architecture.md#41-r1策略冻结-durable-化)——
-`TurnAccepted` 持久化 policy revision，进程内 `TurnPolicySnapshot` 只是冻结 fact 的派生
-视图。模型选择已通过 `TurnAccepted` 携带 model 实现冻结）：
+`TurnAccepted` 持久化 policy revision 和最终 `ToolMode`，进程内 `TurnPolicySnapshot` 只是冻结
+fact 的派生视图。模型选择已通过 `TurnAccepted` 携带 model 实现冻结。Direct 不创建 V8 runtime；
+CodeMode 同时暴露普通工具和 exec/wait；CodeModeOnly 只向模型暴露 exec/wait，但 JS 内继续使用
+同一冻结工具目录）：
 
 ```rust
 pub struct TurnPolicySnapshot {

@@ -2,7 +2,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use ts_rs::TS;
-use zeta_protocol::{CommandId, Patch};
+use zeta_protocol::{CommandId, Patch, ToolMode};
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -393,6 +393,7 @@ pub struct ConfigReadResult {
     pub generation: u64,
     pub preferred_model: Option<ModelRefDto>,
     pub approval_review_model: ApprovalReviewModelSelectionDto,
+    pub tool_mode: ToolMode,
     pub providers: BTreeMap<String, ProviderConfigDto>,
     pub mcp_servers: BTreeMap<String, McpServerConfigDto>,
     pub skill_sources: BTreeMap<String, SkillSourceConfigDto>,
@@ -518,6 +519,10 @@ pub struct ConfigUpdateParams {
     #[schemars(with = "Option<ApprovalReviewModelSelectionDto>")]
     #[ts(as = "Option<ApprovalReviewModelSelectionDto>", optional = nullable)]
     pub approval_review_model: Patch<ApprovalReviewModelSelectionDto>,
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    #[schemars(with = "Option<ToolMode>")]
+    #[ts(as = "Option<ToolMode>", optional = nullable)]
+    pub tool_mode: Patch<ToolMode>,
 }
 
 /// Creates or replaces one user-owned language-server preference.

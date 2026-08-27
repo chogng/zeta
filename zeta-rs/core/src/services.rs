@@ -382,6 +382,16 @@ impl ModelToolCatalogSnapshot {
         &self.definitions
     }
 
+    /// Appends definitions owned by Core while preserving the frozen binder for ordinary tools.
+    #[cfg(feature = "code-mode")]
+    pub(crate) fn with_additional_definitions(
+        mut self,
+        mut definitions: Vec<ToolDefinition>,
+    ) -> Self {
+        self.definitions.append(&mut definitions);
+        self
+    }
+
     /// Uses the frozen binder when the service supplied one.
     ///
     /// `None` means Core must use the static service's ordinary `bind_call` implementation.

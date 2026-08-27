@@ -73,6 +73,7 @@ fn stop_archives_session_and_interrupts_active_child_turns() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                tool_mode: zeta_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![zeta_protocol::UserInput::Text {
@@ -240,6 +241,7 @@ fn rewind_creates_a_child_with_only_turns_before_the_checkpoint() {
                     model: None,
                     policy_revision: "test-policy-v1".into(),
                     approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                    tool_mode: zeta_protocol::ToolMode::Direct,
                     tool_profile: None,
                     activated_skills: Vec::new(),
                     input: vec![zeta_protocol::UserInput::Text {

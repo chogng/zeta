@@ -1,6 +1,6 @@
 use crate::{
     ActionApprovalResponse, ApprovalMode, DynamicToolResponse, FrozenSkillActivation, ModelRef,
-    RequestId, RequestUserInputResponse, ToolProfileSnapshot, TurnId,
+    RequestId, RequestUserInputResponse, ToolMode, ToolProfileSnapshot, TurnId,
     UserInput,
 };
 use schemars::JsonSchema;
@@ -27,6 +27,8 @@ pub enum ThreadCommand {
         host_activated_skills: Option<Vec<FrozenSkillActivation>>,
         #[serde(default)]
         approval_mode: ApprovalMode,
+        #[serde(default)]
+        tool_mode: ToolMode,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         tool_profile: Option<Box<ToolProfileSnapshot>>,

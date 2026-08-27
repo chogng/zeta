@@ -438,11 +438,13 @@ impl AppServer {
             SessionRequest::StartTurn {
                 thread_id,
                 approval_mode,
+                tool_mode,
                 input,
             } => result(&SessionRequestResult::Turn(self.start_turn_request(
                 mutation,
                 thread_id,
                 approval_mode,
+                tool_mode,
                 input,
             )?)),
             SessionRequest::StartShellTurn {
@@ -926,6 +928,7 @@ impl AppServer {
         mutation: SessionMutation,
         thread_id: zeta_protocol::ThreadId,
         approval_mode: ApprovalMode,
+        requested_tool_mode: Option<zeta_protocol::ToolMode>,
         input: Vec<InputItem>,
     ) -> Result<TurnStartResult, RpcError> {
         let thread_before = self
@@ -961,10 +964,22 @@ impl AppServer {
                 InputItem::Skill { skill } => UserInput::Skill { skill },
             })
             .collect::<Vec<_>>();
+        let tool_mode = match requested_tool_mode {
+            Some(tool_mode) => tool_mode,
+            None => match self.config.as_ref() {
+                Some(config) => config
+                    .read_snapshot()
+                    .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?
+                    .values
+                    .tool_mode,
+                None => zeta_protocol::ToolMode::Direct,
+            },
+        };
         if let Some(replayed) = super::start_turn::replayed_result(
             &thread_before,
             &mutation.command_id,
             approval_mode,
+            tool_mode,
             &input,
         )? {
             return Ok(replayed);
@@ -996,6 +1011,7 @@ impl AppServer {
                     model,
                     policy_revision,
                     approval_mode,
+                    tool_mode,
                     tool_profile: Some(tool_profile),
                     activated_skills: Vec::new(),
                     input,
@@ -1013,6 +1029,7 @@ impl AppServer {
                 &snapshot,
                 &command_id,
                 approval_mode,
+                tool_mode,
                 &replay_input,
             )?
             .ok_or_else(|| RpcError::new(-32000, AppServerErrorName::InternalError));

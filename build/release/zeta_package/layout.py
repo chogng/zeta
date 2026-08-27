@@ -33,6 +33,7 @@ def build_package_directory(
     spec: TargetSpec,
     server_binary: Path,
     app_server_daemon_binary: Path,
+    code_mode_host_binary: Path,
     ripgrep: RipgrepResolution,
     node: Optional[NodeResolution],
     bubblewrap: Optional[BubblewrapResolution] = None,
@@ -79,6 +80,11 @@ def build_package_directory(
         copy_executable(
             app_server_daemon_binary,
             binary_directory / spec.app_server_daemon_name,
+            is_windows=spec.is_windows,
+        )
+        copy_executable(
+            code_mode_host_binary,
+            binary_directory / spec.code_mode_host_name,
             is_windows=spec.is_windows,
         )
         copy_executable(
@@ -166,6 +172,12 @@ def build_package_directory(
                     binary_directory / spec.app_server_daemon_name
                 ),
             },
+            "codeModeHost": {
+                "source": "cargo-build",
+                "binarySha256": file_sha256(
+                    binary_directory / spec.code_mode_host_name
+                ),
+            },
             "ripgrep": ripgrep_metadata,
             "serverHost": {
                 "source": "cargo-build",
@@ -187,6 +199,7 @@ def build_package_directory(
         protocol = load_protocol_metadata(repository_root)
         build_identity = {
             "appServerDaemonSha256": components["appServerDaemon"]["binarySha256"],
+            "codeModeHostSha256": components["codeModeHost"]["binarySha256"],
             "protocol": protocol,
             "serverHostSha256": components["serverHost"]["binarySha256"],
             "target": spec.target,
@@ -251,6 +264,7 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
     executables = [
         package / "bin" / spec.server_name,
         package / "bin" / spec.app_server_daemon_name,
+        package / "bin" / spec.code_mode_host_name,
         package / "zeta-path" / spec.ripgrep_name,
     ]
     components = metadata.get("components")
@@ -258,6 +272,7 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
         raise RuntimeError("Invalid package component metadata")
     first_party_artifacts = {
         "appServerDaemon": package / "bin" / spec.app_server_daemon_name,
+        "codeModeHost": package / "bin" / spec.code_mode_host_name,
         "serverHost": package / "bin" / spec.server_name,
     }
     for component_name, artifact in first_party_artifacts.items():
@@ -275,6 +290,7 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
             )
     build_identity = {
         "appServerDaemonSha256": components["appServerDaemon"]["binarySha256"],
+        "codeModeHostSha256": components["codeModeHost"]["binarySha256"],
         "protocol": metadata.get("protocol"),
         "serverHostSha256": components["serverHost"]["binarySha256"],
         "target": metadata.get("target"),

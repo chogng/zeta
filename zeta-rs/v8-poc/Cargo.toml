@@ -1,0 +1,24 @@
+[package]
+name = "zeta-v8-poc"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_v8_poc"
+path = "src/lib.rs"
+
+[features]
+# The Code Mode runtime enables this feature; the probe keeps it explicit so both variants remain testable.
+sandbox = ["v8/v8_enable_sandbox"]
+
+[dependencies]
+v8 = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+
+[lints]
+workspace = true

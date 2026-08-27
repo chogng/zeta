@@ -457,6 +457,7 @@ fn later_child_turns_cannot_expand_the_spawned_skill_ceiling() {
                 model: None,
                 policy_revision: "policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                tool_mode: zeta_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -500,6 +501,7 @@ fn later_child_turns_cannot_expand_the_spawned_skill_ceiling() {
             model: None,
             policy_revision: "policy-v1".into(),
             approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+            tool_mode: zeta_protocol::ToolMode::Direct,
             tool_profile: None,
             activated_skills: Vec::new(),
             input: vec![UserInput::Skill {
@@ -967,6 +969,7 @@ fn fixture() -> Fixture {
                 model: None,
                 policy_revision: "policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                tool_mode: zeta_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {

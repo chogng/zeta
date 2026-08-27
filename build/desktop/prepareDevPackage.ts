@@ -19,6 +19,8 @@ const nodeLockPath = join(repositoryRoot, "third_party", "node", "runtime-lock.j
 const nodeCacheRoot = join(repositoryRoot, "third_party", ".cache", "node");
 const bubblewrapLockPath = join(repositoryRoot, "third_party", "bubblewrap", "runtime-lock.json");
 const bubblewrapCacheRoot = join(repositoryRoot, "third_party", ".cache", "bubblewrap");
+const v8LockPath = join(repositoryRoot, "third_party", "v8", "runtime-lock.json");
+const v8CacheRoot = join(repositoryRoot, "third_party", ".cache", "v8");
 const archiveBufferLimit = 256 * 1024 * 1024;
 const javascriptRuntimeKinds = new Set<JavaScriptRuntimeKind>(["host-provided-node", "packaged-node"]);
 
@@ -51,6 +53,30 @@ interface RuntimeLock {
   readonly runtime: string;
   readonly schemaVersion: number;
   readonly source?: { readonly baseUrl?: string; readonly release?: string; readonly repository?: string };
+  readonly version: string;
+}
+
+interface V8LockedFile {
+  readonly name: string;
+  readonly sha256: string;
+}
+
+interface V8RuntimeLock {
+  readonly artifacts: Readonly<Record<string, { readonly archive: V8LockedFile; readonly binding: V8LockedFile }>>;
+  readonly profile: string;
+  readonly runtime: string;
+  readonly schemaVersion: number;
+  readonly source: { readonly release: string; readonly repository: string };
+  readonly version: string;
+}
+
+interface ResolvedV8File extends V8LockedFile {
+  readonly url: string;
+}
+
+interface ResolvedV8ArtifactPair {
+  readonly archive: ResolvedV8File;
+  readonly binding: ResolvedV8File;
   readonly version: string;
 }
 
@@ -92,6 +118,7 @@ interface FirstPartyExecutables {
   readonly commandRunner?: string;
   readonly sandboxSetup?: string;
   readonly serverHost: string;
+  readonly codeModeHost: string;
 }
 
 interface PackageMetadata {
@@ -173,6 +200,45 @@ export function hostTarget(platform: NodeJS.Platform = process.platform, archite
     throw new Error(`Unsupported Zeta development host: ${platform}/${architecture}`);
   }
   return target;
+}
+
+export function selectV8ArtifactPair(lock: V8RuntimeLock, target: string): ResolvedV8ArtifactPair {
+  if (lock.schemaVersion !== 1 || lock.runtime !== "rusty-v8" || lock.profile !== "ptrcomp_sandbox_release") {
+    throw new Error("Unsupported rusty_v8 runtime lock");
+  }
+  const release = lock.source?.release;
+  const repository = lock.source?.repository;
+  let parsedRepository: URL;
+  try {
+    parsedRepository = new URL(repository);
+  } catch (error) {
+    throw new Error("rusty_v8 repository URL is invalid", { cause: error });
+  }
+  if (parsedRepository.protocol !== "https:" || parsedRepository.username || parsedRepository.password || parsedRepository.search || parsedRepository.hash) {
+    throw new Error("rusty_v8 repository must be a credential-free HTTPS URL");
+  }
+  if (release !== `rusty-v8-v${lock.version}`) {
+    throw new Error("rusty_v8 release does not match its locked version");
+  }
+  const pair = lock.artifacts?.[target];
+  if (!pair) throw new Error(`No locked rusty_v8 artifacts for ${target}`);
+  const windows = target.includes("windows");
+  const expectedArchive = windows
+    ? `rusty_v8_${lock.profile}_${target}.lib.gz`
+    : `librusty_v8_${lock.profile}_${target}.a.gz`;
+  const expectedBinding = `src_binding_${lock.profile}_${target}.rs`;
+  const baseUrl = `${repository.replace(/\/+$/u, "")}/releases/download/${release}`;
+  const resolveFile = (file: V8LockedFile, expectedName: string): ResolvedV8File => {
+    if (file.name !== expectedName || !/^[a-f0-9]{64}$/u.test(file.sha256)) {
+      throw new Error(`Invalid locked rusty_v8 artifact for ${target}: ${file.name}`);
+    }
+    return { ...file, url: `${baseUrl}/${file.name}` };
+  };
+  return {
+    archive: resolveFile(pair.archive, expectedArchive),
+    binding: resolveFile(pair.binding, expectedBinding),
+    version: lock.version,
+  };
 }
 
 export function selectRipgrepArtifact(lock: RuntimeLock, target: string): ResolvedArchiveArtifact {
@@ -359,6 +425,55 @@ async function resolveNode(target: string, isWindows: boolean): Promise<Resolved
   };
 }
 
+async function materializeV8File(file: ResolvedV8File, cacheDirectory: string): Promise<string> {
+  const destination = join(cacheDirectory, file.name);
+  if (await pathExists(destination) && await sha256(destination) === file.sha256) return destination;
+  await mkdir(cacheDirectory, { recursive: true });
+  const partial = `${destination}.partial-${randomUUID()}`;
+  try {
+    const response = await fetch(file.url, {
+      headers: { "user-agent": "zeta-development-package-builder" },
+      signal: AbortSignal.timeout(120_000),
+    });
+    if (!response.ok) throw new Error(`Could not download ${file.url}: HTTP ${response.status}`);
+    const body = Buffer.from(await response.arrayBuffer());
+    if (body.byteLength > archiveBufferLimit) {
+      throw new Error(`rusty_v8 artifact exceeds the download limit: ${file.name}`);
+    }
+    await writeFile(partial, body, { flag: "wx" });
+    if (await sha256(partial) !== file.sha256) {
+      throw new Error(`Downloaded rusty_v8 artifact failed SHA-256 validation: ${file.name}`);
+    }
+    await rm(destination, { force: true });
+    await rename(partial, destination);
+    return destination;
+  } finally {
+    await rm(partial, { force: true });
+  }
+}
+
+async function v8CargoEnvironment(target: string): Promise<NodeJS.ProcessEnv> {
+  if (/^(1|true|yes)$/iu.test(process.env.V8_FROM_SOURCE ?? "")) return { ...process.env };
+  const archiveOverride = process.env.RUSTY_V8_ARCHIVE;
+  const bindingOverride = process.env.RUSTY_V8_SRC_BINDING_PATH;
+  if (archiveOverride && bindingOverride) return { ...process.env };
+  if (archiveOverride || bindingOverride) {
+    throw new Error("RUSTY_V8_ARCHIVE and RUSTY_V8_SRC_BINDING_PATH must be set together");
+  }
+  const lock = JSON.parse(await readFile(v8LockPath, "utf8")) as V8RuntimeLock;
+  const pair = selectV8ArtifactPair(lock, target);
+  const cacheDirectory = join(v8CacheRoot, pair.version, target);
+  const [archive, binding] = await Promise.all([
+    materializeV8File(pair.archive, cacheDirectory),
+    materializeV8File(pair.binding, cacheDirectory),
+  ]);
+  return {
+    ...process.env,
+    RUSTY_V8_ARCHIVE: archive,
+    RUSTY_V8_SRC_BINDING_PATH: binding,
+  };
+}
+
 function cargoBuild(packageName: string, binaryArgs: readonly string[], expectedTargets: readonly string[], environment: NodeJS.ProcessEnv = process.env): Map<string, string> {
   const result = spawnSync("cargo", [
     "build",
@@ -401,27 +516,31 @@ function cargoBuild(packageName: string, binaryArgs: readonly string[], expected
 }
 
 async function buildFirstPartyExecutables(platform: NodeJS.Platform): Promise<FirstPartyExecutables> {
-  const serverArtifacts = cargoBuild("zeta-server-host", ["--bin", "zeta-server"], ["zeta-server"]);
-  const daemonArtifacts = cargoBuild("zeta-app-server-daemon", ["--bin", "zeta-app-server-daemon"], ["zeta-app-server-daemon"]);
+  const cargoEnvironment = await v8CargoEnvironment(hostTarget(platform));
+  const serverArtifacts = cargoBuild("zeta-server-host", ["--bin", "zeta-server"], ["zeta-server"], cargoEnvironment);
+  const daemonArtifacts = cargoBuild("zeta-app-server-daemon", ["--bin", "zeta-app-server-daemon"], ["zeta-app-server-daemon"], cargoEnvironment);
+  const codeModeHostArtifacts = cargoBuild("zeta-code-mode-host", ["--bin", "zeta-code-mode-host"], ["zeta-code-mode-host"], cargoEnvironment);
   const executables: {
     appServerDaemon: string;
     bubblewrap?: ResolvedBubblewrap;
     commandRunner?: string;
     sandboxSetup?: string;
     serverHost: string;
+    codeModeHost: string;
   } = {
     appServerDaemon: requiredExecutable(daemonArtifacts, "zeta-app-server-daemon"),
+    codeModeHost: requiredExecutable(codeModeHostArtifacts, "zeta-code-mode-host"),
     serverHost: requiredExecutable(serverArtifacts, "zeta-server"),
   };
   if (platform === "win32") {
-    const sandboxArtifacts = cargoBuild("zeta-windows-sandbox", ["--bins"], ["zeta-command-runner", "zeta-windows-sandbox-setup"]);
+    const sandboxArtifacts = cargoBuild("zeta-windows-sandbox", ["--bins"], ["zeta-command-runner", "zeta-windows-sandbox-setup"], cargoEnvironment);
     executables.commandRunner = requiredExecutable(sandboxArtifacts, "zeta-command-runner");
     executables.sandboxSetup = requiredExecutable(sandboxArtifacts, "zeta-windows-sandbox-setup");
   }
   if (platform === "linux") {
     const bubblewrap = await materializeBubblewrapSource();
     const bubblewrapArtifacts = cargoBuild("zeta-bwrap", ["--bin", "bwrap"], ["bwrap"], {
-      ...process.env,
+      ...cargoEnvironment,
       ZETA_BWRAP_SOURCE_DIR: bubblewrap.sourceDirectory,
     });
     executables.bubblewrap = {
@@ -614,6 +733,7 @@ export async function assemblePackage(
 ): Promise<void> {
   const isWindows = platform === "win32";
   const appServerDaemonName = isWindows ? "zeta-app-server-daemon.exe" : "zeta-app-server-daemon";
+  const codeModeHostName = isWindows ? "zeta-code-mode-host.exe" : "zeta-code-mode-host";
   const serverHostName = isWindows ? "zeta-server.exe" : "zeta-server";
   const rgName = isWindows ? "rg.exe" : "rg";
   const binDirectory = join(staging, "bin");
@@ -633,6 +753,7 @@ export async function assemblePackage(
   }
   await copyExecutable(executables.serverHost, join(binDirectory, serverHostName), isWindows);
   await copyExecutable(executables.appServerDaemon, join(binDirectory, appServerDaemonName), isWindows);
+  await copyExecutable(executables.codeModeHost, join(binDirectory, codeModeHostName), isWindows);
   await copyExecutable(ripgrep.executable, join(pathDirectory, rgName), isWindows);
   if (node) {
     const nodeDirectory = join(resourcesDirectory, "node", "bin");
@@ -650,6 +771,10 @@ export async function assemblePackage(
   const components: Record<string, unknown> & { node?: unknown } = {
     appServerDaemon: {
       binarySha256: await sha256(join(binDirectory, appServerDaemonName)),
+      source: "cargo-build",
+    },
+    codeModeHost: {
+      binarySha256: await sha256(join(binDirectory, codeModeHostName)),
       source: "cargo-build",
     },
     ripgrep: {
@@ -706,8 +831,9 @@ export async function assemblePackage(
     schemaHash: APP_SERVER_SCHEMA_HASH,
   };
   const appServerDaemonSha256 = (components.appServerDaemon as { readonly binarySha256: string }).binarySha256;
+  const codeModeHostSha256 = (components.codeModeHost as { readonly binarySha256: string }).binarySha256;
   const serverHostSha256 = (components.serverHost as { readonly binarySha256: string }).binarySha256;
-  const buildId = packageBuildId({ appServerDaemonSha256, protocol, serverHostSha256, target, version });
+  const buildId = packageBuildId({ appServerDaemonSha256, codeModeHostSha256, protocol, serverHostSha256, target, version });
   const metadata: PackageMetadata = {
     buildId,
     components,
@@ -763,11 +889,14 @@ async function validatePackage(packageRoot: string, platform: NodeJS.Platform): 
   }
   await requireFile(join(packageRoot, "bin", isWindows ? "zeta-server.exe" : "zeta-server"));
   await requireFile(join(packageRoot, "bin", isWindows ? "zeta-app-server-daemon.exe" : "zeta-app-server-daemon"));
+  await requireFile(join(packageRoot, "bin", isWindows ? "zeta-code-mode-host.exe" : "zeta-code-mode-host"));
   await requireComponentDigest(metadata, "serverHost", join(packageRoot, "bin", isWindows ? "zeta-server.exe" : "zeta-server"));
   await requireComponentDigest(metadata, "appServerDaemon", join(packageRoot, "bin", isWindows ? "zeta-app-server-daemon.exe" : "zeta-app-server-daemon"));
+  await requireComponentDigest(metadata, "codeModeHost", join(packageRoot, "bin", isWindows ? "zeta-code-mode-host.exe" : "zeta-code-mode-host"));
   const appServerDaemonSha256 = (metadata.components.appServerDaemon as { readonly binarySha256: string }).binarySha256;
+  const codeModeHostSha256 = (metadata.components.codeModeHost as { readonly binarySha256: string }).binarySha256;
   const serverHostSha256 = (metadata.components.serverHost as { readonly binarySha256: string }).binarySha256;
-  if (metadata.buildId !== packageBuildId({ appServerDaemonSha256, protocol: metadata.protocol, serverHostSha256, target: metadata.target, version: metadata.version })) {
+  if (metadata.buildId !== packageBuildId({ appServerDaemonSha256, codeModeHostSha256, protocol: metadata.protocol, serverHostSha256, target: metadata.target, version: metadata.version })) {
     throw new Error("Package build identity does not match its first-party artifacts");
   }
   await requireFile(join(packageRoot, "zeta-path", isWindows ? "rg.exe" : "rg"));
@@ -921,6 +1050,7 @@ async function requireComponentDigest(metadata: PackageMetadata, name: string, p
 
 function packageBuildId(identity: {
   readonly appServerDaemonSha256: string;
+  readonly codeModeHostSha256: string;
   readonly protocol: PackageMetadata["protocol"];
   readonly serverHostSha256: string;
   readonly target: string;

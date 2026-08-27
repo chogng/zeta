@@ -1,0 +1,49 @@
+package(default_visibility = ["//visibility:public"])
+
+config_setting(
+    name = "platform_aarch64_unknown_linux_musl",
+    constraint_values = [
+        "@platforms//cpu:aarch64",
+        "@platforms//os:linux",
+        "@llvm//constraints/libc:musl",
+    ],
+)
+
+config_setting(
+    name = "platform_x86_64_unknown_linux_musl",
+    constraint_values = [
+        "@platforms//cpu:x86_64",
+        "@platforms//os:linux",
+        "@llvm//constraints/libc:musl",
+    ],
+)
+
+alias(
+    name = "rusty_v8_archive_for_target",
+    actual = select({
+        "@rules_rs//rs/platforms/config:aarch64-apple-darwin": "@zeta_rusty_v8_aarch64_apple_darwin_archive//file",
+        "@rules_rs//rs/platforms/config:aarch64-pc-windows-msvc": "@zeta_rusty_v8_aarch64_pc_windows_msvc_archive//file",
+        "@rules_rs//rs/platforms/config:aarch64-unknown-linux-gnu": "@zeta_rusty_v8_aarch64_unknown_linux_gnu_archive//file",
+        ":platform_aarch64_unknown_linux_musl": "@zeta_rusty_v8_aarch64_unknown_linux_musl_archive//file",
+        "@rules_rs//rs/platforms/config:x86_64-apple-darwin": "@zeta_rusty_v8_x86_64_apple_darwin_archive//file",
+        "@rules_rs//rs/platforms/config:x86_64-pc-windows-msvc": "@zeta_rusty_v8_x86_64_pc_windows_msvc_archive//file",
+        "@rules_rs//rs/platforms/config:x86_64-unknown-linux-gnu": "@zeta_rusty_v8_x86_64_unknown_linux_gnu_archive//file",
+        ":platform_x86_64_unknown_linux_musl": "@zeta_rusty_v8_x86_64_unknown_linux_musl_archive//file",
+    }),
+)
+
+alias(
+    name = "rusty_v8_binding_for_target",
+    actual = select({
+        "@rules_rs//rs/platforms/config:aarch64-apple-darwin": "@zeta_rusty_v8_aarch64_apple_darwin_binding//file",
+        "@rules_rs//rs/platforms/config:aarch64-pc-windows-msvc": "@zeta_rusty_v8_aarch64_pc_windows_msvc_binding//file",
+        "@rules_rs//rs/platforms/config:aarch64-unknown-linux-gnu": "@zeta_rusty_v8_aarch64_unknown_linux_gnu_binding//file",
+        ":platform_aarch64_unknown_linux_musl": "@zeta_rusty_v8_aarch64_unknown_linux_musl_binding//file",
+        "@rules_rs//rs/platforms/config:x86_64-apple-darwin": "@zeta_rusty_v8_x86_64_apple_darwin_binding//file",
+        "@rules_rs//rs/platforms/config:x86_64-pc-windows-msvc": "@zeta_rusty_v8_x86_64_pc_windows_msvc_binding//file",
+        "@rules_rs//rs/platforms/config:x86_64-unknown-linux-gnu": "@zeta_rusty_v8_x86_64_unknown_linux_gnu_binding//file",
+        ":platform_x86_64_unknown_linux_musl": "@zeta_rusty_v8_x86_64_unknown_linux_musl_binding//file",
+    }),
+)
+
+exports_files(["runtime-lock.json"])

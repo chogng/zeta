@@ -22,6 +22,7 @@ use crate::StableTurnError;
 use crate::ThreadId;
 use crate::ThreadItem;
 use crate::ToolCallId;
+use crate::ToolMode;
 use crate::ToolProfileSnapshot;
 use crate::Turn;
 use crate::TurnExecutionBinding;
@@ -117,6 +118,8 @@ pub enum ThreadEvent {
         policy_revision: String,
         #[serde(default)]
         approval_mode: ApprovalMode,
+        #[serde(default)]
+        tool_mode: ToolMode,
         #[serde(default)]
         activated_skills: Vec<FrozenSkillActivation>,
         #[serde(default, skip_serializing_if = "Option::is_none")]

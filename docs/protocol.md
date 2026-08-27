@@ -177,6 +177,10 @@ ThreadCommand
   StartTurn / SteerTurn / InterruptTurn / ResolveUserInput / ResolveDynamicTool
 ```
 
+`StartTurn` 保存最终解析后的 `ToolMode`：`Direct`、`CodeMode` 或 `CodeModeOnly`。它属于 command
+identity 和 `TurnAccepted` durable fact；相同 `CommandId` 若改了模式必须产生 conflict，回放不能
+重新咨询当前全局配置。
+
 Command 表达产品意图，不代表已经发生，也不能直接写入 projection。
 
 `CommandId` 用于 retry-safe typed identity。`expectedSequence` 用于 optimistic

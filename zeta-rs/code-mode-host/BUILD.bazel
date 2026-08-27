@@ -1,0 +1,8 @@
+load("//:defs.bzl", "zeta_rust_binary")
+
+zeta_rust_binary(
+    name = "zeta-code-mode-host",
+    crate_name = "zeta_code_mode_host",
+    crate_root = "src/main.rs",
+    deps = [],
+)

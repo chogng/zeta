@@ -1,0 +1,18 @@
+[package]
+name = "zeta-code-mode-host"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "zeta-code-mode-host"
+path = "src/main.rs"
+
+[dependencies]
+serde_json = { workspace = true }
+zeta-code-mode-protocol = { workspace = true }
+zeta-code-mode-runtime = { workspace = true }
+
+[lints]
+workspace = true

@@ -8903,6 +8903,9 @@
           },
           "type": "object"
         },
+        "toolMode": {
+          "$ref": "#/$defs/ToolMode"
+        },
         "toolSearch": {
           "$ref": "#/$defs/ToolSearchConfigDto"
         }
@@ -8911,6 +8914,7 @@
         "revision",
         "generation",
         "approvalReviewModel",
+        "toolMode",
         "providers",
         "mcpServers",
         "skillSources",
@@ -8948,6 +8952,16 @@
           "anyOf": [
             {
               "$ref": "#/$defs/ModelRefDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "toolMode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolMode"
             },
             {
               "type": "null"
@@ -19584,6 +19598,16 @@
             "threadId": {
               "$ref": "#/$defs/ThreadId"
             },
+            "toolMode": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ToolMode"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "type": {
               "const": "startTurn",
               "type": "string"
@@ -21944,6 +21968,10 @@
             "threadId": {
               "$ref": "#/$defs/ThreadId"
             },
+            "toolMode": {
+              "$ref": "#/$defs/ToolMode",
+              "default": "direct"
+            },
             "toolProfile": {
               "anyOf": [
                 {
@@ -23784,6 +23812,15 @@
         }
       ]
     },
+    "ToolMode": {
+      "description": "Selects how a model may use the ordinary Tool catalog for one Turn.\n\n`Direct` is the compatibility default. `CodeMode` keeps the ordinary direct surface and adds\nthe Code Mode entry points. `CodeModeOnly` exposes only those entry points while the projected\nordinary tools remain callable from JavaScript.",
+      "enum": [
+        "direct",
+        "codeMode",
+        "codeModeOnly"
+      ],
+      "type": "string"
+    },
     "ToolName": {
       "description": "Validated provider-independent name used to register and invoke a tool.",
       "type": "string"
@@ -24139,6 +24176,10 @@
         },
         "status": {
           "$ref": "#/$defs/TurnStatus"
+        },
+        "toolMode": {
+          "$ref": "#/$defs/ToolMode",
+          "default": "direct"
         },
         "toolProfile": {
           "anyOf": [

@@ -975,6 +975,7 @@ fn fixture_with_approval_mode(
                 model: None,
                 policy_revision,
                 approval_mode,
+                tool_mode: zeta_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text { text: "run".into() }],

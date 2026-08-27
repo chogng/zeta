@@ -91,6 +91,7 @@ fn tool_call_durably_updates_the_running_turn_plan() {
                 model: None,
                 policy_revision: "plan-policy-v1".into(),
                 approval_mode: ApprovalMode::AskPermissions,
+                tool_mode: zeta_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {

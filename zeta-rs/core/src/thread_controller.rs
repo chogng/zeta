@@ -76,6 +76,7 @@ pub struct StartTurnRequest {
     pub policy_revision: String,
     /// Host-seeded automatic activations. Explicit selections are resolved by extensions.
     pub approval_mode: ApprovalMode,
+    pub tool_mode: zeta_protocol::ToolMode,
     pub tool_profile: Option<zeta_protocol::ToolProfileSnapshot>,
     pub activated_skills: Vec<FrozenSkillActivation>,
     pub input: Vec<UserInput>,
@@ -91,6 +92,7 @@ pub struct StartGoalTurnRequest {
     pub model: Option<ModelRef>,
     pub policy_revision: String,
     pub approval_mode: ApprovalMode,
+    pub tool_mode: zeta_protocol::ToolMode,
     pub tool_profile: Option<zeta_protocol::ToolProfileSnapshot>,
 }
 
@@ -576,6 +578,7 @@ impl ThreadController {
                 activated_skills,
                 host_activated_skills,
                 approval_mode,
+                tool_mode,
                 tool_profile,
                 input,
                 ..
@@ -587,6 +590,7 @@ impl ThreadController {
                 || replay_host_activations(host_activated_skills.as_deref(), activated_skills)
                     != request.activated_skills
                 || approval_mode != &request.approval_mode
+                || tool_mode != &request.tool_mode
                 || tool_profile.as_deref() != request.tool_profile.as_ref()
                 || input != &normalized_input
             {
@@ -662,6 +666,7 @@ impl ThreadController {
             activated_skills: activated_skills.clone(),
             host_activated_skills: Some(request.activated_skills.clone()),
             approval_mode: request.approval_mode,
+            tool_mode: request.tool_mode,
             tool_profile: request.tool_profile.clone().map(Box::new),
             input: normalized_input.clone(),
         };
@@ -697,6 +702,7 @@ impl ThreadController {
                 turn_id: turn_id.clone(),
                 policy_revision: request.policy_revision.clone(),
                 approval_mode: request.approval_mode,
+                tool_mode: request.tool_mode,
                 activated_skills: activated_skills.clone(),
                 model: request.model.clone(),
                 tool_profile: request.tool_profile.clone(),
@@ -753,6 +759,7 @@ impl ThreadController {
             activated_skills: Vec::new(),
             host_activated_skills: Some(Vec::new()),
             approval_mode: request.approval_mode,
+            tool_mode: request.tool_mode,
             tool_profile: request.tool_profile.clone().map(Box::new),
             input: Vec::new(),
         };
@@ -804,6 +811,7 @@ impl ThreadController {
                         turn_id: turn_id.clone(),
                         policy_revision: request.policy_revision.clone(),
                         approval_mode: request.approval_mode,
+                        tool_mode: request.tool_mode,
                         activated_skills: Vec::new(),
                         model: request.model.clone(),
                         tool_profile: request.tool_profile.clone(),
@@ -1024,6 +1032,7 @@ impl ThreadController {
                     turn_id: turn_id.clone(),
                     policy_revision: request.policy_revision.clone(),
                     approval_mode: ApprovalMode::AskPermissions,
+                    tool_mode: zeta_protocol::ToolMode::Direct,
                     activated_skills: Vec::new(),
                     model: request.model.clone(),
                     tool_profile: None,
@@ -1126,6 +1135,7 @@ impl ThreadController {
                     turn_id: turn_id.clone(),
                     policy_revision: request.policy_revision.clone(),
                     approval_mode: request.approval_mode,
+                    tool_mode: zeta_protocol::ToolMode::Direct,
                     activated_skills: Vec::new(),
                     model: None,
                     tool_profile: None,

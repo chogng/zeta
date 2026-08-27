@@ -138,12 +138,39 @@ fn update_preferences(
         command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
             preferred_model,
             approval_review_model: Patch::Missing,
+            tool_mode: Patch::Missing,
         }),
     }
 }
 
 fn workspace_trust_id() -> WorkspaceTrustId {
     format!("sha256:{}", "12".repeat(32)).parse().unwrap()
+}
+
+#[test]
+fn tool_mode_defaults_to_direct_and_updates_durably() {
+    let store = ConfigStore::open(&config_path("tool-mode")).unwrap();
+    assert_eq!(
+        store.read_snapshot().unwrap().values.tool_mode,
+        zeta_protocol::ToolMode::Direct
+    );
+
+    store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("select-code-mode-only").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                preferred_model: Patch::Missing,
+                approval_review_model: Patch::Missing,
+                tool_mode: Patch::Value(zeta_protocol::ToolMode::CodeModeOnly),
+            }),
+        })
+        .unwrap();
+
+    assert_eq!(
+        store.read_snapshot().unwrap().values.tool_mode,
+        zeta_protocol::ToolMode::CodeModeOnly
+    );
 }
 
 #[test]
@@ -671,6 +698,7 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                 preferred_model: Patch::Missing,
+                tool_mode: Patch::Missing,
                 approval_review_model: Patch::Value(ApprovalReviewModelSelection::Explicit {
                     model: model_ref("openai", "codex-auto-review"),
                 }),
@@ -686,6 +714,7 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
             expected_revision: configured.revision,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                 preferred_model: Patch::Missing,
+                tool_mode: Patch::Missing,
                 approval_review_model: Patch::Value(ApprovalReviewModelSelection::Explicit {
                     model: model_ref("openai", "codex-auto-review"),
                 }),

@@ -1,0 +1,39 @@
+# Code Mode V8 构建输入
+
+本目录拥有 Code Mode 使用的 `rusty_v8` 预编译输入锁定规则，不拥有 JavaScript 执行语义、工具审批或运行时生命周期。运行时实现由 `zeta-code-mode-runtime` crate 负责。
+
+## 构建和打包行为
+
+`runtime-lock.json` 为每个 Zeta 发布目标锁定一份启用 V8 沙箱的静态库压缩包和对应 Rust binding，并记录 SHA-256。当前文件来自 OpenAI Codex 的 `rusty-v8-v150.4.0` release，因为 `rusty_v8` 上游没有发布这一版本的沙箱组合产物。
+
+| 场景 | 下载位置 | 最终产品里有什么 |
+| --- | --- | --- |
+| Desktop 本地调试 | `third_party/.cache/v8/<version>/<target>/` | V8 静态链接进本地可执行文件；缓存文件不进 Git |
+| 直接运行 Cargo | `build/cargo_with_v8.py` 使用同一缓存 | V8 静态链接进构建结果 |
+| Python 发布构建 | `third_party/.cache/v8/<version>/<target>/`，可用参数覆盖缓存根目录 | V8 静态链接进发布可执行文件；不会额外复制 archive 或 binding 到安装包 |
+| Bazel | Bazel repository cache | V8 静态链接进 Bazel 产物 |
+
+下载器先校验已有缓存；缓存缺失或摘要不匹配时重新下载，并在原子替换前再次校验。`RUSTY_V8_ARCHIVE` 和 `RUSTY_V8_SRC_BINDING_PATH` 只允许同时覆盖；`V8_FROM_SOURCE=1` 明确选择源码构建并跳过预编译产物解析。
+
+## 本地 Cargo 入口
+
+直接调试依赖 Code Mode 的 Rust crate 时使用：
+
+```sh
+python3 -B build/cargo_with_v8.py test -p zeta-code-mode-runtime
+```
+
+包装脚本会读取 Cargo 参数中的 `--target`；没有指定时使用当前主机目标。Desktop 的 `prepareDevPackage.ts` 和发布构建已经自动执行相同的下载与环境配置，不需要手工设置环境变量。
+
+## 更新约束
+
+升级 `v8` crate 时必须同步更新根 `Cargo.toml`、`Cargo.lock`、`runtime-lock.json`、`MODULE.bazel` 中的 Bazel 下载声明以及目标选择规则。每个 release checksum 文件必须精确覆盖 archive 和 binding 两项；不接受未校验下载，也不把预编译二进制提交到仓库。
+
+验证入口：
+
+```sh
+python3 -B -m unittest build.release.zeta_package.test_v8
+node --test build/desktop/prepareDevPackage.test.ts
+python3 -B build/cargo_with_v8.py test -p zeta-v8-poc --features sandbox
+bazel test //zeta-rs/v8-poc:v8-poc-unit-tests
+```

@@ -11,11 +11,11 @@ bazel_dep(name = "aws-lc", version = "5.1.0.bcr.1")
 archive_override(
     module_name = "rules_rs",
     integrity = "sha256-BHgSBa5kiwxnvxEI4ouPeARFvvQMchVk7FJcq2PEddY=",
+    patch_strip = 1,
     patches = [
         "//third_party/rules_rs:module_dot_bazel_version.patch",
         "//third_party/rules_rs:windows_gnullvm_exec_triples.patch",
     ],
-    patch_strip = 1,
     strip_prefix = "rules_rs-0.0.96",
     urls = [
         "https://github.com/hermeticbuild/rules_rs/releases/download/v0.0.96/rules_rs-v0.0.96.tar.gz",
@@ -97,6 +97,7 @@ rules_rust_bindgen = use_extension(
     "rules_rust_bindgen",
 )
 use_repo(rules_rust_bindgen, "rules_rust_bindgen")
+
 register_toolchains("@rules_rust_bindgen//:all")
 
 crate = use_extension("@rules_rs//rs:extensions.bzl", "crate")
@@ -116,7 +117,6 @@ crate.from_cargo(
         "x86_64-pc-windows-msvc",
     ],
 )
-
 use_repo(crate, "crates")
 
 crate.annotation(
@@ -128,7 +128,6 @@ crate.annotation(
     rustc_flags = ["--cfg=use_bindgen_pregenerated"],
     deps = ["@crates//:aws_lc_sys_build_info"],
 )
-
 crate.annotation(
     crate = "aws-lc-rs",
     gen_build_script = "off",
@@ -136,6 +135,158 @@ crate.annotation(
 )
 
 inject_repo(crate, "aws-lc")
+
+# The V8 crate build script consumes checksum-pinned sandbox-enabled archives and bindings.
+# They are build inputs only: the resulting executables link V8 statically.
+http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
+
+new_local_repository = use_repo_rule("@bazel_tools//tools/build_defs/repo:local.bzl", "new_local_repository")
+
+new_local_repository(
+    name = "zeta_v8_targets",
+    build_file = "//third_party/v8:BUILD.bazel",
+    path = "third_party/v8",
+)
+
+http_file(
+    name = "zeta_rusty_v8_aarch64_apple_darwin_archive",
+    downloaded_file_path = "librusty_v8_ptrcomp_sandbox_release_aarch64-apple-darwin.a.gz",
+    sha256 = "00adbb48798848c77550441c68673a5e8529b8e1b73eabcdee232cb39b40f4a1",
+    urls = ["https://github.com/openai/codex/releases/download/rusty-v8-v150.4.0/librusty_v8_ptrcomp_sandbox_release_aarch64-apple-darwin.a.gz"],
+)
+
+http_file(
+    name = "zeta_rusty_v8_aarch64_apple_darwin_binding",
+    downloaded_file_path = "src_binding_ptrcomp_sandbox_release_aarch64-apple-darwin.rs",
+    sha256 = "ca5adf0cf89c9a70ad460ae73648b2fe89b74aa113b3cb7f757b6a02b758394f",
+    urls = ["https://github.com/openai/codex/releases/download/rusty-v8-v150.4.0/src_binding_ptrcomp_sandbox_release_aarch64-apple-darwin.rs"],
+)
+
+http_file(
+    name = "zeta_rusty_v8_x86_64_apple_darwin_archive",
+    downloaded_file_path = "librusty_v8_ptrcomp_sandbox_release_x86_64-apple-darwin.a.gz",
+    sha256 = "e0d9bb64e8b3a034c2930c83972f3f35760211148342fa0407b38250ef330856",
+    urls = ["https://github.com/openai/codex/releases/download/rusty-v8-v150.4.0/librusty_v8_ptrcomp_sandbox_release_x86_64-apple-darwin.a.gz"],
+)
+
+http_file(
+    name = "zeta_rusty_v8_x86_64_apple_darwin_binding",
+    downloaded_file_path = "src_binding_ptrcomp_sandbox_release_x86_64-apple-darwin.rs",
+    sha256 = "ca5adf0cf89c9a70ad460ae73648b2fe89b74aa113b3cb7f757b6a02b758394f",
+    urls = ["https://github.com/openai/codex/releases/download/rusty-v8-v150.4.0/src_binding_ptrcomp_sandbox_release_x86_64-apple-darwin.rs"],
+)
+
+http_file(
+    name = "zeta_rusty_v8_aarch64_unknown_linux_gnu_archive",
+    downloaded_file_path = "librusty_v8_ptrcomp_sandbox_release_aarch64-unknown-linux-gnu.a.gz",
+    sha256 = "d1517eed405468537029b005d5fe997ec74d5c8d351f916b3a6df20b7d2811ba",
+    urls = ["https://github.com/openai/codex/releases/download/rusty-v8-v150.4.0/librusty_v8_ptrcomp_sandbox_release_aarch64-unknown-linux-gnu.a.gz"],
+)
+
+http_file(
+    name = "zeta_rusty_v8_aarch64_unknown_linux_gnu_binding",
+    downloaded_file_path = "src_binding_ptrcomp_sandbox_release_aarch64-unknown-linux-gnu.rs",
+    sha256 = "7727826ae479bdb645e807239fb12d1f8e2e23de7a6cf16f5ee592690d1d8506",
+    urls = ["https://github.com/openai/codex/releases/download/rusty-v8-v150.4.0/src_binding_ptrcomp_sandbox_release_aarch64-unknown-linux-gnu.rs"],
+)
+
+http_file(
+    name = "zeta_rusty_v8_x86_64_unknown_linux_gnu_archive",
+    downloaded_file_path = "librusty_v8_ptrcomp_sandbox_release_x86_64-unknown-linux-gnu.a.gz",
+    sha256 = "a35c75d1f26e6a983885a45b33490a4ebe54f05050568b32b89cfb421b30b583",
+    urls = ["https://github.com/openai/codex/releases/download/rusty-v8-v150.4.0/librusty_v8_ptrcomp_sandbox_release_x86_64-unknown-linux-gnu.a.gz"],
+)
+
+http_file(
+    name = "zeta_rusty_v8_x86_64_unknown_linux_gnu_binding",
+    downloaded_file_path = "src_binding_ptrcomp_sandbox_release_x86_64-unknown-linux-gnu.rs",
+    sha256 = "7727826ae479bdb645e807239fb12d1f8e2e23de7a6cf16f5ee592690d1d8506",
+    urls = ["https://github.com/openai/codex/releases/download/rusty-v8-v150.4.0/src_binding_ptrcomp_sandbox_release_x86_64-unknown-linux-gnu.rs"],
+)
+
+http_file(
+    name = "zeta_rusty_v8_aarch64_unknown_linux_musl_archive",
+    downloaded_file_path = "librusty_v8_ptrcomp_sandbox_release_aarch64-unknown-linux-musl.a.gz",
+    sha256 = "d258efd9c17b67077013f110302ff148fd11428cc4804fcb5c9ad05e3e634cb4",
+    urls = ["https://github.com/openai/codex/releases/download/rusty-v8-v150.4.0/librusty_v8_ptrcomp_sandbox_release_aarch64-unknown-linux-musl.a.gz"],
+)
+
+http_file(
+    name = "zeta_rusty_v8_aarch64_unknown_linux_musl_binding",
+    downloaded_file_path = "src_binding_ptrcomp_sandbox_release_aarch64-unknown-linux-musl.rs",
+    sha256 = "7727826ae479bdb645e807239fb12d1f8e2e23de7a6cf16f5ee592690d1d8506",
+    urls = ["https://github.com/openai/codex/releases/download/rusty-v8-v150.4.0/src_binding_ptrcomp_sandbox_release_aarch64-unknown-linux-musl.rs"],
+)
+
+http_file(
+    name = "zeta_rusty_v8_x86_64_unknown_linux_musl_archive",
+    downloaded_file_path = "librusty_v8_ptrcomp_sandbox_release_x86_64-unknown-linux-musl.a.gz",
+    sha256 = "d06e08bcbf45a90cfeac8a4d322c7288775cb5e3609ca703ea312b155174e46a",
+    urls = ["https://github.com/openai/codex/releases/download/rusty-v8-v150.4.0/librusty_v8_ptrcomp_sandbox_release_x86_64-unknown-linux-musl.a.gz"],
+)
+
+http_file(
+    name = "zeta_rusty_v8_x86_64_unknown_linux_musl_binding",
+    downloaded_file_path = "src_binding_ptrcomp_sandbox_release_x86_64-unknown-linux-musl.rs",
+    sha256 = "7727826ae479bdb645e807239fb12d1f8e2e23de7a6cf16f5ee592690d1d8506",
+    urls = ["https://github.com/openai/codex/releases/download/rusty-v8-v150.4.0/src_binding_ptrcomp_sandbox_release_x86_64-unknown-linux-musl.rs"],
+)
+
+http_file(
+    name = "zeta_rusty_v8_aarch64_pc_windows_msvc_archive",
+    downloaded_file_path = "rusty_v8_ptrcomp_sandbox_release_aarch64-pc-windows-msvc.lib.gz",
+    sha256 = "54722842af36b74248c403ff531254efac6ff65d281198bab0c6350fc1188ad4",
+    urls = ["https://github.com/openai/codex/releases/download/rusty-v8-v150.4.0/rusty_v8_ptrcomp_sandbox_release_aarch64-pc-windows-msvc.lib.gz"],
+)
+
+http_file(
+    name = "zeta_rusty_v8_aarch64_pc_windows_msvc_binding",
+    downloaded_file_path = "src_binding_ptrcomp_sandbox_release_aarch64-pc-windows-msvc.rs",
+    sha256 = "dabf78ba1faac127660db9862b1d0354175c71b8db2d4fcb5bacbd9c93576b16",
+    urls = ["https://github.com/openai/codex/releases/download/rusty-v8-v150.4.0/src_binding_ptrcomp_sandbox_release_aarch64-pc-windows-msvc.rs"],
+)
+
+http_file(
+    name = "zeta_rusty_v8_x86_64_pc_windows_msvc_archive",
+    downloaded_file_path = "rusty_v8_ptrcomp_sandbox_release_x86_64-pc-windows-msvc.lib.gz",
+    sha256 = "732ec5da4243aa166799780c8519a5eea6f32f6e47657a323342794dc3c239d6",
+    urls = ["https://github.com/openai/codex/releases/download/rusty-v8-v150.4.0/rusty_v8_ptrcomp_sandbox_release_x86_64-pc-windows-msvc.lib.gz"],
+)
+
+http_file(
+    name = "zeta_rusty_v8_x86_64_pc_windows_msvc_binding",
+    downloaded_file_path = "src_binding_ptrcomp_sandbox_release_x86_64-pc-windows-msvc.rs",
+    sha256 = "dabf78ba1faac127660db9862b1d0354175c71b8db2d4fcb5bacbd9c93576b16",
+    urls = ["https://github.com/openai/codex/releases/download/rusty-v8-v150.4.0/src_binding_ptrcomp_sandbox_release_x86_64-pc-windows-msvc.rs"],
+)
+
+crate.annotation(
+    build_script_data = [
+        "@zeta_v8_targets//:rusty_v8_archive_for_target",
+        "@zeta_v8_targets//:rusty_v8_binding_for_target",
+    ],
+    build_script_env = {
+        "RUSTY_V8_ARCHIVE": "$(execpath @zeta_v8_targets//:rusty_v8_archive_for_target)",
+        "RUSTY_V8_SRC_BINDING_PATH": "$(execpath @zeta_v8_targets//:rusty_v8_binding_for_target)",
+        "RUSTY_V8_USE_OUT_DIR": "1",
+    },
+    crate = "v8",
+    crate_features_select = {
+        "aarch64-apple-darwin": ["v8_enable_sandbox"],
+        "aarch64-pc-windows-msvc": ["v8_enable_sandbox"],
+        "aarch64-unknown-linux-gnu": ["v8_enable_sandbox"],
+        "aarch64-unknown-linux-musl": ["v8_enable_sandbox"],
+        "x86_64-apple-darwin": ["v8_enable_sandbox"],
+        "x86_64-pc-windows-msvc": ["v8_enable_sandbox"],
+        "x86_64-unknown-linux-gnu": ["v8_enable_sandbox"],
+        "x86_64-unknown-linux-musl": ["v8_enable_sandbox"],
+    },
+    gen_build_script = "on",
+    patch_args = ["-p1"],
+    patches = ["//bazel/toolchains:v8_bazel_build_dir.patch"],
+)
+
+inject_repo(crate, "zeta_v8_targets")
 
 register_toolchains("//bazel/toolchains:windows_gnullvm_tests_on_msvc_host")
 

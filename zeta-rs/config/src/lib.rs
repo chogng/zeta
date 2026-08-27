@@ -63,7 +63,7 @@ pub use workspace::{
     WorkspaceMcpServerConfig, WorkspaceSkillsConfig,
 };
 pub use workspace_trust::{WorkspaceTrustConfig, WorkspaceTrustSetting};
-pub use zeta_protocol::{ModelRef, SkillId, SkillName, SkillSourceId};
+pub use zeta_protocol::{ModelRef, SkillId, SkillName, SkillSourceId, ToolMode};
 pub use zeta_workspace::WorkspaceTrustId;
 
 #[cfg(test)]

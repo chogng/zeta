@@ -1,4 +1,5 @@
 mod backend;
+mod code_mode;
 mod executor;
 mod plan;
 mod policy_feedback;

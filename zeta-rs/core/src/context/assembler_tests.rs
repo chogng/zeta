@@ -394,6 +394,7 @@ fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
             model: None,
             policy_revision: "test-policy-v1".into(),
             approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+            tool_mode: zeta_protocol::ToolMode::Direct,
             activated_skills: Vec::new(),
             failure: None,
             pending_interaction: None,

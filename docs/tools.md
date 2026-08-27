@@ -7,7 +7,7 @@
 > typed discovery request 已接入共享契约；`ext/web-search` 已提供默认关闭、宿主注入 backend 后才注册的
 > `web_search` 工具。Tool Call 已持久化 registry
 > generation、definition digest、source chain 与 direct/code-mode caller；Tool Result 已能持久化结构化
-> 图片内容。Code Mode 当前完成冻结 registry 投影和 durable nested-call bridge，尚无 cell/runtime host；
+> 图片内容。Code Mode 已完成 exec/wait、V8 cell runtime、durable nested-call broker 和可选 stdio Host；
 > Plugin local content store 已落地，但安装 authority、activation、grant，以及 dynamic owner 断连后的持久化重启
 > 端到端 fixture 仍未完成。
 > Canonical value 与 durable Tool Item：[`protocol.md`](protocol.md)  
@@ -28,7 +28,7 @@
 | 工具名称就是执行身份吗？ | 不是；稳定身份还包含来源、绑定和快照 generation | [身份、来源与绑定](#5-身份来源与绑定) |
 | Agent 当前能看到哪些工具？ | 由不可变注册表快照和暴露范围决定，运行中不会被静默改写 | [注册表与快照](#7-注册表与快照) |
 | 谁决定工具能不能执行？ | 权限系统决定授权；Core 调度；工具执行器落实调用 | [当前本地工具来源](#41-当前本地工具来源运行时) |
-| 当前完成到哪里？ | 统一 registry/executor/search、durable provenance 和结构化图片主链已落地；Plugin 安装 authority 与 Code Mode runtime 尚未完成 | [当前仓库审计](#2-当前仓库审计) |
+| 当前完成到哪里？ | 统一 registry/executor/search、durable provenance、结构化图片和 Code Mode 主链已落地；Plugin 安装 authority 尚未完成 | [当前仓库审计](#2-当前仓库审计) |
 
 ## 1. 结论
 
@@ -129,8 +129,8 @@ Core durable Tool Call / Tool Result lifecycle
   当前没有默认生产 Search provider 或 credential UI，宿主未注入 backend 时工具完全不可用；
 - provider adapter 可能分别决定 namespace flattening、strict schema 和 image detail fallback；
 - tool search、Plugin discovery 和 install request 容易被混成一个有隐式副作用的“发现服务”；
-- Code Mode 已有确定性投影和 durable nested-call bridge，但还缺 exec/wait、cell lifecycle、host transport
-  与 broker；runtime 若直接持有 executor，仍会绕过普通 tool 的 approval、durable commit 和 tracing。
+- Code Mode 已有确定性投影、exec/wait、V8 cell lifecycle、异步 broker 和可选 stdio Host。嵌套调用
+  使用冻结 binding 并重新进入普通 ToolScheduler；Host/运行时异常不会重放可能已有副作用的调用。
 
 后续扩展必须继续经过现有 `zeta-tools` 窄共享契约和 App Server composition root，不能在 Plugin、
 Connector、code mode 或 provider adapter 内另建可执行 registry。
@@ -1173,11 +1173,14 @@ model emits code-mode execute call
 outer call 与 nested calls 的 transcript 展示可以由客户端折叠，但 durable facts 不能只保留一段
 opaque code output，使内部副作用不可恢复。
 
-当前实现已完成 `CodeModeProjection::from_registry` 的稳定命名、排序和 collision check，并由
-`TurnExecutor::record_code_mode_nested_call` 为 nested call 写入普通 durable Tool Call。caller 记录
-parent call、cell ID 和 runtime call ID；测试随后使用普通 `ToolScheduler` 完成同一个调用。exec/wait、
-cell host、异步 broker、yield/terminate 和 runtime crash recovery 尚未实现，因此当前不能宣称 Code
-Mode 可供模型实际执行代码。
+当前实现提供 `Direct`、`CodeMode` 和 `CodeModeOnly` 三种持久化模式。模型侧的 `exec`/`wait` 控制
+工具驱动 V8 cell；JavaScript 只得到 `text/image/store/load/notify/yield/exit` 和冻结后的 `tools`
+投影，不得到文件、网络或进程接口。每个 nested call 写入普通 durable Tool Call，caller 记录 parent
+call、cell ID 和 runtime call ID，再由同一个 `ToolScheduler` 处理审批、执行、取消和结果提交。
+
+默认运行时内嵌在进程内；显式选择 Host 时使用 4 字节 little-endian 长度帧 stdio 协议。Host EOF、
+运行时 panic 或已开始调用的传输失败会关闭 session 并产生 unknown outcome，不自动重放。Cell 本身
+不跨进程恢复；重启后旧 cell 不可继续等待。首版结果支持文本和图片，不扩展音频协议。
 
 ### 14.4 结果结构
 
@@ -1544,8 +1547,10 @@ ranking 只证明 gate、document embedding、cosine ranking 和 hybrid merge �
 - ✅ code-mode definition projection、naming/collision table；
 - ✅ nested call 写入 durable binding 并重新进入普通 ToolScheduler path；
 - ✅ structured/MCP/image result adapter；
-- 尚未完成：exec/wait host、cell lifecycle、yield/cancel/uncertain outcome；
-- 部分具备：nested binding 已保存 outer call identity，outer call 自身的 durable runtime lifecycle 尚未完成。
+- ✅ exec/wait、V8 cell lifecycle、yield/terminate、并发 nested calls 和 uncertain outcome；
+- ✅ 内嵌运行时与可选 stdio Host、帧大小/版本/EOF 校验；
+- ✅ Cargo/Bazel 的 sandbox-enabled V8 输入锁定，以及 Desktop/发布 Host 打包；
+- 明确推迟：音频结果、gRPC Host 和崩溃后 cell 重放。
 
 完成条件：code mode 的任意 nested side effect 都可审批、可审计、可取消，并具有准确恢复语义。
 

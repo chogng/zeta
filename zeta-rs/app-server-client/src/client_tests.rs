@@ -378,6 +378,7 @@ fn in_process_client_uses_session_first_contract_and_canonical_updates() {
             request: SessionRequest::StartTurn {
                 thread_id: thread.thread_id.clone(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                tool_mode: None,
                 input: vec![
                     InputItem::Text {
                         text: "hello".into(),

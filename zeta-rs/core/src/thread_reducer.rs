@@ -43,6 +43,7 @@ use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadItem;
 use zeta_protocol::ThreadStatus;
 use zeta_protocol::ToolCallId;
+use zeta_protocol::ToolMode;
 use zeta_protocol::ToolProfileSnapshot;
 use zeta_protocol::Turn;
 use zeta_protocol::TurnExecutionBinding;
@@ -141,6 +142,7 @@ impl ThreadSnapshot {
                     status: turn.status,
                     model: turn.model.clone(),
                     tool_profile: turn.tool_profile.clone(),
+                    tool_mode: turn.tool_mode,
                     usage: turn.usage.clone(),
                     items: self
                         .items
@@ -195,6 +197,7 @@ pub struct TurnSnapshot {
     pub model: Option<ModelRef>,
     pub policy_revision: String,
     pub approval_mode: ApprovalMode,
+    pub tool_mode: ToolMode,
     pub activated_skills: Vec<FrozenSkillActivation>,
     pub failure: Option<StableTurnError>,
     pub pending_interaction: Option<TurnInteraction>,
@@ -594,6 +597,7 @@ pub fn reduce_thread_event(
             model,
             policy_revision,
             approval_mode,
+            tool_mode,
             activated_skills,
             tool_profile,
             ..
@@ -615,6 +619,7 @@ pub fn reduce_thread_event(
                     model: model.clone(),
                     policy_revision: policy_revision.clone(),
                     approval_mode: *approval_mode,
+                    tool_mode: *tool_mode,
                     activated_skills: activated_skills.clone(),
                     failure: None,
                     pending_interaction: None,
@@ -632,6 +637,7 @@ pub fn reduce_thread_event(
                     model: command_model,
                     activated_skills: command_skills,
                     approval_mode: command_approval_mode,
+                    tool_mode: command_tool_mode,
                     tool_profile: command_tool_profile,
                     input,
                     ..
@@ -639,6 +645,7 @@ pub fn reduce_thread_event(
                     command_model == model
                         && command_skills == activated_skills
                         && command_approval_mode == approval_mode
+                        && command_tool_mode == tool_mode
                         && command_tool_profile.as_deref() == tool_profile.as_ref()
                         && turn_skill_activations_match(input, activated_skills)
                 }
@@ -648,6 +655,7 @@ pub fn reduce_thread_event(
                 } => {
                     model.is_none()
                         && tool_profile.is_none()
+                        && *tool_mode == ToolMode::Direct
                         && command_approval_mode == approval_mode
                         && activated_skills.is_empty()
                 }
@@ -657,6 +665,7 @@ pub fn reduce_thread_event(
                 } => {
                     command_model == model
                         && tool_profile.is_none()
+                        && *tool_mode == ToolMode::Direct
                         && *approval_mode == ApprovalMode::AskPermissions
                         && activated_skills.is_empty()
                 }
@@ -1798,6 +1807,7 @@ fn import_history(
             model: turn.model.clone(),
             policy_revision: "imported-history-policy".into(),
             approval_mode: ApprovalMode::AskPermissions,
+            tool_mode: turn.tool_mode,
             activated_skills: Vec::new(),
             failure: turn.error.clone(),
             pending_interaction: None,

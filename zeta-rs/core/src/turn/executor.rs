@@ -1,3 +1,4 @@
+use super::code_mode::CodeModeBroker;
 use super::tool_scheduler::{ToolScheduler, ToolSchedulingProgress};
 use crate::action_policy_service::UnavailableActionPolicyService;
 use crate::context::CONTEXT_CALIBRATION_REVISION;
@@ -54,6 +55,7 @@ pub struct TurnExecutor {
     context_source: Arc<dyn crate::ContextSource>,
     hooks: Arc<dyn HookService>,
     extensions: Arc<zeta_extension_api::ExtensionRegistry>,
+    code_mode: CodeModeBroker,
 }
 
 struct FixedHarnessInstructions {
@@ -154,6 +156,11 @@ impl TurnExecutor {
             ),
         );
         let compaction = Arc::new(ModelContextCompactionService::new(model.clone()));
+        let code_mode = CodeModeBroker::new(
+            Arc::clone(&threads),
+            Arc::clone(&tools),
+            Arc::clone(&policy),
+        );
         Self {
             threads,
             model,
@@ -167,6 +174,7 @@ impl TurnExecutor {
             context_source: Arc::new(crate::NoContextSource),
             hooks: Arc::new(NoHooks),
             extensions: Arc::new(zeta_extension_api::ExtensionRegistry::default()),
+            code_mode,
         }
     }
 
@@ -498,6 +506,13 @@ impl TurnExecutor {
             }
         };
         self.publish_committed_after(thread_id, sequence_before_execution);
+        if !matches!(
+            &result,
+            Ok(TurnExecutionOutcome::WaitingForApproval
+                | TurnExecutionOutcome::WaitingForCapability)
+        ) {
+            let _ = self.code_mode.close_turn(thread_id, turn_id);
+        }
         if matches!(&result, Ok(TurnExecutionOutcome::Completed(_))) {
             let _ = self.maybe_start_goal_continuation(thread_id, turn_id);
         }
@@ -541,7 +556,7 @@ impl TurnExecutor {
                 .map_err(ExecutionFailure::model)?;
             let activated = activated_tool_names(self.tools.as_ref(), &snapshot.items, turn_id)
                 .map_err(ExecutionFailure::model)?;
-            let tool_catalog = self
+            let ordinary_tool_catalog = self
                 .tools
                 .model_catalog_snapshot(&activated)
                 .map_err(ExecutionFailure::model)?;
@@ -551,7 +566,7 @@ impl TurnExecutor {
                 .find(|turn| &turn.turn_id == turn_id)
                 .ok_or_else(|| ExecutionFailure::model(CoreError::NotFound(turn_id.to_string())))?;
             if let Some(profile) = &turn.tool_profile {
-                let frozen_definitions = tool_catalog
+                let frozen_definitions = ordinary_tool_catalog
                     .definitions()
                     .iter()
                     .filter(|definition| !activated.contains(&definition.name))
@@ -563,6 +578,10 @@ impl TurnExecutor {
                 )
                 .map_err(ExecutionFailure::model)?;
             }
+            let tool_catalog = self
+                .code_mode
+                .augment_catalog(ordinary_tool_catalog, turn.tool_mode)
+                .map_err(ExecutionFailure::model)?;
             let tools = tool_catalog.definitions().to_vec();
             let frozen_model = turn.model.clone();
             let model = match frozen_model.as_ref() {
@@ -1133,9 +1152,11 @@ impl TurnExecutor {
                 model: completed_turn.model.clone(),
                 policy_revision: completed_turn.policy_revision.clone(),
                 approval_mode: completed_turn.approval_mode,
+                tool_mode: completed_turn.tool_mode,
                 tool_profile: completed_turn.tool_profile.clone(),
             },
-        )? else {
+        )?
+        else {
             return Ok(false);
         };
         if start.disposition == crate::StartTurnDisposition::Created {
@@ -1155,9 +1176,16 @@ impl TurnExecutor {
             .iter()
             .map(|call| {
                 let caller = zeta_protocol::ToolCallCaller::Direct;
-                let binding = match catalog.bind_call(call, caller.clone()) {
-                    Some(binding) => binding,
-                    None => self.tools.bind_call(call, caller),
+                let binding = match self
+                    .code_mode
+                    .bind_control_call(call, caller.clone())
+                    .map_err(ExecutionFailure::service)?
+                {
+                    Some(binding) => Ok(Some(binding)),
+                    None => match catalog.bind_call(call, caller.clone()) {
+                        Some(binding) => binding,
+                        None => self.tools.bind_call(call, caller),
+                    },
                 }
                 .map_err(ExecutionFailure::service)?
                 .ok_or_else(|| {
@@ -1188,6 +1216,7 @@ impl TurnExecutor {
         )
         .with_thread_updates(self.updates.clone())
         .with_hooks(self.hooks.clone())
+        .with_code_mode(self.code_mode.clone())
     }
 }
 
@@ -1270,7 +1299,7 @@ fn validate_model_tool_calls(
     Ok(())
 }
 
-fn activated_tool_names(
+pub(super) fn activated_tool_names(
     tools: &dyn ToolService,
     items: &[ThreadItem],
     turn_id: &TurnId,

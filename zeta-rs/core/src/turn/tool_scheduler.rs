@@ -1,3 +1,4 @@
+use super::code_mode::CodeModeBroker;
 use super::policy_feedback::{denied_feedback, rejection_circuit_breaker, safer_action_feedback};
 use super::review_context::attach_review_context;
 use super::tool_execution::{
@@ -32,6 +33,7 @@ pub(super) struct ToolScheduler {
     policy: Arc<dyn ActionPolicyService>,
     hooks: Arc<dyn HookService>,
     updates: Arc<dyn ThreadUpdateSink>,
+    code_mode: Option<CodeModeBroker>,
 }
 
 impl ToolScheduler {
@@ -46,6 +48,7 @@ impl ToolScheduler {
             policy,
             hooks: Arc::new(NoHooks),
             updates: Arc::new(NoThreadUpdates),
+            code_mode: None,
         }
     }
 
@@ -59,10 +62,40 @@ impl ToolScheduler {
         self
     }
 
+    pub(super) fn with_code_mode(mut self, code_mode: CodeModeBroker) -> Self {
+        self.code_mode = Some(code_mode);
+        self
+    }
+
     pub(super) fn run_pending(
         &self,
         thread_id: &ThreadId,
         turn_id: &TurnId,
+        cancellation: &CancellationToken,
+    ) -> Result<ToolSchedulingProgress, CoreError> {
+        self.run_pending_matching(thread_id, turn_id, None, cancellation)
+    }
+
+    /// Runs only one durable Tool Call.
+    ///
+    /// Code Mode uses this entry point for a nested call so it cannot recursively consume the
+    /// model-facing `exec` call or unrelated work already queued on the same Turn.
+    #[cfg(feature = "code-mode")]
+    pub(super) fn run_pending_for_call(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        tool_call_id: &ToolCallId,
+        cancellation: &CancellationToken,
+    ) -> Result<ToolSchedulingProgress, CoreError> {
+        self.run_pending_matching(thread_id, turn_id, Some(tool_call_id), cancellation)
+    }
+
+    fn run_pending_matching(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        target_tool_call_id: Option<&ToolCallId>,
         cancellation: &CancellationToken,
     ) -> Result<ToolSchedulingProgress, CoreError> {
         loop {
@@ -79,13 +112,30 @@ impl ToolScheduler {
                     streak.tool_name, streak.arguments_digest, streak.count
                 )));
             }
-            let Some(pending) = next_pending_call(&snapshot.items, turn_id)? else {
+            let Some(pending) = next_pending_call(&snapshot.items, turn_id, target_tool_call_id)?
+            else {
                 return Ok(ToolSchedulingProgress::Complete);
             };
-            if let Err(error) = self
-                .tools
-                .validate_call_binding(&pending.call, pending.binding.as_ref())
-            {
+            let turn = snapshot
+                .turns
+                .iter()
+                .find(|turn| &turn.turn_id == turn_id)
+                .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
+            let control_broker = self.code_mode.as_ref().filter(|broker| {
+                broker.owns_control_binding(&pending.call, pending.binding.as_ref())
+            });
+            let binding_validation = match control_broker {
+                Some(broker) if turn.tool_mode.requires_code_mode() => {
+                    broker.validate_control_binding(&pending.call, pending.binding.as_ref())
+                }
+                Some(_) => Err(CoreError::Policy(
+                    "Code Mode control Tool Call is unavailable for this Turn".into(),
+                )),
+                None => self
+                    .tools
+                    .validate_call_binding(&pending.call, pending.binding.as_ref()),
+            };
+            if let Err(error) = binding_validation {
                 let message = if snapshot.started_tool_calls.contains(&pending.call.id) {
                     format!(
                         "tool execution outcome is unknown after its durable binding became unavailable: {error}"
@@ -96,18 +146,8 @@ impl ToolScheduler {
                 self.record_failure(thread_id, turn_id, pending.call.id, message)?;
                 continue;
             }
-            let frozen_policy_revision = snapshot
-                .turns
-                .iter()
-                .find(|turn| &turn.turn_id == turn_id)
-                .map(|turn| turn.policy_revision.as_str())
-                .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
-            let approval_mode = snapshot
-                .turns
-                .iter()
-                .find(|turn| &turn.turn_id == turn_id)
-                .map(|turn| turn.approval_mode)
-                .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
+            let frozen_policy_revision = turn.policy_revision.as_str();
+            let approval_mode = turn.approval_mode;
             let execution = ToolExecutionContext::new(
                 thread_id,
                 turn_id,
@@ -383,8 +423,16 @@ impl ToolScheduler {
         item_id: &ItemId,
         call: &ToolCall,
     ) -> Result<zeta_action_policy::ActionReviewRequest, CoreError> {
-        let request = self.tools.prepare(call)?;
-        let evidence = self.tools.review_evidence(call)?;
+        let control_broker = self
+            .code_mode
+            .as_ref()
+            .filter(|broker| {
+                broker.owns_control_binding(call, call_binding(snapshot, item_id))
+            });
+        let (request, evidence) = match control_broker {
+            Some(broker) => (broker.prepare_control(call)?, Vec::new()),
+            None => (self.tools.prepare(call)?, self.tools.review_evidence(call)?),
+        };
         Ok(attach_review_context(
             request,
             &snapshot.items,
@@ -421,7 +469,25 @@ impl ToolScheduler {
             Arc::clone(&self.policy),
             Arc::clone(&self.updates),
         );
-        if let Some(request) = self.tools.execution_interaction(&call)? {
+        let persisted_binding = self
+            .threads
+            .read_thread(context.thread_id())?
+            .items
+            .iter()
+            .find_map(|item| match item {
+                ThreadItem::ToolCall {
+                    item_id, binding, ..
+                } if item_id == context.item_id() => binding.clone(),
+                _ => None,
+            });
+        let control_broker = self
+            .code_mode
+            .as_ref()
+            .filter(|broker| broker.owns_control_binding(&call, persisted_binding.as_ref()))
+            .cloned();
+        if control_broker.is_none()
+            && let Some(request) = self.tools.execution_interaction(&call)?
+        {
             if !matches!(request, AgentRequest::DynamicTool { call: ref dynamic } if dynamic.call_id == call.id && dynamic.name == call.name)
             {
                 return Err(CoreError::Policy(
@@ -454,7 +520,21 @@ impl ToolScheduler {
             self.record_failure(context.thread_id(), context.turn_id(), tool_call_id, reason)?;
             return Ok(ToolSchedulingProgress::Complete);
         }
-        let completion = orchestrator.execute(context, call, reviewed, authorization)?;
+        let completion = match control_broker {
+            Some(broker) => {
+                let control_call = call.clone();
+                let updates = Arc::clone(&self.updates);
+                let hooks = Arc::clone(&self.hooks);
+                orchestrator.execute_core_control(
+                    context,
+                    call,
+                    reviewed,
+                    authorization,
+                    || broker.execute(context, &control_call, updates, hooks),
+                )?
+            }
+            None => orchestrator.execute(context, call, reviewed, authorization)?,
+        };
         match completion {
             ToolExecutionCompletion::Complete => {
                 self.run_after_tool(context, &tool_call_id, tool_name)?;
@@ -533,9 +613,24 @@ struct PendingToolCall {
     binding: Option<zeta_protocol::ToolCallBinding>,
 }
 
+fn call_binding<'a>(
+    snapshot: &'a ThreadSnapshot,
+    item_id: &ItemId,
+) -> Option<&'a zeta_protocol::ToolCallBinding> {
+    snapshot.items.iter().find_map(|item| match item {
+        ThreadItem::ToolCall {
+            item_id: candidate,
+            binding,
+            ..
+        } if candidate == item_id => binding.as_ref(),
+        _ => None,
+    })
+}
+
 fn next_pending_call(
     items: &[ThreadItem],
     turn_id: &TurnId,
+    target_tool_call_id: Option<&ToolCallId>,
 ) -> Result<Option<PendingToolCall>, CoreError> {
     for item in items {
         let ThreadItem::ToolCall {
@@ -550,6 +645,7 @@ fn next_pending_call(
             continue;
         };
         if item_turn_id != turn_id
+            || target_tool_call_id.is_some_and(|target| target != tool_call_id)
             || items.iter().any(|candidate| {
                 matches!(
                     candidate,

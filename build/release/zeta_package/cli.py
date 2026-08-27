@@ -5,7 +5,11 @@ from pathlib import Path
 from typing import Optional, Sequence
 
 from .bubblewrap import resolve_bubblewrap
-from .cargo import resolve_app_server_daemon_binary, resolve_server_binary
+from .cargo import (
+    resolve_app_server_daemon_binary,
+    resolve_code_mode_host_binary,
+    resolve_server_binary,
+)
 from .layout import build_package_directory
 from .node import resolve_node
 from .ripgrep import resolve_ripgrep
@@ -57,6 +61,11 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
         "--app-server-daemon-bin",
         type=Path,
         help="Prebuilt profile-scoped App Server daemon executable. If omitted, Cargo builds it.",
+    )
+    parser.add_argument(
+        "--code-mode-host-bin",
+        type=Path,
+        help="Prebuilt isolated Code Mode Host executable. If omitted, Cargo builds it.",
     )
     parser.add_argument(
         "--rg-bin",
@@ -165,6 +174,13 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         cargo=args.cargo,
         cargo_profile=args.cargo_profile,
     )
+    code_mode_host_binary = resolve_code_mode_host_binary(
+        REPOSITORY_ROOT,
+        spec,
+        args.code_mode_host_bin,
+        cargo=args.cargo,
+        cargo_profile=args.cargo_profile,
+    )
     ripgrep = resolve_ripgrep(
         spec,
         args.ripgrep_lock.expanduser().resolve(),
@@ -209,6 +225,7 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         spec,
         server_binary,
         app_server_daemon_binary,
+        code_mode_host_binary,
         ripgrep,
         node,
         bubblewrap,

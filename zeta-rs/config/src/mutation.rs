@@ -241,4 +241,9 @@ fn apply_preferences(document: &mut UserConfigDocument, update: &PreferencesUpda
             document.agent.approval_review_model = selection.clone();
         }
     }
+    match &update.tool_mode {
+        Patch::Missing => {}
+        Patch::Null => document.agent.tool_mode = zeta_protocol::ToolMode::Direct,
+        Patch::Value(tool_mode) => document.agent.tool_mode = *tool_mode,
+    }
 }

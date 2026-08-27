@@ -7,7 +7,7 @@ import test from "node:test";
 
 import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from "../../zeta-ts/generated/app-server/types.ts";
 import { cargoTargetDirectory } from "../lib/cargo.ts";
-import { assemblePackage, copyBuiltinExtensions, hostTarget, parseJavaScriptRuntime, parsePackageOptions, replaceDirectoryAtomically, selectNodeArtifact, selectRipgrepArtifact } from "./prepareDevPackage.ts";
+import { assemblePackage, copyBuiltinExtensions, hostTarget, parseJavaScriptRuntime, parsePackageOptions, replaceDirectoryAtomically, selectNodeArtifact, selectRipgrepArtifact, selectV8ArtifactPair } from "./prepareDevPackage.ts";
 
 test("resolves one shared Cargo target directory for host development builds", () => {
   const workspace = resolve("/workspace/zeta");
@@ -103,6 +103,36 @@ test("selects the target-specific locked Node.js artifact", () => {
   );
 });
 
+test("selects a checksum-locked sandbox-enabled rusty_v8 pair", () => {
+  const target = "aarch64-apple-darwin";
+  const profile = "ptrcomp_sandbox_release";
+  const pair = selectV8ArtifactPair({
+    artifacts: {
+      [target]: {
+        archive: {
+          name: `librusty_v8_${profile}_${target}.a.gz`,
+          sha256: "a".repeat(64),
+        },
+        binding: {
+          name: `src_binding_${profile}_${target}.rs`,
+          sha256: "b".repeat(64),
+        },
+      },
+    },
+    profile,
+    runtime: "rusty-v8",
+    schemaVersion: 1,
+    source: {
+      release: "rusty-v8-v150.4.0",
+      repository: "https://github.com/openai/codex",
+    },
+    version: "150.4.0",
+  }, target);
+
+  assert.equal(pair.archive.url, `https://github.com/openai/codex/releases/download/rusty-v8-v150.4.0/${pair.archive.name}`);
+  assert.equal(pair.binding.sha256, "b".repeat(64));
+});
+
 test("replaces a complete development package atomically", async () => {
   const root = await mkdtemp(join(tmpdir(), "zeta-dev-package-test-"));
   const output = join(root, "zeta-package");
@@ -145,6 +175,7 @@ test("assembles and validates the canonical Windows development layout", async (
   const staging = join(root, "package");
   const executables = {
     appServerDaemon: join(root, "zeta-app-server-daemon.exe"),
+    codeModeHost: join(root, "zeta-code-mode-host.exe"),
     commandRunner: join(root, "zeta-command-runner.exe"),
     sandboxSetup: join(root, "zeta-windows-sandbox-setup.exe"),
     serverHost: join(root, "zeta-server.exe"),
@@ -157,6 +188,7 @@ test("assembles and validates the canonical Windows development layout", async (
     await mkdir(join(remoteRuntimeBundle, "artifacts"), { recursive: true });
     await Promise.all([
       writeFile(executables.appServerDaemon, "zeta-app-server-daemon"),
+      writeFile(executables.codeModeHost, "zeta-code-mode-host"),
       writeFile(executables.commandRunner, "runner"),
       writeFile(executables.sandboxSetup, "setup"),
       writeFile(executables.serverHost, "zeta-server"),
@@ -264,6 +296,7 @@ test("host-provided runtime package omits the standalone Node payload", async ()
   const staging = join(root, "package");
   const executables = {
     appServerDaemon: join(root, "zeta-app-server-daemon.exe"),
+    codeModeHost: join(root, "zeta-code-mode-host.exe"),
     commandRunner: join(root, "zeta-command-runner.exe"),
     sandboxSetup: join(root, "zeta-windows-sandbox-setup.exe"),
     serverHost: join(root, "zeta-server.exe"),
@@ -272,6 +305,7 @@ test("host-provided runtime package omits the standalone Node payload", async ()
   try {
     await Promise.all([
       writeFile(executables.appServerDaemon, "zeta-app-server-daemon"),
+      writeFile(executables.codeModeHost, "zeta-code-mode-host"),
       writeFile(executables.commandRunner, "runner"),
       writeFile(executables.sandboxSetup, "setup"),
       writeFile(executables.serverHost, "zeta-server"),

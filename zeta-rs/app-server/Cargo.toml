@@ -40,7 +40,7 @@ zeta-chatgpt = { workspace = true }
 zeta-config = { workspace = true }
 zeta-connectors = { workspace = true }
 zeta-connectors-extension = { workspace = true }
-zeta-core = { workspace = true }
+zeta-core = { workspace = true, features = ["code-mode"] }
 zeta-client = { workspace = true }
 zeta-diff = { workspace = true }
 zeta-debug-adapter = { workspace = true }

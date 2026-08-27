@@ -98,6 +98,8 @@ pub struct AgentConfig {
     pub preferred_model: Option<ModelRef>,
     #[serde(default)]
     pub approval_review_model: ApprovalReviewModelSelection,
+    #[serde(default)]
+    pub tool_mode: zeta_protocol::ToolMode,
 }
 
 /// Durable, non-secret user intent for ordinary Zeta configuration.
@@ -215,6 +217,7 @@ impl UserConfigDocument {
 pub struct ResolvedConfig {
     pub preferred_model: Option<ModelRef>,
     pub approval_review_model: ApprovalReviewModelSelection,
+    pub tool_mode: zeta_protocol::ToolMode,
     pub providers: BTreeMap<ProviderId, ModelProviderConfig>,
     pub mcp: McpConfig,
     pub skills: SkillsConfig,
@@ -289,6 +292,7 @@ impl From<&UserConfigDocument> for ResolvedConfig {
         Self {
             preferred_model: document.agent.preferred_model.clone(),
             approval_review_model: document.agent.approval_review_model.clone(),
+            tool_mode: document.agent.tool_mode,
             providers: document.providers.clone(),
             mcp: document.mcp.clone(),
             skills: document.skills.clone(),

@@ -171,6 +171,36 @@ impl ToolExecutionOrchestrator {
         Ok(completion)
     }
 
+    /// Executes one Core-owned control Tool while retaining the ordinary durable start/result
+    /// boundary. The operation itself runs only after the start fact is committed.
+    pub(super) fn execute_core_control(
+        &self,
+        context: &ToolExecutionContext<'_>,
+        call: ToolCall,
+        reviewed: &ActionReviewRequest,
+        authorization: ToolAuthorization,
+        operation: impl FnOnce() -> Result<ToolExecutionOutput, CoreError>,
+    ) -> Result<ToolExecutionCompletion, CoreError> {
+        self.threads.record_tool_execution_started(
+            context.thread_id,
+            context.turn_id,
+            RecordToolExecutionStart {
+                tool_call_id: call.id.clone(),
+                action_digest: reviewed.action().digest().as_str().to_owned(),
+                policy_revision: reviewed.action_policy_revision().as_str().to_owned(),
+                authority: execution_authority(&authorization),
+            },
+        )?;
+        let output = match operation() {
+            Ok(output) => output,
+            Err(error @ CoreError::Cancelled(_)) => return Err(error),
+            Err(error) => ToolExecutionOutput::OutcomeUnknown(format!(
+                "Code Mode control failed after execution started: {error}"
+            )),
+        };
+        self.complete_execution_interaction(context, call, output)
+    }
+
     pub(super) fn start_execution_interaction(
         &self,
         context: &ToolExecutionContext<'_>,

@@ -27,6 +27,10 @@ class TargetSpec:
         return "zeta-app-server-daemon" + self.executable_suffix
 
     @property
+    def code_mode_host_name(self) -> str:
+        return "zeta-code-mode-host" + self.executable_suffix
+
+    @property
     def ripgrep_name(self) -> str:
         return "rg" + self.executable_suffix
 

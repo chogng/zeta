@@ -14,6 +14,11 @@ members = [
     "zeta-rs/code-index",
     "zeta-rs/code-index-cloud",
     "zeta-rs/code-index-semantic",
+    "zeta-rs/code-mode",
+    "zeta-rs/code-mode-host",
+    "zeta-rs/code-mode-protocol",
+    "zeta-rs/code-mode-runtime",
+    "zeta-rs/v8-poc",
     "zeta-rs/code-retrieval",
     "zeta-rs/chatgpt",
     "zeta-rs/apply-patch",
@@ -165,6 +170,7 @@ cosmic-text = "0.19.0"
 core-graphics = "0.23.2"
 difflib = "0.4"
 dirs = "6.0"
+deno_core_icudata = "0.77.0"
 dunce = "1"
 ed25519-dalek = "3.0.0"
 getrandom = "0.2"
@@ -228,6 +234,7 @@ typst = "=0.15.1"
 typst-assets = { version = "=0.15.1", features = ["fonts"] }
 typst-pdf = "=0.15.1"
 tokio = { version = "1", features = ["net", "rt", "time"] }
+v8 = "=150.4.0"
 tokio-rustls = "0.26.4"
 tokio-tungstenite = { version = "0.28.0", default-features = false, features = ["handshake"] }
 thiserror = "2"
@@ -282,6 +289,11 @@ zeta-collaboration-server = { path = "zeta-rs/collaboration-server" }
 zeta-code-index = { path = "zeta-rs/code-index" }
 zeta-code-index-cloud = { path = "zeta-rs/code-index-cloud" }
 zeta-code-index-semantic = { path = "zeta-rs/code-index-semantic" }
+zeta-code-mode = { path = "zeta-rs/code-mode" }
+zeta-code-mode-host = { path = "zeta-rs/code-mode-host" }
+zeta-code-mode-protocol = { path = "zeta-rs/code-mode-protocol" }
+zeta-code-mode-runtime = { path = "zeta-rs/code-mode-runtime" }
+zeta-v8-poc = { path = "zeta-rs/v8-poc" }
 zeta-code-retrieval = { path = "zeta-rs/code-retrieval" }
 zeta-chatgpt = { path = "zeta-rs/chatgpt" }
 zeta-apply-patch = { path = "zeta-rs/apply-patch" }

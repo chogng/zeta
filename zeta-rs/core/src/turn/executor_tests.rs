@@ -4,9 +4,9 @@ use crate::{
     ContextTokenMeasurementCapability, ContextTokenMeasurementOutcome, CreateThreadRequest,
     InMemoryThreadStore, ModelSelection, ModelService, ModelStreamSink, SequenceExpectation,
     StartContextCompactionRequest, StartGoalTurnRequest, StartTurnRequest, SteerTurnRequest,
-    ThreadUpdateSink,
-    ToolAuthorization, ToolExecutionFacts, ToolExecutionOutput, ToolInteractionService,
-    ToolOutputSink, ToolService, ToolUserInputOutcome, TurnExecutionOutcome,
+    ThreadUpdateSink, ToolAuthorization, ToolExecutionFacts, ToolExecutionOutput,
+    ToolInteractionService, ToolOutputSink, ToolService, ToolUserInputOutcome,
+    TurnExecutionOutcome,
 };
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -25,12 +25,11 @@ use zeta_context_engine::ContextTokenMeasurement;
 use zeta_context_engine::ContextTokenMeasurementSource;
 use zeta_protocol::{
     AgentResponse, CommandId, ContentDigest, ContentPart, FrozenSkillActivation, InputItem,
-    ModelId, ModelRef, ModelRequest, ModelResponse, ModelStreamEvent,
-    ModelUsage, ProviderId, RequestUserInput, RequestUserInputResponse, ResponseItem, SessionId,
-    SkillActivationReason, SkillId, SkillName, SkillRef, SkillSourceId, StableTurnErrorCode,
-    StopReason, ThreadId, ThreadItem, ThreadUpdate, ThreadUpdateEnvelope, ToolCallId,
-    ToolDefinition, ToolName, TurnStatus, UserInput, UserInputAnswer,
-    UserInputQuestion,
+    ModelId, ModelRef, ModelRequest, ModelResponse, ModelStreamEvent, ModelUsage, ProviderId,
+    RequestUserInput, RequestUserInputResponse, ResponseItem, SessionId, SkillActivationReason,
+    SkillId, SkillName, SkillRef, SkillSourceId, StableTurnErrorCode, StopReason, ThreadId,
+    ThreadItem, ThreadUpdate, ThreadUpdateEnvelope, ToolCallId, ToolDefinition, ToolName,
+    TurnStatus, UserInput, UserInputAnswer, UserInputQuestion,
 };
 use zeta_sandboxing::{FileSystemAccess, NetworkAccess, SandboxPolicy};
 
@@ -66,6 +65,181 @@ fn completes_a_text_turn_from_durable_context() {
             .status,
         TurnStatus::Completed
     );
+}
+
+#[cfg(feature = "code-mode")]
+#[test]
+fn tool_mode_controls_the_model_facing_catalog() {
+    for (mode, expected) in [
+        (
+            zeta_protocol::ToolMode::CodeMode,
+            vec!["weather", "exec", "wait"],
+        ),
+        (zeta_protocol::ToolMode::CodeModeOnly, vec!["exec", "wait"]),
+    ] {
+        let (threads, thread_id, turn_id) = started_turn_with_tool_mode(mode);
+        let model = Arc::new(ScriptedModel::new([Ok(text_response("done"))]));
+        let executor = TurnExecutor::new(
+            threads,
+            model.clone(),
+            Arc::new(WeatherTool),
+            Arc::new(SandboxActionPolicyService),
+        );
+
+        executor
+            .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+            .unwrap();
+
+        assert_eq!(
+            model.requests()[0]
+                .tools
+                .iter()
+                .map(|definition| definition.name.as_str())
+                .collect::<Vec<_>>(),
+            expected
+        );
+    }
+}
+
+#[cfg(feature = "code-mode")]
+#[test]
+fn code_mode_exec_runs_javascript_through_the_durable_tool_path() {
+    let (threads, thread_id, turn_id) =
+        started_turn_with_tool_mode(zeta_protocol::ToolMode::CodeModeOnly);
+    let model = Arc::new(ScriptedModel::new([
+        Ok(ModelResponse {
+            output: vec![ResponseItem::ToolCall(ToolCall {
+                id: ToolCallId::new("code-mode-exec").unwrap(),
+                name: ToolName::new("exec").unwrap(),
+                arguments: json!({"source": "text('hello from JavaScript');"}),
+            })],
+            usage: None,
+            stop_reason: StopReason::ToolUse,
+        }),
+        Ok(text_response("done")),
+    ]));
+    let executor = TurnExecutor::new(
+        threads.clone(),
+        model,
+        Arc::new(crate::NoTools),
+        Arc::new(CodeModeControlPolicy),
+    );
+
+    executor
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+
+    assert!(threads.read_thread(&thread_id).unwrap().items.iter().any(|item| {
+        matches!(
+            item,
+            ThreadItem::ToolResult {
+                tool_call_id,
+                text,
+                is_error: false,
+                ..
+            } if tool_call_id.as_str() == "code-mode-exec" && text.contains("hello from JavaScript")
+        )
+    }));
+}
+
+#[cfg(feature = "code-mode")]
+#[test]
+fn code_mode_only_runs_concurrent_nested_tools_through_the_durable_scheduler() {
+    let (threads, thread_id, turn_id) =
+        started_turn_with_tool_mode(zeta_protocol::ToolMode::CodeModeOnly);
+    let model = Arc::new(ScriptedModel::new([
+        Ok(ModelResponse {
+            output: vec![ResponseItem::ToolCall(ToolCall {
+                id: ToolCallId::new("code-mode-concurrent-exec").unwrap(),
+                name: ToolName::new("exec").unwrap(),
+                arguments: json!({
+                    "source": "const values = await Promise.all([tools.weather({city: 'Paris'}), tools.weather({city: 'Paris'})]); text(values);"
+                }),
+            })],
+            usage: None,
+            stop_reason: StopReason::ToolUse,
+        }),
+        Ok(text_response("done")),
+    ]));
+    let executor = TurnExecutor::new(
+        threads.clone(),
+        model,
+        Arc::new(WeatherTool),
+        Arc::new(CodeModeControlPolicy),
+    );
+
+    executor
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    let nested_calls = snapshot
+        .items
+        .iter()
+        .filter(|item| {
+            matches!(
+                item,
+                ThreadItem::ToolCall {
+                    binding: Some(zeta_protocol::ToolCallBinding {
+                        caller: zeta_protocol::ToolCallCaller::CodeMode { .. },
+                        ..
+                    }),
+                    ..
+                }
+            )
+        })
+        .count();
+    let nested_results = snapshot
+        .items
+        .iter()
+        .filter(|item| {
+            matches!(
+                item,
+                ThreadItem::ToolResult {
+                    tool_call_id,
+                    text,
+                    is_error: false,
+                    ..
+                } if tool_call_id.as_str().starts_with("code-code-mode-concurrent-exec-")
+                    && text == "sunny"
+            )
+        })
+        .count();
+    assert_eq!(nested_calls, 2);
+    assert_eq!(nested_results, 2);
+    assert!(snapshot.items.iter().any(|item| {
+        matches!(
+            item,
+            ThreadItem::ToolResult {
+                tool_call_id,
+                text,
+                is_error: false,
+                ..
+            } if tool_call_id.as_str() == "code-mode-concurrent-exec"
+                && text.contains("sunny")
+        )
+    }));
+}
+
+#[cfg(not(feature = "code-mode"))]
+#[test]
+fn explicit_code_mode_fails_closed_when_the_runtime_feature_is_absent() {
+    let (threads, thread_id, turn_id) =
+        started_turn_with_tool_mode(zeta_protocol::ToolMode::CodeModeOnly);
+    let model = Arc::new(ScriptedModel::new([Ok(text_response("must not run"))]));
+    let executor = TurnExecutor::without_tools(threads, model.clone());
+
+    let error = match executor.execute(&thread_id, &turn_id, &CancellationSource::new().token()) {
+        Ok(_) => panic!("Code Mode must fail when the runtime feature is absent"),
+        Err(error) => error,
+    };
+
+    assert!(
+        error
+            .to_string()
+            .contains("does not include the V8 runtime")
+    );
+    assert!(model.requests().is_empty());
 }
 
 #[test]
@@ -111,6 +285,7 @@ fn frozen_tool_profile_rejects_definition_drift_before_model_invocation() {
                 )),
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                tool_mode: zeta_protocol::ToolMode::Direct,
                 tool_profile: Some(profile.clone()),
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -154,6 +329,7 @@ fn frozen_tool_profile_rejects_definition_drift_before_model_invocation() {
                 )),
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                tool_mode: zeta_protocol::ToolMode::Direct,
                 tool_profile: Some(profile),
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -287,6 +463,7 @@ fn manual_context_compaction_batches_a_prefix_that_exceeds_the_model_window() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                tool_mode: zeta_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -724,6 +901,7 @@ fn recovered_active_goal_resumes_a_running_hidden_turn() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                tool_mode: zeta_protocol::ToolMode::Direct,
                 tool_profile: None,
             },
         )
@@ -824,6 +1002,7 @@ fn compacts_durable_history_then_replans_with_the_verified_checkpoint() {
                     model: None,
                     policy_revision: "test-policy-v1".into(),
                     approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                    tool_mode: zeta_protocol::ToolMode::Direct,
                     tool_profile: None,
                     activated_skills: Vec::new(),
                     input: vec![UserInput::Text {
@@ -846,6 +1025,7 @@ fn compacts_durable_history_then_replans_with_the_verified_checkpoint() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                tool_mode: zeta_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -906,6 +1086,7 @@ fn provider_preflight_tightens_the_budget_and_rechecks_after_compaction() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                tool_mode: zeta_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -980,6 +1161,7 @@ fn explicit_skill_selection_uses_frozen_digest_and_layered_body() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                tool_mode: zeta_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: vec![activation.clone()],
                 input: vec![
@@ -1491,6 +1673,7 @@ fn restart_after_overflow_checkpoint_commit_does_not_replay_the_model_call() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                tool_mode: zeta_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -1512,6 +1695,7 @@ fn restart_after_overflow_checkpoint_commit_does_not_replay_the_model_call() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                tool_mode: zeta_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -1651,6 +1835,7 @@ fn model_usage_and_goal_projection_are_identical_after_recovery() {
                 model: Some(model_ref.clone()),
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                tool_mode: zeta_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -1808,6 +1993,7 @@ fn per_thread_mailboxes_run_independently_and_interrupt_the_active_turn() {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                tool_mode: zeta_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -2954,7 +3140,37 @@ impl ActionPolicyService for SandboxActionPolicyService {
     }
 }
 
+#[cfg(feature = "code-mode")]
+struct CodeModeControlPolicy;
+
+#[cfg(feature = "code-mode")]
+impl ActionPolicyService for CodeModeControlPolicy {
+    fn revision(&self) -> String {
+        "test-policy-v1".into()
+    }
+
+    fn decide(
+        &self,
+        request: &ActionReviewRequest,
+        _: &zeta_async_utils::CancellationToken,
+    ) -> Result<ExecutionDecision, CoreError> {
+        match request.sandbox() {
+            SandboxCompatibility::Supported(policy) => Ok(ExecutionDecision::RunSandboxed(*policy)),
+            SandboxCompatibility::NotApplicable { .. } => Ok(ExecutionDecision::RunUnsandboxed {
+                grant_id: zeta_action_policy::GrantId::new("code-mode-test-grant"),
+            }),
+            SandboxCompatibility::Unsupported { reason } => Err(CoreError::Policy(reason.clone())),
+        }
+    }
+}
+
 fn started_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
+    started_turn_with_tool_mode(zeta_protocol::ToolMode::Direct)
+}
+
+fn started_turn_with_tool_mode(
+    tool_mode: zeta_protocol::ToolMode,
+) -> (Arc<ThreadController>, ThreadId, TurnId) {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),
     )));
@@ -2975,6 +3191,7 @@ fn started_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                tool_mode,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -3001,6 +3218,7 @@ fn started_turn_with_history() -> (Arc<ThreadController>, ThreadId, TurnId) {
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                tool_mode: zeta_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {

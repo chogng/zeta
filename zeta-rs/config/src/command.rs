@@ -15,6 +15,7 @@ use zeta_model_provider_config::ModelProviderConfig;
 use zeta_protocol::CommandId;
 use zeta_protocol::Patch;
 use zeta_protocol::ProviderId;
+use zeta_protocol::ToolMode;
 use zeta_workspace::WorkspaceTrustId;
 
 /// A three-state update for user-facing preferences.
@@ -25,6 +26,8 @@ pub struct PreferencesUpdate {
     pub preferred_model: Patch<ModelRef>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub approval_review_model: Patch<ApprovalReviewModelSelection>,
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    pub tool_mode: Patch<ToolMode>,
 }
 
 /// Typed mutations accepted by the user configuration authority.

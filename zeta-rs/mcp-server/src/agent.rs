@@ -329,6 +329,7 @@ impl<T: JsonRpcTransport + Send> AppServerAgentService<T> {
                     request: SessionRequest::StartTurn {
                         thread_id: thread_id.clone(),
                         approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                        tool_mode: None,
                         input: vec![InputItem::Text {
                             text: prompt.to_string(),
                         }],

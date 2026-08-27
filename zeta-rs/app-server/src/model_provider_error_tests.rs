@@ -116,6 +116,7 @@ fn provider_context_overflow_compacts_and_retries_through_the_product_boundary()
                 model: None,
                 policy_revision: "provider-error-policy-v1".into(),
                 approval_mode: ApprovalMode::AskPermissions,
+                tool_mode: zeta_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -137,6 +138,7 @@ fn provider_context_overflow_compacts_and_retries_through_the_product_boundary()
                 model: None,
                 policy_revision: "provider-error-policy-v1".into(),
                 approval_mode: ApprovalMode::AskPermissions,
+                tool_mode: zeta_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {
@@ -242,6 +244,7 @@ fn run_provider_failure(failure: ProviderFailure) -> (StableTurnErrorCode, bool,
                 model: None,
                 policy_revision: "provider-error-policy-v1".into(),
                 approval_mode: ApprovalMode::AskPermissions,
+                tool_mode: zeta_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),
                 input: vec![UserInput::Text {

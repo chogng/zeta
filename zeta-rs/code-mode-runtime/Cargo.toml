@@ -1,0 +1,23 @@
+[package]
+name = "zeta-code-mode-runtime"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_code_mode_runtime"
+path = "src/lib.rs"
+
+[dependencies]
+deno_core_icudata = { workspace = true }
+serde_json = { workspace = true }
+v8 = { workspace = true, features = ["v8_enable_sandbox"] }
+zeta-code-mode-protocol = { workspace = true }
+zeta-protocol = { workspace = true }
+
+[lints.rust]
+# This crate is the narrow V8 FFI boundary. The heap-limit callback and linked-sandbox probe are
+# the only direct unsafe operations; JavaScript/tool execution remains behind safe Rust APIs.
+unsafe_code = "allow"

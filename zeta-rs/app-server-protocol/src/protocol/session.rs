@@ -18,6 +18,7 @@ use zeta_protocol::Session;
 use zeta_protocol::SessionUpdateEnvelope;
 use zeta_protocol::Thread;
 use zeta_protocol::ThreadUpdateEnvelope;
+use zeta_protocol::ToolMode;
 use zeta_thread_transcript::ThreadTranscriptSnapshot;
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -83,6 +84,9 @@ pub enum SessionRequest {
         thread_id: ThreadId,
         #[serde(default)]
         approval_mode: ApprovalMode,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        tool_mode: Option<ToolMode>,
         #[schemars(length(min = 1))]
         input: Vec<InputItem>,
     },

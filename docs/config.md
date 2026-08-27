@@ -7,6 +7,8 @@
 > read-only document、exact Plugin request、declarative Hook、User Workspace trust decision 和
 > scoped resolution、Tool Search 词法/混合 embedding 模式选择、User execution-policy rule
 > persistence 与 Workspace restrictive rule intent 已实现。
+> Agent 默认 Tool Mode（Direct / CodeMode / CodeModeOnly）也由 User Config 持久化，默认 Direct；
+> App Server 可在 StartTurn 中接收一次性覆盖，并把最终值冻结进 Turn。
 > Local App Server 在 profile 下使用
 > `config.toml` 与 `state.sqlite3`，并在提交后原子切换未来的 model、Skill 与 MCP Tool safe point；
 > 已 prepare 的 Tool Call 保留旧 generation。Plugin contribution、grant 和完整环境组合仍是后续
@@ -125,6 +127,7 @@ ResolvedConfigSnapshot
 | --- | --- | --- |
 | 产品 Theme/UI preference | profile `configuration.json` | 使用产品命名的 typed key；不进入 App Server Config、Workspace、Session 或 Agent runtime snapshot |
 | Preferred model | User、Workspace、Session、launch | 只影响下一个 model safe point |
+| Tool Mode | User、StartTurn override | 默认 Direct；最终值在 Turn 接受时冻结，运行中不随配置变化 |
 | Provider endpoint/profile | User、host | Workspace 不能静默替换认证或网络边界 |
 | Standalone MCP server | User、Workspace | Workspace declaration 需要 trust/grant 后才能启动 |
 | Plugin request | User、Workspace | 只能请求 exact package/version 与 desired enablement，不能证明已安装、激活或授权 |
@@ -278,6 +281,10 @@ pub struct ResolvedConfigSnapshot {
 内容为 pending intent；只有 Workspace preferred model 在 provider 已由 User 配置时才覆盖 user
 default。审批模型始终来自 User/managed configuration，Workspace 无权覆盖。未配置的 provider
 产生 diagnostic，不会暗中选择或创建 endpoint。
+
+`ResolvedConfig.tool_mode` 是后续 Turn 的全局默认值。`session/request.startTurn.toolMode` 若存在则
+只覆盖该轮；不存在时读取当前 resolved snapshot。Core 在 `StartTurn` command、`TurnAccepted`
+event 和 Turn snapshot 中保存最终模式，因此 command replay 和进程恢复不会重新读取可变配置。
 
 `ConfigGeneration` 只在 consumer-visible resolved value 或 diagnostics gate 发生变化时递增。
 snapshot 不包含：

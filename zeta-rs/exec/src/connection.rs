@@ -305,6 +305,7 @@ impl ExecConnection for EmbeddedConnection {
                 request: SessionRequest::StartTurn {
                     thread_id,
                     approval_mode,
+                    tool_mode: None,
                     input,
                 },
             })

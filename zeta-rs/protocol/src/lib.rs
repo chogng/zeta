@@ -14,6 +14,7 @@ mod stream;
 mod thread;
 mod tool_binding;
 mod tool_execution;
+mod tool_mode;
 mod tool_name;
 mod turn;
 mod turn_execution;
@@ -74,6 +75,7 @@ pub use tool_execution::{
     ProcessExecutionOutput, ProcessExitStatus, SandboxDenialOutput, ToolExecutionOutput,
     ToolReplaySafety,
 };
+pub use tool_mode::ToolMode;
 pub use tool_name::{InvalidToolName, ToolName};
 pub use turn::{ToolProfileSnapshot, Turn, TurnStatus};
 pub use turn_execution::TurnExecutionBinding;

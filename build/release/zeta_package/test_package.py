@@ -86,6 +86,9 @@ class PackageTests(unittest.TestCase):
             root = Path(temporary)
             server_binary = executable_file(root / "zeta-source", b"zeta-server")
             daemon_binary = executable_file(root / "daemon-source", b"zeta-app-server-daemon")
+            code_mode_host_binary = executable_file(
+                root / "code-mode-host-source", b"zeta-code-mode-host"
+            )
             rg_binary = executable_file(root / "rg-source", b"ripgrep")
             output = root / "package"
             spec = TARGETS["aarch64-apple-darwin"]
@@ -104,6 +107,7 @@ class PackageTests(unittest.TestCase):
                 spec,
                 server_binary,
                 daemon_binary,
+                code_mode_host_binary,
                 ripgrep,
                 node,
             )
@@ -112,6 +116,10 @@ class PackageTests(unittest.TestCase):
             self.assertEqual(
                 b"zeta-app-server-daemon",
                 (output / "bin" / "zeta-app-server-daemon").read_bytes(),
+            )
+            self.assertEqual(
+                b"zeta-code-mode-host",
+                (output / "bin" / "zeta-code-mode-host").read_bytes(),
             )
             self.assertEqual(b"ripgrep", (output / "zeta-path" / "rg").read_bytes())
             self.assertEqual(
@@ -245,6 +253,7 @@ class PackageTests(unittest.TestCase):
                     spec,
                     server_binary,
                     daemon_binary,
+                    code_mode_host_binary,
                     ripgrep,
                     node,
                 )
@@ -261,6 +270,7 @@ class PackageTests(unittest.TestCase):
                 spec,
                 executable_file(root / "zeta-source", b"zeta-server"),
                 executable_file(root / "daemon-source", b"zeta-app-server-daemon"),
+                executable_file(root / "code-mode-host-source", b"zeta-code-mode-host"),
                 resolve_ripgrep(
                     spec,
                     PRODUCTION_LOCK,
@@ -349,6 +359,9 @@ class PackageTests(unittest.TestCase):
             bubblewrap_lock = write_bubblewrap_lock(root, source_archive)
             server_binary = executable_file(root / "zeta-source", b"zeta-server")
             daemon_binary = executable_file(root / "daemon-source", b"zeta-app-server-daemon")
+            code_mode_host_binary = executable_file(
+                root / "code-mode-host-source", b"zeta-code-mode-host"
+            )
             rg_binary = executable_file(root / "rg-source", b"ripgrep")
             bwrap_binary = executable_file(root / "bwrap-source", b"bubblewrap")
             spec = TARGETS["x86_64-unknown-linux-musl"]
@@ -378,6 +391,7 @@ class PackageTests(unittest.TestCase):
                 spec,
                 server_binary,
                 daemon_binary,
+                code_mode_host_binary,
                 ripgrep,
                 node,
                 bubblewrap,
@@ -415,6 +429,8 @@ class PackageTests(unittest.TestCase):
             server_binary.write_bytes(b"zeta-server")
             daemon_binary = root / "zeta-app-server-daemon.exe"
             daemon_binary.write_bytes(b"zeta-app-server-daemon")
+            code_mode_host_binary = root / "zeta-code-mode-host.exe"
+            code_mode_host_binary.write_bytes(b"zeta-code-mode-host")
             rg_binary = root / "rg.exe"
             rg_binary.write_bytes(b"ripgrep")
             command_runner = root / "zeta-command-runner.exe"
@@ -447,6 +463,7 @@ class PackageTests(unittest.TestCase):
                 spec,
                 server_binary,
                 daemon_binary,
+                code_mode_host_binary,
                 ripgrep,
                 node,
                 windows_helpers=helpers,

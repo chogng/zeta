@@ -110,6 +110,7 @@ impl AppServer {
                     approval_review_model: approval_review_model_update_from_dto(
                         params.approval_review_model,
                     )?,
+                    tool_mode: params.tool_mode,
                 }),
             })
             .map_err(config_operation_error)?;
@@ -471,6 +472,7 @@ fn config_read_result(
         generation: snapshot.generation.get(),
         preferred_model: snapshot.values.preferred_model.map(model_ref_dto),
         approval_review_model: approval_review_model_dto(snapshot.values.approval_review_model),
+        tool_mode: snapshot.values.tool_mode,
         providers: snapshot
             .values
             .providers

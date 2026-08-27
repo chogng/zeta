@@ -9,6 +9,13 @@ from typing import Optional
 from .cargo_paths import cargo_profile_directory
 from .cargo_paths import resolve_cargo_target_directory
 from .targets import TargetSpec
+from .v8 import resolve_v8_cargo_env
+
+
+def cargo_environment(spec: TargetSpec) -> dict[str, str]:
+    environment = os.environ.copy()
+    environment.update(resolve_v8_cargo_env(spec, environ=environment))
+    return environment
 
 
 def resolve_server_binary(
@@ -41,7 +48,7 @@ def resolve_server_binary(
         "--target-dir",
         str(target_directory),
     ]
-    subprocess.run(command, check=True)
+    subprocess.run(command, check=True, env=cargo_environment(spec))
     profile_directory = cargo_profile_directory(cargo_profile)
     binary = (
         target_directory
@@ -84,7 +91,7 @@ def resolve_app_server_daemon_binary(
         "--target-dir",
         str(target_directory),
     ]
-    subprocess.run(command, check=True)
+    subprocess.run(command, check=True, env=cargo_environment(spec))
     profile_directory = cargo_profile_directory(cargo_profile)
     binary = (
         target_directory
@@ -97,6 +104,53 @@ def resolve_app_server_daemon_binary(
         "built Zeta App Server daemon executable",
         cargo,
         spec.is_windows,
+    )
+
+
+def resolve_code_mode_host_binary(
+    repository_root: Path,
+    spec: TargetSpec,
+    explicit_binary: Optional[Path],
+    cargo: str,
+    cargo_profile: str,
+) -> Path:
+    if explicit_binary is not None:
+        return validate_input_binary(
+            explicit_binary,
+            "Zeta Code Mode Host executable",
+            "--code-mode-host-bin",
+            spec.is_windows,
+        )
+
+    target_directory = resolve_cargo_target_directory(repository_root)
+    subprocess.run(
+        [
+            cargo,
+            "build",
+            "--manifest-path",
+            str(repository_root / "Cargo.toml"),
+            "--package",
+            "zeta-code-mode-host",
+            "--bin",
+            "zeta-code-mode-host",
+            "--profile",
+            cargo_profile,
+            "--target",
+            spec.target,
+            "--target-dir",
+            str(target_directory),
+        ],
+        check=True,
+        env=cargo_environment(spec),
+    )
+    binary = (
+        target_directory
+        / spec.target
+        / cargo_profile_directory(cargo_profile)
+        / spec.code_mode_host_name
+    )
+    return validate_input_binary(
+        binary, "built Zeta Code Mode Host executable", cargo, spec.is_windows
     )
 
 
