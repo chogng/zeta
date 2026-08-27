@@ -2,6 +2,17 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
+			"name": "Run Zeta Code",
+			"type": "node-terminal",
+			"request": "launch",
+			"command": "just zeta",
+			"cwd": "${workspaceFolder}",
+			"presentation": {
+				"group": "zeta-code",
+				"order": 1
+			}
+		},
+		{
 			"name": "Run app (watch)",
 			"type": "node-terminal",
 			"request": "launch",
