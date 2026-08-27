@@ -62,7 +62,7 @@ flowchart TB
 
 人类观测与控制界面不必经过 Agent Runtime 才能读取工作区。用户可以直接打开文件、跳转定义、查看 Diff 或进入 Terminal；Agent 也消费同一份 canonical capability。两者不得建立第二套 diagnostics、Git status、文件内容或终端状态。
 
-Human Takeover 需要完整的单文件编辑闭环，但不推出完整传统 IDE。`app` 使用 MultiDiffEditor 和 DiffEditor 审查 Change Set，使用 CodeEditor 完成文件阅读、定位、编辑、保存和冲突处理；这些内容作为当前 PanePart 中的 PaneInput 打开，具体布局边界由 [`LAYOUT.md`](../LAYOUT.md) 拥有。
+Human Takeover 需要完整的单文件编辑闭环，但不推出完整传统 IDE。`Files` 视图使用 CodeEditor 完成文件阅读、定位、编辑、保存和冲突处理；`Changes` 视图使用 MultiDiffEditor 和 DiffEditor 审查 Change Set。具体布局边界由 [`LAYOUT.md`](../LAYOUT.md) 拥有。
 
 ## 机器反馈与人类观测
 
@@ -106,7 +106,7 @@ Workspace
 
 ## 当前产品结构
 
-当前产品仍以 Zeta ThreadTimeline 为中央区域，普通用户消息、Zeta 消息、ToolCall 和用户直接发起的 Shell Turn 进入同一 durable Thread；Terminal、Editor、Files 和 Changes 仍通过独立 Surface 或右侧区域接入。目标布局把这些内容统一为当前 PanePart 中的 PaneInput；外部 AI CLI 只进入 Terminal Pane，不进入 Zeta Thread。具体结构与当前差距由 [`LAYOUT.md`](../LAYOUT.md) 拥有。
+当前产品仍以 Zeta ThreadTimeline 为中央区域，普通用户消息、Zeta 消息、ToolCall 和用户直接发起的 Shell Turn 进入同一 durable Thread；Terminal、Files 和 Changes 仍通过独立区域接入。目标布局把 `Agent`、`Terminal`、`Files`、`Changes` 和 `Settings` 统一为当前 PanePart 中的视图输入；外部 AI CLI 只进入 Terminal Pane，不进入 Zeta Thread。具体结构与当前差距由 [`LAYOUT.md`](../LAYOUT.md) 拥有。
 
 ```text
 AgentWorkspace
@@ -120,10 +120,9 @@ AgentWorkspace
 │  ├─ Compact CodeEditor
 │  ├─ Context Toolbar
 │  └─ 分类器选择的 Agent | Shell 路由
-├─ Workspace Surfaces
-│  ├─ File Editor
-│  ├─ Files
-│  └─ Changes / Diff
+├─ Workspace Views
+│  ├─ Files → file tree / search / editor content
+│  └─ Changes → change list / Diff content
 └─ Terminal Surface
 ```
 
@@ -156,7 +155,7 @@ Terminal 不拥有 Zeta Session、Thread 或 transcript。Zeta 发起的普通�
 | 结果摘要 | Proposed Native Thread projection | 从权威事实重建，默认呈现结果并按需展开过程 |
 | Timeline scroll、展开、选择和布局 | Native presentation | 可丢弃、可从 snapshot 重建 |
 | Composer text、routing、IME 与 caret | `zeta-composer::Composer` + `zeta-editor::CodeEditorDocument` | 输入变化时重新分类；提交时产生确定的 Agent 或 Shell operation |
-| Files、Editor、Changes、Diagnostics 与 Terminal Surface | 对应 Native/domain presentation owner | 让用户检查和接管 canonical state，不复制 capability implementation |
+| Files、Changes 与 Terminal Pane | 对应 domain presentation owner | 让用户检查和接管 canonical state；Editor 和 Diff 作为视图内部内容组合 |
 | Approval、Stop 与 Retry | Core authority + Native command adapter | 明确作用范围、失败语义和恢复边界 |
 | Accept 与 Revert | Proposed domain authority + Native command adapter | 绑定明确的 Change Set 或 Checkpoint identity，不按当前屏幕内容猜测目标 |
 
@@ -196,7 +195,7 @@ Native 首次选择 Session 时调用 `session/subscribe`。App Server 返回 Se
 | AST/tree-sitter queries | 高 | 低 | 主要作为内部能力；不做独立 AST GUI |
 | Terminal/PTY/runtime logs | 很高 | 很高 | 核心；区分有界 CommandCard 与交互 Terminal |
 | Remote Workspace | 很高 | 中 | 核心；用户只需看到执行位置、状态和恢复动作 |
-| File Editor 与 Diff review | 高 | 很高 | 核心检查和接管 Surface |
+| Files 与 Changes 视图 | 高 | 很高 | 分别承载文件编辑与 Diff 审查 |
 | DAP debugger | Potentially high | 高 | Potential；先验证可复现问题、结构化状态和 Agent consumer |
 | CI、browser/dev-server feedback | Potentially high | 高 | Potential；需要可信身份、取消、revision 和结果绑定 |
 | Minimap、复杂 Editor Group | 低 | 低到中 | Non-goal，除非真实 Agent workflow 证明必要 |
