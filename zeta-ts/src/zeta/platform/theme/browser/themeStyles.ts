@@ -10,7 +10,7 @@ interface IPreviousProperty {
 }
 
 /**
- * Keeps a workbench root synchronized with its window-scoped color theme.
+ * Keeps a browser theme root synchronized with its window-scoped color theme.
  *
  * Disposing the binding restores every inline property and attribute that was
  * present before the theme was applied.

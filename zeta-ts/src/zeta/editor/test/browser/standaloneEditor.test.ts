@@ -2,10 +2,23 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../base/common/uri.js";
+import { lightColorTheme } from "../../../platform/theme/common/colorTheme.js";
 import { LanguageFeaturesService } from "../../common/services/languageService.js";
 import { StandaloneServiceCollection } from "../../standalone/browser/standaloneServices.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+const forcedColors = new browserEnvironment.window.EventTarget();
+Object.defineProperties(forcedColors, {
+	matches: { configurable: true, value: false, writable: true },
+	media: { configurable: true, value: "(forced-colors: active)" },
+});
+Object.defineProperty(browserEnvironment.window, "matchMedia", {
+	configurable: true,
+	value: (query: string) => {
+		assert.equal(query, "(forced-colors: active)");
+		return forcedColors;
+	},
+});
 let createdWorkerCount = 0;
 let terminatedWorkerCount = 0;
 class TestWorker extends browserEnvironment.window.EventTarget {
@@ -35,9 +48,35 @@ test("standalone service collection honors explicit first-scope overrides", () =
 	const languages = new LanguageFeaturesService();
 	const services = new StandaloneServiceCollection({ languageFeaturesService: languages });
 	assert.equal(services.languageFeaturesService, languages);
+	assert.equal(services.themeService.getColorTheme(), lightColorTheme);
 	services.dispose();
 	assert.equal(languages.isDisposed, false);
 	languages.dispose();
+});
+
+test("standalone theme APIs register, select, and project a named theme", () => {
+	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	stanza.editor.defineTheme("standalone-test", {
+		label: "Standalone Test",
+		colorScheme: stanza.ColorScheme.Dark,
+		colors: { "editor.background": "#101010" },
+	});
+	const container = dom.window.document.querySelector<HTMLElement>("main")!;
+	const editor = stanza.editor.create(container, { value: "theme", theme: "standalone-test" });
+	assert.equal(container.getAttribute("data-color-theme"), "standalone-test");
+	assert.equal(container.style.getPropertyValue("--zeta-editor-background"), "#101010");
+
+	stanza.editor.setTheme("zeta-light");
+	assert.equal(container.getAttribute("data-color-theme"), "zeta-light");
+	editor.dispose();
+	dom.window.close();
+});
+
+test("standalone public API keeps compiled theme snapshots internal", () => {
+	for (const exportName of ["lightColorTheme", "darkColorTheme", "highContrastLightColorTheme", "highContrastDarkColorTheme"]) {
+		assert.equal(exportName in stanza, false);
+	}
 });
 
 test("standalone API registers URI and language identity with model lifecycle events", () => {

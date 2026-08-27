@@ -1,57 +1,12 @@
 :root {
-  color-scheme: dark;
+  color-scheme: light;
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
   --zeta-font-family: Inter, ui-sans-serif, system-ui, sans-serif;
   --zeta-font-family-monospace: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
-  --zeta-foreground: #cccccc;
-  --zeta-description-foreground: #9d9d9d;
-  --zeta-editor-foreground: #d4d4d4;
-  --zeta-editor-description-foreground: #858585;
-  --zeta-editor-background: #1e1e1e;
-  --zeta-editor-border: #3c3c3c;
-  --zeta-editor-input-background: #1e1e1e;
-  --zeta-editor-widget-background: #252526;
-  --zeta-editor-widget-border: #454545;
-  --zeta-editor-widget-shadow: rgb(0 0 0 / 36%);
-  --zeta-editor-hover-background: #252526;
-  --zeta-editor-hover-border: #454545;
-  --zeta-editor-hover-foreground: #cccccc;
-  --zeta-editor-list-hover-background: #2a2d2e;
-  --zeta-editor-inlay-hint-foreground: #969696;
-  --zeta-editor-inline-completion-foreground: #7f7f7f;
-  --zeta-editor-composition-border: #0e639c;
-  --zeta-editor-token-comment-foreground: #6a9955;
-  --zeta-editor-token-keyword-foreground: #c586c0;
-  --zeta-editor-token-string-foreground: #ce9178;
-  --zeta-editor-token-number-foreground: #b5cea8;
-  --zeta-editor-token-regexp-foreground: #d16969;
-  --zeta-editor-token-type-foreground: #4ec9b0;
-  --zeta-editor-token-function-foreground: #dcdcaa;
-  --zeta-editor-token-variable-foreground: #9cdcfe;
-  --zeta-editor-token-operator-foreground: #d4d4d4;
-  --zeta-focus-border: #007fd4;
-  --zeta-border: #3c3c3c;
-  --zeta-widget-border: #454545;
-  --zeta-widget-shadow: rgb(0 0 0 / 36%);
-  --zeta-input-background: #313131;
-  --zeta-input-border: #3c3c3c;
-  --zeta-input-foreground: #cccccc;
-  --zeta-input-placeholder-foreground: #989898;
-  --zeta-button-foreground: #ffffff;
-  --zeta-button-hover-background: #1177bb;
-  --zeta-toolbar-hover-background: #2a2d2e;
-  --zeta-list-active-selection-background: #04395e;
-  --zeta-list-active-selection-foreground: #ffffff;
-  --zeta-list-hover-background: #2a2d2e;
-  --zeta-selection-background: #264f78;
-  --zeta-search-match-background: #613214;
-  --zeta-error-foreground: #f48771;
-  --zeta-warning-foreground: #cca700;
-  --zeta-success-foreground: #89d185;
-  --zeta-scrollbar-size: 10px;
-  --zeta-scrollbar-slider-background: rgb(121 121 121 / 40%);
-  --zeta-scrollbar-slider-hover-background: rgb(100 100 100 / 70%);
-  --zeta-scrollbar-slider-active-background: rgb(191 191 191 / 40%);
+  --zeta-foreground: #3b3b3b;
+  --zeta-description-foreground: #616161;
+  --zeta-editor-background: #ffffff;
+  --zeta-border: #e5e5e5;
 }
 
 * {
@@ -79,7 +34,7 @@ body {
   justify-content: space-between;
   min-width: 0;
   padding: 0 10px 0 14px;
-  background: #181818;
+  background: #f3f3f3;
   border-bottom: 1px solid var(--zeta-border);
 }
 

@@ -3,13 +3,13 @@ import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
 import { bindColorTheme } from "../../../platform/theme/browser/themeStyles.js";
-import { type IColorTheme } from "../../../platform/theme/common/colorTheme.js";
 import { EditorBrowser, type EditorBrowserOptions, type EditorTextViewState, type IEditorBrowser } from "../../browser/editorBrowser.js";
 import { type EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
 import { type TextRange } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { type EditorView, type EditorViewport } from "../../browser/view.js";
 import { type CodeEditorWidget } from "../../browser/widget/codeEditor/codeEditorWidget.js";
+import { type IStandaloneThemeData } from "../common/standaloneTheme.js";
 import { StandaloneServices, type StandaloneServiceOverrides } from "./standaloneServices.js";
 import { type StandaloneModelLanguageChangeEvent } from "./standaloneModelService.js";
 
@@ -25,6 +25,8 @@ export interface IStandaloneEditorConstructionOptions extends StandaloneEditorBr
 	readonly resource?: URI;
 	readonly label?: string;
 	readonly readOnly?: boolean;
+	readonly theme?: string;
+	readonly autoDetectHighContrast?: boolean;
 }
 
 export interface IStandaloneCodeEditor extends IEditorBrowser {
@@ -44,6 +46,7 @@ export interface IStandaloneEditorApi {
 	readonly onDidCreateModel: Event<TextModel>;
 	readonly onWillDisposeModel: Event<TextModel>;
 	readonly onDidChangeModelLanguage: Event<StandaloneModelLanguageChangeEvent>;
+	readonly defineTheme: typeof defineTheme;
 	readonly setTheme: typeof setTheme;
 }
 
@@ -70,11 +73,15 @@ export function create(
 		resource,
 		label,
 		readOnly,
+		theme,
+		autoDetectHighContrast,
 		...browserOptions
 	} = options;
 	if (suppliedModel && (value !== undefined || languageId !== undefined || resource !== undefined)) {
 		throw new TypeError("Standalone editor model cannot be combined with value, languageId, or resource");
 	}
+	if (theme !== undefined) services.themeService.setTheme(theme);
+	if (autoDetectHighContrast !== undefined) services.themeService.setAutoDetectHighContrast(autoDetectHighContrast);
 	const model = suppliedModel ?? services.modelService.createModel(value ?? "", languageId, resource);
 	const ownsModel = suppliedModel === undefined;
 	try {
@@ -128,8 +135,12 @@ export function getEditors(): readonly IStandaloneCodeEditor[] {
 	return Object.freeze([...editors]);
 }
 
-export function setTheme(theme: IColorTheme): void {
-	StandaloneServices.get().themeService.setColorTheme(theme);
+export function defineTheme(themeId: string, themeData: IStandaloneThemeData): void {
+	StandaloneServices.get().themeService.defineTheme(themeId, themeData);
+}
+
+export function setTheme(themeId: string): void {
+	StandaloneServices.get().themeService.setTheme(themeId);
 }
 
 export function createStandaloneEditorApi(): IStandaloneEditorApi {
@@ -146,6 +157,7 @@ export function createStandaloneEditorApi(): IStandaloneEditorApi {
 		onDidCreateModel,
 		onWillDisposeModel,
 		onDidChangeModelLanguage,
+		defineTheme,
 		setTheme,
 	});
 }

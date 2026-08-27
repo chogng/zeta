@@ -1,19 +1,19 @@
 import { Disposable } from "../../../base/common/lifecycle.js";
 import { createServiceIdentifier, ServiceContainer, type ServiceIdentifier } from "../../../platform/instantiation/common/instantiation.js";
-import { darkColorTheme } from "../../../platform/theme/common/colorTheme.js";
-import { IThemeService, ThemeService, type IThemeService as ThemeServiceContract } from "../../../platform/theme/common/themeService.js";
+import { IThemeService } from "../../../platform/theme/common/themeService.js";
 import { createCompletionWorkerFactory } from "../../browser/language/languageCompletionWorkerClient.js";
 import { createSyntaxWorkerFactory } from "../../browser/language/syntaxWorkerClient.js";
 import { type LanguageCompletionWorkerFactory } from "../../common/languages/completion/languageCompletionService.js";
 import { type SyntaxWorkerFactory } from "../../common/languages/syntax/syntaxService.js";
 import { LanguageFeaturesService, type ILanguageFeaturesService } from "../../common/services/languageService.js";
+import { type IStandaloneThemeService } from "../common/standaloneTheme.js";
 import { IStandaloneModelService, StandaloneModelService } from "./standaloneModelService.js";
+import { StandaloneThemeService } from "./standaloneThemeService.js";
 
 const IStandaloneLanguageFeaturesService: ServiceIdentifier<ILanguageFeaturesService> = createServiceIdentifier<ILanguageFeaturesService>("standaloneLanguageFeaturesService");
 
 export interface StandaloneServiceOverrides {
 	readonly languageFeaturesService?: ILanguageFeaturesService;
-	readonly themeService?: ThemeServiceContract;
 	readonly syntaxWorkerFactory?: SyntaxWorkerFactory;
 	readonly completionWorkerFactory?: LanguageCompletionWorkerFactory;
 }
@@ -22,7 +22,7 @@ export class StandaloneServiceCollection extends Disposable {
 	readonly instantiationService: ServiceContainer;
 	readonly modelService: IStandaloneModelService;
 	readonly languageFeaturesService: ILanguageFeaturesService;
-	readonly themeService: ThemeServiceContract;
+	readonly themeService: IStandaloneThemeService;
 	readonly syntaxWorkerFactory: SyntaxWorkerFactory;
 	readonly completionWorkerFactory: LanguageCompletionWorkerFactory;
 
@@ -31,12 +31,11 @@ export class StandaloneServiceCollection extends Disposable {
 		const instantiationService = this.instantiationService = this._register(new ServiceContainer());
 		if (overrides.languageFeaturesService) instantiationService.registerInstance(IStandaloneLanguageFeaturesService, overrides.languageFeaturesService);
 		else instantiationService.registerSingleton(IStandaloneLanguageFeaturesService, () => new LanguageFeaturesService());
-		if (overrides.themeService) instantiationService.registerInstance(IThemeService, overrides.themeService);
-		else instantiationService.registerSingleton(IThemeService, () => new ThemeService(darkColorTheme));
+		instantiationService.registerSingleton(IThemeService, () => new StandaloneThemeService(window));
+		this.themeService = instantiationService.get(IThemeService) as IStandaloneThemeService;
 		instantiationService.registerSingleton(IStandaloneModelService, () => new StandaloneModelService());
 		this.modelService = instantiationService.get(IStandaloneModelService);
 		this.languageFeaturesService = instantiationService.get(IStandaloneLanguageFeaturesService);
-		this.themeService = instantiationService.get(IThemeService);
 		this.syntaxWorkerFactory = overrides.syntaxWorkerFactory ?? createSyntaxWorkerFactory();
 		this.completionWorkerFactory = overrides.completionWorkerFactory ?? createCompletionWorkerFactory();
 	}

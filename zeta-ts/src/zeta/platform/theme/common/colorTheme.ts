@@ -146,7 +146,7 @@ export const colorIdentifiers: readonly ColorIdentifier[] = Object.freeze(Colors
 export const sizeIdentifiers: readonly string[] = Object.freeze(Sizes.getSizes().map(({ id }) => id));
 export type ThemeColors = Readonly<Record<ColorIdentifier, string>>;
 
-/** Immutable, fully resolved theme snapshot selected for one workbench window. */
+/** Immutable, fully resolved theme snapshot selected for one frontend host. */
 export interface IColorTheme {
 	readonly id: string;
 	readonly label: string;
@@ -191,3 +191,5 @@ export function createColorTheme(options: IColorThemeOptions): IColorTheme {
 
 export const darkColorTheme = createColorTheme({ id: "zeta-dark", label: "Zeta Dark", colorScheme: ColorScheme.Dark });
 export const lightColorTheme = createColorTheme({ id: "zeta-light", label: "Zeta Light", colorScheme: ColorScheme.Light });
+export const highContrastDarkColorTheme = createColorTheme({ id: "zeta-high-contrast-dark", label: "Zeta High Contrast Dark", colorScheme: ColorScheme.HighContrastDark });
+export const highContrastLightColorTheme = createColorTheme({ id: "zeta-high-contrast-light", label: "Zeta High Contrast Light", colorScheme: ColorScheme.HighContrastLight });

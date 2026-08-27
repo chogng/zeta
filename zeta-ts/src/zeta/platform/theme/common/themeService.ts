@@ -5,7 +5,7 @@ import {
 } from "../../instantiation/common/instantiation.js";
 import type { IColorTheme } from "./colorTheme.js";
 
-/** Window-scoped access to the active workbench theme. */
+/** Window-scoped access to the active frontend color theme. */
 export interface IThemeService {
 	readonly onDidColorThemeChange: Event<IColorTheme>;
 
