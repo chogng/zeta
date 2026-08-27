@@ -46,5 +46,5 @@
 ## 验证
 
 - `cargo test -p zeta-agent-session` 覆盖队列容量、重连退避、断线期拒绝和订阅快照协议构造。
-- `cargo check -p app --all-targets` 验证产品连接适配、事件 sink 和全部 app 测试构造点。
+- `just app-check` 验证产品连接适配、事件 sink 和全部 app 测试构造点，并使用版本锁定且经过摘要校验的 V8 archive 与 binding。
 - 修改 App Server Session 协议时，同时检查 `src/worker/operations.rs`、`src/worker/operations_tests.rs` 和 app 中构造 `Thread`、`ConfigReadResult` 的测试。

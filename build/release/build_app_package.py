@@ -17,10 +17,12 @@ from urllib.parse import urlsplit
 
 from remote_runtime_bundle import RemoteRuntimeBundle
 from remote_runtime_bundle import validate_remote_runtime_bundle
+from zeta_package.cargo import cargo_environment
 from zeta_package.cargo_paths import cargo_artifact_executable
 from zeta_package.cargo_paths import cargo_rendered_diagnostic
 from zeta_package.cargo_paths import parse_cargo_message
 from zeta_package.cargo_paths import resolve_cargo_target_directory
+from zeta_package.targets import TARGETS
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -95,7 +97,7 @@ def sha256(path: Path) -> str:
 def resolve_binary(
     cargo: str,
     profile: str,
-    target: Optional[str],
+    target: str,
     explicit: Optional[Path],
     remote_runtime_bundle: Optional[RemoteRuntimeBundle],
     remote_runtime_release: Optional[RemoteRuntimeNetworkRelease],
@@ -125,9 +127,8 @@ def resolve_binary(
             "json-render-diagnostics",
         ]
     )
-    if target:
-        command.extend(["--target", target])
-    environment = os.environ.copy()
+    command.extend(["--target", target])
+    environment = cargo_environment(TARGETS[target])
     selected_sha256 = (
         remote_runtime_release.catalog_sha256
         if remote_runtime_release is not None
@@ -266,7 +267,7 @@ def build_package(
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--package-dir", type=Path, required=True)
-    parser.add_argument("--target")
+    parser.add_argument("--target", choices=sorted(TARGETS))
     parser.add_argument("--app-bin", type=Path)
     parser.add_argument("--cargo", default="cargo")
     parser.add_argument("--cargo-profile", default="release")
@@ -298,7 +299,7 @@ def main() -> int:
     binary = resolve_binary(
         args.cargo,
         args.cargo_profile,
-        args.target,
+        target,
         args.app_bin,
         remote_runtime_bundle,
         remote_runtime_release,

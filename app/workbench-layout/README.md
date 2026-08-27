@@ -21,4 +21,4 @@ runtime resources.
 ## Validation
 
 Run `cargo test -p zeta-workbench-layout` for structural layout behavior and
-`cargo check -p app` for product integration.
+`python3 -B build/cargo_with_v8.py check -p app` for product integration.

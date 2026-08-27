@@ -25,5 +25,5 @@ The page currently exposes General, Language Servers, Appearance, and Keybinding
 
 ## Verification
 
-Run `cargo test -p zeta-settings` and `cargo test --manifest-path Cargo.toml -p app` after changing
+Run `cargo test -p zeta-settings` and `python3 -B build/cargo_with_v8.py test -p app` after changing
 the page contract or a host adapter.

@@ -23,7 +23,7 @@
 python3 -B build/cargo_with_v8.py test -p zeta-code-mode-runtime
 ```
 
-包装脚本会读取 Cargo 参数中的 `--target`；没有指定时使用当前主机目标。Desktop 的 `prepareDevPackage.ts` 和发布构建已经自动执行相同的下载与环境配置，不需要手工设置环境变量。
+包装脚本会读取 Cargo 参数中的 `--target`；没有指定时使用当前主机目标。依赖 Code Mode 的 Cargo 构建必须通过该脚本执行，`just app`、`just app-dev`、`just app-check`、`just app-test`、Desktop 的 `prepareDevPackage.ts` 和发布构建都会自动执行相同的下载与环境配置，不需要手工设置环境变量。
 
 ## 更新约束
 

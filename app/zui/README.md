@@ -316,7 +316,7 @@ cargo check -p zui --no-default-features --features native --target x86_64-pc-wi
 bazel test //app/zui:zui-unit-tests
 cargo test -p zeta-ui
 cargo check -p zui-demo --features native --bin zui-native-demo
-cargo test -p app
+python3 -B build/cargo_with_v8.py test -p app
 ```
 
 `zui-demo` 是不依赖终端、App Server 或产品 icon catalog 的最小宿主，用来验证 public namespaces、scene contract、renderer 替换、`ViewState` / `ComponentRuntime` retained composition 和默认 native Application composition。其 native binary 还覆盖 root/child 双窗口、proxy 异步窗口创建与退出、product window registry/relationship、display snapshot/spatial query/change callback、retained handle 关闭、位置/层级、subscription-driven redraw、task/timer、checkbox/accelerator/native-role menu 与 accessibility publication。

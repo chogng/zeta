@@ -48,7 +48,7 @@ atomic-write helper.
 
 ```bash
 cargo test -p zeta-keybindings-host
-cargo test -p app
+python3 -B build/cargo_with_v8.py test -p app
 ```
 
 The crate must not depend on `NativeApp`, App Server clients, terminal state,

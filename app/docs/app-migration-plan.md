@@ -197,10 +197,10 @@ boundary CI 均已通过。
 阶段一完成后至少通过：
 
 ```text
-cargo check --manifest-path Cargo.toml --workspace
-cargo check --manifest-path Cargo.toml -p app
-cargo test --manifest-path Cargo.toml -p app
-cargo test --manifest-path Cargo.toml --workspace
+python3 -B build/cargo_with_v8.py check --workspace
+python3 -B build/cargo_with_v8.py check -p app
+python3 -B build/cargo_with_v8.py test -p app
+python3 -B build/cargo_with_v8.py test --workspace
 just --dry-run app
 ```
 

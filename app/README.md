@@ -52,12 +52,12 @@ Tab/Pane/Part 模型与 Native runtime，`presentation` 负责 Shell 投影，`p
 仓库根 `Cargo.toml` 是唯一 Cargo workspace；`app/Cargo.toml` 是 `app` 产品 package 和发布边界：
 
 ```bash
-cargo check --manifest-path Cargo.toml -p app
-cargo test --manifest-path Cargo.toml -p app
-cargo run --manifest-path Cargo.toml -p app
+python3 -B build/cargo_with_v8.py check -p app
+python3 -B build/cargo_with_v8.py test -p app
+python3 -B build/cargo_with_v8.py run -p app
 ```
 
-Debug 构建的本地 Agent Session 默认把当前 `app` executable 作为 profile daemon 的进程载体，确保 `cargo run -p app` 使用与产品 host 同一次构建的 App Server graph；显式 `ZETA_APP_SERVER_DAEMON_PATH` 仍优先，release 构建继续由发布环境选择独立 daemon binary。
+Debug 构建的本地 Agent Session 默认把当前 `app` executable 作为 profile daemon 的进程载体，确保 `just app` 使用与产品 host 同一次构建的 App Server graph；显式 `ZETA_APP_SERVER_DAEMON_PATH` 仍优先，release 构建继续由发布环境选择独立 daemon binary。
 
 根 Cargo profile 对完整依赖图和 Native/App Server 大型链接单元应用轻量 size optimization，在保留 limited line-table 调试信息的同时，使 macOS debug binary 的 unwind metadata 保持在 compact-unwind 编码上限内。
 
@@ -376,7 +376,7 @@ main
 just app
 
 # Without just:
-cargo run --manifest-path Cargo.toml -p app
+python3 -B build/cargo_with_v8.py run -p app
 ```
 
 `shell_scene::ShellLayout` 把 titlebar 下方 body 先交给 Tab Container/Main 横向

@@ -17,9 +17,7 @@ from test_remote_runtime_bundle import create_package
 
 
 class AppPackageTests(unittest.TestCase):
-    def test_native_source_build_uses_cargo_artifact_without_forcing_target(
-        self,
-    ) -> None:
+    def test_source_build_uses_locked_v8_inputs_for_selected_target(self) -> None:
         executable = "/custom/cargo-output/release/app"
         cargo_output = json.dumps(
             {
@@ -29,14 +27,36 @@ class AppPackageTests(unittest.TestCase):
             }
         )
         completed = CompletedProcess(["cargo"], 0, cargo_output + "\n", "")
-        with patch(
-            "build_app_package.subprocess.run", return_value=completed
-        ) as run:
-            resolved = resolve_binary("cargo", "release", None, None, None, None)
+        environment = {
+            "RUSTY_V8_ARCHIVE": "/archive",
+            "RUSTY_V8_SRC_BINDING_PATH": "/binding",
+        }
+        with (
+            patch(
+                "build_app_package.cargo_environment", return_value=environment
+            ) as cargo_environment,
+            patch(
+                "build_app_package.subprocess.run", return_value=completed
+            ) as run,
+        ):
+            resolved = resolve_binary(
+                "cargo",
+                "release",
+                "aarch64-apple-darwin",
+                None,
+                None,
+                None,
+            )
 
         command = run.call_args.args[0]
-        self.assertNotIn("--target", command)
+        self.assertEqual(
+            command[command.index("--target") + 1], "aarch64-apple-darwin"
+        )
         self.assertIn("--target-dir", command)
+        self.assertEqual(environment, run.call_args.kwargs["env"])
+        self.assertEqual(
+            "aarch64-apple-darwin", cargo_environment.call_args.args[0].target
+        )
         self.assertEqual(Path(executable), resolved)
 
     def test_stages_binary_digest_and_unsigned_state(self) -> None:
