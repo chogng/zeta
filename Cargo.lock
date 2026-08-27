@@ -10621,10 +10621,10 @@ dependencies = [
  "zeta-instructions",
  "zeta-keyring-store",
  "zeta-kimi",
- "zeta-lsp-manager",
- "zeta-lsp-server-provider",
  "zeta-linux-sandbox",
  "zeta-login",
+ "zeta-lsp-manager",
+ "zeta-lsp-server-provider",
  "zeta-marketplace-client",
  "zeta-marketplace-manager",
  "zeta-mcp",
@@ -11259,31 +11259,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-lsp-server-provider"
-version = "0.1.0"
-dependencies = [
- "serde_json",
- "tempfile",
- "thiserror 2.0.19",
- "zeta-install-context",
- "zeta-lsp",
-]
-
-[[package]]
-name = "zeta-lsp-manager"
-version = "0.1.0"
-dependencies = [
- "serde_json",
- "tempfile",
- "thiserror 2.0.19",
- "tokio",
- "url",
- "zeta-async-utils",
- "zeta-lsp",
- "zeta-lsp-server-provider",
-]
-
-[[package]]
 name = "zeta-linux-sandbox"
 version = "0.1.0"
 dependencies = [
@@ -11307,6 +11282,31 @@ dependencies = [
  "thiserror 2.0.19",
  "tokio",
  "zeta-async-utils",
+]
+
+[[package]]
+name = "zeta-lsp-manager"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.19",
+ "tokio",
+ "url",
+ "zeta-async-utils",
+ "zeta-lsp",
+ "zeta-lsp-server-provider",
+]
+
+[[package]]
+name = "zeta-lsp-server-provider"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.19",
+ "zeta-install-context",
+ "zeta-lsp",
 ]
 
 [[package]]
