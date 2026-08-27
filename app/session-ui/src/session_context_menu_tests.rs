@@ -6,8 +6,8 @@ use super::{
 };
 use crate::interaction::{SESSION_CONTEXT_MENU, SessionContextMenuAction};
 use zeta_protocol::SessionId;
-use zeta_ui::{Color, Edges, Point, Rect};
 use zeta_workbench::TabInputKey;
+use zui::ui::{Color, Edges, Point, Rect};
 const COMPOSER: zui::ui::ElementId = zui::ui::ElementId::scoped(1, 5);
 const WINDOW: zui::ui::ElementId = zui::ui::ElementId::scoped(1, 1);
 const TEST_STYLE: SessionContextMenuStyle = SessionContextMenuStyle::new(
@@ -43,7 +43,7 @@ fn context_menu_places_four_vertical_actions_beside_the_pointer() {
 
     assert_eq!(state.target_tab(), Some(&target));
     assert_eq!(menu.bounds().origin, Point::new(80.0, 123.0));
-    assert_eq!(menu.bounds().size, zeta_ui::Size::new(164.0, 124.0));
+    assert_eq!(menu.bounds().size, zui::ui::Size::new(164.0, 124.0));
     assert_eq!(
         menu.item_bounds(0).unwrap().origin,
         Point::new(menu.bounds().origin.x + 2.0, menu.bounds().origin.y + 2.0)

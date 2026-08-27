@@ -1,5 +1,5 @@
 use super::{SCM_TOOLBAR_HEIGHT, ScmLayout};
-use zeta_ui::Rect;
+use zui::ui::Rect;
 
 #[test]
 fn scm_layout_resolves_toolbar_and_content() {

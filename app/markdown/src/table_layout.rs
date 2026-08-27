@@ -1,4 +1,4 @@
-use zeta_ui::{FontWeight, TextLayoutEngine, TextLayoutWidth};
+use zui::ui::{FontWeight, TextLayoutEngine, TextLayoutWidth};
 
 use crate::inline_layout::{InlineLayout, layout_inline};
 use crate::math::MarkdownMathImages;
@@ -99,7 +99,7 @@ pub(crate) fn layout_table(
     }
 }
 
-fn table_text_style(header: bool, style: &MarkdownStyle) -> zeta_ui::TextStyle {
+fn table_text_style(header: bool, style: &MarkdownStyle) -> zui::ui::TextStyle {
     if header {
         style.body().clone().with_weight(FontWeight::Bold)
     } else {

@@ -2,7 +2,7 @@
 
 use std::ops::Range;
 
-use zeta_ui::{
+use zui::ui::{
     CaretVisibility, Color, Component, ComponentElement, Element, PaintRect, Point, Rect, Size,
     TextBlock, TextBlockWrap, TextStyle, UiScene,
 };
@@ -129,7 +129,7 @@ impl From<zeta_editor_core::EditorCoreEditError> for CodeEditorCoreTransactionEr
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CodeEditorComposition<'a> {
     pub text: &'a str,
-    pub cursor: &'a zeta_ui::TextInputCompositionCursor,
+    pub cursor: &'a zui::ui::TextInputCompositionCursor,
 }
 
 /// Optional header treatment above a CodeEditor viewport.

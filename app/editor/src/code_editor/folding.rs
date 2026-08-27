@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use zeta_ui::Rect;
+use zui::ui::Rect;
 
 /// One multiline source range that can be collapsed by a CodeEditor document.
 ///

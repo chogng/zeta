@@ -1,48 +1,48 @@
 use zeta_remote_connections::RemoteConnectionEntry;
 use zeta_remote_connections::RemoteConnectionName;
-use zeta_ui::ButtonBackgrounds;
-use zeta_ui::ButtonState;
-use zeta_ui::ButtonStyle;
-use zeta_ui::CaretVisibility;
-use zeta_ui::Component;
-use zeta_ui::ComponentContext;
-use zeta_ui::ComponentElement;
-use zeta_ui::ComputedElement;
-use zeta_ui::ContextViewAnchorPosition;
-use zeta_ui::ContextViewPlacement;
-use zeta_ui::CornerRadii;
-use zeta_ui::Dropdown;
-use zeta_ui::DropdownItem;
-use zeta_ui::DropdownScrollConfiguration;
-use zeta_ui::DropdownSelection;
-use zeta_ui::DropdownStyle;
-use zeta_ui::Edges;
-use zeta_ui::Element;
-use zeta_ui::InputBoxState;
-use zeta_ui::InteractionRegion;
-use zeta_ui::Rect;
-use zeta_ui::ScrollAxis;
-use zeta_ui::ScrollCommand;
-use zeta_ui::ScrollMetrics;
-use zeta_ui::ScrollState;
-use zeta_ui::SearchBox;
-use zeta_ui::Size;
-use zeta_ui::TextInput;
-use zeta_ui::TextInputCommand;
-use zeta_ui::TextInputCompositionEvent;
-use zeta_ui::TextInputLayoutEngine;
-use zeta_ui::TextStyle;
-use zeta_ui::UiScene;
+use zeta_ui_components::ButtonBackgrounds;
+use zeta_ui_components::ButtonState;
+use zeta_ui_components::ButtonStyle;
+use zeta_ui_components::ContextViewAnchorPosition;
+use zeta_ui_components::ContextViewPlacement;
+use zeta_ui_components::Dropdown;
+use zeta_ui_components::DropdownItem;
+use zeta_ui_components::DropdownScrollConfiguration;
+use zeta_ui_components::DropdownSelection;
+use zeta_ui_components::DropdownStyle;
+use zeta_ui_components::InputBoxState;
+use zeta_ui_components::InteractionRegion;
+use zeta_ui_components::ScrollAxis;
+use zeta_ui_components::ScrollCommand;
+use zeta_ui_components::ScrollMetrics;
+use zeta_ui_components::ScrollState;
+use zeta_ui_components::SearchBox;
 use zui::ui::AccessibilityRole;
 use zui::ui::AccessibilitySelection;
+use zui::ui::CaretVisibility;
+use zui::ui::Component;
+use zui::ui::ComponentContext;
+use zui::ui::ComponentElement;
+use zui::ui::ComputedElement;
+use zui::ui::CornerRadii;
 use zui::ui::CursorFeedback;
+use zui::ui::Edges;
+use zui::ui::Element;
 use zui::ui::ElementId;
 use zui::ui::FocusBehavior;
 use zui::ui::NavigationAxis;
 use zui::ui::NavigationGroupId;
 use zui::ui::NodeAction;
+use zui::ui::Rect;
+use zui::ui::Size;
+use zui::ui::TextInput;
+use zui::ui::TextInputCommand;
+use zui::ui::TextInputCompositionEvent;
+use zui::ui::TextInputLayoutEngine;
+use zui::ui::TextStyle;
 use zui::ui::UiDispatch;
 use zui::ui::UiNode;
+use zui::ui::UiScene;
 
 use crate::style::RemoteUiStyle;
 
@@ -268,7 +268,7 @@ impl RemoteConnectionPicker {
     ) -> Option<Self> {
         let open = state.open.as_ref()?;
         let items = state.items();
-        let resting_backgrounds = ButtonBackgrounds::new(zeta_ui::Color::TRANSPARENT);
+        let resting_backgrounds = ButtonBackgrounds::new(zui::ui::Color::TRANSPARENT);
         let selected_backgrounds = ButtonBackgrounds::new(palette.session_tab_highlight)
             .with_hovered(palette.session_tab_highlight)
             .with_focused(palette.session_tab_highlight)
@@ -478,8 +478,8 @@ mod tests {
     use zeta_remote::RemoteWorkspacePath;
     use zeta_remote::SshHost;
     use zeta_remote::SshTarget;
-    use zeta_ui::{CaretVisibility, TextInputLayoutEngine};
     use zui::ui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
+    use zui::ui::{CaretVisibility, TextInputLayoutEngine};
 
     #[test]
     fn picker_sorts_filters_and_activates_canonical_connection_names() {

@@ -1,11 +1,13 @@
-use zeta_ui::{
+use zeta_ui_components::{
     ActionBar, ActionBarButton, ActionBarItem, ActionBarOrientation, ActionBarStyle,
-    ButtonSelection, ButtonState, Component, ComponentContext, ComponentElement, ComputedElement,
-    Element, InteractionRegion, Rect, Size, UiScene,
+    ButtonSelection, ButtonState, InteractionRegion,
 };
 use zui::ui::{
     AccessibilityRole, AccessibilitySelection, CursorFeedback, FocusBehavior, NavigationAxis,
     NavigationGroupId, NodeAction, UiDispatch, UiNode,
+};
+use zui::ui::{
+    Component, ComponentContext, ComponentElement, ComputedElement, Element, Rect, Size, UiScene,
 };
 
 use crate::WorkspacePaneSelection;

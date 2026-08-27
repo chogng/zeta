@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 use std::ops::Range;
 
 use zeta_diff::DiffRowKind;
-use zeta_ui::{
+use zui::ui::{
     AccessibilityRole, Component, ComponentContext, ComponentElement, ComputedElement, Element,
     ElementId, PaintRect, Point, Rect, UiNode, UiScene,
 };

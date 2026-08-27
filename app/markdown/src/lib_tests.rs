@@ -1,7 +1,5 @@
-use zeta_ui::{
-    Color, Component, FontFamily, FontStyle, FontWeight, Point, Rect, ScrollAxis, ScrollCommand,
-    ScrollDelta, ScrollMetrics, ScrollState, Size, UiScene,
-};
+use zeta_ui_components::{ScrollAxis, ScrollCommand, ScrollDelta, ScrollMetrics, ScrollState};
+use zui::ui::{Color, Component, FontFamily, FontStyle, FontWeight, Point, Rect, Size, UiScene};
 
 use super::{
     MarkdownDocument, MarkdownError, MarkdownImages, MarkdownLayoutEngine, MarkdownLinkError,
@@ -11,7 +9,7 @@ use super::{
 };
 use crate::document::MarkdownBlockKind;
 use image::ImageEncoder;
-use zeta_ui::ImageId;
+use zui::ui::ImageId;
 
 #[test]
 fn parses_commonmark_blocks_and_retains_inline_semantics() {

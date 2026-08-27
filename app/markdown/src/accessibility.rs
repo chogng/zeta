@@ -1,4 +1,4 @@
-use zeta_ui::Rect;
+use zui::ui::Rect;
 
 /// Presentation-independent role exposed by the Markdown semantic tree.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

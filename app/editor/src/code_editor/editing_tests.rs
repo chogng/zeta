@@ -5,7 +5,7 @@ use crate::CodeEditorDocument;
 use crate::CodeEditorNavigation;
 use crate::CodeEditorPosition;
 use crate::CodeEditorSelectionMode;
-use zeta_ui::TextInputCompositionEvent;
+use zui::ui::TextInputCompositionEvent;
 
 #[test]
 fn word_navigation_keeps_unicode_identifier_runs_and_separator_runs_distinct() {

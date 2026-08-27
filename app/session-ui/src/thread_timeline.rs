@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde_json::Value;
 use zeta_protocol::{PlanStepStatus, ThreadItem};
-use zeta_ui::{
+use zui::ui::{
     Component, ComponentElement, Edges, Element, FontFamily, FontWeight, PaintRect, Point, Rect,
     Size, TextBlock, TextStyle, UiScene,
 };
@@ -17,19 +17,19 @@ const TIMELINE_SECTION_GAP: f32 = 10.0;
 /// Colors needed by the Thread timeline renderer.
 #[derive(Clone, Copy)]
 pub struct ThreadTimelineStyle {
-    pub surface_raised: zeta_ui::Color,
-    pub text: zeta_ui::Color,
-    pub text_muted: zeta_ui::Color,
-    pub error: zeta_ui::Color,
+    pub surface_raised: zui::ui::Color,
+    pub text: zui::ui::Color,
+    pub text_muted: zui::ui::Color,
+    pub error: zui::ui::Color,
 }
 
 impl ThreadTimelineStyle {
     /// Creates a timeline style from the host's resolved colors.
     pub const fn new(
-        surface_raised: zeta_ui::Color,
-        text: zeta_ui::Color,
-        text_muted: zeta_ui::Color,
-        error: zeta_ui::Color,
+        surface_raised: zui::ui::Color,
+        text: zui::ui::Color,
+        text_muted: zui::ui::Color,
+        error: zui::ui::Color,
     ) -> Self {
         Self {
             surface_raised,

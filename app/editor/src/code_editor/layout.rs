@@ -1,6 +1,6 @@
 //! Internal CodeEditor geometry.
 
-use zeta_ui::Rect;
+use zui::ui::Rect;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct CodeEditorLayout {

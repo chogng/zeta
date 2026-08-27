@@ -23,8 +23,8 @@ pub use interaction::ComposerModelOption;
 pub use interaction::SelectionDirection;
 pub use interaction_pane::ComposerInteractionPaneState;
 
-use zeta_ui::ScrollCommand;
-use zeta_ui::VirtualListLayout;
+use zeta_ui_components::ScrollCommand;
+use zeta_ui_components::VirtualListLayout;
 use zui::ui::{Rect, Size};
 
 const PANEL_HORIZONTAL_INSET: f32 = 24.0;

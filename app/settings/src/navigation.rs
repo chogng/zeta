@@ -12,10 +12,10 @@ use super::SettingsPageLayout;
 use super::SettingsPageSection;
 
 use zeta_icons::icons;
-use zeta_ui::Button;
-use zeta_ui::ButtonSelection;
-use zeta_ui::ButtonState;
-use zeta_ui::ButtonStyle;
+use zeta_ui_components::Button;
+use zeta_ui_components::ButtonSelection;
+use zeta_ui_components::ButtonState;
+use zeta_ui_components::ButtonStyle;
 use zui::ui::ElementId;
 use zui::ui::UiDispatch;
 
@@ -102,7 +102,7 @@ pub(super) fn navigation_buttons(
 }
 
 fn navigation_button(
-    bounds: zeta_ui::Rect,
+    bounds: zui::ui::Rect,
     id: ElementId,
     icon: zeta_icons::Icon,
     label: &str,

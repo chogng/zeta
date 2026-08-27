@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use thiserror::Error;
-use zeta_ui::{ImageData, ImageId};
+use zui::ui::{ImageData, ImageId};
 
 const MAX_DECODED_PIXELS: u64 = 16_777_216;
 
@@ -81,5 +81,5 @@ pub enum MarkdownImageDecodeError {
     #[error("decoded image is {width}x{height}, exceeding the {limit}-pixel limit")]
     TooManyPixels { width: u32, height: u32, limit: u64 },
     #[error("decoded image pixels are invalid: {0}")]
-    Pixels(zeta_ui::ImageDataError),
+    Pixels(zui::ui::ImageDataError),
 }

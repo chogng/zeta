@@ -1,24 +1,22 @@
 //! Host-resolved colors and shared component styles for Remote overlays.
 
 use zeta_icons::icons;
-use zeta_ui::{
-    CornerRadii, Edges, InputBoxStateColors, InputBoxStyle, ScrollViewStyle, SearchBoxStyle,
-    TextStyle,
-};
+use zeta_ui_components::{InputBoxStateColors, InputBoxStyle, ScrollViewStyle, SearchBoxStyle};
+use zui::ui::{CornerRadii, Edges, TextStyle};
 
 /// Colors and shared component styles needed by Remote overlays.
 #[derive(Clone, Copy)]
 pub struct RemoteUiStyle {
-    pub surface: zeta_ui::Color,
-    pub surface_raised: zeta_ui::Color,
-    pub surface_hovered: zeta_ui::Color,
-    pub border: zeta_ui::Color,
-    pub text: zeta_ui::Color,
-    pub text_muted: zeta_ui::Color,
-    pub accent: zeta_ui::Color,
-    pub error: zeta_ui::Color,
-    pub terminal_selection: zeta_ui::Color,
-    pub session_tab_highlight: zeta_ui::Color,
+    pub surface: zui::ui::Color,
+    pub surface_raised: zui::ui::Color,
+    pub surface_hovered: zui::ui::Color,
+    pub border: zui::ui::Color,
+    pub text: zui::ui::Color,
+    pub text_muted: zui::ui::Color,
+    pub accent: zui::ui::Color,
+    pub error: zui::ui::Color,
+    pub terminal_selection: zui::ui::Color,
+    pub session_tab_highlight: zui::ui::Color,
     file_list_scroll_view: ScrollViewStyle,
     picker_scroll_view: ScrollViewStyle,
 }
@@ -27,16 +25,16 @@ impl RemoteUiStyle {
     /// Creates resolved style values for all Remote overlays.
     #[allow(clippy::too_many_arguments)]
     pub const fn new(
-        surface: zeta_ui::Color,
-        surface_raised: zeta_ui::Color,
-        surface_hovered: zeta_ui::Color,
-        border: zeta_ui::Color,
-        text: zeta_ui::Color,
-        text_muted: zeta_ui::Color,
-        accent: zeta_ui::Color,
-        error: zeta_ui::Color,
-        terminal_selection: zeta_ui::Color,
-        session_tab_highlight: zeta_ui::Color,
+        surface: zui::ui::Color,
+        surface_raised: zui::ui::Color,
+        surface_hovered: zui::ui::Color,
+        border: zui::ui::Color,
+        text: zui::ui::Color,
+        text_muted: zui::ui::Color,
+        accent: zui::ui::Color,
+        error: zui::ui::Color,
+        terminal_selection: zui::ui::Color,
+        session_tab_highlight: zui::ui::Color,
         file_list_scroll_view: ScrollViewStyle,
         picker_scroll_view: ScrollViewStyle,
     ) -> Self {
@@ -67,14 +65,14 @@ impl RemoteUiStyle {
     pub(crate) fn session_search_style(self) -> SearchBoxStyle {
         let input_box = InputBoxStyle::new(
             InputBoxStateColors::new(
-                zeta_ui::Color::TRANSPARENT,
-                zeta_ui::Color::TRANSPARENT,
-                zeta_ui::Color::TRANSPARENT,
+                zui::ui::Color::TRANSPARENT,
+                zui::ui::Color::TRANSPARENT,
+                zui::ui::Color::TRANSPARENT,
             ),
             InputBoxStateColors::new(
-                zeta_ui::Color::TRANSPARENT,
-                zeta_ui::Color::TRANSPARENT,
-                zeta_ui::Color::TRANSPARENT,
+                zui::ui::Color::TRANSPARENT,
+                zui::ui::Color::TRANSPARENT,
+                zui::ui::Color::TRANSPARENT,
             ),
             TextStyle::new(11.0, self.text).with_line_height(16.0),
             TextStyle::new(11.0, self.text_muted).with_line_height(16.0),

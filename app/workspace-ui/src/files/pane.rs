@@ -1,8 +1,9 @@
-use zeta_ui::{
-    Component, ComponentContext, ComponentElement, Element, IconLabel, IconLabelStyle, ListView,
-    PaintRect, Rect, TextBlock, TextStyle, UiScene,
-};
+use zeta_ui_components::{IconLabel, IconLabelStyle, ListView};
 use zui::ui::{AccessibilityRole, ComputedElement, UiDispatch, UiNode};
+use zui::ui::{
+    Component, ComponentContext, ComponentElement, Element, PaintRect, Rect, TextBlock, TextStyle,
+    UiScene,
+};
 
 use super::FILE_LIST_ROW_HEIGHT;
 use super::FilesState;
@@ -12,8 +13,8 @@ use super::tree_view::FilesTreeView;
 use super::tree_view::draw_row_background;
 use super::tree_view::file_row_state;
 
-use zeta_ui::Color;
-use zeta_ui::ScrollViewStyle;
+use zeta_ui_components::ScrollViewStyle;
+use zui::ui::Color;
 use zui::ui::ElementId;
 
 pub const EXPLORER_PANE: ElementId = crate::interaction::AGENT_EXPLORER_PANE;
@@ -283,11 +284,11 @@ fn search_result_element_id(index: usize) -> zui::ui::ElementId {
 fn draw_empty(scene: &mut UiScene, bounds: Rect, style: &FilesPaneStyle, label: &str) {
     scene.draw_text(TextBlock::new(
         label,
-        zeta_ui::Point::new(
+        zui::ui::Point::new(
             bounds.origin.x + HORIZONTAL_PADDING,
             bounds.origin.y + HORIZONTAL_PADDING,
         ),
-        zeta_ui::Size::new(
+        zui::ui::Size::new(
             (bounds.size.width - HORIZONTAL_PADDING * 2.0).max(1.0),
             18.0,
         ),

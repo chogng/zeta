@@ -4,7 +4,7 @@ use super::{
 };
 use crate::CodeEditorLanguage;
 use zeta_diff::DiffDocument;
-use zeta_ui::{Color, Component, Point, Rect, UiScene};
+use zui::ui::{Color, Component, Point, Rect, UiScene};
 
 fn document() -> DiffEditorDocument {
     editor_document(

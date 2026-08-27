@@ -1,4 +1,4 @@
-use zeta_ui::Color;
+use zui::ui::Color;
 
 use super::{MarkdownMathError, MarkdownMathMode, render_markdown_math};
 

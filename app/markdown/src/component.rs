@@ -1,6 +1,7 @@
-use zeta_ui::{
-    ImageData, PaintImage, PaintRect, Point, Rect, ScrollMetrics, ScrollState, Size, TextBlock,
-    TextLayout, TextLayoutEngine, TextLayoutWidth, TextSpan, TextStyle,
+use zeta_ui_components::{ScrollMetrics, ScrollState};
+use zui::ui::{
+    ImageData, PaintImage, PaintRect, Point, Rect, Size, TextBlock, TextLayout, TextLayoutEngine,
+    TextLayoutWidth, TextSpan, TextStyle,
 };
 
 use crate::accessibility::{MarkdownSemanticNode, MarkdownSemanticRole, enclosing_bounds};

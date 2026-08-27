@@ -1,4 +1,4 @@
-use zeta_ui::{Color, FontFamily, FontStyle, FontWeight, TextStyle};
+use zui::ui::{Color, FontFamily, FontStyle, FontWeight, TextStyle};
 
 use crate::document::InlineFormat;
 

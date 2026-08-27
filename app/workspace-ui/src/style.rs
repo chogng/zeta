@@ -1,10 +1,10 @@
-use zeta_ui::ButtonBackgrounds;
-use zeta_ui::ButtonStyle;
-use zeta_ui::Color;
-use zeta_ui::CornerRadii;
-use zeta_ui::Edges;
-use zeta_ui::SearchBoxStyle;
-use zeta_ui::TextStyle;
+use zeta_ui_components::ButtonBackgrounds;
+use zeta_ui_components::ButtonStyle;
+use zeta_ui_components::SearchBoxStyle;
+use zui::ui::Color;
+use zui::ui::CornerRadii;
+use zui::ui::Edges;
+use zui::ui::TextStyle;
 
 /// Theme values shared by Workspace Pane toolbar and navigation components.
 #[derive(Clone)]

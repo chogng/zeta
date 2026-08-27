@@ -1,5 +1,5 @@
 use zeta_editor::{CodeEditorDiagnostic, CodeEditorDiagnosticSeverity};
-use zeta_ui::{Color, Component, Point, Rect, UiScene};
+use zui::ui::{Color, Component, Point, Rect, UiScene};
 
 use super::*;
 

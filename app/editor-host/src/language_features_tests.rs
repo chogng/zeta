@@ -1,4 +1,4 @@
-use zeta_ui::{Point, Rect};
+use zui::ui::{Point, Rect};
 
 use super::*;
 

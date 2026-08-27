@@ -1,7 +1,7 @@
 use super::icon_for_search_result;
 use super::icon_for_tree_item;
 use zeta_icons::icons;
-use zeta_ui::TreeItemExpansion;
+use zeta_ui_components::TreeItemExpansion;
 
 #[test]
 fn tree_items_use_file_text_for_leaves_and_files_for_branches() {

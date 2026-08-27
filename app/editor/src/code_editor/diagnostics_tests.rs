@@ -1,4 +1,4 @@
-use zeta_ui::{Color, Component, Point, Rect, UiScene};
+use zui::ui::{Color, Component, Point, Rect, UiScene};
 
 use super::*;
 use crate::{CodeEditorDocument, CodeEditorHeader, CodeEditorStyle, CodeEditorViewport};

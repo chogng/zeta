@@ -1,5 +1,5 @@
 use super::{FileEditorSearchMode, FileEditorSearchState};
-use zeta_ui::TextInputCommand;
+use zui::ui::TextInputCommand;
 
 #[test]
 fn search_state_only_owns_transient_single_line_inputs() {

@@ -22,7 +22,8 @@ sha2 = { workspace = true }
 syntect = { workspace = true }
 thiserror = { workspace = true }
 url = { workspace = true }
-zeta-ui = { workspace = true }
+zeta-ui-components = { workspace = true }
+zui = { workspace = true, default-features = false }
 
 [lints]
 workspace = true

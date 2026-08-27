@@ -1,11 +1,11 @@
-use zeta_ui::Border;
-use zeta_ui::ButtonBackgrounds;
-use zeta_ui::ButtonStyle;
-use zeta_ui::CornerRadii;
-use zeta_ui::Edges;
-use zeta_ui::InputBoxStateColors;
-use zeta_ui::InputBoxStyle;
-use zeta_ui::TextStyle;
+use zeta_ui_components::ButtonBackgrounds;
+use zeta_ui_components::ButtonStyle;
+use zeta_ui_components::InputBoxStateColors;
+use zeta_ui_components::InputBoxStyle;
+use zui::ui::Border;
+use zui::ui::CornerRadii;
+use zui::ui::Edges;
+use zui::ui::TextStyle;
 
 use crate::style::RemoteUiStyle;
 

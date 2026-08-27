@@ -2,7 +2,7 @@
 
 use std::ops::Range;
 
-use zeta_ui::{Color, PaintRect, Point, Rect, UiScene};
+use zui::ui::{Color, PaintRect, Point, Rect, UiScene};
 
 use super::text_metrics::display_columns_until;
 use super::{CELL_WIDTH, CONTENT_HORIZONTAL_PADDING, CodeEditor, CodeEditorPosition, ROW_HEIGHT};

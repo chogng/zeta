@@ -1,7 +1,7 @@
 //! Session search matching and input tests.
 
 use super::SessionSearchState;
-use zeta_ui::TextInputCommand;
+use zui::ui::TextInputCommand;
 
 #[test]
 fn session_name_matching_is_case_insensitive_and_ignores_outer_query_whitespace() {

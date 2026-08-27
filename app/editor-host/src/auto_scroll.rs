@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use zeta_ui::{Point, Rect};
+use zui::ui::{Point, Rect};
 
 const SELECTION_AUTO_SCROLL_INTERVAL: Duration = Duration::from_millis(35);
 const SELECTION_AUTO_SCROLL_EDGE: f32 = 8.0;

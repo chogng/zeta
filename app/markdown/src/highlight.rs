@@ -4,7 +4,7 @@ use syntect::easy::HighlightLines;
 use syntect::highlighting::{Theme, ThemeSet};
 use syntect::parsing::SyntaxSet;
 use syntect::util::LinesWithEndings;
-use zeta_ui::{Color, TextSpan, TextStyle};
+use zui::ui::{Color, TextSpan, TextStyle};
 
 /// One syntax color override over a UTF-8 byte range in a fenced code block.
 #[derive(Clone, Debug, PartialEq)]

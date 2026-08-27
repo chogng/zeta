@@ -1,5 +1,6 @@
 use super::ComposerInteractionPaneState;
-use zeta_ui::{Point, Rect, ScrollCommand, ScrollDelta, Size};
+use zeta_ui_components::{ScrollCommand, ScrollDelta};
+use zui::ui::{Point, Rect, Size};
 
 #[test]
 fn pane_scrolls_from_only_viewport_and_content_geometry() {

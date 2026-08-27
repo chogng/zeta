@@ -10,18 +10,18 @@ use zeta_editor::CodeEditorSelectionMode;
 use zeta_editor::CodeEditorStyle;
 use zeta_editor::CodeEditorTextEdit;
 use zeta_editor::CodeEditorViewport;
-use zeta_ui::CaretVisibility;
-use zeta_ui::Color;
-use zeta_ui::Component;
-use zeta_ui::ComponentElement;
-use zeta_ui::Element;
-use zeta_ui::FontFamily;
-use zeta_ui::Point;
-use zeta_ui::Rect;
-use zeta_ui::TextBlock;
-use zeta_ui::TextInputCompositionEvent;
-use zeta_ui::TextStyle;
-use zeta_ui::UiScene;
+use zui::ui::CaretVisibility;
+use zui::ui::Color;
+use zui::ui::Component;
+use zui::ui::ComponentElement;
+use zui::ui::Element;
+use zui::ui::FontFamily;
+use zui::ui::Point;
+use zui::ui::Rect;
+use zui::ui::TextBlock;
+use zui::ui::TextInputCompositionEvent;
+use zui::ui::TextStyle;
+use zui::ui::UiScene;
 
 const MAX_VISIBLE_ROWS: usize = 8;
 const MIN_EDITOR_HEIGHT: f32 = 44.0;
@@ -268,7 +268,7 @@ impl Component for ComposerInputView<'_> {
                         self.bounds.origin.x + PLACEHOLDER_HORIZONTAL_INSET,
                         self.bounds.origin.y,
                     ),
-                    zeta_ui::Size::new(
+                    zui::ui::Size::new(
                         (self.bounds.size.width - PLACEHOLDER_HORIZONTAL_INSET).max(0.0),
                         self.bounds.size.height,
                     ),

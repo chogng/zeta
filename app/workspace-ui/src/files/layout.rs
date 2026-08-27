@@ -1,4 +1,4 @@
-use zeta_ui::Rect;
+use zui::ui::Rect;
 
 /// Height reserved by the Files functional toolbar.
 pub const FILES_TOOLBAR_HEIGHT: f32 = 36.0;

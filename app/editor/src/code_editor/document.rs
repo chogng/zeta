@@ -13,7 +13,7 @@ use zeta_editor_core::EditorCoreTextEdit;
 use zeta_editor_core::EditorCoreTextRange;
 use zeta_editor_core::EditorCoreTransaction;
 use zeta_editor_core::EditorCoreUtf16Offset;
-use zeta_ui::TextInputCompositionCursor;
+use zui::ui::TextInputCompositionCursor;
 
 use super::CodeEditorComposition;
 use super::CodeEditorFoldControl;

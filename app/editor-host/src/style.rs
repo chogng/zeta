@@ -1,6 +1,6 @@
 //! Host-resolved colors shared by editor overlays.
 
-use zeta_ui::Color;
+use zui::ui::Color;
 
 /// Colors required by editor search-adjacent popovers and diagnostic details.
 #[derive(Clone, Copy)]

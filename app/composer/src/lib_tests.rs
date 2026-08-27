@@ -2,7 +2,7 @@ use super::{
     ComposerPanelLayout, interaction_content_size, interaction_list_bounds,
     interaction_preferred_height, interaction_selection_scroll_command,
 };
-use zeta_ui::ScrollCommand;
+use zeta_ui_components::ScrollCommand;
 use zui::ui::{Rect, Size};
 
 #[test]

@@ -101,7 +101,7 @@ impl<'a> ComposerInteractionView<'a> {
 
 /// Composer-owned model that selects and updates the active interaction view.
 ///
-/// Presentation geometry, clipping, and scrolling belong to the Composer Pane and zeta-ui list
+/// Presentation geometry, clipping, and scrolling belong to the Composer Pane and UI component
 /// primitives; this model only owns Slash command and model-picker domain state and exposes an
 /// immutable render view.
 #[derive(Clone, Debug, Default, PartialEq)]

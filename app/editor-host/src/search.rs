@@ -1,5 +1,5 @@
 use zeta_editor::CodeEditorSearchQuery;
-use zeta_ui::{TextInput, TextInputCommand, TextInputCompositionEvent};
+use zui::ui::{TextInput, TextInputCommand, TextInputCompositionEvent};
 
 /// Which find widget fields are visible above the shared CodeEditor.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

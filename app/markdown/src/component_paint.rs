@@ -1,4 +1,4 @@
-use zeta_ui::{
+use zui::ui::{
     Border, Component, ComponentElement, CornerRadii, Element, PaintImage, PaintRect, Point, Rect,
     Size, TextBlock, TextStyle, UiScene,
 };
@@ -398,7 +398,7 @@ impl Markdown {
     }
 }
 
-fn fit_image_bounds(image: &zeta_ui::ImageData, available: Rect) -> Rect {
+fn fit_image_bounds(image: &zui::ui::ImageData, available: Rect) -> Rect {
     let scale = (available.size.width / image.width() as f32)
         .min(available.size.height / image.height() as f32);
     let width = image.width() as f32 * scale;

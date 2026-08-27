@@ -1,4 +1,4 @@
-use zeta_ui::Rect;
+use zui::ui::Rect;
 
 /// Height reserved by the Changes functional toolbar slot.
 pub const SCM_TOOLBAR_HEIGHT: f32 = 36.0;

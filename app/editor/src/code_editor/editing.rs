@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use unicode_segmentation::UnicodeSegmentation;
-use zeta_ui::{TextInputCompositionCursor, TextInputCompositionEvent, TextInputSelectionMode};
+use zui::ui::{TextInputCompositionCursor, TextInputCompositionEvent, TextInputSelectionMode};
 
 use super::language_configuration::is_closing_delimiter;
 use super::language_configuration::paired_delimiter_close;

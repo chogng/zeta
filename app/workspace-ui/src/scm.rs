@@ -1,7 +1,7 @@
 //! Source-control snapshots for the Changes Workspace Pane.
 
 use zeta_editor::DiffEditorDocument;
-use zeta_ui::Color;
+use zui::ui::Color;
 
 #[path = "scm/layout.rs"]
 mod layout;

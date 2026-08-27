@@ -10,12 +10,12 @@ mod page;
 
 pub use page::SettingsPage;
 
-use zeta_ui::ActionBarStyle;
-use zeta_ui::ButtonStyle;
-use zeta_ui::Color;
-use zeta_ui::Rect;
-use zeta_ui::SearchBoxStyle;
+use zeta_ui_components::ActionBarStyle;
+use zeta_ui_components::ButtonStyle;
+use zeta_ui_components::SearchBoxStyle;
+use zui::ui::Color;
 use zui::ui::ElementId;
+use zui::ui::Rect;
 
 const SETTINGS_SCOPE: u32 = 9;
 const RAIL_WIDTH: f32 = 216.0;

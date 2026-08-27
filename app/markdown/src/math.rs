@@ -7,7 +7,7 @@ use resvg::tiny_skia::{Pixmap, Transform};
 use resvg::usvg;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
-use zeta_ui::{Color, ImageData, ImageId};
+use zui::ui::{Color, ImageData, ImageId};
 
 use crate::document::{InlineRun, MarkdownBlockKind};
 use crate::{MarkdownDocument, MarkdownStyle};
@@ -36,7 +36,7 @@ pub enum MarkdownMathError {
     #[error("math raster dimensions are invalid")]
     InvalidDimensions,
     #[error("math pixels are invalid: {0}")]
-    Pixels(zeta_ui::ImageDataError),
+    Pixels(zui::ui::ImageDataError),
 }
 
 /// Parses and typesets bounded LaTeX with the pure-Rust RaTeX backend.

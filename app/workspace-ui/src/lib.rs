@@ -82,9 +82,9 @@ impl WorkspacePaneSelection {
 
 #[cfg(test)]
 pub(crate) const TEST_SCM_PANE_STYLE: ScmPaneStyle = ScmPaneStyle {
-    surface: zeta_ui::Color::WHITE,
-    border: zeta_ui::Color::rgb(222, 222, 224),
-    text_muted: zeta_ui::Color::rgb(126, 126, 132),
+    surface: zui::ui::Color::WHITE,
+    border: zui::ui::Color::rgb(222, 222, 224),
+    text_muted: zui::ui::Color::rgb(126, 126, 132),
 };
 
 /// A feature view that can be mounted in a Workspace Pane.

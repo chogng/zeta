@@ -6,11 +6,13 @@ use zeta_editor::{
     DiffEditorDocument, DiffEditorLabels, DiffEditorPresentation, DiffEditorState, MultiDiffEditor,
     MultiDiffEditorItem, MultiDiffEditorItemIdentity, MultiDiffEditorLayout, MultiDiffEditorStyle,
 };
-use zeta_ui::{
+use zeta_ui_components::{
+    ScrollAxis, ScrollCommand, ScrollDelta, ScrollMetrics, ScrollState, ScrollbarController,
+    ScrollbarDrag, ScrollbarPart, ScrollbarPointerPresence, ScrollbarPresentation,
+};
+use zui::ui::{
     AccessibilityRole, Border, Component, ComponentContext, ComponentElement, ComputedElement,
-    Edges, Element, ElementId, PaintRect, Rect, ScrollAxis, ScrollCommand, ScrollDelta,
-    ScrollMetrics, ScrollState, ScrollbarController, ScrollbarDrag, ScrollbarPart,
-    ScrollbarPointerPresence, ScrollbarPresentation, Size, TextBlock, TextStyle, UiNode, UiScene,
+    Edges, Element, ElementId, PaintRect, Rect, Size, TextBlock, TextStyle, UiNode, UiScene,
 };
 
 use super::ScmDiff;
@@ -264,7 +266,7 @@ impl EditorPaneState {
 
     pub fn scrollbar_pointer_moved(
         &mut self,
-        point: zeta_ui::Point,
+        point: zui::ui::Point,
         bounds: Rect,
         now: Instant,
     ) -> ScrollbarPointerOutcome {
@@ -298,7 +300,7 @@ impl EditorPaneState {
 
     pub fn press_scrollbar(
         &mut self,
-        point: zeta_ui::Point,
+        point: zui::ui::Point,
         bounds: Rect,
         now: Instant,
     ) -> ScrollbarPointerOutcome {
@@ -331,7 +333,7 @@ impl EditorPaneState {
 
     pub fn release_scrollbar(
         &mut self,
-        point: zeta_ui::Point,
+        point: zui::ui::Point,
         bounds: Rect,
         now: Instant,
     ) -> ScrollbarPointerOutcome {
@@ -374,7 +376,7 @@ impl EditorPaneState {
         self.scrollbar.presentation()
     }
 
-    fn scroll_view(&self, bounds: Rect) -> zeta_ui::ScrollView {
+    fn scroll_view(&self, bounds: Rect) -> zeta_ui_components::ScrollView {
         let items = self.items();
         MultiDiffEditor::new(bounds, &items, self.scroll_state, self.style())
             .with_diff_presentation(DiffEditorPresentation::Unified)
@@ -395,7 +397,7 @@ impl EditorPaneState {
         .measure_layout();
     }
 
-    fn scrollbar_presence(&self, point: zeta_ui::Point, bounds: Rect) -> ScrollbarPointerPresence {
+    fn scrollbar_presence(&self, point: zui::ui::Point, bounds: Rect) -> ScrollbarPointerPresence {
         if self.scroll_view(bounds).hit_test_scrollbar(point).is_some() {
             ScrollbarPointerPresence::Over
         } else {
@@ -442,11 +444,11 @@ impl<'a> EditorPane<'a> {
     fn paint_empty_state(&self, scene: &mut UiScene, bounds: Rect) {
         scene.draw_text(TextBlock::new(
             "No changed files",
-            zeta_ui::Point::new(
+            zui::ui::Point::new(
                 bounds.origin.x + EMPTY_STATE_PADDING,
                 bounds.origin.y + EMPTY_STATE_PADDING,
             ),
-            zeta_ui::Size::new(
+            zui::ui::Size::new(
                 (bounds.size.width - EMPTY_STATE_PADDING * 2.0).max(1.0),
                 18.0,
             ),

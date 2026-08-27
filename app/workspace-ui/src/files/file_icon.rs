@@ -1,6 +1,6 @@
 use zeta_icons::Icon;
 use zeta_icons::icons;
-use zeta_ui::TreeItemExpansion;
+use zeta_ui_components::TreeItemExpansion;
 
 /// Selects the semantic icon for one visible file-tree item.
 ///

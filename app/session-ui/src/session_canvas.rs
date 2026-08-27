@@ -2,22 +2,22 @@
 
 use zeta_protocol::ThreadStatus;
 use zeta_protocol::TurnStatus;
-use zeta_ui::Border;
-use zeta_ui::Component;
-use zeta_ui::ComponentElement;
-use zeta_ui::ComputedElement;
-use zeta_ui::CornerRadii;
-use zeta_ui::Edges;
-use zeta_ui::Element;
-use zeta_ui::FontWeight;
-use zeta_ui::PaintRect;
-use zeta_ui::Point;
-use zeta_ui::Rect;
-use zeta_ui::Size;
-use zeta_ui::TextBlock;
-use zeta_ui::TextStyle;
-use zeta_ui::UiScene;
 use zui::ui::AccessibilityRole;
+use zui::ui::Border;
+use zui::ui::Component;
+use zui::ui::ComponentElement;
+use zui::ui::ComputedElement;
+use zui::ui::CornerRadii;
+use zui::ui::Edges;
+use zui::ui::Element;
+use zui::ui::FontWeight;
+use zui::ui::PaintRect;
+use zui::ui::Point;
+use zui::ui::Rect;
+use zui::ui::Size;
+use zui::ui::TextBlock;
+use zui::ui::TextStyle;
+use zui::ui::UiScene;
 use zui::ui::{ElementId, UiNode};
 
 use crate::interaction::SESSION_HEADER;
@@ -69,29 +69,29 @@ impl SessionCanvasLayout {
 /// Colors needed by the Session header renderer.
 #[derive(Clone, Copy)]
 pub struct SessionHeaderStyle {
-    pub surface: zeta_ui::Color,
-    pub border: zeta_ui::Color,
-    pub surface_raised: zeta_ui::Color,
-    pub text: zeta_ui::Color,
-    pub text_muted: zeta_ui::Color,
-    pub success: zeta_ui::Color,
-    pub accent: zeta_ui::Color,
-    pub warning: zeta_ui::Color,
-    pub error: zeta_ui::Color,
+    pub surface: zui::ui::Color,
+    pub border: zui::ui::Color,
+    pub surface_raised: zui::ui::Color,
+    pub text: zui::ui::Color,
+    pub text_muted: zui::ui::Color,
+    pub success: zui::ui::Color,
+    pub accent: zui::ui::Color,
+    pub warning: zui::ui::Color,
+    pub error: zui::ui::Color,
 }
 
 impl SessionHeaderStyle {
     /// Creates the resolved colors used by the header.
     pub const fn new(
-        surface: zeta_ui::Color,
-        border: zeta_ui::Color,
-        surface_raised: zeta_ui::Color,
-        text: zeta_ui::Color,
-        text_muted: zeta_ui::Color,
-        success: zeta_ui::Color,
-        accent: zeta_ui::Color,
-        warning: zeta_ui::Color,
-        error: zeta_ui::Color,
+        surface: zui::ui::Color,
+        border: zui::ui::Color,
+        surface_raised: zui::ui::Color,
+        text: zui::ui::Color,
+        text_muted: zui::ui::Color,
+        success: zui::ui::Color,
+        accent: zui::ui::Color,
+        warning: zui::ui::Color,
+        error: zui::ui::Color,
     ) -> Self {
         Self {
             surface,
@@ -283,7 +283,7 @@ impl SessionActivity {
         }
     }
 
-    const fn color(self, style: SessionHeaderStyle) -> zeta_ui::Color {
+    const fn color(self, style: SessionHeaderStyle) -> zui::ui::Color {
         match self {
             Self::Ready | Self::Completed => style.success,
             Self::Working => style.accent,

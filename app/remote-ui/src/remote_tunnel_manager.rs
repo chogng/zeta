@@ -1,13 +1,13 @@
 use std::num::NonZeroU16;
 
-use zeta_ui::ScrollAxis;
-use zeta_ui::ScrollCommand;
-use zeta_ui::ScrollMetrics;
-use zeta_ui::ScrollState;
-use zeta_ui::TextInput;
-use zeta_ui::TextInputCommand;
-use zeta_ui::TextInputCompositionEvent;
+use zeta_ui_components::ScrollAxis;
+use zeta_ui_components::ScrollCommand;
+use zeta_ui_components::ScrollMetrics;
+use zeta_ui_components::ScrollState;
 use zui::ui::ElementId;
+use zui::ui::TextInput;
+use zui::ui::TextInputCommand;
+use zui::ui::TextInputCompositionEvent;
 
 use zeta_remote_host::{RemoteTunnelEvent, RemoteTunnelId, RemoteTunnelUpdate};
 
@@ -340,7 +340,7 @@ fn parse_port(value: &str) -> Result<NonZeroU16, String> {
 mod tests {
     use std::num::NonZeroU16;
 
-    use zeta_ui::TextInputCommand;
+    use zui::ui::TextInputCommand;
 
     use super::RemoteTunnelEvent;
     use super::RemoteTunnelId;

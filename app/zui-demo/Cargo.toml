@@ -18,7 +18,7 @@ path = "src/native_main.rs"
 required-features = ["native"]
 
 [dependencies]
-zeta-ui = { workspace = true }
+zeta-ui-components = { workspace = true }
 zui = { workspace = true, default-features = false }
 
 [lints]

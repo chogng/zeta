@@ -1,4 +1,4 @@
-use zeta_ui::{
+use zui::ui::{
     Color, ImageData, Point, Rect, Size, TextLayout, TextLayoutEngine, TextLayoutWidth, TextSpan,
     TextStyle,
 };

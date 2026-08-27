@@ -1,6 +1,7 @@
 //! Native Markdown parsing, layout, and presentation for Zeta product hosts.
 //!
-//! This crate owns a bounded CommonMark document projection and its presentation as `zeta-ui`
+//! This crate owns a bounded CommonMark document projection and its presentation with `zui` and
+//! `zeta-ui-components`
 //! primitives. It owns safe link evaluation, decoded-image projection, code highlighting,
 //! document search/selection geometry, footnote/math projection, and an accessibility tree. It
 //! does not own message identity, scrolling input, platform URL/clipboard side effects, network

@@ -21,7 +21,8 @@ pub use style::RemoteUiStyle;
 
 #[cfg(test)]
 fn test_style() -> RemoteUiStyle {
-    use zeta_ui::{Color, ScrollViewStyle, ScrollbarStyle};
+    use zeta_ui_components::{ScrollViewStyle, ScrollbarStyle};
+    use zui::ui::Color;
 
     let scroll = ScrollViewStyle::new(ScrollbarStyle::new(
         Color::TRANSPARENT,

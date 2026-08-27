@@ -1,37 +1,37 @@
 //! Minimal host proving that the reusable UI stack can run without app product state.
 
-use zeta_ui::ActionBar;
-use zeta_ui::ActionBarButton;
-use zeta_ui::ActionBarItem;
-use zeta_ui::ActionBarOrientation;
-use zeta_ui::ActionBarStyle;
-use zeta_ui::ButtonBackgrounds;
-use zeta_ui::ButtonState;
-use zeta_ui::ButtonStyle;
-use zeta_ui::Color;
-use zeta_ui::Component;
-use zeta_ui::ComponentContext;
-use zeta_ui::ComponentElement;
-use zeta_ui::ComponentRuntime;
-use zeta_ui::ComponentSlot;
-use zeta_ui::ComputedElement;
-use zeta_ui::Edges;
-use zeta_ui::Element;
-use zeta_ui::ElementId;
-use zeta_ui::Size;
-use zeta_ui::TextStyle;
-use zeta_ui::ViewState;
+use zeta_ui_components::ActionBar;
+use zeta_ui_components::ActionBarButton;
+use zeta_ui_components::ActionBarItem;
+use zeta_ui_components::ActionBarOrientation;
+use zeta_ui_components::ActionBarStyle;
+use zeta_ui_components::ButtonBackgrounds;
+use zeta_ui_components::ButtonState;
+use zeta_ui_components::ButtonStyle;
 use zui::render::RenderOutcome;
 use zui::render::RenderTargetSize;
 use zui::render::Renderer;
 use zui::render::RendererError;
+use zui::ui::Color;
+use zui::ui::Component;
+use zui::ui::ComponentContext;
+use zui::ui::ComponentElement;
+use zui::ui::ComponentRuntime;
+use zui::ui::ComponentSlot;
+use zui::ui::ComputedElement;
+use zui::ui::Edges;
+use zui::ui::Element;
+use zui::ui::ElementId;
 use zui::ui::Icon;
 use zui::ui::IconDefinition;
 use zui::ui::IconId;
 use zui::ui::InteractionFrame;
 use zui::ui::Rect;
+use zui::ui::Size;
+use zui::ui::TextStyle;
 use zui::ui::UiFrame;
 use zui::ui::UiScene;
+use zui::ui::ViewState;
 
 const DEMO_ICON: Icon = Icon::new(
     IconId::new("demo-square"),

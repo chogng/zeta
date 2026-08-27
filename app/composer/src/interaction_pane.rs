@@ -1,10 +1,11 @@
-use zeta_ui::{ScrollAxis, ScrollCommand, ScrollMetrics, ScrollState, Size};
+use zeta_ui_components::{ScrollAxis, ScrollCommand, ScrollMetrics, ScrollState};
+use zui::ui::Size;
 
 /// Presentation-only state for the scrollable View mounted above the Composer.
 ///
 /// The pane does not know which product View is mounted. Callers provide only viewport and content
 /// geometry; the pane retains the resulting scroll position and delegates clipping, translation,
-/// scrollbar geometry, and paint to `zeta_ui::ScrollView`.
+/// scrollbar geometry, and paint to `zeta_ui_components::ScrollView`.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct ComposerInteractionPaneState {
     scroll_state: ScrollState,

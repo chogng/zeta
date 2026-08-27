@@ -1,5 +1,5 @@
 use super::{FILES_TOOLBAR_HEIGHT, FilesLayout};
-use zeta_ui::Rect;
+use zui::ui::Rect;
 
 #[test]
 fn files_layout_resolves_toolbar_and_content() {

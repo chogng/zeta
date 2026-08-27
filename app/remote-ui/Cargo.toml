@@ -15,7 +15,7 @@ zeta-icons = { workspace = true }
 zeta-remote = { workspace = true }
 zeta-remote-connections = { workspace = true }
 zeta-remote-host = { workspace = true }
-zeta-ui = { workspace = true }
+zeta-ui-components = { workspace = true }
 zui = { workspace = true, default-features = false }
 
 [lints]

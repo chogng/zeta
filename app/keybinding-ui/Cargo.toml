@@ -11,7 +11,7 @@ name = "app_keybinding_ui"
 
 [dependencies]
 zeta-keybinding = { workspace = true }
-zeta-ui = { workspace = true }
+zeta-ui-components = { workspace = true }
 zui = { workspace = true, default-features = false }
 
 [lints]

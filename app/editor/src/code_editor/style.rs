@@ -1,6 +1,6 @@
 //! CodeEditor-owned presentation tokens.
 
-use zeta_ui::{Border, Color, Edges, FontFamily, FontWeight, PaintRect, Rect, TextStyle};
+use zui::ui::{Border, Color, Edges, FontFamily, FontWeight, PaintRect, Rect, TextStyle};
 
 use super::{
     CodeEditorDiagnosticPalette, CodeEditorDiagnosticSeverity, CodeEditorSyntaxPalette,

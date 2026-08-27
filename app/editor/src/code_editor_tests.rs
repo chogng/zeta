@@ -5,8 +5,8 @@ use super::{
     CodeEditorPresentation, CodeEditorRow, CodeEditorRowSource, CodeEditorSelectionMode,
     CodeEditorStyle, CodeEditorTextEdit, CodeEditorViewport,
 };
-use zeta_ui::{CaretVisibility, Color, Component, Point, Rect, TextBlockWrap, UiScene};
-use zeta_ui::{TextInputCompositionCursor, TextInputCompositionEvent};
+use zui::ui::{CaretVisibility, Color, Component, Point, Rect, TextBlockWrap, UiScene};
+use zui::ui::{TextInputCompositionCursor, TextInputCompositionEvent};
 
 #[test]
 fn exact_feature_edit_uses_normal_revision_history_and_unicode_validation() {

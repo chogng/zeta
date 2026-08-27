@@ -1,6 +1,6 @@
 //! Session search editor and matching policy.
 
-use zeta_ui::{TextInput, TextInputCommand, TextInputCompositionEvent};
+use zui::ui::{TextInput, TextInputCommand, TextInputCompositionEvent};
 
 #[derive(Default)]
 pub struct SessionSearchState {

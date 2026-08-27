@@ -7,8 +7,8 @@ use zeta_editor::CodeEditorCommand;
 use zeta_editor::CodeEditorLanguage;
 use zeta_editor::CodeEditorSelectionMode;
 use zeta_input_classifier::InputConversation;
-use zeta_ui::TextInputCompositionCursor;
-use zeta_ui::TextInputCompositionEvent;
+use zui::ui::TextInputCompositionCursor;
+use zui::ui::TextInputCompositionEvent;
 
 static NEXT_FIXTURE_ID: AtomicU64 = AtomicU64::new(0);
 

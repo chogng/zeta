@@ -3,14 +3,16 @@
 use std::cell::OnceCell;
 use std::time::Duration;
 
-use zeta_ui::{
+use zeta_ui_components::{
+    ListContentPadding, ScrollAxis, ScrollMetrics, ScrollState, ScrollView, ScrollViewStyle,
+    ScrollbarLayout, ScrollbarPresentation, ScrollbarStyle, VirtualListLayout,
+};
+use zui::ui::{
     AccessibilityExpansion, AccessibilityRole, AnimationEasing, Border, Color, Component,
     ComponentContext, ComponentElement, ComputedElement, CornerRadii, CursorFeedback, Edges,
-    Element, ElementId, FocusBehavior, FontFamily, FontWeight, FrameInvalidation,
-    ListContentPadding, NavigationAxis, NavigationGroupId, NodeAction, PaintRect, Point, Rect,
-    ScalarAnimationSpec, ScrollAxis, ScrollMetrics, ScrollState, ScrollView, ScrollViewStyle,
-    ScrollbarLayout, ScrollbarPresentation, ScrollbarStyle, TextBlock, TextStyle, UiNode, UiScene,
-    VirtualListLayout,
+    Element, ElementId, FocusBehavior, FontFamily, FontWeight, FrameInvalidation, NavigationAxis,
+    NavigationGroupId, NodeAction, PaintRect, Point, Rect, ScalarAnimationSpec, TextBlock,
+    TextStyle, UiNode, UiScene,
 };
 
 mod identity;
@@ -411,7 +413,7 @@ impl<'a> MultiDiffEditor<'a> {
     pub fn scroll_view(&self) -> ScrollView {
         ScrollView::new(
             self.bounds,
-            zeta_ui::Size::new(self.bounds.size.width, self.content_height()),
+            zui::ui::Size::new(self.bounds.size.width, self.content_height()),
             self.state,
             ScrollAxis::Vertical,
             self.style.scroll_view,
@@ -485,7 +487,7 @@ impl<'a> MultiDiffEditor<'a> {
     fn scroll_view_with_layout(&self, layout: &VirtualListLayout) -> ScrollView {
         ScrollView::new(
             self.bounds,
-            zeta_ui::Size::new(self.bounds.size.width, layout.content_extent()),
+            zui::ui::Size::new(self.bounds.size.width, layout.content_extent()),
             self.state,
             ScrollAxis::Vertical,
             self.style.scroll_view,
@@ -591,7 +593,7 @@ impl Component for MultiDiffEditor<'_> {
                 scene.draw_text(TextBlock::new(
                     item.file_name,
                     Point::new(header.origin.x + FILE_HEADER_PADDING, header.origin.y + 7.0),
-                    zeta_ui::Size::new(
+                    zui::ui::Size::new(
                         (header.size.width - FILE_HEADER_PADDING * 2.0).max(1.0),
                         18.0,
                     ),
@@ -786,7 +788,7 @@ impl Component for MultiDiffFileHeader<'_> {
                 self.bounds.origin.x + FILE_HEADER_PADDING,
                 self.bounds.origin.y + 7.0,
             ),
-            zeta_ui::Size::new(
+            zui::ui::Size::new(
                 (self.bounds.size.width - FILE_HEADER_PADDING * 2.0).max(1.0),
                 18.0,
             ),

@@ -1,6 +1,6 @@
-use zeta_ui::AnimationKey;
-use zeta_ui::AnimationProperty;
-use zeta_ui::ElementId;
+use zui::ui::AnimationKey;
+use zui::ui::AnimationProperty;
+use zui::ui::ElementId;
 
 const FOLD_SCOPE: u32 = 4;
 const SECTION_SCOPE: u32 = 10;

@@ -2,9 +2,9 @@
 
 use super::{SessionCanvasLayout, SessionHeader, SessionHeaderStyle};
 use crate::thread_state::ThreadState;
-use zeta_ui::Component;
-use zeta_ui::Rect;
-use zeta_ui::UiScene;
+use zui::ui::Component;
+use zui::ui::Rect;
+use zui::ui::UiScene;
 
 #[test]
 fn session_canvas_reserves_a_stable_header_above_the_thread_timeline() {
@@ -28,19 +28,19 @@ fn empty_session_header_shows_ready_workspace_context() {
         "Local  ·  ~/Desktop/zeta  ·  main  ·  Changes 2".to_owned(),
         &state,
         SessionHeaderStyle::new(
-            zeta_ui::Color::WHITE,
-            zeta_ui::Color::rgb(222, 222, 224),
-            zeta_ui::Color::rgb(246, 246, 247),
-            zeta_ui::Color::rgb(38, 38, 41),
-            zeta_ui::Color::rgb(126, 126, 132),
-            zeta_ui::Color::rgb(16, 124, 16),
-            zeta_ui::Color::rgb(15, 110, 96),
-            zeta_ui::Color::rgb(154, 103, 0),
-            zeta_ui::Color::rgb(180, 38, 38),
+            zui::ui::Color::WHITE,
+            zui::ui::Color::rgb(222, 222, 224),
+            zui::ui::Color::rgb(246, 246, 247),
+            zui::ui::Color::rgb(38, 38, 41),
+            zui::ui::Color::rgb(126, 126, 132),
+            zui::ui::Color::rgb(16, 124, 16),
+            zui::ui::Color::rgb(15, 110, 96),
+            zui::ui::Color::rgb(154, 103, 0),
+            zui::ui::Color::rgb(180, 38, 38),
         ),
         zui::ui::ElementId::scoped(1, 3),
     );
-    let mut scene = UiScene::new(zeta_ui::Color::rgb(252, 252, 253));
+    let mut scene = UiScene::new(zui::ui::Color::rgb(252, 252, 253));
 
     header.paint(&mut scene);
 

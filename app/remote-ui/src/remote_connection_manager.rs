@@ -3,15 +3,15 @@ use zeta_remote::SshHost;
 use zeta_remote::SshTarget;
 use zeta_remote_connections::RemoteConnectionEntry;
 use zeta_remote_connections::RemoteConnectionName;
-use zeta_ui::Rect;
-use zeta_ui::ScrollAxis;
-use zeta_ui::ScrollCommand;
-use zeta_ui::ScrollMetrics;
-use zeta_ui::ScrollState;
-use zeta_ui::TextInput;
-use zeta_ui::TextInputCommand;
-use zeta_ui::TextInputCompositionEvent;
+use zeta_ui_components::ScrollAxis;
+use zeta_ui_components::ScrollCommand;
+use zeta_ui_components::ScrollMetrics;
+use zeta_ui_components::ScrollState;
 use zui::ui::ElementId;
+use zui::ui::Rect;
+use zui::ui::TextInput;
+use zui::ui::TextInputCommand;
+use zui::ui::TextInputCompositionEvent;
 
 const REMOTE_CONNECTION_MANAGER_SCOPE: u32 = 10;
 pub const REMOTE_CONNECTION_MANAGER: ElementId =
@@ -531,7 +531,7 @@ mod tests {
     use zeta_remote::SshTarget;
     use zeta_remote_connections::RemoteConnectionEntry;
     use zeta_remote_connections::RemoteConnectionName;
-    use zeta_ui::TextInputCommand;
+    use zui::ui::TextInputCommand;
 
     use super::RemoteConnectionManagerField;
     use super::RemoteConnectionManagerState;

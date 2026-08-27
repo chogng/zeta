@@ -4,7 +4,7 @@ use zeta_protocol::{
     ItemId, SessionId, Thread, ThreadId, ThreadItem, ThreadStatus, ToolCallId, ToolName, Turn,
     TurnId, TurnStatus,
 };
-use zeta_ui::{Color, Rect};
+use zui::ui::{Color, Rect};
 
 #[test]
 fn timeline_groups_shell_result_under_its_tool_call() {

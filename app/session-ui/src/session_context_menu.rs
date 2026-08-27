@@ -1,15 +1,17 @@
 //! Session tab context-menu state and presentation.
 
-use zeta_ui::{
-    ButtonBackgrounds, ButtonState, ButtonStyle, Component, ComponentContext, ComponentElement,
-    ComputedElement, ContextMenu, ContextMenuItem, ContextMenuSelection, ContextMenuStyle,
-    ContextViewPlacement, CornerRadii, Edges, Element, InteractionRegion, Point, Rect, Size,
-    TextStyle, UiScene,
+use zeta_ui_components::{
+    ButtonBackgrounds, ButtonState, ButtonStyle, ContextMenu, ContextMenuItem,
+    ContextMenuSelection, ContextMenuStyle, ContextViewPlacement, InteractionRegion,
 };
 use zui::ui::{
     AccessibilityRole, AccessibilitySelection, CursorFeedback, DispatchInvalidation,
     DispatchOutcome, ElementId, FocusBehavior, InteractionFrame, NavigationAxis, NavigationGroupId,
     NodeAction, UiDispatch, UiNode,
+};
+use zui::ui::{
+    Component, ComponentContext, ComponentElement, ComputedElement, CornerRadii, Edges, Element,
+    Point, Rect, Size, TextStyle, UiScene,
 };
 
 use crate::interaction::{SESSION_CONTEXT_MENU, SessionContextMenuAction};
@@ -23,19 +25,19 @@ const MENU_ANCHOR_GAP: f32 = 2.0;
 /// Colors needed by the Session context-menu renderer.
 #[derive(Clone, Copy)]
 pub struct SessionContextMenuStyle {
-    pub surface: zeta_ui::Color,
-    pub border: zeta_ui::Color,
-    pub text: zeta_ui::Color,
-    pub session_tab_highlight: zeta_ui::Color,
+    pub surface: zui::ui::Color,
+    pub border: zui::ui::Color,
+    pub text: zui::ui::Color,
+    pub session_tab_highlight: zui::ui::Color,
 }
 
 impl SessionContextMenuStyle {
     /// Creates the resolved colors used by the menu.
     pub const fn new(
-        surface: zeta_ui::Color,
-        border: zeta_ui::Color,
-        text: zeta_ui::Color,
-        session_tab_highlight: zeta_ui::Color,
+        surface: zui::ui::Color,
+        border: zui::ui::Color,
+        text: zui::ui::Color,
+        session_tab_highlight: zui::ui::Color,
     ) -> Self {
         Self {
             surface,
@@ -101,7 +103,7 @@ impl SessionContextMenu {
         dispatch: &UiDispatch,
     ) -> Option<Self> {
         let open = state.open.as_ref()?;
-        let resting_backgrounds = ButtonBackgrounds::new(zeta_ui::Color::TRANSPARENT);
+        let resting_backgrounds = ButtonBackgrounds::new(zui::ui::Color::TRANSPARENT);
         let selected_backgrounds = ButtonBackgrounds::new(style.session_tab_highlight)
             .with_hovered(style.session_tab_highlight)
             .with_focused(style.session_tab_highlight)

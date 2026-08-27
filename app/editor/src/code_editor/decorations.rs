@@ -1,4 +1,4 @@
-use zeta_ui::{PaintRect, Point, Rect, Size, UiScene};
+use zui::ui::{PaintRect, Point, Rect, Size, UiScene};
 
 use super::text_metrics::{display_columns, display_columns_until, expand_tabs};
 use super::{
@@ -23,7 +23,7 @@ impl CodeEditor<'_> {
             + CONTENT_HORIZONTAL_PADDING
             + (column as isize - self.horizontal_origin_column(line) as isize) as f32 * CELL_WIDTH;
         if let Some(composition) = self.rows.composition()
-            && let zeta_ui::TextInputCompositionCursor::Visible(cursor) = composition.cursor
+            && let zui::ui::TextInputCompositionCursor::Visible(cursor) = composition.cursor
         {
             x += display_columns_until(composition.text, cursor.end) as f32 * CELL_WIDTH;
         }
@@ -184,11 +184,11 @@ impl CodeEditor<'_> {
                 Rect::from_xywh(base_x, bounds.bottom() - 1.0, width.max(CELL_WIDTH), 1.0),
                 self.style.composition_underline(),
             ));
-            if let zeta_ui::TextInputCompositionCursor::Visible(cursor) = composition.cursor {
+            if let zui::ui::TextInputCompositionCursor::Visible(cursor) = composition.cursor {
                 caret_x += display_columns_until(composition.text, cursor.end) as f32 * CELL_WIDTH;
             }
         }
-        if self.caret_visibility == zeta_ui::CaretVisibility::Visible {
+        if self.caret_visibility == zui::ui::CaretVisibility::Visible {
             scene.draw_rect(PaintRect::new(
                 Rect::from_xywh(caret_x, bounds.origin.y, 1.5, ROW_HEIGHT),
                 self.style.caret(),

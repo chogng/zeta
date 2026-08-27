@@ -3,7 +3,7 @@
 use super::DirectoryEntry;
 use super::FilesTree;
 use crate::WorkspacePaneAction;
-use zeta_ui::TreeItemExpansion;
+use zeta_ui_components::TreeItemExpansion;
 
 #[test]
 fn directory_activation_loads_once_and_preserves_child_identity() {

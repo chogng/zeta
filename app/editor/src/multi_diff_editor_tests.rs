@@ -7,9 +7,10 @@ use crate::{
 };
 use std::time::{Duration, Instant};
 use zeta_diff::DiffDocument;
-use zeta_ui::{
+use zeta_ui_components::{ScrollAxis, ScrollCommand, ScrollDelta, ScrollState};
+use zui::ui::{
     AnimationProperty, AnimationRegistry, Color, Component, CornerRadii, ElementId,
-    InteractionFrame, Rect, ScrollAxis, ScrollCommand, ScrollDelta, ScrollState, UiFrame, UiScene,
+    InteractionFrame, Rect, UiFrame, UiScene,
 };
 
 fn document(original: &str, modified: &str) -> DiffEditorDocument {

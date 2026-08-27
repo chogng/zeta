@@ -1,6 +1,6 @@
 use super::{ComposerInput, ComposerInputFocus};
 use zeta_editor::{CodeEditorCommand, CodeEditorLanguage};
-use zeta_ui::{CaretVisibility, Color, Component, Rect, UiScene};
+use zui::ui::{CaretVisibility, Color, Component, Rect, UiScene};
 
 #[test]
 fn compact_editor_grows_until_eight_visible_rows() {

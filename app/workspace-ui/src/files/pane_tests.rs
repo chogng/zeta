@@ -1,7 +1,8 @@
 use super::{EXPLORER_PANE, FilesPane, FilesPaneStyle};
 use crate::{DirectoryEntry, FilesState};
-use zeta_ui::{Color, Component, Point, Rect, ScrollViewStyle, ScrollbarStyle, UiScene};
+use zeta_ui_components::{ScrollViewStyle, ScrollbarStyle};
 use zui::ui::{AccessibilityRole, DispatchInvalidation, InteractionFrame, UiDispatch, UiFrame};
+use zui::ui::{Color, Component, Point, Rect, UiScene};
 
 fn style() -> FilesPaneStyle {
     FilesPaneStyle {

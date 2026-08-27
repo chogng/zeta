@@ -1,6 +1,6 @@
 //! Internal side-by-side pane geometry.
 
-use zeta_ui::Rect;
+use zui::ui::Rect;
 
 use super::DIVIDER_WIDTH;
 

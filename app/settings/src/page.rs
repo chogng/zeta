@@ -21,37 +21,37 @@ use super::navigation::button_state;
 use super::navigation::navigation_buttons;
 
 use zeta_icons::icons;
-use zeta_ui::ActionBar;
-use zeta_ui::ActionBarButton;
-use zeta_ui::ActionBarItem;
-use zeta_ui::Button;
-use zeta_ui::CaretVisibility;
-use zeta_ui::Component;
-use zeta_ui::ComponentContext;
-use zeta_ui::ComponentElement;
-use zeta_ui::ComputedElement;
-use zeta_ui::Edges;
-use zeta_ui::Element;
-use zeta_ui::InputBoxState;
-use zeta_ui::InteractionRegion;
-use zeta_ui::PaintRect;
-use zeta_ui::Rect;
-use zeta_ui::SearchBox;
-use zeta_ui::TextBlock;
-use zeta_ui::TextInput;
-use zeta_ui::TextInputLayoutEngine;
-use zeta_ui::TextStyle;
-use zeta_ui::UiScene;
+use zeta_ui_components::ActionBar;
+use zeta_ui_components::ActionBarButton;
+use zeta_ui_components::ActionBarItem;
+use zeta_ui_components::Button;
+use zeta_ui_components::InputBoxState;
+use zeta_ui_components::InteractionRegion;
+use zeta_ui_components::SearchBox;
 use zui::ui::AccessibilityRole;
 use zui::ui::AccessibilitySelection;
+use zui::ui::CaretVisibility;
+use zui::ui::Component;
+use zui::ui::ComponentContext;
+use zui::ui::ComponentElement;
+use zui::ui::ComputedElement;
 use zui::ui::CursorFeedback;
+use zui::ui::Edges;
+use zui::ui::Element;
 use zui::ui::ElementId;
 use zui::ui::FocusBehavior;
 use zui::ui::NavigationAxis;
 use zui::ui::NavigationGroupId;
 use zui::ui::NodeAction;
+use zui::ui::PaintRect;
+use zui::ui::Rect;
+use zui::ui::TextBlock;
+use zui::ui::TextInput;
+use zui::ui::TextInputLayoutEngine;
+use zui::ui::TextStyle;
 use zui::ui::UiDispatch;
 use zui::ui::UiNode;
+use zui::ui::UiScene;
 
 /// Retained Settings page shell with left navigation, header, action bar, and a content slot.
 pub struct SettingsPage {
@@ -153,7 +153,7 @@ impl SettingsPage {
         let actions = SettingsPageActionState::from_availability(actions, dispatch);
         let action_bar = ActionBar::new(
             layout.action_bar(),
-            zeta_ui::ActionBarOrientation::Horizontal,
+            zeta_ui_components::ActionBarOrientation::Horizontal,
             vec![
                 ActionBarItem::Button(
                     ActionBarButton::label("Reset to Default", actions.reset())
@@ -355,17 +355,17 @@ impl Component for SettingsPage {
         scene.draw_rect(PaintRect::new(viewport, self.style.background));
         scene.draw_rect(
             PaintRect::new(self.layout.rail(), self.style.rail_background).with_border(
-                zeta_ui::Border::new(Edges::new(0.0, 1.0, 0.0, 0.0), self.style.border),
+                zui::ui::Border::new(Edges::new(0.0, 1.0, 0.0, 0.0), self.style.border),
             ),
         );
         scene.draw_rect(
             PaintRect::new(self.layout.header(), self.style.surface).with_border(
-                zeta_ui::Border::new(Edges::new(0.0, 0.0, 1.0, 0.0), self.style.border),
+                zui::ui::Border::new(Edges::new(0.0, 0.0, 1.0, 0.0), self.style.border),
             ),
         );
         scene.draw_rect(
             PaintRect::new(self.layout.action_bar(), self.style.surface_raised).with_border(
-                zeta_ui::Border::new(Edges::new(0.0, 0.0, 1.0, 0.0), self.style.border),
+                zui::ui::Border::new(Edges::new(0.0, 0.0, 1.0, 0.0), self.style.border),
             ),
         );
         draw_text(
@@ -379,7 +379,7 @@ impl Component for SettingsPage {
             ),
             TextStyle::new(20.0, self.style.text)
                 .with_line_height(24.0)
-                .with_weight(zeta_ui::FontWeight::Bold),
+                .with_weight(zui::ui::FontWeight::Bold),
         );
         for (index, button) in self.navigation.iter().enumerate() {
             scene.draw_component(button);

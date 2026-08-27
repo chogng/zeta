@@ -14,7 +14,7 @@ path = "src/lib.rs"
 serde_json = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-workbench = { workspace = true }
-zeta-ui = { workspace = true }
+zeta-ui-components = { workspace = true }
 zui = { workspace = true, default-features = false }
 
 [lints]

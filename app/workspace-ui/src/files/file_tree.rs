@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use zeta_ui::TreeItem;
-use zeta_ui::TreeItemExpansion;
+use zeta_ui_components::TreeItem;
+use zeta_ui_components::TreeItemExpansion;
 use zui::ui::ElementId;
 
 use super::DirectoryEntry;

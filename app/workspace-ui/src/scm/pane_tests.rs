@@ -4,8 +4,8 @@ use super::{EditorPane, EditorPaneState};
 use crate::TEST_SCM_PANE_STYLE;
 use crate::interaction::{AGENT_EDITOR_PANE, MULTI_DIFF_EDITOR, MULTI_DIFF_SCROLLBAR};
 use zeta_diff::DiffDocument;
-use zeta_ui::{Color, Component, Rect, UiScene};
 use zui::ui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
+use zui::ui::{Color, Component, Rect, UiScene};
 
 fn document(original: &str, modified: &str) -> DiffDocument {
     DiffDocument::from_text(original, modified).unwrap()
@@ -36,7 +36,7 @@ fn changed_files_retain_independent_diff_viewports_in_one_multi_diff_state() {
         .unwrap()
         .editor_state_mut()
         .scroll_rows(8, 24, 6);
-    assert!(state.scroll(120.0, zeta_ui::Size::new(320.0, 300.0), Instant::now(),));
+    assert!(state.scroll(120.0, zui::ui::Size::new(320.0, 300.0), Instant::now(),));
 
     assert_eq!(state.diffs.len(), 2);
     assert_eq!(state.diffs[0].editor_state.first_visible_row(), 0);
@@ -122,14 +122,14 @@ fn scrollbar_thumb_drag_and_track_click_update_the_shared_scroll_state() {
     let thumb = scrollbar.thumb_bounds();
     let now = Instant::now();
     let press = state.press_scrollbar(
-        zeta_ui::Point::new(thumb.origin.x + 2.0, thumb.origin.y + 2.0),
+        zui::ui::Point::new(thumb.origin.x + 2.0, thumb.origin.y + 2.0),
         bounds,
         now,
     );
     assert!(press.handled);
 
     let drag = state.scrollbar_pointer_moved(
-        zeta_ui::Point::new(
+        zui::ui::Point::new(
             thumb.origin.x + 2.0,
             scrollbar.track_bounds().bottom() - 2.0,
         ),
@@ -140,12 +140,12 @@ fn scrollbar_thumb_drag_and_track_click_update_the_shared_scroll_state() {
     assert!(state.scroll_state.vertical_offset() > 0.0);
     assert!(
         state
-            .release_scrollbar(zeta_ui::Point::new(-1.0, -1.0), bounds, now)
+            .release_scrollbar(zui::ui::Point::new(-1.0, -1.0), bounds, now)
             .handled
     );
 
     let previous = state.scroll_state.vertical_offset();
-    let track_point = zeta_ui::Point::new(
+    let track_point = zui::ui::Point::new(
         scrollbar.track_bounds().origin.x + 2.0,
         scrollbar.track_bounds().origin.y + 1.0,
     );

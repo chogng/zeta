@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use zeta_ui::Color;
+use zui::ui::Color;
 
 /// Stable editor presentation role independent from syntax or semantic token provenance.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]

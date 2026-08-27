@@ -13,9 +13,9 @@ use zeta_input_classifier::InputHistoryEntry;
 use zeta_input_classifier::InputRoute;
 use zeta_input_classifier::ShellCompletion;
 use zeta_input_classifier::ShellCompletionSnapshot;
-use zeta_ui::Point;
-use zeta_ui::Rect;
-use zeta_ui::TextInputCompositionEvent;
+use zui::ui::Point;
+use zui::ui::Rect;
+use zui::ui::TextInputCompositionEvent;
 
 use crate::ComposerInput;
 use crate::ComposerInteractionModel;

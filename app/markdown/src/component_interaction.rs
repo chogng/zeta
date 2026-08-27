@@ -1,4 +1,4 @@
-use zeta_ui::{PaintRect, Point, Rect};
+use zui::ui::{PaintRect, Point, Rect};
 
 use crate::component::Markdown;
 use crate::inline_layout::offset_rect;
