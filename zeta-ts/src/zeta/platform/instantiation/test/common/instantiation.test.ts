@@ -2,23 +2,23 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
 	createServiceIdentifier,
-	InstantiationService,
-	ServiceCollection,
+	InstantiationType,
+	ServiceContainer,
 	SyncDescriptor,
 	type ServicesAccessor,
 } from "../../../../platform/instantiation/common/instantiation.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 
 test("instantiation resolves descriptor arguments in contract order", () => {
 	const serviceId = createServiceIdentifier<string>("test.message");
-	const services = new ServiceCollection();
-	services.set(serviceId, "service");
-	const instantiation = new InstantiationService(services);
+	const container = new ServiceContainer();
+	container.registerInstance(serviceId, "service");
 	const descriptor = new SyncDescriptor(TestContribution, {
 		staticArguments: ["static"],
 		serviceDependencies: [serviceId],
 	});
 
-	const contribution = instantiation.createInstance(
+	const contribution = container.createInstance(
 		descriptor,
 		"dynamic",
 	);
@@ -28,16 +28,16 @@ test("instantiation resolves descriptor arguments in contract order", () => {
 		"dynamic",
 		"service",
 	]);
+	container.dispose();
 });
 
 test("invocation accessors cannot escape their call", () => {
 	const serviceId = createServiceIdentifier<string>("test.value");
-	const services = new ServiceCollection();
-	services.set(serviceId, "ready");
-	const instantiation = new InstantiationService(services);
+	const container = new ServiceContainer();
+	container.registerInstance(serviceId, "ready");
 	let escapedAccessor: ServicesAccessor | undefined;
 
-	const result = instantiation.invokeFunction((accessor, suffix) => {
+	const result = container.invokeFunction((accessor, suffix) => {
 		escapedAccessor = accessor;
 		return `${accessor.get(serviceId)}:${suffix}`;
 	}, "done");
@@ -47,6 +47,88 @@ test("invocation accessors cannot escape their call", () => {
 		() => escapedAccessor?.get(serviceId),
 		/only valid during invocation/,
 	);
+	container.dispose();
+});
+
+test("singleton factories are delayed and resolved once", () => {
+	const serviceId = createServiceIdentifier<{ id: number }>("test.singleton");
+	const container = new ServiceContainer();
+	let created = 0;
+	container.registerSingleton(serviceId, () => ({ id: ++created }));
+
+	assert.equal(created, 0);
+	const first = container.get(serviceId);
+	const second = container.get(serviceId);
+	assert.equal(created, 1);
+	assert.strictEqual(first, second);
+	container.dispose();
+});
+
+test("service registration is explicit and rejects a duplicate in one scope", () => {
+	const serviceId = createServiceIdentifier<string>("test.duplicate");
+	const container = new ServiceContainer();
+	container.registerInstance(serviceId, "first");
+
+	assert.throws(
+		() => container.registerInstance(serviceId, "second"),
+		/already registered in this scope/u,
+	);
+	assert.equal(container.get(serviceId), "first");
+	container.dispose();
+});
+
+test("eager singleton factories are created during registration", () => {
+	const serviceId = createServiceIdentifier<string>("test.eager");
+	const container = new ServiceContainer();
+	let created = 0;
+	container.registerSingleton(serviceId, () => `value-${++created}`, {
+		instantiation: InstantiationType.Eager,
+	});
+
+	assert.equal(created, 1);
+	assert.equal(container.get(serviceId), "value-1");
+	container.dispose();
+});
+
+test("child containers inherit services and override only their scope", () => {
+	const serviceId = createServiceIdentifier<string>("test.scope");
+	const parent = new ServiceContainer();
+	parent.registerInstance(serviceId, "parent");
+	const child = parent.createChild();
+	child.registerInstance(serviceId, "child");
+
+	assert.equal(parent.get(serviceId), "parent");
+	assert.equal(child.get(serviceId), "child");
+	child.dispose();
+	parent.dispose();
+});
+
+test("cyclic singleton dependencies report the dependency chain", () => {
+	const first = createServiceIdentifier<string>("test.first");
+	const second = createServiceIdentifier<string>("test.second");
+	const container = new ServiceContainer();
+	container.registerSingleton(first, accessor => `${accessor.get(second)}`);
+	container.registerSingleton(second, accessor => `${accessor.get(first)}`);
+
+	assert.throws(
+		() => container.get(first),
+		/Cyclic service dependency: test\.first -> test\.second -> test\.first/u,
+	);
+	container.dispose();
+});
+
+test("container owns disposable singleton instances", () => {
+	const serviceId = createServiceIdentifier<DisposableValue>("test.disposable");
+	const container = new ServiceContainer();
+	let value: DisposableValue | undefined;
+	container.registerSingleton(serviceId, () => {
+		value = new DisposableValue();
+		return value;
+	});
+
+	container.get(serviceId);
+	container.dispose();
+	assert.equal(value?.disposed, true);
 });
 
 class TestContribution {
@@ -58,5 +140,14 @@ class TestContribution {
 		service: string,
 	) {
 		this.arguments = [staticArgument, dynamicArgument, service];
+	}
+}
+
+class DisposableValue extends Disposable {
+	disposed = false;
+
+	protected override disposeCore(): void {
+		this.disposed = true;
+		super.disposeCore();
 	}
 }

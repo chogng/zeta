@@ -1,0 +1,4 @@
+interface:
+  display_name: "VS Code File Convergence"
+  short_description: "Refactor files in line with VS Code"
+  default_prompt: "Use $vscode-file-convergence to refactor or retire the named file by aligning its responsibility with the matching VS Code and local files."

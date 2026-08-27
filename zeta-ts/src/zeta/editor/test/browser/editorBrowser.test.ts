@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { DisposableTracker, installDisposableTracker } from "../../../base/common/disposableTracker.js";
+import { DisposableTracker, installDisposableTracker } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
 import { type TextModelReference } from "../../common/services/textModelService.js";
 import { LanguageFeaturesService } from "../../common/services/languageService.js";
@@ -286,7 +286,7 @@ test("Code editor keeps large files editable while disabling full-document backg
 });
 
 test("constructor-backed editor contributions receive editor context and window services", async () => {
-	const [{ EditorContributionInstantiation, registerEditorContribution }, { createServiceIdentifier, InstantiationService, ServiceCollection, SyncDescriptor }] = await Promise.all([
+const [{ EditorContributionInstantiation, registerEditorContribution }, { createServiceIdentifier, ServiceContainer, SyncDescriptor }] = await Promise.all([
 		import("../../browser/editorExtensions.js"),
 		import("../../../platform/instantiation/common/instantiation.js"),
 	]);
@@ -309,9 +309,9 @@ test("constructor-backed editor contributions receive editor context and window 
 			instantiation: EditorContributionInstantiation.Eager,
 		},
 	});
-	const services = new ServiceCollection();
-	services.set(IService, { value: "window-service" });
-	const instantiationService = new InstantiationService(services);
+	const services = new ServiceContainer();
+	services.registerInstance(IService, { value: "window-service" });
+	const instantiationService = services;
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const model = new TextModel("runtime");

@@ -7,5 +7,5 @@ import { TestingService } from "./testingService.js";
 registerWorkbenchServiceContribution({
 	service: ITestingService,
 	dependencies: [ITaskService, ILogService],
-	install: context => context.own(new TestingService(context.services.get(ITaskService), context.services.get(ILogService))),
+	install: context => context.register(new TestingService(context.container.get(ITaskService), context.container.get(ILogService))),
 });

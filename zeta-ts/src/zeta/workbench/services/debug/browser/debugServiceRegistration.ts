@@ -16,8 +16,8 @@ registerWorkbenchServiceContribution({
 	service: IDebugService,
 	dependencies: [IFileService, IWorkspaceContextService, ITerminalService, IStorageService, ITaskService, ILogService],
 	install: context => {
-		const service = context.own(new DebugService(context.services.get(IFileService), context.services.get(IWorkspaceContextService), context.services.getOptional(IDebugAdapterProcessService), context.services.get(ITerminalService), context.services.get(IStorageService), context.services.get(ITaskService), DebugAdapterFactoriesRegistry, context.services.get(ILogService)));
-		context.services.set(IDebugConsoleService, context.own(new DebugConsoleService(service)));
+		const service = context.register(new DebugService(context.container.get(IFileService), context.container.get(IWorkspaceContextService), context.container.getOptional(IDebugAdapterProcessService), context.container.get(ITerminalService), context.container.get(IStorageService), context.container.get(ITaskService), DebugAdapterFactoriesRegistry, context.container.get(ILogService)));
+		context.container.registerInstance(IDebugConsoleService, context.register(new DebugConsoleService(service)));
 		return service;
 	},
 });

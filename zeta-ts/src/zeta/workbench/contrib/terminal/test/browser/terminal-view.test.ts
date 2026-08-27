@@ -26,7 +26,7 @@ for (const [name, value] of Object.entries({
 const [
 	{ ContextKeyService },
 	{ MenuService },
-	{ ServiceCollection },
+	{ ServiceContainer },
 	{ CommandService },
 	{ TerminalTitleActions },
 ] = await Promise.all([
@@ -66,7 +66,7 @@ test("Terminal profile menu launches the selected shell profile", async () => {
 	let focusCount = 0;
 	let clearCount = 0;
 	using contextKeyService = new ContextKeyService();
-	const commandService = new CommandService(new ServiceCollection());
+	const commandService = new CommandService(new ServiceContainer());
 	const menuService = new MenuService(commandService, contextKeyService);
 	using titleActions = new TerminalTitleActions(ownerDocument.body, {
 		menuService,

@@ -4,7 +4,7 @@ import {
 	CommandRegistry,
 } from "../../../../../platform/commands/common/commands.js";
 import {
-	ServiceCollection,
+	ServiceContainer,
 } from "../../../../../platform/instantiation/common/instantiation.js";
 import {
 	CommandService,
@@ -20,7 +20,7 @@ test("command service emits execution events around the handler call", async () 
 			return "result";
 		},
 	);
-	using service = new CommandService(new ServiceCollection(), registry);
+	using service = new CommandService(new ServiceContainer(), registry);
 	using willListener = service.onWillExecuteCommand((event) => {
 		order.push(`will:${event.commandId}:${String(event.args[0])}`);
 	});
@@ -49,7 +49,7 @@ test("command service does not emit did when a handler throws", async () => {
 			throw new Error("failed");
 		},
 	);
-	using service = new CommandService(new ServiceCollection(), registry);
+	using service = new CommandService(new ServiceContainer(), registry);
 	let willCount = 0;
 	let didCount = 0;
 	using willListener = service.onWillExecuteCommand(() => {

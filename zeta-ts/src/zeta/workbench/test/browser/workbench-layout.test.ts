@@ -84,7 +84,7 @@ const {
 const { CommandService } = await import(
 	"../../../workbench/services/commands/common/commandService.js"
 );
-const { InstantiationService, ServiceCollection, SyncDescriptor } = await import(
+const { ServiceContainer, SyncDescriptor } = await import(
 	"../../../platform/instantiation/common/instantiation.js"
 );
 type WorkbenchPartId =
@@ -780,7 +780,7 @@ test("Sidebar hosts its Composite Bar before content", () => {
 	assert.deepEqual(selections, ["zeta.search"]);
 	assert.equal(compositeBar.activeCompositeId, "zeta.explorer");
 
-	const instantiationService = new InstantiationService();
+	const instantiationService = new ServiceContainer();
 	const explorerContainer = viewDescriptors.getViewContainers(
 		ViewContainerLocation.Sidebar,
 	)[0];
@@ -860,7 +860,7 @@ test("Pane Composite Parts restore workspace selections with Registry fallback",
 		return new PaneComposite(dom.window.document.body, {
 			viewContainer: descriptor,
 			model: viewDescriptors.getViewContainerModel(descriptor.id),
-			instantiationService: new InstantiationService(),
+			instantiationService: new ServiceContainer(),
 			contextKeyService: contextKeys,
 		});
 	};
@@ -944,7 +944,7 @@ test("Sidebar can host Agent Sidebar composites", () => {
 	const composite = new PaneComposite(dom.window.document.body, {
 		viewContainer: descriptor,
 		model: viewDescriptors.getViewContainerModel(descriptor.id),
-		instantiationService: new InstantiationService(),
+		instantiationService: new ServiceContainer(),
 		contextKeyService: contextKeys,
 	});
 	agentSidebar.addComposite(composite);
@@ -980,7 +980,7 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 		ctorDescriptor: new SyncDescriptor(TestPanelView),
 	}]));
 	const contextKeys = disposables.add(new ContextKeyService());
-	const commands = disposables.add(new CommandService(new ServiceCollection()));
+	const commands = disposables.add(new CommandService(new ServiceContainer()));
 	const menuService = new MenuService(commands, contextKeys);
 	const contextMenuProvider: IContextMenuProvider = { showContextMenu() {} };
 	const viewDescriptors = disposables.add(new ViewDescriptorService({
@@ -1020,7 +1020,7 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 	const terminal = new PaneComposite(dom.window.document.body, {
 		viewContainer: terminalDescriptor,
 		model: viewDescriptors.getViewContainerModel(terminalDescriptor.id),
-		instantiationService: new InstantiationService(),
+		instantiationService: new ServiceContainer(),
 		contextKeyService: contextKeys,
 		paneHeaders: "hidden",
 		paneLayout: "fill",
@@ -1046,7 +1046,7 @@ test("Panel presents its destinations as tabs and active commands as a toolbar",
 		const composite = new PaneComposite(dom.window.document.body, {
 			viewContainer: descriptor,
 			model: viewDescriptors.getViewContainerModel(descriptor.id),
-			instantiationService: new InstantiationService(),
+			instantiationService: new ServiceContainer(),
 			contextKeyService: contextKeys,
 			paneHeaders: "hidden",
 			paneLayout: "fill",
@@ -1202,9 +1202,7 @@ test("Auxiliary Bar retains its fixed View as a standard Pane Composite", () => 
 		ViewContainerLocation.AuxiliaryBar,
 	);
 	assert.ok(descriptor);
-	const instantiationService = new InstantiationService(
-		new ServiceCollection(),
-	);
+	const instantiationService = new ServiceContainer();
 	const composite = new PaneComposite(dom.window.document.body, {
 		viewContainer: descriptor,
 		model: viewDescriptors.getViewContainerModel(descriptor.id),
@@ -1307,7 +1305,7 @@ test("PaneComposite rejects ambiguous title projections from multiple Views", ()
 	const composite = new PaneComposite(dom.window.document.body, {
 		viewContainer: descriptor,
 		model: viewDescriptors.getViewContainerModel(descriptor.id),
-		instantiationService: new InstantiationService(),
+		instantiationService: new ServiceContainer(),
 		contextKeyService: contextKeys,
 	});
 
@@ -1361,8 +1359,8 @@ test("CompositeBar reorders view container tabs through drag and drop", () => {
 test("titlebar layout commands toggle shell regions", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const harness = createLayoutHarness(dom.window.document);
-	const services = new ServiceCollection();
-	services.set(IWorkbenchLayoutService, harness.layout);
+	const services = new ServiceContainer();
+	services.registerInstance(IWorkbenchLayoutService, harness.layout);
 	const commands = harness.disposables.add(new CommandService(services));
 
 	assert.equal(harness.layout.isPartVisible("sidebar"), true);
@@ -1403,7 +1401,7 @@ test("panel layout actions use state icons", () => {
 	using disposables = new DisposableStore();
 	const contextKeys = disposables.add(new ContextKeyService());
 	const commands = disposables.add(
-		new CommandService(new ServiceCollection()),
+		new CommandService(new ServiceContainer()),
 	);
 	const menuService = new MenuService(commands, contextKeys);
 	const panelAction = () => menuService

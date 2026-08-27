@@ -1,5 +1,5 @@
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { ServiceCollection } from "../../../platform/instantiation/common/instantiation.js";
+import { ServiceContainer } from "../../../platform/instantiation/common/instantiation.js";
 import type { IRendererHost } from "../../../platform/renderer/common/rendererHost.js";
 import type { IWorkspaceContextApi } from "../../../platform/workspace/common/workspaceIpc.js";
 import type { IConfigurationService } from "../../../platform/configuration/common/configurationService.js";
@@ -20,7 +20,7 @@ export interface SessionsRuntimeOptions {
 
 /** Shared App Server-backed state used by one dedicated Sessions renderer. */
 export class SessionsRuntime extends Disposable {
-	readonly services = new ServiceCollection();
+	readonly container: ServiceContainer;
 	readonly sessions: AppServerSessionsManagementService;
 	readonly view: SessionsViewService;
 	readonly chat: ChatService;
@@ -29,6 +29,7 @@ export class SessionsRuntime extends Disposable {
 
 	constructor(api: IRendererHost, options: SessionsRuntimeOptions = {}) {
 		super();
+		this.container = this._register(new ServiceContainer());
 		this.sessions = this._register(new AppServerSessionsManagementService({
 			session: api.session,
 			turn: api.turn,
@@ -50,9 +51,9 @@ export class SessionsRuntime extends Disposable {
 			eventApi: api.events,
 			...(options.configurationService ? { configurationService: options.configurationService } : {}),
 		}));
-		this.services.set(ISessionsManagementService, this.sessions);
-		this.services.set(ISessionsViewService, this.view);
-		this.services.set(IChatService, this.chat);
+		this.container.registerInstance(ISessionsManagementService, this.sessions);
+		this.container.registerInstance(ISessionsViewService, this.view);
+		this.container.registerInstance(IChatService, this.chat);
 		if (options.workspaceApi) {
 			const subscription = options.workspaceApi.onDidChange(workspace => this.updateWorkspaceRoot(workspace));
 			this._register(toDisposable(() => subscription.dispose()));

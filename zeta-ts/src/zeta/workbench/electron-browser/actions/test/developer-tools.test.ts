@@ -10,7 +10,7 @@ import {
 	ContextKeyService,
 } from "../../../../platform/contextkey/common/contextkey.js";
 import {
-	ServiceCollection,
+	ServiceContainer,
 } from "../../../../platform/instantiation/common/instantiation.js";
 import {
 	NATIVE_HOST_GET_ACCESSIBILITY_SUPPORT_CHANNEL,
@@ -137,9 +137,9 @@ test("native host routes validate folder opening and developer tools", async () 
 });
 
 test("desktop commands are available from the command palette", async () => {
-	const services = new ServiceCollection();
+	const services = new ServiceContainer();
 	let toggles = 0;
-	services.set(INativeHostService, {
+	services.registerInstance(INativeHostService, {
 		openFolder: async () => {},
 		pickFolder: async () => undefined,
 		openWorkspace: async () => {},
@@ -152,7 +152,7 @@ test("desktop commands are available from the command palette", async () => {
 		},
 	});
 	let folderOpens = 0;
-	services.set(IWorkspaceOpenService, {
+	services.registerInstance(IWorkspaceOpenService, {
 		canOpenFolder: true,
 		canOpenWorkspace: true,
 		async openFolder() {

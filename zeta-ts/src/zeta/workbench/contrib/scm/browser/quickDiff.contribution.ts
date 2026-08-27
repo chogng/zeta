@@ -21,19 +21,19 @@ import { WorkbenchQuickDiffService } from './workbenchQuickDiffService.js';
 registerWorkbenchServiceContribution({
 	service: IQuickDiffService,
 	dependencies: [],
-	install: context => context.own(new WorkbenchQuickDiffService()),
+	install: context => context.register(new WorkbenchQuickDiffService()),
 });
 
 registerWorkbenchServiceContribution({
 	service: IQuickDiffEditorControllerService,
 	dependencies: [],
-	install: context => context.own(new QuickDiffEditorControllerService()),
+	install: context => context.register(new QuickDiffEditorControllerService()),
 });
 
 registerWorkbenchServiceContribution({
 	service: IQuickDiffModelService,
 	dependencies: [IQuickDiffService],
-	install: context => context.own(new QuickDiffModelService(context.services.get(IQuickDiffService))),
+	install: context => context.register(new QuickDiffModelService(context.container.get(IQuickDiffService))),
 });
 
 registerWorkbenchContribution('workbench.contrib.gitQuickDiffProvider', WorkbenchPhase.BlockRestore, accessor => {

@@ -42,7 +42,7 @@ const { CommandsRegistry } = await import(
 const { ContextKeyService } = await import(
 	"../../../../../../platform/contextkey/common/contextkey.js"
 );
-const { ServiceCollection } = await import(
+const { ServiceContainer } = await import(
 	"../../../../../../platform/instantiation/common/instantiation.js"
 );
 const { CommandService } = await import(
@@ -67,7 +67,7 @@ test("titlebar owns a menu-driven actions container", async () => {
 	const ownerDocument = browserEnvironment.window.document;
 	ownerDocument.body.replaceChildren();
 	const commandService = disposables.add(
-		new CommandService(new ServiceCollection()),
+		new CommandService(new ServiceContainer()),
 	);
 	const contextKeyService = disposables.add(new ContextKeyService());
 	const menuService = new MenuService(commandService, contextKeyService);
@@ -155,7 +155,7 @@ test("titlebar renders left actions before the application menu", () => {
 	const ownerDocument = browserEnvironment.window.document;
 	ownerDocument.body.replaceChildren();
 	const commandService = disposables.add(
-		new CommandService(new ServiceCollection()),
+		new CommandService(new ServiceContainer()),
 	);
 	const contextKeyService = disposables.add(new ContextKeyService());
 	const menuService = new MenuService(commandService, contextKeyService);
@@ -201,7 +201,7 @@ test("browser titlebar uses one icon trigger for the application menus", () => {
 	const ownerDocument = browserEnvironment.window.document;
 	ownerDocument.body.replaceChildren();
 	const commandService = disposables.add(
-		new CommandService(new ServiceCollection()),
+		new CommandService(new ServiceContainer()),
 	);
 	const contextKeyService = disposables.add(new ContextKeyService());
 	const menuService = new MenuService(commandService, contextKeyService);

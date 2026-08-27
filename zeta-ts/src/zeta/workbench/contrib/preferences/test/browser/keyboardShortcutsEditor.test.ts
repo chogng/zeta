@@ -24,7 +24,7 @@ const { Disposable, DisposableStore } = await import('../../../../../base/common
 const { OperatingSystem } = await import('../../../../../base/common/platform.js');
 const { CommandsRegistry } = await import('../../../../../platform/commands/common/commands.js');
 const { ContextKeyService } = await import('../../../../../platform/contextkey/common/contextkey.js');
-const { ServiceCollection } = await import('../../../../../platform/instantiation/common/instantiation.js');
+const { ServiceContainer } = await import('../../../../../platform/instantiation/common/instantiation.js');
 const { KeybindingsRegistry } = await import('../../../../../platform/keybinding/common/keybindingsRegistry.js');
 const { EditorPart } = await import('../../../../../workbench/browser/parts/editor/editorPart.js');
 const { EditorPaneMatch } = await import('../../../../../workbench/browser/parts/editor/editorPane.js');
@@ -62,7 +62,7 @@ test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows in
 	]);
 	disposables.add(new KeybindingsResourceContribution({ service: resources }));
 	const contextKeys = disposables.add(new ContextKeyService());
-	const commands = disposables.add(new CommandService(new ServiceCollection()));
+	const commands = disposables.add(new CommandService(new ServiceContainer()));
 	const keyboardLayout = disposables.add(new BrowserKeyboardLayoutService({
 		navigator: browserEnvironment.window.navigator,
 		operatingSystem: OperatingSystem.Windows,

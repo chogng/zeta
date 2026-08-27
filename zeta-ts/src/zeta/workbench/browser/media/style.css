@@ -176,6 +176,7 @@ button, input, select, textarea { font: inherit; }
 }
 
 .zeta-workbench {
+  position: relative;
   display: flex;
   width: 100%;
   min-width: 0;
@@ -229,4 +230,127 @@ button, input, select, textarea { font: inherit; }
 
 .zeta-workbench.zeta-underline-links a {
   text-decoration-line: underline;
+}
+
+.zeta-notification-host {
+  position: absolute;
+  z-index: 1000;
+  inset-block-start: 12px;
+  inset-inline-end: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(420px, calc(100% - 24px));
+  pointer-events: none;
+}
+
+.zeta-notification {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border: 1px solid var(--zeta-widget-border, var(--zeta-foreground));
+  border-radius: 6px;
+  color: var(--zeta-foreground);
+  background: var(--zeta-editor-background, var(--zeta-workbench-background));
+  box-shadow: 0 4px 16px rgb(0 0 0 / 20%);
+  pointer-events: auto;
+}
+
+.zeta-notification-content {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.zeta-notification-message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.zeta-notification-source {
+  margin-top: 4px;
+  opacity: .75;
+  font-size: .9em;
+}
+
+.zeta-notification-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.zeta-notification-action,
+.zeta-notification-close,
+.zeta-progress-cancel {
+  border: 1px solid var(--zeta-button-border, var(--zeta-foreground));
+  border-radius: 3px;
+  color: inherit;
+  background: var(--zeta-button-background, transparent);
+  cursor: pointer;
+}
+
+.zeta-notification-close {
+  inline-size: 24px;
+  block-size: 24px;
+  padding: 0;
+  font-size: 18px;
+  line-height: 20px;
+}
+
+.zeta-progress-host {
+  position: absolute;
+  z-index: 999;
+  inset-block-end: 8px;
+  inset-inline-end: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(420px, calc(100% - 24px));
+  pointer-events: none;
+}
+
+.zeta-progress-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border: 1px solid var(--zeta-widget-border, var(--zeta-foreground));
+  border-radius: 4px;
+  color: var(--zeta-foreground);
+  background: var(--zeta-editor-background, var(--zeta-workbench-background));
+  pointer-events: auto;
+}
+
+.zeta-progress-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.zeta-progress-message {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: .8;
+}
+
+.zeta-progress-item progress {
+  inline-size: 100px;
+}
+
+.zeta-progress-indeterminate {
+  inline-size: 14px;
+  block-size: 14px;
+  border: 2px solid currentColor;
+  border-inline-end-color: transparent;
+  border-radius: 50%;
+  animation: zeta-progress-spin 900ms linear infinite;
+}
+
+@keyframes zeta-progress-spin {
+  to { transform: rotate(360deg); }
 }

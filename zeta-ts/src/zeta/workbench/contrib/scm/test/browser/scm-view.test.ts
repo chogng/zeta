@@ -6,7 +6,7 @@ import { AnchorAxisAlignment, AnchorPosition } from "../../../../../base/common/
 import { URI } from "../../../../../base/common/uri.js";
 import { MenuId, registerAction2 } from "../../../../../platform/actions/common/actions.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
-import { ServiceCollection } from "../../../../../platform/instantiation/common/instantiation.js";
+import { ServiceContainer } from "../../../../../platform/instantiation/common/instantiation.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import type { HoverSetupOptions, IHoverService, IManagedHover } from "../../../../../platform/hover/common/hoverService.js";
 import type { IFileIconThemeService } from "../../../../../platform/theme/browser/fileIconThemeService.js";
@@ -66,7 +66,7 @@ test("ScmGraphViewPane renders a repository history page", async () => {
 	const [
 		{ ContextKeyService },
 		{ MenuService },
-		{ ServiceCollection },
+		{ ServiceContainer },
 		{ CommandService },
 	] = await Promise.all([
 		import("../../../../../platform/contextkey/common/contextkey.js"),
@@ -75,7 +75,7 @@ test("ScmGraphViewPane renders a repository history page", async () => {
 		import("../../../../../workbench/services/commands/common/commandService.js"),
 	]);
 	using contextKeyService = new ContextKeyService();
-	const services = new ServiceCollection();
+	const services = new ServiceContainer();
 	const menuService = new MenuService(new CommandService(services), contextKeyService);
 	const hoverOptions: HoverSetupOptions[] = [];
 	const graphRepositoryIds: Array<string | undefined> = [];
@@ -129,7 +129,7 @@ test("ScmGraphViewPane renders a repository history page", async () => {
 			return status;
 		},
 	} as unknown as IGitService;
-	services.set(IGitService, gitService);
+	services.registerInstance(IGitService, gitService);
 
 	try {
 		const { ScmGraphViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmGraphViewPane.js");
@@ -196,7 +196,7 @@ test("ScmGraphViewPane loads the complete history across graph pages", async () 
 	const [
 		{ ContextKeyService },
 		{ MenuService },
-		{ ServiceCollection },
+		{ ServiceContainer },
 		{ CommandService },
 	] = await Promise.all([
 		import("../../../../../platform/contextkey/common/contextkey.js"),
@@ -205,7 +205,7 @@ test("ScmGraphViewPane loads the complete history across graph pages", async () 
 		import("../../../../../workbench/services/commands/common/commandService.js"),
 	]);
 	using contextKeyService = new ContextKeyService();
-	const menuService = new MenuService(new CommandService(new ServiceCollection()), contextKeyService);
+	const menuService = new MenuService(new CommandService(new ServiceContainer()), contextKeyService);
 	const hoverService: IHoverService = {
 		setupHover: () => testManagedHover(),
 		showHover: () => testManagedHover(),
@@ -274,7 +274,7 @@ test("ScmGraphViewPane virtualizes loaded history rows", async () => {
 	const [
 		{ ContextKeyService },
 		{ MenuService },
-		{ ServiceCollection },
+		{ ServiceContainer },
 		{ CommandService },
 	] = await Promise.all([
 		import("../../../../../platform/contextkey/common/contextkey.js"),
@@ -283,7 +283,7 @@ test("ScmGraphViewPane virtualizes loaded history rows", async () => {
 		import("../../../../../workbench/services/commands/common/commandService.js"),
 	]);
 	using contextKeyService = new ContextKeyService();
-	const menuService = new MenuService(new CommandService(new ServiceCollection()), contextKeyService);
+	const menuService = new MenuService(new CommandService(new ServiceContainer()), contextKeyService);
 	const status: GitStatus = {
 		repositoryId: "repo-1",
 		streamInstanceId: "git-graph-stream",
@@ -347,14 +347,14 @@ test("ScmGraphViewPane virtualizes loaded history rows", async () => {
 test("ScmGraphViewPane expands commit files and opens a selected change in the diff editor", async () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
-	const [{ ContextKeyService }, { MenuService }, { ServiceCollection }, { CommandService }] = await Promise.all([
+	const [{ ContextKeyService }, { MenuService }, { ServiceContainer }, { CommandService }] = await Promise.all([
 		import("../../../../../platform/contextkey/common/contextkey.js"),
 		import("../../../../../platform/actions/common/menuService.js"),
 		import("../../../../../platform/instantiation/common/instantiation.js"),
 		import("../../../../../workbench/services/commands/common/commandService.js"),
 	]);
 	using contextKeyService = new ContextKeyService();
-	const menuService = new MenuService(new CommandService(new ServiceCollection()), contextKeyService);
+	const menuService = new MenuService(new CommandService(new ServiceContainer()), contextKeyService);
 	const objectId = "1".repeat(40);
 	const parentObjectId = "2".repeat(40);
 	let changeRequests = 0;
@@ -576,9 +576,9 @@ test("ScmViewPane groups App Server Git status", async () => {
 	try {
 		const { ScmViewPane } = await import("../../../../../workbench/contrib/scm/browser/scmViewPane.js");
 		const editorService = testEditorService(opened);
-		const services = new ServiceCollection();
-		services.set(IGitService, gitService);
-		services.set(IEditorService, editorService);
+		const services = new ServiceContainer();
+		services.registerInstance(IGitService, gitService);
+		services.registerInstance(IEditorService, editorService);
 		using commandService = new CommandService(services);
 		using actionRegistration = registerAction2(OpenScmMultiDiffEditorAction);
 		using pane = new ScmViewPane(browser.window.document.body, {

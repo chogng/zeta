@@ -38,9 +38,13 @@ import { BrowserLayoutService } from "../../platform/layout/browser/layoutServic
 import { ILayoutService } from "../../platform/layout/common/layoutService.js";
 import "../../platform/layout/browser/zIndexRegistry.js";
 import {
-	InstantiationService,
-	ServiceCollection,
+	ServiceContainer,
 } from "../../platform/instantiation/common/instantiation.js";
+import { BrowserNotificationService } from "../../platform/notification/browser/notificationService.js";
+import { INotificationService } from "../../platform/notification/common/notification.js";
+import { BrowserProgressService } from "../../platform/progress/browser/progressService.js";
+import { IProgressService } from "../../platform/progress/common/progress.js";
+import { MarkerService, IMarkerService } from "../../platform/markers/common/markers.js";
 import type { IKeybindingsResourceApi } from "../../platform/keybinding/common/keybindingsResource.js";
 import type { IKeyboardLayoutProvider } from "../../platform/keyboardLayout/common/keyboardLayout.js";
 import {
@@ -160,8 +164,6 @@ import { GitService } from "../services/git/browser/gitService.js";
 import { IGitService } from "../services/git/common/gitService.js";
 import { ChatService } from "../services/chat/browser/chatService.js";
 import { IChatService } from "../services/chat/common/chatService.js";
-import { ChatContextPickService } from "../services/chat/browser/chatContextPickService.js";
-import { IChatContextPickService } from "../services/chat/common/chatContextService.js";
 import { ICodeIndexService } from "../../platform/codeIndex/common/codeIndexService.js";
 import { AppServerCodeIndexService } from "../services/codeIndex/browser/appServerCodeIndexService.js";
 import { IToolSearchService } from "../../platform/toolSearch/common/toolSearchService.js";
@@ -209,6 +211,7 @@ import { ICodeIntelligenceDocumentService } from "../services/codeIntelligence/c
 import { AppServerLanguageServerStatusService } from "../services/language/browser/appServerLanguageServerStatusService.js";
 import { ILanguageServerStatusService } from "../services/language/common/languageServerStatusService.js";
 import { ILanguageDiagnosticsService } from "../services/language/common/languageDiagnosticsService.js";
+import { LanguageDiagnosticsMarkerBridge } from "../services/language/browser/languageDiagnosticsMarkerBridge.js";
 import { OutputService } from "../services/output/browser/outputService.js";
 import { IOutputService } from "../services/output/common/outputService.js";
 import { IWorkbenchHostService } from "../services/host/common/workbenchHostService.js";
@@ -325,32 +328,32 @@ export class Workbench extends Disposable {
 	) {
 		super();
 		const mode = WorkbenchModeRegistry.get(modeId);
-		const services = new ServiceCollection();
-		const instantiationService = new InstantiationService(services);
+		const services = this._register(new ServiceContainer());
+		const instantiationService = services;
 		const logService = this._register(new LogService({ sinks: [new ConsoleLogSink()] }));
 		this.logService = logService;
 		this.registerErrorHandler(logService);
-		services.set(ILogService, logService);
-		services.set(IExtensionHostApi, api.extensionHost);
-		services.set(ISymbolIndexApi, api.symbolIndex);
-		if (api.debugAdapter) services.set(IDebugAdapterProcessService, api.debugAdapter);
+		services.registerInstance(ILogService, logService);
+		services.registerInstance(IExtensionHostApi, api.extensionHost);
+		services.registerInstance(ISymbolIndexApi, api.symbolIndex);
+		if (api.debugAdapter) services.registerInstance(IDebugAdapterProcessService, api.debugAdapter);
 		const remoteAgentService = this._register(new AppServerRemoteAgentService({ api: api.appServer, remoteApi: api.remote }));
-		services.set(IRemoteAgentService, remoteAgentService);
-		services.set(IRemoteConnectionService, api.remoteConnections ?? UnavailableRemoteConnectionService);
-		services.set(IRemoteTunnelService, api.remoteTunnels ?? UnavailableRemoteTunnelService);
+		services.registerInstance(IRemoteAgentService, remoteAgentService);
+		services.registerInstance(IRemoteConnectionService, api.remoteConnections ?? UnavailableRemoteConnectionService);
+		services.registerInstance(IRemoteTunnelService, api.remoteTunnels ?? UnavailableRemoteTunnelService);
 		if (nativeHostApi) {
-			services.set(INativeHostService, nativeHostApi);
+			services.registerInstance(INativeHostService, nativeHostApi);
 		}
 		const workspaceOpenService = new WorkspaceOpenService(nativeHostApi);
-		services.set(IWorkspaceOpenService, workspaceOpenService);
+		services.registerInstance(IWorkspaceOpenService, workspaceOpenService);
 		const workspaceContext = this._register(new WorkspaceContextService(workspace));
 		this.workspaceContext = workspaceContext;
-		services.set(IWorkspaceContextService, workspaceContext);
+		services.registerInstance(IWorkspaceContextService, workspaceContext);
 		const labelService = this._register(new LabelService(workspaceContext));
-		services.set(ILabelService, labelService);
-		services.set(IFileLabelDecorationService, this._register(new FileLabelDecorationService()));
+		services.registerInstance(ILabelService, labelService);
+		services.registerInstance(IFileLabelDecorationService, this._register(new FileLabelDecorationService()));
 		const workspaceTrustService = new AppServerWorkspaceTrustService(api.workspaceTrust);
-		services.set(IWorkspaceTrustService, workspaceTrustService);
+		services.registerInstance(IWorkspaceTrustService, workspaceTrustService);
 		const workspaceFileService = new BrowserFileService({
 			api: api.fs,
 			resourceApi: api.resource,
@@ -367,59 +370,62 @@ export class Workbench extends Disposable {
 		});
 		this._register(workspaceFileService);
 		const fileService = this._register(new MultiplexFileService(workspaceFileService));
-		services.set(IFileService, fileService);
-		services.set(IFileSystemProviderService, fileService);
+		services.registerInstance(IFileService, fileService);
+		services.registerInstance(IFileSystemProviderService, fileService);
 		const textFileService = new TextFileService(fileService);
-		services.set(ITextFileService, textFileService);
+		services.registerInstance(ITextFileService, textFileService);
 		const untitledTextEditorService = this._register(new BrowserUntitledTextEditorService());
-		services.set(IUntitledTextEditorService, untitledTextEditorService);
+		services.registerInstance(IUntitledTextEditorService, untitledTextEditorService);
 		const workingCopyService = this._register(new BrowserWorkingCopyService());
-		services.set(IWorkingCopyService, workingCopyService);
+		services.registerInstance(IWorkingCopyService, workingCopyService);
 		const workingCopyBackups = this._register(new IndexedDbWorkingCopyBackupService(workspace.id));
 		this.workingCopyBackups = workingCopyBackups;
-		services.set(IWorkingCopyBackupService, workingCopyBackups);
+		services.registerInstance(IWorkingCopyBackupService, workingCopyBackups);
 		const textResourceStore = getBrowserTextResourceStore(textFileService);
 		const textModelService = this._register(getBrowserTextModelService(textResourceStore));
-		services.set(ITextModelService, textModelService);
+		services.registerInstance(ITextModelService, textModelService);
 		const workspaceEditService = this._register(new BrowserWorkspaceEditService(textModelService, workingCopyService, fileService));
-		services.set(IWorkspaceEditService, workspaceEditService);
+		services.registerInstance(IWorkspaceEditService, workspaceEditService);
 		const bulkEditService = this._register(new BrowserBulkEditService(workspaceEditService));
-		services.set(IBulkEditService, bulkEditService);
+		services.registerInstance(IBulkEditService, bulkEditService);
 		const textMateService = this._register(new BrowserTextMateService());
-		services.set(ITextMateService, textMateService);
+		services.registerInstance(ITextMateService, textMateService);
 		const languageFeaturesService = this._register(new LanguageFeaturesService());
-		services.set(ILanguageFeaturesService, languageFeaturesService);
+		services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
 		this._register(new AppServerLanguageProviders(languageFeaturesService, api.language, workspaceContext, { workspaceTrust: workspaceTrustService, events: api.events }));
 		const codeIntelligenceDocuments = new AppServerCodeIntelligenceDocumentService(api.symbolIndex);
-		services.set(ICodeIntelligenceDocumentService, codeIntelligenceDocuments);
+		services.registerInstance(ICodeIntelligenceDocumentService, codeIntelligenceDocuments);
 		const languageDiagnosticsService = this._register(new AppServerLanguageDiagnosticsService(api.language, api.events, workspaceContext, codeIntelligenceDocuments, workspaceTrustService));
-		services.set(ILanguageDiagnosticsService, languageDiagnosticsService);
+		services.registerInstance(ILanguageDiagnosticsService, languageDiagnosticsService);
+		const markerService = this._register(new MarkerService());
+		services.registerInstance(IMarkerService, markerService);
+		this._register(new LanguageDiagnosticsMarkerBridge(languageDiagnosticsService, markerService));
 		const extensionService = this._register(new AppServerExtensionService({ api: api.extensions, eventApi: api.events, textMateService, languageFeaturesService }));
-		services.set(IExtensionService, extensionService);
+		services.registerInstance(IExtensionService, extensionService);
 		const extensionReady = extensionService.start();
 		void extensionReady.catch(error => logService.error("extensions", "Declarative extension activation failed", error));
-		services.set(
+		services.registerInstance(
 			IWorkspaceSearchService,
 			new BrowserWorkspaceSearchService(api.workspaceSearch, workspaceContext),
 		);
 		const terminalService = this._register(new TerminalService(api.terminal, workspaceContext));
-		services.set(ITerminalService, terminalService);
+		services.registerInstance(ITerminalService, terminalService);
 		const gitService = this._register(new GitService({ api: api.git, appServerApi: api.appServer, eventApi: api.events, workspaceContext }));
-		services.set(IGitService, gitService);
-		services.set(ICodeIndexService, new AppServerCodeIndexService(api.codeIndex));
-		services.set(IConnectorService, this._register(new AppServerConnectorService(api.connectors, api.events)));
-		services.set(IAccountService, this._register(new AppServerAccountService(api.accounts, api.events)));
-		services.set(IPluginService, this._register(new AppServerPluginService(api.plugins, api.events)));
+		services.registerInstance(IGitService, gitService);
+		services.registerInstance(ICodeIndexService, new AppServerCodeIndexService(api.codeIndex));
+		services.registerInstance(IConnectorService, this._register(new AppServerConnectorService(api.connectors, api.events)));
+		services.registerInstance(IAccountService, this._register(new AppServerAccountService(api.accounts, api.events)));
+		services.registerInstance(IPluginService, this._register(new AppServerPluginService(api.plugins, api.events)));
 		const marketplaceService = this._register(new AppServerMarketplaceService(api.marketplace, api.events));
-		services.set(IMarketplaceService, marketplaceService);
-		services.set(IToolSearchService, new AppServerToolSearchService(api.toolSearch));
+		services.registerInstance(IMarketplaceService, marketplaceService);
+		services.registerInstance(IToolSearchService, new AppServerToolSearchService(api.toolSearch));
 		const workbenchState = workspaceContext.getWorkbenchState();
 		const workbenchWindow = this._register(new WorkbenchWindow({
 			root: workbenchRoot,
 			modeId,
 			workbenchState,
 		}));
-		services.set(IWorkbenchHostService, workbenchWindow);
+		services.registerInstance(IWorkbenchHostService, workbenchWindow);
 		const ownerDocument = workbenchWindow.ownerDocument;
 		let workbenchLayout: WorkbenchLayout | undefined;
 		const layoutService = this._register(new BrowserLayoutService({
@@ -430,32 +436,35 @@ export class Workbench extends Disposable {
 			},
 			focus: () => this.editor.focus(),
 		}));
-		services.set(ILayoutService, layoutService);
+		services.registerInstance(ILayoutService, layoutService);
 
 		const configuration = this._register(new WorkbenchConfigurationService({
 			api: configurationApi,
 		}));
-		services.set(IConfigurationService, configuration);
-		services.set(IConfigurationResourceService, configuration);
+		services.registerInstance(IConfigurationService, configuration);
+		services.registerInstance(IConfigurationResourceService, configuration);
 		const chatService = this._register(new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events, configurationService: configuration }));
-		services.set(IChatService, chatService);
-		services.set(IChatContextPickService, new ChatContextPickService());
+		services.registerInstance(IChatService, chatService);
 		const languagePackService = this._register(new MarketplaceLanguagePackService(marketplaceService, builtinLanguagePackCatalogs));
-		services.set(ILanguagePackService, languagePackService);
+		services.registerInstance(ILanguagePackService, languagePackService);
 		const localeService = this._register(new WorkbenchLocaleService(configuration, languagePackService));
-		services.set(ILocaleService, localeService);
+		services.registerInstance(ILocaleService, localeService);
 		const localizationService = this._register(new WorkbenchLocalizationService(localeService, languagePackService));
-		services.set(ILocalizationService, localizationService);
+		services.registerInstance(ILocalizationService, localizationService);
 		const ownerWindow = ownerDocument.defaultView;
 		if (!ownerWindow) {
 			throw new Error("Workbench requires an owner window");
 		}
 		this.ownerWindow = ownerWindow;
-		services.set(IClipboardService, new BrowserClipboardService(ownerWindow.navigator.clipboard));
+		const notificationService = this._register(new BrowserNotificationService(workbenchRoot));
+		services.registerInstance(INotificationService, notificationService);
+		const progressService = this._register(new BrowserProgressService(workbenchRoot));
+		services.registerInstance(IProgressService, progressService);
+		services.registerInstance(IClipboardService, new BrowserClipboardService(ownerWindow.navigator.clipboard));
 		const lifecycleService = this._register(new BrowserLifecycleService({ ownerWindow, onError: error => logService.error("lifecycle", "Workbench shutdown failed", error) }));
 		this.lifecycleService = lifecycleService;
-		services.set(ILifecycleService, lifecycleService);
-		services.set(IWorkbenchModeService, this._register(new WorkbenchModeService({
+		services.registerInstance(ILifecycleService, lifecycleService);
+		services.registerInstance(IWorkbenchModeService, this._register(new WorkbenchModeService({
 			currentModeId: modeId,
 			configurationService: configuration,
 			lifecycleService,
@@ -470,27 +479,27 @@ export class Workbench extends Disposable {
 		}));
 		this.workbenchWindow = workbenchWindow;
 		this.storage = storage;
-		services.set(IStorageService, storage);
+		services.registerInstance(IStorageService, storage);
 		const recentWorkspaces = this._register(new RecentWorkspacesService(storage, workspaceContext, workspaceOpenService));
-		services.set(IRecentWorkspacesService, recentWorkspaces);
+		services.registerInstance(IRecentWorkspacesService, recentWorkspaces);
 		this._register(lifecycleService.onWillShutdown(event => {
 			event.join(workingCopyBackupTracker.flush(), "working-copy backup flush");
 			event.join(storage.flush(WillSaveStateReason.SHUTDOWN), "Workbench storage flush");
 		}));
 		const outputService = this._register(new OutputService({ storageService: storage }));
-		services.set(IOutputService, outputService);
+		services.registerInstance(IOutputService, outputService);
 		const systemOutputService = this._register(new SystemOutputService(outputService, api.appServer));
 		this._register(logService.registerSink(systemOutputService));
 		const serviceContributionReady: Promise<void>[] = [];
-		installWorkbenchServiceContributions({ services, own: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
-		services.set(IAccessibleViewInformationService, this._register(new AccessibleViewInformationService(storage)));
+		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
+		services.registerInstance(IAccessibleViewInformationService, this._register(new AccessibleViewInformationService(storage)));
 		const themeService = this._register(new ThemeService(
 			resolveWorkbenchColorTheme(
 				configuration.getValue(WorkbenchConfiguration.colorTheme),
 				ownerWindow.matchMedia("(prefers-color-scheme: dark)").matches,
 			),
 		));
-		services.set(IThemeService, themeService);
+		services.registerInstance(IThemeService, themeService);
 		let textMateThemeRevision = 0;
 		const updateTextMateTheme = (): void => {
 			const model = textMateService.mutableScopeTheme;
@@ -501,10 +510,10 @@ export class Workbench extends Disposable {
 		};
 		this._register(extensionService.themes.onDidChange(() => updateTextMateTheme()));
 		this._register(themeService.onDidColorThemeChange(() => updateTextMateTheme()));
-		services.set(IUserThemeService, userThemeService ?? UnavailableUserThemeService);
+		services.registerInstance(IUserThemeService, userThemeService ?? UnavailableUserThemeService);
 		const fileIconThemeService = this._register(new SetiFileIconThemeService(themeService));
-		services.set(IFileIconThemeService, fileIconThemeService);
-		services.set(IResourceLabelService, this._register(new ResourceLabelService({
+		services.registerInstance(IFileIconThemeService, fileIconThemeService);
+		services.registerInstance(IResourceLabelService, this._register(new ResourceLabelService({
 			workspaceContextService: workspaceContext,
 			fileIconThemeService,
 			untitledTextEditorService,
@@ -519,18 +528,18 @@ export class Workbench extends Disposable {
 		this._register(extensionService.onDidChange(() => workbenchThemeController.refresh()));
 		this._register(bindColorTheme(themeService, workbenchRoot));
 		const statusbarService = this._register(new StatusbarService());
-		services.set(IStatusbarService, statusbarService);
+		services.registerInstance(IStatusbarService, statusbarService);
 		const dialogService = this._register(new DialogService());
-		services.set(IDialogService, dialogService);
-		services.set(IDialogsModel, dialogService.model);
+		services.registerInstance(IDialogService, dialogService);
+		services.registerInstance(IDialogsModel, dialogService.model);
 		const languageServerStatusService = this._register(new AppServerLanguageServerStatusService(api.events, dialogService, outputService, statusbarService, workspaceContext));
-		services.set(ILanguageServerStatusService, languageServerStatusService);
-		services.set(
+		services.registerInstance(ILanguageServerStatusService, languageServerStatusService);
+		services.registerInstance(
 			IWorkbenchDialogHandler,
 			new BrowserDialogHandler(workbenchRoot),
 		);
 		const interactionServices = this._register(new WorkbenchInteractionServices({
-			services,
+			container: services,
 			layoutService,
 			configurationService: configuration,
 			keybindingsResourceApi,
@@ -556,11 +565,11 @@ export class Workbench extends Disposable {
 				contextKeyService: contextKeys,
 				configurationService: configuration,
 			}));
-		services.set(IAccessibilityService, accessibilityService);
+		services.registerInstance(IAccessibilityService, accessibilityService);
 		const viewDescriptors = this._register(new ViewDescriptorService({
 			contextKeyService: contextKeys,
 		}));
-		services.set(IViewDescriptorService, viewDescriptors);
+		services.registerInstance(IViewDescriptorService, viewDescriptors);
 		const sessionService = this._register(new AppServerSessionsManagementService({
 			session: api.session,
 			turn: api.turn,
@@ -572,7 +581,7 @@ export class Workbench extends Disposable {
 				},
 			} : {}),
 		}));
-		services.set(ISessionsManagementService, sessionService);
+		services.registerInstance(ISessionsManagementService, sessionService);
 		const keybindings = interactionServices.keybindingService;
 		const contributions = this._register(
 			WorkbenchContributionsRegistry.createHost(services),
@@ -664,7 +673,7 @@ export class Workbench extends Disposable {
 		};
 		const editor = this._register(new EditorPart(workbenchRoot, editorOptions));
 		const auxiliaryWindows = this._register(new BrowserAuxiliaryWindowService(ownerWindow));
-		services.set(IAuxiliaryWindowService, auxiliaryWindows);
+		services.registerInstance(IAuxiliaryWindowService, auxiliaryWindows);
 		const editorParts = this._register(new EditorParts(editor, auxiliaryWindows, container => {
 			const contextKeyService = contextKeys.createScoped(container);
 			return {
@@ -676,12 +685,12 @@ export class Workbench extends Disposable {
 				resources: [contextKeyService],
 			};
 		}));
-		services.set(IEditorPartsService, editorParts);
+		services.registerInstance(IEditorPartsService, editorParts);
 		this._register(new EditorContextKeyController(contextKeys, editorParts, EditorPanes, languageFeaturesService));
-		services.set(IEditorPart, editorParts);
+		services.registerInstance(IEditorPart, editorParts);
 		const editorService = this._register(new BrowserEditorService(editorParts));
-		services.set(IEditorService, editorService);
-		services.set(IEditorGroupsService, editorService);
+		services.registerInstance(IEditorService, editorService);
+		services.registerInstance(IEditorGroupsService, editorService);
 		const openSidebarComposite = (
 			compositeId: string,
 		): PaneComposite => {
@@ -799,7 +808,7 @@ export class Workbench extends Disposable {
 		}));
 		workbenchLayout = layout;
 		this.workbenchLayout = layout;
-		services.set(IWorkbenchLayoutService, layout);
+		services.registerInstance(IWorkbenchLayoutService, layout);
 		this._register(new WorkbenchContextKeysHandler(contextKeys, workspaceContext, editorService, editorService, layout, workingCopyService));
 		this._register(bindResizableLayout(layoutService.onDidLayoutMainContainer, layout));
 		const openAuxiliaryComposite = (compositeId: string): PaneComposite => {
@@ -872,7 +881,7 @@ export class Workbench extends Disposable {
 				}
 			},
 		});
-		services.set(IViewsService, viewsService);
+		services.registerInstance(IViewsService, viewsService);
 		this._register(outputService.onDidRequestShowChannel(request => {
 			if (request.focus === "take") viewsService.focusView(OUTPUT_VIEW_ID);
 			else viewsService.openView(OUTPUT_VIEW_ID);

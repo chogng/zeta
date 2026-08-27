@@ -1,9 +1,9 @@
 import { type IDisposable } from "../../base/common/lifecycle.js";
-import { type ServiceCollection, type ServiceIdentifier } from "../../platform/instantiation/common/instantiation.js";
+import { type ServiceContainer, type ServiceIdentifier } from "../../platform/instantiation/common/instantiation.js";
 
 export interface WorkbenchServiceContributionContext {
-	readonly services: ServiceCollection;
-	readonly own: <T extends IDisposable>(value: T) => T;
+	readonly container: ServiceContainer;
+	readonly register: <T extends IDisposable>(value: T) => T;
 	readonly blockRestorationUntil: (operation: Promise<void>) => void;
 }
 
@@ -24,14 +24,14 @@ export class WorkbenchServiceContributionRegistry {
 	install(context: WorkbenchServiceContributionContext): void {
 		const pending = [...this.contributions];
 		while (pending.length > 0) {
-			const readyIndex = pending.findIndex(contribution => contribution.dependencies.every(dependency => context.services.has(dependency)));
+			const readyIndex = pending.findIndex(contribution => contribution.dependencies.every(dependency => context.container.has(dependency)));
 			if (readyIndex < 0) {
-				const unresolved = pending.map(contribution => `${serviceName(contribution.service)} <- ${contribution.dependencies.filter(dependency => !context.services.has(dependency)).map(serviceName).join(", ")}`).join("; ");
+				const unresolved = pending.map(contribution => `${serviceName(contribution.service)} <- ${contribution.dependencies.filter(dependency => !context.container.has(dependency)).map(serviceName).join(", ")}`).join("; ");
 				throw new Error(`Workbench service contributions have missing or cyclic dependencies: ${unresolved}`);
 			}
 			const [contribution] = pending.splice(readyIndex, 1);
 			const service = contribution!.install(context);
-			context.services.set(contribution!.service, service);
+			context.container.registerInstance(contribution!.service, service);
 		}
 	}
 }

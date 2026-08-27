@@ -10,8 +10,8 @@ registerWorkbenchServiceContribution({
 	service: ISymbolIndexService,
 	dependencies: [ISymbolIndexApi, ILanguageFeaturesService, IWorkspaceContextService],
 	install: context => {
-		const service = new AppServerSymbolIndexService(context.services.get(ISymbolIndexApi));
-		context.own(registerSymbolIndexWorkspaceSymbolProvider(context.services.get(ILanguageFeaturesService), service, context.services.get(IWorkspaceContextService)));
+		const service = new AppServerSymbolIndexService(context.container.get(ISymbolIndexApi));
+		context.register(registerSymbolIndexWorkspaceSymbolProvider(context.container.get(ILanguageFeaturesService), service, context.container.get(IWorkspaceContextService)));
 		return service;
 	},
 });

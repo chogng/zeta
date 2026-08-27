@@ -1,8 +1,7 @@
 import { strict as assert } from "node:assert";
 import { createHash } from "node:crypto";
 import test from "node:test";
-import { DisposableTracker, installDisposableTracker } from "../../../../../base/common/disposableTracker.js";
-import { toDisposable } from "../../../../../base/common/lifecycle.js";
+import { DisposableTracker, installDisposableTracker, toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { ExtensionCatalog, ExtensionDescriptor, IExtensionApi } from "../../../../../platform/extensions/common/extensionApi.js";
 import type { IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
 import type { ServerNotification } from "../../../../../../../generated/app-server/types.js";

@@ -24,7 +24,7 @@ for (const [name, value] of Object.entries({
 
 const { CodeEditorWidget } = await import("../../../browser/widget/codeEditor/codeEditorWidget.js");
 const { CodeEditorContributionInstantiation } = await import("../../../browser/widget/codeEditor/codeEditorContributions.js");
-const { createServiceIdentifier, InstantiationService, ServiceCollection, SyncDescriptor } = await import("../../../../platform/instantiation/common/instantiation.js");
+const { createServiceIdentifier, ServiceContainer, SyncDescriptor } = await import("../../../../platform/instantiation/common/instantiation.js");
 await import("../../../contrib/placeholderText/browser/placeholderTextController.js");
 
 test.after(() => browserEnvironment.window.close());
@@ -87,9 +87,9 @@ test("CodeEditorWidget stages and owns per-instance contributions", () => {
 	const events: string[] = [];
 	const service = { kind: "test" };
 	const serviceId = createServiceIdentifier<typeof service>("test.codeEditorContribution");
-	const services = new ServiceCollection();
-	services.set(serviceId, service);
-	const instantiationService = new InstantiationService(services);
+	const services = new ServiceContainer();
+	services.registerInstance(serviceId, service);
+	const instantiationService = services;
 	const state = { events, model, service };
 	using editor = new CodeEditorWidget({
 		container,

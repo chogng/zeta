@@ -3,9 +3,8 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, screen, type Event as Electr
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { isCancellationError } from "../../base/common/cancellation.js";
-import { Disposable, DisposableStore, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, DisposableTracker, installDisposableTracker, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { assertDefined } from "../../base/common/types.js";
-import { DisposableTracker, installDisposableTracker } from "../../base/common/disposableTracker.js";
 import { ZetaApplicationName } from '../common/application.js';
 import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry, WorkbenchRendererEntry, withWorkbenchModeId, type WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
 import { ElectronContextMenu } from "../../base/parts/contextmenu/electron-main/contextmenu.js";

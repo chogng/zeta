@@ -46,7 +46,7 @@ export interface TextEditorContributionConfigurationContext {
 	readonly setBracketColorizationSource: (source: BracketColorizationSource) => void;
 	readonly setLanguageLexicalContext: (source: LanguageLexicalContextSource) => void;
 	readonly setLanguageEditing: (adapter: EditorLanguageEditingAdapter) => void;
-	readonly own: <T extends IDisposable>(value: T) => T;
+	readonly register: <T extends IDisposable>(value: T) => T;
 }
 
 export interface TextEditorContributionContext {
@@ -64,7 +64,7 @@ export interface TextEditorContributionContext {
 	readonly getCapability: <T>(capability: EditorCapability<T>) => T;
 	readonly getOptionalCapability: <T>(capability: EditorCapability<T>) => T | undefined;
 	readonly registerBeforeSave: (hook: () => void | Promise<void>) => IDisposable;
-	readonly own: <T extends IDisposable>(value: T) => T;
+	readonly register: <T extends IDisposable>(value: T) => T;
 }
 
 export interface DocumentFormattingState {

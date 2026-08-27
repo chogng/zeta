@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Emitter } from "../../../base/common/event.js";
-import { ServiceCollection } from "../../../platform/instantiation/common/instantiation.js";
+import { ServiceContainer } from "../../../platform/instantiation/common/instantiation.js";
 import { NEW_CHAT_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
 import { CommandService } from "../../../workbench/services/commands/common/commandService.js";
 import "../../../sessions/browser/actions/sessionsChatActions.js";
@@ -28,8 +28,8 @@ test("Sessions owns the local New Chat command without requiring regular Workben
 		navigateBack() {},
 		navigateForward() {},
 	};
-	const services = new ServiceCollection();
-	services.set(ISessionsViewService, viewService);
+	const services = new ServiceContainer();
+	services.registerInstance(ISessionsViewService, viewService);
 	using commands = new CommandService(services);
 
 	await commands.executeCommand(NEW_CHAT_COMMAND_ID);

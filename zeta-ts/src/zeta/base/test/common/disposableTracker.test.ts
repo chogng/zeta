@@ -5,15 +5,13 @@ import {
 	DisposableMap,
 	DisposableStore,
 	Disposable,
+	DisposableTracker,
+	installDisposableTracker,
 	MutableDisposable,
 	type IDisposable,
 	noneDisposable,
 	toDisposable,
 } from "../../common/lifecycle.js";
-import {
-	DisposableTracker,
-	installDisposableTracker,
-} from "../../common/disposableTracker.js";
 
 test("AbstractDisposable closes its tracking record when cleanup throws", () => {
 	class Resource extends AbstractDisposable {

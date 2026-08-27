@@ -27,7 +27,7 @@ import {
 } from "../../../../platform/contextkey/common/contextkey.js";
 import {
 	createServiceIdentifier,
-	ServiceCollection,
+	ServiceContainer,
 	type ServicesAccessor,
 } from "../../../../platform/instantiation/common/instantiation.js";
 import {
@@ -75,8 +75,8 @@ test("registerAction2 connects command execution and menu placement", async () =
 	}
 
 	registrations.add(registerAction2(RegisteredAction));
-	const services = new ServiceCollection();
-	services.set(serviceId, "service");
+	const services = new ServiceContainer();
+	services.registerInstance(serviceId, "service");
 	const commands = new CommandService(services);
 	const contexts = registrations.add(new ContextKeyService());
 	const menus = new MenuService(commands, contexts);
@@ -147,7 +147,7 @@ test("menu actions react to visibility, enablement, and toggle context", () => {
 		when: ContextKeyExpr.has("test.visible"),
 	}));
 
-	const services = new ServiceCollection();
+	const services = new ServiceContainer();
 	const commands = new CommandService(services);
 	const contexts = registrations.add(new ContextKeyService());
 	const menus = new MenuService(commands, contexts);
@@ -206,7 +206,7 @@ test("menus can resolve actions against a caller-owned context scope", () => {
 	using rootContexts = new ContextKeyService();
 	using scopedContexts = new ContextKeyService();
 	scopedContexts.setContext("test.scopeVisible", true);
-	const menus = new MenuService(new CommandService(new ServiceCollection()), rootContexts);
+	const menus = new MenuService(new CommandService(new ServiceContainer()), rootContexts);
 
 	assert.deepEqual(menus.getMenuActions(menuId), []);
 	assert.equal(menus.getMenuActions(menuId, undefined, scopedContexts)[0]?.[1].length, 1);
@@ -231,7 +231,7 @@ test("menu change events include context keys used by nested submenus", () => {
 		when: ContextKeyExpr.has("test.nested-visible"),
 	}));
 
-	const commands = new CommandService(new ServiceCollection());
+	const commands = new CommandService(new ServiceContainer());
 	const contexts = registrations.add(new ContextKeyService());
 	const menu = registrations.add(new MenuService(commands, contexts).createMenu(rootMenu));
 	let changes = 0;
@@ -286,7 +286,7 @@ test("menu service sorts groups and resolves submenus", () => {
 		order: 2,
 	}));
 
-	const commands = new CommandService(new ServiceCollection());
+	const commands = new CommandService(new ServiceContainer());
 	const contexts = registrations.add(new ContextKeyService());
 	const groups = new MenuService(commands, contexts)
 		.getMenuActions(rootMenu);
@@ -318,7 +318,7 @@ test("menu actions refresh localized labels when the locale changes", () => {
 	const resolve = (_bundle: string, key: string, fallback: string) => key === "command" && locale === "zh-CN" ? "打开" : fallback;
 	setNlsResolver(resolve);
 	try {
-		const commands = new CommandService(new ServiceCollection());
+		const commands = new CommandService(new ServiceContainer());
 		const contexts = registrations.add(new ContextKeyService());
 		const menu = registrations.add(new MenuService(commands, contexts).createMenu(menuId));
 		const changes: boolean[] = [];

@@ -11,7 +11,7 @@ import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
 import { MenuId } from "../../../../../platform/actions/common/actions.js";
 import { MenuService } from "../../../../../platform/actions/common/menuService.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
-import { ServiceCollection } from "../../../../../platform/instantiation/common/instantiation.js";
+import { ServiceContainer } from "../../../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
 import { CommandService } from "../../../../../workbench/services/commands/common/commandService.js";
 import type { ViewPaneContainer } from "../../../../../workbench/browser/parts/views/viewPaneContainer.js";
@@ -145,21 +145,21 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		contextKeyService: contextKeys,
 		registry: new WorkbenchViewRegistry(),
 	});
-	const services = new ServiceCollection();
+	const services = new ServiceContainer();
 	let preferencesEditorTarget: string | undefined;
 	using preferences: PreferencesService = new BrowserPreferencesService(() => ({
 		...emptyEditorServiceState,
 		openEditor: async (_input, _options, target) => { preferencesEditorTarget = target; },
 		focusActiveEditor() {},
 	}));
-	services.set(IPreferencesService, preferences);
-	services.set(IContextKeyService, contextKeys);
+	services.registerInstance(IPreferencesService, preferences);
+	services.registerInstance(IContextKeyService, contextKeys);
 	using commands = new CommandService(services);
 	const menuService = new MenuService(commands, contextKeys);
 	const layout = testLayoutService();
 	let openedAgentSidebarViewId: string | undefined;
-	services.set(IWorkbenchLayoutService, layout);
-	services.set(IViewsService, {
+	services.registerInstance(IWorkbenchLayoutService, layout);
+	services.registerInstance(IViewsService, {
 		openView: (viewId) => {
 			openedAgentSidebarViewId = viewId;
 			layout.showPart("agentSidebar");
@@ -478,15 +478,15 @@ test("an empty Session list opens an untitled session and persists it on its fir
 		},
 	});
 	const api = fake.api;
-	const services = new ServiceCollection();
+	const services = new ServiceContainer();
 	using sessions = new AppServerSessionsManagementService(api);
 	using contextKeys = new ContextKeyService();
 	using viewDescriptors = new ViewDescriptorService({
 		contextKeyService: contextKeys,
 		registry: new WorkbenchViewRegistry(),
 	});
-	services.set(ISessionsManagementService, sessions);
-	services.set(IViewsService, {
+	services.registerInstance(ISessionsManagementService, sessions);
+	services.registerInstance(IViewsService, {
 		openView: () => undefined,
 		focusView: () => true,
 	});
@@ -593,16 +593,16 @@ test("the New Chat slash command opens an untitled session", async () => {
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
 	const initialSession = session("session-1", "thread-1", "First Chat");
 	const fake = fakeApi({ sessions: [initialSession] });
-	const services = new ServiceCollection();
+	const services = new ServiceContainer();
 	using sessions = new AppServerSessionsManagementService(fake.api);
 	using contextKeys = new ContextKeyService();
 	using viewDescriptors = new ViewDescriptorService({
 		contextKeyService: contextKeys,
 		registry: new WorkbenchViewRegistry(),
 	});
-	services.set(ISessionsManagementService, sessions);
+	services.registerInstance(ISessionsManagementService, sessions);
 	let focusedView: string | undefined;
-	services.set(IViewsService, {
+	services.registerInstance(IViewsService, {
 		openView: () => undefined,
 		focusView: (viewId) => {
 			focusedView = viewId;
@@ -672,15 +672,15 @@ test("failed first send keeps the untitled session and its input draft", async (
 		sessions: [],
 		createSessionError: new Error("Cannot create Session"),
 	});
-	const services = new ServiceCollection();
+	const services = new ServiceContainer();
 	using sessions = new AppServerSessionsManagementService(fake.api);
 	using contextKeys = new ContextKeyService();
 	using viewDescriptors = new ViewDescriptorService({
 		contextKeyService: contextKeys,
 		registry: new WorkbenchViewRegistry(),
 	});
-	services.set(ISessionsManagementService, sessions);
-	services.set(IViewsService, {
+	services.registerInstance(ISessionsManagementService, sessions);
+	services.registerInstance(IViewsService, {
 		openView: () => undefined,
 		focusView: () => true,
 	});
@@ -765,7 +765,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 		contextKeyService: contextKeys,
 		registry: new WorkbenchViewRegistry(),
 	});
-	using commands = new CommandService(new ServiceCollection());
+	using commands = new CommandService(new ServiceContainer());
 	const menuService = new MenuService(commands, contextKeys);
 	const layout = testLayoutService();
 	const contextMenuService = {
@@ -818,7 +818,7 @@ test("Chat history selects an active Thread through Quick Pick", async () => {
 			session("session-2", "thread-2", "Second Chat"),
 		],
 	}).api;
-	const services = new ServiceCollection();
+	const services = new ServiceContainer();
 	using sessions = new AppServerSessionsManagementService(api);
 	using contextKeys = new ContextKeyService();
 	using quickInput = new WorkbenchQuickInputService({
@@ -826,9 +826,9 @@ test("Chat history selects an active Thread through Quick Pick", async () => {
 		contextKeyService: contextKeys,
 	});
 	let focusedView: string | undefined;
-	services.set(ISessionsManagementService, sessions);
-	services.set(IQuickInputService, quickInput);
-	services.set(IViewsService, {
+	services.registerInstance(ISessionsManagementService, sessions);
+	services.registerInstance(IQuickInputService, quickInput);
+	services.registerInstance(IViewsService, {
 		openView: () => undefined,
 		focusView: (viewId) => {
 			focusedView = viewId;

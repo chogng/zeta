@@ -12,16 +12,16 @@ registerWorkbenchServiceContribution({
 	service: IExtensionHostService,
 	dependencies: [IExtensionHostApi, ILogService, ILanguageFeaturesService, ITaskService, ITestingService, IOutputService],
 	install: context => {
-		const service = context.own(new AppServerExtensionHostService({
-			api: context.services.get(IExtensionHostApi),
-			languageFeatures: context.services.get(ILanguageFeaturesService),
-			tasks: context.services.get(ITaskService),
-			testing: context.services.get(ITestingService),
-			output: context.services.get(IOutputService),
+		const service = context.register(new AppServerExtensionHostService({
+			api: context.container.get(IExtensionHostApi),
+			languageFeatures: context.container.get(ILanguageFeaturesService),
+			tasks: context.container.get(ITaskService),
+			testing: context.container.get(ITestingService),
+			output: context.container.get(IOutputService),
 		}));
 		const ready = service.start();
 		context.blockRestorationUntil(ready);
-		void ready.catch(error => context.services.get(ILogService).error("extensionHost", "Executable Extension Host activation failed", error));
+		void ready.catch(error => context.container.get(ILogService).error("extensionHost", "Executable Extension Host activation failed", error));
 		return service;
 	},
 });

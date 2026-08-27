@@ -10,5 +10,5 @@ import { TaskService } from "./taskService.js";
 registerWorkbenchServiceContribution({
 	service: ITaskService,
 	dependencies: [IFileService, IWorkspaceContextService, ITerminalService, IOutputService, ILogService],
-	install: context => context.own(new TaskService(context.services.get(IFileService), context.services.get(IWorkspaceContextService), context.services.get(ITerminalService), context.services.get(IOutputService), context.services.get(ILogService))),
+	install: context => context.register(new TaskService(context.container.get(IFileService), context.container.get(IWorkspaceContextService), context.container.get(ITerminalService), context.container.get(IOutputService), context.container.get(ILogService))),
 });

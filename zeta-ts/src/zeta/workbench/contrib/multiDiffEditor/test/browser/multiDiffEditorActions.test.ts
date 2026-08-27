@@ -6,7 +6,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { ContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
-import { ServiceCollection } from '../../../../../platform/instantiation/common/instantiation.js';
+import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { IEditorPart as IEditorPartShape } from '../../../../browser/parts/editor/editorPart.js';
 import { ActiveEditorContext } from '../../../../common/contextkeys.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
@@ -77,10 +77,10 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		registrations.add(registerAction2(MultiDiffGoToFileAction));
 		const pane = new TrackingMultiDiffEditorPane();
 		registrations.add(pane);
-		const services = new ServiceCollection();
-		services.set(IEditorPart, { activePane: pane } as unknown as IEditorPartShape);
+		const services = new ServiceContainer();
+		services.registerInstance(IEditorPart, { activePane: pane } as unknown as IEditorPartShape);
 		const openedInputs: EditorInput[] = [];
-		services.set(IEditorService, {
+		services.registerInstance(IEditorService, {
 			...emptyEditorServiceState,
 			async openEditor(input) { openedInputs.push(input); },
 			focusActiveEditor() {},

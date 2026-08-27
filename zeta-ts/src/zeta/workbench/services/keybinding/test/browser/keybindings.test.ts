@@ -27,7 +27,7 @@ import {
 	parseContextKeyExpression,
 } from "../../../../../platform/contextkey/common/contextKeyExpressionParser.js";
 import {
-	ServiceCollection,
+	ServiceContainer,
 } from "../../../../../platform/instantiation/common/instantiation.js";
 import {
 	KeybindingResolveKind,
@@ -165,7 +165,7 @@ test("browser service executes chords and restores IME state", async () => {
 	const statusbar = registrations.add(new StatusbarService());
 	const service = registrations.add(new WorkbenchKeybindingService({
 		ownerDocument: dom.window.document,
-		commandService: new CommandService(new ServiceCollection(), commands),
+		commandService: new CommandService(new ServiceContainer(), commands),
 		contextKeyService: contexts,
 		keyboardLayoutService: keyboardLayout,
 		statusbarService: statusbar,
@@ -224,7 +224,7 @@ test("browser service dispatches Ctrl+Shift+P with a shifted key value", async (
 	);
 	const service = registrations.add(new WorkbenchKeybindingService({
 		ownerDocument: dom.window.document,
-		commandService: new CommandService(new ServiceCollection(), commands),
+		commandService: new CommandService(new ServiceContainer(), commands),
 		contextKeyService: contexts,
 		keyboardLayoutService: keyboardLayout,
 		registry,
@@ -260,7 +260,7 @@ test("keyboard shortcut troubleshooting traces native, mapped, and resolved even
 	}));
 	const service = registrations.add(new WorkbenchKeybindingService({
 		ownerDocument: dom.window.document,
-		commandService: new CommandService(new ServiceCollection(), commands),
+		commandService: new CommandService(new ServiceContainer(), commands),
 		contextKeyService: contexts,
 		keyboardLayoutService: keyboardLayout,
 		registry,
@@ -320,7 +320,7 @@ test("single modifier bindings dispatch on keyup only when the modifier was unus
 	}));
 	const service = registrations.add(new WorkbenchKeybindingService({
 		ownerDocument: dom.window.document,
-		commandService: new CommandService(new ServiceCollection(), commands),
+		commandService: new CommandService(new ServiceContainer(), commands),
 		contextKeyService: contexts,
 		keyboardLayoutService: keyboardLayout,
 		registry,

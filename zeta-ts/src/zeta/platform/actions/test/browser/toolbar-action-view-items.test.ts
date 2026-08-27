@@ -133,7 +133,7 @@ test("workbench toolbar adapts manually supplied platform menu actions", async (
 		{ MenuService },
 		{ CommandsRegistry },
 		{ ContextKeyService },
-		{ ServiceCollection },
+		{ ServiceContainer },
 		{ CommandService },
 		{ DisposableStore },
 		{ WorkbenchToolBar },
@@ -155,7 +155,7 @@ test("workbench toolbar adapts manually supplied platform menu actions", async (
 		command: { id: commandId, title: "Workbench action" },
 		group: "navigation",
 	}));
-	const commands = new CommandService(new ServiceCollection());
+	const commands = new CommandService(new ServiceContainer());
 	const contexts = registrations.add(new ContextKeyService());
 	const menus = new MenuService(commands, contexts);
 	const action = menus.getMenuActions(menuId)[0]?.[1][0];
@@ -182,7 +182,7 @@ test("menu toolbar keeps navigation inline and moves other groups into More Acti
 		{ MenuService },
 		{ CommandsRegistry },
 		{ ContextKeyService },
-		{ ServiceCollection },
+		{ ServiceContainer },
 		{ CommandService },
 		{ DisposableStore },
 		{ MenuWorkbenchToolBar },
@@ -220,7 +220,7 @@ test("menu toolbar keeps navigation inline and moves other groups into More Acti
 		},
 		group: "other",
 	}));
-	const commands = new CommandService(new ServiceCollection());
+	const commands = new CommandService(new ServiceContainer());
 	const contexts = registrations.add(new ContextKeyService());
 	const menus = new MenuService(commands, contexts);
 	let shownOptions:
@@ -269,7 +269,7 @@ test("menu toolbar projects empty state as a stable visual class", async () => {
 		{ MenuService },
 		{ CommandsRegistry },
 		{ ContextKeyExpr, ContextKeyService },
-		{ ServiceCollection },
+		{ ServiceContainer },
 		{ CommandService },
 		{ DisposableStore },
 		{ MenuWorkbenchToolBar },
@@ -295,7 +295,7 @@ test("menu toolbar projects empty state as a stable visual class", async () => {
 	const contexts = registrations.add(new ContextKeyService());
 	const toolbar = new MenuWorkbenchToolBar(
 		dom.window.document.body,
-		new MenuService(new CommandService(new ServiceCollection()), contexts),
+		new MenuService(new CommandService(new ServiceContainer()), contexts),
 		{ showContextMenu() {} },
 		menuId,
 	);
@@ -326,7 +326,7 @@ test("menu toolbar retains action slots for enablement and toggle changes", asyn
 		{ MenuService },
 		{ CommandsRegistry },
 		{ ContextKeyExpr, ContextKeyService },
-		{ ServiceCollection },
+		{ ServiceContainer },
 		{ CommandService },
 		{ DisposableStore },
 		{ MenuWorkbenchToolBar },
@@ -356,7 +356,7 @@ test("menu toolbar retains action slots for enablement and toggle changes", asyn
 	const contexts = registrations.add(new ContextKeyService());
 	const toolbar = new MenuWorkbenchToolBar(
 		dom.window.document.body,
-		new MenuService(new CommandService(new ServiceCollection()), contexts),
+		new MenuService(new CommandService(new ServiceContainer()), contexts),
 		{ showContextMenu() {} },
 		menuId,
 	);
@@ -403,7 +403,7 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 		{ ToolBar },
 		{ ContextKeyService },
 		{ MenuService },
-		{ ServiceCollection },
+		{ ServiceContainer },
 		{ CommandService },
 		{ BrowserContextViewService },
 		{ BrowserContextMenuService },
@@ -420,7 +420,7 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 	const host = dom.window.document.querySelector<HTMLElement>("main");
 	assert.ok(host);
 	using contexts = new ContextKeyService();
-	const commands = new CommandService(new ServiceCollection());
+	const commands = new CommandService(new ServiceContainer());
 	const menus = new MenuService(commands, contexts);
 	using contextViews = new BrowserContextViewService(host);
 	using contextMenus = new BrowserContextMenuService(

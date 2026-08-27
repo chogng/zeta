@@ -2,7 +2,7 @@ import { SyncDescriptor } from "../../../../platform/instantiation/common/instan
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
 import { ViewContainerLocation, type WorkbenchViewRegistry, WorkbenchViewContainerId, ViewsRegistry } from "../../../common/views.js";
 import { IEditorService } from "../../../services/editor/common/editorService.js";
-import { ILanguageDiagnosticsService } from "../../../services/language/common/languageDiagnosticsService.js";
+import { IMarkerService } from "../../../../platform/markers/common/markers.js";
 import { IStatusbarService } from "../../../services/statusbar/browser/statusbar.js";
 import { IViewsService } from "../../../services/views/browser/viewsService.js";
 import { ProblemsStatusContribution } from "./problemsStatus.js";
@@ -27,13 +27,13 @@ export function registerProblemsView(registry: WorkbenchViewRegistry = ViewsRegi
 		order: 1,
 		canToggleVisibility: false,
 		ctorDescriptor: new SyncDescriptor(ProblemsViewPane, {
-			serviceDependencies: [ILanguageDiagnosticsService, IEditorService],
+			serviceDependencies: [IMarkerService, IEditorService],
 		}),
 	}]);
 }
 
 registerWorkbenchContribution("workbench.contrib.problemsStatus", WorkbenchPhase.BlockRestore, accessor => new ProblemsStatusContribution({
 	statusbarService: accessor.get(IStatusbarService),
-	diagnosticsService: accessor.get(ILanguageDiagnosticsService),
+	markerService: accessor.get(IMarkerService),
 	viewsService: accessor.get(IViewsService),
 }));

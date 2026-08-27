@@ -12,7 +12,7 @@ import {
 } from "../../../platform/contextkey/common/contextkey.js";
 import {
 	createServiceIdentifier,
-	ServiceCollection,
+	ServiceContainer,
 	SyncDescriptor,
 } from "../../../platform/instantiation/common/instantiation.js";
 import {
@@ -114,8 +114,8 @@ test("workbench context keys describe the current workspace", () => {
 
 test("workbench contributions start once at their declared phases", () => {
 	const serviceId = createServiceIdentifier<string>("testService");
-	const services = new ServiceCollection();
-	services.set(serviceId, "ready");
+	const services = new ServiceContainer();
+	services.registerInstance(serviceId, "ready");
 	const registry = new WorkbenchContributionRegistry();
 	const calls: string[] = [];
 	using startupRegistration = registry.register(

@@ -1,7 +1,8 @@
 import { bindResizableLayout } from "../../../base/browser/ui/resizable/resizable.js";
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { BrowserLayoutService } from "../../../platform/layout/browser/layoutService.js";
-import type { IConfigurationService } from "../../../platform/configuration/common/configurationService.js";
+import { IConfigurationService, type IConfigurationService as IConfigurationServiceContract } from "../../../platform/configuration/common/configurationService.js";
+import { ILayoutService } from "../../../platform/layout/common/layoutService.js";
 import type { IKeybindingsResourceApi } from "../../../platform/keybinding/common/keybindingsResource.js";
 import type { IStorageService } from "../../../platform/storage/common/storage.js";
 import type { WorkbenchPart } from "../../../workbench/browser/part.js";
@@ -23,7 +24,7 @@ export interface CodeSessionsWorkbenchOptions {
 	readonly profile: SessionsProfile;
 	readonly runtime: SessionsRuntime;
 	readonly sessionsWindowApi?: ISessionsWindowApi;
-	readonly configurationService: IConfigurationService;
+	readonly configurationService: IConfigurationServiceContract;
 	readonly keybindingsResourceApi?: IKeybindingsResourceApi;
 	readonly createContextMenuService: WorkbenchContextMenuServiceFactory;
 	readonly storageService: IStorageService;
@@ -51,8 +52,10 @@ export class CodeSessionsWorkbench extends Disposable {
 			focus: () => sessionsPart?.focus(),
 		}));
 		this.layoutService = layoutService;
+		runtime.container.registerInstance(ILayoutService, layoutService);
+		runtime.container.registerInstance(IConfigurationService, options.configurationService);
 		const interactionServices = this._register(new WorkbenchInteractionServices({
-			services: runtime.services,
+			container: runtime.container,
 			layoutService,
 			configurationService: options.configurationService,
 			keybindingsResourceApi: options.keybindingsResourceApi,
@@ -88,7 +91,7 @@ export class CodeSessionsWorkbench extends Disposable {
 			initialDimension: layoutService.mainContainerDimension,
 			storageService: options.storageService,
 		}));
-		runtime.services.set(ISessionsLayoutService, layout);
+		runtime.container.registerInstance(ISessionsLayoutService, layout);
 		this._register(bindResizableLayout(layoutService.onDidLayoutMainContainer, layout));
 		void runtime.initialize();
 	}

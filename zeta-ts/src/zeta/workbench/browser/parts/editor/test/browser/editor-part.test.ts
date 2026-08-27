@@ -826,7 +826,7 @@ test("Editor title toolbar splits the active group and owns More Actions", async
 	const [
 		{ MenuService },
 		{ ContextKeyService },
-		{ ServiceCollection },
+		{ ServiceContainer },
 		{ CommandService },
 	] = await Promise.all([
 		import("../../../../../../platform/actions/common/menuService.js"),
@@ -842,7 +842,7 @@ test("Editor title toolbar splits the active group and owns More Actions", async
 		".ts",
 		() => trackPane(panes, "stanza.editor.code"),
 	));
-	const services = new ServiceCollection();
+	const services = new ServiceContainer();
 	using contextKeys = new ContextKeyService();
 	using commands = new CommandService(services);
 	const menus = new MenuService(commands, contextKeys);
@@ -856,7 +856,7 @@ test("Editor title toolbar splits the active group and owns More Actions", async
 			},
 		},
 	});
-	services.set(IEditorPart, editor);
+	services.registerInstance(IEditorPart, editor);
 	dom.window.document.body.append(editor.domNode);
 	const activeInput = input("C:\\project\\main.ts");
 	await editor.openEditor(activeInput);

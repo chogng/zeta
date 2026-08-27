@@ -43,7 +43,7 @@ const { IConfigurationService: ConfigurationServiceId } = await import('../../..
 const { IContextMenuService } = await import('../../../../../platform/contextview/browser/contextMenu.js');
 const { IContextViewService } = await import('../../../../../platform/contextview/browser/contextView.js');
 const { BrowserContextViewService } = await import('../../../../../platform/contextview/browser/contextViewService.js');
-const { InstantiationService, ServiceCollection, SyncDescriptor } = await import('../../../../../platform/instantiation/common/instantiation.js');
+const { ServiceContainer, SyncDescriptor } = await import('../../../../../platform/instantiation/common/instantiation.js');
 const { darkColorTheme } = await import('../../../../../platform/theme/common/colorTheme.js');
 const { AccessibilityConfiguration } = await import('../../../../../platform/accessibility/common/accessibility.js');
 const { HoverConfiguration } = await import('../../../../../platform/hover/common/hoverService.js');
@@ -273,13 +273,13 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 	};
 	const configuration = disposables.add(new WorkbenchConfigurationService());
 	const contextView = disposables.add(new BrowserContextViewService(root));
-	const services = new ServiceCollection();
-	services.set(ClipboardServiceId, clipboardService);
-	services.set(ConfigurationServiceId, configuration);
-	services.set(IContextMenuService, contextMenuProvider);
-	services.set(IContextViewService, contextView);
-	services.set(LocalizationServiceId, localizationService);
-	const instantiationService = new InstantiationService(services);
+	const services = new ServiceContainer();
+	services.registerInstance(ClipboardServiceId, clipboardService);
+	services.registerInstance(ConfigurationServiceId, configuration);
+	services.registerInstance(IContextMenuService, contextMenuProvider);
+	services.registerInstance(IContextViewService, contextView);
+	services.registerInstance(LocalizationServiceId, localizationService);
+	const instantiationService = services;
 	const preferencesPanes = disposables.add(new PreferencesEditorPaneRegistry());
 	disposables.add(preferencesPanes.registerPreferencesEditorPane({
 		id: SettingsEditorPaneId,

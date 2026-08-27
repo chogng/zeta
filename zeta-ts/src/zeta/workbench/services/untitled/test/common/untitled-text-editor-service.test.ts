@@ -3,7 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { Emitter } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
-import { ServiceCollection } from "../../../../../platform/instantiation/common/instantiation.js";
+import { ServiceContainer } from "../../../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService, type IQuickInputService as IQuickInputServiceContract, type IQuickPick, type IQuickPickItem } from "../../../../../platform/quickinput/common/quickInput.js";
 import type { IEditorPart as IEditorPartContract } from "../../../../browser/parts/editor/editorPart.js";
 import { ExtensionFileTemplateRegistry } from "../../../extensions/common/extensionFileTemplate.js";
@@ -66,9 +66,9 @@ test("New Untitled Text Editor opens a compatible text editor input", async () =
 	using untitled = new BrowserUntitledTextEditorService();
 	const opened: Array<{ readonly resource: URI; readonly label?: string; readonly initialText?: string }> = [];
 	const editorPart = { openEditor: async (input: typeof opened[number]) => { opened.push(input); } } as unknown as IEditorPartContract;
-	const services = new ServiceCollection();
-	services.set(IUntitledTextEditorService, untitled);
-	services.set(IEditorPart, editorPart);
+	const services = new ServiceContainer();
+	services.registerInstance(IUntitledTextEditorService, untitled);
+	services.registerInstance(IEditorPart, editorPart);
 	using commands = new CommandService(services);
 
 	await commands.executeCommand(NewUntitledTextEditorCommandId);
@@ -93,11 +93,11 @@ test("New File from Template opens the selected extension template as an untitle
 	const opened: Array<{ readonly resource: URI; readonly label?: string; readonly initialText?: string; readonly languageId?: string }> = [];
 	const editorPart = { openEditor: async (input: typeof opened[number]) => { opened.push(input); } } as unknown as IEditorPartContract;
 	const quickInput = new TestQuickInputService();
-	const services = new ServiceCollection();
-	services.set(IUntitledTextEditorService, untitled);
-	services.set(IEditorPart, editorPart);
-	services.set(IQuickInputService, quickInput);
-	services.set(IExtensionService, { fileTemplates: templates } as unknown as IExtensionService);
+	const services = new ServiceContainer();
+	services.registerInstance(IUntitledTextEditorService, untitled);
+	services.registerInstance(IEditorPart, editorPart);
+	services.registerInstance(IQuickInputService, quickInput);
+	services.registerInstance(IExtensionService, { fileTemplates: templates } as unknown as IExtensionService);
 	using commands = new CommandService(services);
 
 	await commands.executeCommand(NewFileFromTemplateCommandId);

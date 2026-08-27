@@ -10,7 +10,7 @@ import { EditorView, type EditorViewOptions, type EditorViewViewportOptions } fr
 import { type EditorViewport } from "../../view.js";
 import { KeyboardNavigationController, type KeyboardNavigationControllerOptions } from "../../controller/keyboardNavigationController.js";
 import { MouseHandler, type MouseHandlerOptions } from "../../controller/mouseHandler.js";
-import { InstantiationService, type IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+import { ServiceContainer, type IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import { CodeEditorContributions, type CodeEditorContributionDescription } from "./codeEditorContributions.js";
 
 export type CodeEditorWidgetViewportOptions = EditorViewViewportOptions;
@@ -87,13 +87,14 @@ export class CodeEditorWidget extends Disposable {
 			this.viewport = this.view.viewport;
 			this.userInputEvents = this.view.userInputEvents;
 			this.contributions = this._register(new CodeEditorContributions());
+			const instantiationService = options.instantiationService ?? this._register(new ServiceContainer());
 			this.contributions.initialize({
 				model: options.model,
 				selectionController: options.selectionController,
 				viewport: this.viewport,
 				view: this.view,
 				placeholder: options.placeholder,
-			}, options.instantiationService ?? new InstantiationService(), options.contributions, options.onContributionError);
+			}, instantiationService, options.contributions, options.onContributionError);
 			this._register(new KeyboardNavigationController(this.viewport, options.selectionController, options.keyboardNavigation));
 			this._register(new MouseHandler(this.viewport, options.selectionController, options.mouseHandler));
 		} catch (error) {

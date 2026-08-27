@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { DomEmitter } from '../../browser/event.js';
-import { DisposableTracker, installDisposableTracker } from '../../common/disposableTracker.js';
+import { DisposableTracker, installDisposableTracker } from '../../common/lifecycle.js';
 
 test('DomEmitter attaches while observed and detaches with its final listener', () => {
 	const target = new CountingEventTarget();

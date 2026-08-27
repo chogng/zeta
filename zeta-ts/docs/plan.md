@@ -138,10 +138,7 @@ owner-child 关系并拒绝重复所有权与所有权环；在一个明确的�
 覆盖 LIFO、幂等、销毁后注册、释放异常、
 `SuppressedError` 和所有权转移测试。
 
-`lifecycle.ts` 只保留薄的 `IDisposableTracker` 观察接口、当前 tracker 槽和通知
-钩子；创建栈、所有权图和泄漏报告的具体实现位于 `disposableTracker.ts`。依赖
-方向固定为 `disposableTracker.ts -> lifecycle.ts`，生产生命周期模块不依赖具体
-诊断实现。
+`lifecycle.ts` 统一承载 `IDisposableTracker` 契约、tracker 槽、通知钩子以及开发和测试追踪器的创建栈、所有权图与泄漏报告；生产生命周期正确性不依赖是否安装追踪器。
 
 Electron `contextBridge` 是明确的序列化边界：Symbol 键不能跨越该边界，因此
 preload 只暴露带字符串键 `dispose()` 的 `DisposableHandle`。renderer 在需要

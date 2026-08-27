@@ -20,7 +20,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { ServiceCollection } = await import("../../../../../platform/instantiation/common/instantiation.js");
+const { ServiceContainer } = await import("../../../../../platform/instantiation/common/instantiation.js");
 const { IConfigurationService } = await import("../../../../../platform/configuration/common/configurationService.js");
 const { ILayoutService } = await import("../../../../../platform/layout/common/layoutService.js");
 const { WorkbenchContributionsRegistry, WorkbenchPhase } = await import("../../../../../workbench/common/contributions.js");
@@ -74,9 +74,9 @@ test("Sash contribution starts after restoration", () => {
 	assert.ok(root);
 	const sash = appendSash(root);
 	using configuration = new WorkbenchConfigurationService();
-	const services = new ServiceCollection();
-	services.set(IConfigurationService, configuration);
-	services.set(ILayoutService, { mainContainer: root } as LayoutService);
+	const services = new ServiceContainer();
+	services.registerInstance(IConfigurationService, configuration);
+	services.registerInstance(ILayoutService, { mainContainer: root } as LayoutService);
 
 	using host = WorkbenchContributionsRegistry.createHost(services);
 	host.advance(WorkbenchPhase.BlockRestore);

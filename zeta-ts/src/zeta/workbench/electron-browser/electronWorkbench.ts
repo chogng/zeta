@@ -1,10 +1,11 @@
 import { installBaseUiStyles } from "../../base/browser/ui/styles.js";
 import { addDisposableListener } from "../../base/browser/dom.js";
-import { DisposableStore, toDisposable } from "../../base/common/lifecycle.js";
 import {
+	DisposableStore,
 	DisposableTracker,
 	installDisposableTracker,
-} from "../../base/common/disposableTracker.js";
+	toDisposable,
+} from "../../base/common/lifecycle.js";
 import { WorkbenchModeRegistry, type WorkbenchModeId } from "../common/workbenchMode.js";
 import {
 	createElectronRendererApi,

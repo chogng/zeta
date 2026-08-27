@@ -54,7 +54,7 @@ export class SessionsWorkbench extends Disposable {
 			workspaceId: "sessions",
 			profileId: options.profile.id,
 		}));
-		runtime.services.set(IStorageService, storage);
+		runtime.container.registerInstance(IStorageService, storage);
 		container.replaceChildren();
 		const sessions = this.createCodeSessions(container, {
 			profile: options.profile,

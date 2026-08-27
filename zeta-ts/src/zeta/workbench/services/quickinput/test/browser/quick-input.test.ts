@@ -14,7 +14,7 @@ import {
 	IContextKeyService,
 } from "../../../../../platform/contextkey/common/contextkey.js";
 import {
-	ServiceCollection,
+	ServiceContainer,
 } from "../../../../../platform/instantiation/common/instantiation.js";
 import {
 	IKeybindingService,
@@ -123,19 +123,19 @@ test("Command Palette filters, executes, closes, and restores focus", async () =
 	container.append(focusTarget);
 	focusTarget.focus();
 
-	const services = new ServiceCollection();
+	const services = new ServiceContainer();
 	const contextKeys = new ContextKeyService();
-	services.set(IContextKeyService, contextKeys);
+	services.registerInstance(IContextKeyService, contextKeys);
 	const commands = new CommandService(services);
-	services.set(ICommandService, commands);
+	services.registerInstance(ICommandService, commands);
 	const menus = new MenuService(commands, contextKeys);
-	services.set(IMenuService, menus);
+	services.registerInstance(IMenuService, menus);
 	const quickInput = new WorkbenchQuickInputService({
 		container,
 		contextKeyService: contextKeys,
 	});
-	services.set(IQuickInputService, quickInput);
-	services.set(IKeybindingService, emptyKeybindingService());
+	services.registerInstance(IQuickInputService, quickInput);
+	services.registerInstance(IKeybindingService, emptyKeybindingService());
 
 	let executions = 0;
 	class PaletteTargetAction extends Action2 {

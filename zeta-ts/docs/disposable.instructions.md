@@ -90,7 +90,7 @@ tracker.assertNoLeaks();
 
 Only one tracker is installed per JavaScript realm. Tracking is disabled when no tracker is installed, so production lifecycle correctness must never depend on it.
 
-The thin `IDisposableTracker` contract, current tracker slot, and notification hooks live in `lifecycle.ts`. Stack collection, ownership graphs, and leak reporting live in `disposableTracker.ts`; the lifecycle module does not depend on that concrete implementation.
+The `IDisposableTracker` contract, tracker slot, notification hooks, stack collection, ownership graph, and leak reporting are all owned by `lifecycle.ts`; production lifecycle correctness remains independent of whether a tracker is installed.
 
 ## Review rules
 

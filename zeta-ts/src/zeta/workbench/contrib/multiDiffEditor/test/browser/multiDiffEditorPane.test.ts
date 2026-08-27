@@ -6,7 +6,7 @@ import { type DiffComputationRequest, type IDiffComputationService } from '../..
 import { type LineDiff } from '../../../../../editor/common/diff/lineDiff.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { ContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
-import { ServiceCollection } from '../../../../../platform/instantiation/common/instantiation.js';
+import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
 import { EditorPaneVisibility } from '../../../../browser/parts/editor/editorPane.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { TextFileContentSource, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest } from '../../../../services/textfile/common/textFileService.js';
@@ -33,7 +33,7 @@ test('Stanza multi-diff pane resolves every comparison and releases the complete
 	const parent = requiredElement<HTMLElement>(dom.window.document, 'main');
 	const resourceStore = new BrowserTextResourceStore(new BootstrapTextFiles());
 	using models = new BrowserTextModelService(resourceStore);
-	using commands = new CommandService(new ServiceCollection());
+	using commands = new CommandService(new ServiceContainer());
 	using contexts = new ContextKeyService();
 	const menus = new MenuService(commands, contexts);
 	const pane = new MultiDiffEditorPane({
