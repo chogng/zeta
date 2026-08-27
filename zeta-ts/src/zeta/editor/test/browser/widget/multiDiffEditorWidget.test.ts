@@ -60,6 +60,8 @@ test('MultiDiffEditorWidget presents ordered file sections with one outer viewpo
 	editor.layout({ width: 480, height: 80 });
 
 	assert.equal(editor.domNode.querySelectorAll('.stanza-multi-diff-editor-section').length, 2);
+	assert.ok([...editor.domNode.querySelectorAll<HTMLElement>('.stanza-multi-diff-editor-section')].every((section) => section.style.transform === ''));
+	assert.ok([...editor.domNode.querySelectorAll<HTMLElement>('.stanza-multi-diff-editor-rows')].every((rows) => rows.style.transform === ''));
 	assert.deepEqual(
 		[...editor.domNode.querySelectorAll('.stanza-multi-diff-editor-title')].map((element) => element.textContent),
 		['src/first.ts', 'src/second.ts'],

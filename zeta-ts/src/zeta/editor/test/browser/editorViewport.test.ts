@@ -395,9 +395,10 @@ test("Scrolling virtualizes rows while preserving overlapping DOM identity", () 
 		endLineIndexExclusive: 27,
 	});
 	assert.equal(
-		requiredElement(viewport.element, ".stanza-editor-lines").style.transform,
-		"translate3d(0, 360px, 0)",
+		requiredElement(viewport.element, ".stanza-editor-lines").style.top,
+		"360px",
 	);
+	assert.equal(requiredElement(viewport.element, ".stanza-editor-lines").style.transform, "");
 
 	viewport.element.scrollTop = 420;
 	viewport.element.dispatchEvent(new dom.window.Event("scroll"));

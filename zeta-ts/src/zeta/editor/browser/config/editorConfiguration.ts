@@ -1,3 +1,5 @@
+import { EDITOR_FONT_DEFAULTS } from '../../common/config/fontInfo.js';
+
 /** Input accepted by the browser editor's geometry configuration resolver. */
 export interface EditorConfigurationInput {
 	readonly fontFamily?: string;
@@ -9,7 +11,7 @@ export interface EditorConfigurationInput {
 /** Resolved values that affect the editor's initial font and line geometry. */
 export interface EditorConfiguration {
 	readonly fontFamily?: string;
-	readonly fontSize?: number;
+	readonly fontSize: number;
 	readonly lineHeight: number;
 	readonly fontLigatures: boolean;
 }
@@ -41,7 +43,7 @@ export function resolveEditorConfiguration(options: EditorConfigurationInput): E
 
 	return Object.freeze({
 		fontFamily: options.fontFamily,
-		fontSize: options.fontSize,
+		fontSize: options.fontSize ?? EDITOR_FONT_DEFAULTS.fontSize,
 		lineHeight: options.lineHeight ?? defaultLineHeight(options.fontSize),
 		fontLigatures: options.fontLigatures ?? false,
 	});

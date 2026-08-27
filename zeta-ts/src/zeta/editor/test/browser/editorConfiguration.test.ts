@@ -3,11 +3,12 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { applyEditorFontInfo } from '../../browser/config/domFontInfo.js';
 import { resolveEditorConfiguration } from '../../browser/config/editorConfiguration.js';
+import { EDITOR_FONT_DEFAULTS } from '../../common/config/fontInfo.js';
 
 test('browser editor configuration resolves geometry defaults at the composition boundary', () => {
 	assert.deepEqual(resolveEditorConfiguration({}), {
 		fontFamily: undefined,
-		fontSize: undefined,
+		fontSize: EDITOR_FONT_DEFAULTS.fontSize,
 		lineHeight: 20,
 		fontLigatures: false,
 	});

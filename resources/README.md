@@ -21,6 +21,25 @@ Zeta is one optional consumer: this product bundle chooses to pin that root, whi
 validation and publication do not depend on Zeta. A root rotation must be valid in the Marketplace;
 Zeta then updates its pinned copy before requiring metadata signed only by the rotated root.
 
+## Application branding
+
+The fixed application icon is derived from
+`zeta-ts/src/zeta/workbench/browser/media/zeta-light.svg`. Unlike renderer UI,
+launcher, package, taskbar, and Web icons do not change with the editor color theme.
+
+- `win32/zeta.ico` is the Windows application and package icon.
+- `darwin/zeta.icns` is the macOS application bundle icon.
+- `linux/zeta.png` is the Linux desktop and window icon.
+- `server/` contains the Web favicon, install icons, and manifest.
+
+Vite copies `server/` unchanged to the renderer output root, and the browser
+Workbench and Sessions pages link those stable paths. The repository does not
+currently contain an Electron bundle or installer stage; that stage must consume
+the three platform files directly when it is introduced.
+
+`zeta-dark.svg` remains a renderer-only titlebar variant and is not a packaging
+source.
+
 ## Icons
 
 The cross-client ownership and rendering contract is documented in

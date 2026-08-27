@@ -1,7 +1,9 @@
-import { type EditorConfiguration } from './editorConfiguration.js';
-
 /** Resolved font values that can be applied to a browser editor root. */
-export type EditorDomFontInfo = Pick<EditorConfiguration, 'fontFamily' | 'fontSize' | 'fontLigatures'>;
+export interface EditorDomFontInfo {
+	readonly fontFamily?: string;
+	readonly fontSize?: number;
+	readonly fontLigatures: boolean;
+}
 
 /** Applies the editor font contract without coupling callers to CSS details. */
 export function applyEditorFontInfo(element: HTMLElement, fontInfo: EditorDomFontInfo): void {

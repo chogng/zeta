@@ -29,6 +29,7 @@ export default defineConfig(() => {
   return {
     base: "./",
     root: sourceRoot,
+    publicDir: resolve(repositoryRoot, "resources/server"),
     define: {
       __ZETA_WORKBENCH_MODE__: JSON.stringify(workbenchModeId),
       __ZETA_WEB_APP_SERVER__: JSON.stringify(webAppServerEnabled),

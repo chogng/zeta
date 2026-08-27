@@ -74,6 +74,9 @@ test("DiffEditorWidget refreshes on either source model and virtualizes diff row
 	const firstVisibleRow = editor.element.querySelector<HTMLElement>(".stanza-diff-editor-row");
 	assert.equal(firstVisibleRow?.style.height, "20px");
 	assert.ok(editor.element.scrollTop > 0);
+	const rows = requiredElement<HTMLElement>(editor.element, ".stanza-diff-editor-rows");
+	assert.notEqual(rows.style.top, "0px");
+	assert.equal(rows.style.transform, "");
 	const overview = requiredElement<HTMLElement>(editor.element, ".stanza-diff-overview");
 	assert.equal(overview.style.top, `${editor.element.scrollTop}px`);
 	assert.equal(Number.parseFloat(requiredElement<HTMLElement>(overview, ".stanza-diff-overview-viewport").style.height), 2);

@@ -342,7 +342,7 @@ class MultiDiffSection extends Disposable {
 
 	public layout(layout: MultiDiffSectionLayout): void {
 		this.domNode.style.height = `${layout.height}px`;
-		this.domNode.style.transform = `translate3d(0, ${layout.top}px, 0)`;
+		this.domNode.style.top = `${layout.top}px`;
 		this.bodyDomNode.style.height = `${layout.bodyHeight}px`;
 	}
 
@@ -377,7 +377,7 @@ class MultiDiffSection extends Disposable {
 		for (let rowIndex = startRow; rowIndex < endRow; rowIndex += 1) {
 			fragment.append(createDiffEditorRow(this.domNode.ownerDocument, rows[rowIndex]!, this.item.model, lineHeight, rowIndex === activeRow, showInlineChanges));
 		}
-		this.rowsNode.setTransform(`translate3d(0, ${startRow * lineHeight}px, 0)`);
+		this.rowsNode.setTop(startRow * lineHeight);
 		reset(this.rowsDomNode, fragment);
 		this.renderedStartRow = startRow;
 		this.renderedEndRow = endRow;

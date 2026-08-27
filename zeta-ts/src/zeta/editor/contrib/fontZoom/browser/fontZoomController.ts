@@ -9,13 +9,13 @@ export interface FontZoomControllerOptions { readonly baseFontSize?: number; rea
 /** Owns per-editor font zoom state and invalidates browser measurements after each change. */
 export class FontZoomController extends Disposable {
 	private readonly baseLineHeight: number;
-	private readonly baseFontSize: number | undefined;
+	private readonly baseFontSize: number;
 	private scale: number;
 
 	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, options: FontZoomControllerOptions = {}) {
 		super();
 		this.baseLineHeight = readPositive(options.baseLineHeight ?? viewport.viewportLayout.lineHeight, "baseLineHeight");
-		this.baseFontSize = options.baseFontSize === undefined ? undefined : readPositive(options.baseFontSize, "baseFontSize");
+		this.baseFontSize = readPositive(options.baseFontSize ?? readFontSize(viewport.element), "baseFontSize");
 		this.scale = readScale(options.initialScale ?? 1);
 		this.apply();
 		this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event), true));
@@ -37,7 +37,7 @@ export class FontZoomController extends Disposable {
 
 	private apply(): void {
 		this.viewport.element.style.setProperty("--stanza-editor-font-scale", String(this.scale));
-		this.viewport.element.style.fontSize = this.baseFontSize === undefined ? `${this.scale}em` : `${this.baseFontSize * this.scale}px`;
+		this.viewport.element.style.fontSize = `${this.baseFontSize * this.scale}px`;
 		this.viewport.setLineHeight(Math.max(1, Math.round(this.baseLineHeight * this.scale)));
 		this.viewport.refreshFontMetrics();
 		this.viewport.announceAccessibilityStatus(`Editor font size ${Math.round(this.scale * 100)} percent`);
@@ -46,6 +46,7 @@ export class FontZoomController extends Disposable {
 
 function readScale(value: number): number { if (!Number.isFinite(value) || value < 0.5 || value > 3) throw new RangeError("Stanza font zoom scale must be between 0.5 and 3"); return Math.round(value * 10) / 10; }
 function readPositive(value: number, name: string): number { if (!Number.isFinite(value) || value <= 0) throw new RangeError(`Stanza ${name} must be positive`); return value; }
+function readFontSize(element: HTMLElement): number { return Number.parseFloat(element.ownerDocument.defaultView?.getComputedStyle(element).fontSize ?? ""); }
 
 registerEditorContribution({
 	id: "editor.contrib.fontZoom",

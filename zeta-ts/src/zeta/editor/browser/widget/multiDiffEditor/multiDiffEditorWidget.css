@@ -113,7 +113,6 @@
 	top: 0;
 	left: 0;
 	min-width: 100%;
-	will-change: transform;
 }
 
 .stanza-multi-diff-editor.hide-line-numbers .stanza-diff-editor-line-number {

@@ -220,7 +220,7 @@ export class DiffEditorWidget extends Disposable {
 			const row = rows[rowIndex]!;
 			fragment.append(createDiffEditorRow(this.element.ownerDocument, row, this.model, this.lineHeight, rowIndex === this.activeChangeRow, this.showInlineChanges));
 		}
-		this.rowsNode.setTransform(`translate3d(0, ${startRow * this.lineHeight}px, 0)`);
+		this.rowsNode.setTop(startRow * this.lineHeight);
 		reset(this.rowsElement, fragment);
 		this.renderedStartRow = startRow;
 		this.renderedEndRow = endRow;

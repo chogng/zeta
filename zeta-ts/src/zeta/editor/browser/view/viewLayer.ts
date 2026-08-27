@@ -59,7 +59,7 @@ export class ViewLayer<TLine> extends Disposable {
 	}
 
 	render(viewportData: ViewportData): void {
-		this.root.setTransform(`translate3d(0, ${viewportData.renderTop}px, 0)`);
+		this.root.setTop(viewportData.renderTop);
 		const visualProjection = this.readVisualProjection();
 		const projectionRevision = this.readProjectionRevision();
 		if (visualProjection.modelVersion !== viewportData.modelVersion) return;
