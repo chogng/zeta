@@ -22,6 +22,29 @@
   align-self: stretch;
 }
 
+.zeta-titlebar-app-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+}
+
+.zeta-workbench[data-color-scheme="light"] .zeta-titlebar-app-icon,
+.zeta-workbench[data-color-scheme="high-contrast-light"] .zeta-titlebar-app-icon {
+  background-image: url("../../media/zeta-light.svg");
+}
+
+.zeta-workbench[data-color-scheme="dark"] .zeta-titlebar-app-icon,
+.zeta-workbench[data-color-scheme="high-contrast-dark"] .zeta-titlebar-app-icon {
+  background-image: url("../../media/zeta-dark.svg");
+}
+
+.zeta-workbench[data-os="mac"] .zeta-titlebar-app-icon {
+  display: none;
+}
+
 .zeta-titlebar-actions {
   display: flex;
   height: 100%;

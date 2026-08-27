@@ -39,6 +39,10 @@ export class BrowserTitlebarPart extends WorkbenchPart {
 		super(container, "titlebar");
 		const ownerDocument = container.ownerDocument;
 		this.menubar = this._register(menubar);
+		const appIconDomNode = h(ownerDocument, "span");
+		appIconDomNode.className = "zeta-titlebar-app-icon";
+		appIconDomNode.setAttribute("aria-hidden", "true");
+		this.titleDomNode.append(appIconDomNode);
 		const leftActionsDomNode = h(ownerDocument, "div");
 		leftActionsDomNode.className = "zeta-titlebar-left-actions zeta-titlebar-interactive-region";
 		this.titleDomNode.append(leftActionsDomNode);

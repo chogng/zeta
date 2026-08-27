@@ -150,7 +150,7 @@ test("titlebar owns a menu-driven actions container", async () => {
 	assert.equal(menubarDisposed, true);
 });
 
-test("titlebar renders left actions before the application menu", () => {
+test("titlebar renders its product icon before left actions and the application menu", () => {
 	using disposables = new DisposableStore();
 	const ownerDocument = browserEnvironment.window.document;
 	ownerDocument.body.replaceChildren();
@@ -184,15 +184,20 @@ test("titlebar renders left actions before the application menu", () => {
 		".zeta-workbench-part-title",
 	)?.children ?? []];
 	assert.equal(
-		titleChildren[0]?.classList.contains("zeta-titlebar-left-actions"),
+		titleChildren[0]?.classList.contains("zeta-titlebar-app-icon"),
 		true,
 	);
-	assert.equal(titleChildren[1], menubarElement);
+	assert.equal(titleChildren[0]?.getAttribute("aria-hidden"), "true");
 	assert.equal(
-		titleChildren[0]?.querySelector("button")?.textContent,
+		titleChildren[1]?.classList.contains("zeta-titlebar-left-actions"),
+		true,
+	);
+	assert.equal(titleChildren[2], menubarElement);
+	assert.equal(
+		titleChildren[1]?.querySelector("button")?.textContent,
 		"Left title action",
 	);
-	assert.equal(titleChildren.length, 2);
+	assert.equal(titleChildren.length, 3);
 	assert.equal(titlebar.domNode.querySelector(".zeta-titlebar-label"), null);
 });
 
