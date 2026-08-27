@@ -2,11 +2,10 @@
   position: sticky;
   left: 0;
   z-index: 4;
-  display: inline-block;
+  display: block;
   box-sizing: border-box;
   width: var(--stanza-editor-gutter-width);
   height: 100%;
-  vertical-align: top;
   user-select: none;
   background: var(--zeta-editor-background);
 }
