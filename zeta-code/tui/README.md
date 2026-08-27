@@ -55,7 +55,7 @@ Tool、approval policy 或 persistence。
   切换 subscription；
 - `/files` 只通过 App Server `fs/readDirectory`/`fs/readFile` 浏览 workspace，目录优先、支持父目录
   和 UTF-8 preview；preview 限 64 KiB/200 行，不直接访问宿主 filesystem；
-- 配置命令调用 `config/read`，`/model` 使用 expected revision 更新 preferred model；
+- `/config` 异步调用 `config/read` 展示服务端快照，并把本地增强终端设置合并为独立标签页；`/model` 使用 expected revision 更新 preferred model；
 - 启动时读取 client 保存的 `initialize.slashCommands` snapshot，通过
   [`zeta-slash-commands`](../../zeta-rs/slash-commands/README.md) 与 built-ins 做防冲突合并；
   server-advertised command 保留 `/name`、inline text/image/large-paste 参数并作为普通 Turn
@@ -109,7 +109,7 @@ Tool、approval policy 或 persistence。
 transcript 当前采用 plain-text wrapping；Native Agent Timeline 的 Markdown block、table、selection、
 折叠与虚拟化由
 [`native-agent-console.md`](../../app/docs/native-agent-console.md) 和
-[`zeta-markdown`](../../app/markdown/README.md) 拥有，不构成 TUI backlog。TUI 的 Mouse support 服务 slash/file-mention popup 和带可执行候选项的 Selection Pane；hover 复用选中态，左键复用 Enter 动作。任意屏幕文本框选仍由终端负责。
+[`zeta-markdown`](../../app/markdown/README.md) 拥有，不构成 TUI backlog。TUI 的 Mouse support 服务 slash/file-mention popup 和带可执行候选项的 Selection Pane；hover 复用选中态，左键复用 Enter 动作。Config 的 Enhanced terminal 标签页可关闭鼠标交互，关闭后这些页面不捕获鼠标，任意屏幕文本框选由终端负责。
 `TextArea` 保留局部 keymap 扩展边界，但 Vim mode/motion/operator 不是当前 `zeta code` 产品要求。
 
 TUI 当前连接 CLI 提供的 profile/Workspace-scoped local App Server authority，不提供 remote
@@ -121,7 +121,7 @@ transport retry。workspace mention 当前插入 workspace-relative 原子文本
 
 图片 bytes 的持久化由共享 `zeta-attachments` content-addressed store 拥有；TUI 只在草稿期间保留
 本地 data URL，并在 `StartTurn` 前通过 App Server 分块上传或安全导入远程 URL，最终只提交 typed
-`ImageAttachmentRef`。usage 必须等待已接受的 typed snapshot contract，不能从 transcript 推导。缺少 typed backend contract 的 login、compact、service tier 等命令不会进入 registry。`/statusline` 使用 `<profile>/zeta-code/statusline.json` 保存权限、模型、Git 分支和 Git 变更四个显示开关；Config 页面只读取 Overview、Provider 与 Language Server 状态，不再重复 MCP、Skill、Plugin 和 Hook 的只读列表。
+`ImageAttachmentRef`。usage 必须等待已接受的 typed snapshot contract，不能从 transcript 推导。缺少 typed backend contract 的 login、compact、service tier 等命令不会进入 registry。`/statusline` 使用 `<profile>/zeta-code/statusline.json` 保存权限、模型、Git 分支和 Git 变更四个显示开关；Config 页面展示 Overview、Enhanced terminal、Provider 与 Language Server，其中鼠标交互开关保存在 `<profile>/zeta-code/terminal.json`，关闭后 `App::mouse_mode` 始终把拖选留给终端。MCP、Skill、Plugin 和 Hook 不在 Config 中重复展示。
 
 从 repository root 启动当前 TUI：
 
@@ -141,7 +141,7 @@ cargo run --manifest-path Cargo.toml -p zeta-cli
 | --- | --- |
 | `TuiOptions::new` | 提供 Session/Thread title，并默认以当前目录作为 file mention root |
 | `TuiOptions::with_workspace_root` | 显式覆盖有界 file mention root |
-| `TuiOptions::with_profile_root` | 启用 host-local、产品作用域的 `zeta-code/keybindings.json` 用户键位资源 |
+| `TuiOptions::with_profile_root` | 启用 host-local、产品作用域的 `zeta-code/keybindings.json`、`zeta-code/statusline.json` 与 `zeta-code/terminal.json` 资源 |
 | `run` | 接管 ready `AppServerSession`，校验 initialize snapshot、驱动 terminal/client events，并在退出时显式 shutdown |
 | `TuiExit::UserRequested` | 用户通过按键或 command 请求正常退出 |
 | `TuiExit::TerminationRequested` | Unix host termination signal 请求正常退出 |
@@ -181,10 +181,11 @@ src/
 │   ├── composer/                  # editor, attachments, paste, slash/mention state and views
 │   ├── interaction/               # composer-preserving temporary view stack
 │   ├── selection/                 # reusable selection state and view
+│   ├── tab_list.rs                # reusable horizontal tab state, input, wrapping and view
 │   └── transcript/                # transcript projection rendering and row estimation
 ├── features/
 │   ├── config.rs                  # config feature module root
-│   ├── config/                    # config snapshot, provider/language-server view and model update
+│   ├── config/                    # config snapshot, enhanced-terminal resource/view and model update
 │   ├── sessions/                  # active Session/Thread selection and lifecycle requests
 │   ├── thread/                    # canonical snapshot, requests, subscription and projection
 │   ├── skills/                    # skill request and selection presentation mapping
@@ -226,6 +227,7 @@ src/
 | `Status` | crate-private | Ready/Working/waiting/Cancelling/Error display state | 只能由 canonical snapshot/result驱动 |
 | `StatusLineModel` | crate-private | 按配置顺序把当前权限、preferred model、Git 分支和变更映射为长短展示值并执行宽度降级 | 不接收完整 config aggregate、不查询接口、不保存权限或 Turn authority、不渲染 |
 | `StatusLineResource` | crate-private | 有界读取、revision 校验并原子保存 `<profile>/zeta-code/statusline.json` | 只保存四个显示开关，不进入 App Server 配置、不拥有被显示的数据 |
+| `ConfigResource` | crate-private | 有界读取、revision 校验并原子保存 `<profile>/zeta-code/terminal.json` | 只保存终端本地设置；服务端配置仍来自 `config/read` |
 | `components::welcome::WelcomeModel` | crate-private | 在 App 构造阶段把 workspace 路径缩写为 `~/...`，供空会话 Welcome Banner 使用 | 不在 draw 中读取环境，不把路径复制到 status line |
 | `App::update` | crate-private | 将一个 `AppEvent` 应用到唯一 presentation state owner | 不执行 I/O、不访问 runtime resource |
 | `App::handle_key` | crate-private | 先路由 Chord prefix；其他键先委托局部输入，再处理未消费的应用级键 | 不直接调用 client |
@@ -241,8 +243,9 @@ src/
 | `ThreadSubscription` | crate-private | 分开维护 durable sequence、stream-instance cursor 与 history Turn cursor，分类 duplicate/gap/runtime switch，消费 bounded snapshot 和 older-page resync | 不应用 `ThreadEvent` reducer、不保存 Thread history 或 transient projection |
 | `features::interactions` | crate-private | full agent request → approval/user-input view state → exact typed response | 不决定 policy、不选择 owner、不支持未声明的 dynamic Tool |
 | `InteractionPane` | crate-private | 保留 composer、拥有 temporary view stack，并把 key/paste 路由到 active view 或 composer | 不保存 Plugin/Session 等产品 feature 状态 |
-| `components::selection::SelectionViewState` | crate-private | 可配置 tabs/search/titled preview、Space search mode、过滤索引、候选 presentation highlight、选择与循环导航，并统一提供可执行候选项的鼠标模式、命中与选中 API | 不执行 action、不依赖产品 ID 或 App Server |
-| `components::selection::draw` | crate-private | generic title/tabs/search/items、可配置间距的水平分隔 preview、caption/footer Ratatui surface | 只读 selection state、不解释产品 action |
+| `components::tab_list::TabListState<T>` | crate-private | 拥有 tab 集合和当前项，处理左右/Tab 循环切换，并由同模块按 Unicode 宽度统一换行和绘制 | 不拥有 pane 内容、搜索、选择或产品 action |
+| `components::selection::SelectionViewState` | crate-private | 可配置 search/titled preview、Space search mode、过滤索引、候选 presentation highlight、选择与循环导航，并组合 `TabListState<SelectionTab>` 切换候选集合 | 不执行 action、不依赖产品 ID 或 App Server |
+| `components::selection::draw` | crate-private | generic title/search/items、可配置间距的水平分隔 preview、caption/footer Ratatui surface，并把 tab 区域委托给 `components::tab_list::draw` | 只读 selection state、不解释产品 action |
 | `ChatComposer` | private | blank/trim/submit、多行换行、paste routing、slash completion application、参数结构化与 local dispatch | 不自行实现 slash grammar，不拥有 cursor、Vim state 或 RPC |
 | `Attachments` | private | 图片 bytes/path、共享格式识别/data URL helper 与原子占位符绑定、删除后重新编号 | 不解码或缩放图片、不替代 Core 权威校验、不直接读取系统 clipboard、不发 RPC、不渲染 |
 | `host::clipboard::read_image` | crate-private | 从本机 clipboard 文件列表/RGBA image 读取并统一编码 PNG | 不改变 composer、不发 RPC、不持久化临时文件 |
@@ -288,6 +291,7 @@ run(session, options)
 ├─ EventPump::start → terminal source + App Server source
 ├─ FileSearchManager::new
 ├─ App::for_workspace → WelcomeModel::for_workspace + StatusLineModel::new
+├─ ConfigResource::refresh → AppEvent::ConfigSettingsReceived → App::update
 ├─ StatusLineResource::refresh → AppEvent::StatusLineSettingsReceived → App::update
 ├─ client.read_config / git_status → AppEvent → App::update
 └─ loop
@@ -463,23 +467,24 @@ client failure 通过 `AppEvent::FailureReported` 进入 Error 并允许输入�
 
 ## 终端生命周期
 
-`TerminalSession::open` 按以下顺序获取资源：
+`TerminalSession::open` 按以下顺序获取基础资源：
 
 ```text
 enable_raw_mode
 → EnterAlternateScreen
 → EnableBracketedPaste
-→ EnableMouseCapture
 → Terminal::new
 → clear
 ```
+
+首帧前由 `App::mouse_mode` 决定是否另行执行 `EnableMouseCapture`。Config 中的鼠标交互关闭时，该方法始终返回 `TerminalSelection`；页面即使声明可点击，也不会捕获鼠标。
 
 `TerminalModeGuard::acquire` 在任一 mode 获取失败时只回滚已经成功获取的 mode。
 `Terminal::new` 或 `clear` 失败时，已经构造的 guard 也执行同一路径。成功后
 `TerminalSession::drop` 无条件尝试：
 
 ```text
-DisableMouseCapture
+DisableMouseCapture（仅在已经捕获时）
 → DisableBracketedPaste
 → LeaveAlternateScreen
 → disable_raw_mode
@@ -555,7 +560,7 @@ keyboard semantics、duplicate interrupt suppression、active-Turn follow-up que
 canonical Thread snapshot 替换 optimistic transcript、snapshot identity/sequence 保留、完整
 ThreadItem projection、transient identity/UTF-8/容量上限、stream duplicate/gap/runtime switch、
 response lifecycle/error/interrupted transitions、interaction view 的
-composer 保留、tabs wrap/左右循环切换、
+composer 保留、tab list 换行/左右循环切换、
 approval 与多问题 option/free-form user input、blocked Esc/Ctrl-C semantics、搜索过滤/选择修复、
 selection render，以及 snapshot
 terminal/wait/resume mapping，以及 transcript chrome、error 去重、role

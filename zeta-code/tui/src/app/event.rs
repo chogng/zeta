@@ -1,5 +1,7 @@
 use crate::components::pane::PaneViewModel;
 use crate::components::selection::SelectionViewModel;
+use crate::features::config::ConfigSelectionView;
+use crate::features::config::TerminalSettings;
 use crate::features::connectors::ConnectorSelectionView;
 use crate::features::interactions::InteractionSelectionView;
 use crate::features::mcp::McpSelectionView;
@@ -25,6 +27,9 @@ pub(crate) enum AppEvent {
     ClipboardImageRead(Result<Vec<u8>, String>),
     CommandStarted(String),
     CommandCompleted { command: String, result: String },
+    ConfigSettingsReceived(TerminalSettings),
+    ConfigViewOpened(ConfigSelectionView),
+    ConfigViewReplaced(ConfigSelectionView),
     ConnectorViewOpened(ConnectorSelectionView),
     ConnectorViewReplaced(ConnectorSelectionView),
     PreferredModelReceived(Option<ModelRefDto>),

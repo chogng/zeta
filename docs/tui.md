@@ -316,6 +316,7 @@ zeta-code/tui/
 │   │   │   ├── layout.rs
 │   │   │   ├── view.rs
 │   │   │   └── transcript_tests.rs
+│   │   ├── tab_list.rs
 │   │   └── selection/
 │   │       ├── mod.rs
 │   │       ├── state.rs
@@ -523,7 +524,8 @@ value；但不能调用领域接口或保存 canonical aggregate。
 | `interaction/` | composer 与 temporary view stack 的焦点、push/pop 和 routing | feature catalog、RPC、Thread lifecycle |
 | `composer/` | draft、Unicode cursor、attachments、paste bindings、slash parsing | Turn start、config mutation、App Server client |
 | `transcript/` | plain-text visible row、wrapping 与 scroll | canonical Thread snapshot、sequence、transient cursor；不复制 Native Markdown/diff/table 组件 |
-| `selection/` | tabs、query、filtered indices、selection 和通用列表渲染 | Session/Skill identity 的业务 action |
+| `tab_list.rs` | tab 集合、当前项、横向切换、窄宽度换行和绘制 | pane 内容、搜索、产品 action |
+| `selection/` | query、filtered indices、selection 和通用列表渲染，并组合 `tab_list` 切换每组候选项 | Session/Skill identity 的业务 action |
 
 `features/thread/update.rs` 完成 committed/transient item 合并并暴露有稳定 identity 的可见
 items；`components/transcript/` 只负责把这些 items 布局和渲染。composer 提交时只产生
@@ -543,7 +545,7 @@ component 可以依赖 `ui/` 原语和必要的 canonical value type，但禁止
 `ui/` 可以包含：
 
 - layout helper；
-- selection list、tabs、picker 和 overlay 容器；
+- selection list、picker 和 overlay 容器；
 - scroll state；
 - key hint 和 keymap 展示；
 - theme、color、spacing；
@@ -556,9 +558,7 @@ component 可以依赖 `ui/` 原语和必要的 canonical value type，但禁止
 - approval、model、plugin 等产品状态；
 - 完整的 Session browser 或 Thread transcript。
 
-通用 tabs、过滤和选择状态放在 `components/selection/`；“恢复哪个 Session”的 row model、
-typed ID 和 action 属于 `features/sessions/`。`ui/` 只提供这两个上层模块共同需要的纯布局与
-样式函数。
+通用横向 tab 交互放在 `components/tab_list.rs`，过滤和选择状态放在 `components/selection/`；“恢复哪个 Session”的 row model、typed ID 和 action 属于 `features/sessions/`。`ui/` 只提供这些上层模块共同需要的纯布局与样式函数。
 
 ## 10. `terminal/`：真实终端基础设施
 
@@ -928,6 +928,7 @@ components/
 ├── composer/
 ├── interaction/
 ├── selection/
+├── tab_list.rs
 └── transcript/
 features/
 ├── mod.rs
@@ -996,10 +997,8 @@ lib_tests.rs
   tabs 与 replacement lifecycle 由同一 feature 拥有；
 - `features/interactions` 把 owner-directed full request 转成 approval 或多问题 user-input Pane，
   只返回 exact typed response；owner selection、deadline 与 cancellation 留在 App Server；
-- `features/config/request.rs` 与 `features/skills/request.rs` 分别拥有已有 typed config/model
-  与 Skill catalog/enablement 调用，App 不再内联这些领域 payload；
-- `components/selection` 已同时拥有 generic tabs/query/filter/selection state、输入 outcome 与
-  Ratatui view；`InteractionPane`、App 和产品 view builder 只消费该 component contract；
+- `features/config/request.rs` 与 `features/skills/request.rs` 分别拥有已有 typed config/model 与 Skill catalog/enablement 调用，App 不再内联这些领域 payload；`ConfigResource` 有界读取、revision 校验并原子保存 `<profile>/zeta-code/terminal.json`，其鼠标交互设置只约束 TUI 本地 `MouseMode`，不进入 App Server 配置；
+- `components/tab_list.rs` 已拥有横向 tab 集合、当前项、左右/Tab 循环切换、窄宽度换行和 Ratatui 绘制；`components/selection` 组合它并只拥有 query/filter/selection state、输入 outcome 与列表 Ratatui view；`InteractionPane`、App 和产品 view builder 只消费 selection component contract；
 - `ui/layout.rs` 拥有跨 presentation surface 复用的纯 geometry；`ui/theme.rs` 只拥有共享主题
   snapshot 到终端色彩能力的窄投影，用户文件解析与完整 token catalog 留在 `zeta-theme`；
   component 不反向依赖 frame coordinator；
@@ -1013,8 +1012,7 @@ lib_tests.rs
 - update-driven snapshot resync 先应用完整 canonical Thread，再把
   completed/waiting/failed/interrupted 映射为 presentation lifecycle；active Turn 的定时
   snapshot polling 已移除，Turn completion 不再单独追加 agent 文本；
-- `InteractionPane` 保留 composer 并拥有 temporary view stack；generic selection view 已支持
-  tabs、直接输入搜索、过滤、循环选择、左右/Tab 切页和 Esc/Ctrl-C 出栈；`/help` 只提供命令列表，`/shortcuts` 提供统一快捷键目录，`/skills` 从 typed `skills/list` 提供
+- `InteractionPane` 保留 composer 并拥有 temporary view stack；generic selection view 已组合 `tab_list` 支持横向切页，并继续拥有直接输入搜索、过滤、循环选择和 Esc/Ctrl-C 出栈；`/help` 只提供命令列表，`/shortcuts` 提供统一快捷键目录，`/skills` 从 typed `skills/list` 提供
   All/Enabled/Disabled/Errors catalog tabs；
 - `/skills` 只消费 App Server catalog snapshot，不读取 `zeta-skills` filesystem；
   `Space` 将 exact `SkillId` 转成 revision-checked `skill/enablement/set`，成功后刷新页面；
@@ -1053,8 +1051,7 @@ lib_tests.rs
   window 的 Markdown export。
   Native Agent Timeline 的 Markdown/table、任意 pointer selection、折叠与虚拟化属于 `app`，
   不是 TUI 的“尚未完成”；
-- Mouse 只覆盖 slash/file-mention popup 的必要左键命中。完整 pointer/selection 交互不属于当前
-  `zeta code` 要求；Vim mode/motion/operator 也没有被产品文档接受；
+- Mouse 只覆盖 slash/file-mention popup 和可执行 Selection Pane 的左键命中与 hover。Config 的 Enhanced terminal 标签页可关闭这类交互，关闭后页面把鼠标拖选留给宿主终端；完整 pointer/selection 交互不属于当前 `zeta code` 要求，Vim mode/motion/operator 也没有被产品文档接受；
 - 当前入口通过 `AppServerSession` 消费 profile/Workspace-scoped local authority，不提供 remote
   selector 或自动 reconnect。若未来接受
   远程产品需求，connection/recovery contract 必须先进入 `zeta-app-server-client`；
@@ -1064,7 +1061,7 @@ lib_tests.rs
   `ImageAttachmentRef` → durable `UserImageAttachment` → provider 临时 image block”纵切。TUI
   不建立私有 blob store；Thread history 与 command receipt 不持久化 data URL；
 - status line 已按固定顺序显示可独立开关的权限模式、模型、Git 分支和 Git 变更；workspace 路径只在空会话 Welcome Banner 显示，Turn 运行状态不进入该行，usage 也不从 transcript 推导；
-- Config surface 只保留 Overview、Provider 与 Language Server 状态；MCP、Skill、Plugin 和 Hook 不再作为 Config tab 重复展示，已有 `/mcp` 与 `/skills` 页面继续拥有各自能力。
+- Config surface 保留 Overview、Provider 与 Language Server 服务端状态，并在 Enhanced terminal 标签页展示本地鼠标交互开关。该开关由 `<profile>/zeta-code/terminal.json` 保存，不进入 App Server 配置；MCP、Skill、Plugin 和 Hook 不再作为 Config tab 重复展示，已有 `/mcp` 与 `/skills` 页面继续拥有各自能力。
 
 新增能力必须先证明是 `zeta code` 产品要求，再按 canonical contract 和垂直 feature 接入；不能
 因为 Native 已有 richer component，或某能力技术上可实现，就把它复制成 TUI backlog。
@@ -1083,6 +1080,7 @@ lib_tests.rs
 | request completion 的非阻塞 app command dispatch | Current |
 | canonical `features/thread` snapshot 与 transcript projection owner | Current |
 | `components/transcript` 与 `ui` layout/theme 原语 | Current |
+| `components/tab_list` 横向切换、换行与绘制边界 | Current |
 | `components/selection` state/view 边界 | Current |
 | composer/interaction component 物理边界 | Current |
 | Thread transient merge、cursor recovery 与 bounded data plane | Current |
@@ -1119,7 +1117,7 @@ README 中记录。
    （snapshot/projection owner、typed request、durable sequence/gap snapshot resync 为 Current；
    transient merge 和完整 ThreadItem projection 也为 Current）
 5. 把 bootstrap `toppane/` 与各 presentation surface 按职责迁入
-   `components/transcript/`、`components/interaction/`、`components/selection/` 和
+   `components/transcript/`、`components/interaction/`、`components/tab_list.rs`、`components/selection/` 和
    `components/composer/`；（Current；旧 `toppane/` 与顶层 `render/` 已移除）
    保留 `InteractionPane → ChatComposer → TextArea` 的局部 ownership；
 6. 将 public `run` 收敛为接收 owned `AppServerSession`，并在所有正常/错误退出路径显式

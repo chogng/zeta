@@ -11,6 +11,8 @@ use crate::components::selection::SelectionViewState;
 use crate::components::transcript::Message;
 use crate::components::transcript::TranscriptScroll;
 use crate::components::welcome::WelcomeModel;
+use crate::features::config::ConfigSelectionAction;
+use crate::features::config::TerminalSettings;
 use crate::features::connectors::ConnectorSelectionAction;
 use crate::features::connectors::ConnectorSelectionView;
 use crate::features::interactions::InteractionSelectionOutcome;
@@ -60,6 +62,9 @@ use std::time::Duration;
 use std::time::Instant;
 use zeta_protocol::ApprovalMode;
 
+#[path = "config_state.rs"]
+mod config_state;
+
 const DOUBLE_ESCAPE_WINDOW: Duration = Duration::from_millis(500);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -84,12 +89,14 @@ pub(crate) struct App {
     last_root_escape: Option<Instant>,
     status: Status,
     status_line: StatusLineModel,
+    terminal_settings: TerminalSettings,
     approval_mode: ApprovalMode,
 }
 
 #[derive(Debug)]
 enum SelectionActions {
     ReadOnly,
+    Config(BTreeMap<SelectionItemId, ConfigSelectionAction>),
     Interaction(InteractionSelectionState),
     Connectors(BTreeMap<SelectionItemId, ConnectorSelectionAction>),
     Mcp(BTreeMap<SelectionItemId, McpSelectionAction>),
@@ -118,6 +125,7 @@ impl App {
             last_root_escape: None,
             status: Status::Ready,
             status_line: StatusLineModel::new(),
+            terminal_settings: TerminalSettings::default(),
             approval_mode: ApprovalMode::AskPermissions,
         }
     }
@@ -144,6 +152,7 @@ impl App {
             last_root_escape: None,
             status: Status::Ready,
             status_line: StatusLineModel::new(),
+            terminal_settings: TerminalSettings::default(),
             approval_mode: ApprovalMode::AskPermissions,
         }
     }
@@ -243,6 +252,11 @@ impl App {
         }
         match self.selection_actions.last()? {
             SelectionActions::ReadOnly => None,
+            SelectionActions::Config(actions) => match actions.get(item_id)? {
+                ConfigSelectionAction::SetMouseInteractions(edit) => {
+                    Some(AppCommand::EditConfig(edit.clone()))
+                }
+            },
             SelectionActions::Interaction(_) => None,
             SelectionActions::Connectors(actions) => match actions.get(item_id)? {
                 ConnectorSelectionAction::ConnectDeviceOAuth {
@@ -470,7 +484,11 @@ impl App {
     }
 
     pub(crate) fn mouse_mode(&self) -> MouseMode {
-        self.interaction_pane.mouse_mode()
+        if self.terminal_settings.mouse_interactions() {
+            self.interaction_pane.mouse_mode()
+        } else {
+            MouseMode::TerminalSelection
+        }
     }
 
     fn show_selection_view(&mut self, model: PaneViewModel<SelectionViewModel>) {
@@ -704,6 +722,9 @@ impl App {
         match event {
             AppEvent::ClipboardImageRead(Ok(bytes)) => self.attach_image_bytes(bytes),
             AppEvent::ClipboardImageRead(Err(error)) => self.record_clipboard_error(error),
+            AppEvent::ConfigSettingsReceived(settings) => self.terminal_settings = settings,
+            AppEvent::ConfigViewOpened(view) => self.show_config_view(view),
+            AppEvent::ConfigViewReplaced(view) => self.replace_config_view(view),
             AppEvent::PreferredModelReceived(model) => {
                 self.status_line.apply_preferred_model(model.as_ref())
             }
@@ -927,6 +948,11 @@ impl App {
                 if invocation.arguments.is_empty() =>
             {
                 Some(AppCommand::OpenShortcutsPane)
+            }
+            (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Config))
+                if invocation.arguments.is_empty() =>
+            {
+                Some(AppCommand::OpenConfigPane)
             }
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::StatusLine))
                 if invocation.arguments.is_empty() =>

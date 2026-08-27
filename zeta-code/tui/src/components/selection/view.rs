@@ -1,9 +1,8 @@
-use super::SelectionTab;
 use super::SelectionViewState;
 use super::state::SelectionItem;
-use super::state::tab_row_count;
 use crate::components::search_box;
 use crate::components::search_box::SEARCH_BOX_HEIGHT;
+use crate::components::tab_list;
 use crate::ui::horizontal_margin;
 use crate::ui::{highlight, muted};
 use ratatui::Frame;
@@ -22,7 +21,6 @@ use ratatui::widgets::Paragraph;
 use std::rc::Rc;
 use unicode_width::UnicodeWidthStr;
 
-const TAB_GAP: usize = 2;
 const ITEM_MARKER_WIDTH: u16 = 2;
 const ITEM_COLUMN_GAP: u16 = 4;
 
@@ -39,17 +37,11 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: &SelectionViewState)
         return;
     }
 
-    let tab_lines = if view.show_tabs() {
-        tab_lines(
-            view.tabs(),
-            view.active_tab_index(),
-            content.width,
-            presentation_highlight,
-        )
+    let tab_height = if view.show_tabs() {
+        tab_list::desired_height(view.tabs(), content.width)
     } else {
-        Vec::new()
+        0
     };
-    let tab_height = tab_lines.len().min(u16::MAX as usize) as u16;
     let areas = selection_areas(content, view, tab_height);
 
     frame.render_widget(
@@ -62,7 +54,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: &SelectionViewState)
         areas[1],
     );
     if view.show_tabs() {
-        frame.render_widget(Paragraph::new(tab_lines), areas[3]);
+        tab_list::draw(frame, areas[3], view.tab_list(), presentation_highlight);
     }
 
     if let Some(search) = view.search() {
@@ -163,7 +155,7 @@ impl SelectionViewState {
             return None;
         }
         let tab_height = if self.show_tabs() {
-            tab_row_count(self.tabs(), content.width)
+            tab_list::desired_height(self.tabs(), content.width)
         } else {
             0
         };
@@ -331,54 +323,4 @@ fn dashed_rule(width: u16, title: Option<&str>, color: Color) -> Line<'static> {
         format!("{prefix}{}", "╌".repeat(remaining)),
         Style::default().fg(color),
     ))
-}
-
-fn tab_lines(
-    tabs: &[SelectionTab],
-    active: usize,
-    width: u16,
-    presentation_highlight: Color,
-) -> Vec<Line<'static>> {
-    if tabs.is_empty() {
-        return Vec::new();
-    }
-    let available_width = usize::from(width.max(1));
-    let mut lines = Vec::new();
-    let mut spans = Vec::new();
-    let mut row_width = 0usize;
-
-    for (index, tab) in tabs.iter().enumerate() {
-        let tab_width = tab.label().width().saturating_add(2);
-        let gap = usize::from(!spans.is_empty()) * TAB_GAP;
-        if !spans.is_empty()
-            && row_width.saturating_add(gap).saturating_add(tab_width) > available_width
-        {
-            lines.push(Line::from(spans));
-            spans = Vec::new();
-            row_width = 0;
-        }
-        if !spans.is_empty() {
-            spans.push(Span::raw("  "));
-            row_width = row_width.saturating_add(TAB_GAP);
-        }
-        if index == active {
-            spans.push(Span::styled(
-                format!(" {} ", tab.label()),
-                Style::default()
-                    .fg(Color::Black)
-                    .bg(presentation_highlight)
-                    .add_modifier(Modifier::BOLD),
-            ));
-        } else {
-            spans.push(Span::styled(
-                format!(" {} ", tab.label()),
-                Style::default().fg(muted()),
-            ));
-        }
-        row_width = row_width.saturating_add(tab_width);
-    }
-    if !spans.is_empty() {
-        lines.push(Line::from(spans));
-    }
-    lines
 }

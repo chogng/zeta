@@ -5,7 +5,6 @@ use super::SelectionItemId;
 use super::SelectionTab;
 use super::SelectionViewModel;
 use super::SelectionViewState;
-use super::tab_row_count;
 use crate::components::search_box::SearchBoxModel;
 use crate::mouse::MouseMode;
 use crossterm::event::KeyCode;
@@ -337,14 +336,6 @@ fn paste_only_filters_after_space_enters_search_mode() {
 
     assert_eq!(state.query(), "status");
     assert_eq!(state.visible_items()[0].label(), "/status");
-}
-
-#[test]
-fn narrow_width_wraps_tabs_without_hiding_them() {
-    let state = state();
-
-    assert_eq!(tab_row_count(state.tabs(), 80), 1);
-    assert_eq!(tab_row_count(state.tabs(), 12), 2);
 }
 
 #[test]

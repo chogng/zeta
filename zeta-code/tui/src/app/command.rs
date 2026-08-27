@@ -1,5 +1,6 @@
 use crate::components::composer::ComposerSubmission;
 use crate::components::composer::SlashCommandInvocation;
+use crate::features::config::ConfigEdit;
 use crate::features::interactions::InteractionResponse;
 use crate::features::shortcuts::ShortcutEdit;
 use crate::features::status_line::StatusLineEdit;
@@ -19,9 +20,11 @@ pub(crate) enum AppCommand {
     Interrupt,
     Suspend,
     CopyLastResponse,
+    OpenConfigPane,
     OpenShortcutsPane,
     OpenStatusLinePane,
     EditShortcut(ShortcutEdit),
+    EditConfig(ConfigEdit),
     EditStatusLine(StatusLineEdit),
     ConnectConnectorDeviceOAuth {
         connector_id: String,

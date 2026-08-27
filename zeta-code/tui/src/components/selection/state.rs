@@ -2,7 +2,6 @@ use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use ratatui::style::Color;
-use unicode_width::UnicodeWidthStr;
 
 use super::SelectionPreview;
 use super::matcher::selection_match_score;
@@ -10,9 +9,12 @@ use crate::components::search_box::SEARCH_BOX_HEIGHT;
 use crate::components::search_box::SearchBoxInputOutcome;
 use crate::components::search_box::SearchBoxModel;
 use crate::components::search_box::SearchBoxState;
+use crate::components::tab_list;
+use crate::components::tab_list::TabListInputOutcome;
+use crate::components::tab_list::TabListItem;
+use crate::components::tab_list::TabListState;
 use crate::mouse::MouseMode;
 
-const TAB_GAP: usize = 2;
 const MAX_VISIBLE_ROWS: usize = 12;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -145,10 +147,21 @@ impl SelectionTab {
     }
 }
 
+impl TabListItem for SelectionTab {
+    fn tab_label(&self) -> &str {
+        self.label()
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct SelectionViewModel {
-    title: String,
     tabs: Vec<SelectionTab>,
+    presentation: SelectionViewPresentation,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct SelectionViewPresentation {
+    title: String,
     search: Option<SearchBoxModel>,
     free_form_action: Option<SelectionItemId>,
     empty_message: String,
@@ -168,58 +181,60 @@ impl SelectionViewModel {
             "a selection view requires at least one tab"
         );
         Self {
-            title: title.into(),
             tabs,
-            search: None,
-            free_form_action: None,
-            empty_message: "No matching items".into(),
-            activation_mode: SelectionActivationMode::Enter,
-            dismissal: SelectionDismissal::Allowed,
-            show_tabs: true,
-            selection_enabled: true,
-            initial_selected: 0,
-            title_top_margin: 0,
-            title_bottom_margin: 0,
+            presentation: SelectionViewPresentation {
+                title: title.into(),
+                search: None,
+                free_form_action: None,
+                empty_message: "No matching items".into(),
+                activation_mode: SelectionActivationMode::Enter,
+                dismissal: SelectionDismissal::Allowed,
+                show_tabs: true,
+                selection_enabled: true,
+                initial_selected: 0,
+                title_top_margin: 0,
+                title_bottom_margin: 0,
+            },
         }
     }
 
     pub(crate) fn with_activation_mode(mut self, mode: SelectionActivationMode) -> Self {
-        self.activation_mode = mode;
+        self.presentation.activation_mode = mode;
         self
     }
 
     pub(crate) fn with_dismissal(mut self, dismissal: SelectionDismissal) -> Self {
-        self.dismissal = dismissal;
+        self.presentation.dismissal = dismissal;
         self
     }
 
     pub(crate) fn without_tab_bar(mut self) -> Self {
-        self.show_tabs = false;
+        self.presentation.show_tabs = false;
         self
     }
 
     pub(crate) fn without_selection(mut self) -> Self {
-        self.selection_enabled = false;
+        self.presentation.selection_enabled = false;
         self
     }
 
     pub(crate) fn with_initial_selected(mut self, index: usize) -> Self {
-        self.initial_selected = index;
+        self.presentation.initial_selected = index;
         self
     }
 
     pub(crate) fn with_title_top_margin(mut self, rows: usize) -> Self {
-        self.title_top_margin = rows;
+        self.presentation.title_top_margin = rows;
         self
     }
 
     pub(crate) fn with_title_bottom_margin(mut self, rows: usize) -> Self {
-        self.title_bottom_margin = rows;
+        self.presentation.title_bottom_margin = rows;
         self
     }
 
     pub(crate) fn with_search(mut self, search: SearchBoxModel) -> Self {
-        self.search = Some(search);
+        self.presentation.search = Some(search);
         self
     }
 
@@ -228,14 +243,18 @@ impl SelectionViewModel {
         placeholder: impl Into<String>,
         action: SelectionItemId,
     ) -> Self {
-        self.search = Some(SearchBoxModel::new(placeholder).initially_active());
-        self.free_form_action = Some(action);
+        self.presentation.search = Some(SearchBoxModel::new(placeholder).initially_active());
+        self.presentation.free_form_action = Some(action);
         self
     }
 
     pub(crate) fn with_empty_message(mut self, message: impl Into<String>) -> Self {
-        self.empty_message = message.into();
+        self.presentation.empty_message = message.into();
         self
+    }
+
+    fn into_parts(self) -> (SelectionViewPresentation, Vec<SelectionTab>) {
+        (self.presentation, self.tabs)
     }
 }
 
@@ -253,18 +272,19 @@ pub(crate) enum SelectionInputOutcome {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct SelectionViewState {
-    model: SelectionViewModel,
-    active_tab: usize,
+    model: SelectionViewPresentation,
+    tabs: TabListState<SelectionTab>,
     selected_visible: Option<usize>,
     search: Option<SearchBoxState>,
 }
 
 impl SelectionViewState {
     pub(crate) fn new(model: SelectionViewModel) -> Self {
+        let (model, tabs) = model.into_parts();
         let search = model.search.clone().map(SearchBoxState::new);
         let mut state = Self {
             model,
-            active_tab: 0,
+            tabs: TabListState::new(tabs),
             selected_visible: None,
             search,
         };
@@ -279,6 +299,7 @@ impl SelectionViewState {
     }
 
     pub(crate) fn replace_model(&mut self, model: SelectionViewModel) {
+        let (model, tabs) = model.into_parts();
         self.search = match (self.search.take(), model.search.clone()) {
             (Some(mut state), Some(search_model)) => {
                 state.replace_model(search_model);
@@ -288,7 +309,7 @@ impl SelectionViewState {
             (_, None) => None,
         };
         self.model = model;
-        self.active_tab = self.active_tab.min(self.model.tabs.len().saturating_sub(1));
+        self.tabs.replace_tabs(tabs);
         self.reconcile_selection();
     }
 
@@ -305,11 +326,15 @@ impl SelectionViewState {
     }
 
     pub(crate) fn tabs(&self) -> &[SelectionTab] {
-        &self.model.tabs
+        self.tabs.tabs()
     }
 
     pub(crate) fn active_tab_index(&self) -> usize {
-        self.active_tab
+        self.tabs.active_index()
+    }
+
+    pub(super) fn tab_list(&self) -> &TabListState<SelectionTab> {
+        &self.tabs
     }
 
     pub(crate) fn query(&self) -> &str {
@@ -393,7 +418,7 @@ impl SelectionViewState {
 
     pub(crate) fn desired_height(&self, width: u16) -> u16 {
         let tab_rows = if self.show_tabs() {
-            tab_row_count(self.tabs(), width.saturating_sub(4))
+            tab_list::desired_height(self.tabs(), width.saturating_sub(4))
         } else {
             0
         };
@@ -449,8 +474,6 @@ impl SelectionViewState {
                     SelectionDismissal::Blocked => SelectionInputOutcome::Consumed,
                 };
             }
-            KeyCode::Left | KeyCode::BackTab => self.switch_tab(TabDirection::Previous),
-            KeyCode::Right | KeyCode::Tab => self.switch_tab(TabDirection::Next),
             KeyCode::Up => self.move_selection(SelectionDirection::Previous),
             KeyCode::Down => self.move_selection(SelectionDirection::Next),
             KeyCode::Home => self.select_first_visible(),
@@ -473,6 +496,13 @@ impl SelectionViewState {
             _ => {}
         }
 
+        match self.tabs.handle_key(key) {
+            TabListInputOutcome::ActiveChanged | TabListInputOutcome::Consumed => {
+                self.select_first_visible();
+            }
+            TabListInputOutcome::Unhandled => {}
+        }
+
         SelectionInputOutcome::Consumed
     }
 
@@ -485,7 +515,7 @@ impl SelectionViewState {
     }
 
     fn active_tab(&self) -> &SelectionTab {
-        &self.model.tabs[self.active_tab]
+        self.tabs.active_tab()
     }
 
     fn free_form_outcome(&self) -> Option<SelectionInputOutcome> {
@@ -535,15 +565,6 @@ impl SelectionViewState {
         self.visible_indices().len()
     }
 
-    fn switch_tab(&mut self, direction: TabDirection) {
-        let tab_count = self.model.tabs.len();
-        self.active_tab = match direction {
-            TabDirection::Previous => self.active_tab.checked_sub(1).unwrap_or(tab_count - 1),
-            TabDirection::Next => (self.active_tab + 1) % tab_count,
-        };
-        self.select_first_visible();
-    }
-
     fn move_selection(&mut self, direction: SelectionDirection) {
         if !self.model.selection_enabled {
             return;
@@ -588,37 +609,9 @@ impl SelectionViewState {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum TabDirection {
-    Previous,
-    Next,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum SelectionDirection {
     Previous,
     Next,
-}
-
-pub(crate) fn tab_row_count(tabs: &[SelectionTab], width: u16) -> u16 {
-    if tabs.is_empty() {
-        return 0;
-    }
-    let available_width = usize::from(width.max(1));
-    let mut rows = 1u16;
-    let mut row_width = 0usize;
-    for tab in tabs {
-        let tab_width = tab.label().width().saturating_add(2);
-        let gap = usize::from(row_width > 0) * TAB_GAP;
-        if row_width > 0
-            && row_width.saturating_add(gap).saturating_add(tab_width) > available_width
-        {
-            rows = rows.saturating_add(1);
-            row_width = tab_width;
-        } else {
-            row_width = row_width.saturating_add(gap).saturating_add(tab_width);
-        }
-    }
-    rows
 }
 
 #[cfg(test)]

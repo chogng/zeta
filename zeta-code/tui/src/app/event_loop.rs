@@ -23,6 +23,7 @@ use crate::TuiOptions;
 use crate::client;
 use crate::components::pane;
 use crate::features::config;
+use crate::features::config::ConfigResource;
 use crate::features::interactions;
 use crate::features::mcp;
 use crate::features::rewind;
@@ -52,6 +53,9 @@ use zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory;
 use zeta_app_server_protocol::protocol::skills::SkillCatalogReloadDto;
 use zeta_app_server_protocol::protocol::skills::SkillListParams;
 
+#[path = "config_actions.rs"]
+mod config_actions;
+
 pub(crate) fn run(mut session: AppServerSession, options: TuiOptions) -> Result<TuiExit, TuiError> {
     let result = run_session(&mut session, options);
     let shutdown = session.shutdown();
@@ -76,6 +80,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         host_file_search_root,
         keybindings_path,
         status_line_path,
+        terminal_settings_path,
         recovery,
     } = options;
     let server_slash_commands = client.initialization()?.slash_commands.clone();
@@ -110,6 +115,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     let now = Instant::now();
     let mut keybindings_resource = keybindings_path.map(|path| ShortcutResource::new(path, now));
     let mut status_line_resource = status_line_path.map(StatusLineResource::new);
+    let mut config_resource = terminal_settings_path.map(ConfigResource::new);
     app.replace_slash_commands(slash_registry.catalog, slash_registry.skills);
     apply_thread_snapshot(
         &mut app,
@@ -118,6 +124,12 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         initial_transcript,
     );
     poll_keybindings_resource(&mut keybindings_resource, &mut app, now);
+    if let Some(resource) = config_resource.as_mut() {
+        match resource.refresh() {
+            Ok(settings) => app.update(AppEvent::ConfigSettingsReceived(settings)),
+            Err(error) => app.update(AppEvent::FailureReported(error)),
+        }
+    }
     if let Some(resource) = status_line_resource.as_mut() {
         match resource.refresh() {
             Ok(settings) => app.update(AppEvent::StatusLineSettingsReceived(settings)),
@@ -321,6 +333,17 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                     .map(|()| "Copied the latest Zeta response".to_owned())
                             });
                         app.update(AppEvent::HostOperationCompleted(result));
+                    }
+                    AppCommand::OpenConfigPane => {
+                        config_actions::open_config(
+                            &mut config_resource,
+                            &client,
+                            &mut pending_request,
+                            &mut app,
+                        );
+                    }
+                    AppCommand::EditConfig(edit) => {
+                        config_actions::edit_config(&mut config_resource, &edit, &mut app);
                     }
                     AppCommand::OpenShortcutsPane => match keybindings_resource.as_ref() {
                         Some(resource) => {

@@ -6,6 +6,8 @@ use crate::components::composer::ComposerInput;
 use crate::components::composer::ComposerSubmission;
 use crate::components::composer::built_in_slash_command_definitions;
 use crate::components::transcript::MessageRole;
+use crate::features::config::TerminalSettings;
+use crate::features::config::config_view;
 use crate::features::rewind::rewind_selection_view;
 use crate::features::shortcuts::ShortcutEditIntent;
 use crate::features::shortcuts::ShortcutEditKind;
@@ -22,6 +24,7 @@ use crate::features::thread::TurnActivity;
 use crate::features::workspace_files::FileSearchManager;
 use crate::keymap::AppKeymap;
 use crate::mouse::MouseMode;
+use crate::test_support::empty_config_snapshot;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -495,6 +498,37 @@ fn shortcut_slash_command_is_owned_by_the_local_host() {
 }
 
 #[test]
+fn config_slash_command_is_owned_by_the_local_host() {
+    let mut app = App::new();
+    app.insert_text("/config");
+
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_eq!(action, Some(AppCommand::OpenConfigPane));
+    assert!(app.messages().is_empty());
+}
+
+#[test]
+fn config_mouse_selection_emits_a_revision_bound_edit() {
+    let config = empty_config_snapshot();
+    let mut app = App::new();
+    app.update(AppEvent::ConfigViewOpened(config_view(
+        &config,
+        TerminalSettings::default(),
+        7,
+    )));
+    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert!(matches!(
+        action,
+        Some(AppCommand::EditConfig(edit))
+            if edit.terminal.expected_revision == 7 && !edit.terminal.mouse_interactions
+    ));
+}
+
+#[test]
 fn statusline_slash_command_is_owned_by_the_local_host() {
     let mut app = App::new();
     app.insert_text("/statusline");
@@ -720,6 +754,19 @@ fn clickable_composer_popups_declare_ui_click_mouse_mode() {
 
     assert_eq!(app.mouse_mode(), MouseMode::UiClick);
     let _ = fs::remove_dir_all(workspace);
+}
+
+#[test]
+fn disabled_mouse_interactions_leave_selection_to_the_terminal() {
+    let mut app = App::new();
+    app.insert_text("/");
+    assert_eq!(app.mouse_mode(), MouseMode::UiClick);
+
+    let mut settings = TerminalSettings::default();
+    settings.set_mouse_interactions(false);
+    app.update(AppEvent::ConfigSettingsReceived(settings));
+
+    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
 }
 
 #[test]

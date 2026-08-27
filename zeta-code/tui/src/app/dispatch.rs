@@ -240,12 +240,6 @@ impl ActiveConversation {
                         .map_err(session_error)?,
                 );
             }
-            TuiSlashCommandAction::Config => {
-                let config = client.read_config()?;
-                output
-                    .events
-                    .push(AppEvent::SelectionViewOpened(config::config_view(&config)));
-            }
             TuiSlashCommandAction::Files => {
                 output.events.push(AppEvent::FileViewOpened(
                     crate::features::workspace_files::load_directory(
@@ -266,6 +260,7 @@ impl ActiveConversation {
                     .push(AppEvent::SelectionViewOpened(help_selection_view()));
             }
             TuiSlashCommandAction::Copy
+            | TuiSlashCommandAction::Config
             | TuiSlashCommandAction::Export
             | TuiSlashCommandAction::Shortcuts
             | TuiSlashCommandAction::StatusLine => {
