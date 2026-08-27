@@ -1,5 +1,6 @@
 use super::TerminalModeGuard;
 use super::TerminalModeOperations;
+use crate::mouse::MouseMode;
 use std::cell::RefCell;
 use std::io;
 use std::rc::Rc;
@@ -68,15 +69,23 @@ fn acquisition_failure_restores_only_modes_that_were_acquired() {
 }
 
 #[test]
-fn mouse_capture_is_enabled_and_disabled_independently() {
+fn mouse_mode_is_applied_idempotently() {
     let calls = Rc::new(RefCell::new(Vec::new()));
     let mut guard =
         TerminalModeGuard::acquire(FakeOperations::new(calls.clone(), None)).expect("acquire");
 
-    guard.capture_mouse().expect("capture mouse");
-    guard.capture_mouse().expect("capture mouse again");
-    guard.release_mouse().expect("release mouse");
-    guard.release_mouse().expect("release mouse again");
+    guard
+        .set_mouse_mode(MouseMode::UiClick)
+        .expect("enable UI clicks");
+    guard
+        .set_mouse_mode(MouseMode::UiClick)
+        .expect("keep UI clicks enabled");
+    guard
+        .set_mouse_mode(MouseMode::TerminalSelection)
+        .expect("restore terminal selection");
+    guard
+        .set_mouse_mode(MouseMode::TerminalSelection)
+        .expect("keep terminal selection restored");
     drop(guard);
 
     assert_eq!(
@@ -123,7 +132,9 @@ fn suspend_cycle_reacquires_requested_mouse_capture() {
     let mut guard =
         TerminalModeGuard::acquire(FakeOperations::new(calls.clone(), None)).expect("acquire");
 
-    guard.capture_mouse().expect("capture mouse");
+    guard
+        .set_mouse_mode(MouseMode::UiClick)
+        .expect("enable UI clicks");
     guard.restore();
     guard.reacquire().expect("reacquire");
     drop(guard);

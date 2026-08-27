@@ -6,6 +6,7 @@ mod components;
 mod features;
 mod host;
 mod keymap;
+mod mouse;
 mod terminal;
 #[cfg(test)]
 mod test_support;

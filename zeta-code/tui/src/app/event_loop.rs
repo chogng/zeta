@@ -815,11 +815,7 @@ fn draw_terminal(
     terminal: &mut terminal::TerminalSession,
     app: &App,
 ) -> Result<(), std::io::Error> {
-    if app.clickable_composer_popup_visible() {
-        terminal.capture_mouse()?;
-    } else {
-        terminal.release_mouse()?;
-    }
+    terminal.set_mouse_mode(app.mouse_mode())?;
     terminal.draw(|terminal_frame| frame::draw(terminal_frame, app))
 }
 

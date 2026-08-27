@@ -19,6 +19,7 @@ use crate::features::theme::theme_selection_view;
 use crate::features::thread::TurnActivity;
 use crate::features::workspace_files::FileSearchManager;
 use crate::keymap::AppKeymap;
+use crate::mouse::MouseMode;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -650,15 +651,15 @@ fn slash_popup_selection_executes_without_an_exact_query() {
 }
 
 #[test]
-fn clickable_composer_popups_own_the_mouse_capture_requirement() {
+fn clickable_composer_popups_declare_ui_click_mouse_mode() {
     let mut app = App::new();
-    assert!(!app.clickable_composer_popup_visible());
+    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
 
     app.insert_text("/");
-    assert!(app.clickable_composer_popup_visible());
+    assert_eq!(app.mouse_mode(), MouseMode::UiClick);
 
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    assert!(!app.clickable_composer_popup_visible());
+    assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
 
     let workspace = temporary_workspace("mouse-interaction-mention");
     fs::write(workspace.join("notes.md"), "notes").unwrap();
@@ -666,7 +667,7 @@ fn clickable_composer_popups_own_the_mouse_capture_requirement() {
     app.insert_text("@notes");
     wait_for_mention_results(&mut app, &workspace);
 
-    assert!(app.clickable_composer_popup_visible());
+    assert_eq!(app.mouse_mode(), MouseMode::UiClick);
     let _ = fs::remove_dir_all(workspace);
 }
 

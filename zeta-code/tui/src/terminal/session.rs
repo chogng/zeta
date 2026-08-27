@@ -1,3 +1,4 @@
+use crate::mouse::MouseMode;
 use crossterm::ExecutableCommand;
 use crossterm::event::DisableBracketedPaste;
 use crossterm::event::DisableMouseCapture;
@@ -53,12 +54,8 @@ impl TerminalSession {
             .map(|size| Rect::new(0, 0, size.width, size.height))
     }
 
-    pub(crate) fn capture_mouse(&mut self) -> io::Result<()> {
-        self.modes.capture_mouse()
-    }
-
-    pub(crate) fn release_mouse(&mut self) -> io::Result<()> {
-        self.modes.release_mouse()
+    pub(crate) fn set_mouse_mode(&mut self, mode: MouseMode) -> io::Result<()> {
+        self.modes.set_mouse_mode(mode)
     }
 
     /// Restores the parent terminal, suspends this process, and reacquires TUI modes on resume.
@@ -96,7 +93,7 @@ struct TerminalModeGuard<O: TerminalModeOperations> {
     raw_mode: bool,
     alternate_screen: bool,
     bracketed_paste: bool,
-    mouse_capture_requested: bool,
+    mouse_mode: MouseMode,
     mouse_capture: bool,
 }
 
@@ -107,7 +104,7 @@ impl<O: TerminalModeOperations> TerminalModeGuard<O> {
             raw_mode: false,
             alternate_screen: false,
             bracketed_paste: false,
-            mouse_capture_requested: false,
+            mouse_mode: MouseMode::default(),
             mouse_capture: false,
         };
 
@@ -123,7 +120,7 @@ impl<O: TerminalModeOperations> TerminalModeGuard<O> {
             self.alternate_screen = true;
             self.operations.enable_bracketed_paste()?;
             self.bracketed_paste = true;
-            if self.mouse_capture_requested {
+            if self.mouse_mode == MouseMode::UiClick {
                 self.operations.enable_mouse_capture()?;
                 self.mouse_capture = true;
             }
@@ -135,21 +132,25 @@ impl<O: TerminalModeOperations> TerminalModeGuard<O> {
         result
     }
 
-    fn capture_mouse(&mut self) -> io::Result<()> {
-        self.mouse_capture_requested = true;
-        if self.alternate_screen && !self.mouse_capture {
-            self.operations.enable_mouse_capture()?;
-            self.mouse_capture = true;
+    fn set_mouse_mode(&mut self, mode: MouseMode) -> io::Result<()> {
+        if self.mouse_mode == mode {
+            return Ok(());
         }
-        Ok(())
-    }
-
-    fn release_mouse(&mut self) -> io::Result<()> {
-        self.mouse_capture_requested = false;
-        if self.mouse_capture {
-            self.operations.disable_mouse_capture()?;
-            self.mouse_capture = false;
+        match mode {
+            MouseMode::TerminalSelection => {
+                if self.mouse_capture {
+                    self.operations.disable_mouse_capture()?;
+                    self.mouse_capture = false;
+                }
+            }
+            MouseMode::UiClick => {
+                if self.alternate_screen && !self.mouse_capture {
+                    self.operations.enable_mouse_capture()?;
+                    self.mouse_capture = true;
+                }
+            }
         }
+        self.mouse_mode = mode;
         Ok(())
     }
 

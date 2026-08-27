@@ -11,6 +11,7 @@ use crate::components::selection::SelectionInputOutcome;
 use crate::components::selection::SelectionItemId;
 use crate::components::selection::SelectionViewModel;
 use crate::components::selection::SelectionViewState;
+use crate::mouse::MouseMode;
 use crossterm::event::KeyEvent;
 use std::collections::BTreeMap;
 use zeta_file_search::PathSearchSnapshot;
@@ -137,8 +138,12 @@ impl InteractionPane {
         self.composer.mention_popup()
     }
 
-    pub(crate) fn clickable_composer_popup_visible(&self) -> bool {
-        self.slash_popup().is_some() || self.mention_popup().is_some()
+    pub(crate) fn mouse_mode(&self) -> MouseMode {
+        if self.slash_popup().is_some() || self.mention_popup().is_some() {
+            MouseMode::UiClick
+        } else {
+            MouseMode::TerminalSelection
+        }
     }
 
     pub(crate) fn mention_query(&self) -> Option<&str> {

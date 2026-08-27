@@ -200,6 +200,7 @@ src/
 │   ├── shortcuts/                 # searchable view, action menu and key/chord capture
 │   ├── status_line/               # model/workspace model and pure view
 │   └── workspace_files/           # bounded async file-search runtime
+├── mouse.rs                        # shared mouse-mode contract for pages and terminal lifecycle
 ├── host/
 │   ├── clipboard.rs               # native text output plus file/RGBA image input
 │   └── transcript_export.rs       # workspace-bounded, no-overwrite Markdown export
@@ -270,7 +271,8 @@ src/
 | `app::frame::{slash_command_index_at,mention_index_at}` | crate-private | 复用 popup geometry 映射可见行点击 | 不执行命令、不改变选择状态 |
 | `components::transcript::row::estimated_wrapped_rows` | private | Unicode display-width based scroll estimate | width 0 不 panic |
 | `TerminalSession::open` | crate-private | 进入 raw/alternate/paste mode 并创建 backend | partial failure 必须 rollback；默认不捕获鼠标 |
-| `TerminalSession::{capture_mouse,release_mouse}` | crate-private | 根据可点击 popup 的可见状态切换终端全屏鼠标捕获 | 不判断 popup 状态、不处理点击坐标；重复调用保持幂等 |
+| `MouseMode` | crate-private | 页面声明 `TerminalSelection` 或 `UiClick`，供 App 与终端共享同一鼠标模式契约 | 不执行终端副作用、不保存页面身份 |
+| `TerminalSession::set_mouse_mode` | crate-private | 应用当前页面声明的鼠标模式并切换终端全屏鼠标捕获 | 不判断具体页面、不处理点击坐标；重复调用保持幂等 |
 | `TerminalModeGuard::acquire` | private | 按顺序获取 terminal mode，并在任一步失败时逆序 rollback | 不创建 Ratatui backend、不处理产品状态 |
 | `TerminalModeGuard::restore` | private | 幂等地逆序释放已经获取的 mode | cleanup error 不覆盖原始错误 |
 | `Drop for TerminalSession` | private impl | 委托 guard 恢复 terminal modes，再显示 normal-screen cursor | 所有成功构造后的退出路径都依赖 RAII |
@@ -302,8 +304,7 @@ run(session, options)
    ├─ skills changed → queued background skills refresh
    ├─ newer active Thread durable update → queued session/thread/read snapshot resync
    ├─ transient update → cursor validation → bounded Thread projection
-   ├─ clickable popup visible → TerminalSession::capture_mouse
-   ├─ no clickable popup → TerminalSession::release_mouse
+   ├─ App::mouse_mode → TerminalSession::set_mouse_mode
    ├─ TerminalSession::draw → app::frame::draw
    └─ terminal event
       ├─ key → App::handle_key

@@ -46,6 +46,7 @@ use crate::keymap::AppChordMatch;
 use crate::keymap::AppKeymap;
 use crate::keymap::AppKeymapAction;
 use crate::keymap::AppKeymapContext;
+use crate::mouse::MouseMode;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -452,8 +453,8 @@ impl App {
         self.interaction_pane.mention_popup()
     }
 
-    pub(crate) fn clickable_composer_popup_visible(&self) -> bool {
-        self.interaction_pane.clickable_composer_popup_visible()
+    pub(crate) fn mouse_mode(&self) -> MouseMode {
+        self.interaction_pane.mouse_mode()
     }
 
     fn show_selection_view(&mut self, model: PaneViewModel<SelectionViewModel>) {
