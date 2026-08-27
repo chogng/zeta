@@ -4,7 +4,7 @@
 > Electron Desktop 的内置 Workbench 模式与窗口重载入口见 [`workbench-modes.md`](workbench-modes.md)；
 > 具体实现分别见 [`zeta-cli-architecture.md`](zeta-cli-architecture.md)、
 > [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md)、[`tui.md`](tui.md) 和
-> [`app/docs/native-terminal-ui.md`](../app/docs/native-terminal-ui.md)。
+> [`app/TERMINAL.md`](../app/TERMINAL.md)。
 
 ## 快速理解
 
@@ -16,7 +16,7 @@ Zeta 不是一个 UI 宿主的三种包装，而是三条产品线共享 Rust �
 | --- | --- | --- | --- | --- |
 | `zeta code` | TUI 产品 | `zeta-code/cli` + `zeta-code/tui` | `zeta-app-server-client` 连接 App Server | TUI 管理自己的 `crossterm`/`ratatui` 宿主终端；不直接拥有子 PTY |
 | `zeta` | Electron Desktop | Renderer + Preload + Electron Main | Electron Main 启动并桥接 Rust App Server | 当前 Renderer 用 xterm；Rust/App Server 管理 `zeta-utils-pty` |
-| `app` | 纯 Rust Desktop | `app/` 原生窗口与 UI | Rust 进程内直接组合 | `zeta-terminal` 负责终端语义，`zeta-utils-pty` 负责 PTY/进程 |
+| `app` | Zeta Agent 与外部 AI CLI 工作台 | `app/` Rust 窗口与 UI | Zeta 通过 App Server；外部 AI CLI 由 Terminal host 启动 | `zeta-terminal` 负责终端语义，`zeta-utils-pty` 负责 AI CLI 的 PTY/进程 |
 
 产品线与 Electron 的内部 Workbench 模式不是同一个维度。Desktop 在同一个 `zeta` 安装包中提供 `code`、`academic` 两个内置模式；它们不代表 `zeta code` TUI，也不构成额外的公开产品线。用户可以在设置中选择模式，当前 Workbench 窗口在 reload 边界重新装配；开发和测试可以用 `ZETA_WORKBENCH_MODE` 覆盖初始模式。具体说明见 [`workbench-modes.md`](workbench-modes.md)。
 

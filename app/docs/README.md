@@ -6,16 +6,16 @@
 
 ## 快速理解
 
-`app/docs` 只记录纯 Rust Desktop 产品的用户语义、跨 crate 组合、终端兼容性、输入与发布边界。
+`app/docs` 只记录纯 Rust Desktop 产品的用户语义、跨 crate 组合、输入与发布边界。
 它不替代 `app/README.md` 或各 presentation crate README，也不把产品状态机复制进文档。
 
 | 你要理解什么 | 先读哪份文档 | canonical owner |
 | --- | --- | --- |
 | Agent 开发能力、机器反馈、人类观测、功能准入与 Thread/Composer 语义 | [`native-agent-console.md`](native-agent-console.md) | `app` 产品宿主 + App Server contract |
-| 主窗口信息架构、Agent Terminal 会话流、按需检查与响应式布局 | [`native-layout.md`](native-layout.md) | `app` product presentation + `zeta-workbench-layout` geometry contract |
-| Terminal Surface、PTY、grid 与兼容性 | [`native-terminal-ui.md`](native-terminal-ui.md) | `zeta-terminal` + `app` terminal host |
+| 主窗口 Tab/Pane 层级、PaneInput 与响应式布局 | [`LAYOUT.md`](../LAYOUT.md) | `app` product presentation + `zeta-workbench-layout` geometry contract |
+| 外部 AI CLI、Terminal Pane、PTY、grid 与兼容性 | [`TERMINAL.md`](../TERMINAL.md) | AI CLI adapter + `zeta-terminal` + `app` terminal host |
 | 键盘、IME、caret 与输入路由 | [`native-text-input.md`](native-text-input.md) | `zui` / `zeta-ui-components` / `app` adapter |
-| 稳定产品命令身份、请求与注册式执行 | [`native-terminal-ui.md`](native-terminal-ui.md) + [`zeta-commands`](../commands/README.md) | `AppCommandId` + `CommandRequest` + `CommandRegistry` |
+| 稳定产品命令身份、请求与注册式执行 | [`zeta-commands`](../commands/README.md) | `AppCommandId` + `CommandRequest` + `CommandRegistry` |
 | UI scene 到 GPU 的依赖方向 | [`rendering-architecture.md`](rendering-architecture.md) | `zui::ui` → `zui::render` contract → private `render/wgpu` |
 | Native UI 编写、布局、样式与主题投影边界 | [`native-ui-authoring.md`](native-ui-authoring.md) | `zui` / `zeta-ui-components` / `app` host |
 | 通用 application/window、renderer 与平台能力 | [`zui`](../zui/README.md) | 单一 `zui` crate，内部按 `app/window/input/ui/runtime/render/services` 能力目录隔离 |

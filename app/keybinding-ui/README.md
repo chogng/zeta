@@ -1,6 +1,6 @@
 # `app-keybinding-ui`
 
-> 文档所有权：三端快捷键架构见 [`docs/keybindings.md`](../../docs/keybindings.md)，App 输入和产品 UI 边界见 [`native-terminal-ui.md`](../docs/native-terminal-ui.md)。
+> 文档所有权：三端快捷键架构见 [`docs/keybindings.md`](../../docs/keybindings.md)，App 输入和产品 UI 边界见 [`native-text-input.md`](../docs/native-text-input.md)。
 > 本 README 只说明 App 快捷键设置与录制 UI 的当前实现。
 
 ## 快速理解

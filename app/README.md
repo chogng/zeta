@@ -4,6 +4,38 @@
 
 `app` 是纯 Rust Desktop 产品的 Cargo package 和发布边界。它负责组装窗口、产品状态、事件、App Server 连接和最终界面；可复用能力必须留在对应 crate 中。
 
+## 当前 UI 布局
+
+当前 Workbench 由 `Titlebar`、可选的 `TabContainer` 和当前顶层页签拥有的 `PaneContainer` 组成。
+
+```text
+Workbench
+├─ Titlebar
+├─ TabPart
+│  └─ TabGroup
+│     ├─ TabInput::Session(session_id)
+│     └─ TabInput::Settings
+└─ active TabInput → PaneContainer
+   └─ PanePart
+      └─ split tree
+         ├─ PaneGroup → active PaneInput
+         └─ Split
+            ├─ PaneGroup → active PaneInput
+            └─ PaneGroup → active PaneInput
+```
+
+顶层 `TabInput` 当前只有 Session 和 Settings 两类；每个 `TabInput` 一对一拥有一个 `PaneContainer`，切换顶层页签会整体切换其中的拆分布局。`PanePart` 保存拆分树和活动 `PaneGroup`；每个 `PaneGroup` 是一个可见矩形区域，可以保存多个 `PaneInput`，但同一时刻只显示其中一个。
+
+| 当前 `PaneInput` | 身份 | 内容 |
+| --- | --- | --- |
+| `Agent` | Session + Thread | 只表示 Zeta Agent 的对话、时间线和 Composer |
+| `Terminal` | Terminal session | 外部 AI CLI、shell 和其他交互式进程 |
+| `Files` | 工作区根目录 | 文件树和文件搜索 |
+| `Diff` | 工作区根目录 | 当前 Changes 入口和多文件差异内容 |
+| `Settings` | 全局单例 | 设置页面 |
+
+目标模型会把 Changes、普通文件和具体 Diff 分成明确的 `PaneInput`，并按当前 `PanePart` 的 PaneGroup 和活动输入绘制。Agent 只表示 Zeta；外部 AI CLI 由 Terminal Pane 承载。完整布局见 [`LAYOUT.md`](LAYOUT.md)，终端边界见 [`TERMINAL.md`](TERMINAL.md)。
+
 ## 职责边界
 
 | 位置 | 负责 | 不负责 |
@@ -67,7 +99,7 @@ src/session/            Session 搜索、菜单和画布接线
 | Session UI | [`zeta-session-ui`](session-ui/README.md) |
 | Workspace UI | [`zeta-workspace-ui`](workspace-ui/README.md) |
 | Remote UI | [`zeta-remote-ui`](remote-ui/README.md) |
-| Terminal 与 Session 绑定 | [`zeta-terminal-workspace`](terminal-workspace/README.md) |
+| Terminal runtime 与 Pane 绑定 | [`zeta-terminal-workspace`](terminal-workspace/README.md)、[`TERMINAL.md`](TERMINAL.md) |
 | Workbench | [`zeta-workbench`](workbench/README.md)、[`zeta-workbench-layout`](workbench-layout/README.md)、[`zeta-workbench-host`](workbench-host/README.md)、[`zeta-workbench-controller`](workbench-controller/README.md) |
 | Workbench UI | [`zeta-workbench-ui`](workbench-ui/README.md) |
 | 命令与快捷键 | [`zeta-commands`](commands/README.md)、[`zeta-keybindings-host`](keybindings/README.md)、[`app-keybinding-ui`](keybinding-ui/README.md) |

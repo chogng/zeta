@@ -68,7 +68,7 @@ zeta-ui-components -X→ App Server / workspace / product state
 不需要依赖 app 的产品 artwork。若本 crate 开始拥有 scene primitive、font adapter、GPU API、窗口、workspace 或产品 reducer，
 说明 ownership 已经漂移。基础 framework 的内部符号、验证与扩展点以 `zui/README.md` 为准。
 
-导航和 Pane 组合的跨 crate contract 由 [`native-terminal-ui.md`](../docs/native-terminal-ui.md) 维护。当前 `zeta-ui-components` 只提供 `Tab`/`TabList` 和其他 presentation component；Workbench 结构布局位于 [`zeta-workbench-layout`](../workbench-layout/README.md)，模型和 binding 位于 [`zeta-workbench`](../workbench/README.md) 与 [`zeta-workbench-host`](../workbench-host/README.md)。`TabInput`、`PaneInput`、`PaneGroup`、active selection、provider/controller 和具体 tab/pane content 不得下沉到本 crate。
+导航和 Pane 组合的跨 crate contract 由 [`LAYOUT.md`](../LAYOUT.md) 维护。当前 `zeta-ui-components` 只提供 `Tab`/`TabList` 和其他 presentation component；Workbench 结构布局位于 [`zeta-workbench-layout`](../workbench-layout/README.md)，模型和 binding 位于 [`zeta-workbench`](../workbench/README.md) 与 [`zeta-workbench-host`](../workbench-host/README.md)。`TabInput`、`PaneInput`、`PaneGroup`、active selection、provider/controller 和具体 tab/pane content 不得下沉到本 crate。
 
 ## 2. 文件与接口地图
 
@@ -83,7 +83,7 @@ zeta-ui-components -X→ App Server / workspace / product state
 | `components::action_bar::{ActionBarStyle, ActionBarSeparatorStyle, ActionBarOrientation}` | public | 定义 item size、gap、separator metrics、共享 Button style 与排列轴 |
 | `components::tab_list::{Tab, TabState, TabSelection}` | public | 表达无产品 identity/content 的 Tab surface 交互与选中 presentation |
 | `components::tab_list::{TabList, TabListStyle, TabListOrientation}` | public | 横向或纵向排列 Tab surface，拥有 item size/gap，并公开同源 tab bounds |
-| `NavBar` 导航容器 | proposed composition boundary | 组合横向/纵向导航 shell 与 `TabList`；尚未形成 public API，具体方向见 [`native-terminal-ui.md`](../docs/native-terminal-ui.md) |
+| `NavBar` 导航容器 | proposed composition boundary | 组合横向/纵向导航 shell 与 `TabList`；尚未形成 public API，具体方向见 [`LAYOUT.md`](../LAYOUT.md) |
 | `components::tab_list::{TabStyle, TabBackgrounds}` | public | 定义 border、corner radii 及普通/selected 的状态背景 |
 | `components::sash::{Sash, SashStyle, SashState}` | public | 从零面积 separator track 推导共享 drag target 与 feedback line，并绘制 host 投影的 hover/active 状态 |
 | `components::resizable::{SashController, SashPointerPresence, Resizable}` | public | 延迟 hover、active presentation、deadline 与基于 `SplitViewResizeSnapshot` 的 drag-start-relative resize；不拥有 pointer capture、产品 identity 或 pane state |

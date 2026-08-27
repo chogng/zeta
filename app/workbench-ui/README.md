@@ -1,6 +1,6 @@
 # `zeta-workbench-ui`
 
-`zeta-workbench-ui` 负责 Rust Desktop 产品的 Workbench 导航和标题栏界面。跨 crate 的 Workbench 行为与所有权见 [`native-terminal-ui.md`](../docs/native-terminal-ui.md)，纯逻辑模型由 [`zeta-workbench`](../workbench/README.md) 负责。
+`zeta-workbench-ui` 负责 Rust Desktop 产品的 Workbench 导航和标题栏界面。跨 crate 的 Workbench 行为与所有权见 [`LAYOUT.md`](../LAYOUT.md)，纯逻辑模型由 [`zeta-workbench`](../workbench/README.md) 负责。
 
 ## 边界
 

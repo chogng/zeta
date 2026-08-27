@@ -1,7 +1,7 @@
 # `zeta-terminal`
 
-> Native 终端产品结构、用户语义和分阶段演进由
-> [`app/docs/native-terminal-ui.md`](../../app/docs/native-terminal-ui.md) 统一说明。本 README 只拥有
+> 外部 AI CLI、Terminal Pane 和产品接线由
+> [`app/TERMINAL.md`](../../app/TERMINAL.md) 统一说明。本 README 只拥有
 > terminal model 的当前实现契约、内部接口和修改路径；PTY process plumbing 见
 > [`zeta-utils-pty`](../utils/pty/README.md)。
 

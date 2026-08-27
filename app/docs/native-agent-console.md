@@ -1,6 +1,6 @@
 # `app`：Agent 开发能力与人类观测
 
-> 状态：Current product direction。本文定义 `app` 的产品原则、能力选择、机器反馈、人类观测和 Agent 工作区闭环，是这些产品决策的 canonical owner。主窗口信息架构与布局迁移见 [`native-layout.md`](native-layout.md)；当前源码接线见 [`app` README](../README.md)；Terminal compatibility 见 [`native-terminal-ui.md`](native-terminal-ui.md)；Session、Thread、Turn 与 ThreadItem 的权威语义见 [`protocol.md`](../../docs/protocol.md)。
+> 状态：Current product direction。本文中的 Agent 只表示 Zeta。本文定义 Zeta Agent 的产品原则、能力选择、机器反馈、人类观测和工作区闭环，是这些产品决策的 canonical owner。主窗口 Tab/Pane 布局见 [`LAYOUT.md`](../LAYOUT.md)；当前源码接线见 [`app` README](../README.md)；外部 AI CLI 与终端边界见 [`TERMINAL.md`](../TERMINAL.md)；Session、Thread、Turn 与 ThreadItem 的权威语义见 [`protocol.md`](../../docs/protocol.md)。
 
 ## 快速理解
 
@@ -62,7 +62,7 @@ flowchart TB
 
 人类观测与控制界面不必经过 Agent Runtime 才能读取工作区。用户可以直接打开文件、跳转定义、查看 Diff 或进入 Terminal；Agent 也消费同一份 canonical capability。两者不得建立第二套 diagnostics、Git status、文件内容或终端状态。
 
-Human Takeover 需要完整的单文件编辑闭环，但不推出完整传统 IDE。`app` 使用 MultiDiffEditor 和 DiffEditor 审查 Change Set，使用 CodeEditor 完成文件阅读、定位、编辑、保存和冲突处理；这些界面作为 Agent Terminal 会话流中的按需检查对象出现，具体 Surface 分工与 Non-goal 由 [`native-layout.md`](native-layout.md) 拥有。
+Human Takeover 需要完整的单文件编辑闭环，但不推出完整传统 IDE。`app` 使用 MultiDiffEditor 和 DiffEditor 审查 Change Set，使用 CodeEditor 完成文件阅读、定位、编辑、保存和冲突处理；这些内容作为当前 PanePart 中的 PaneInput 打开，具体布局边界由 [`LAYOUT.md`](../LAYOUT.md) 拥有。
 
 ## 机器反馈与人类观测
 
@@ -106,7 +106,7 @@ Workspace
 
 ## 当前产品结构
 
-当前 Native 产品仍以 Agent ThreadTimeline 为中央 Surface，普通用户消息、Agent 消息、ToolCall 和用户直接发起的 Shell Turn 进入同一 durable Thread；交互式 Terminal、Editor、Files 和 Changes 通过独立 Surface 或右侧区域接入。Proposed 布局把 Agent conversation、Terminal command block 和结果证据投影到同一个 Agent Terminal 会话流，并把 Editor、Diff 和 Files 收敛为按需检查对象；具体组合与迁移由 [`native-layout.md`](native-layout.md) 拥有。
+当前产品仍以 Zeta ThreadTimeline 为中央区域，普通用户消息、Zeta 消息、ToolCall 和用户直接发起的 Shell Turn 进入同一 durable Thread；Terminal、Editor、Files 和 Changes 仍通过独立 Surface 或右侧区域接入。目标布局把这些内容统一为当前 PanePart 中的 PaneInput；外部 AI CLI 只进入 Terminal Pane，不进入 Zeta Thread。具体结构与当前差距由 [`LAYOUT.md`](../LAYOUT.md) 拥有。
 
 ```text
 AgentWorkspace
@@ -127,7 +127,7 @@ AgentWorkspace
 └─ Terminal Surface
 ```
 
-Terminal 不拥有产品 Session、Thread 或 transcript。普通非交互式 shell execution 作为 typed ToolCall/ToolResult 或 direct Shell Turn 投影到 Thread；当前实现让 `vim`、`top`、`ssh` 等需要持续直接输入和 terminal protocol compatibility 的程序进入独立 Terminal Surface，目标布局则让绑定的 Terminal session 在同一会话流位置原地进入完整 grid。
+Terminal 不拥有 Zeta Session、Thread 或 transcript。Zeta 发起的普通非交互式 shell execution 仍作为 typed ToolCall/ToolResult 或 direct Shell Turn 进入 Zeta Thread；外部 AI CLI 与其他交互式程序进入独立 Terminal Pane，其输入和输出只属于绑定的外部进程。Terminal 不从屏幕文字推断 Zeta ToolCall、Approval 或任务完成状态。
 
 ## 当前能力与计划方向
 
@@ -139,7 +139,7 @@ Terminal 不拥有产品 Session、Thread 或 transcript。普通非交互式 sh
 | Git | App Server 已有 repository、status、diff 和 branch typed contract；Agent 目前主要通过受控 Shell 使用 Git | 计划提供 baseline、diff、history、blame、restore 和 Agent-made change attribution | Files Changed、Diff、Untracked、Accept 和 Revert；不复制 GitKraken |
 | 语法与 AST | Editor 已消费 syntax projection；Agent 没有通用 typed AST query | 计划只暴露能提高定位、结构化修改和验证的查询 | 通常不单独呈现；最终关键发现可进入结果摘要 |
 | 构建与测试 | Agent 可通过 shell-command 执行；结果当前主要是 Tool output | 计划增加 test discovery、structured result、diagnostic binding 和 retry scope | Passed/Failed、失败位置、耗时和原始输出展开 |
-| Terminal 与 PTY | Local/Remote Terminal、direct Shell Turn 和交互式 Terminal Surface 已接入 | 继续作为运行、复现和 runtime feedback substrate | CommandCard、Terminal 和退出状态 |
+| Terminal 与 PTY | Local/Remote Terminal、direct Shell Turn 和交互式 Terminal Surface 已接入 | Zeta 继续使用结构化执行能力；外部 AI CLI 通过独立 adapter 启动 | Zeta CommandCard 与外部 CLI Terminal 分开显示 |
 | Remote | Remote Workspace、Agent、Language、Terminal 和 Tunnel 基础路径已接入 | 保持能力在远端 Workspace authority 内执行 | 连接状态、失败、重试和执行位置 |
 
 上表中的“计划”是 Proposed，不表示对应 Agent tool 或人类 Surface 已经存在。实现时先扩展 canonical capability 和结构化结果，再选择是否需要持久证据与用户 Surface；不得先画完整面板再反推底层 contract。
