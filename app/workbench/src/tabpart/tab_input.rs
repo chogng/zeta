@@ -5,6 +5,8 @@ use std::path::PathBuf;
 
 use zeta_protocol::SessionId;
 
+use crate::TabStatus;
+
 /// Stable logical identity for one input that can be shown by a Workbench tab.
 ///
 /// UI element identities deliberately do not belong here. They are allocated by the mounted tab
@@ -55,7 +57,7 @@ pub struct TabInputMetadata {
     title: String,
     workspace: String,
     workspace_root: Option<PathBuf>,
-    status_label: String,
+    status: TabStatus,
 }
 
 impl TabInputMetadata {
@@ -64,7 +66,7 @@ impl TabInputMetadata {
             title: title.into(),
             workspace: workspace.into(),
             workspace_root: None,
-            status_label: String::new(),
+            status: TabStatus::default(),
         }
     }
 
@@ -73,8 +75,8 @@ impl TabInputMetadata {
         self
     }
 
-    pub fn with_status_label(mut self, status_label: impl Into<String>) -> Self {
-        self.status_label = status_label.into();
+    pub fn with_status(mut self, status: TabStatus) -> Self {
+        self.status = status;
         self
     }
 }
@@ -122,8 +124,8 @@ impl TabInput {
         self.metadata.workspace_root.as_deref()
     }
 
-    pub fn status_label(&self) -> &str {
-        &self.metadata.status_label
+    pub const fn status(&self) -> &TabStatus {
+        &self.metadata.status
     }
 
     pub(crate) fn update_from(&mut self, input: Self) {
@@ -131,8 +133,8 @@ impl TabInput {
         self.metadata = input.metadata;
     }
 
-    pub fn update_status(&mut self, status_label: impl Into<String>) {
-        self.metadata.status_label = status_label.into();
+    pub fn update_status(&mut self, status: TabStatus) {
+        self.metadata.status = status;
     }
 }
 

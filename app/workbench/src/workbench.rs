@@ -14,6 +14,7 @@ use crate::TabInput;
 use crate::TabInputChange;
 use crate::TabInputKey;
 use crate::TabPart;
+use crate::TabStatus;
 
 /// Logical state removed together with one Workbench tab.
 #[derive(Clone, Debug, PartialEq)]
@@ -192,8 +193,32 @@ impl Workbench {
     }
 
     /// Updates one Session tab's status metadata without exposing mutable TabPart access.
-    pub fn update_session_status(&mut self, session_id: &SessionId, status_label: &str) {
-        self.tab_part.update_status(session_id, status_label);
+    pub fn update_session_status(&mut self, session_id: &SessionId, status: TabStatus) {
+        self.tab_part.update_status(session_id, status);
+    }
+
+    /// Toggles one Session tab's Workbench-owned pinned state.
+    pub fn toggle_tab_pin(&mut self, key: &TabInputKey) -> Option<bool> {
+        self.tab_part.toggle_tab_pin(key)
+    }
+
+    /// Moves one tab to an existing Workbench group.
+    pub fn move_tab_to_group(
+        &mut self,
+        key: &TabInputKey,
+        group: crate::TabGroupId,
+        index: usize,
+    ) -> bool {
+        self.tab_part.move_tab_to_group(key, group, index)
+    }
+
+    /// Moves one tab into a newly created named group.
+    pub fn move_tab_to_new_group(
+        &mut self,
+        key: &TabInputKey,
+        label: impl Into<String>,
+    ) -> Option<crate::TabGroupId> {
+        self.tab_part.group_tabs([key.clone()], label)
     }
 
     /// Returns to the last selected Session tab.

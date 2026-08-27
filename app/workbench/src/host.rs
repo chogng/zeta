@@ -719,8 +719,36 @@ impl<B> WorkbenchHost<B> {
     }
 
     /// Updates Session tab status metadata.
-    pub fn update_session_status(&mut self, session_id: &zeta_protocol::SessionId, status: &str) {
+    pub fn update_session_status(
+        &mut self,
+        session_id: &zeta_protocol::SessionId,
+        status: crate::TabStatus,
+    ) {
         self.workbench.update_session_status(session_id, status);
+    }
+
+    /// Toggles one Session tab's pinned state.
+    pub fn toggle_tab_pin(&mut self, key: &TabInputKey) -> Option<bool> {
+        self.workbench.toggle_tab_pin(key)
+    }
+
+    /// Moves one tab to an existing Workbench group.
+    pub fn move_tab_to_group(
+        &mut self,
+        key: &TabInputKey,
+        group: crate::TabGroupId,
+        index: usize,
+    ) -> bool {
+        self.workbench.move_tab_to_group(key, group, index)
+    }
+
+    /// Moves one tab into a newly created named group.
+    pub fn move_tab_to_new_group(
+        &mut self,
+        key: &TabInputKey,
+        label: impl Into<String>,
+    ) -> Option<crate::TabGroupId> {
+        self.workbench.move_tab_to_new_group(key, label)
     }
 
     /// Resolves Workbench geometry without mutating model or bindings.

@@ -7,9 +7,15 @@ use zui::ui::NavigationAxis;
 use super::identity::{
     FIRST_TAB_CONTAINER_SESSION_TAB, FIRST_TITLEBAR_SESSION_TAB, TAB_CONTAINER,
     TAB_CONTAINER_SETTINGS_TAB, TITLEBAR, TITLEBAR_SETTINGS_TAB, TITLEBAR_TAB_CONTAINER, WINDOW,
-    session_tab_id, tab_group_list_id, titlebar_session_tab_id, titlebar_tab_group_list_id,
+    session_tab_close_id, session_tab_id, tab_group_list_id, titlebar_session_tab_close_id,
+    titlebar_session_tab_id, titlebar_tab_group_list_id,
 };
-use crate::{TabGroupId, TabInput, TabInputKey, TabPart};
+use crate::TabGroupId;
+use crate::TabId;
+use crate::TabInput;
+use crate::TabInputKey;
+use crate::TabPart;
+use crate::TabStatus;
 
 /// UI mount that projects the same logical Tab Part into a concrete Workbench location.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -54,10 +60,17 @@ impl TabContainerPlacement {
         }
     }
 
-    pub(super) fn session_id(self, index: usize) -> ElementId {
+    pub(super) fn session_id(self, id: TabId) -> ElementId {
         match self {
-            Self::Body => session_tab_id(index),
-            Self::Titlebar => titlebar_session_tab_id(index),
+            Self::Body => session_tab_id(id),
+            Self::Titlebar => titlebar_session_tab_id(id),
+        }
+    }
+
+    pub(super) fn close_id(self, id: TabId) -> ElementId {
+        match self {
+            Self::Body => session_tab_close_id(id),
+            Self::Titlebar => titlebar_session_tab_close_id(id),
         }
     }
 
@@ -75,13 +88,15 @@ pub(super) enum WorkbenchTabKind {
     Settings,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct WorkbenchTab<'a> {
     pub(super) id: ElementId,
+    pub(super) close_id: ElementId,
     pub(super) kind: WorkbenchTabKind,
     pub(super) name: &'a str,
     pub(super) workspace: &'a str,
-    pub(super) status_label: &'a str,
+    pub(super) status: TabStatus,
+    pub(super) pinned: bool,
 }
 
 #[derive(Clone)]
@@ -122,24 +137,64 @@ pub fn tab_input_element_id(
     selected: Option<&TabInputKey>,
     placement: TabContainerPlacement,
 ) -> ElementId {
-    let mut session_index = 0;
-    for input in tab_part.inputs() {
-        let id = if input.is_settings() {
-            placement.settings_id()
-        } else {
-            placement.session_id(session_index)
-        };
-        if selected.is_some_and(|selected| input.key() == selected) {
-            return id;
-        }
-        if input.is_session() {
-            session_index += 1;
-        }
+    let Some(selected) = selected else {
+        return first_session_id(placement);
+    };
+    if selected.is_settings() {
+        return placement.settings_id();
     }
+    tab_part
+        .tab_id(selected)
+        .map(|id| placement.session_id(id))
+        .unwrap_or_else(|| first_session_id(placement))
+}
+
+fn first_session_id(placement: TabContainerPlacement) -> ElementId {
     match placement {
         TabContainerPlacement::Body => FIRST_TAB_CONTAINER_SESSION_TAB,
         TabContainerPlacement::Titlebar => FIRST_TITLEBAR_SESSION_TAB,
     }
+}
+
+/// Workbench-owned action resolved from one mounted tab element.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TabIntent {
+    Activate(TabInputKey),
+    Close(TabInputKey),
+}
+
+/// Resolves a tab or close-button identity without depending on current tab order.
+pub fn tab_intent_for_element(tab_part: &TabPart, element: ElementId) -> Option<TabIntent> {
+    if element == TabContainerPlacement::Body.settings_id()
+        || element == TabContainerPlacement::Titlebar.settings_id()
+    {
+        return Some(TabIntent::Activate(TabInputKey::Settings));
+    }
+    for input in tab_part.inputs().filter(|input| input.is_session()) {
+        let tab_id = tab_part
+            .tab_id(input.key())
+            .expect("mounted Session TabInput must have a TabId");
+        for placement in [TabContainerPlacement::Body, TabContainerPlacement::Titlebar] {
+            if element == placement.session_id(tab_id) {
+                return Some(TabIntent::Activate(input.key().clone()));
+            }
+            if element == placement.close_id(tab_id) {
+                return Some(TabIntent::Close(input.key().clone()));
+            }
+        }
+    }
+    None
+}
+
+/// Resolves the Session tab owning a mounted tab element.
+pub fn tab_key_for_element(tab_part: &TabPart, element: ElementId) -> Option<&TabInputKey> {
+    tab_part.inputs().find_map(|input| {
+        let tab_id = tab_part.tab_id(input.key())?;
+        [TabContainerPlacement::Body, TabContainerPlacement::Titlebar]
+            .into_iter()
+            .any(|placement| placement.session_id(tab_id) == element)
+            .then_some(input.key())
+    })
 }
 
 pub fn workbench_tab_groups<'a>(
@@ -147,7 +202,6 @@ pub fn workbench_tab_groups<'a>(
     placement: TabContainerPlacement,
     include: impl Fn(&TabInput) -> bool,
 ) -> Vec<WorkbenchTabGroup<'a>> {
-    let mut session_index = 0;
     tab_part
         .groups()
         .iter()
@@ -155,13 +209,8 @@ pub fn workbench_tab_groups<'a>(
             let tabs = group
                 .inputs()
                 .iter()
-                .filter_map(|input| {
-                    let index = session_index;
-                    if input.is_session() {
-                        session_index += 1;
-                    }
-                    include(input).then(|| WorkbenchTab::from_input(index, input, placement))
-                })
+                .filter(|input| include(input))
+                .map(|input| WorkbenchTab::from_input(tab_part, input, placement))
                 .collect::<Vec<_>>();
             (!tabs.is_empty()).then(|| {
                 WorkbenchTabGroup::new(group.id(), group.label(), group.is_collapsed(), tabs)
@@ -171,41 +220,56 @@ pub fn workbench_tab_groups<'a>(
 }
 
 impl<'a> WorkbenchTab<'a> {
-    pub fn from_input(index: usize, input: &'a TabInput, placement: TabContainerPlacement) -> Self {
+    pub fn from_input(
+        tab_part: &TabPart,
+        input: &'a TabInput,
+        placement: TabContainerPlacement,
+    ) -> Self {
         if input.is_settings() {
             Self::settings(placement.settings_id())
         } else {
+            let tab_id = tab_part
+                .tab_id(input.key())
+                .expect("mounted Session TabInput must have a TabId");
             Self::new(
-                placement.session_id(index),
+                placement.session_id(tab_id),
+                placement.close_id(tab_id),
                 input.title(),
                 input.workspace(),
-                input.status_label(),
+                input.status().clone(),
+                tab_part.is_tab_pinned(input.key()),
             )
         }
     }
 
-    pub const fn new(
+    pub fn new(
         id: ElementId,
+        close_id: ElementId,
         name: &'a str,
         workspace: &'a str,
-        status_label: &'a str,
+        status: TabStatus,
+        pinned: bool,
     ) -> Self {
         Self {
             id,
+            close_id,
             kind: WorkbenchTabKind::Session,
             name,
             workspace,
-            status_label,
+            status,
+            pinned,
         }
     }
 
-    pub const fn settings(id: ElementId) -> Self {
+    pub fn settings(id: ElementId) -> Self {
         Self {
             id,
+            close_id: id,
             kind: WorkbenchTabKind::Settings,
             name: "Settings",
             workspace: "Application",
-            status_label: "",
+            status: TabStatus::idle("Settings"),
+            pinned: false,
         }
     }
 }

@@ -6,6 +6,7 @@ use crate::PaneSplitDirection;
 use crate::TabInput;
 use crate::TabInputKey;
 use crate::TabInputMetadata;
+use crate::TabStatus;
 
 fn session_id(value: &str) -> zeta_protocol::SessionId {
     zeta_protocol::SessionId::new(value).expect("valid session id")
@@ -14,7 +15,7 @@ fn session_id(value: &str) -> zeta_protocol::SessionId {
 fn session_input(id: zeta_protocol::SessionId) -> TabInput {
     TabInput::session(
         id,
-        TabInputMetadata::new("Session", "/workspace").with_status_label("Active"),
+        TabInputMetadata::new("Session", "/workspace").with_status(TabStatus::busy("Active")),
     )
 }
 

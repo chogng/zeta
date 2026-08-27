@@ -3,6 +3,7 @@
 use super::TabContainer;
 use super::TabContainerPlacement;
 use super::tab_input_element_id;
+use super::tab_intent_for_element;
 use crate::Color;
 use crate::FontWeight;
 use crate::Point;
@@ -11,10 +12,13 @@ use crate::TabGroupId;
 use crate::TabInput;
 use crate::TabInputKey;
 use crate::TabInputMetadata;
+use crate::TabIntent;
 use crate::TabPart;
+use crate::TabStatus;
 use crate::tabpart::identity::{
     FIRST_TAB_CONTAINER_SESSION_TAB, FIRST_TITLEBAR_SESSION_TAB, TAB_CONTAINER_SETTINGS_TAB,
-    TITLEBAR_SETTINGS_TAB, session_tab_id, tab_group_list_id, titlebar_session_tab_id,
+    TITLEBAR_SETTINGS_TAB, session_tab_id, tab_group_list_id, titlebar_session_tab_close_id,
+    titlebar_session_tab_id,
 };
 use crate::tabpart::test_style;
 use zeta_protocol::Session;
@@ -47,11 +51,11 @@ fn part_with_two_sessions() -> (TabPart, TabInputKey, TabInputKey) {
     let mut part = TabPart::default();
     part.upsert_session_input(TabInput::session(
         first.session_id,
-        TabInputMetadata::new(first.title, "~/first").with_status_label("Active"),
+        TabInputMetadata::new(first.title, "~/first").with_status(TabStatus::busy("Active")),
     ));
     part.upsert_session_input(TabInput::session(
         second.session_id,
-        TabInputMetadata::new(second.title, "~/second").with_status_label("Active"),
+        TabInputMetadata::new(second.title, "~/second").with_status(TabStatus::busy("Active")),
     ));
     (part, first_key, second_key)
 }
@@ -66,7 +70,7 @@ fn each_mount_resolves_distinct_ui_identity_for_the_same_tab_input() {
     );
     assert_eq!(
         tab_input_element_id(&part, Some(&second_key), TabContainerPlacement::Body),
-        session_tab_id(1)
+        session_tab_id(part.tab_id(&second_key).unwrap())
     );
     assert_eq!(
         tab_input_element_id(&part, Some(&first_key), TabContainerPlacement::Titlebar),
@@ -141,7 +145,7 @@ fn body_mount_arranges_tabs_vertically_with_two_line_session_information() {
 
 #[test]
 fn titlebar_mount_arranges_tabs_horizontally_and_emits_activation() {
-    let (part, first_key, _) = part_with_two_sessions();
+    let (part, first_key, second_key) = part_with_two_sessions();
     let mut dispatch = UiDispatch::default();
     let bounds = Rect::from_xywh(40.0, 0.0, 700.0, 32.0);
     let container = TabContainer::from_tab_part(
@@ -170,7 +174,9 @@ fn titlebar_mount_arranges_tabs_horizontally_and_emits_activation() {
 
     assert_eq!(
         outcome.intent,
-        Some(UiIntent::Activate(titlebar_session_tab_id(1)))
+        Some(UiIntent::Activate(titlebar_session_tab_id(
+            part.tab_id(&second_key).unwrap()
+        )))
     );
     assert!(
         frame
@@ -178,6 +184,48 @@ fn titlebar_mount_arranges_tabs_horizontally_and_emits_activation() {
             .text_blocks()
             .iter()
             .all(|text| text.text() != "~/first")
+    );
+}
+
+#[test]
+fn close_button_is_a_child_action_and_resolves_to_the_stable_tab_key() {
+    let (part, first_key, _) = part_with_two_sessions();
+    let mut dispatch = UiDispatch::default();
+    let bounds = Rect::from_xywh(40.0, 0.0, 700.0, 32.0);
+    let container = TabContainer::from_tab_part(
+        bounds,
+        bounds,
+        &part,
+        Some(&first_key),
+        TabContainerPlacement::Titlebar,
+        test_style(),
+        &dispatch,
+    );
+    let mut frame = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
+    frame.draw_component(&container);
+    let tab_id = part.tab_id(&first_key).unwrap();
+    let close_id = titlebar_session_tab_close_id(tab_id);
+    let close_node = frame
+        .interaction()
+        .accessibility_nodes(&dispatch)
+        .into_iter()
+        .find(|node| node.id == close_id)
+        .unwrap();
+    let point = Point::new(
+        close_node.bounds.origin.x + 2.0,
+        close_node.bounds.origin.y + 2.0,
+    );
+
+    dispatch.pointer_moved(point, frame.interaction());
+    dispatch.press_primary(frame.interaction());
+    let outcome = dispatch.release_primary(point, frame.interaction());
+
+    assert_eq!(close_node.role, AccessibilityRole::Button);
+    assert_eq!(close_node.parent, Some(titlebar_session_tab_id(tab_id)));
+    assert_eq!(outcome.intent, Some(UiIntent::Activate(close_id)));
+    assert_eq!(
+        tab_intent_for_element(&part, close_id),
+        Some(TabIntent::Close(first_key))
     );
 }
 

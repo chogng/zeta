@@ -6,6 +6,7 @@ use crate::TabInput;
 use crate::TabInputChange;
 use crate::TabInputKey;
 use crate::TabInputMetadata;
+use crate::TabStatus;
 use zeta_protocol::{Session, SessionId, SessionStatus};
 
 fn session(id: &str, title: &str) -> Session {
@@ -23,7 +24,7 @@ fn session(id: &str, title: &str) -> Session {
 fn input(session: &Session, workspace: &str) -> TabInput {
     TabInput::session(
         session.session_id.clone(),
-        TabInputMetadata::new(&session.title, workspace).with_status_label("Active"),
+        TabInputMetadata::new(&session.title, workspace).with_status(TabStatus::busy("Active")),
     )
 }
 
@@ -123,10 +124,70 @@ fn status_updates_are_scoped_to_the_logical_input() {
     upsert_session(&mut part, &first, "~/first");
     upsert_session(&mut part, &second, "~/second");
 
-    part.update_status(&first.session_id, "Exited");
+    part.update_status(&first.session_id, TabStatus::warning("Exited"));
 
-    assert_eq!(part.input(&first_key).unwrap().status_label(), "Exited");
-    assert_eq!(part.input(&second_key).unwrap().status_label(), "Active");
+    assert_eq!(
+        part.input(&first_key).unwrap().status(),
+        &TabStatus::warning("Exited")
+    );
+    assert_eq!(
+        part.input(&second_key).unwrap().status(),
+        &TabStatus::busy("Active")
+    );
+}
+
+#[test]
+fn pinning_reorders_within_the_group_without_changing_tab_identity() {
+    let first = session("session-1", "First");
+    let second = session("session-2", "Second");
+    let first_key = TabInputKey::session(first.session_id.clone());
+    let second_key = TabInputKey::session(second.session_id.clone());
+    let mut part = TabPart::default();
+    upsert_session(&mut part, &first, "~/first");
+    upsert_session(&mut part, &second, "~/second");
+    let second_id = part.tab_id(&second_key).unwrap();
+
+    assert_eq!(part.toggle_tab_pin(&second_key), Some(true));
+
+    assert!(part.is_tab_pinned(&second_key));
+    assert_eq!(part.tab_id(&second_key), Some(second_id));
+    assert_eq!(
+        part.inputs()
+            .filter(|input| input.is_session())
+            .map(TabInput::key)
+            .collect::<Vec<_>>(),
+        [&second_key, &first_key]
+    );
+
+    assert_eq!(part.toggle_tab_pin(&second_key), Some(false));
+    assert!(!part.is_tab_pinned(&second_key));
+    assert_eq!(part.tab_id(&second_key), Some(second_id));
+}
+
+#[test]
+fn moving_tabs_to_a_group_preserves_its_pinned_prefix() {
+    let first = session("session-1", "First");
+    let second = session("session-2", "Second");
+    let first_key = TabInputKey::session(first.session_id.clone());
+    let second_key = TabInputKey::session(second.session_id.clone());
+    let mut part = TabPart::default();
+    upsert_session(&mut part, &first, "~/first");
+    upsert_session(&mut part, &second, "~/second");
+    assert!(part.pin_tab(&second_key));
+    let group = part.create_group("Work");
+
+    assert!(part.move_tab_to_group(&first_key, group, 0));
+    assert!(part.move_tab_to_group(&second_key, group, usize::MAX));
+
+    assert_eq!(
+        part.group(group)
+            .unwrap()
+            .inputs()
+            .iter()
+            .map(TabInput::key)
+            .collect::<Vec<_>>(),
+        [&second_key, &first_key]
+    );
 }
 
 #[test]

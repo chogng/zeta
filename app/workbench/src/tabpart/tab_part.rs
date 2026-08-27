@@ -1,6 +1,26 @@
+use std::collections::HashMap;
+use std::collections::HashSet;
+
 use zeta_protocol::SessionId;
 
-use crate::{TabGroup, TabGroupId, TabInput, TabInputChange, TabInputKey};
+use crate::TabGroup;
+use crate::TabGroupId;
+use crate::TabInput;
+use crate::TabInputChange;
+use crate::TabInputKey;
+use crate::TabStatus;
+
+/// Stable process-local identity for one mounted Workbench tab.
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct TabId(u32);
+
+impl TabId {
+    pub(crate) const FIRST: Self = Self(1);
+
+    pub const fn value(self) -> u32 {
+        self.0
+    }
+}
 
 /// Workbench-owned Tab Part shared by every horizontal or vertical tab projection.
 ///
@@ -12,6 +32,9 @@ pub struct TabPart {
     active: Option<TabInputKey>,
     last_session: Option<SessionId>,
     next_group_id: u64,
+    tab_ids: HashMap<TabInputKey, TabId>,
+    pinned_tabs: HashSet<TabInputKey>,
+    next_tab_id: u32,
 }
 
 impl Default for TabPart {
@@ -23,6 +46,9 @@ impl Default for TabPart {
             active: None,
             last_session: None,
             next_group_id: TabGroupId::DEFAULT.value() + 1,
+            tab_ids: HashMap::new(),
+            pinned_tabs: HashSet::new(),
+            next_tab_id: TabId::FIRST.value(),
         }
     }
 }
@@ -69,6 +95,52 @@ impl TabPart {
             .iter()
             .find(|group| group.contains(key))
             .map(TabGroup::id)
+    }
+
+    /// Returns the stable mounted identity assigned to one Session tab.
+    pub fn tab_id(&self, key: &TabInputKey) -> Option<TabId> {
+        self.tab_ids.get(key).copied()
+    }
+
+    /// Returns whether one Session tab is pinned in its current group.
+    pub fn is_tab_pinned(&self, key: &TabInputKey) -> bool {
+        self.pinned_tabs.contains(key)
+    }
+
+    /// Pins one Session tab and moves it to the start of its current group.
+    pub fn pin_tab(&mut self, key: &TabInputKey) -> bool {
+        if !key.is_session() || self.input(key).is_none() || !self.pinned_tabs.insert(key.clone()) {
+            return false;
+        }
+        let group = self
+            .input_group(key)
+            .expect("known TabInput must belong to one TabGroup");
+        self.group_mut(group)
+            .expect("resolved TabGroup must remain present")
+            .move_input(key, 0)
+    }
+
+    /// Unpins one Session tab and places it after the group's pinned prefix.
+    pub fn unpin_tab(&mut self, key: &TabInputKey) -> bool {
+        if !self.pinned_tabs.remove(key) {
+            return false;
+        }
+        let group = self
+            .input_group(key)
+            .expect("pinned TabInput must belong to one TabGroup");
+        let index = self.pinned_count_excluding(group, key);
+        self.group_mut(group)
+            .expect("resolved TabGroup must remain present")
+            .move_input(key, index)
+    }
+
+    /// Toggles one Session tab's pinned state and returns the new state.
+    pub fn toggle_tab_pin(&mut self, key: &TabInputKey) -> Option<bool> {
+        if self.is_tab_pinned(key) {
+            self.unpin_tab(key).then_some(false)
+        } else {
+            self.pin_tab(key).then_some(true)
+        }
     }
 
     /// Returns the active logical input key.
@@ -156,6 +228,13 @@ impl TabPart {
         let Some(source_group) = self.input_group(key) else {
             return false;
         };
+        let pinned = self.is_tab_pinned(key);
+        let pinned_count = self.pinned_count_excluding(target_group, key);
+        let index = if pinned {
+            index.min(pinned_count)
+        } else {
+            index.max(pinned_count)
+        };
         if source_group == target_group {
             return self
                 .group_mut(target_group)
@@ -235,6 +314,8 @@ impl TabPart {
         let source_group = self.input_group(key)?;
         let was_active = self.active.as_ref() == Some(key);
         let removed = self.group_mut(source_group)?.remove_input(key)?;
+        self.tab_ids.remove(key);
+        self.pinned_tabs.remove(key);
         self.remove_empty_non_default_group(source_group);
 
         if was_active {
@@ -260,13 +341,13 @@ impl TabPart {
     }
 
     /// Updates a Session status without changing its group or identity.
-    pub fn update_status(&mut self, session_id: &SessionId, status_label: &str) {
+    pub fn update_status(&mut self, session_id: &SessionId, status: TabStatus) {
         let key = self
             .inputs()
             .find(|input| input.session_id() == Some(session_id))
             .map(|input| input.key().clone());
         if let Some(input) = key.and_then(|key| self.input_mut(&key)) {
-            input.update_status(status_label);
+            input.update_status(status);
         }
     }
 
@@ -284,6 +365,7 @@ impl TabPart {
             return TabInputChange::Updated(key);
         }
 
+        self.register_tab(&key);
         self.insert_session_into_default_group(input);
         self.last_session = key.session_id().cloned();
         if !was_settings {
@@ -301,6 +383,7 @@ impl TabPart {
             return TabInputChange::Updated(key);
         }
 
+        self.register_tab(&key);
         self.insert_session_into_default_group(input);
         TabInputChange::Added(key)
     }
@@ -333,6 +416,25 @@ impl TabPart {
         {
             self.groups.retain(|group| group.id() != id);
         }
+    }
+
+    fn register_tab(&mut self, key: &TabInputKey) {
+        let id = TabId(self.next_tab_id);
+        self.next_tab_id = self
+            .next_tab_id
+            .checked_add(1)
+            .expect("Tab identity space exhausted");
+        let previous = self.tab_ids.insert(key.clone(), id);
+        debug_assert!(previous.is_none());
+    }
+
+    fn pinned_count_excluding(&self, group: TabGroupId, excluded: &TabInputKey) -> usize {
+        self.group(group)
+            .expect("resolved TabGroup must remain present")
+            .inputs()
+            .iter()
+            .filter(|input| input.key() != excluded && self.is_tab_pinned(input.key()))
+            .count()
     }
 }
 

@@ -18,12 +18,15 @@ use zui::ui::UiNode;
 use super::WorkbenchUiStyle;
 use crate::TabInputKey;
 use crate::TabPart;
+use crate::TabStatusKind;
 
 pub use super::tab_mount::TabContainerPlacement;
 pub use super::tab_mount::WorkbenchTab;
 pub use super::tab_mount::WorkbenchTabGroup;
 use super::tab_mount::WorkbenchTabKind;
 pub use super::tab_mount::tab_input_element_id;
+pub use super::tab_mount::tab_intent_for_element;
+pub use super::tab_mount::tab_key_for_element;
 pub use super::tab_mount::workbench_tab_groups;
 
 const BODY_TAB_HEIGHT: f32 = 52.0;
@@ -39,6 +42,10 @@ const TAB_CONTENT_PADDING: f32 = 8.0;
 const TAB_INFORMATION_HEIGHT: f32 = 36.0;
 const STATUS_CONTAINER_SIZE: f32 = TAB_INFORMATION_HEIGHT;
 const STATUS_CONTENT_GAP: f32 = 10.0;
+const STATUS_DOT_SIZE: f32 = 10.0;
+const BODY_CLOSE_SIZE: f32 = 24.0;
+const TITLEBAR_CLOSE_SIZE: f32 = 18.0;
+const TITLEBAR_PIN_SIZE: f32 = 12.0;
 
 struct GroupLayout<'a> {
     group: &'a WorkbenchTabGroup<'a>,
@@ -265,6 +272,9 @@ impl<'a> TabContainer<'a> {
                         continue;
                     }
                     context.draw_component(&self.tab_region(tab, tab_bounds, layout.list_id));
+                    if tab.kind == WorkbenchTabKind::Session {
+                        context.draw_component(&self.close_region(tab, tab_bounds));
+                    }
                 }
             }
             context.scene_mut().with_clip(self.content_bounds, |scene| {
@@ -281,7 +291,7 @@ impl<'a> TabContainer<'a> {
     ) -> InteractionRegion {
         let label = match tab.kind {
             WorkbenchTabKind::Session => {
-                format!("{}, {}, {}", tab.name, tab.workspace, tab.status_label)
+                format!("{}, {}, {}", tab.name, tab.workspace, tab.status.label())
             }
             WorkbenchTabKind::Settings => "Settings".to_owned(),
         };
@@ -305,6 +315,33 @@ impl<'a> TabContainer<'a> {
         } else {
             AccessibilitySelection::Unselected
         })
+    }
+
+    fn close_region(&self, tab: &WorkbenchTab<'_>, tab_bounds: Rect) -> InteractionRegion {
+        InteractionRegion::new(
+            "WorkbenchTabClose",
+            tab.close_id,
+            self.close_bounds(tab_bounds),
+            AccessibilityRole::Button,
+            format!("Close {}", tab.name),
+        )
+        .with_parent(tab.id)
+        .with_cursor(CursorFeedback::Pointer)
+        .with_focus(FocusBehavior::TabStop)
+        .with_action(NodeAction::Activate)
+    }
+
+    fn close_bounds(&self, tab_bounds: Rect) -> Rect {
+        let size = match self.placement {
+            TabContainerPlacement::Body => BODY_CLOSE_SIZE,
+            TabContainerPlacement::Titlebar => TITLEBAR_CLOSE_SIZE,
+        };
+        Rect::from_xywh(
+            tab_bounds.right() - TAB_CONTENT_PADDING - size,
+            tab_bounds.origin.y + (tab_bounds.size.height - size) * 0.5,
+            size,
+            size,
+        )
     }
 
     fn paint_group(&self, scene: &mut UiScene, layout: &GroupLayout<'_>) {
@@ -347,9 +384,18 @@ impl<'a> TabContainer<'a> {
         );
         if tab.kind == WorkbenchTabKind::Settings {
             self.paint_settings_icon(scene, status_bounds, 18.0);
+        } else if tab.pinned {
+            self.paint_pinned_status(scene, tab, status_bounds);
+        } else {
+            self.paint_status_dot(scene, tab, status_bounds);
         }
         let text_x = status_bounds.right() + STATUS_CONTENT_GAP;
-        let text_width = (tab_bounds.right() - text_x - TAB_CONTENT_PADDING).max(1.0);
+        let text_right = if tab.kind == WorkbenchTabKind::Session {
+            self.close_bounds(tab_bounds).origin.x - 6.0
+        } else {
+            tab_bounds.right() - TAB_CONTENT_PADDING
+        };
+        let text_width = (text_right - text_x).max(1.0);
         scene.draw_text(TextBlock::new(
             tab.name,
             Point::new(text_x, tab_bounds.origin.y + 7.0),
@@ -362,6 +408,9 @@ impl<'a> TabContainer<'a> {
             Size::new(text_width, 15.0),
             TextStyle::new(11.0, self.style.text_muted).with_line_height(15.0),
         ));
+        if tab.kind == WorkbenchTabKind::Session {
+            self.paint_close_icon(scene, tab_bounds);
+        }
     }
 
     fn paint_titlebar_tab(&self, scene: &mut UiScene, tab: &WorkbenchTab<'_>, tab_bounds: Rect) {
@@ -375,15 +424,107 @@ impl<'a> TabContainer<'a> {
             );
             self.paint_settings_icon(scene, icon_bounds, 16.0);
             text_x = icon_bounds.right() + 6.0;
+        } else {
+            let status_bounds = Rect::from_xywh(
+                text_x,
+                tab_bounds.origin.y + (tab_bounds.size.height - STATUS_DOT_SIZE) * 0.5,
+                STATUS_DOT_SIZE,
+                STATUS_DOT_SIZE,
+            );
+            self.paint_status_dot(scene, tab, status_bounds);
+            text_x = status_bounds.right() + 6.0;
+            if tab.pinned {
+                let pin_bounds = Rect::from_xywh(
+                    text_x,
+                    tab_bounds.origin.y + (tab_bounds.size.height - TITLEBAR_PIN_SIZE) * 0.5,
+                    TITLEBAR_PIN_SIZE,
+                    TITLEBAR_PIN_SIZE,
+                );
+                scene.draw_icon(PaintIcon::new(
+                    self.style.pinned_icon,
+                    pin_bounds,
+                    self.style.text_muted,
+                ));
+                text_x = pin_bounds.right() + 4.0;
+            }
         }
+        let text_right = if tab.kind == WorkbenchTabKind::Session {
+            self.close_bounds(tab_bounds).origin.x - 4.0
+        } else {
+            tab_bounds.right() - TAB_CONTENT_PADDING
+        };
         scene.draw_text(TextBlock::new(
             tab.name,
             Point::new(text_x, tab_bounds.origin.y + 3.0),
-            Size::new(
-                (tab_bounds.right() - text_x - TAB_CONTENT_PADDING).max(1.0),
-                18.0,
-            ),
+            Size::new((text_right - text_x).max(1.0), 18.0),
             TextStyle::new(12.0, self.style.text).with_line_height(18.0),
+        ));
+        if tab.kind == WorkbenchTabKind::Session {
+            self.paint_close_icon(scene, tab_bounds);
+        }
+    }
+
+    fn paint_pinned_status(&self, scene: &mut UiScene, tab: &WorkbenchTab<'_>, bounds: Rect) {
+        let icon_size = 16.0;
+        let icon_bounds = Rect::from_xywh(
+            bounds.origin.x + (bounds.size.width - icon_size) * 0.5,
+            bounds.origin.y + (bounds.size.height - icon_size) * 0.5,
+            icon_size,
+            icon_size,
+        );
+        scene.draw_icon(PaintIcon::new(
+            self.style.pinned_icon,
+            icon_bounds,
+            self.style.text_muted,
+        ));
+        let dot_bounds = Rect::from_xywh(
+            bounds.right() - STATUS_DOT_SIZE,
+            bounds.bottom() - STATUS_DOT_SIZE,
+            STATUS_DOT_SIZE,
+            STATUS_DOT_SIZE,
+        );
+        self.paint_status_dot(scene, tab, dot_bounds);
+    }
+
+    fn paint_status_dot(&self, scene: &mut UiScene, tab: &WorkbenchTab<'_>, bounds: Rect) {
+        let dot_bounds = Rect::from_xywh(
+            bounds.origin.x + (bounds.size.width - STATUS_DOT_SIZE) * 0.5,
+            bounds.origin.y + (bounds.size.height - STATUS_DOT_SIZE) * 0.5,
+            STATUS_DOT_SIZE,
+            STATUS_DOT_SIZE,
+        );
+        scene.draw_rect(
+            PaintRect::new(dot_bounds, self.status_color(tab.status.kind()))
+                .with_corner_radii(CornerRadii::uniform(STATUS_DOT_SIZE * 0.5)),
+        );
+    }
+
+    const fn status_color(&self, kind: TabStatusKind) -> Color {
+        match kind {
+            TabStatusKind::Idle => self.style.text_muted,
+            TabStatusKind::Busy => self.style.accent,
+            TabStatusKind::Attention | TabStatusKind::Warning => self.style.warning,
+            TabStatusKind::Success => self.style.success,
+            TabStatusKind::Error => self.style.error,
+        }
+    }
+
+    fn paint_close_icon(&self, scene: &mut UiScene, tab_bounds: Rect) {
+        let bounds = self.close_bounds(tab_bounds);
+        let size = match self.placement {
+            TabContainerPlacement::Body => 16.0,
+            TabContainerPlacement::Titlebar => 14.0,
+        };
+        let icon_bounds = Rect::from_xywh(
+            bounds.origin.x + (bounds.size.width - size) * 0.5,
+            bounds.origin.y + (bounds.size.height - size) * 0.5,
+            size,
+            size,
+        );
+        scene.draw_icon(PaintIcon::new(
+            self.style.close_icon,
+            icon_bounds,
+            self.style.text_muted,
         ));
     }
 

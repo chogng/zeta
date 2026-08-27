@@ -5,6 +5,7 @@ use crate::PaneInputKind;
 use crate::TabInput;
 use crate::TabInputChange;
 use crate::TabInputMetadata;
+use crate::TabStatus;
 use zeta_protocol::{Session, SessionId, SessionStatus, ThreadId};
 
 fn session(id: &str, title: &str) -> Session {
@@ -27,7 +28,7 @@ fn upsert_session(workbench: &mut Workbench, session: &Session, workspace: &str)
     workbench.upsert_session_input(
         TabInput::session(
             session.session_id.clone(),
-            TabInputMetadata::new(&session.title, workspace).with_status_label("Active"),
+            TabInputMetadata::new(&session.title, workspace).with_status(TabStatus::busy("Active")),
         ),
         PaneInput::terminal(session.session_id.clone()),
     )
