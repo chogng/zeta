@@ -129,6 +129,7 @@ fn selected_rewind_checkpoint_emits_a_typed_rewind_action() {
             status: TurnStatus::Completed,
             model: None,
             tool_profile: None,
+            tool_mode: zeta_protocol::ToolMode::Direct,
             usage: zeta_protocol::ModelUsageSummary::default(),
             items: vec![ThreadItem::UserMessage {
                 item_id: ItemId::new("item-1").unwrap(),

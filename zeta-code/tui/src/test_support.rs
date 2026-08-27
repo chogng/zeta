@@ -14,6 +14,7 @@ pub(crate) fn empty_config_snapshot() -> ConfigReadResult {
         generation: 0,
         preferred_model: None,
         approval_review_model: ApprovalReviewModelSelectionDto::Automatic,
+        tool_mode: zeta_protocol::ToolMode::Direct,
         providers: BTreeMap::new(),
         mcp_servers: BTreeMap::new(),
         skill_sources: BTreeMap::new(),

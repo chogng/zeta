@@ -58,6 +58,7 @@ fn thread(messages: &[&str]) -> Thread {
                     status: TurnStatus::Completed,
                     model: None,
                     tool_profile: None,
+                    tool_mode: zeta_protocol::ToolMode::Direct,
                     usage: zeta_protocol::ModelUsageSummary::default(),
                     items: vec![ThreadItem::UserMessage {
                         item_id: ItemId::new(format!("item-{ordinal}")).unwrap(),
