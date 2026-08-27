@@ -32,6 +32,9 @@ use zeta_protocol::{
     SessionId, StableTurnError, StreamCursor, StreamInstanceId, ThreadCommand, ThreadId,
     ThreadItem, ThreadUpdate, ThreadUpdateEnvelope, ToolCall, TurnId, TurnStatus,
 };
+use zeta_utils_stream_parser::AssistantTextMode;
+use zeta_utils_stream_parser::AssistantTextStreamParser;
+use zeta_utils_stream_parser::strip_citations;
 
 /// Executes provider-independent model and tool steps for one already-started Turn.
 ///
@@ -725,6 +728,7 @@ impl TurnExecutor {
                         }
                         .map_err(ExecutionFailure::persistence)?;
                         check_cancellation(cancellation)?;
+                        stream.finish_text();
                         let tool_calls = response.tool_calls().count();
                         let text = final_text(&response, &stream);
                         if tool_calls == 0
@@ -1328,6 +1332,7 @@ struct InvocationStream {
     cancellation: CancellationToken,
     text_item_id: Option<ItemId>,
     reasoning_item_id: Option<ItemId>,
+    assistant_text: AssistantTextStreamParser,
     text: String,
     reasoning: String,
 }
@@ -1356,6 +1361,7 @@ impl InvocationStream {
             cancellation,
             text_item_id: None,
             reasoning_item_id: None,
+            assistant_text: AssistantTextStreamParser::new(AssistantTextMode::Message),
             text: String::new(),
             reasoning: String::new(),
         }
@@ -1418,6 +1424,24 @@ impl InvocationStream {
         self.reasoning_item_id = Some(item_id.clone());
         item_id
     }
+
+    fn publish_text_delta(&mut self, text: String) {
+        if text.is_empty() {
+            return;
+        }
+        let item_id = self.start_text_item();
+        self.text.push_str(&text);
+        self.publish(ThreadUpdate::ItemDelta {
+            turn_id: self.turn_id.clone(),
+            item_id,
+            delta: zeta_protocol::ItemDelta::AgentMessage { text },
+        });
+    }
+
+    fn finish_text(&mut self) {
+        let parsed = self.assistant_text.finish();
+        self.publish_text_delta(parsed.visible_text);
+    }
 }
 
 impl ModelStreamSink for InvocationStream {
@@ -1427,13 +1451,8 @@ impl ModelStreamSink for InvocationStream {
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
         match event {
             ModelStreamEvent::TextDelta(text) if !text.is_empty() => {
-                let item_id = self.start_text_item();
-                self.text.push_str(&text);
-                self.publish(ThreadUpdate::ItemDelta {
-                    turn_id: self.turn_id.clone(),
-                    item_id,
-                    delta: zeta_protocol::ItemDelta::AgentMessage { text },
-                });
+                let parsed = self.assistant_text.push_str(&text);
+                self.publish_text_delta(parsed.visible_text);
             }
             ModelStreamEvent::ReasoningDelta(text) if !text.is_empty() => {
                 let item_id = self.start_reasoning_item();
@@ -1455,7 +1474,7 @@ fn final_text(response: &ModelResponse, stream: &InvocationStream) -> String {
     if text.is_empty() {
         stream.text.clone()
     } else {
-        text
+        strip_citations(&text).0
     }
 }
 

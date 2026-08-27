@@ -103,6 +103,7 @@ members = [
     "zeta-rs/utils/path-utils",
     "zeta-rs/utils/pdf",
     "zeta-rs/utils/pty",
+    "zeta-rs/utils/stream-parser",
     "zeta-rs/utils/typst",
     "zeta-rs/windows-sandbox-rs",
     "zeta-rs/workspace",
@@ -370,6 +371,7 @@ zeta-workbench-layout = { path = "app/workbench-layout" }
 zeta-utils-image = { path = "zeta-rs/utils/image" }
 zeta-utils-path = { path = "zeta-rs/utils/path-utils" }
 zeta-utils-path-uri = { path = "zeta-rs/utils/path-uri" }
+zeta-utils-stream-parser = { path = "zeta-rs/utils/stream-parser" }
 zeta-pdf = { path = "zeta-rs/utils/pdf" }
 zeta-typst = { path = "zeta-rs/utils/typst" }
 zeta-utils-pty = { path = "zeta-rs/utils/pty" }

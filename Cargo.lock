@@ -10976,6 +10976,7 @@ dependencies = [
  "zeta-session-store",
  "zeta-thread-store",
  "zeta-utils-image",
+ "zeta-utils-stream-parser",
 ]
 
 [[package]]
@@ -11913,6 +11914,13 @@ dependencies = [
  "shared_library",
  "tokio",
  "winapi",
+]
+
+[[package]]
+name = "zeta-utils-stream-parser"
+version = "0.1.0"
+dependencies = [
+ "pretty_assertions",
 ]
 
 [[package]]

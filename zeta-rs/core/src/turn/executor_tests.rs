@@ -1756,6 +1756,39 @@ fn streaming_delta_and_final_item_share_one_identity() {
 }
 
 #[test]
+fn streaming_hidden_markup_is_filtered_across_chunk_boundaries() {
+    let (threads, thread_id, turn_id) = started_turn();
+    let updates = Arc::new(RecordingUpdates::default());
+    let executor = TurnExecutor::without_tools(threads.clone(), Arc::new(HiddenMarkupChunkedModel))
+        .with_thread_updates(updates.clone());
+
+    executor.start(&thread_id, &turn_id).unwrap();
+    wait_for_turn_status(&threads, &thread_id, &turn_id, TurnStatus::Completed);
+
+    let streamed_text = updates
+        .updates()
+        .into_iter()
+        .filter_map(|update| match update.update {
+            ThreadUpdate::ItemDelta {
+                delta: zeta_protocol::ItemDelta::AgentMessage { text },
+                ..
+            } => Some(text),
+            _ => None,
+        })
+        .collect::<String>();
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    let final_text = snapshot.items.iter().find_map(|item| match item {
+        ThreadItem::AgentMessage { text, .. } => Some(text.as_str()),
+        _ => None,
+    });
+
+    assert_eq!(streamed_text, "hello<");
+    assert_eq!(final_text, Some("hello<"));
+    assert!(!streamed_text.contains("oai-mem-citation"));
+    assert!(!streamed_text.contains("private-source"));
+}
+
+#[test]
 fn per_thread_mailboxes_run_independently_and_interrupt_the_active_turn() {
     let (threads, slow_thread_id, slow_turn_id) = started_turn();
     let fast_thread_id = ThreadId::new("fast-thread").unwrap();
@@ -2485,6 +2518,36 @@ impl ModelService for ChunkedModel {
         sink.emit(ModelStreamEvent::TextDelta("hel".into()))?;
         sink.emit(ModelStreamEvent::TextDelta("lo".into()))?;
         Ok(text_response("hello"))
+    }
+}
+
+struct HiddenMarkupChunkedModel;
+
+impl ModelService for HiddenMarkupChunkedModel {
+    fn invoke(
+        &self,
+        _: ModelSelection<'_>,
+        _: &ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ModelResponse, CoreError> {
+        unreachable!("stream is overridden")
+    }
+
+    fn stream(
+        &self,
+        _: ModelSelection<'_>,
+        _: &ModelRequest,
+        _: &CancellationToken,
+        sink: &mut dyn ModelStreamSink,
+    ) -> Result<ModelResponse, CoreError> {
+        sink.emit(ModelStreamEvent::TextDelta("hel<oai-mem-".into()))?;
+        sink.emit(ModelStreamEvent::TextDelta(
+            "citation>private-source</oai-mem-cit".into(),
+        ))?;
+        sink.emit(ModelStreamEvent::TextDelta("ation>lo<".into()))?;
+        Ok(text_response(
+            "hel<oai-mem-citation>private-source</oai-mem-citation>lo<",
+        ))
     }
 }
 
