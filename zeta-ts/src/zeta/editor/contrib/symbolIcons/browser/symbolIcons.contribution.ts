@@ -5,7 +5,7 @@ import { TextEditorCapability } from "../../textEditorCapabilities.js";
 registerEditorContribution({
 	id: "editor.contrib.symbolIcons",
 	configure: context => {
-		if (context.model.largeFile.tooLargeForTokenization) return;
+		if (context.options.showSymbolIcons === false || context.model.largeFile.tooLargeForTokenization) return;
 		const service = context.register(context.languageFeaturesService.createDocumentSymbolService(context.model, {
 			resource: context.options.input.resource,
 			fallbackProviders: context.getOptionalCapability(TextEditorCapability.documentSymbolProviders) ?? [],

@@ -1,5 +1,5 @@
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
-import { OccurrenceHighlightController } from "./wordHighlighterController.js";
+import { OccurrenceHighlightController } from "./wordHighlighter.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { DecorationPresentation, createStanzaDecorationSource } from "../../../browser/viewparts/decorations/decorationPresentation.js";

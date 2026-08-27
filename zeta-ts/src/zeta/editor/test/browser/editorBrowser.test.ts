@@ -248,6 +248,7 @@ test("Stanza editor browser omits disabled presentation and language-assistance 
 		languageId: "typescript",
 		model,
 		showLineNumbers: false,
+		showSymbolIcons: false,
 		showIndentationGuides: false,
 		bracketPairColorization: false,
 		stickyScroll: false,
@@ -260,6 +261,7 @@ test("Stanza editor browser omits disabled presentation and language-assistance 
 	editorPart.layout({ width: 320, height: 80 });
 
 	assert.equal(editorPart.viewport.element.classList.contains("hide-line-numbers"), true);
+	assert.equal(editorPart.viewport.element.style.getPropertyValue("--stanza-editor-line-decorations-width"), "20px");
 	assert.equal(container.querySelectorAll(".stanza-editor-indent-guide").length, 0);
 	assert.equal(container.querySelectorAll(".stanza-editor-bracket-level-1").length, 0);
 	assert.equal(container.querySelectorAll(".stanza-editor-sticky-scroll").length, 0);

@@ -105,6 +105,7 @@ export interface EditorBrowserOptions {
 	readonly activeLineHighlight?: EditorActiveLineHighlight;
 	readonly showLineNumbers?: boolean;
 	readonly glyphMargin?: boolean;
+	readonly showSymbolIcons?: boolean;
 	readonly rulers?: readonly EditorRuler[];
 	readonly showIndentationGuides?: boolean;
 	readonly bracketPairColorization?: boolean;
@@ -372,6 +373,7 @@ function validateOptions(options: EditorBrowserOptions): void {
 	for (const [name, value] of [
 		["line numbers", options.showLineNumbers],
 		["glyph margin", options.glyphMargin],
+		["symbol icons", options.showSymbolIcons],
 		["indentation guides", options.showIndentationGuides],
 		["bracket pair colorization", options.bracketPairColorization],
 		["sticky scroll", options.stickyScroll],

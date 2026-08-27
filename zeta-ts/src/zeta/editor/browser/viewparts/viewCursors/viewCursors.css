@@ -8,8 +8,8 @@
 
 .stanza-editor-caret {
   position: absolute;
-  top: 2px;
-  bottom: 2px;
+  top: 0;
+  bottom: 0;
   width: 2px;
   background: var(--zeta-editor-foreground);
 }

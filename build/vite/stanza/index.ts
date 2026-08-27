@@ -36,6 +36,7 @@ const editor = disposables.add(stanzaApi.editor.create(container, {
   model,
   lineWrapping: stanzaApi.EditorLineWrapping.On,
   showLineNumbers: true,
+  showSymbolIcons: false,
   showIndentationGuides: true,
   bracketPairColorization: true,
   stickyScroll: true,
