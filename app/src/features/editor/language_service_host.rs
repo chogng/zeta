@@ -246,10 +246,6 @@ impl NativeLanguageService {
         &diagnostics.items
     }
 
-    pub(crate) fn server_state(&self, server: &str) -> Option<&LanguageServerState> {
-        self.server_states.get(server)
-    }
-
     pub(crate) fn active_hover(&self, host: &FileEditorHost) -> Option<&LanguageHover> {
         let tab = host.active()?;
         self.hover.as_ref().filter(|hover| {

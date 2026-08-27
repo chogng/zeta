@@ -233,10 +233,6 @@ impl ShellPresentation {
         &self.frame
     }
 
-    pub(crate) fn scene(&self) -> &UiScene {
-        self.frame.scene()
-    }
-
     pub(crate) fn scene_mut(&mut self) -> &mut UiScene {
         self.frame.scene_mut()
     }
