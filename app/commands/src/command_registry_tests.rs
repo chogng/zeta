@@ -1,7 +1,7 @@
+use crate::AppCommandId;
 use crate::CommandRegistry;
 use crate::CommandRegistryError;
 use crate::CommandRequest;
-use crate::AppCommandId;
 
 #[derive(Default)]
 struct Context {
@@ -36,9 +36,7 @@ fn registry_rejects_duplicate_and_missing_handlers() {
         .expect("Save should be registered once");
     assert_eq!(
         registry.register(AppCommandId::Save, record_command),
-        Err(CommandRegistryError::AlreadyRegistered(
-            AppCommandId::Save
-        ))
+        Err(CommandRegistryError::AlreadyRegistered(AppCommandId::Save))
     );
 
     let mut context = Context::default();

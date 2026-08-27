@@ -1,14 +1,12 @@
 use std::process::ExitCode;
 use std::time::Instant;
 
-use crate::agent_session::AgentSession;
-use crate::app_server::{AppServerHost, local_profile_root};
+use crate::app_server::{AppServerHost, AppServerRequestHandle, local_profile_root};
+use crate::session_host::SessionRuntime;
 use crate::file_editor_host::FileEditorHost;
 use crate::file_editor_input::FileEditorInputState;
 use crate::git_branch_context_menu::GitBranchContextMenuState;
 use crate::keybindings::{KeybindingsResource, KeybindingsResourcePoll};
-use crate::keyboard_shortcuts::KeyboardShortcutsState;
-use crate::language_server_settings::LanguageServerSettingsState;
 use crate::launch::AppLaunch;
 use crate::native_event::NativeEvent;
 use crate::remote_connection_cli::AppInvocation;
@@ -16,35 +14,31 @@ use crate::remote_connection_manager::RemoteConnectionManagerState;
 use crate::remote_connection_picker::RemoteConnectionPickerState;
 use crate::remote_tunnel_manager::RemoteTunnelManagerState;
 use crate::remote_tunnel_process::NativeRemoteTunnelHost;
-use crate::session::session_context_menu::SessionContextMenuState;
-use crate::session::session_search::SessionSearch;
-use crate::session::session_switch_trace;
 use crate::shell_interaction::{COMPOSER, FILE_EDITOR_DOCUMENT};
 use crate::shell_scene::{
     ShellPresentation, ShellPresentationModel, build_shell_presentation_with_animation_bindings,
-    rebuild_shell_fragment, rebuild_shell_overlays, terminal_grid_size_for_bounds,
-    terminal_grid_size_for_viewport, terminal_pane_bounds_for_viewport,
-    terminal_pane_sash_for_viewport,
+    rebuild_shell_overlays, terminal_grid_size_for_bounds, terminal_grid_size_for_viewport,
+    terminal_pane_bounds_for_viewport, terminal_pane_sash_for_viewport,
 };
 use crate::shell_style::{SHELL_PALETTE, ShellPalette, code_editor_style};
+use crate::tab_context_menu::TabContextMenuState;
 use crate::terminal_pane_view::TerminalPaneViewState;
 use crate::terminal_session::{TerminalSession, TerminalSessionEvent, TerminalSessionKey};
-use crate::thread_projection::ThreadProjection;
-use crate::thread_timeline_scroll::ThreadTimelineScroll;
 use crate::workspace_context::WorkspaceContext;
 use crate::workspace_pane_host::{WorkspacePaneHost, WorkspacePaneView};
 use crate::workspace_panes::WorkspacePaneAction;
 use crate::workspace_path_picker::WorkspacePathPickerState;
 use crate::workspace_surface::WorkspaceSurface;
-use zeta_composer::Composer;
 use zeta_editor::CodeEditorStyle;
 use zeta_protocol::SessionId;
-use zeta_settings::SettingsPageSection;
+use zeta_session::SessionPaneState;
+use zeta_settings::SettingsState;
 use zeta_terminal::{BlockStatus, GridSize, ScreenBuffer};
 use zeta_terminal_workspace::PaneBinding;
 use zeta_terminal_workspace::TerminalPaneViews;
 use zeta_theme::{ColorScheme, ThemeLoadOptions, ThemeLoader, ThemeSurface, default_device_root};
 use zeta_ui_components::{SashOrientation, SashPointerPresence};
+use zeta_workbench::SessionSearchState;
 use zeta_workbench::{
     LogicalViewport, PaneGroupId as PaneId, PaneInput, PaneInputKind, PaneKey, PaneSplitDirection,
     PaneSplitId, TabInputKey, WorkbenchHost,
@@ -89,16 +83,12 @@ use zui::window::WindowEvent;
 use zui::window::WindowHandle;
 use zui::window::WindowOptions;
 
-#[path = "../features/agent/agent_session.rs"]
-pub(crate) mod agent_session;
+#[path = "../features/agent/session_host.rs"]
+pub(crate) mod session_host;
 #[path = "../app_server.rs"]
 pub(crate) mod app_server;
 #[path = "command_dispatch.rs"]
 pub(crate) mod command_dispatch;
-#[path = "../features/agent/composer_host.rs"]
-pub(crate) mod composer_host;
-#[path = "../features/agent/composer_panel.rs"]
-pub(crate) mod composer_panel;
 #[path = "events.rs"]
 mod events;
 #[path = "../features/editor/file_editor_auto_scroll.rs"]
@@ -121,20 +111,12 @@ mod frame;
 pub(crate) mod git_branch_context_menu;
 #[path = "../features/workspace/git_branch_context_menu_input.rs"]
 pub(crate) mod git_branch_context_menu_input;
-#[path = "../features/workspace/input_context_toolbar.rs"]
-pub(crate) mod input_context_toolbar;
 #[path = "../platform/input_method.rs"]
 pub(crate) mod input_method;
 #[path = "interaction.rs"]
 mod interaction;
 #[path = "../platform/keybindings.rs"]
 pub(crate) mod keybindings;
-#[path = "../features/settings/keyboard_shortcuts.rs"]
-pub(crate) mod keyboard_shortcuts;
-#[path = "../features/settings/language_server_settings.rs"]
-pub(crate) mod language_server_settings;
-#[path = "../features/settings/language_server_settings_input.rs"]
-pub(crate) mod language_server_settings_input;
 #[path = "../features/editor/language_service_host.rs"]
 pub(crate) mod language_service_host;
 #[path = "../features/remote/launch.rs"]
@@ -195,10 +177,8 @@ pub(crate) mod remote_tunnel_process;
 mod run;
 #[path = "runtime.rs"]
 mod runtime;
-#[path = "../session.rs"]
-pub(crate) mod session;
-#[path = "../features/settings/settings_sections.rs"]
-pub(crate) mod settings_sections;
+#[path = "../features/agent/session_catalog.rs"]
+pub(crate) mod session_catalog;
 #[path = "../presentation/shell_interaction.rs"]
 pub(crate) mod shell_interaction;
 #[path = "../presentation/shell_scene.rs"]
@@ -207,6 +187,8 @@ pub(crate) mod shell_scene;
 pub(crate) mod shell_style;
 #[path = "state.rs"]
 mod state;
+#[path = "../presentation/tab_context_menu.rs"]
+pub(crate) mod tab_context_menu;
 #[path = "../features/terminal/terminal_blocks.rs"]
 pub(crate) mod terminal_blocks;
 #[path = "../features/terminal/terminal_input.rs"]
@@ -225,10 +207,6 @@ pub(crate) mod terminal_scrollback;
 pub(crate) mod terminal_selection;
 #[path = "../features/terminal/terminal_session.rs"]
 pub(crate) mod terminal_session;
-#[path = "../features/agent/thread_projection.rs"]
-pub(crate) mod thread_projection;
-#[path = "../features/agent/thread_timeline.rs"]
-pub(crate) mod thread_timeline;
 #[path = "../features/agent/thread_timeline_scroll.rs"]
 pub(crate) mod thread_timeline_scroll;
 mod workbench;

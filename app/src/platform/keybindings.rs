@@ -218,11 +218,9 @@ fn default_keybinding(command: AppCommandId) -> Option<&'static KeySequence> {
                     .expect("builtin key"),
             )
         })),
-        AppCommandId::OpenLanguageServerSettings
-        | AppCommandId::ManageRemoteTunnels
+        AppCommandId::ManageRemoteTunnels
         | AppCommandId::ToggleTabContainer
         | AppCommandId::ToggleWorkspacePane
-        | AppCommandId::ActivateSessionTab
         | AppCommandId::AddSession
         | AppCommandId::ShowAgentChanges
         | AppCommandId::ShowAgentFiles
@@ -231,6 +229,7 @@ fn default_keybinding(command: AppCommandId) -> Option<&'static KeySequence> {
         | AppCommandId::PinSession
         | AppCommandId::CloseSession
         | AppCommandId::RenameSession
+        | AppCommandId::GroupSession
         | AppCommandId::ForkSession
         | AppCommandId::PickExecutionLocation
         | AppCommandId::PickWorkingDirectory

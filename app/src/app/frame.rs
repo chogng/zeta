@@ -3,7 +3,6 @@ use super::*;
 
 impl NativeApp {
     pub(super) fn rebuild_presentation(&mut self) {
-        let _trace = session_switch_trace::Span::new(None, "rebuild_presentation");
         let viewport = self.logical_viewport();
         let active_screen = self.active_screen();
         let tab_container = self.workbench.tab_container_state();
@@ -86,7 +85,6 @@ impl NativeApp {
                 },
             );
         }
-        self.mount_shell_fragments(&mut presentation);
         self.presentation = Some(presentation);
         self.frame_scheduler.clear();
         if requested_focus.is_some() {
@@ -163,7 +161,6 @@ impl NativeApp {
             self.rebuild_presentation();
             return;
         }
-        self.mount_shell_fragments(&mut presentation);
         self.presentation = Some(presentation);
         self.frame_scheduler.clear();
         self.update_ime_cursor_area();
@@ -179,82 +176,6 @@ impl NativeApp {
         if self.frame_scheduler.request(FrameInvalidation::Fragment) == FrameSchedule::RequestFrame
         {
             self.request_redraw();
-        }
-    }
-
-    pub(super) fn rebuild_fragment_on_next_redraw(&mut self, id: ElementId) {
-        if self.frame_scheduler.request_fragment(id) == FrameSchedule::RequestFrame {
-            self.request_redraw();
-        }
-    }
-
-    pub(super) fn mount_shell_fragments(&mut self, presentation: &mut ShellPresentation) {
-        let fragment = language_server_settings::LANGUAGE_SERVER_SWITCH;
-        let Some(content) = presentation.language_server_settings_content else {
-            presentation.forget_retained_fragment(fragment);
-            if self
-                .retained_runtime
-                .fragment_registry()
-                .state(fragment)
-                .is_some()
-            {
-                self.retained_runtime
-                    .unmount(fragment)
-                    .expect("retained shell fragment should be mounted before unmount");
-            }
-            return;
-        };
-        self.retained_runtime.mount(fragment);
-        let target = language_server_settings::switch_animation_target(
-            self.language_server_settings.switch_selection(),
-        );
-        let progress = self
-            .retained_runtime
-            .animation_registry()
-            .value(language_server_settings::SWITCH_ANIMATION_KEY)
-            .unwrap_or(target);
-        presentation.record_retained_fragment(fragment);
-        presentation.scene_mut().with_fragment(fragment, |scene| {
-            language_server_settings::paint_switch_fragment(
-                scene,
-                content,
-                &self.language_server_settings,
-                self.palette,
-                &self.ui_dispatch,
-                progress,
-            );
-        });
-    }
-
-    pub(super) fn rebuild_shell_fragments(&mut self, ids: Vec<ElementId>) {
-        let Some(mut presentation) = self.presentation.take() else {
-            self.rebuild_presentation();
-            return;
-        };
-        let target = language_server_settings::switch_animation_target(
-            self.language_server_settings.switch_selection(),
-        );
-        let progress = self
-            .retained_runtime
-            .animation_registry()
-            .value(language_server_settings::SWITCH_ANIMATION_KEY)
-            .unwrap_or(target);
-        let mut rebuilt = true;
-        for id in ids {
-            rebuilt &= rebuild_shell_fragment(
-                &mut presentation,
-                id,
-                &self.language_server_settings,
-                self.palette,
-                &self.ui_dispatch,
-                progress,
-            );
-        }
-        self.presentation = Some(presentation);
-        if rebuilt {
-            self.frame_scheduler.clear();
-        } else {
-            self.rebuild_presentation();
         }
     }
 }

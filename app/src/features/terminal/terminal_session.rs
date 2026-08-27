@@ -12,7 +12,6 @@ use zui::app::AppProxy;
 use crate::PRODUCT_DISPLAY_NAME;
 use crate::app_server::AppServerHost;
 use crate::native_event::NativeEvent;
-use crate::session::session_switch_trace;
 
 #[path = "terminal_session/remote.rs"]
 mod remote;
@@ -81,26 +80,11 @@ impl TerminalSession {
         event_proxy: AppProxy<NativeEvent>,
         target: AppServerHost,
     ) -> Result<()> {
-        session_switch_trace::event(
-            None,
-            "terminal-spawn-queued",
-            format_args!("key={key:?} rows={} cols={}", size.rows(), size.cols()),
-        );
         std::thread::Builder::new()
             .name("app-terminal-spawn".to_owned())
             .spawn(move || {
-                session_switch_trace::event(
-                    None,
-                    "terminal-spawn-start",
-                    format_args!("key={key:?}"),
-                );
                 let result = Self::spawn(key, size, event_proxy.clone(), target)
                     .map_err(|error| format!("{error:#}"));
-                session_switch_trace::event(
-                    None,
-                    "terminal-spawn-finished",
-                    format_args!("key={key:?} success={}", result.is_ok()),
-                );
                 let _ = event_proxy.send_event(TerminalReady::new(key, result).into());
             })
             .context("could not start terminal spawn worker")?;
@@ -113,7 +97,6 @@ impl TerminalSession {
         event_proxy: AppProxy<NativeEvent>,
         target: AppServerHost,
     ) -> Result<Self> {
-        let _trace = session_switch_trace::Span::new(None, "terminal-session-spawn");
         let Some(connection) = target.remote_connection() else {
             return Self::spawn_local(key, size, event_proxy);
         };

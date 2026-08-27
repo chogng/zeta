@@ -10,10 +10,8 @@ from pathlib import Path
 EXPECTED_APP_MEMBERS = {
     "app",
     "app/commands",
-    "app/composer",
     "app/editor",
     "app/icons",
-    "app/keybinding-ui",
     "app/markdown",
     "app/keybindings",
     "app/settings",
@@ -24,6 +22,7 @@ EXPECTED_APP_MEMBERS = {
 }
 
 RETIRED_PRODUCT_PATHS = {
+    "app/composer",
     "app/src/workbench_host",
     "app/src/workbench_host.rs",
     "zeta-rs/native",

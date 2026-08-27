@@ -269,7 +269,6 @@ fn app_app_server_adapter_owns_the_zeta_rs_client_boundary() {
         "ui-components/Cargo.toml",
         "workbench/Cargo.toml",
         "zui/Cargo.toml",
-        "composer/Cargo.toml",
         "editor/Cargo.toml",
         "settings/Cargo.toml",
     ] {

@@ -36,10 +36,9 @@ src/app/
   runtime.rs            后台事件处理
   workbench*.rs         Workbench 产品接线与调整尺寸
 src/app_server.rs       App Server 适配入口
-src/features/           Agent、Editor、Remote、Settings、Terminal、Workspace 产品适配
+src/features/           Agent、Editor、Remote、Terminal、Workspace 产品适配
 src/platform/           键盘、IME 和窗口事件适配
-src/presentation/       Shell 界面、交互标识和主题适配
-src/session/            Session 搜索、菜单和画布接线
+src/presentation/       Shell 界面、Workbench Tab 菜单适配、交互标识和主题适配
 ```
 
 `NativeApp` 是唯一产品组合根，但不能继续吸收能力实现。跨功能协调应先确定长期负责的能力 crate，产品宿主只做必要调用。若某个改动让能力 crate 反向读取 `NativeApp` 字段，说明依赖方向已经错误。
@@ -62,14 +61,14 @@ src/session/            Session 搜索、菜单和画布接线
 | 能力 | 实现契约 |
 | --- | --- |
 | Agent Session | [`zeta-agent-session`](agent-session/README.md) |
-| Composer | [`zeta-composer`](composer/README.md) |
 | Editor | [`zeta-editor`](editor/README.md)、[`zeta-editor-host`](editor-host/README.md) |
-| Session | [`zeta-session`](session/README.md) |
+| Session Pane 与 Composer | [`zeta-session`](session/README.md) |
+| Settings | [`zeta-settings`](settings/README.md) |
 | Workspace UI | [`zeta-workspace-ui`](workspace-ui/README.md) |
 | Remote UI | [`zeta-remote-ui`](remote-ui/README.md) |
 | Terminal runtime 与 Pane 绑定 | [`zeta-terminal-workspace`](terminal-workspace/README.md)、[`TERMINAL.md`](TERMINAL.md) |
 | Workbench | [`zeta-workbench`](workbench/README.md) |
-| 命令与快捷键 | [`zeta-commands`](commands/README.md)、[`zeta-keybindings-host`](keybindings/README.md)、[`app-keybinding-ui`](keybinding-ui/README.md) |
+| 命令与快捷键 | [`zeta-commands`](commands/README.md)、[`zeta-keybindings-host`](keybindings/README.md)；快捷键设置页面由 [`zeta-settings`](settings/README.md) 管 |
 
 修改能力内部行为时，先读对应 README；不要把能力状态或算法复制回产品宿主。
 

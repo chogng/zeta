@@ -1,13 +1,18 @@
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use serde_json::Value;
-use zeta_protocol::{PlanStepStatus, ThreadItem};
+use zeta_protocol::PlanStepStatus;
+use zeta_protocol::ThreadItem;
+use zeta_protocol::ToolCallId;
+use zeta_protocol::ToolOutputStream;
+use zeta_thread_transcript::ThreadTranscriptEntry;
 use zui::ui::{
     Component, ComponentElement, Edges, Element, FontFamily, FontWeight, PaintRect, Point, Rect,
     Size, TextBlock, TextStyle, UiScene,
 };
 
-use crate::thread_state::ThreadState;
+use crate::TranscriptState;
 
 const TIMELINE_HORIZONTAL_PADDING: f32 = 20.0;
 const TIMELINE_VERTICAL_PADDING: f32 = 18.0;
@@ -46,6 +51,7 @@ enum TimelineLineKind {
     UserMessage,
     AgentLabel,
     AgentMessage,
+    AgentError,
     ToolLabel,
     ToolCommand,
     ToolOutput,
@@ -67,13 +73,13 @@ pub struct ThreadTimeline {
 impl ThreadTimeline {
     pub fn new(
         bounds: Rect,
-        thread_state: &ThreadState,
+        transcript: &TranscriptState,
         scroll_offset: usize,
         style: ThreadTimelineStyle,
     ) -> Self {
         Self {
             bounds,
-            lines: scrolled_lines(thread_state, bounds, scroll_offset),
+            lines: scrolled_lines(transcript, bounds, scroll_offset),
             style,
         }
     }
@@ -140,122 +146,201 @@ impl Component for ThreadTimeline {
     }
 }
 
-fn build_lines(thread_state: &ThreadState) -> Vec<TimelineLine> {
-    let items = thread_state.items().collect::<Vec<_>>();
-    let tool_results = items
+fn build_lines(transcript: &TranscriptState) -> Vec<TimelineLine> {
+    let entries = transcript.entries();
+    let tool_call_ids = entries
         .iter()
-        .filter_map(|item| match item {
-            ThreadItem::ToolResult {
-                tool_call_id,
-                text,
-                is_error,
+        .filter_map(|entry| match entry {
+            ThreadTranscriptEntry::Item {
+                item: ThreadItem::ToolCall { tool_call_id, .. },
+                ..
+            } => Some(tool_call_id.clone()),
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>();
+    let tool_results = entries
+        .iter()
+        .filter_map(|entry| match entry {
+            ThreadTranscriptEntry::Item {
+                item:
+                    ThreadItem::ToolResult {
+                        tool_call_id,
+                        text,
+                        is_error,
+                        ..
+                    },
                 ..
             } => Some((tool_call_id.clone(), (text.as_str(), *is_error))),
             _ => None,
         })
         .collect::<BTreeMap<_, _>>();
+    let mut transient_tool_outputs = BTreeMap::<ToolCallId, TransientToolOutput>::new();
+    for entry in entries {
+        let ThreadTranscriptEntry::ToolOutput {
+            tool_call_id,
+            stream,
+            text,
+            ..
+        } = entry
+        else {
+            continue;
+        };
+        let output = transient_tool_outputs
+            .entry(tool_call_id.clone())
+            .or_default();
+        match stream {
+            ToolOutputStream::Stdout => output.stdout = text.clone(),
+            ToolOutputStream::Stderr => output.stderr = text.clone(),
+        }
+    }
     let mut lines = Vec::new();
-    for item in items {
-        match item {
-            ThreadItem::UserMessage { text, .. } => {
-                push_section(&mut lines, "You", TimelineLineKind::UserLabel);
-                push_text(&mut lines, text, TimelineLineKind::UserMessage);
-            }
-            ThreadItem::UserContext { name, .. } => {
-                push_section(&mut lines, "You · Context", TimelineLineKind::UserLabel);
-                push_text(&mut lines, name, TimelineLineKind::UserMessage);
-            }
-            ThreadItem::UserImage { url, .. } => {
-                push_section(&mut lines, "You · Image", TimelineLineKind::UserLabel);
-                push_text(&mut lines, url, TimelineLineKind::UserMessage);
-            }
-            ThreadItem::UserImageAttachment { attachment, .. } => {
-                push_section(&mut lines, "You · Image", TimelineLineKind::UserLabel);
-                push_text(
-                    &mut lines,
-                    &format!(
-                        "{} · {}×{}",
-                        attachment.media_type.mime_type(),
-                        attachment.width,
-                        attachment.height
-                    ),
-                    TimelineLineKind::UserMessage,
-                );
-            }
-            ThreadItem::AgentMessage { text, .. } => {
-                push_section(&mut lines, "Agent", TimelineLineKind::AgentLabel);
-                push_text(&mut lines, text, TimelineLineKind::AgentMessage);
-            }
-            ThreadItem::Reasoning { text, .. } => {
-                push_section(
-                    &mut lines,
-                    "Agent · Reasoning",
-                    TimelineLineKind::AgentLabel,
-                );
-                push_text(&mut lines, text, TimelineLineKind::AgentMessage);
-            }
-            ThreadItem::Plan { text, .. } => {
-                push_section(&mut lines, "Agent · Plan", TimelineLineKind::AgentLabel);
-                push_text(&mut lines, text, TimelineLineKind::AgentMessage);
-            }
-            ThreadItem::ToolCall {
-                tool_call_id,
-                name,
-                arguments_json,
-                ..
-            } => {
-                push_section(
-                    &mut lines,
-                    &format!("Tool · {name}"),
-                    TimelineLineKind::ToolLabel,
-                );
-                push_text(
-                    &mut lines,
-                    &tool_command(name.as_str(), arguments_json),
-                    TimelineLineKind::ToolCommand,
-                );
-                if let Some((output, is_error)) = tool_results.get(tool_call_id) {
-                    let is_error = *is_error || shell_output_failed(name.as_str(), output);
+    for entry in entries {
+        match entry {
+            ThreadTranscriptEntry::Item { item, .. } => match item {
+                ThreadItem::UserMessage { text, .. } => {
+                    push_section(&mut lines, "You", TimelineLineKind::UserLabel);
+                    push_text(&mut lines, text, TimelineLineKind::UserMessage);
+                }
+                ThreadItem::UserContext { name, .. } => {
+                    push_section(&mut lines, "You · Context", TimelineLineKind::UserLabel);
+                    push_text(&mut lines, name, TimelineLineKind::UserMessage);
+                }
+                ThreadItem::UserImage { url, .. } => {
+                    push_section(&mut lines, "You · Image", TimelineLineKind::UserLabel);
+                    push_text(&mut lines, url, TimelineLineKind::UserMessage);
+                }
+                ThreadItem::UserImageAttachment { attachment, .. } => {
+                    push_section(&mut lines, "You · Image", TimelineLineKind::UserLabel);
                     push_text(
                         &mut lines,
-                        &tool_output(name.as_str(), output),
-                        if is_error {
+                        &format!(
+                            "{} · {}×{}",
+                            attachment.media_type.mime_type(),
+                            attachment.width,
+                            attachment.height
+                        ),
+                        TimelineLineKind::UserMessage,
+                    );
+                }
+                ThreadItem::AgentMessage { text, .. } => {
+                    push_section(&mut lines, "Agent", TimelineLineKind::AgentLabel);
+                    push_text(&mut lines, text, TimelineLineKind::AgentMessage);
+                }
+                ThreadItem::Reasoning { text, .. } => {
+                    push_section(
+                        &mut lines,
+                        "Agent · Reasoning",
+                        TimelineLineKind::AgentLabel,
+                    );
+                    push_text(&mut lines, text, TimelineLineKind::AgentMessage);
+                }
+                ThreadItem::Plan { text, .. } => {
+                    push_section(&mut lines, "Agent · Plan", TimelineLineKind::AgentLabel);
+                    push_text(&mut lines, text, TimelineLineKind::AgentMessage);
+                }
+                ThreadItem::ToolCall {
+                    tool_call_id,
+                    name,
+                    arguments_json,
+                    ..
+                } => {
+                    push_section(
+                        &mut lines,
+                        &format!("Tool · {name}"),
+                        TimelineLineKind::ToolLabel,
+                    );
+                    push_text(
+                        &mut lines,
+                        &tool_command(name.as_str(), arguments_json),
+                        TimelineLineKind::ToolCommand,
+                    );
+                    if let Some((output, is_error)) = tool_results.get(tool_call_id) {
+                        let is_error = *is_error || shell_output_failed(name.as_str(), output);
+                        push_text(
+                            &mut lines,
+                            &tool_output(name.as_str(), output),
+                            if is_error {
+                                TimelineLineKind::ToolError
+                            } else {
+                                TimelineLineKind::ToolOutput
+                            },
+                        );
+                    } else if let Some(output) = transient_tool_outputs.get(tool_call_id) {
+                        push_text(&mut lines, &output.stdout, TimelineLineKind::ToolOutput);
+                        push_text(&mut lines, &output.stderr, TimelineLineKind::ToolError);
+                    }
+                }
+                ThreadItem::ToolResult {
+                    tool_call_id,
+                    text,
+                    is_error,
+                    ..
+                } if !tool_call_ids.contains(tool_call_id) => {
+                    push_section(&mut lines, "Tool · Result", TimelineLineKind::ToolLabel);
+                    push_text(
+                        &mut lines,
+                        text,
+                        if *is_error {
                             TimelineLineKind::ToolError
                         } else {
                             TimelineLineKind::ToolOutput
                         },
                     );
-                } else if let Some((stdout, stderr)) = thread_state.tool_output(tool_call_id) {
-                    push_text(&mut lines, stdout, TimelineLineKind::ToolOutput);
-                    push_text(&mut lines, stderr, TimelineLineKind::ToolError);
+                }
+                ThreadItem::ToolResult { .. } => {}
+            },
+            ThreadTranscriptEntry::TurnPlan { plan, .. } => {
+                push_section(&mut lines, "Agent · Plan", TimelineLineKind::AgentLabel);
+                if let Some(explanation) = plan.explanation.as_deref() {
+                    push_text(&mut lines, explanation, TimelineLineKind::AgentMessage);
+                }
+                for step in &plan.steps {
+                    let marker = match step.status {
+                        PlanStepStatus::Pending => "○",
+                        PlanStepStatus::InProgress => "◐",
+                        PlanStepStatus::Completed => "●",
+                    };
+                    push_text(
+                        &mut lines,
+                        &format!("{marker} {}", step.step),
+                        TimelineLineKind::AgentMessage,
+                    );
                 }
             }
-            ThreadItem::ToolResult { .. } => {}
-        }
-    }
-    if let Some(plan) = thread_state.plan() {
-        push_section(&mut lines, "Agent · Plan", TimelineLineKind::AgentLabel);
-        if let Some(explanation) = plan.explanation.as_deref() {
-            push_text(&mut lines, explanation, TimelineLineKind::AgentMessage);
-        }
-        for step in &plan.steps {
-            let marker = match step.status {
-                PlanStepStatus::Pending => "○",
-                PlanStepStatus::InProgress => "◐",
-                PlanStepStatus::Completed => "●",
-            };
-            push_text(
-                &mut lines,
-                &format!("{marker} {}", step.step),
-                TimelineLineKind::AgentMessage,
-            );
+            ThreadTranscriptEntry::TurnError { error, .. } => {
+                push_section(&mut lines, "Agent · Error", TimelineLineKind::AgentError);
+                push_text(&mut lines, &error.message, TimelineLineKind::AgentError);
+            }
+            ThreadTranscriptEntry::ToolOutput {
+                tool_call_id,
+                text,
+                stream,
+                ..
+            } if !tool_call_ids.contains(tool_call_id) => {
+                push_section(&mut lines, "Tool · Output", TimelineLineKind::ToolLabel);
+                push_text(
+                    &mut lines,
+                    text,
+                    match stream {
+                        ToolOutputStream::Stdout => TimelineLineKind::ToolOutput,
+                        ToolOutputStream::Stderr => TimelineLineKind::ToolError,
+                    },
+                );
+            }
+            ThreadTranscriptEntry::ToolOutput { .. } => {}
         }
     }
     lines
 }
 
-pub fn line_count(thread_state: &ThreadState) -> usize {
-    build_lines(thread_state).len()
+#[derive(Default)]
+struct TransientToolOutput {
+    stdout: String,
+    stderr: String,
+}
+
+pub fn line_count(transcript: &TranscriptState) -> usize {
+    build_lines(transcript).len()
 }
 
 pub fn line_capacity(bounds: Rect) -> usize {
@@ -265,11 +350,11 @@ pub fn line_capacity(bounds: Rect) -> usize {
 }
 
 fn scrolled_lines(
-    thread_state: &ThreadState,
+    transcript: &TranscriptState,
     bounds: Rect,
     scroll_offset: usize,
 ) -> Vec<TimelineLine> {
-    let lines = build_lines(thread_state);
+    let lines = build_lines(transcript);
     let capacity = line_capacity(bounds);
     let offset = scroll_offset.min(lines.len().saturating_sub(capacity));
     let end = lines.len().saturating_sub(offset);
@@ -394,6 +479,9 @@ fn line_style(kind: TimelineLineKind, style: ThreadTimelineStyle) -> TextStyle {
         ),
         TimelineLineKind::UserMessage | TimelineLineKind::AgentMessage => {
             (14.0, style.text, FontFamily::SansSerif, FontWeight::Normal)
+        }
+        TimelineLineKind::AgentError => {
+            (14.0, style.error, FontFamily::SansSerif, FontWeight::Normal)
         }
         TimelineLineKind::ToolCommand | TimelineLineKind::ToolOutput => {
             (13.0, style.text, FontFamily::Monospace, FontWeight::Normal)

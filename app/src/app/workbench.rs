@@ -23,7 +23,7 @@ impl NativeApp {
         {
             return false;
         }
-        if let Some(session) = self.agent_session.as_ref()
+        if let Some(session) = self.session_runtime.as_ref()
             && let Some(session_id) = tab_key.session_id()
             && let Err(error) = session.stop_session(session_id.clone())
         {
@@ -51,7 +51,7 @@ impl NativeApp {
         if was_active {
             match closed.active_tab().cloned() {
                 Some(tab_key @ TabInputKey::Session(_)) => {
-                    self.activate_session_tab_after_close(&tab_key);
+                    self.mount_session_pane(&tab_key);
                 }
                 Some(TabInputKey::Settings) => self.activate_settings_tab(),
                 None => self.workspace_surface.show_agent(),
@@ -154,7 +154,11 @@ impl NativeApp {
             .or_else(|| self.terminal_workspace.active_key())
     }
 
-    pub(super) fn update_terminal_status(&mut self, key: TerminalSessionKey, status: &str) {
+    pub(super) fn update_terminal_status(
+        &mut self,
+        key: TerminalSessionKey,
+        status: zeta_workbench::TabStatus,
+    ) {
         let Some(session_id) = self.terminal_workspace.session_id_for_key(key) else {
             return;
         };
@@ -364,18 +368,14 @@ impl NativeApp {
 impl NativeApp {
     /// Selects the singleton Settings workbench item and prepares its feature-owned state.
     pub(super) fn activate_settings_tab(&mut self) {
-        if !self.workbench.workbench().tab_part().is_settings() {
-            self.settings_section = zeta_settings::SettingsPageSection::LanguageServers;
-        }
+        self.settings.reopen();
         let _ = self.workbench.activate_settings();
-        self.language_server_settings.open();
-        self.keyboard_shortcuts.close();
         let _ = self.git_branch_context_menu.dismiss();
         let _ = self.workspace_path_picker.dismiss();
         let _ = self.remote_connection_picker.dismiss();
         self.dismiss_remote_connection_manager();
         self.dismiss_remote_tunnel_manager();
-        self.dismiss_session_context_menu();
+        self.dismiss_tab_context_menu();
         self.pending_focus = Some(zeta_settings::SETTINGS_SEARCH_INPUT);
         self.keybindings.cancel_chord();
     }
@@ -396,8 +396,7 @@ impl NativeApp {
                 let _ = self.bind_agent_pane();
             }
         }
-        self.language_server_settings.close();
-        self.keyboard_shortcuts.close();
+        self.settings.close();
         self.pending_focus = Some(if self.workspace_surface.is_editor() {
             crate::shell_interaction::FILE_EDITOR_DOCUMENT
         } else {

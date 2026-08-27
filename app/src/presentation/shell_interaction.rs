@@ -2,19 +2,26 @@ use std::ops::Range;
 use zui::ui::ElementId;
 
 pub(crate) use zeta_workbench::{
-    ADD_SESSION, FIRST_TAB_CONTAINER_SESSION_TAB, SESSION_SEARCH_INPUT, TAB_CONTAINER_SETTINGS_TAB,
-    TAB_CONTAINER_TOGGLE, TITLEBAR_SETTINGS_TAB, WINDOW, WORKSPACE_PANE_TOGGLE, session_tab_id,
-    titlebar_session_tab_id,
+    ADD_SESSION, FIRST_TAB_CONTAINER_SESSION_TAB, SESSION_SEARCH_INPUT, TAB_CONTAINER_TOGGLE,
+    WINDOW, WORKSPACE_PANE_TOGGLE,
 };
 #[cfg(test)]
 pub(crate) use zeta_workbench::{
     FIRST_TITLEBAR_SESSION_TAB, TAB_CONTAINER_ACTION_BAR, TAB_CONTAINER_LIST,
-    TAB_CONTAINER_TOOLBAR, TITLEBAR, TITLEBAR_TAB_LIST,
+    TAB_CONTAINER_SETTINGS_TAB, TAB_CONTAINER_TOOLBAR, TITLEBAR, TITLEBAR_TAB_LIST,
 };
 
+pub(crate) use zeta_session::interaction::{
+    COMPOSER, COMPOSER_INTERACTION, CONTEXT_GIT_BRANCH, CONTEXT_LOCATION,
+    CONTEXT_WORKING_DIRECTORY, ContextAction, THREAD_TIMELINE, composer_interaction_item_id,
+};
 #[cfg(test)]
-pub(crate) use zeta_session::interaction::SESSION_CONTEXT_MENU;
-pub(crate) use zeta_session::interaction::SessionContextMenuAction;
+pub(crate) use zeta_session::interaction::{
+    COMPOSER_INFO_BAR, COMPOSER_PANEL, CONTEXT_DIFF, SESSION_HEADER,
+};
+#[cfg(test)]
+pub(crate) use zeta_workbench::TAB_CONTEXT_MENU;
+pub(crate) use zeta_workbench::TabContextMenuAction;
 #[cfg(test)]
 pub(crate) use zeta_workspace_ui::interaction::{
     AGENT_CHANGES, AGENT_EDITOR_PANE, AGENT_FILES, AGENT_FILES_ACTION_BAR, AGENT_FILES_TOOLBAR,
@@ -29,31 +36,17 @@ pub(crate) use crate::workspace_panes::WorkspacePaneSelection;
 
 const SHELL_SCOPE: u32 = 1;
 const FILE_EDITOR_ACTION_SCOPE: u32 = 7;
-#[cfg(test)]
-const SESSION_CONTENT_SCOPE: u32 = 16;
 
 pub(crate) const MAIN_SURFACE: ElementId = ElementId::scoped(SHELL_SCOPE, 3);
 pub(crate) const TERMINAL_OUTPUT: ElementId = ElementId::scoped(SHELL_SCOPE, 4);
-pub(crate) const COMPOSER_PANEL: ElementId = ElementId::scoped(SHELL_SCOPE, 5);
-pub(crate) const COMPOSER: ElementId = ElementId::scoped(SHELL_SCOPE, 6);
-pub(crate) const CONTEXT_TOOLBAR: ElementId = ElementId::scoped(SHELL_SCOPE, 7);
-pub(crate) const CONTEXT_LOCATION: ElementId = ElementId::scoped(SHELL_SCOPE, 8);
-pub(crate) const CONTEXT_WORKING_DIRECTORY: ElementId = ElementId::scoped(SHELL_SCOPE, 9);
-pub(crate) const CONTEXT_GIT_BRANCH: ElementId = ElementId::scoped(SHELL_SCOPE, 10);
-pub(crate) const CONTEXT_DIFF: ElementId = ElementId::scoped(SHELL_SCOPE, 11);
 pub(crate) const TAB_CONTAINER_RESIZE_HANDLE: ElementId = ElementId::scoped(SHELL_SCOPE, 16);
 pub(crate) const INSPECTOR_RESIZE_HANDLE: ElementId = ElementId::scoped(SHELL_SCOPE, 51);
-pub(crate) const THREAD_TIMELINE: ElementId = ElementId::scoped(SHELL_SCOPE, 40);
-pub(crate) const COMPOSER_INTERACTION: ElementId = ElementId::scoped(SHELL_SCOPE, 42);
-pub(crate) const COMPOSER_INFO_BAR: ElementId = ElementId::scoped(SHELL_SCOPE, 43);
 pub(crate) const FILE_EDITOR_PANE: ElementId = ElementId::scoped(SHELL_SCOPE, 44);
 pub(crate) const FILE_EDITOR_DOCUMENT: ElementId = ElementId::scoped(SHELL_SCOPE, 45);
 pub(crate) const FILE_EDITOR_TAB_LIST: ElementId = ElementId::scoped(SHELL_SCOPE, 46);
 pub(crate) const FILE_EDITOR_FIND_INPUT: ElementId = ElementId::scoped(SHELL_SCOPE, 47);
 pub(crate) const FILE_EDITOR_REPLACE_INPUT: ElementId = ElementId::scoped(SHELL_SCOPE, 48);
 pub(crate) const FILE_EDITOR_SEARCH_BAR: ElementId = ElementId::scoped(SHELL_SCOPE, 49);
-#[cfg(test)]
-pub(crate) const SESSION_HEADER: ElementId = ElementId::scoped(SESSION_CONTENT_SCOPE, 1);
 pub(crate) const FILE_EDITOR_NOTICE: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 1);
 const FILE_EDITOR_RELOAD: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 2);
 const FILE_EDITOR_OVERWRITE: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 3);
@@ -65,35 +58,15 @@ const FILE_EDITOR_FIND_NEXT: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SC
 const FILE_EDITOR_REPLACE_CURRENT: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 9);
 const FILE_EDITOR_REPLACE_ALL: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 10);
 const FILE_EDITOR_CLOSE_SEARCH: ElementId = ElementId::scoped(FILE_EDITOR_ACTION_SCOPE, 11);
-const FIRST_COMPOSER_INTERACTION_ITEM: u32 = 100;
 const FIRST_FILE_EDITOR_TAB: u32 = 200;
 const FIRST_FILE_EDITOR_FOLD: u32 = 1_000;
 const FIRST_FILE_EDITOR_CLOSE: u32 = 100;
-
-pub(crate) fn composer_interaction_item_id(index: usize) -> ElementId {
-    let local = u32::try_from(index)
-        .ok()
-        .and_then(|index| FIRST_COMPOSER_INTERACTION_ITEM.checked_add(index))
-        .expect("composer interaction item index must fit its element scope");
-    ElementId::scoped(SHELL_SCOPE, local)
-}
 
 pub(crate) fn composer_interaction_item_index(
     id: ElementId,
     mut visible_range: Range<usize>,
 ) -> Option<usize> {
     visible_range.find(|index| composer_interaction_item_id(*index) == id)
-}
-
-pub(crate) fn session_tab_index(id: ElementId, mounted: Range<usize>) -> Option<usize> {
-    mounted
-        .clone()
-        .find(|index| session_tab_id(*index) == id)
-        .or_else(|| {
-            mounted
-                .into_iter()
-                .find(|index| titlebar_session_tab_id(*index) == id)
-        })
 }
 
 pub(crate) fn file_editor_tab_id(index: usize) -> ElementId {
@@ -197,42 +170,6 @@ impl FileEditorAction {
             FILE_EDITOR_REPLACE_CURRENT => Some(Self::ReplaceCurrent),
             FILE_EDITOR_REPLACE_ALL => Some(Self::ReplaceAll),
             FILE_EDITOR_CLOSE_SEARCH => Some(Self::CloseSearch),
-            _ => None,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ContextAction {
-    Location,
-    WorkingDirectory,
-    GitBranch,
-    Diff,
-}
-
-impl ContextAction {
-    pub(crate) const ALL: [Self; 4] = [
-        Self::Location,
-        Self::WorkingDirectory,
-        Self::GitBranch,
-        Self::Diff,
-    ];
-
-    pub(crate) const fn element_id(self) -> ElementId {
-        match self {
-            Self::Location => CONTEXT_LOCATION,
-            Self::WorkingDirectory => CONTEXT_WORKING_DIRECTORY,
-            Self::GitBranch => CONTEXT_GIT_BRANCH,
-            Self::Diff => CONTEXT_DIFF,
-        }
-    }
-
-    pub(crate) const fn from_element_id(id: ElementId) -> Option<Self> {
-        match id {
-            CONTEXT_LOCATION => Some(Self::Location),
-            CONTEXT_WORKING_DIRECTORY => Some(Self::WorkingDirectory),
-            CONTEXT_GIT_BRANCH => Some(Self::GitBranch),
-            CONTEXT_DIFF => Some(Self::Diff),
             _ => None,
         }
     }

@@ -89,10 +89,7 @@ fn desktop_file_names_are_canonical_reverse_dns_identities() {
     let name = DesktopFileName::new("dev.zeta.App").unwrap();
     assert_eq!(name.as_str(), "dev.zeta.App.desktop");
     assert_eq!(name.application_id(), "dev.zeta.App");
-    assert_eq!(
-        DesktopFileName::new("dev.zeta.App.desktop").unwrap(),
-        name
-    );
+    assert_eq!(DesktopFileName::new("dev.zeta.App.desktop").unwrap(), name);
 
     for invalid in ["app", ".desktop", "dev..app", "dev.zeta_app"] {
         assert!(DesktopFileName::new(invalid).is_err(), "accepted {invalid}");

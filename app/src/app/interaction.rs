@@ -99,7 +99,6 @@ impl NativeApp {
         let sash_changed = self.sync_sash_pointer_presence(Instant::now());
         let activation = matches!(outcome.intent, Some(UiIntent::Activate(_)));
         if let Some(intent) = outcome.intent {
-            session_switch_trace::event(None, "ui-intent", format_args!("intent={intent:?}"));
             match intent {
                 UiIntent::StartWindowDrag(_) => {
                     if let Some(window) = self.window.as_ref()
@@ -119,10 +118,8 @@ impl NativeApp {
             }
             DispatchInvalidation::Fragment => {
                 self.sync_input_focus();
-                if activation {
+                if activation || outcome.fragment.is_some() {
                     self.rebuild_presentation_on_next_redraw();
-                } else if let Some(id) = outcome.fragment {
-                    self.rebuild_fragment_on_next_redraw(id);
                 } else {
                     self.rebuild_overlay_on_next_redraw();
                 }
@@ -134,16 +131,15 @@ impl NativeApp {
     }
 
     pub(super) fn activate_shell_element(&mut self, id: zui::ui::ElementId) {
-        if self.activate_language_server_settings_element(id) {
+        if self.activate_settings_element(id) {
             return;
         }
         if self.activate_file_editor_element(id) {
             return;
         }
         let interaction_item_count = self
-            .composer
-            .interaction()
-            .view()
+            .session_pane
+            .composer_interaction_view()
             .map(|view| view.items().len())
             .unwrap_or(0);
         if let Some(index) =
@@ -167,9 +163,6 @@ impl NativeApp {
         if self.workspace_pane_host.toggle_multi_diff_fold(id) {
             return;
         }
-        if self.activate_keyboard_shortcuts_element(id) {
-            return;
-        }
         if self.activate_remote_connection_manager_element(id) {
             return;
         }
@@ -185,31 +178,44 @@ impl NativeApp {
         if self.activate_workspace_path_picker_element(id) {
             return;
         }
-        if matches!(
-            id,
-            shell_interaction::TAB_CONTAINER_SETTINGS_TAB
-                | shell_interaction::TITLEBAR_SETTINGS_TAB
-        ) {
-            self.activate_settings_tab();
-            return;
-        }
-        if let Some(index) = shell_interaction::session_tab_index(
-            id,
-            0..self.workbench.workbench().tab_part().session_count(),
-        ) {
-            session_switch_trace::event(
-                None,
-                "session-tab-hit",
-                format_args!(
-                    "element={id:?} index={index} tab_count={}",
-                    self.workbench.workbench().tab_part().session_count()
-                ),
-            );
-            self.activate_session_tab(index);
+        if let Some(intent) =
+            zeta_workbench::tab_intent_for_element(self.workbench.workbench().tab_part(), id)
+        {
+            match intent {
+                zeta_workbench::TabIntent::Activate(TabInputKey::Settings) => {
+                    self.activate_settings_tab();
+                }
+                zeta_workbench::TabIntent::Activate(tab @ TabInputKey::Session(_)) => {
+                    if self.workbench.activate_tab(tab.clone()) {
+                        self.mount_session_pane(&tab);
+                    }
+                }
+                zeta_workbench::TabIntent::Close(tab) => {
+                    let _ = self.close_session_tab(&tab);
+                }
+            }
             return;
         }
         if let Some(request) = command_dispatch::command_request_for_element(id) {
             self.dispatch_command(request);
+        }
+    }
+
+    fn activate_settings_element(&mut self, id: ElementId) -> bool {
+        if !self.workbench.workbench().tab_part().is_settings() {
+            return false;
+        }
+        match self.settings.activate(id) {
+            zeta_settings::SettingsActivation::Ignored => false,
+            zeta_settings::SettingsActivation::Changed => {
+                self.rebuild_presentation();
+                self.request_redraw();
+                true
+            }
+            zeta_settings::SettingsActivation::Close => {
+                self.close_settings_tab();
+                true
+            }
         }
     }
 
@@ -231,7 +237,7 @@ impl NativeApp {
         if self.route_workspace_path_picker_pointer_move(point) {
             return;
         }
-        if self.route_session_context_menu_pointer_move(point) {
+        if self.route_tab_context_menu_pointer_move(point) {
             return;
         }
         if self.route_tab_container_resize_move(point) {
@@ -321,8 +327,8 @@ impl NativeApp {
                 zeta_editor::CodeEditorSelectionMode::Move
             };
             if self
-                .composer
-                .move_caret_to_point(bounds, point, selection_mode)
+                .session_pane
+                .move_composer_caret_to_point(bounds, point, selection_mode)
             {
                 self.composer_changed();
             }
@@ -345,7 +351,7 @@ impl NativeApp {
         if self.route_workspace_path_picker_button(state, button) {
             return;
         }
-        if self.route_session_context_menu_button(state, button) {
+        if self.route_tab_context_menu_button(state, button) {
             return;
         }
         if button == MouseButton::Left && self.route_tab_container_resize_button(state) {

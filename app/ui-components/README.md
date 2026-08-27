@@ -6,8 +6,8 @@
 > renderer contract 与私有 wgpu 实现见 [`zui`](../zui/README.md)；native 文本输入的跨 crate ownership 见
 > [`docs/native-text-input.md`](../docs/native-text-input.md)；product icon system 见
 > [`docs/icons.md`](../../docs/icons.md)；Native UI 编写和样式边界见
-> [`docs/native-ui-authoring.md`](../docs/native-ui-authoring.md)。`Keycap` 的快捷键产品组合由
-> [`app-keybinding-ui`](../keybinding-ui/README.md) 拥有。
+> [`docs/native-ui-authoring.md`](../docs/native-ui-authoring.md)。`Keycap` 的快捷键设置组合由
+> [`zeta-settings`](../settings/README.md) 管，工作界面的组合键提示由 [`zeta-workbench`](../workbench/README.md) 管。
 
 `zeta-ui-components` 基于 `zui` 提供 Button、Switch、ActionBar、ContextMenu、Dropdown、TabList、Keycap、Sash、Resizable、ContextView、ScrollView 和输入框等可复用组合控件。调用方必须直接从 `zui::ui` 引用框架类型；本 crate 不转发 `zui` API。
 GPU pipeline、atlas、shader 和 surface 全部委托给 renderer backend。

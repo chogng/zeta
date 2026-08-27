@@ -1,7 +1,6 @@
 //! Session canvas tests.
 
 use super::{SessionCanvasLayout, SessionHeader, SessionHeaderStyle};
-use crate::thread_state::ThreadState;
 use zui::ui::Component;
 use zui::ui::Rect;
 use zui::ui::UiScene;
@@ -21,12 +20,11 @@ fn session_canvas_reserves_a_stable_header_above_the_thread_timeline() {
 
 #[test]
 fn empty_session_header_shows_ready_workspace_context() {
-    let state = ThreadState::default();
     let header = SessionHeader::new(
         Rect::from_xywh(0.0, 0.0, 700.0, 64.0),
         "",
         "Local  ·  ~/Desktop/zeta  ·  main  ·  Changes 2".to_owned(),
-        &state,
+        None,
         SessionHeaderStyle::new(
             zui::ui::Color::WHITE,
             zui::ui::Color::rgb(222, 222, 224),

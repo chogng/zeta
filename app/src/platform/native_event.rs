@@ -1,4 +1,4 @@
-use crate::agent_session::AgentSessionEvent;
+use crate::session_host::SessionRuntimeEvent;
 use crate::language_service_host::remote::RemoteLanguageEvent;
 use crate::remote_connection_process::RemoteWindowLaunchEvent;
 use crate::remote_tunnel_process::RemoteTunnelEvent;
@@ -6,7 +6,7 @@ use crate::terminal_session::{TerminalSessionEventEnvelope, TerminalSessionReady
 use zeta_language_service::LanguageServiceEvent;
 
 pub(crate) enum NativeEvent {
-    Agent(AgentSessionEvent),
+    Session(SessionRuntimeEvent),
     Terminal(TerminalSessionEventEnvelope),
     TerminalReady(TerminalSessionReady),
     LanguageService(LanguageServiceEvent),
@@ -15,9 +15,9 @@ pub(crate) enum NativeEvent {
     RemoteTunnel(RemoteTunnelEvent),
 }
 
-impl From<AgentSessionEvent> for NativeEvent {
-    fn from(event: AgentSessionEvent) -> Self {
-        Self::Agent(event)
+impl From<SessionRuntimeEvent> for NativeEvent {
+    fn from(event: SessionRuntimeEvent) -> Self {
+        Self::Session(event)
     }
 }
 

@@ -218,9 +218,9 @@ CLI 把 active profile root 显式交给 TUI；TUI 启动时加载产品资源�
 | Zeta Code 用户可配置 Keymap | Current | profile 资源、User precedence/blocker、`when`、平台覆盖、Chord、热重载和坏更新恢复持续通过测试 |
 | Zeta Code Keyboard Shortcuts Pane 与录制保存 | Current | 可搜索、来源/诊断可见；原子保存直接安装同一份已校验规则，不建立第二套 Resolver |
 
-迁移已经按一个 source of truth 原则完成首个纵切：纯 core 已移动，App UI 已拆出，Zeta Code 根级 Keymap 已接入，旧 `app/keybinding` 模块已删除。adapter 只能单向转换，不保留两套 Resolver。
+迁移已经按一个 source of truth 原则完成首个纵切：纯 core 已移动，App 的快捷键设置页面已归入 `zeta-settings`，工作界面的组合键提示由 `zeta-workbench` 管，Zeta Code 根级 Keymap 已接入，旧 `app/keybinding` 模块已删除。adapter 只能单向转换，不保留两套 Resolver。
 
-共享 core 可用 `bazel test //zeta-rs/keybinding:keybinding-unit-tests` 在三端平台验证。App host 与 UI 另有 `//app/keybindings:keybindings-unit-tests` 和 `//app/keybinding-ui:keybinding-ui-unit-tests` Bazel 目标。Windows Bazel 通过仓库拥有的 `rules_rs` 兼容补丁使用 gnullvm-hosted Rust tools，使 `rustc`、过程宏 DLL 和 hermetic LLVM/MinGW linker 使用同一 ABI；三个目标在 Windows、Linux 与 macOS 都实际运行，不再使用平台跳过。
+共享 core 可用 `bazel test //zeta-rs/keybinding:keybinding-unit-tests` 在三端平台验证。App 的运行时规则、设置页面和工作界面提示分别由 `//app/keybindings:keybindings-unit-tests`、`//app/settings:settings-unit-tests` 和 `//app/workbench:workbench-unit-tests` 验证。Windows Bazel 通过仓库拥有的 `rules_rs` 兼容补丁使用 gnullvm-hosted Rust tools，使 `rustc`、过程宏 DLL 和 hermetic LLVM/MinGW linker 使用同一 ABI；这些目标在 Windows、Linux 与 macOS 都实际运行，不再使用平台跳过。
 
 ## 9. 长期不变量
 

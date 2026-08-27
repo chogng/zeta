@@ -4,9 +4,6 @@ use zui::input::MouseScrollDelta;
 
 use crate::NativeApp;
 use crate::shell_interaction::THREAD_TIMELINE;
-use crate::thread_timeline::{line_capacity, line_count};
-
-pub(crate) use zeta_session::ThreadTimelineScroll;
 use zeta_session::TimelineScrollDelta;
 
 impl NativeApp {
@@ -30,12 +27,12 @@ impl NativeApp {
         let Some(bounds) = presentation.element_bounds(THREAD_TIMELINE) else {
             return false;
         };
-        let limit = line_count(&self.thread_projection).saturating_sub(line_capacity(bounds));
+        let limit = self.session_pane.timeline_scroll_limit(bounds);
         let delta = match delta {
             MouseScrollDelta::LineDelta(_, vertical) => TimelineScrollDelta::Lines(vertical),
             MouseScrollDelta::PixelDelta(position) => TimelineScrollDelta::Pixels(position.y),
         };
-        if self.thread_timeline_scroll.scroll(delta, limit) {
+        if self.session_pane.timeline_scroll_mut().scroll(delta, limit) {
             self.rebuild_presentation();
             self.request_redraw();
         }
@@ -49,6 +46,6 @@ impl NativeApp {
         let Some(bounds) = presentation.element_bounds(THREAD_TIMELINE) else {
             return 0;
         };
-        line_count(&self.thread_projection).saturating_sub(line_capacity(bounds))
+        self.session_pane.timeline_scroll_limit(bounds)
     }
 }

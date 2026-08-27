@@ -9,7 +9,7 @@ use zui::ui::{
 };
 
 use crate::NativeApp;
-use crate::agent_session::WorkspaceSwitchResult;
+use crate::session_host::WorkspaceSwitchResult;
 use crate::file_editor_host::FileEditorCloseRequest;
 use crate::shell_interaction::CONTEXT_WORKING_DIRECTORY;
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
@@ -43,7 +43,7 @@ impl NativeApp {
             eprintln!("could not open workspace path picker: {error}");
             return;
         }
-        self.session_context_menu.dismiss();
+        self.tab_context_menu.dismiss();
         self.git_branch_context_menu.dismiss();
         self.remote_connection_picker.dismiss();
         self.dismiss_remote_connection_manager();
@@ -76,7 +76,7 @@ impl NativeApp {
                     );
                     return true;
                 }
-                let switched = match self.agent_session.as_ref() {
+                let switched = match self.session_runtime.as_ref() {
                     Some(session) => session.switch_workspace(directory),
                     None => Err(anyhow::anyhow!("Agent session is unavailable")),
                 };
@@ -107,8 +107,8 @@ impl NativeApp {
             eprintln!("could not switch workspace directory: {error}");
             return false;
         }
-        self.workspace_context
-            .apply_git_projection(switched.git.as_ref());
+        self.app_server_client = None;
+        self.workspace_context.apply_git_projection(None);
         self.replace_workspace_pane();
         self.language_service
             .replace_workspace(self.workspace_context.working_directory());
@@ -122,8 +122,7 @@ impl NativeApp {
             let _ = self.bind_agent_pane();
         }
         self.pending_focus = Some(crate::shell_interaction::COMPOSER);
-        self.refresh_files_from_app_server();
-        self.composer
+        self.session_pane
             .set_working_directory(self.workspace_context.working_directory());
         true
     }

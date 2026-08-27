@@ -18,15 +18,14 @@ use crate::NativeApp;
 use crate::keybindings::{
     NativeKeybindingContext, NativeKeybindingFacts, NativeKeybindingResolution,
 };
-use crate::language_server_settings::LANGUAGE_SERVER_EXECUTABLE_INPUT;
 use crate::shell_interaction::{
     AGENT_FILE_SEARCH_INPUT, COMPOSER, COMPOSER_INTERACTION, FILE_EDITOR_FIND_INPUT,
     FILE_EDITOR_REPLACE_INPUT, SESSION_SEARCH_INPUT,
 };
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
 use crate::workspace_panes::WorkspacePaneAction;
-use zeta_composer::{ComposerInteractionActivation, SelectionDirection};
-use zeta_composer::{ComposerRoute, ComposerSubmission};
+use zeta_session::{ComposerInteractionActivation, SelectionDirection};
+use zeta_session::{ComposerRoute, ComposerSubmission};
 use zeta_settings::SETTINGS_SEARCH_INPUT;
 use zui::ui::{FocusDirection, NavigationAxis};
 
@@ -41,14 +40,21 @@ impl NativeApp {
             }
             return;
         }
-        if self.keyboard_shortcuts.is_visible() {
-            if self.route_keyboard_shortcuts_keyboard(&event) {
+        if self.settings.keyboard_shortcuts().is_visible() {
+            if self.settings.route_keyboard_shortcut_input(
+                &event,
+                self.modifiers,
+                self.keybindings.platform(),
+                Instant::now(),
+            ) {
+                self.rebuild_presentation();
+                self.request_redraw();
                 return;
             }
             let _ = self.dispatch_primary_keyboard_input(&event);
             return;
         }
-        if self.route_language_server_settings_keyboard(&event) {
+        if self.route_settings_keyboard(&event) {
             return;
         }
         if self.route_remote_tunnel_manager_keyboard(&event) {
@@ -66,7 +72,7 @@ impl NativeApp {
         if self.route_workspace_path_picker_keyboard(&event) {
             return;
         }
-        if self.route_session_context_menu_keyboard(&event) {
+        if self.route_tab_context_menu_keyboard(&event) {
             return;
         }
         let direct_terminal = self.is_direct_terminal_input();
@@ -76,7 +82,7 @@ impl NativeApp {
             tab_container_visible: self.workbench.tab_container_state().is_expanded(),
             inspector_visible: self.workbench.inspector_state().is_expanded(),
             file_search_visible: self.workspace_pane_host.search_visible(),
-            composer_route: match self.composer.route() {
+            composer_route: match self.session_pane.composer_route() {
                 ComposerRoute::Agent => "agent",
                 ComposerRoute::Shell => "shell",
             },
@@ -107,6 +113,43 @@ impl NativeApp {
         }
     }
 
+    fn route_settings_keyboard(&mut self, event: &KeyEvent) -> bool {
+        if !self.workbench.workbench().tab_part().is_settings()
+            || event.state != ElementState::Pressed
+        {
+            return false;
+        }
+        if event.logical_key == Key::Named(NamedKey::Escape) {
+            self.close_settings_tab();
+            self.rebuild_presentation();
+            self.request_redraw();
+            return true;
+        }
+        if self.ui_dispatch.is_focused(SETTINGS_SEARCH_INPUT) {
+            if let Some(command) = text_input_command(event, self.modifiers) {
+                self.settings.apply_search(command);
+                self.caret_blink.activity(Instant::now());
+                self.rebuild_presentation();
+                self.request_redraw();
+            }
+            return true;
+        }
+        if matches!(
+            event.logical_key,
+            Key::Named(
+                NamedKey::Tab
+                    | NamedKey::ArrowLeft
+                    | NamedKey::ArrowRight
+                    | NamedKey::ArrowUp
+                    | NamedKey::ArrowDown
+                    | NamedKey::Enter
+            )
+        ) {
+            return self.dispatch_primary_keyboard_input(event);
+        }
+        false
+    }
+
     fn file_search_keyboard_input(&mut self, event: &KeyEvent) {
         if event.logical_key == Key::Named(NamedKey::Escape) {
             if self
@@ -129,29 +172,25 @@ impl NativeApp {
     }
 
     fn composer_keyboard_input(&mut self, event: &KeyEvent) {
-        if self.composer.interaction().is_visible() {
+        if self.session_pane.composer_interaction_visible() {
             match event.logical_key {
                 Key::Named(NamedKey::ArrowUp) => {
-                    self.composer
-                        .interaction_mut()
-                        .move_selection(SelectionDirection::Previous);
+                    self.session_pane
+                        .move_composer_interaction_selection(SelectionDirection::Previous);
                     self.reveal_composer_interaction_selection();
                     self.composer_changed();
                     return;
                 }
                 Key::Named(NamedKey::ArrowDown) => {
-                    self.composer
-                        .interaction_mut()
-                        .move_selection(SelectionDirection::Next);
+                    self.session_pane
+                        .move_composer_interaction_selection(SelectionDirection::Next);
                     self.reveal_composer_interaction_selection();
                     self.composer_changed();
                     return;
                 }
                 Key::Named(NamedKey::Enter) => {
-                    let activation = self.composer.interaction_mut().activate_selected();
-                    if activation.is_none()
-                        && !self.composer.interaction().is_model_picker_visible()
-                    {
+                    let activation = self.session_pane.activate_composer_interaction();
+                    if activation.is_none() && !self.session_pane.composer_model_picker_visible() {
                         self.submit_composer();
                         return;
                     }
@@ -159,23 +198,20 @@ impl NativeApp {
                     return;
                 }
                 Key::Named(NamedKey::Tab) => {
-                    if let Some(completion) =
-                        self.composer.interaction_mut().complete_selected_slash()
-                    {
-                        self.composer.set_text(completion);
+                    if let Some(completion) = self.session_pane.complete_selected_slash() {
+                        self.session_pane.set_composer_text(completion);
                     }
                     self.composer_changed();
                     return;
                 }
                 Key::Named(NamedKey::Escape) => {
-                    let text = self.composer.input().text().to_owned();
-                    if self.composer.interaction_mut().dismiss(&text) {
-                        self.composer.interaction_pane_mut().reset();
-                    }
+                    self.session_pane.dismiss_composer_interaction();
                     self.composer_changed();
                     return;
                 }
-                _ if self.composer.interaction().is_model_picker_visible() => return,
+                _ if self.session_pane.composer_model_picker_visible() => {
+                    return;
+                }
                 _ => {}
             }
         }
@@ -184,14 +220,15 @@ impl NativeApp {
             && !self.modifiers.alt_key()
             && !self.modifiers.control_key()
             && !self.modifiers.super_key()
-            && self.composer.accept_shell_suggestion()
+            && self.session_pane.accept_shell_suggestion()
         {
             self.composer_changed();
             return;
         }
         if event.logical_key == Key::Named(NamedKey::Enter) {
             if self.modifiers.shift_key() {
-                self.composer.apply(CodeEditorCommand::Newline);
+                self.session_pane
+                    .apply_composer_command(CodeEditorCommand::Newline);
                 self.composer_changed();
             } else {
                 self.submit_composer();
@@ -199,13 +236,13 @@ impl NativeApp {
             return;
         }
         if event.logical_key == Key::Named(NamedKey::Escape) {
-            self.composer.dismiss_shell_suggestion();
-            self.composer.cancel_composition();
+            self.session_pane.dismiss_shell_suggestion();
+            self.session_pane.cancel_composer_composition();
             self.composer_changed();
             return;
         }
         if let Some(command) = code_editor_command(event, self.modifiers) {
-            self.composer.apply(command);
+            self.session_pane.apply_composer_command(command);
             self.composer_changed();
         }
     }
@@ -232,7 +269,7 @@ impl NativeApp {
             && !self.modifiers.control_key()
             && !self.modifiers.super_key()
             && self.ui_dispatch.is_focused(COMPOSER)
-            && self.composer.has_shell_suggestion()
+            && self.session_pane.has_shell_suggestion()
         {
             return false;
         }
@@ -241,7 +278,7 @@ impl NativeApp {
         };
         let frame = presentation.interaction_frame();
         let outcome = if event.logical_key == Key::Named(NamedKey::Tab)
-            && !self.composer.interaction().is_visible()
+            && !self.session_pane.composer_interaction_visible()
         {
             let direction = if self.modifiers.shift_key() {
                 FocusDirection::Previous
@@ -345,41 +382,41 @@ impl NativeApp {
     }
 
     fn submit_composer(&mut self) {
-        let Some(submission) = self.composer.submission() else {
+        let Some(submission) = self.session_pane.composer_submission() else {
             return;
         };
         match submission {
             ComposerSubmission::AgentMessage(text) => {
-                let Some(session) = self.agent_session.as_ref() else {
+                let Some(session) = self.session_runtime.as_ref() else {
                     return;
                 };
                 if let Err(error) = session.submit_agent_message(text.clone()) {
                     eprintln!("could not submit Agent message: {error}");
                     return;
                 }
-                self.composer.mark_agent_message_submitted(&text);
+                self.session_pane.mark_agent_message_submitted(&text);
             }
             ComposerSubmission::ShellCommand(command) => {
-                let Some(session) = self.agent_session.as_ref() else {
+                let Some(session) = self.session_runtime.as_ref() else {
                     return;
                 };
                 if let Err(error) = session.submit_shell_command(command.clone()) {
                     eprintln!("could not submit Shell Turn: {error}");
                     return;
                 }
-                self.composer.mark_shell_command_submitted(&command);
+                self.session_pane.mark_shell_command_submitted(&command);
             }
         }
-        self.composer.clear_after_submit();
-        self.thread_timeline_scroll.reset();
+        self.session_pane.clear_composer_after_submit();
+        self.session_pane.timeline_scroll_mut().reset();
         self.composer_changed();
     }
 
     pub(super) fn activate_composer_interaction_item(&mut self, index: usize) -> bool {
-        if !self.composer.interaction_mut().select_item(index) {
+        if !self.session_pane.select_composer_interaction_item(index) {
             return false;
         }
-        let activation = self.composer.interaction_mut().activate_selected();
+        let activation = self.session_pane.activate_composer_interaction();
         self.apply_composer_interaction_activation(activation);
         true
     }
@@ -390,18 +427,18 @@ impl NativeApp {
     ) {
         match activation {
             Some(ComposerInteractionActivation::ComposerText(text)) => {
-                self.composer.set_text(text);
+                self.session_pane.set_composer_text(text);
             }
             Some(ComposerInteractionActivation::Model(model)) => {
-                if let Some(session) = self.agent_session.as_ref()
+                if let Some(session) = self.session_runtime.as_ref()
                     && let Err(error) = session.select_model(model)
                 {
                     eprintln!("could not select Agent model: {error}");
                 }
-                self.composer.clear_after_submit();
+                self.session_pane.clear_composer_after_submit();
             }
             Some(ComposerInteractionActivation::ViewChanged) => {
-                self.composer.interaction_pane_mut().reset();
+                self.session_pane.reset_composer_interaction_scroll();
             }
             None => {}
         }
@@ -409,7 +446,7 @@ impl NativeApp {
     }
 
     fn reveal_composer_interaction_selection(&mut self) {
-        let Some(view) = self.composer.interaction().view() else {
+        let Some(view) = self.session_pane.composer_interaction_view() else {
             return;
         };
         let Some(interaction_bounds) = self
@@ -419,22 +456,21 @@ impl NativeApp {
         else {
             return;
         };
-        let viewport = zeta_composer::interaction_list_bounds(interaction_bounds);
-        let content = zeta_composer::interaction_content_size(viewport, view.items().len());
-        let Some(command) = zeta_composer::interaction_selection_scroll_command(
+        let viewport = zeta_session::interaction_list_bounds(interaction_bounds);
+        let content = zeta_session::interaction_content_size(viewport, view.items().len());
+        let Some(command) = zeta_session::interaction_selection_scroll_command(
             view.selected(),
             view.items().len(),
             content.width,
         ) else {
             return;
         };
-        self.composer
-            .interaction_pane_mut()
-            .apply_scroll(command, viewport.size, content);
+        self.session_pane
+            .scroll_composer_interaction(command, viewport.size, content);
     }
 
     pub(super) fn copy_composer_selection(&mut self) -> bool {
-        let Some(text) = self.composer.input().selected_text() else {
+        let Some(text) = self.session_pane.selected_composer_text() else {
             return false;
         };
         if let Err(error) = write_clipboard_text(&self.clipboard, text.to_string()) {
@@ -444,7 +480,7 @@ impl NativeApp {
     }
 
     pub(super) fn paste_into_composer(&mut self) {
-        if self.composer.interaction().is_model_picker_visible() {
+        if self.session_pane.composer_model_picker_visible() {
             return;
         }
         let text = match read_clipboard_text(&self.clipboard) {
@@ -454,7 +490,8 @@ impl NativeApp {
                 return;
             }
         };
-        self.composer.apply(CodeEditorCommand::Insert(text));
+        self.session_pane
+            .apply_composer_command(CodeEditorCommand::Insert(text));
         self.composer_changed();
     }
 
@@ -475,7 +512,7 @@ impl NativeApp {
     }
 
     pub(super) fn composer_changed(&mut self) {
-        if self.composer.interaction().is_visible() {
+        if self.session_pane.composer_interaction_visible() {
             self.reveal_composer_interaction_selection();
         }
         self.caret_blink.activity(Instant::now());
@@ -516,21 +553,10 @@ impl NativeApp {
 
     pub(super) fn copy_keybinding_target(&mut self) {
         if self.ui_dispatch.is_focused(SETTINGS_SEARCH_INPUT) {
-            if let Some(text) = self.language_server_settings.selected_search_text()
+            if let Some(text) = self.settings.selected_search_text()
                 && let Err(error) = write_clipboard_text(&self.clipboard, text.to_owned())
             {
                 eprintln!("could not copy settings search text: {error}");
-            }
-            return;
-        }
-        if self
-            .ui_dispatch
-            .is_focused(LANGUAGE_SERVER_EXECUTABLE_INPUT)
-        {
-            if let Some(text) = self.language_server_settings.selected_executable_text()
-                && let Err(error) = write_clipboard_text(&self.clipboard, text.to_owned())
-            {
-                eprintln!("could not copy language server executable path: {error}");
             }
             return;
         }
@@ -582,24 +608,7 @@ impl NativeApp {
             else {
                 return;
             };
-            self.language_server_settings
-                .apply_search(TextInputCommand::Insert(text));
-            self.rebuild_presentation();
-            self.request_redraw();
-            return;
-        }
-        if self
-            .ui_dispatch
-            .is_focused(LANGUAGE_SERVER_EXECUTABLE_INPUT)
-        {
-            let Some(text) = clipboard_text(
-                &self.clipboard,
-                "could not paste language server executable path",
-            ) else {
-                return;
-            };
-            self.language_server_settings
-                .apply_executable(TextInputCommand::Insert(text));
+            self.settings.apply_search(TextInputCommand::Insert(text));
             self.rebuild_presentation();
             self.request_redraw();
             return;
@@ -662,9 +671,6 @@ impl NativeApp {
 
     fn is_direct_terminal_input(&self) -> bool {
         self.workspace_surface.is_terminal()
-            && !self
-                .ui_dispatch
-                .is_focused(LANGUAGE_SERVER_EXECUTABLE_INPUT)
             && !self.ui_dispatch.is_focused(SETTINGS_SEARCH_INPUT)
             && !self.ui_dispatch.is_focused(SESSION_SEARCH_INPUT)
             && !self.ui_dispatch.is_focused(AGENT_FILE_SEARCH_INPUT)

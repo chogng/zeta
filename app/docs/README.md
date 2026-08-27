@@ -23,7 +23,7 @@
 | Workbench 模型、布局、外壳 UI 与 Pane binding | [`zeta-workbench`](../workbench/README.md) | 一个 Workbench crate；产品能力 crate 负责各自内容 runtime 与 scene |
 | 可复用 UI 组件与样式边界 | [`zeta-ui-components`](../ui-components/README.md) | `zeta-ui-components` → `zui`；不包含 Workbench 布局或业务状态 |
 | Workbench 导航与标题栏界面 | [`zeta-workbench`](../workbench/README.md) | `zeta-workbench` → `zeta-ui-components` / `zui` |
-| Composer state、input、routing、interaction 与 panel/list geometry | [`zeta-composer`](../composer/README.md) | `zeta-composer` + Native product/scene adapter |
+| Session Pane、Composer state、input、routing、interaction 与 panel/list geometry | [`zeta-session`](../session/README.md) | `zeta-session` + product effect adapter |
 | 通用 UI 脱离产品宿主的最小验证 | [`zui-demo`](../zui-demo/README.md) | `zui` / `zeta-ui-components` |
 | 从旧 Native workspace 的迁移状态 | [`app-migration-plan.md`](app-migration-plan.md) | `app/` + root Cargo workspace |
 | Native 弃用与长期 owner | [`native-deprecation-plan.md`](native-deprecation-plan.md) | `zui` / `zeta-ui-components` / `app` host boundary |

@@ -2,17 +2,18 @@
 
 > 本文拥有 `zeta-agent-session` 的实现与接入契约；跨 crate 的迁移状态由 [`app/docs/app-migration-plan.md`](../docs/app-migration-plan.md) 维护。
 
-`zeta-agent-session` 是 app 侧 Agent Session 运行时的唯一所有者。它持有 App Server 会话、worker、订阅、文件与 Git 请求、语言服务器配置请求、命令队列和断线恢复；产品宿主只提供连接目标和事件投递函数。
+`zeta-agent-session` 是 app 侧 Agent Session 运行时的唯一所有者。它持有 App Server 会话、worker、订阅、文件与 Git 请求、命令队列和断线恢复；产品宿主只提供连接目标和事件投递函数。
 
 ## 边界
 
 | 责任 | 所有者 |
 | --- | --- |
 | App Server client、事件流、Session/Thread 订阅 | `zeta-agent-session` |
-| 文件读取与保存冲突检查、Git 快照与分支切换、语言服务器配置请求 | `zeta-agent-session` |
+| 文件读取与保存冲突检查、Git 快照与分支切换 | `zeta-agent-session` |
 | 有界命令队列、worker 生命周期、远端重连窗口与断线期拒绝 | `zeta-agent-session` |
 | Local/Remote 连接参数和实际连接建立 | 实现 `AgentSessionTarget` 的产品宿主 |
-| 窗口事件投递、Session Tab、Composer、文件编辑器和 Workspace pane 状态 | `app` 产品组合层 |
+| 窗口事件投递、Composer、文件编辑器和 Workspace pane 状态 | 对应能力 crate 与产品组合层 |
+| Tab 状态、搜索、右键菜单和切换 | `zeta-workbench` |
 
 本 crate 不依赖 `app` package、`zui` 或任何窗口类型。若 worker、协议订阅、文件/Git 请求重新出现在 `app/src/features/agent/agent_session.rs`，说明所有权已经漂移。
 
@@ -23,17 +24,17 @@
 | `src/lib.rs` / `AgentSession` | 启动和停止 worker，并把产品方法转换为有界队列命令 |
 | `src/contract.rs` / `AgentSessionCommand`、`AgentSessionEvent` | 定义宿主与 worker 之间的 typed contract，以及断线期命令拒绝规则 |
 | `src/worker.rs` / `run_agent_session`、`run_with_recovery`、`drive` | 持有连接、消费命令和 App Server 通知，并执行 Local/Remote 生命周期 |
-| `src/worker/operations.rs` | 实现 Session/Thread 订阅、稳定文件快照、保存校验、Git 和配置请求 |
+| `src/worker/operations.rs` | 实现 Session/Thread 订阅、稳定文件快照、保存校验和 Git 请求 |
 | `AgentSessionTarget` | 由宿主实现；保持连接类型并支持切换工作区后重新建立 App Server 会话 |
 
 ## 执行路径
 
 1. 产品调用 `AgentSession::spawn`，传入 `AgentSessionTarget` 和 `AgentSessionEvent` sink。
 2. `run_connection` 完成初始化、模型与命令目录读取、配置/Git 快照读取，并确保当前工作区存在活动 Session 与 Thread。
-3. `drive` 轮询有界命令队列和 App Server 事件流；请求结果通过一次性 response channel 返回，durable 更新通过 event sink 投给产品 reducer。
+3. `drive` 轮询有界命令队列和 App Server 事件流；请求结果通过一次性 response channel 返回，Thread metadata 快照和后端拼好的 transcript 变化通过 event sink 原样转交产品。
 4. Local 工作区切换使用同一目标的 `retarget` 创建新连接。Remote transport 失败进入最多 30 秒的指数退避恢复；断线期间的请求不会重放。
 
-`SessionRequest::StartTurn` 始终使用当前协议的 `tool_mode` 字段。Thread 测试快照必须显式包含 `goal`，Session Thread projection 必须包含 `transcript`；不得在本 crate 恢复旧协议字段或添加兼容兜底。
+`SessionRequest::StartTurn` 始终使用当前协议的 `tool_mode` 字段。Thread 测试快照必须显式包含 `goal`，Session 订阅中的 Thread 必须包含 `transcript`；不得在本 crate 恢复旧协议字段或添加兼容兜底。
 
 ## 失败语义
 

@@ -24,7 +24,6 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
         remote_connection_manager_field: None,
         remote_tunnel_port_focused: false,
         settings_search_focused: false,
-        language_server_executable_focused: false,
     };
     let toolbar = InputMethodContext {
         composer_focused: false,
@@ -83,10 +82,6 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
     };
     let remote_tunnel_port = InputMethodContext {
         remote_tunnel_port_focused: true,
-        ..terminal_grid
-    };
-    let language_server_executable = InputMethodContext {
-        language_server_executable_focused: true,
         ..terminal_grid
     };
     let inactive_window = InputMethodContext {
@@ -149,10 +144,6 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
     assert_eq!(
         InputMethodTarget::for_context(settings_search),
         InputMethodTarget::SettingsSearch
-    );
-    assert_eq!(
-        InputMethodTarget::for_context(language_server_executable),
-        InputMethodTarget::LanguageServerExecutable
     );
     assert_eq!(
         InputMethodTarget::for_context(inactive_window),

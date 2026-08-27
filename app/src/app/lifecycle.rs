@@ -67,7 +67,7 @@ impl App<NativeEvent> for NativeApp {
             return;
         }
         let event_proxy = self.event_proxy.clone();
-        self.agent_session = match AgentSession::spawn(self.app_server_host.clone(), move |event| {
+        self.session_runtime = match SessionRuntime::spawn(self.app_server_host.clone(), move |event| {
             event_proxy
                 .send_event(event.into())
                 .map_err(|_| "application event loop is unavailable".to_owned())
@@ -132,7 +132,7 @@ impl App<NativeEvent> for NativeApp {
             WindowEvent::Focused(false) => {
                 self.modifiers = ModifiersState::default();
                 self.keybindings.cancel_chord();
-                self.keyboard_shortcuts.window_blurred();
+                self.settings.keyboard_shortcuts_window_blurred();
                 self.terminal_view_mut().pointer.cancel();
                 self.file_editor_input.cancel_pointer();
                 self.cancel_tab_container_resize();
@@ -142,7 +142,7 @@ impl App<NativeEvent> for NativeApp {
                 }
                 self.workspace_pane_host.cancel_multi_diff_scrollbar();
                 self.terminal_view_mut().scroll.cancel_scrollbar();
-                self.session_context_menu.dismiss();
+                self.tab_context_menu.dismiss();
                 self.git_branch_context_menu.dismiss();
                 self.workspace_path_picker.dismiss();
                 self.ui_dispatch.window_blurred();
@@ -198,8 +198,8 @@ impl App<NativeEvent> for NativeApp {
 
     fn user_event(&mut self, _context: &mut AppContext<'_, NativeEvent>, event: NativeEvent) {
         match event {
-            NativeEvent::Agent(event) => {
-                self.handle_agent_session_event(event);
+            NativeEvent::Session(event) => {
+                self.handle_session_runtime_event(event);
                 return;
             }
             NativeEvent::LanguageService(event) => {
@@ -266,22 +266,11 @@ impl App<NativeEvent> for NativeApp {
                             handle_terminal_event(self, key, event);
                         }
                     }
-                    TerminalReadyOutcome::Failed { key, error } => {
-                        session_switch_trace::event(
-                            None,
-                            "terminal-ready-failed",
-                            format_args!("key={key:?} error={error}"),
-                        );
+                    TerminalReadyOutcome::Failed { error, .. } => {
                         eprintln!("could not create terminal runtime: {error}");
                         self.rebuild_presentation_on_next_redraw();
                     }
-                    TerminalReadyOutcome::Ignored { key } => {
-                        session_switch_trace::event(
-                            None,
-                            "terminal-ready-ignored",
-                            format_args!("key={key:?}"),
-                        );
-                    }
+                    TerminalReadyOutcome::Ignored { .. } => {}
                 }
                 return;
             }
@@ -291,7 +280,25 @@ impl App<NativeEvent> for NativeApp {
     fn about_to_wait(&mut self, context: &mut AppContext<'_, NativeEvent>) {
         let now = Instant::now();
         self.keybindings.advance_chord(now);
-        self.advance_keyboard_shortcuts(now);
+        if let Some(commit) = self.settings.advance_keyboard_shortcuts(now) {
+            match self.keybindings_resource.update_command_binding(
+                commit.command,
+                &commit.keybinding,
+                now,
+            ) {
+                Ok(()) => match self.keybindings_resource.poll(now, &mut self.keybindings) {
+                    KeybindingsResourcePoll::Rejected(error) => {
+                        self.settings.keyboard_shortcuts_save_failed(error);
+                    }
+                    KeybindingsResourcePoll::Unchanged | KeybindingsResourcePoll::Updated => {
+                        self.settings.keyboard_shortcuts_saved(commit.command);
+                    }
+                },
+                Err(error) => self.settings.keyboard_shortcuts_save_failed(error),
+            }
+            self.rebuild_presentation();
+            self.request_redraw();
+        }
         if let KeybindingsResourcePoll::Rejected(error) =
             self.keybindings_resource.poll(now, &mut self.keybindings)
         {
@@ -330,7 +337,7 @@ impl App<NativeEvent> for NativeApp {
             self.workbench.tab_sash_deadline(),
             self.workbench.inspector_sash_deadline(),
             self.keybindings.chord_deadline(),
-            self.keyboard_shortcuts_deadline(),
+            self.settings.keyboard_shortcuts_deadline(),
             Some(self.keybindings_resource.next_deadline()),
             self.file_editor_input.auto_scroll_deadline(),
         ]

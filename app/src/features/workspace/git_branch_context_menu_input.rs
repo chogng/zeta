@@ -27,10 +27,7 @@ impl NativeApp {
         let Some(anchor) = anchor else {
             return;
         };
-        let Some(session) = self.agent_session.as_ref() else {
-            return;
-        };
-        let branches = match session.local_branches() {
+        let branches = match self.local_git_branches() {
             Ok(branches) => branches,
             Err(error) => {
                 eprintln!("could not open Git branch menu: {error}");
@@ -40,7 +37,7 @@ impl NativeApp {
         let restore_focus = self.ui_dispatch.focused();
         self.git_branch_context_menu
             .open(anchor, branches, restore_focus);
-        self.session_context_menu.dismiss();
+        self.tab_context_menu.dismiss();
         self.workspace_path_picker.dismiss();
         self.remote_connection_picker.dismiss();
         self.dismiss_remote_connection_manager();
@@ -64,12 +61,7 @@ impl NativeApp {
                     self.dismiss_git_branch_context_menu();
                     return true;
                 }
-                let projection = match self
-                    .agent_session
-                    .as_ref()
-                    .ok_or_else(|| anyhow::anyhow!("Agent session is unavailable"))
-                    .and_then(|session| session.switch_git_branch(branch.name().into()))
-                {
+                let projection = match self.switch_git_branch(branch.name().into()) {
                     Ok(projection) => projection,
                     Err(error) => {
                         eprintln!("could not switch Git branch: {error}");

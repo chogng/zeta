@@ -7,9 +7,11 @@ def app_rust_library(
         name,
         crate_name,
         package_name,
+        crate_root = "src/lib.rs",
         crate_features = [],
         data = [],
         source_files = [],
+        source_globs = ["src/**/*.rs"],
         target_compatible_with = [],
         unit_tests = False):
     """Defines a app-owned Cargo library with metadata-derived dependencies.
@@ -21,12 +23,13 @@ def app_rust_library(
         name = name,
         aliases = aliases(package_name = package_name),
         crate_name = crate_name,
+        crate_root = crate_root,
         crate_features = crate_features,
         compile_data = data,
         deps = all_crate_deps(package_name = package_name),
         edition = "2024",
         srcs = native.glob(
-            ["src/**/*.rs"],
+            source_globs,
             exclude = ["src/main.rs", "src/bin/**/*.rs"],
         ),
         target_compatible_with = target_compatible_with,
@@ -49,10 +52,7 @@ def app_rust_library(
 
     native.filegroup(
         name = name + "_sources",
-        srcs = native.glob([
-            "src/**/*.rs",
-            "Cargo.toml",
-        ]) + source_files,
+        srcs = native.glob(source_globs + ["Cargo.toml"]) + source_files,
         visibility = ["//visibility:public"],
     )
 

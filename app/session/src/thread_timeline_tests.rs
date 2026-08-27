@@ -1,15 +1,15 @@
 use super::{ThreadTimeline, ThreadTimelineStyle};
-use crate::thread_state::ThreadState;
+use crate::TranscriptState;
 use zeta_protocol::{
-    ItemId, SessionId, Thread, ThreadId, ThreadItem, ThreadStatus, ToolCallId, ToolName, Turn,
-    TurnId, TurnStatus,
+    ItemId, SessionId, StableTurnError, Thread, ThreadId, ThreadItem, ThreadStatus, ToolCallId,
+    ToolName, Turn, TurnId, TurnStatus,
 };
+use zeta_thread_transcript::ThreadTranscriptSnapshot;
 use zui::ui::{Color, Rect};
 
 #[test]
 fn timeline_groups_shell_result_under_its_tool_call() {
-    let mut state = ThreadState::default();
-    state.replace_snapshot(Thread {
+    let thread = Thread {
         session_id: SessionId::new("session").unwrap(),
         thread_id: ThreadId::new("thread").unwrap(),
         title: "Agent".to_owned(),
@@ -55,13 +55,15 @@ fn timeline_groups_shell_result_under_its_tool_call() {
             ],
             plan: None,
             pending_interaction: None,
-            error: None,
+            error: Some(StableTurnError::model_invocation_failed()),
         }],
-    });
+    };
+    let mut transcript = TranscriptState::default();
+    transcript.replace_snapshot(ThreadTranscriptSnapshot::from_thread(&thread));
 
     let timeline = ThreadTimeline::new(
         Rect::from_xywh(0.0, 0.0, 800.0, 600.0),
-        &state,
+        &transcript,
         0,
         ThreadTimelineStyle::new(
             Color::rgb(246, 246, 247),
@@ -79,7 +81,9 @@ fn timeline_groups_shell_result_under_its_tool_call() {
             "README selection",
             "Tool · shell-command",
             "$ cargo test",
-            "42 passed"
+            "42 passed",
+            "Agent · Error",
+            "Model invocation failed"
         ]
     );
 }

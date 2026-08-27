@@ -115,7 +115,7 @@ AgentWorkspace
 │  ├─ AgentMessage
 │  ├─ CommandCard
 │  └─ Plan
-├─ zeta-composer::Composer
+├─ zeta-session::SessionPaneState / Composer
 │  ├─ Interaction Pane
 │  ├─ Compact CodeEditor
 │  ├─ Context Toolbar
@@ -154,7 +154,7 @@ Terminal 不拥有 Zeta Session、Thread 或 transcript。Zeta 发起的普通�
 | 任务证据的权威事实 | Core / App Server Thread facts + Workspace domain revision | 保留动作、修改、验证、风险和恢复所需的 identity，不保存平行工作区状态 |
 | 结果摘要 | Proposed Native Thread projection | 从权威事实重建，默认呈现结果并按需展开过程 |
 | Timeline scroll、展开、选择和布局 | Native presentation | 可丢弃、可从 snapshot 重建 |
-| Composer text、routing、IME 与 caret | `zeta-composer::Composer` + `zeta-editor::CodeEditorDocument` | 输入变化时重新分类；提交时产生确定的 Agent 或 Shell operation |
+| Composer text、routing、IME 与 caret | `zeta-session::SessionPaneState` + `zeta-editor::CodeEditorDocument` | 输入变化时重新分类；提交时产生确定的 Agent 或 Shell operation |
 | Files、Changes 与 Terminal Pane | 对应 domain presentation owner | 让用户检查和接管 canonical state；Editor 和 Diff 作为视图内部内容组合 |
 | Approval、Stop 与 Retry | Core authority + Native command adapter | 明确作用范围、失败语义和恢复边界 |
 | Accept 与 Revert | Proposed domain authority + Native command adapter | 绑定明确的 Change Set 或 Checkpoint identity，不按当前屏幕内容猜测目标 |

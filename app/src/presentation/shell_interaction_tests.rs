@@ -1,10 +1,9 @@
 use super::{
     ADD_SESSION, AGENT_CHANGES, AGENT_FILE_SEARCH_INPUT, AGENT_FILES, CONTEXT_DIFF,
     CONTEXT_GIT_BRANCH, CONTEXT_LOCATION, CONTEXT_WORKING_DIRECTORY, ContextAction,
-    FIRST_TAB_CONTAINER_SESSION_TAB, FIRST_TITLEBAR_SESSION_TAB, SESSION_CONTEXT_MENU,
-    SESSION_HEADER, SESSION_SEARCH_INPUT, SessionContextMenuAction, TAB_CONTAINER_ACTION_BAR,
-    TAB_CONTAINER_LIST, TAB_CONTAINER_TOOLBAR, TITLEBAR_TAB_LIST, WorkspacePaneSelection,
-    session_tab_id, session_tab_index, titlebar_session_tab_id,
+    FIRST_TAB_CONTAINER_SESSION_TAB, FIRST_TITLEBAR_SESSION_TAB, SESSION_HEADER,
+    SESSION_SEARCH_INPUT, TAB_CONTAINER_ACTION_BAR, TAB_CONTAINER_LIST, TAB_CONTAINER_TOOLBAR,
+    TAB_CONTEXT_MENU, TITLEBAR_TAB_LIST, TabContextMenuAction, WorkspacePaneSelection,
 };
 
 #[test]
@@ -63,34 +62,6 @@ fn sessions_toolbar_elements_have_stable_unique_identities() {
 }
 
 #[test]
-fn session_tab_identities_are_unique_and_round_trip_to_their_indices() {
-    let body_ids = (0..4).map(session_tab_id).collect::<Vec<_>>();
-    let titlebar_ids = (0..4).map(titlebar_session_tab_id).collect::<Vec<_>>();
-
-    assert_eq!(
-        body_ids
-            .iter()
-            .chain(&titlebar_ids)
-            .collect::<std::collections::HashSet<_>>()
-            .len(),
-        8
-    );
-    assert_eq!(
-        body_ids
-            .iter()
-            .collect::<std::collections::HashSet<_>>()
-            .len(),
-        4
-    );
-    for (index, id) in body_ids.into_iter().enumerate() {
-        assert_eq!(session_tab_index(id, 0..4), Some(index));
-    }
-    for (index, id) in titlebar_ids.into_iter().enumerate() {
-        assert_eq!(session_tab_index(id, 0..4), Some(index));
-    }
-}
-
-#[test]
 fn session_identity_namespace_does_not_overlap_workspace_pane_elements() {
     let session_ids = [
         TAB_CONTAINER_LIST,
@@ -98,7 +69,6 @@ fn session_identity_namespace_does_not_overlap_workspace_pane_elements() {
         TITLEBAR_TAB_LIST,
         FIRST_TITLEBAR_SESSION_TAB,
         SESSION_HEADER,
-        session_tab_id(1),
     ];
     let workspace_pane_ids = [AGENT_FILE_SEARCH_INPUT, super::AGENT_FILES_TOOLBAR];
 
@@ -110,22 +80,20 @@ fn session_identity_namespace_does_not_overlap_workspace_pane_elements() {
 }
 
 #[test]
-fn session_context_menu_actions_have_stable_labels_and_identities() {
-    let ids = SessionContextMenuAction::ALL.map(SessionContextMenuAction::element_id);
-    let labels = SessionContextMenuAction::ALL.map(SessionContextMenuAction::label);
+fn tab_context_menu_actions_have_stable_labels_and_identities() {
+    let ids = TabContextMenuAction::ALL.map(TabContextMenuAction::element_id);
+    let labels = TabContextMenuAction::ALL.map(|action| action.label(false));
 
-    assert_eq!(labels, ["Pin", "Close", "Rename", "Fork"]);
+    assert_eq!(labels, ["Pin", "Close", "Move to new group"]);
     assert_eq!(
         ids.into_iter()
             .collect::<std::collections::HashSet<_>>()
             .len(),
-        4
+        3
     );
     assert_eq!(
-        SessionContextMenuAction::from_element_id(ids[3]),
-        Some(SessionContextMenuAction::Fork)
+        TabContextMenuAction::from_element_id(ids[2]),
+        Some(TabContextMenuAction::MoveToNewGroup)
     );
-    assert!(SessionContextMenuAction::is_menu_element(
-        SESSION_CONTEXT_MENU
-    ));
+    assert!(TabContextMenuAction::is_menu_element(TAB_CONTEXT_MENU));
 }

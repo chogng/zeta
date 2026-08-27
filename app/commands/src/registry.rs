@@ -2,8 +2,8 @@
 
 use std::collections::HashMap;
 
-use crate::CommandRequest;
 use crate::AppCommandId;
+use crate::CommandRequest;
 
 /// A product-owned handler function registered for a stable command.
 ///

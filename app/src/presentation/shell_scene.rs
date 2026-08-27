@@ -1,12 +1,9 @@
-use std::collections::BTreeMap;
-
-use app_keybinding_ui::KeyboardShortcuts;
-use app_keybinding_ui::paint_chord_hint;
 use zeta_terminal::{GridSize, ScreenBuffer, TerminalColor, TerminalCore, TerminalMousePosition};
 use zeta_ui_components::{
     InteractionRegion, Sash, SashOrientation, SashState, SashStyle, ScrollMetrics,
     ScrollbarPresentation,
 };
+use zeta_workbench::paint_chord_hint;
 use zui::ui::{
     Border, CaretVisibility, Color, CornerRadii, FontFamily, FontWeight, PaintRect, Rect,
     SceneCheckpoint, SplitViewOrientation, SplitViewResizeSnapshot, TextBlock,
@@ -14,18 +11,11 @@ use zui::ui::{
 };
 
 use crate::PRODUCT_DISPLAY_NAME;
-use crate::composer_panel::{ComposerPanelView, draw_composer_panel};
 use crate::file_editor_host::FileEditorHost;
 use crate::file_editor_pane::{FileEditorPane, FileEditorPrompt};
 use crate::file_editor_search::FileEditorSearchState;
 use crate::git_branch_context_menu::{GitBranchContextMenu, GitBranchContextMenuState};
 use crate::keybindings::NativeKeybindings;
-use crate::keyboard_shortcuts::{
-    KeyboardShortcutsState, keyboard_shortcut_rows, keyboard_shortcuts_ids,
-};
-use crate::language_server_settings::{
-    LanguageServerSettings, LanguageServerSettingsState, paint_switch_fragment,
-};
 use crate::remote_connection_manager::RemoteConnectionManagerField;
 use crate::remote_connection_manager::RemoteConnectionManagerState;
 use crate::remote_connection_manager_view::RemoteConnectionManager;
@@ -34,23 +24,17 @@ use crate::remote_connection_picker::RemoteConnectionPickerState;
 use crate::remote_tunnel_manager::REMOTE_TUNNEL_REMOTE_PORT;
 use crate::remote_tunnel_manager::RemoteTunnelManagerState;
 use crate::remote_tunnel_manager_view::RemoteTunnelManager;
-use crate::session::session_canvas::SessionCanvasLayout;
-use crate::session::session_canvas::SessionHeader;
-use crate::session::session_context_menu::{SessionContextMenu, SessionContextMenuState};
-use crate::session::session_search::SessionSearch;
-use crate::settings_sections::SettingsSectionPane;
 use crate::shell_interaction::{
     AGENT_FILE_SEARCH_INPUT, FILE_EDITOR_DOCUMENT, FILE_EDITOR_FIND_INPUT,
     FILE_EDITOR_REPLACE_INPUT, FIRST_TAB_CONTAINER_SESSION_TAB, INSPECTOR_RESIZE_HANDLE,
-    MAIN_SURFACE, SESSION_SEARCH_INPUT, TAB_CONTAINER_RESIZE_HANDLE, TERMINAL_OUTPUT,
-    THREAD_TIMELINE, WINDOW, WORKSPACE_PANE, WORKSPACE_PANE_TOOLBAR,
+    MAIN_SURFACE, SESSION_SEARCH_INPUT, TAB_CONTAINER_RESIZE_HANDLE, TERMINAL_OUTPUT, WINDOW,
+    WORKSPACE_PANE, WORKSPACE_PANE_TOOLBAR,
 };
 use crate::shell_style::ShellPalette;
+use crate::tab_context_menu::{TabContextMenu, TabContextMenuState};
 use crate::terminal_blocks::{TerminalBlockLineKind, project_block_lines};
 use crate::terminal_output_scroll_view::TerminalOutputScrollView;
 use crate::terminal_selection::{TerminalSelectionRange, paint_terminal_selection};
-use crate::thread_projection::ThreadProjection;
-use crate::thread_timeline::{ThreadTimeline, thread_timeline_style};
 use crate::workspace_context::WorkspaceContext;
 use crate::workspace_pane_host::WorkspacePaneHost;
 use crate::workspace_pane_host::WorkspacePaneView;
@@ -62,9 +46,13 @@ use crate::workspace_panes::ScmLayout;
 use crate::workspace_panes::WorkspacePaneNavigation;
 use crate::workspace_path_picker::{WorkspacePathPicker, WorkspacePathPickerState};
 use crate::workspace_surface::WorkspaceSurfaceKind;
-use zeta_composer::Composer;
-use zeta_composer::ComposerPanelLayout;
+use zeta_session::SessionPaneContext;
+use zeta_session::SessionPaneLayout;
+use zeta_session::SessionPaneState;
+use zeta_session::SessionPaneView;
+use zeta_session::draw_session_pane;
 use zeta_terminal_workspace::PaneBinding;
+use zeta_workbench::SessionSearchState;
 use zeta_workbench::{
     InspectorPartState, PaneGroupId as PaneId, PaneInputKind, PaneMount, PanePart, PanePartSashes,
     PaneSplitId, TITLEBAR_HEIGHT, TabContainer, TabContainerPlacement, TabContainerState,
@@ -75,10 +63,13 @@ use zeta_workbench::{
 
 type PaneViewMount<'a> = PaneMount<'a, PaneBinding>;
 use zeta_editor::CodeEditorStyle;
-use zeta_settings::SettingsPage;
-use zeta_settings::SettingsPageActionAvailability;
-use zeta_settings::SettingsPageMode;
-use zeta_settings::SettingsPageSection;
+use zeta_settings::AppearanceSettingsSnapshot;
+use zeta_settings::GeneralSettingsSnapshot;
+use zeta_settings::KeybindingSettingsSnapshot;
+use zeta_settings::SettingsFeatureSnapshot;
+use zeta_settings::SettingsPaneStyle;
+use zeta_settings::SettingsPaneView;
+use zeta_settings::SettingsState;
 use zeta_workbench::InspectorLayoutSpec;
 use zeta_workbench::PaneGroupLayout;
 use zeta_workbench::PartVisibility;
@@ -103,7 +94,7 @@ struct ShellLayout {
     output: Rect,
     session_header: Rect,
     thread_timeline: Rect,
-    composer_panel_layout: ComposerPanelLayout,
+    session_pane_layout: SessionPaneLayout,
     composer_panel: Rect,
     composer_info_bar: Rect,
     composer_toolbar: Rect,
@@ -193,19 +184,19 @@ impl ShellLayout {
         )
         .for_viewport(viewport)?;
         let main = workbench.main();
-        let composer_panel = ComposerPanelLayout::for_main(
+        let session_pane_layout = SessionPaneLayout::for_bounds(
             main,
             preferred_composer_height.max(COMPOSER_HEIGHT),
             preferred_interaction_height,
         );
+        let composer_panel = session_pane_layout.composer();
         let output = composer_panel.output();
-        let session_canvas = SessionCanvasLayout::for_output(output);
         Some(Self {
             workbench,
             output,
-            session_header: session_canvas.header(),
-            thread_timeline: session_canvas.timeline(),
-            composer_panel_layout: composer_panel,
+            session_header: session_pane_layout.header(),
+            thread_timeline: session_pane_layout.timeline(),
+            session_pane_layout,
             composer_panel: composer_panel.panel(),
             composer_info_bar: composer_panel.info_bar(),
             composer_toolbar: composer_panel.toolbar(),
@@ -234,9 +225,7 @@ pub(crate) struct ShellPresentation {
     pub(crate) remote_connection_manager_list_viewport: Option<Rect>,
     pub(crate) remote_tunnel_manager_scroll_metrics: Option<ScrollMetrics>,
     pub(crate) remote_tunnel_manager_list_viewport: Option<Rect>,
-    pub(crate) language_server_settings_content: Option<Rect>,
     base_checkpoint: Option<ShellBaseCheckpoint>,
-    retained_fragments: BTreeMap<ElementId, RetainedFragmentCheckpoint>,
 }
 
 impl ShellPresentation {
@@ -263,35 +252,6 @@ impl ShellPresentation {
     pub(crate) fn element_bounds(&self, id: ElementId) -> Option<Rect> {
         self.interaction_frame().node(id).map(|node| node.bounds())
     }
-
-    /// Removes a retained shell fragment and restores both shared frame outputs to its mount
-    /// checkpoint. A failed terminal-fragment removal tells the host to rebuild the presentation.
-    pub(crate) fn remove_retained_fragment(
-        &mut self,
-        id: ElementId,
-    ) -> Result<(), zui::ui::SceneFragmentError> {
-        let Some(checkpoint) = self.retained_fragments.get(&id).cloned() else {
-            return Err(zui::ui::SceneFragmentError::Missing(id));
-        };
-        self.scene_mut().remove_fragment(id)?;
-        self.interaction_frame_mut().restore(checkpoint.interaction);
-        self.retained_fragments.remove(&id);
-        Ok(())
-    }
-
-    pub(crate) fn record_retained_fragment(&mut self, id: ElementId) {
-        self.retained_fragments.insert(
-            id,
-            RetainedFragmentCheckpoint {
-                scene: self.scene().checkpoint(),
-                interaction: self.interaction_frame().checkpoint(),
-            },
-        );
-    }
-
-    pub(crate) fn forget_retained_fragment(&mut self, id: ElementId) {
-        self.retained_fragments.remove(&id);
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -299,12 +259,6 @@ struct ShellBaseCheckpoint {
     scene: SceneCheckpoint,
     interaction: InteractionFrameCheckpoint,
     ime_cursor_area: Option<Rect>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-struct RetainedFragmentCheckpoint {
-    scene: SceneCheckpoint,
-    interaction: InteractionFrameCheckpoint,
 }
 
 struct ShellOverlayPresentation {
@@ -349,11 +303,9 @@ pub(crate) struct ShellPresentationModel<'a> {
     pub(crate) language_completions: Option<&'a zeta_language_service::LanguageCompletions>,
     pub(crate) completion_selection: usize,
     pub(crate) code_editor_style: &'a CodeEditorStyle,
-    pub(crate) thread_projection: &'a ThreadProjection,
-    pub(crate) thread_timeline_scroll_offset: usize,
+    pub(crate) session_pane: &'a SessionPaneState,
     pub(crate) workspace_context: &'a WorkspaceContext,
-    pub(crate) composer: &'a Composer,
-    pub(crate) session_search: &'a SessionSearch,
+    pub(crate) session_search: &'a SessionSearchState,
     pub(crate) tab_part: &'a TabPart,
     pub(crate) active_tab_input: Option<&'a TabInputKey>,
     pub(crate) caret_visibility: CaretVisibility,
@@ -361,18 +313,14 @@ pub(crate) struct ShellPresentationModel<'a> {
     pub(crate) tab_container: TabContainerState,
     pub(crate) inspector_part: InspectorPartState,
     pub(crate) workspace_pane_host: &'a WorkspacePaneHost,
-    pub(crate) session_context_menu: SessionContextMenuState,
+    pub(crate) tab_context_menu: TabContextMenuState,
     pub(crate) git_branch_context_menu: &'a GitBranchContextMenuState,
     pub(crate) workspace_path_picker: &'a WorkspacePathPickerState,
     pub(crate) remote_connection_picker: &'a RemoteConnectionPickerState,
     pub(crate) remote_connection_manager: &'a RemoteConnectionManagerState,
     pub(crate) remote_tunnel_manager: &'a RemoteTunnelManagerState,
     pub(crate) keybindings: &'a NativeKeybindings,
-    pub(crate) keyboard_shortcuts: &'a KeyboardShortcutsState,
-    pub(crate) language_server_settings: &'a LanguageServerSettingsState,
-    pub(crate) settings_section: SettingsPageSection,
-    pub(crate) language_server_runtime_state:
-        Option<&'a zeta_language_service::LanguageServerState>,
+    pub(crate) settings: &'a SettingsState,
     pub(crate) keybinding_diagnostics: &'a [String],
     pub(crate) theme_scheme: zeta_theme::ColorScheme,
     pub(crate) theme_follows_system: bool,
@@ -384,7 +332,7 @@ pub(crate) struct ShellPresentationModel<'a> {
 struct TabContainerView<'a> {
     title: &'a str,
     context: &'a WorkspaceContext,
-    search: &'a SessionSearch,
+    search: &'a SessionSearchState,
     tab_part: &'a TabPart,
     selected_id: ElementId,
     caret_visibility: CaretVisibility,
@@ -424,17 +372,13 @@ struct MainPresentationView<'a> {
     terminal_pane_resize_split: Option<PaneSplitId>,
     workspace_surface: WorkspaceSurfaceKind,
     active_tab_input: Option<&'a TabInputKey>,
-    language_server_settings: &'a LanguageServerSettingsState,
-    settings_section: SettingsPageSection,
-    language_server_runtime_state: Option<&'a zeta_language_service::LanguageServerState>,
+    settings: &'a SettingsState,
     session_title: &'a str,
-    thread_projection: &'a ThreadProjection,
-    thread_timeline_scroll_offset: usize,
-    composer: ComposerPanelView<'a>,
+    session_pane: &'a SessionPaneState,
+    session_pane_context: &'a SessionPaneContext,
     workspace: &'a WorkspacePaneHost,
     workspace_context: &'a WorkspaceContext,
     keybindings: &'a NativeKeybindings,
-    keyboard_shortcuts: &'a KeyboardShortcutsState,
     keybinding_diagnostics: &'a [String],
     theme_scheme: zeta_theme::ColorScheme,
     theme_follows_system: bool,
@@ -445,7 +389,6 @@ struct MainPresentationView<'a> {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct MainDrawResult {
     ime_cursor_area: Option<Rect>,
-    settings_content: Option<Rect>,
 }
 
 #[cfg(test)]
@@ -493,10 +436,13 @@ fn build_shell_presentation_with_bindings(
         viewport,
         model.tab_container,
         model.inspector_part,
-        model.composer.input().preferred_height(),
-        model.composer.interaction().view().map_or(0.0, |view| {
-            zeta_composer::interaction_preferred_height(view.items().len())
-        }),
+        model.session_pane.composer_preferred_height(),
+        model
+            .session_pane
+            .composer_interaction_view()
+            .map_or(0.0, |view| {
+                zeta_session::interaction_preferred_height(view.items().len())
+            }),
     ) else {
         draw_compact_scene(frame.scene_mut(), viewport, palette);
         return ShellPresentation {
@@ -510,9 +456,7 @@ fn build_shell_presentation_with_bindings(
             remote_connection_manager_list_viewport: None,
             remote_tunnel_manager_scroll_metrics: None,
             remote_tunnel_manager_list_viewport: None,
-            language_server_settings_content: None,
             base_checkpoint: None,
-            retained_fragments: BTreeMap::new(),
         };
     };
 
@@ -523,7 +467,7 @@ fn build_shell_presentation_with_bindings(
             .unwrap_or("Terminal")
     } else {
         model
-            .thread_projection
+            .session_pane
             .thread()
             .map(|thread| thread.title.as_str())
             .unwrap_or(PRODUCT_DISPLAY_NAME)
@@ -533,6 +477,12 @@ fn build_shell_presentation_with_bindings(
         .and_then(|selected| model.tab_part.input(selected))
         .map(TabInput::title)
         .unwrap_or("New session");
+    let session_pane_context = SessionPaneContext::new(
+        model.workspace_context.location_label(),
+        model.workspace_context.working_directory_label(),
+        model.workspace_context.git_branch_label(),
+        model.workspace_context.diff_summary_label(),
+    );
     let selected_id = tab_input_element_id(
         model.tab_part,
         model.active_tab_input,
@@ -621,25 +571,13 @@ fn build_shell_presentation_with_bindings(
                 terminal_pane_resize_split: model.terminal_pane_resize_split,
                 workspace_surface: model.workspace_surface,
                 active_tab_input: model.active_tab_input,
-                language_server_settings: model.language_server_settings,
-                settings_section: model.settings_section,
-                language_server_runtime_state: model.language_server_runtime_state,
+                settings: model.settings,
                 session_title,
-                thread_projection: model.thread_projection,
-                thread_timeline_scroll_offset: model.thread_timeline_scroll_offset,
-                composer: ComposerPanelView {
-                    context: model.workspace_context,
-                    editor: model.composer.input(),
-                    interaction: model.composer.interaction(),
-                    interaction_pane: model.composer.interaction_pane(),
-                    route: model.composer.route(),
-                    caret_visibility: model.caret_visibility,
-                    dispatch: model.dispatch,
-                },
+                session_pane: model.session_pane,
+                session_pane_context: &session_pane_context,
                 workspace: model.workspace_pane_host,
                 workspace_context: model.workspace_context,
                 keybindings: model.keybindings,
-                keyboard_shortcuts: model.keyboard_shortcuts,
                 keybinding_diagnostics: model.keybinding_diagnostics,
                 theme_scheme: model.theme_scheme,
                 theme_follows_system: model.theme_follows_system,
@@ -712,9 +650,7 @@ fn build_shell_presentation_with_bindings(
         remote_connection_manager_list_viewport: overlay.remote_connection_manager_list_viewport,
         remote_tunnel_manager_scroll_metrics: overlay.remote_tunnel_manager_scroll_metrics,
         remote_tunnel_manager_list_viewport: overlay.remote_tunnel_manager_list_viewport,
-        language_server_settings_content: main_draw.settings_content,
         base_checkpoint: Some(base_checkpoint),
-        retained_fragments: BTreeMap::new(),
     }
 }
 
@@ -757,29 +693,6 @@ pub(crate) fn rebuild_shell_overlays(
     true
 }
 
-/// Replaces one product-owned retained scene fragment by its stable interaction ID.
-pub(crate) fn rebuild_shell_fragment(
-    presentation: &mut ShellPresentation,
-    id: ElementId,
-    state: &LanguageServerSettingsState,
-    palette: ShellPalette,
-    dispatch: &UiDispatch,
-    progress: f32,
-) -> bool {
-    let Some(panel) = presentation.language_server_settings_content else {
-        return false;
-    };
-    if id != crate::language_server_settings::LANGUAGE_SERVER_SWITCH {
-        return false;
-    }
-    presentation
-        .scene_mut()
-        .replace_fragment(id, |scene| {
-            paint_switch_fragment(scene, panel, state, palette, dispatch, progress);
-        })
-        .is_ok()
-}
-
 fn draw_shell_overlays(
     frame: &mut UiFrame<InteractionFrame>,
     viewport: LogicalViewport,
@@ -796,9 +709,9 @@ fn draw_shell_overlays(
     let mut remote_connection_manager_list_viewport = None;
     let mut remote_tunnel_manager_scroll_metrics = None;
     let mut remote_tunnel_manager_list_viewport = None;
-    if let Some(context_menu) = SessionContextMenu::new(
+    if let Some(context_menu) = TabContextMenu::new(
         Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
-        &model.session_context_menu,
+        &model.tab_context_menu,
         palette,
         model.dispatch,
     ) {
@@ -905,18 +818,19 @@ fn draw_shell_overlays(
             model.keybindings.platform(),
         );
     }
-    let shortcut_rows = keyboard_shortcut_rows(model.keybindings);
-    if let Some(shortcuts) = KeyboardShortcuts::new(
+    let shortcut_rows = zeta_settings::keyboard_shortcut_rows(|command| {
+        model.keybindings.binding_for_command(command)
+    });
+    zeta_settings::draw_keyboard_shortcuts_overlay(
+        frame,
         viewport_bounds,
-        model.keyboard_shortcuts,
+        model.settings.keyboard_shortcuts(),
         &shortcut_rows,
         model.keybinding_diagnostics,
-        keyboard_shortcuts_ids(),
+        WINDOW,
         model.keybindings.platform(),
         model.dispatch,
-    ) {
-        frame.draw_component(&shortcuts);
-    }
+    );
     ShellOverlayPresentation {
         ime_cursor_area,
         workspace_path_picker_scroll_metrics,
@@ -1231,9 +1145,11 @@ fn draw_tab_container(
     if !has_session_input && view.search.matches_session_name(view.title) {
         let fallback = WorkbenchTab::new(
             FIRST_TAB_CONTAINER_SESSION_TAB,
+            zeta_workbench::FIRST_TAB_CONTAINER_SESSION_CLOSE,
             view.title,
             view.context.working_directory_label(),
-            "Active",
+            zeta_workbench::TabStatus::idle("Ready"),
+            false,
         );
         if let Some(group) = groups
             .iter_mut()
@@ -1329,81 +1245,59 @@ fn draw_main(
             .draw_rect(PaintRect::new(layout.main(), palette.background));
         context.with_clip(layout.main(), |context| {
             let mut ime_cursor_area = None;
-            let mut settings_content = None;
             if view
                 .active_tab_input
                 .is_some_and(|input| input.is_settings())
             {
-                let actions = if view.settings_section == SettingsPageSection::LanguageServers {
-                    SettingsPageActionAvailability::none()
-                        .with_reset_enabled(view.language_server_settings.can_reset())
-                        .with_save_enabled(view.language_server_settings.can_save())
-                } else {
-                    SettingsPageActionAvailability::none()
+                let platform = view.keybindings.platform();
+                let keybinding_rows =
+                    zeta_settings::settings_keybinding_rows(platform, |command| {
+                        view.keybindings.binding_for_command(command)
+                    });
+                let surface_label = match view.workspace_surface {
+                    WorkspaceSurfaceKind::Agent => "Agent workspace",
+                    WorkspaceSurfaceKind::Editor => "Editor",
+                    WorkspaceSurfaceKind::Terminal => "Terminal",
                 };
-                let settings_page = SettingsPage::new_with_header_height_and_section(
+                let theme_scheme =
+                    match view.theme_scheme {
+                        zeta_theme::ColorScheme::Dark
+                        | zeta_theme::ColorScheme::HighContrastDark => "Dark",
+                        zeta_theme::ColorScheme::Light
+                        | zeta_theme::ColorScheme::HighContrastLight => "Light",
+                    };
+                let draw = zeta_settings::draw_settings_pane(
+                    context,
                     layout.main(),
                     TITLEBAR_HEIGHT,
-                    view.language_server_settings.search_input(),
-                    view.caret_visibility,
-                    palette.settings_page_style(),
-                    actions,
-                    view.settings_section,
-                    view.dispatch,
+                    MAIN_SURFACE,
+                    SettingsPaneView {
+                        state: view.settings,
+                        features: SettingsFeatureSnapshot {
+                            general: GeneralSettingsSnapshot {
+                                workspace_label: view.workspace_context.working_directory_label(),
+                                connection_label: view.workspace_context.location_label(),
+                                surface_label,
+                            },
+                            appearance: AppearanceSettingsSnapshot {
+                                scheme: theme_scheme,
+                                follows_system: view.theme_follows_system,
+                            },
+                            keybindings: KeybindingSettingsSnapshot {
+                                keybinding_rows: &keybinding_rows,
+                                keybinding_diagnostics: view.keybinding_diagnostics,
+                            },
+                        },
+                        caret_visibility: view.caret_visibility,
+                        dispatch: view.dispatch,
+                    },
+                    SettingsPaneStyle::new(
+                        palette.settings_page_style(),
+                        palette.settings_section_style(),
+                    ),
                     text_layout,
-                )
-                .with_parent(MAIN_SURFACE)
-                .with_mode(SettingsPageMode::Surface);
-                if view.settings_section == SettingsPageSection::LanguageServers {
-                    settings_content = Some(settings_page.content_bounds());
-                }
-                if view
-                    .dispatch
-                    .is_focused(zeta_settings::SETTINGS_SEARCH_INPUT)
-                {
-                    ime_cursor_area = settings_page.search_caret_bounds();
-                }
-                context.draw_component(&settings_page);
-                match view.settings_section {
-                    SettingsPageSection::LanguageServers => {
-                        if let Some(settings) = LanguageServerSettings::new_in_content(
-                            settings_page.content_bounds(),
-                            view.language_server_settings,
-                            view.caret_visibility,
-                            palette,
-                            text_layout,
-                            view.dispatch,
-                        ) {
-                            let settings =
-                                if let Some(runtime_state) = view.language_server_runtime_state {
-                                    settings.with_runtime_state(runtime_state)
-                                } else {
-                                    settings
-                                }
-                                .without_switch_fragment()
-                                .with_parent(zeta_settings::SETTINGS_PAGE);
-                            if view.dispatch.is_focused(
-                                crate::language_server_settings::LANGUAGE_SERVER_EXECUTABLE_INPUT,
-                            ) {
-                                ime_cursor_area = settings.executable_caret_bounds();
-                            }
-                            context.draw_component(&settings);
-                        }
-                    }
-                    section => context.draw_component(&SettingsSectionPane::new(
-                        settings_page.content_bounds(),
-                        section,
-                        palette,
-                        view.workspace_context,
-                        view.workspace_surface,
-                        view.keybindings,
-                        view.keyboard_shortcuts,
-                        view.keybinding_diagnostics,
-                        view.theme_scheme,
-                        view.theme_follows_system,
-                        view.dispatch,
-                    )),
-                }
+                );
+                ime_cursor_area = draw.ime_cursor_area;
             } else {
                 let workspace_pane_active =
                     !matches!(view.workspace_surface, WorkspaceSurfaceKind::Editor)
@@ -1492,36 +1386,19 @@ fn draw_main(
                             }
                         }
                         WorkspaceSurfaceKind::Agent | WorkspaceSurfaceKind::Editor => {
-                            context.draw_component(&SessionHeader::new(
-                                layout.session_header,
-                                view.session_title,
-                                view.thread_projection,
-                                view.composer.context,
-                                palette,
-                            ));
-                            let timeline_region = InteractionRegion::new(
-                                "ThreadTimeline",
-                                THREAD_TIMELINE,
-                                layout.thread_timeline,
-                                AccessibilityRole::Group,
-                                "Agent Thread timeline",
-                            )
-                            .with_parent(MAIN_SURFACE)
-                            .with_cursor(CursorFeedback::Text);
-                            context.with_component(&timeline_region, |context, _| {
-                                context.draw_component(&ThreadTimeline::new(
-                                    layout.thread_timeline,
-                                    view.thread_projection,
-                                    view.thread_timeline_scroll_offset,
-                                    thread_timeline_style(palette),
-                                ));
-                            });
-                            ime_cursor_area = draw_composer_panel(
+                            ime_cursor_area = draw_session_pane(
                                 context,
-                                layout.composer_panel_layout,
-                                view.composer,
+                                layout.session_pane_layout,
+                                SessionPaneView {
+                                    title: view.session_title,
+                                    state: view.session_pane,
+                                    context: view.session_pane_context,
+                                    caret_visibility: view.caret_visibility,
+                                    dispatch: view.dispatch,
+                                    parent: MAIN_SURFACE,
+                                },
                                 text_layout,
-                                palette,
+                                palette.session_pane_style(),
                             );
                         }
                     }
@@ -1560,10 +1437,7 @@ fn draw_main(
                     WorkspaceSurfaceKind::Agent | WorkspaceSurfaceKind::Editor => ime_cursor_area,
                 }
             };
-            MainDrawResult {
-                ime_cursor_area,
-                settings_content,
-            }
+            MainDrawResult { ime_cursor_area }
         })
     })
 }

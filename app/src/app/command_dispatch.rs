@@ -4,10 +4,7 @@ use zeta_commands::CommandRequest;
 use zui::ui::ElementId;
 
 use crate::NativeApp;
-use crate::session::session_switch_trace;
-use crate::shell_interaction::{
-    self, ContextAction, SessionContextMenuAction, WorkspacePaneSelection,
-};
+use crate::shell_interaction::{self, ContextAction, TabContextMenuAction, WorkspacePaneSelection};
 use zeta_workbench::PaneSplitDirection;
 
 pub(crate) type NativeCommandRegistry = CommandRegistry<NativeApp>;
@@ -19,9 +16,6 @@ pub(crate) fn command_request_for_element(id: ElementId) -> Option<CommandReques
     }
     if id == shell_interaction::WORKSPACE_PANE_TOGGLE {
         return Some(AppCommandId::ToggleWorkspacePane.into());
-    }
-    if id == shell_interaction::FIRST_TAB_CONTAINER_SESSION_TAB {
-        return Some(AppCommandId::ActivateSessionTab.into());
     }
     if id == shell_interaction::ADD_SESSION {
         return Some(AppCommandId::AddSession.into());
@@ -41,13 +35,12 @@ pub(crate) fn command_request_for_element(id: ElementId) -> Option<CommandReques
     if id == shell_interaction::AGENT_FILES_SEARCH {
         return Some(AppCommandId::ToggleAgentFileSearch.into());
     }
-    if let Some(action) = SessionContextMenuAction::from_element_id(id) {
+    if let Some(action) = TabContextMenuAction::from_element_id(id) {
         return Some(
             match action {
-                SessionContextMenuAction::Pin => AppCommandId::PinSession,
-                SessionContextMenuAction::Close => AppCommandId::CloseSession,
-                SessionContextMenuAction::Rename => AppCommandId::RenameSession,
-                SessionContextMenuAction::Fork => AppCommandId::ForkSession,
+                TabContextMenuAction::TogglePin => AppCommandId::PinSession,
+                TabContextMenuAction::Close => AppCommandId::CloseSession,
+                TabContextMenuAction::MoveToNewGroup => AppCommandId::GroupSession,
             }
             .into(),
         );
@@ -89,12 +82,6 @@ pub(crate) fn builtin_command_registry() -> NativeCommandRegistry {
         .expect("built-in command IDs must be unique");
     registry
         .register(
-            AppCommandId::OpenLanguageServerSettings,
-            execute_open_language_server_settings,
-        )
-        .expect("built-in command IDs must be unique");
-    registry
-        .register(
             AppCommandId::ManageRemoteTunnels,
             execute_manage_remote_tunnels,
         )
@@ -109,12 +96,6 @@ pub(crate) fn builtin_command_registry() -> NativeCommandRegistry {
         .register(
             AppCommandId::ToggleWorkspacePane,
             execute_toggle_workspace_pane,
-        )
-        .expect("built-in command IDs must be unique");
-    registry
-        .register(
-            AppCommandId::ActivateSessionTab,
-            execute_activate_session_tab,
         )
         .expect("built-in command IDs must be unique");
     registry
@@ -136,28 +117,19 @@ pub(crate) fn builtin_command_registry() -> NativeCommandRegistry {
         )
         .expect("built-in command IDs must be unique");
     registry
-        .register(
-            AppCommandId::PinSession,
-            execute_session_context_menu_action,
-        )
+        .register(AppCommandId::PinSession, execute_tab_context_menu_action)
         .expect("built-in command IDs must be unique");
     registry
-        .register(
-            AppCommandId::CloseSession,
-            execute_session_context_menu_action,
-        )
+        .register(AppCommandId::CloseSession, execute_tab_context_menu_action)
         .expect("built-in command IDs must be unique");
     registry
-        .register(
-            AppCommandId::RenameSession,
-            execute_session_context_menu_action,
-        )
+        .register(AppCommandId::RenameSession, execute_tab_context_menu_action)
         .expect("built-in command IDs must be unique");
     registry
-        .register(
-            AppCommandId::ForkSession,
-            execute_session_context_menu_action,
-        )
+        .register(AppCommandId::GroupSession, execute_tab_context_menu_action)
+        .expect("built-in command IDs must be unique");
+    registry
+        .register(AppCommandId::ForkSession, execute_tab_context_menu_action)
         .expect("built-in command IDs must be unique");
     registry
         .register(
@@ -251,16 +223,12 @@ fn execute_toggle_terminal_surface(app: &mut NativeApp, _request: &CommandReques
 }
 
 fn execute_open_keyboard_shortcuts(app: &mut NativeApp, _request: &CommandRequest) {
-    app.activate_session_workbench_tab();
+    app.activate_settings_tab();
     app.remote_connection_picker.dismiss();
     app.dismiss_remote_connection_manager();
     app.dismiss_remote_tunnel_manager();
-    app.keyboard_shortcuts.toggle();
+    app.settings.open_keyboard_shortcuts();
     app.keybindings.cancel_chord();
-}
-
-fn execute_open_language_server_settings(app: &mut NativeApp, _request: &CommandRequest) {
-    app.activate_settings_tab();
 }
 
 fn execute_manage_remote_tunnels(app: &mut NativeApp, _request: &CommandRequest) {
@@ -270,7 +238,7 @@ fn execute_manage_remote_tunnels(app: &mut NativeApp, _request: &CommandRequest)
         return;
     }
     let restore_focus = app.ui_dispatch.focused();
-    app.keyboard_shortcuts.close();
+    app.settings.close_keyboard_shortcuts();
     app.activate_session_workbench_tab();
     app.open_remote_tunnel_manager(restore_focus);
     app.keybindings.cancel_chord();
@@ -278,14 +246,6 @@ fn execute_manage_remote_tunnels(app: &mut NativeApp, _request: &CommandRequest)
 
 fn execute_toggle_tab_container(app: &mut NativeApp, _request: &CommandRequest) {
     app.workbench.toggle_tab_container();
-    session_switch_trace::event(
-        None,
-        "tab-container-toggle",
-        format_args!(
-            "expanded={}",
-            app.workbench.tab_container_state().is_expanded()
-        ),
-    );
 }
 
 fn execute_toggle_workspace_pane(app: &mut NativeApp, _request: &CommandRequest) {
@@ -303,11 +263,6 @@ fn execute_toggle_workspace_pane(app: &mut NativeApp, _request: &CommandRequest)
     }
 }
 
-fn execute_activate_session_tab(_app: &mut NativeApp, _request: &CommandRequest) {
-    // Concrete tab clicks are handled by NativeApp::activate_shell_element before generic command
-    // dispatch because CommandRequest does not carry the clicked tab index.
-}
-
 fn execute_add_session(app: &mut NativeApp, _request: &CommandRequest) {
     app.add_session();
 }
@@ -321,9 +276,7 @@ fn execute_show_agent_files(app: &mut NativeApp, _request: &CommandRequest) {
 }
 
 fn execute_refresh_agent_files(app: &mut NativeApp, _request: &CommandRequest) {
-    if let Some(session) = app.agent_session.as_ref()
-        && let Err(error) = session.refresh_git()
-    {
+    if let Err(error) = app.refresh_git_from_app_server() {
         eprintln!("could not refresh Git projection: {error}");
     }
     app.refresh_files_from_app_server();
@@ -343,25 +296,39 @@ fn execute_toggle_agent_file_search(app: &mut NativeApp, _request: &CommandReque
     }
 }
 
-fn execute_session_context_menu_action(app: &mut NativeApp, request: &CommandRequest) {
+fn execute_tab_context_menu_action(app: &mut NativeApp, request: &CommandRequest) {
     debug_assert!(matches!(
         request.command_id(),
         AppCommandId::PinSession
             | AppCommandId::CloseSession
             | AppCommandId::RenameSession
+            | AppCommandId::GroupSession
             | AppCommandId::ForkSession
     ));
-    let target_tab = app.session_context_menu.target_tab().cloned();
+    let target_tab = app.tab_context_menu.target_tab().cloned();
     let command_id = request.command_id();
-    app.dismiss_session_context_menu();
+    app.dismiss_tab_context_menu();
     if command_id == AppCommandId::CloseSession {
         if let Some(target_tab) = target_tab {
             let _ = app.close_session_tab(&target_tab);
         }
         return;
     }
-    // These transitions require the future multi-Session runtime rather than mutating the single
-    // PTY preview.
+    if command_id == AppCommandId::PinSession {
+        if let Some(target_tab) = target_tab {
+            let _ = app.workbench.toggle_tab_pin(&target_tab);
+            app.rebuild_presentation_on_next_redraw();
+        }
+        return;
+    }
+    if command_id == AppCommandId::GroupSession
+        && let Some(target_tab) = target_tab
+    {
+        let _ = app
+            .workbench
+            .move_tab_to_new_group(&target_tab, "New group");
+        app.rebuild_presentation_on_next_redraw();
+    }
 }
 
 fn execute_pick_execution_location(app: &mut NativeApp, _request: &CommandRequest) {
@@ -377,9 +344,7 @@ fn execute_pick_git_branch(app: &mut NativeApp, _request: &CommandRequest) {
 }
 
 fn execute_show_workspace_diff(app: &mut NativeApp, _request: &CommandRequest) {
-    if let Some(session) = app.agent_session.as_ref()
-        && let Err(error) = session.refresh_git()
-    {
+    if let Err(error) = app.refresh_git_from_app_server() {
         eprintln!("could not refresh Git projection: {error}");
     }
     app.select_workspace_pane_view(crate::workspace_pane_host::WorkspacePaneView::Changes);

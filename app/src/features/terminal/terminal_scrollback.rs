@@ -26,7 +26,7 @@ impl NativeApp {
         if self.route_workspace_path_picker_wheel(delta) {
             return;
         }
-        if self.session_context_menu.is_open() {
+        if self.tab_context_menu.is_open() {
             return;
         }
         if self.route_file_editor_wheel(delta) {
@@ -102,14 +102,13 @@ impl NativeApp {
             return true;
         };
         let item_count = self
-            .composer
-            .interaction()
-            .view()
+            .session_pane
+            .composer_interaction_view()
             .map(|view| view.items().len())
             .unwrap_or(0);
-        let viewport = zeta_composer::interaction_list_bounds(interaction_bounds);
-        let content = zeta_composer::interaction_content_size(viewport, item_count);
-        if self.composer.interaction_pane_mut().apply_scroll(
+        let viewport = zeta_session::interaction_list_bounds(interaction_bounds);
+        let content = zeta_session::interaction_content_size(viewport, item_count);
+        if self.session_pane.scroll_composer_interaction(
             composer_interaction_scroll_command(delta),
             viewport.size,
             content,
@@ -201,7 +200,7 @@ impl NativeApp {
 fn composer_interaction_scroll_command(delta: MouseScrollDelta) -> ScrollCommand {
     let pixels = match delta {
         MouseScrollDelta::LineDelta(_, vertical) => {
-            vertical * LINES_PER_WHEEL_STEP * zeta_composer::INTERACTION_ROW_HEIGHT
+            vertical * LINES_PER_WHEEL_STEP * zeta_session::INTERACTION_ROW_HEIGHT
         }
         MouseScrollDelta::PixelDelta(position) => position.y as f32,
     };

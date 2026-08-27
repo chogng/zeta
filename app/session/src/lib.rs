@@ -1,25 +1,65 @@
-//! Session state, lifecycle-facing models, and presentation.
+//! App Server runtime, state, presentation, and interaction for Session.
 //!
-//! The crate accepts typed Thread snapshots, incremental updates, and host-resolved
-//! style values, then exposes feature state and UI components. Window, transport,
-//! and other product-host effects remain outside this crate.
+//! The runtime owns Session/Thread requests, subscriptions, and reconnects. The Pane owns the
+//! backend-assembled transcript, timeline, and Composer. Tabs, product effects, and other App
+//! Server capabilities remain outside this crate.
 
+mod composer;
+mod composer_input;
+mod composer_interaction;
+mod composer_interaction_pane;
+mod composer_layout;
+mod composer_panel;
+mod input_context_toolbar;
 pub mod interaction;
+mod pane;
+mod pane_context;
+mod pane_state;
+mod pane_style;
+mod runtime;
+mod runtime_contract;
+mod runtime_worker;
 mod session_canvas;
-mod session_context_menu;
-mod session_search;
-mod thread_state;
 mod thread_timeline;
 mod timeline_scroll;
-mod workbench_input;
+mod transcript_state;
 
+pub(crate) use composer::Composer;
+pub use composer::ComposerRoute;
+pub use composer::ComposerSubmission;
+pub(crate) use composer_input::ComposerInput;
+pub(crate) use composer_input::ComposerInputFocus;
+pub use composer_interaction::ComposerInteractionActivation;
+pub use composer_interaction::ComposerInteractionItem;
+pub(crate) use composer_interaction::ComposerInteractionModel;
+pub use composer_interaction::ComposerInteractionView;
+pub use composer_interaction::ComposerModelOption;
+pub use composer_interaction::SelectionDirection;
+pub(crate) use composer_interaction_pane::ComposerInteractionPaneState;
+pub use composer_layout::ComposerPanelLayout;
+pub use composer_layout::INTERACTION_ROW_HEIGHT;
+pub use composer_layout::interaction_content_size;
+pub use composer_layout::interaction_list_bounds;
+pub use composer_layout::interaction_preferred_height;
+pub use composer_layout::interaction_selection_scroll_command;
+use composer_panel::ComposerPanelView;
+use composer_panel::draw_composer_panel;
+pub use pane::{SessionPaneLayout, SessionPaneView, draw_session_pane};
+pub use pane_context::SessionPaneContext;
+pub use pane_state::SessionPaneState;
+pub use pane_style::SessionPaneStyle;
+pub use runtime::CommandResult;
+pub use runtime::SESSION_UNAVAILABLE_COMMAND_ERROR;
+pub use runtime::SessionRuntime;
+pub use runtime::SessionRuntimeEvent;
+pub use runtime::SessionRuntimeTarget;
+pub use runtime::WorkspaceSwitchResult;
+pub(crate) use runtime::SessionRuntimeEventSink;
+pub(crate) use runtime_contract::RECONNECT_WINDOW;
+pub(crate) use runtime_contract::SessionRuntimeCommand;
+pub(crate) use runtime_contract::reconnect_delay_within_window;
+pub(crate) use runtime_contract::reject_disconnected_command;
 pub use session_canvas::{SessionCanvasLayout, SessionHeader, SessionHeaderStyle};
-pub use session_context_menu::{
-    SessionContextMenu, SessionContextMenuState, SessionContextMenuStyle,
-    update_session_context_menu_pointer,
-};
-pub use session_search::SessionSearchState;
-pub use thread_state::{ThreadState, ThreadUpdateResult};
-pub use thread_timeline::{ThreadTimeline, ThreadTimelineStyle, line_capacity, line_count};
+pub(crate) use thread_timeline::{ThreadTimeline, ThreadTimelineStyle, line_capacity, line_count};
 pub use timeline_scroll::{ThreadTimelineScroll, TimelineScrollDelta};
-pub use workbench_input::session_tab_input;
+pub(crate) use transcript_state::TranscriptState;

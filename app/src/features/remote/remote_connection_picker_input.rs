@@ -62,7 +62,7 @@ impl NativeApp {
             self.remote_tunnel_host.is_some(),
             restore_focus,
         );
-        self.session_context_menu.dismiss();
+        self.tab_context_menu.dismiss();
         self.git_branch_context_menu.dismiss();
         self.workspace_path_picker.dismiss();
         self.dismiss_remote_connection_manager();

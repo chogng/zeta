@@ -7,34 +7,31 @@ use crate::PRODUCT_DISPLAY_NAME;
 use crate::file_editor_host::FileEditorHost;
 use crate::git_branch_context_menu::GitBranchContextMenuState;
 use crate::keybindings::NativeKeybindings;
-use crate::keyboard_shortcuts::KeyboardShortcutsState;
-use crate::language_server_settings::LanguageServerSettingsState;
 use crate::remote_connection_manager::RemoteConnectionManagerState;
 use crate::remote_connection_picker::RemoteConnectionPickerState;
 use crate::remote_tunnel_manager::RemoteTunnelManagerState;
-use crate::session::session_context_menu::SessionContextMenuState;
-use crate::session::session_search::SessionSearch;
 use crate::shell_interaction::{
     ADD_SESSION, AGENT_CHANGES, AGENT_EDITOR_PANE, AGENT_EXPLORER_PANE, AGENT_FILES,
     AGENT_FILES_REFRESH, AGENT_FILES_SEARCH, COMPOSER, COMPOSER_INFO_BAR, COMPOSER_PANEL,
     ContextAction, FILE_EDITOR_DOCUMENT, FILE_EDITOR_PANE, FILE_EDITOR_TAB_LIST,
-    INSPECTOR_RESIZE_HANDLE, MULTI_DIFF_EDITOR, SESSION_CONTEXT_MENU, SESSION_HEADER,
-    SESSION_SEARCH_INPUT, TAB_CONTAINER_RESIZE_HANDLE, TAB_CONTAINER_SETTINGS_TAB, THREAD_TIMELINE,
+    INSPECTOR_RESIZE_HANDLE, MULTI_DIFF_EDITOR, SESSION_HEADER, SESSION_SEARCH_INPUT,
+    TAB_CONTAINER_RESIZE_HANDLE, TAB_CONTAINER_SETTINGS_TAB, TAB_CONTEXT_MENU, THREAD_TIMELINE,
     TITLEBAR, WORKSPACE_PANE, WORKSPACE_PANE_NAVIGATION, WORKSPACE_PANE_TOOLBAR,
 };
-use crate::thread_projection::ThreadProjection;
+use crate::tab_context_menu::TabContextMenuState;
 use crate::workspace_context::WorkspaceContext;
 use crate::workspace_pane_host::WorkspacePaneHost;
 use crate::workspace_path_picker::WorkspacePathPickerState;
 use crate::workspace_surface::WorkspaceSurfaceKind;
 use zeta_app_server_protocol::protocol::fs::{FsFileType, FsReadDirectoryEntry};
-use zeta_composer::Composer;
 use zeta_editor::CodeEditorStyle;
-use zeta_settings::SettingsPageSection;
+use zeta_session::SessionPaneState;
+use zeta_settings::SettingsState;
 use zeta_terminal::{GridSize, ScreenBuffer, TerminalCore};
 use zeta_terminal_workspace::PaneBinding;
 use zeta_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSnapshot};
 use zeta_ui_components::ScrollbarPresentation;
+use zeta_workbench::SessionSearchState;
 use zeta_workbench::TabContainerState;
 use zeta_workbench::{
     InspectorPartState, PaneInput, PanePart, PaneSplitDirection, TabInput, TabInputKey,
@@ -86,7 +83,7 @@ fn presentation_with_dispatch(
         scroll_offset,
         TabContainerState::collapsed(),
         InspectorPartState::default(),
-        SessionContextMenuState::default(),
+        TabContextMenuState::default(),
         &workspace_pane_host,
         &mut dispatch,
     );
@@ -111,7 +108,7 @@ fn presentation_with_tab_container(
         terminal,
         scroll_offset,
         tab_container,
-        SessionContextMenuState::default(),
+        TabContextMenuState::default(),
     )
 }
 
@@ -119,14 +116,14 @@ fn presentation_with_tab_container_and_menu(
     terminal: Option<&TerminalCore>,
     scroll_offset: usize,
     tab_container: TabContainerState,
-    session_context_menu: SessionContextMenuState,
+    tab_context_menu: TabContextMenuState,
 ) -> ShellPresentation {
     presentation_with_parts_and_menu(
         terminal,
         scroll_offset,
         tab_container,
         InspectorPartState::default(),
-        session_context_menu,
+        tab_context_menu,
     )
 }
 
@@ -135,7 +132,7 @@ fn presentation_with_parts_and_menu(
     scroll_offset: usize,
     tab_container: TabContainerState,
     inspector_part: InspectorPartState,
-    session_context_menu: SessionContextMenuState,
+    tab_context_menu: TabContextMenuState,
 ) -> ShellPresentation {
     let workspace_pane_host = WorkspacePaneHost::default();
     let mut dispatch = UiDispatch::default();
@@ -144,7 +141,7 @@ fn presentation_with_parts_and_menu(
         scroll_offset,
         tab_container,
         inspector_part,
-        session_context_menu,
+        tab_context_menu,
         &workspace_pane_host,
         &mut dispatch,
     )
@@ -155,7 +152,7 @@ fn presentation_with_workspace(
     scroll_offset: usize,
     tab_container: TabContainerState,
     inspector_part: InspectorPartState,
-    session_context_menu: SessionContextMenuState,
+    tab_context_menu: TabContextMenuState,
     workspace_pane_host: &WorkspacePaneHost,
     dispatch: &mut UiDispatch,
 ) -> ShellPresentation {
@@ -164,7 +161,7 @@ fn presentation_with_workspace(
         scroll_offset,
         tab_container,
         inspector_part,
-        session_context_menu,
+        tab_context_menu,
         workspace_pane_host,
         dispatch,
         None,
@@ -176,18 +173,17 @@ fn presentation_with_active_tab_input(
     scroll_offset: usize,
     tab_container: TabContainerState,
     inspector_part: InspectorPartState,
-    session_context_menu: SessionContextMenuState,
+    tab_context_menu: TabContextMenuState,
     workspace_pane_host: &WorkspacePaneHost,
     dispatch: &mut UiDispatch,
     active_tab_input: Option<TabInputKey>,
 ) -> ShellPresentation {
-    let composer = Composer::default();
-    let session_search = SessionSearch::default();
+    let session_pane = SessionPaneState::default();
+    let session_search = SessionSearchState::default();
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
     let mut text_layout = TextInputLayoutEngine::new();
     let file_editor_host = FileEditorHost::default();
     let code_editor_style = CodeEditorStyle::light();
-    let thread_projection = ThreadProjection::default();
     let workspace_tab_key = TabInputKey::session(
         zeta_protocol::SessionId::new("workspace-pane-session")
             .expect("test session ID is non-empty"),
@@ -249,10 +245,8 @@ fn presentation_with_active_tab_input(
             language_completions: None,
             completion_selection: 0,
             code_editor_style: &code_editor_style,
-            thread_projection: &thread_projection,
-            thread_timeline_scroll_offset: 0,
+            session_pane: &session_pane,
             workspace_context: &workspace_context,
-            composer: &composer,
             session_search: &session_search,
             tab_part: &tab_part,
             active_tab_input,
@@ -261,17 +255,14 @@ fn presentation_with_active_tab_input(
             tab_container,
             inspector_part,
             workspace_pane_host,
-            session_context_menu: session_context_menu.clone(),
+            tab_context_menu: tab_context_menu.clone(),
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
             remote_connection_picker: &RemoteConnectionPickerState::default(),
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
             keybindings: &NativeKeybindings::default(),
-            keyboard_shortcuts: &KeyboardShortcutsState::default(),
-            language_server_settings: &LanguageServerSettingsState::default(),
-            settings_section: SettingsPageSection::default(),
-            language_server_runtime_state: None,
+            settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
             theme_scheme: zeta_theme::ColorScheme::Light,
             theme_follows_system: true,
@@ -308,10 +299,8 @@ fn presentation_with_active_tab_input(
             language_completions: None,
             completion_selection: 0,
             code_editor_style: &code_editor_style,
-            thread_projection: &thread_projection,
-            thread_timeline_scroll_offset: 0,
+            session_pane: &session_pane,
             workspace_context: &workspace_context,
-            composer: &composer,
             session_search: &session_search,
             tab_part: &tab_part,
             active_tab_input,
@@ -320,17 +309,14 @@ fn presentation_with_active_tab_input(
             tab_container,
             inspector_part,
             workspace_pane_host,
-            session_context_menu,
+            tab_context_menu,
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
             remote_connection_picker: &RemoteConnectionPickerState::default(),
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
             keybindings: &NativeKeybindings::default(),
-            keyboard_shortcuts: &KeyboardShortcutsState::default(),
-            language_server_settings: &LanguageServerSettingsState::default(),
-            settings_section: SettingsPageSection::default(),
-            language_server_runtime_state: None,
+            settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
             theme_scheme: zeta_theme::ColorScheme::Light,
             theme_follows_system: true,
@@ -350,7 +336,7 @@ fn settings_tab_input_renders_settings_and_selects_the_tab_container_entry() {
         0,
         TabContainerState::expanded(),
         InspectorPartState::default(),
-        SessionContextMenuState::default(),
+        TabContextMenuState::default(),
         &workspace_pane_host,
         &mut dispatch,
         Some(TabInputKey::Settings),
@@ -397,7 +383,7 @@ fn expanded_inspector_part_file_row_hover_rebuilds_with_the_hover_background() {
         0,
         TabContainerState::collapsed(),
         InspectorPartState::expanded(),
-        SessionContextMenuState::default(),
+        TabContextMenuState::default(),
         &workspace,
         &mut dispatch,
     );
@@ -424,7 +410,7 @@ fn expanded_inspector_part_file_row_hover_rebuilds_with_the_hover_background() {
         0,
         TabContainerState::collapsed(),
         InspectorPartState::expanded(),
-        SessionContextMenuState::default(),
+        TabContextMenuState::default(),
         &workspace,
         &mut dispatch,
     );
@@ -459,12 +445,11 @@ fn primary_layout_keeps_output_above_a_bottom_composer() {
 
 #[test]
 fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
-    let composer = Composer::default();
-    let session_search = SessionSearch::default();
+    let session_pane = SessionPaneState::default();
+    let session_search = SessionSearchState::default();
     let tab_part = TabPart::default();
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
     let workspace_pane_host = WorkspacePaneHost::default();
-    let thread_projection = ThreadProjection::default();
     let mut file_editor_host = FileEditorHost::default();
     file_editor_host.open(TextFileSnapshot::new(
         "src/main.rs".into(),
@@ -500,10 +485,8 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
             language_completions: None,
             completion_selection: 0,
             code_editor_style: &code_editor_style,
-            thread_projection: &thread_projection,
-            thread_timeline_scroll_offset: 0,
+            session_pane: &session_pane,
             workspace_context: &workspace_context,
-            composer: &composer,
             session_search: &session_search,
             tab_part: &tab_part,
             active_tab_input: None,
@@ -512,17 +495,14 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
             tab_container: TabContainerState::collapsed(),
             inspector_part: InspectorPartState::expanded(),
             workspace_pane_host: &workspace_pane_host,
-            session_context_menu: SessionContextMenuState::default(),
+            tab_context_menu: TabContextMenuState::default(),
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
             remote_connection_picker: &RemoteConnectionPickerState::default(),
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
             keybindings: &NativeKeybindings::default(),
-            keyboard_shortcuts: &KeyboardShortcutsState::default(),
-            language_server_settings: &LanguageServerSettingsState::default(),
-            settings_section: SettingsPageSection::default(),
-            language_server_runtime_state: None,
+            settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
             theme_scheme: zeta_theme::ColorScheme::Light,
             theme_follows_system: true,
@@ -602,7 +582,13 @@ fn primary_presentation_uses_a_flat_light_surface() {
         .scene()
         .rects()
         .iter()
-        .find(|rect| rect.bounds() == layout.composer_panel_layout.info_editor_separator())
+        .find(|rect| {
+            rect.bounds()
+                == layout
+                    .session_pane_layout
+                    .composer()
+                    .info_editor_separator()
+        })
         .unwrap();
 
     assert_eq!(presentation.scene().background(), Color::rgb(252, 252, 253));
@@ -740,8 +726,8 @@ fn expanded_tab_container_reflow_the_terminal_and_publish_a_selected_session_tab
 
 #[test]
 fn session_search_filters_tabs_by_session_name() {
-    let composer = Composer::default();
-    let mut session_search = SessionSearch::default();
+    let session_pane = SessionPaneState::default();
+    let mut session_search = SessionSearchState::default();
     let tab_part = TabPart::default();
     session_search.apply(TextInputCommand::Insert("missing session".to_owned()));
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
@@ -750,7 +736,6 @@ fn session_search_filters_tabs_by_session_name() {
     let workspace_pane_host = WorkspacePaneHost::default();
     let file_editor_host = FileEditorHost::default();
     let code_editor_style = CodeEditorStyle::light();
-    let thread_projection = ThreadProjection::default();
 
     let presentation = build_shell_presentation(
         viewport(),
@@ -773,10 +758,8 @@ fn session_search_filters_tabs_by_session_name() {
             language_completions: None,
             completion_selection: 0,
             code_editor_style: &code_editor_style,
-            thread_projection: &thread_projection,
-            thread_timeline_scroll_offset: 0,
+            session_pane: &session_pane,
             workspace_context: &workspace_context,
-            composer: &composer,
             session_search: &session_search,
             tab_part: &tab_part,
             active_tab_input: None,
@@ -785,17 +768,14 @@ fn session_search_filters_tabs_by_session_name() {
             tab_container: TabContainerState::expanded(),
             inspector_part: InspectorPartState::default(),
             workspace_pane_host: &workspace_pane_host,
-            session_context_menu: SessionContextMenuState::default(),
+            tab_context_menu: TabContextMenuState::default(),
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
             remote_connection_picker: &RemoteConnectionPickerState::default(),
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
             keybindings: &NativeKeybindings::default(),
-            keyboard_shortcuts: &KeyboardShortcutsState::default(),
-            language_server_settings: &LanguageServerSettingsState::default(),
-            settings_section: SettingsPageSection::default(),
-            language_server_runtime_state: None,
+            settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
             theme_scheme: zeta_theme::ColorScheme::Light,
             theme_follows_system: true,
@@ -828,7 +808,7 @@ fn workspace_pane_defaults_to_files_in_the_main_workbench_with_navigation_and_ac
         0,
         TabContainerState::collapsed(),
         inspector_part,
-        SessionContextMenuState::default(),
+        TabContextMenuState::default(),
     );
     let accessibility_nodes = accessibility_nodes(&presentation, &UiDispatch::default());
     let workspace_pane = accessibility_nodes
@@ -924,8 +904,8 @@ fn workspace_pane_defaults_to_files_in_the_main_workbench_with_navigation_and_ac
 
 #[test]
 fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_actions() {
-    let composer = Composer::default();
-    let session_search = SessionSearch::default();
+    let session_pane = SessionPaneState::default();
+    let session_search = SessionSearchState::default();
     let tab_part = TabPart::default();
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(2));
     let mut agent_workspace = WorkspacePaneHost::default();
@@ -952,7 +932,6 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
     let main_pane = workbench.mount(&tab_key, main_pane_group.root_pane());
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
-    let thread_projection = ThreadProjection::default();
     let file_editor_host = FileEditorHost::default();
     let code_editor_style = CodeEditorStyle::light();
     let presentation = build_shell_presentation(
@@ -976,10 +955,8 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
             language_completions: None,
             completion_selection: 0,
             code_editor_style: &code_editor_style,
-            thread_projection: &thread_projection,
-            thread_timeline_scroll_offset: 0,
+            session_pane: &session_pane,
             workspace_context: &workspace_context,
-            composer: &composer,
             session_search: &session_search,
             tab_part: &tab_part,
             active_tab_input: Some(&tab_key),
@@ -988,17 +965,14 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
             tab_container: TabContainerState::collapsed(),
             inspector_part: InspectorPartState::default(),
             workspace_pane_host: &agent_workspace,
-            session_context_menu: SessionContextMenuState::default(),
+            tab_context_menu: TabContextMenuState::default(),
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
             remote_connection_picker: &RemoteConnectionPickerState::default(),
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
             keybindings: &NativeKeybindings::default(),
-            keyboard_shortcuts: &KeyboardShortcutsState::default(),
-            language_server_settings: &LanguageServerSettingsState::default(),
-            settings_section: SettingsPageSection::default(),
-            language_server_runtime_state: None,
+            settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
             theme_scheme: zeta_theme::ColorScheme::Light,
             theme_follows_system: true,
@@ -1044,9 +1018,9 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
 }
 
 #[test]
-fn open_session_context_menu_is_topmost_and_exposes_four_actions() {
-    let mut menu_state = SessionContextMenuState::default();
-    menu_state.open(
+fn open_tab_context_menu_is_topmost_and_exposes_generic_actions() {
+    let mut menu_state = TabContextMenuState::default();
+    menu_state.open_unpinned(
         TabInputKey::session(
             zeta_protocol::SessionId::new("context-menu-session")
                 .expect("test session ID is non-empty"),
@@ -1063,30 +1037,30 @@ fn open_session_context_menu_is_topmost_and_exposes_four_actions() {
     let accessibility_nodes = accessibility_nodes(&presentation, &UiDispatch::default());
     let labels = accessibility_nodes
         .iter()
-        .filter(|node| node.parent == Some(crate::shell_interaction::SESSION_CONTEXT_MENU))
+        .filter(|node| node.parent == Some(crate::shell_interaction::TAB_CONTEXT_MENU))
         .map(|node| node.label.as_str())
         .collect::<Vec<_>>();
     let first_item = accessibility_nodes
         .iter()
         .find(|node| {
-            node.id == crate::shell_interaction::SessionContextMenuAction::Pin.element_id()
+            node.id == crate::shell_interaction::TabContextMenuAction::TogglePin.element_id()
         })
         .unwrap();
 
-    assert_eq!(labels, ["Pin", "Close", "Rename", "Fork"]);
+    assert_eq!(labels, ["Pin", "Close", "Move to new group"]);
     assert_eq!(
         presentation.interaction_frame().target_at(Point::new(
             first_item.bounds.origin.x + 2.0,
             first_item.bounds.origin.y + 2.0
         )),
-        Some(crate::shell_interaction::SessionContextMenuAction::Pin.element_id())
+        Some(crate::shell_interaction::TabContextMenuAction::TogglePin.element_id())
     );
     assert!(
         presentation
             .scene()
             .text_blocks()
             .iter()
-            .any(|text| text.text() == "Fork")
+            .any(|text| text.text() == "Move to new group")
     );
 }
 
@@ -1163,19 +1137,17 @@ fn context_toolbar_pointer_clicks_activate_workspace_and_branch_pickers() {
 
 #[test]
 fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
-    let composer = Composer::default();
-    let session_search = SessionSearch::default();
+    let session_pane = SessionPaneState::default();
+    let session_search = SessionSearchState::default();
     let tab_part = TabPart::default();
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
     let workspace_pane_host = WorkspacePaneHost::default();
-    let thread_projection = ThreadProjection::default();
     let git_branch_context_menu = GitBranchContextMenuState::default();
     let workspace_path_picker = WorkspacePathPickerState::default();
     let remote_connection_picker = RemoteConnectionPickerState::default();
     let remote_connection_manager = RemoteConnectionManagerState::default();
     let keybindings = NativeKeybindings::default();
-    let keyboard_shortcuts = KeyboardShortcutsState::default();
-    let language_server_settings = LanguageServerSettingsState::default();
+    let settings = SettingsState::default();
     let file_editor_host = FileEditorHost::default();
     let code_editor_style = CodeEditorStyle::light();
     let dispatch = UiDispatch::default();
@@ -1199,10 +1171,8 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         language_completions: None,
         completion_selection: 0,
         code_editor_style: &code_editor_style,
-        thread_projection: &thread_projection,
-        thread_timeline_scroll_offset: 0,
+        session_pane: &session_pane,
         workspace_context: &workspace_context,
-        composer: &composer,
         session_search: &session_search,
         tab_part: &tab_part,
         active_tab_input: None,
@@ -1211,17 +1181,14 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         tab_container: TabContainerState::collapsed(),
         inspector_part: InspectorPartState::default(),
         workspace_pane_host: &workspace_pane_host,
-        session_context_menu: SessionContextMenuState::default(),
+        tab_context_menu: TabContextMenuState::default(),
         git_branch_context_menu: &git_branch_context_menu,
         workspace_path_picker: &workspace_path_picker,
         remote_connection_picker: &remote_connection_picker,
         remote_connection_manager: &remote_connection_manager,
         remote_tunnel_manager: &RemoteTunnelManagerState::default(),
         keybindings: &keybindings,
-        keyboard_shortcuts: &keyboard_shortcuts,
-        language_server_settings: &language_server_settings,
-        settings_section: SettingsPageSection::default(),
-        language_server_runtime_state: None,
+        settings: &settings,
         keybinding_diagnostics: &[],
         theme_scheme: zeta_theme::ColorScheme::Light,
         theme_follows_system: true,
@@ -1233,8 +1200,8 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
     let base_scene = presentation.scene().clone();
     let base_interactions = presentation.interaction_frame().clone();
     let base_accessibility = accessibility_nodes(&presentation, &dispatch);
-    let mut menu = SessionContextMenuState::default();
-    menu.open(
+    let mut menu = TabContextMenuState::default();
+    menu.open_unpinned(
         TabInputKey::session(
             zeta_protocol::SessionId::new("context-menu-session")
                 .expect("test session ID is non-empty"),
@@ -1247,7 +1214,7 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         &mut presentation,
         viewport(),
         ShellPresentationModel {
-            session_context_menu: menu,
+            tab_context_menu: menu,
             ..closed_model.clone()
         },
         &mut text_layout,
@@ -1255,7 +1222,7 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
     assert!(
         presentation
             .interaction_frame()
-            .node(SESSION_CONTEXT_MENU)
+            .node(TAB_CONTEXT_MENU)
             .is_some()
     );
     assert_ne!(*presentation.scene(), base_scene);
@@ -1347,14 +1314,13 @@ fn context_toolbar_starts_with_environment_below_the_composer_editor() {
 
 #[test]
 fn compact_viewport_uses_bounded_fallback_scene() {
-    let composer = Composer::default();
-    let session_search = SessionSearch::default();
+    let session_pane = SessionPaneState::default();
+    let session_search = SessionSearchState::default();
     let tab_part = TabPart::default();
     let workspace_context = WorkspaceContext::fixture("/tmp/project", None, None);
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
     let workspace_pane_host = WorkspacePaneHost::default();
-    let thread_projection = ThreadProjection::default();
     let file_editor_host = FileEditorHost::default();
     let code_editor_style = CodeEditorStyle::light();
     let presentation = build_shell_presentation(
@@ -1381,10 +1347,8 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             language_completions: None,
             completion_selection: 0,
             code_editor_style: &code_editor_style,
-            thread_projection: &thread_projection,
-            thread_timeline_scroll_offset: 0,
+            session_pane: &session_pane,
             workspace_context: &workspace_context,
-            composer: &composer,
             session_search: &session_search,
             tab_part: &tab_part,
             active_tab_input: None,
@@ -1393,17 +1357,14 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             tab_container: TabContainerState::collapsed(),
             inspector_part: InspectorPartState::default(),
             workspace_pane_host: &workspace_pane_host,
-            session_context_menu: SessionContextMenuState::default(),
+            tab_context_menu: TabContextMenuState::default(),
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
             remote_connection_picker: &RemoteConnectionPickerState::default(),
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
             keybindings: &NativeKeybindings::default(),
-            keyboard_shortcuts: &KeyboardShortcutsState::default(),
-            language_server_settings: &LanguageServerSettingsState::default(),
-            settings_section: SettingsPageSection::default(),
-            language_server_runtime_state: None,
+            settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
             theme_scheme: zeta_theme::ColorScheme::Light,
             theme_follows_system: true,

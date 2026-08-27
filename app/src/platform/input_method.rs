@@ -7,7 +7,6 @@ use zui::window::ImeCursorArea;
 
 use crate::NativeApp;
 use crate::git_branch_context_menu::GIT_BRANCH_SEARCH_INPUT;
-use crate::language_server_settings::LANGUAGE_SERVER_EXECUTABLE_INPUT;
 use crate::remote_connection_manager::RemoteConnectionManagerField;
 use crate::remote_connection_picker::REMOTE_CONNECTION_SEARCH_INPUT;
 use crate::remote_tunnel_manager::REMOTE_TUNNEL_REMOTE_PORT;
@@ -33,7 +32,6 @@ enum InputMethodTarget {
     RemoteConnectionWorkspace,
     RemoteTunnelPort,
     SettingsSearch,
-    LanguageServerExecutable,
     FileEditor,
     FileEditorFind,
     FileEditorReplace,
@@ -56,7 +54,6 @@ struct InputMethodContext {
     remote_connection_manager_field: Option<RemoteConnectionManagerField>,
     remote_tunnel_port_focused: bool,
     settings_search_focused: bool,
-    language_server_executable_focused: bool,
 }
 
 impl InputMethodTarget {
@@ -92,9 +89,6 @@ impl InputMethodTarget {
         if context.settings_search_focused {
             return Self::SettingsSearch;
         }
-        if context.language_server_executable_focused {
-            return Self::LanguageServerExecutable;
-        }
         if context.file_editor_find_focused {
             return Self::FileEditorFind;
         }
@@ -127,13 +121,13 @@ impl NativeApp {
         match target {
             InputMethodTarget::Disabled => {}
             InputMethodTarget::Composer => {
-                if self.composer.interaction().is_model_picker_visible() {
+                if self.session_pane.composer_model_picker_visible() {
                     return;
                 }
                 let Some(composition) = text_input_composition_event(event) else {
                     return;
                 };
-                self.composer.apply_composition(composition);
+                self.session_pane.apply_composer_composition(composition);
                 self.composer_changed();
             }
             InputMethodTarget::SessionSearch => {
@@ -215,18 +209,7 @@ impl NativeApp {
                     return;
                 };
                 self.caret_blink.activity(Instant::now());
-                self.language_server_settings
-                    .apply_search_composition(composition);
-                self.rebuild_presentation();
-                self.request_redraw();
-            }
-            InputMethodTarget::LanguageServerExecutable => {
-                let Some(composition) = text_input_composition_event(event) else {
-                    return;
-                };
-                self.caret_blink.activity(Instant::now());
-                self.language_server_settings
-                    .apply_executable_composition(composition);
+                self.settings.apply_search_composition(composition);
                 self.rebuild_presentation();
                 self.request_redraw();
             }
@@ -301,7 +284,6 @@ impl NativeApp {
                 | InputMethodTarget::RemoteConnectionWorkspace
                 | InputMethodTarget::RemoteTunnelPort
                 | InputMethodTarget::SettingsSearch
-                | InputMethodTarget::LanguageServerExecutable
                 | InputMethodTarget::FileEditor
                 | InputMethodTarget::FileEditorFind
                 | InputMethodTarget::FileEditorReplace
@@ -311,7 +293,7 @@ impl NativeApp {
             self.caret_blink.blur();
         }
         if target != InputMethodTarget::Composer {
-            self.composer.cancel_composition();
+            self.session_pane.cancel_composer_composition();
         }
         if target != InputMethodTarget::SessionSearch {
             self.session_search.cancel_composition();
@@ -334,11 +316,7 @@ impl NativeApp {
             self.remote_tunnel_manager.cancel_remote_port_composition();
         }
         if target != InputMethodTarget::SettingsSearch {
-            self.language_server_settings.cancel_search_composition();
-        }
-        if target != InputMethodTarget::LanguageServerExecutable {
-            self.language_server_settings
-                .cancel_executable_composition();
+            self.settings.cancel_search_composition();
         }
         if target != InputMethodTarget::FileEditor {
             self.file_editor_host.cancel_active_composition();
@@ -381,9 +359,6 @@ impl NativeApp {
                 .and_then(RemoteConnectionManagerField::from_element_id),
             remote_tunnel_port_focused: self.ui_dispatch.is_focused(REMOTE_TUNNEL_REMOTE_PORT),
             settings_search_focused: self.ui_dispatch.is_focused(SETTINGS_SEARCH_INPUT),
-            language_server_executable_focused: self
-                .ui_dispatch
-                .is_focused(LANGUAGE_SERVER_EXECUTABLE_INPUT),
         })
     }
 }

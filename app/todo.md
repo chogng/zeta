@@ -6,7 +6,7 @@
 
 ---------------------------------------------------
 - zeta-agent-session：App Server Session client、worker、订阅、文件/Git/LSP 请求、命令/事件队列和断线恢复策略
-- zeta-session：Thread 状态、时间线、滚动、菜单、搜索
+- zeta-session：单个 Agent Pane 的 Thread、时间线、Composer、布局和内部交互
 - zeta-workspace-ui：Files/SCM、目录树、搜索、路径选择
 - zeta-editor-host：编辑器 Tab、搜索、诊断、LSP 展示
 - zeta-terminal-workspace：终端 runtime、Pane binding、滚动、选择、指针和视图状态

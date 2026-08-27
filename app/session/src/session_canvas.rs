@@ -21,7 +21,6 @@ use zui::ui::UiScene;
 use zui::ui::{ElementId, UiNode};
 
 use crate::interaction::SESSION_HEADER;
-use crate::thread_state::ThreadState;
 
 const SESSION_HEADER_HEIGHT: f32 = 64.0;
 const SESSION_HEADER_HORIZONTAL_PADDING: f32 = 20.0;
@@ -111,7 +110,7 @@ impl SessionHeaderStyle {
 pub struct SessionHeader<'a> {
     bounds: Rect,
     title: &'a str,
-    thread_state: &'a ThreadState,
+    thread: Option<&'a zeta_protocol::Thread>,
     metadata: String,
     style: SessionHeaderStyle,
     parent: ElementId,
@@ -123,14 +122,14 @@ impl<'a> SessionHeader<'a> {
         bounds: Rect,
         title: &'a str,
         metadata: String,
-        thread_state: &'a ThreadState,
+        thread: Option<&'a zeta_protocol::Thread>,
         style: SessionHeaderStyle,
         parent: ElementId,
     ) -> Self {
         Self {
             bounds,
             title,
-            thread_state,
+            thread,
             metadata,
             style,
             parent,
@@ -148,7 +147,7 @@ impl<'a> SessionHeader<'a> {
     }
 
     fn status(&self) -> SessionActivity {
-        let Some(thread) = self.thread_state.thread() else {
+        let Some(thread) = self.thread else {
             return SessionActivity::Ready;
         };
         if thread.status == ThreadStatus::Archived {

@@ -144,7 +144,7 @@ impl AppServerHost {
     }
 }
 
-impl zeta_agent_session::AgentSessionTarget for AppServerHost {
+impl zeta_session::SessionRuntimeTarget for AppServerHost {
     fn is_remote(&self) -> bool {
         AppServerHost::is_remote(self)
     }
@@ -156,13 +156,13 @@ impl zeta_agent_session::AgentSessionTarget for AppServerHost {
     fn retarget(
         &self,
         root: &Path,
-    ) -> zeta_agent_session::CommandResult<Box<dyn zeta_agent_session::AgentSessionTarget>> {
+    ) -> zeta_session::CommandResult<Box<dyn zeta_session::SessionRuntimeTarget>> {
         self.with_workspace_root(root)
-            .map(|target| Box::new(target) as Box<dyn zeta_agent_session::AgentSessionTarget>)
+            .map(|target| Box::new(target) as Box<dyn zeta_session::SessionRuntimeTarget>)
             .map_err(|error| error.to_string())
     }
 
-    fn start(&self) -> zeta_agent_session::CommandResult<zeta_app_server_client::AppServerSession> {
+    fn start(&self) -> zeta_session::CommandResult<zeta_app_server_client::AppServerSession> {
         AppServerHost::start(self).map_err(|error| error.to_string())
     }
 }

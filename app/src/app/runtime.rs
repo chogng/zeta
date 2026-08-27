@@ -22,7 +22,7 @@ impl NativeApp {
         self.palette = palette;
         self.theme_scheme = loaded.snapshot.color_scheme();
         self.theme_follows_system = loaded.follows_system;
-        self.composer.set_input_style(editor_style.clone());
+        self.session_pane.set_composer_style(editor_style.clone());
         self.code_editor_style = editor_style;
         self.workspace_pane_host
             .set_editor_style(palette.multi_diff_editor_style());
@@ -79,7 +79,7 @@ impl NativeApp {
             return false;
         };
         let Some(thread_id) = self
-            .thread_projection
+            .session_pane
             .thread()
             .map(|thread| thread.thread_id.clone())
         else {
@@ -174,30 +174,14 @@ impl NativeApp {
     }
 
     pub(super) fn redraw_frame(&mut self, context: &mut WindowContext<'_, NativeEvent>) {
-        let _trace = session_switch_trace::Span::frame("redraw");
         let now = Instant::now();
         let retained_report = self.retained_runtime.advance(now);
-        let mut retained_cleanup_failed = false;
-        if !retained_report.fragment().removed_ids().is_empty() {
-            if let Some(presentation) = self.presentation.as_mut() {
-                for id in retained_report.fragment().removed_ids() {
-                    if presentation.remove_retained_fragment(*id).is_err() {
-                        retained_cleanup_failed = true;
-                    }
-                }
-            } else {
-                retained_cleanup_failed = true;
-            }
-        }
-        if retained_cleanup_failed {
-            self.rebuild_presentation_on_next_redraw();
-        }
         let _ = retained_report
             .animation()
             .schedule(&mut self.frame_scheduler);
         match self.frame_scheduler.take() {
             Some(FrameInvalidation::Fragment) => match self.frame_scheduler.take_fragment_ids() {
-                Some(ids) => self.rebuild_shell_fragments(ids),
+                Some(_) => self.rebuild_presentation(),
                 None => self.rebuild_overlay_presentation(),
             },
             Some(FrameInvalidation::Rebuild) => self.rebuild_presentation(),
@@ -206,7 +190,6 @@ impl NativeApp {
         let Some(presentation) = self.presentation.as_ref() else {
             return;
         };
-        let _render_trace = session_switch_trace::Span::frame("renderer.render_scene");
         if let Err(error) = context.present_frame(presentation.frame(), &self.ui_dispatch) {
             self.fail(&error);
             context.exit_with_error(ApplicationError::product("app frame rendering", error));

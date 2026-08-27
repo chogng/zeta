@@ -8,7 +8,6 @@ pub(super) fn handle_terminal_event(
     let terminal_exited = matches!(&event, TerminalSessionEvent::Exited(_));
     if app.terminal_workspace.is_pending(key) {
         app.terminal_workspace.buffer_event_if_pending(key, event);
-        session_switch_trace::event(None, "terminal-event-buffered", format_args!("key={key:?}"));
         return;
     }
     if app.active_pane_terminal_key() != Some(key) {
@@ -21,7 +20,7 @@ pub(super) fn handle_terminal_event(
             }
         }
         if terminal_exited {
-            app.update_terminal_status(key, "Exited");
+            app.update_terminal_status(key, zeta_workbench::TabStatus::warning("Exited"));
             app.rebuild_presentation_on_next_redraw();
         }
         return;
@@ -51,7 +50,7 @@ pub(super) fn handle_terminal_event(
         let _ = window.set_title(&title);
     }
     if terminal_exited {
-        app.update_terminal_status(key, "Exited");
+        app.update_terminal_status(key, zeta_workbench::TabStatus::warning("Exited"));
     }
     let current_block_status = app
         .active_terminal()
@@ -60,9 +59,7 @@ pub(super) fn handle_terminal_event(
     if previous_block_status == Some(BlockStatus::Running)
         && current_block_status != Some(BlockStatus::Running)
     {
-        if let Some(session) = app.agent_session.as_ref()
-            && let Err(error) = session.refresh_git()
-        {
+        if let Err(error) = app.refresh_git_from_app_server() {
             eprintln!("could not refresh Git projection: {error}");
         }
         app.refresh_files_from_app_server();

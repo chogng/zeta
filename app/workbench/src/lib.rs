@@ -7,12 +7,14 @@ use zeta_ui_components::*;
 use zui::ui::*;
 
 mod host;
+mod keybinding_hint;
 mod layout;
 mod panepart;
 mod tabpart;
 mod workbench;
 
 pub use host::{ClosedPane, PaneActivation, PaneBindingId, PaneKey, PaneMount, WorkbenchHost};
+pub use keybinding_hint::paint_chord_hint;
 pub use layout::{
     InspectorLayoutSpec, InspectorPartState, LogicalViewport, PartVisibility, TabContainerLayout,
     TabContainerLayoutSpec, WorkbenchLayout, WorkbenchLayoutSpec, WorkbenchLayoutState,

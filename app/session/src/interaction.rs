@@ -3,54 +3,59 @@
 use zui::ui::ElementId;
 
 pub const SESSION_HEADER: ElementId = ElementId::scoped(16, 1);
-pub const SESSION_CONTEXT_MENU: ElementId = ElementId::scoped(1, 17);
+pub const COMPOSER_PANEL: ElementId = ElementId::scoped(16, 2);
+pub const COMPOSER: ElementId = ElementId::scoped(16, 3);
+pub const CONTEXT_TOOLBAR: ElementId = ElementId::scoped(16, 4);
+pub const THREAD_TIMELINE: ElementId = ElementId::scoped(16, 5);
+pub const COMPOSER_INTERACTION: ElementId = ElementId::scoped(16, 6);
+pub const COMPOSER_INFO_BAR: ElementId = ElementId::scoped(16, 7);
 
-const SESSION_CONTEXT_MENU_PIN: ElementId = ElementId::scoped(1, 18);
-const SESSION_CONTEXT_MENU_CLOSE: ElementId = ElementId::scoped(1, 19);
-const SESSION_CONTEXT_MENU_RENAME: ElementId = ElementId::scoped(1, 20);
-const SESSION_CONTEXT_MENU_FORK: ElementId = ElementId::scoped(1, 21);
+pub const CONTEXT_LOCATION: ElementId = ElementId::scoped(16, 8);
+pub const CONTEXT_WORKING_DIRECTORY: ElementId = ElementId::scoped(16, 9);
+pub const CONTEXT_GIT_BRANCH: ElementId = ElementId::scoped(16, 10);
+pub const CONTEXT_DIFF: ElementId = ElementId::scoped(16, 11);
+const FIRST_COMPOSER_INTERACTION_ITEM: u32 = 100;
 
-/// Action emitted by the Session tab context menu.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SessionContextMenuAction {
-    Pin,
-    Close,
-    Rename,
-    Fork,
+pub enum ContextAction {
+    Location,
+    WorkingDirectory,
+    GitBranch,
+    Diff,
 }
 
-impl SessionContextMenuAction {
-    pub const ALL: [Self; 4] = [Self::Pin, Self::Close, Self::Rename, Self::Fork];
+impl ContextAction {
+    pub const ALL: [Self; 4] = [
+        Self::Location,
+        Self::WorkingDirectory,
+        Self::GitBranch,
+        Self::Diff,
+    ];
 
     pub const fn element_id(self) -> ElementId {
         match self {
-            Self::Pin => SESSION_CONTEXT_MENU_PIN,
-            Self::Close => SESSION_CONTEXT_MENU_CLOSE,
-            Self::Rename => SESSION_CONTEXT_MENU_RENAME,
-            Self::Fork => SESSION_CONTEXT_MENU_FORK,
-        }
-    }
-
-    pub const fn label(self) -> &'static str {
-        match self {
-            Self::Pin => "Pin",
-            Self::Close => "Close",
-            Self::Rename => "Rename",
-            Self::Fork => "Fork",
+            Self::Location => CONTEXT_LOCATION,
+            Self::WorkingDirectory => CONTEXT_WORKING_DIRECTORY,
+            Self::GitBranch => CONTEXT_GIT_BRANCH,
+            Self::Diff => CONTEXT_DIFF,
         }
     }
 
     pub const fn from_element_id(id: ElementId) -> Option<Self> {
         match id {
-            SESSION_CONTEXT_MENU_PIN => Some(Self::Pin),
-            SESSION_CONTEXT_MENU_CLOSE => Some(Self::Close),
-            SESSION_CONTEXT_MENU_RENAME => Some(Self::Rename),
-            SESSION_CONTEXT_MENU_FORK => Some(Self::Fork),
+            CONTEXT_LOCATION => Some(Self::Location),
+            CONTEXT_WORKING_DIRECTORY => Some(Self::WorkingDirectory),
+            CONTEXT_GIT_BRANCH => Some(Self::GitBranch),
+            CONTEXT_DIFF => Some(Self::Diff),
             _ => None,
         }
     }
+}
 
-    pub fn is_menu_element(id: ElementId) -> bool {
-        id == SESSION_CONTEXT_MENU || Self::from_element_id(id).is_some()
-    }
+pub fn composer_interaction_item_id(index: usize) -> ElementId {
+    let local = u32::try_from(index)
+        .ok()
+        .and_then(|index| FIRST_COMPOSER_INTERACTION_ITEM.checked_add(index))
+        .expect("composer interaction item index must fit its element scope");
+    ElementId::scoped(16, local)
 }

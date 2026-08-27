@@ -11,9 +11,16 @@ name = "zeta_session"
 path = "src/lib.rs"
 
 [dependencies]
+anyhow = { workspace = true }
 serde_json = { workspace = true }
+zeta-app-server-client = { workspace = true }
+zeta-app-server-protocol = { workspace = true }
+zeta-editor = { workspace = true }
+zeta-icons = { workspace = true }
+zeta-input-classifier = { workspace = true }
 zeta-protocol = { workspace = true }
-zeta-workbench = { workspace = true }
+zeta-slash-commands = { workspace = true }
+zeta-thread-transcript = { workspace = true }
 zeta-ui-components = { workspace = true }
 zui = { workspace = true, default-features = false }
 

@@ -9,8 +9,6 @@ use zeta_editor::{
 use zeta_icons::icons;
 use zeta_settings::SettingsPageStyle;
 use zeta_theme::{ThemeError, ThemeSnapshot, tokens};
-use zeta_ui_components::ActionBarSeparatorStyle;
-use zeta_ui_components::ActionBarStyle;
 use zeta_ui_components::ButtonBackgrounds;
 use zeta_ui_components::ButtonStyle;
 use zeta_ui_components::{
@@ -103,6 +101,37 @@ pub(crate) const SHELL_PALETTE: ShellPalette = ShellPalette {
 };
 
 impl ShellPalette {
+    pub(crate) fn settings_section_style(self) -> zeta_settings::SettingsSectionStyle {
+        zeta_settings::SettingsSectionStyle {
+            background: self.background,
+            surface: self.surface,
+            surface_raised: self.surface_raised,
+            surface_hovered: self.surface_hovered,
+            border: self.border,
+            text: self.text,
+            text_muted: self.text_muted,
+            accent: self.accent,
+            error: self.error,
+        }
+    }
+
+    pub(crate) fn session_pane_style(self) -> zeta_session::SessionPaneStyle {
+        zeta_session::SessionPaneStyle::new(
+            self.surface,
+            self.surface_raised,
+            self.surface_hovered,
+            self.border,
+            self.text,
+            self.text_muted,
+            self.accent,
+            self.success,
+            self.warning,
+            self.error,
+            self.session_tab_highlight,
+            self.file_list_scroll_view_style(),
+        )
+    }
+
     pub(crate) fn workbench_ui_style(self) -> WorkbenchUiStyle {
         WorkbenchUiStyle::new(
             self.surface,
@@ -112,9 +141,15 @@ impl ShellPalette {
             self.text,
             self.text_muted,
             self.session_tab_highlight,
+            self.accent,
+            self.success,
+            self.warning,
+            self.error,
             self.session_search_style(),
             icons::GEAR,
             icons::ADD,
+            icons::CLOSE,
+            icons::PINNED,
             icons::LAYOUT_SIDEBAR_LEFT,
             icons::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY,
             icons::LAYOUT_SIDEBAR_RIGHT,
@@ -277,39 +312,16 @@ impl ShellPalette {
         .with_border(Border::uniform(0.0, Color::TRANSPARENT))
         .with_corner_radii(CornerRadii::uniform(5.0))
         .with_padding(Edges::uniform(6.0));
-        let action_button = ButtonStyle::new(
-            ButtonBackgrounds::new(Color::TRANSPARENT)
-                .with_hovered(self.surface_hovered)
-                .with_focused(self.surface_hovered)
-                .with_pressed(self.border)
-                .with_disabled(Color::TRANSPARENT),
-            TextStyle::new(self.font_size_body, self.text).with_line_height(18.0),
-        )
-        .with_disabled_text_style(
-            TextStyle::new(self.font_size_body, self.text_muted).with_line_height(18.0),
-        )
-        .with_border(Border::uniform(1.0, self.border))
-        .with_corner_radii(CornerRadii::uniform(5.0))
-        .with_padding(Edges::new(6.0, 10.0, 6.0, 10.0));
-        let action_bar = ActionBarStyle::new(action_button, zui::ui::Size::new(108.0, 32.0))
-            .with_gap(6.0)
-            .with_separator_style(
-                ActionBarSeparatorStyle::new(self.border)
-                    .with_extent(8.0)
-                    .with_thickness(1.0),
-            );
         SettingsPageStyle::new(
             self.background,
             self.surface_raised,
             self.surface,
-            self.surface_raised,
             self.border,
             self.text,
             self.accent,
             SearchBoxStyle::new(search_input, icons::SEARCH, self.text_muted).with_icon_size(16.0),
             nav_button,
             close_button,
-            action_bar,
         )
     }
 

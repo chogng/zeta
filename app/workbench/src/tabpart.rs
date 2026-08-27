@@ -1,6 +1,8 @@
 //! TabPart's model, chrome UI, presentation state, and stable interaction identities.
 
 mod identity;
+mod session_input;
+mod session_search;
 mod style;
 mod tab_context_menu;
 mod tab_group;
@@ -13,6 +15,8 @@ mod tabs_state;
 mod titlebar;
 mod toolbar;
 
+pub use session_input::session_tab_input;
+pub use session_search::SessionSearchState;
 pub use tab_context_menu::{
     TAB_CONTEXT_MENU, TabContextMenu, TabContextMenuAction, TabContextMenuState,
     TabContextMenuStyle, update_tab_context_menu_pointer,

@@ -39,7 +39,7 @@ impl NativeApp {
         };
         let host = host.host().as_str().to_owned();
         self.remote_tunnel_manager.open(host, restore_focus);
-        self.session_context_menu.dismiss();
+        self.tab_context_menu.dismiss();
         self.git_branch_context_menu.dismiss();
         self.workspace_path_picker.dismiss();
         self.remote_connection_picker.dismiss();
