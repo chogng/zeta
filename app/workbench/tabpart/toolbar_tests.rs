@@ -1,15 +1,9 @@
 //! Body-mounted Workbench toolbar tests.
 
 use super::{TOOLBAR_CONTENT_GAP, TOOLBAR_HEIGHT, TabContainerToolbar};
-use crate::tabpart::identity::{
-    ADD_SESSION, SESSION_SEARCH_INPUT, TAB_CONTAINER_ACTION_BAR, TAB_CONTAINER_TOGGLE,
-    TAB_LAYOUT_MENU, TAB_LAYOUT_MENU_MOVE_TO_TITLEBAR, TAB_LAYOUT_MENU_TRIGGER,
-};
+use crate::tabpart::identity::{ADD_SESSION, SESSION_SEARCH_INPUT, TAB_CONTAINER_ACTION_BAR};
 use crate::tabpart::test_style;
-use crate::{
-    CaretVisibility, Color, Point, Rect, TabPart, TextInput, TextInputLayoutEngine, Titlebar,
-    TitlebarInsets,
-};
+use crate::{CaretVisibility, Color, Point, Rect, TextInput, TextInputLayoutEngine};
 use zui::ui::UiIntent;
 use zui::ui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
 
@@ -50,8 +44,8 @@ fn toolbar_fills_the_container_row_with_search_and_add_action() {
             .collect::<Vec<_>>(),
         vec!["TabContainerToolbar", "SearchBox", "InputBox"]
     );
-    assert_eq!(scene.icons().len(), 3);
-    assert_eq!(scene.icons()[1].icon(), zeta_icons::icons::LAYOUT);
+    assert_eq!(scene.icons().len(), 2);
+    assert_eq!(scene.icons()[1].icon(), zeta_icons::icons::ADD);
     assert!(
         scene
             .icons()
@@ -61,10 +55,6 @@ fn toolbar_fills_the_container_row_with_search_and_add_action() {
     assert_eq!(
         frame.interaction().target_at(Point::new(20.0, 50.0)),
         Some(SESSION_SEARCH_INPUT)
-    );
-    assert_eq!(
-        frame.interaction().target_at(Point::new(170.0, 50.0)),
-        Some(TAB_LAYOUT_MENU_TRIGGER)
     );
     assert_eq!(
         frame.interaction().target_at(Point::new(196.0, 50.0)),
@@ -96,91 +86,5 @@ fn toolbar_fills_the_container_row_with_search_and_add_action() {
             .release_primary(add_session_point, frame.interaction())
             .intent,
         Some(UiIntent::Activate(ADD_SESSION))
-    );
-}
-
-#[test]
-fn layout_action_opens_the_move_to_titlebar_command() {
-    let part_bounds = Rect::from_xywh(0.0, 32.0, 220.0, 668.0);
-    let mut dispatch = UiDispatch::default();
-    let mut text_layout = TextInputLayoutEngine::new();
-    let toolbar = TabContainerToolbar::new(
-        part_bounds,
-        &TextInput::new(),
-        CaretVisibility::Visible,
-        test_style(),
-        &mut text_layout,
-        &dispatch,
-    );
-    let mut closed_frame = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
-    closed_frame.draw_component(&toolbar);
-    let trigger = Point::new(170.0, 50.0);
-
-    dispatch.pointer_moved(trigger, closed_frame.interaction());
-    dispatch.press_primary(closed_frame.interaction());
-    let _ = dispatch.release_primary(trigger, closed_frame.interaction());
-
-    let toolbar = TabContainerToolbar::new(
-        part_bounds,
-        &TextInput::new(),
-        CaretVisibility::Visible,
-        test_style(),
-        &mut text_layout,
-        &dispatch,
-    );
-    let mut open_frame = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
-    let tab_part = TabPart::default();
-    let titlebar = Titlebar::new(
-        Rect::from_xywh(0.0, 0.0, 1000.0, 32.0),
-        test_style(),
-        &tab_part,
-        tab_part.active_tab_key(),
-        true,
-        None,
-        TitlebarInsets::NONE,
-        &dispatch,
-    );
-    open_frame.draw_component(&titlebar);
-    open_frame.draw_component(&toolbar);
-    let nodes = open_frame.interaction().accessibility_nodes(&dispatch);
-
-    assert!(open_frame.interaction().node(TAB_LAYOUT_MENU).is_some());
-    assert_eq!(
-        nodes
-            .iter()
-            .find(|node| node.id == TAB_LAYOUT_MENU_MOVE_TO_TITLEBAR)
-            .map(|node| (node.role, node.label.as_str())),
-        Some((AccessibilityRole::MenuItem, "Move tabs to titlebar"))
-    );
-    assert!(
-        open_frame
-            .scene()
-            .text_blocks()
-            .iter()
-            .any(|text| text.text() == "Move tabs to titlebar")
-    );
-
-    let item = open_frame
-        .interaction()
-        .node(TAB_LAYOUT_MENU_MOVE_TO_TITLEBAR)
-        .expect("layout menu command")
-        .bounds();
-    let item_center = Point::new(
-        item.origin.x + item.size.width * 0.5,
-        item.origin.y + item.size.height * 0.5,
-    );
-    dispatch.pointer_moved(item_center, open_frame.interaction());
-    dispatch.press_primary(open_frame.interaction());
-    assert_eq!(
-        dispatch
-            .release_primary(item_center, open_frame.interaction())
-            .intent,
-        Some(UiIntent::Activate(TAB_LAYOUT_MENU_MOVE_TO_TITLEBAR))
-    );
-    assert!(
-        open_frame
-            .interaction()
-            .node(TAB_CONTAINER_TOGGLE)
-            .is_some()
     );
 }

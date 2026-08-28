@@ -132,7 +132,7 @@ impl AppCommandId {
             Self::ToggleTerminalSurface => "Toggle terminal",
             Self::OpenKeyboardShortcuts => "Keyboard shortcuts",
             Self::ManageRemoteTunnels => "Manage Remote tunnels",
-            Self::ToggleTabContainer => "Toggle tabs",
+            Self::ToggleTabContainer => "Toggle tab part",
             Self::ToggleWorkspacePane => "Toggle workspace pane",
             Self::AddSession => "New session",
             Self::ShowAgentChanges => "Show changes",

@@ -10,7 +10,6 @@ use super::identity::{
     TAB_CONTAINER_TOGGLE, TITLEBAR, TITLEBAR_SETTINGS_BUTTON, WINDOW, WORKSPACE_PANE_TOGGLE,
 };
 use super::tabs::TabContainer;
-use super::tabs::TabContainerPlacement;
 use crate::PaneInputKind;
 use crate::TabInputKey;
 use crate::TabPart;
@@ -54,8 +53,8 @@ impl<'a> Titlebar<'a> {
     pub fn new(
         bounds: Rect,
         style: WorkbenchUiStyle,
-        tab_part: &'a TabPart,
-        active_tab: Option<&TabInputKey>,
+        _tab_part: &'a TabPart,
+        _active_tab: Option<&TabInputKey>,
         tabs_expanded: bool,
         active_pane_kind: Option<PaneInputKind>,
         window_control_insets: TitlebarInsets,
@@ -71,8 +70,8 @@ impl<'a> Titlebar<'a> {
             TOGGLE_SIZE,
             TOGGLE_SIZE,
         );
-        let settings_action_visible = tabs_expanded;
-        let right_action_count = if settings_action_visible { 2.0 } else { 1.0 };
+        let settings_action_visible = true;
+        let right_action_count = 2.0;
         let right_action_width = right_action_count * TOGGLE_SIZE
             + (right_action_count - 1.0) * TITLEBAR_ACTION_ITEM_GAP;
         let right_action_max_x = (content_right - right_action_width).max(content_left);
@@ -113,9 +112,9 @@ impl<'a> Titlebar<'a> {
             ButtonState::Resting
         };
         let tab_container_toggle_label = if tabs_expanded {
-            "Collapse tabs"
+            "Collapse tab part"
         } else {
-            "Expand tabs"
+            "Expand tab part"
         };
         let tab_container_toggle_icon = if tabs_expanded {
             style.tabs_expanded_icon
@@ -177,31 +176,13 @@ impl<'a> Titlebar<'a> {
             ActionBarStyle::new(button_style, Size::new(TOGGLE_SIZE, TOGGLE_SIZE))
                 .with_gap(TITLEBAR_ACTION_ITEM_GAP),
         );
-        let tabs_left = left_action_bar.bounds().right() + TITLEBAR_ACTION_GAP;
-        let tabs_right = (right_action_bar.bounds().origin.x - TITLEBAR_ACTION_GAP).max(tabs_left);
-        let tabs_bounds = Rect::from_xywh(
-            tabs_left,
-            bounds.origin.y,
-            tabs_right - tabs_left,
-            bounds.size.height,
-        );
         Self {
             bounds,
             style: style.clone(),
             left_action_bar,
             right_action_bar,
             settings_action_index,
-            tab_container: (!tabs_expanded).then(|| {
-                TabContainer::from_tab_part(
-                    tabs_bounds,
-                    tabs_bounds,
-                    tab_part,
-                    active_tab,
-                    TabContainerPlacement::Titlebar,
-                    style,
-                    dispatch,
-                )
-            }),
+            tab_container: None,
             tab_container_toggle_label,
             workspace_toggle_label,
         }
