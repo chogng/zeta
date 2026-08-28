@@ -395,11 +395,6 @@ fn fixed_shortcut_items() -> impl Iterator<Item = SelectionItem> {
             "Tab",
             "complete the selected slash command or workspace path",
         ),
-        (
-            "↑ / ↓",
-            "move the cursor, recall prompts, or select an item",
-        ),
-        ("← / →", "switch tabs in an interactive view"),
         ("Home / End", "move to the start or end of the input line"),
         ("PageUp / PageDown", "scroll the conversation"),
         (

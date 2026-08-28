@@ -93,8 +93,6 @@ fn shortcut_view_lists_keys_before_responsibilities() {
             "ctrl+z",
             "Esc Esc",
             "Tab",
-            "↑ / ↓",
-            "← / →",
             "Home / End",
             "PageUp / PageDown",
             "Ctrl-Home / Ctrl-End",
