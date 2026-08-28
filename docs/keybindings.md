@@ -101,7 +101,7 @@ all clients ── semantic command only ──→ App Server
 - 设置 UI、快捷键提示样式和诊断展示；
 - 用户配置的产品命令 catalog、资源路径和设置 UI。
 
-Zeta Code 把根级运行时结构称为 `AppKeymap`，不称为 `GlobalKeymap`。用户规则没有 `when` 时表示“在本产品所有上下文中适用”，这是规则作用域，不是另一个运行时对象。Composer 的字符编辑、Selection 的方向键和 Transcript 的滚动继续由各 component 拥有。单键先交给当前 component，只有未消费事件进入应用级 fallback；多段 Chord prefix 则先经过应用级 matcher，避免首段被文本组件吞掉。应用级 default 声明同时生成 Resolver 注册和 `/shortcuts` 可配置项，固定 component 操作也由该 feature 汇总展示；附加 Shift、Alt、Meta 或 Hyper 不会匹配只声明 Control 的组合。
+Zeta Code 把根级运行时结构称为 `AppKeymap`，不称为 `GlobalKeymap`。用户规则没有 `when` 时表示“在本产品所有上下文中适用”，这是规则作用域，不是另一个运行时对象。Composer 的字符编辑、Selection 的方向键和 Transcript 的滚动继续由各 component 拥有。单键先交给当前 component，只有未消费事件进入应用级 fallback；多段 Chord prefix 则先经过应用级 matcher，避免首段被文本组件吞掉。应用级 default 声明同时生成 Resolver 注册和 `/shortcuts` 可配置项；少量有产品语义的固定操作由该 feature 汇总展示，通用方向键不作为快捷键条目；附加 Shift、Alt、Meta 或 Hyper 不会匹配只声明 Control 的组合。
 
 `AppKeymap` 已拥有一至四段 Chord 的 pending sequence、1 秒超时、上下文变化取消、Esc 取消、错误后续键透传和 footer 提示。当前内建应用级绑定仍都是单段；以后增加多段声明不再需要建立第二套状态机。`Esc Esc` rewind 保留为根界面的专用交互：普通 Esc 在 Chord pending 时只负责取消，不同时推进 rewind。
 

@@ -7,7 +7,7 @@
 > Anthropic、Google、Kimi、Z.AI estimated remote preflight 已接入，DeepSeek/Hugging Face local
 > tokenizer adapter 已接入；provider usage 会按冻结模型和估算 revision 校准未来 Core-managed
 > capacity，未知窗口仍为 provider-managed。Hugging Face 公共模型支持按需发现、下载和缓存，其他 provider 的固定
-> 资产目录、prompt cache/reference baseline、跨 Thread seed 与自动 Skill 选择仍是扩展点。
+> 资产目录、reference baseline、跨 Thread seed 与自动 Skill 选择仍是扩展点。
 >
 > Core 总体边界：[`core.md`](core.md)
 > Canonical Thread/Turn/Item contract：[`protocol.md`](protocol.md)
@@ -101,7 +101,7 @@ Thread event stream
 - `ThreadSnapshot` 是可重建 projection；
 - `ContextManager` 是进程内可重建派生状态；
 - `ContextPlan` 只属于一次 invocation；
-- provider prompt cache 使用 Session 级 key 和一次请求内的可复用前缀提示，命中与否仍是可丢弃优化；
+- provider cache 是可丢弃优化；
 - compaction summary 是带 provenance 的 durable 派生 artifact，不替代原始事件。
 
 ## 4. 数据模型

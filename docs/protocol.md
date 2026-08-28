@@ -230,7 +230,7 @@ Command
   → publish committed Update
 ```
 
-Event 不携带 storage sequence、timestamp、schema version、event ID 或 command receipt。Session stored envelope 由 `zeta-session-store` 定义；Thread persisted record 由 `zeta-history` 定义。Core 构造 record，Store 只校验并提交。Fork 每个 Turn 单独形成 `ForkTurnImported`，最后由 `ForkHistoryImportCompleted` 固定 source Thread、精确 source sequence、导入数量和继承的上下文检查点，使子 Thread 只靠自己的 event stream 就能恢复，并让检查点之后的导入项保留独立 sequence。
+Event 不携带 storage sequence、timestamp、schema version、event ID 或 command receipt。Session stored envelope 由 `zeta-session-store` 定义；Thread persisted record 由 `zeta-history` 定义。Core 构造 record，Store 只校验并提交。Fork 子 Thread 拥有可独立重放的历史和上下文检查点；具体事件顺序由 [`zeta-protocol`](../zeta-rs/protocol/README.md#event) 定义。
 
 普通预算压缩使用 `ContextCheckpointCommitted`；供应商实际窗口拒绝普通请求时使用 `ContextOverflowRecoveryCommitted`，在同一个 durable fact 中携带 checkpoint 与触发恢复的 Turn ID。后者使 reducer 能在重放后继续拒绝同一 Turn 的第二次自动溢出恢复，而不把执行计数藏在进程内。
 
