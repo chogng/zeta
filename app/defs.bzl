@@ -56,7 +56,14 @@ def app_rust_library(
         visibility = ["//visibility:public"],
     )
 
-def app_rust_binary(name, crate_name, package_name, crate_root, deps = [], data = []):
+def app_rust_binary(
+        name,
+        crate_name,
+        package_name,
+        crate_root,
+        deps = [],
+        data = [],
+        source_globs = ["src/**/*.rs"]):
     """Defines the app binary from the root workspace dependency graph."""
     rust_binary(
         name = name,
@@ -65,6 +72,6 @@ def app_rust_binary(name, crate_name, package_name, crate_root, deps = [], data 
         crate_root = crate_root,
         deps = all_crate_deps(package_name = package_name) + deps,
         edition = "2024",
-        srcs = native.glob(["src/**/*.rs"]),
+        srcs = native.glob(source_globs),
         visibility = ["//visibility:public"],
     )

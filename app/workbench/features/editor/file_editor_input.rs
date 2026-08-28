@@ -4,7 +4,7 @@ use zeta_editor::{CodeEditorCommand, CodeEditorPosition, CodeEditorSelectionMode
 use zeta_editor_host::FileEditorAutoScrollDirection;
 use zeta_editor_host::FileEditorAutoScrollState;
 use zeta_editor_host::FileEditorCloseRequest;
-use zeta_language_service::LanguageRequestKind;
+use zeta_lsp_manager::LanguageRequestKind;
 use zui::input::{ElementState, Key, KeyEvent, MouseScrollDelta, NamedKey};
 use zui::ui::TextInputCompositionEvent;
 

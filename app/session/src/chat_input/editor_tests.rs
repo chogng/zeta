@@ -10,7 +10,7 @@ fn compact_editor_grows_until_eight_visible_rows() {
 
     editor.apply(CodeEditorCommand::Insert("one\ntwo\nthree".to_owned()));
     assert_eq!(editor.visible_row_count(), 3);
-    assert_eq!(editor.preferred_height(), 60.0);
+    assert_eq!(editor.preferred_height(), 84.0);
 
     editor.set_text(
         (0..12)
@@ -19,7 +19,7 @@ fn compact_editor_grows_until_eight_visible_rows() {
             .join("\n"),
     );
     assert_eq!(editor.visible_row_count(), 8);
-    assert_eq!(editor.preferred_height(), 160.0);
+    assert_eq!(editor.preferred_height(), 184.0);
 }
 
 #[test]
@@ -67,7 +67,18 @@ fn empty_editor_paints_placeholder_and_only_exposes_a_focused_visible_caret() {
         ChatInputFocus::Focused(CaretVisibility::Visible),
         Color::rgb(126, 126, 132),
     );
-    assert!(focused.caret_bounds().is_some());
+    assert_eq!(
+        focused.caret_bounds(),
+        Some(Rect::from_xywh(8.0, 12.0, 8.0, 20.0))
+    );
+
+    focused.paint(&mut scene);
+    let placeholder = scene
+        .text_blocks()
+        .iter()
+        .find(|block| block.text() == "Ask Zeta anything…")
+        .unwrap();
+    assert_eq!(placeholder.origin().y, 12.0);
 }
 
 #[test]

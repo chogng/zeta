@@ -53,4 +53,4 @@ python3 -B build/cargo_with_v8.py test -p app
 
 The crate must not depend on `ProductApp`, App Server clients, terminal state,
 workspace state, or product UI components. If it needs one of those types,
-extend the host catalog contract or keep the adapter in `app/src`.
+extend the host catalog contract or keep the adapter in `app/workbench/product`.

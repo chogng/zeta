@@ -32,6 +32,7 @@ use zeta_protocol::SessionStatus;
 use zui::ui::AccessibilityExpansion;
 use zui::ui::AccessibilityRole;
 use zui::ui::AccessibilitySelection;
+use zui::ui::BoxShadow;
 use zui::ui::InteractionFrame;
 use zui::ui::UiDispatch;
 use zui::ui::UiFrame;
@@ -757,6 +758,15 @@ fn workspace_preview_expands_all_roots_and_resets_after_hover_ends() {
         .iter()
         .map(|text| text.text())
         .collect::<Vec<_>>();
+    assert!(collapsed.scene().rects().iter().any(|rect| {
+        rect.fill() == Color::rgb(45, 46, 51)
+            && rect.shadow()
+                == Some(
+                    BoxShadow::new(Color::rgba(0, 0, 0, 48))
+                        .with_offset(Point::new(0.0, 4.0))
+                        .with_blur_radius(12.0),
+                )
+    }));
     assert!(collapsed_text.contains(&"/workspace/root-1"));
     assert!(collapsed_text.contains(&"/workspace/root-3"));
     assert!(!collapsed_text.contains(&"/workspace/root-4"));

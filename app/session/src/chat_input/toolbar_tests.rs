@@ -70,6 +70,43 @@ fn toolbar_projects_four_real_context_values_as_action_buttons() {
 }
 
 #[test]
+fn changes_label_uses_text_success_and_error_colors() {
+    let context = SessionPaneContext::new("Local", "~/Desktop/zeta", "main", "Changes 5 • +84 -39");
+    let mut text_layout = TextInputLayoutEngine::new();
+    let dispatch = UiDispatch::default();
+    let toolbar = ChatInputToolbar::new(
+        Rect::from_xywh(24.0, 600.0, 952.0, 24.0),
+        &context,
+        STYLE,
+        &mut text_layout,
+        &dispatch,
+    );
+    let mut scene = UiScene::new(STYLE.surface);
+
+    toolbar.paint(&mut scene);
+
+    let changes = scene
+        .text_blocks()
+        .iter()
+        .find(|block| block.text() == "Changes 5 • +84 -39")
+        .unwrap();
+    assert_eq!(
+        changes
+            .spans()
+            .iter()
+            .map(|span| (span.text(), span.style().color()))
+            .collect::<Vec<_>>(),
+        [
+            ("Changes ", STYLE.text),
+            ("5 ", STYLE.text),
+            ("• ", STYLE.text),
+            ("+84 ", STYLE.success),
+            ("-39", STYLE.error),
+        ]
+    );
+}
+
+#[test]
 fn toolbar_scales_all_items_into_a_narrow_input_surface() {
     let context = context("/tmp/project", None, None);
     let mut text_layout = TextInputLayoutEngine::new();

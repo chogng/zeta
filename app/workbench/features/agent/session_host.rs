@@ -268,6 +268,7 @@ impl ProductApp {
         };
         match client.read_directory(FsReadDirectoryParams {
             workspace_folder_id: None,
+            session_directory: None,
             path: PathBuf::from("."),
         }) {
             Ok(result) => self.files.refresh(directory_entries(result.entries)),
@@ -281,6 +282,7 @@ impl ProductApp {
         };
         match client.read_directory(FsReadDirectoryParams {
             workspace_folder_id: None,
+            session_directory: None,
             path,
         }) {
             Ok(result) => {
@@ -314,7 +316,7 @@ impl ProductApp {
 
     pub(crate) fn open_language_definition(
         &mut self,
-        target: zeta_language_service::LanguageLocationTarget,
+        target: zeta_lsp_manager::LanguageLocationTarget,
     ) {
         let Some(client) = self.app_server_client.as_mut() else {
             return;
@@ -475,6 +477,7 @@ fn read_workspace_file(
         let before = client
             .get_file_metadata(FsGetMetadataParams {
                 workspace_folder_id: None,
+                session_directory: None,
                 path: path.clone(),
             })
             .map(disk_version)
@@ -482,6 +485,7 @@ fn read_workspace_file(
         let content = client
             .read_file(FsReadFileParams {
                 workspace_folder_id: None,
+                session_directory: None,
                 path: path.clone(),
             })
             .map_err(client_error)?
@@ -489,6 +493,7 @@ fn read_workspace_file(
         let after = client
             .get_file_metadata(FsGetMetadataParams {
                 workspace_folder_id: None,
+                session_directory: None,
                 path: path.clone(),
             })
             .map(disk_version)
@@ -511,6 +516,7 @@ fn write_workspace_file(
     let current = client
         .get_file_metadata(FsGetMetadataParams {
             workspace_folder_id: None,
+            session_directory: None,
             path: path.clone(),
         })
         .map_err(client_error)?;
@@ -527,6 +533,7 @@ fn write_workspace_file(
     client
         .write_file(FsWriteFileParams {
             workspace_folder_id: None,
+            session_directory: None,
             path,
             content,
             expected_revision: None,
@@ -587,17 +594,17 @@ fn definition_editor_position(
     text: &str,
     row: u32,
     character: u32,
-    encoding: zeta_language_service::LanguagePositionEncoding,
+    encoding: zeta_lsp_manager::LanguagePositionEncoding,
 ) -> Option<zeta_editor::CodeEditorPosition> {
     let row_index = usize::try_from(row).ok()?;
     let line = text.split('\n').nth(row_index)?;
     let line = line.strip_suffix('\r').unwrap_or(line);
     let requested = usize::try_from(character).ok()?;
     let byte_offset = match encoding {
-        zeta_language_service::LanguagePositionEncoding::Utf8 => {
+        zeta_lsp_manager::LanguagePositionEncoding::Utf8 => {
             (requested <= line.len() && line.is_char_boundary(requested)).then_some(requested)?
         }
-        zeta_language_service::LanguagePositionEncoding::Utf16 => {
+        zeta_lsp_manager::LanguagePositionEncoding::Utf16 => {
             let mut units = 0;
             let mut resolved = None;
             for (offset, scalar) in line.char_indices() {

@@ -162,4 +162,4 @@ bazel test //app:app_ci
 transition tests。
 
 具体 CI provider 只需要把上面的 Build → Stage → Sign → Verify → Publish 节点接入 secret store；
-不要把密钥逻辑写入 `app/src`、`zui` 或通用 Bazel Rust macro。
+不要把密钥逻辑写入 `app/workbench`、`zui` 或通用 Bazel Rust macro。

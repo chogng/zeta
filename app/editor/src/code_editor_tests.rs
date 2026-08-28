@@ -1,9 +1,9 @@
 use super::text_metrics::{display_columns_until, visit_display_cell_runs};
 use super::{
-    CodeEditor, CodeEditorCommand, CodeEditorDocument, CodeEditorFoldState, CodeEditorHeader,
-    CodeEditorInlineHighlight, CodeEditorLanguage, CodeEditorLineWrapping, CodeEditorNavigation,
-    CodeEditorPresentation, CodeEditorRow, CodeEditorRowSource, CodeEditorSelectionMode,
-    CodeEditorStyle, CodeEditorTextEdit, CodeEditorViewport,
+    CodeEditor, CodeEditorCaretStyle, CodeEditorCommand, CodeEditorDocument, CodeEditorFoldState,
+    CodeEditorHeader, CodeEditorInlineHighlight, CodeEditorLanguage, CodeEditorLineWrapping,
+    CodeEditorNavigation, CodeEditorPresentation, CodeEditorRow, CodeEditorRowSource,
+    CodeEditorSelectionMode, CodeEditorStyle, CodeEditorTextEdit, CodeEditorViewport,
 };
 use zui::ui::{CaretVisibility, Color, Component, Point, Rect, TextBlockWrap, UiScene};
 use zui::ui::{TextInputCompositionCursor, TextInputCompositionEvent};
@@ -136,6 +136,32 @@ fn compact_presentation_uses_the_full_width_without_line_number_chrome() {
     assert_eq!(hello.origin().x, 8.0);
     assert!(scene.text_blocks().iter().all(|block| block.text() != "1"));
     assert!(editor.caret_bounds().is_some());
+}
+
+#[test]
+fn block_caret_occupies_one_monospace_cell() {
+    let document = CodeEditorDocument::from_text("");
+    let editor = CodeEditor::new(
+        Rect::from_xywh(0.0, 0.0, 320.0, 20.0),
+        &document,
+        CodeEditorViewport::default(),
+        CodeEditorHeader::Hidden,
+        CodeEditorStyle::light(),
+    )
+    .with_presentation(CodeEditorPresentation::Compact)
+    .with_caret_style(CodeEditorCaretStyle::Block);
+    let mut scene = UiScene::new(Color::WHITE);
+
+    editor.paint(&mut scene);
+
+    let caret = Rect::from_xywh(8.0, 0.0, 8.0, 20.0);
+    assert_eq!(editor.caret_bounds(), Some(caret));
+    assert!(
+        scene
+            .rects()
+            .iter()
+            .any(|rect| { rect.bounds() == caret && rect.fill() == Color::rgb(15, 110, 96) })
+    );
 }
 
 #[test]

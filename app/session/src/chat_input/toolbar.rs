@@ -7,7 +7,7 @@ use zeta_ui_components::{
 use zui::ui::Point;
 use zui::ui::{
     Border, Component, ComponentContext, ComponentElement, ComputedElement, CornerRadii, Edges,
-    Element, Rect, Size, TextInputLayoutEngine, TextStyle, UiScene,
+    Element, Rect, Size, TextInputLayoutEngine, TextSpan, TextStyle, UiScene,
 };
 
 use crate::SessionPaneContext;
@@ -69,19 +69,10 @@ impl ChatInputToolbar {
         let scale = (bounds.size.width / total_width).clamp(0.0, 1.0);
         let scaled_text_style = TextStyle::new(TOOLBAR_FONT_SIZE * scale, style.accent)
             .with_line_height(TOOLBAR_LINE_HEIGHT * scale);
-        let button_style = button_style(style, scaled_text_style, scale);
+        let button_style = button_style(style, scaled_text_style.clone(), scale);
         let item = |target, icon, label: String, index: usize| {
-            let state = if dispatch.is_pressed(target) {
-                ButtonState::Pressed
-            } else if dispatch.is_focused(target) {
-                ButtonState::Focused
-            } else if dispatch.is_hovered(target) {
-                ButtonState::Hovered
-            } else {
-                ButtonState::Resting
-            };
             ActionBarItem::Action(
-                ActionViewItem::icon_and_label(icon, label, state)
+                ActionViewItem::icon_and_label(icon, label, button_state(target, dispatch))
                     .with_main_axis_extent(item_widths[index] * scale),
             )
         };
@@ -104,11 +95,14 @@ impl ChatInputToolbar {
                 labels[2].clone(),
                 2,
             ),
-            item(
-                ContextAction::ALL[3].element_id(),
-                icons::DIFF,
-                labels[3].clone(),
-                3,
+            ActionBarItem::Action(
+                ActionViewItem::icon_and_styled_label(
+                    icons::DIFF,
+                    labels[3].clone(),
+                    diff_summary_spans(labels[3].as_str(), &scaled_text_style, style),
+                    button_state(ContextAction::ALL[3].element_id(), dispatch),
+                )
+                .with_main_axis_extent(item_widths[3] * scale),
             ),
         ];
         Self {
@@ -159,6 +153,45 @@ impl ChatInputToolbar {
     pub(crate) fn hit_test(&self, point: Point) -> Option<usize> {
         self.action_bar.hit_test(point)
     }
+}
+
+fn button_state(target: zui::ui::ElementId, dispatch: &UiDispatch) -> ButtonState {
+    if dispatch.is_pressed(target) {
+        ButtonState::Pressed
+    } else if dispatch.is_focused(target) {
+        ButtonState::Focused
+    } else if dispatch.is_hovered(target) {
+        ButtonState::Hovered
+    } else {
+        ButtonState::Resting
+    }
+}
+
+fn diff_summary_spans(
+    label: &str,
+    scaled_text_style: &TextStyle,
+    style: SessionPaneStyle,
+) -> Vec<TextSpan> {
+    label
+        .split_inclusive(' ')
+        .map(|part| {
+            let token = part.trim_end();
+            let color = if numeric_delta(token, '+') {
+                style.success
+            } else if numeric_delta(token, '-') {
+                style.error
+            } else {
+                style.text
+            };
+            TextSpan::new(part, scaled_text_style.clone().with_color(color))
+        })
+        .collect()
+}
+
+fn numeric_delta(token: &str, sign: char) -> bool {
+    token.strip_prefix(sign).is_some_and(|digits| {
+        !digits.is_empty() && digits.chars().all(|digit| digit.is_ascii_digit())
+    })
 }
 
 fn button_style(style: SessionPaneStyle, text_style: TextStyle, scale: f32) -> ButtonStyle {

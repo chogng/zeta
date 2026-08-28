@@ -16,6 +16,7 @@ mod path;
 mod repository;
 mod status;
 mod text_diff;
+mod worktree;
 
 pub use client::GitClient;
 pub use client::GitExecutionLimits;
@@ -56,6 +57,8 @@ pub use text_diff::GitDiffStatistics;
 pub use text_diff::GitTextDiff;
 pub use text_diff::GitTextDiffLimits;
 pub use text_diff::GitTextDiffSnapshot;
+pub use worktree::GitWorktree;
+pub use worktree::GitWorktreeAvailability;
 
 #[cfg(test)]
 #[path = "test_support.rs"]

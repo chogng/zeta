@@ -16,7 +16,7 @@ Native UI 的 crate 从共享 workspace 中分离。
 | --- | --- | --- | --- |
 | `app` binary 与产品事件语义 | `zeta-rs/native` | `app/` | 已实现 `zui::App` |
 | 通用 application/window runtime | `zeta-rs/native` 的历史宿主 glue | public `app/zui` | 已拥有 event loop、window registry、renderer 初始化与 resize/scale 同步；内部由 `app/window/input/render` 能力目录隔离 |
-| `app` Root/Shell/Workspace 产品布局 | `zeta-rs/native/src` | `zeta-workbench` + `zeta-session` + `app/src` | Workbench geometry 与单个 Session Pane 的 Thread/Composer state、input、interaction、layout 已由各自 crate 拥有；Shell scene composition 仍在宿主 |
+| `app` Root/Shell/Workspace 产品布局 | `zeta-rs/native/src` | `zeta-workbench` + `zeta-session` | Workbench 管完整产品组合与窗口场景，Session Pane 的 Thread/Composer state、input、interaction、layout 由 `zeta-session` 拥有 |
 | 通用 icon asset contract | 旧 Native icon types | `app/zui::ui` | 已收入单一 `zui` crate；产品 catalog 保留在 `app/icons` |
 | Element、Scene、Interaction、Animation、Retained Runtime | `app/zui` | app-owned crates in root workspace | 已迁入 app |
 | Button、Tree、List、Editor/Workspace pane presentation | `app/ui-components`、`editor`、`features/workspace` | app-owned modules and crates in root workspace | 已迁入 app |
@@ -103,7 +103,7 @@ hub 消费 rules_rs 生成的 package deps。`bazel build //app:app` 已在当�
 
 ### 阶段三：收敛应用组合根
 
-- [x] `app/src` 只保留窗口/平台适配、产品状态投影、command 执行和具体 Part/Overlay 组合；
+- [x] 删除 `app/src`；`app/main.rs` 只启动 `zeta-workbench`，窗口/平台适配、产品状态、command 执行和具体 Part/Overlay 组合统一由 Workbench 管理；
 - [x] `ShellPresentation` 使用单一 `zui::UiFrame` owner；
 - [x] 清零 split scene/interaction API 的生产调用并删除旧入口；
 - [x] retained fragment cleanup、animation deadline 和 redraw invalidation 全部从 `zui::RetainedRuntime`/
@@ -147,13 +147,13 @@ hub 消费 rules_rs 生成的 package deps。`bazel build //app:app` 已在当�
 - [x] 将 `zui` 保持为一个对外 crate，内部使用 `app/window/input/ui/runtime/render/services`
       等同名能力目录维持边界，降低跨 crate API churn 并支持其他 app 直接依赖。
 
-### `app/src` 拆分审计（2026-08-27）
+### Workbench 产品组合审计（2026-08-27）
 
-App Server Session 的连接 worker、订阅、命令队列和重连策略已经与 Session Pane 统一进入 `zeta-session`；文件、Git 和配置请求仍由产品宿主持有连接句柄执行。`zeta-session` 同时拥有单个 Session Pane 的 Thread、时间线与 Composer；`zeta-editor`、`zeta-workbench`、`zeta-ui-components`、`zeta-terminal`、`zeta-remote*` 和 LSP crate 继续拥有各自能力，`app/src` 负责产品 effect、样式、窗口事件和输入路由。
+App Server Session 的连接 worker、订阅、命令队列和重连策略已经与 Session Pane 统一进入 `zeta-session`；文件、Git 和配置请求由 Workbench 产品组合根持有连接句柄执行。`zeta-session` 同时拥有单个 Session Pane 的 Thread、时间线与 Composer；`zeta-editor`、`zeta-ui-components`、`zeta-terminal`、`zeta-remote*` 和 LSP crate 继续拥有各自能力，`zeta-workbench` 负责产品 effect、样式、窗口事件和输入路由。
 
 新增的 app-side crate 如下：
 
-| crate | 进入的职责 | 留在 `app/src` 的职责 |
+| crate | 进入的职责 | Workbench 组合职责 |
 | --- | --- | --- |
 | `zeta-session` | App Server Session client、worker、订阅、命令/事件队列和重连策略；单个 Session Pane 的 Thread metadata、后端 transcript 条目、时间线、滚动、Composer 状态、输入、交互、布局和绘制 | Local/Remote 连接目标、文件/Git/配置请求、提交 effect 和平台事件接线 |
 | `zeta-terminal-workspace` | Terminal runtime、Pane binding、每个 PaneInput 的滚动/指针/选择视图状态 | 平台事件转发和终端进程适配 |
@@ -184,7 +184,7 @@ boundary CI 均已通过。
 - 不复制 `zeta-rs/native` 形成第二个并行宿主；迁移必须保持单一运行入口。
 - 不在旧 Native 中修建新功能；若迁移过程中发现缺少通用能力，先在正确的下层 owner 实现，再由
   app 做最小接线。
-- 不把 `app/editor` 或 `app/src/features/workspace` 等 presentation owner 直接误判为 shared backend；
+- 不把 `app/editor` 或 `app/workbench/features/workspace` 等 presentation owner 直接误判为 shared backend；
   先按“headless model/core”和“Native presentation”拆分。
 - 不让 `app` 类型、产品命令、窗口事件或布局类型进入 `zeta-rs`。
 - 每个迁移阶段都必须保留 deterministic unit tests 和至少一个产品 targeted test；测试失败时先区分

@@ -114,6 +114,7 @@ members = [
     "zeta-rs/windows-sandbox-rs",
     "zeta-rs/workspace",
     "zeta-rs/workspace-access",
+    "zeta-rs/worktree",
     "zeta-rs/search",
     "zeta-rs/server-host",
     "zeta-rs/zeta-api",
@@ -403,6 +404,7 @@ zeta-utils-pty = { path = "zeta-rs/utils/pty" }
 zeta-windows-sandbox = { path = "zeta-rs/windows-sandbox-rs" }
 zeta-workspace = { path = "zeta-rs/workspace" }
 zeta-workspace-access = { path = "zeta-rs/workspace-access" }
+zeta-worktree = { path = "zeta-rs/worktree" }
 zui = { path = "app/zui", default-features = false }
 
 [profile.dev]

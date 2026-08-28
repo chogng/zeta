@@ -19,27 +19,27 @@ use zeta_app_server_protocol::protocol::language::LanguageRangeDto;
 use zeta_app_server_protocol::protocol::language::LanguageServerMessageNotification;
 use zeta_app_server_protocol::protocol::language::LanguageTextEditDto;
 use zeta_editor_host::FileEditorHost;
-use zeta_language_service::LanguageCommand;
-use zeta_language_service::LanguageCompletionInsertTextFormat;
-use zeta_language_service::LanguageCompletionItem;
-use zeta_language_service::LanguageCompletionItemKind;
-use zeta_language_service::LanguageCompletions;
-use zeta_language_service::LanguageDiagnostic;
-use zeta_language_service::LanguageDiagnosticSeverity;
-use zeta_language_service::LanguageDocumentPosition;
-use zeta_language_service::LanguageDocumentRevision;
-use zeta_language_service::LanguageHover;
-use zeta_language_service::LanguageLocationKind;
-use zeta_language_service::LanguageLocationPosition;
-use zeta_language_service::LanguageLocationRange;
-use zeta_language_service::LanguageLocationTarget;
-use zeta_language_service::LanguageLocations;
-use zeta_language_service::LanguagePositionEncoding;
-use zeta_language_service::LanguageRequestId;
-use zeta_language_service::LanguageRequestKind;
-use zeta_language_service::LanguageServiceDocument;
-use zeta_language_service::LanguageTextEdit;
-use zeta_language_service::LanguageTextRange;
+use zeta_lsp_manager::LanguageCommand;
+use zeta_lsp_manager::LanguageCompletionInsertTextFormat;
+use zeta_lsp_manager::LanguageCompletionItem;
+use zeta_lsp_manager::LanguageCompletionItemKind;
+use zeta_lsp_manager::LanguageCompletions;
+use zeta_lsp_manager::LanguageDiagnostic;
+use zeta_lsp_manager::LanguageDiagnosticSeverity;
+use zeta_lsp_manager::LanguageDocumentPosition;
+use zeta_lsp_manager::LanguageDocumentRevision;
+use zeta_lsp_manager::LanguageHover;
+use zeta_lsp_manager::LanguageLocationKind;
+use zeta_lsp_manager::LanguageLocationPosition;
+use zeta_lsp_manager::LanguageLocationRange;
+use zeta_lsp_manager::LanguageLocationTarget;
+use zeta_lsp_manager::LanguageLocations;
+use zeta_lsp_manager::LanguagePositionEncoding;
+use zeta_lsp_manager::LanguageRequestId;
+use zeta_lsp_manager::LanguageRequestKind;
+use zeta_lsp_manager::LanguageServiceDocument;
+use zeta_lsp_manager::LanguageTextEdit;
+use zeta_lsp_manager::LanguageTextRange;
 
 use super::ProductDocumentDiagnostics;
 use super::ProductLanguageService;
@@ -85,6 +85,7 @@ pub(crate) enum RemoteLanguageEvent {
 pub(crate) fn protocol_document(document: LanguageServiceDocument) -> LanguageDocumentDto {
     LanguageDocumentDto {
         workspace_folder_id: None,
+        session_directory: None,
         path: document.path().to_path_buf(),
         language_id: document.language_id().to_owned(),
         revision: document.revision().value(),

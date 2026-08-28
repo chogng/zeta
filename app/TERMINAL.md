@@ -40,7 +40,7 @@ Terminal 是外部 AI CLI 和其他交互式进程的通用运行与显示容器
 | ANSI/VT、screen、grid 和输入编码 | `zeta-terminal` | 维护终端状态和有界回滚；不识别 Codex、Claude、Gemini 或 Zeta |
 | Terminal Pane 绘制和输入路由 | `app` host + `zui` | 把 Terminal session 挂入当前 PaneGroup；不保存第二份终端状态 |
 
-`app/src` 只做产品接线。CLI 的 executable discovery、启动参数、环境策略、认证检查和恢复规则必须留在对应 adapter crate，不能堆进产品组合层或 `zeta-terminal`。
+`app/workbench/product` 只做产品接线。CLI 的 executable discovery、启动参数、环境策略、认证检查和恢复规则必须留在对应 adapter crate，不能堆进产品组合层或 `zeta-terminal`。
 
 ## AI CLI 适配器
 

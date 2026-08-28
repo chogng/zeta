@@ -469,16 +469,16 @@
       "description": "Foreground for managed Hovers.",
       "needsTransparency": false,
       "defaults": {
-        "dark": "foreground",
-        "light": "foreground",
-        "high-contrast-dark": "foreground",
-        "high-contrast-light": "foreground"
+        "dark": "#f5f5f7",
+        "light": "#f5f5f7",
+        "high-contrast-dark": "#f5f5f7",
+        "high-contrast-light": "#f5f5f7"
       },
       "values": {
-        "dark": "#cccccc",
-        "light": "#3b3b3b",
-        "high-contrast-dark": "#cccccc",
-        "high-contrast-light": "#3b3b3b"
+        "dark": "#f5f5f7",
+        "light": "#f5f5f7",
+        "high-contrast-dark": "#f5f5f7",
+        "high-contrast-light": "#f5f5f7"
       }
     },
     {
@@ -489,16 +489,16 @@
       "description": "Background for managed Hovers.",
       "needsTransparency": false,
       "defaults": {
-        "dark": "#252526",
-        "light": "#f8f8f8",
-        "high-contrast-dark": "#252526",
-        "high-contrast-light": "#f8f8f8"
+        "dark": "#2d2e33",
+        "light": "#2d2e33",
+        "high-contrast-dark": "#2d2e33",
+        "high-contrast-light": "#2d2e33"
       },
       "values": {
-        "dark": "#252526",
-        "light": "#f8f8f8",
-        "high-contrast-dark": "#252526",
-        "high-contrast-light": "#f8f8f8"
+        "dark": "#2d2e33",
+        "light": "#2d2e33",
+        "high-contrast-dark": "#2d2e33",
+        "high-contrast-light": "#2d2e33"
       }
     },
     {
@@ -509,16 +509,16 @@
       "description": "Border around managed Hovers.",
       "needsTransparency": false,
       "defaults": {
-        "dark": "widget.border",
-        "light": "widget.border",
-        "high-contrast-dark": "widget.border",
-        "high-contrast-light": "widget.border"
+        "dark": "#ffffff18",
+        "light": "#ffffff18",
+        "high-contrast-dark": "#ffffff18",
+        "high-contrast-light": "#ffffff18"
       },
       "values": {
-        "dark": "#454545",
-        "light": "#d4d4d4",
-        "high-contrast-dark": "#454545",
-        "high-contrast-light": "#d4d4d4"
+        "dark": "#ffffff18",
+        "light": "#ffffff18",
+        "high-contrast-dark": "#ffffff18",
+        "high-contrast-light": "#ffffff18"
       }
     },
     {
@@ -529,16 +529,16 @@
       "description": "Shadow around managed Hovers.",
       "needsTransparency": false,
       "defaults": {
-        "dark": "widget.shadow",
-        "light": "widget.shadow",
-        "high-contrast-dark": "widget.shadow",
-        "high-contrast-light": "widget.shadow"
+        "dark": "#00000030",
+        "light": "#00000030",
+        "high-contrast-dark": "#00000030",
+        "high-contrast-light": "#00000030"
       },
       "values": {
-        "dark": "#00000066",
-        "light": "#00000029",
-        "high-contrast-dark": "#00000066",
-        "high-contrast-light": "#00000029"
+        "dark": "#00000030",
+        "light": "#00000030",
+        "high-contrast-dark": "#00000030",
+        "high-contrast-light": "#00000030"
       }
     },
     {
@@ -1755,10 +1755,10 @@
         "high-contrast-light": "hover.foreground"
       },
       "values": {
-        "dark": "#cccccc",
-        "light": "#3b3b3b",
-        "high-contrast-dark": "#cccccc",
-        "high-contrast-light": "#3b3b3b"
+        "dark": "#f5f5f7",
+        "light": "#f5f5f7",
+        "high-contrast-dark": "#f5f5f7",
+        "high-contrast-light": "#f5f5f7"
       }
     },
     {
@@ -1775,10 +1775,10 @@
         "high-contrast-light": "hover.background"
       },
       "values": {
-        "dark": "#252526",
-        "light": "#f8f8f8",
-        "high-contrast-dark": "#252526",
-        "high-contrast-light": "#f8f8f8"
+        "dark": "#2d2e33",
+        "light": "#2d2e33",
+        "high-contrast-dark": "#2d2e33",
+        "high-contrast-light": "#2d2e33"
       }
     },
     {
@@ -1795,10 +1795,10 @@
         "high-contrast-light": "hover.border"
       },
       "values": {
-        "dark": "#454545",
-        "light": "#d4d4d4",
-        "high-contrast-dark": "#454545",
-        "high-contrast-light": "#d4d4d4"
+        "dark": "#ffffff18",
+        "light": "#ffffff18",
+        "high-contrast-dark": "#ffffff18",
+        "high-contrast-light": "#ffffff18"
       }
     },
     {

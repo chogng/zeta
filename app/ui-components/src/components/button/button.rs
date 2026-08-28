@@ -1,6 +1,6 @@
 use crate::{
     Border, Color, Component, ComponentElement, CornerRadii, Edges, Element, PaintIcon, PaintRect,
-    Point, Rect, TextBlock, TextStyle, UiScene,
+    Point, Rect, TextBlock, TextSpan, TextStyle, UiScene,
 };
 use zui::ui::Icon;
 
@@ -190,6 +190,11 @@ enum ButtonContent {
         icon: Icon,
         label: String,
     },
+    IconAndStyledLabel {
+        icon: Icon,
+        label: String,
+        spans: Vec<TextSpan>,
+    },
 }
 
 /// A reusable button that paints text, icon-only, or icon-and-label content.
@@ -258,6 +263,28 @@ impl Button {
         }
     }
 
+    /// Creates an icon button with one accessible label and styled visible text runs.
+    pub fn icon_and_styled_label(
+        bounds: Rect,
+        icon: Icon,
+        accessible_label: impl Into<String>,
+        spans: impl IntoIterator<Item = TextSpan>,
+        state: ButtonState,
+        style: ButtonStyle,
+    ) -> Self {
+        Self {
+            bounds,
+            content: ButtonContent::IconAndStyledLabel {
+                icon,
+                label: accessible_label.into(),
+                spans: spans.into_iter().collect(),
+            },
+            state,
+            selection: ButtonSelection::Unselected,
+            style,
+        }
+    }
+
     pub const fn with_selection(mut self, selection: ButtonSelection) -> Self {
         self.selection = selection;
         self
@@ -275,7 +302,8 @@ impl Button {
                 accessible_label: label,
                 ..
             }
-            | ButtonContent::IconAndLabel { label, .. } => label,
+            | ButtonContent::IconAndLabel { label, .. }
+            | ButtonContent::IconAndStyledLabel { label, .. } => label,
         }
     }
 }
@@ -333,6 +361,22 @@ impl Component for Button {
                     content,
                     *icon,
                     label.clone(),
+                    IconLabelStyle::new(text_style.clone())
+                        .with_icon_size(self.style.icon_size)
+                        .with_content_gap(self.style.content_gap),
+                );
+                scene.draw_component(&label);
+                return;
+            }
+            ButtonContent::IconAndStyledLabel {
+                icon,
+                label: _,
+                spans,
+            } => {
+                let label = IconLabel::from_spans(
+                    content,
+                    *icon,
+                    spans.clone(),
                     IconLabelStyle::new(text_style.clone())
                         .with_icon_size(self.style.icon_size)
                         .with_content_gap(self.style.content_gap),

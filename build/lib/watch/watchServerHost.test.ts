@@ -45,7 +45,7 @@ test("server-host watcher excludes a custom Cargo target directory inside Rust s
 test("workspace-root watcher accepts only canonical root manifests", () => {
   assert.equal(shouldRebuildWorkspaceManifest("Cargo.toml"), true);
   assert.equal(shouldRebuildWorkspaceManifest("Cargo.lock"), true);
-  assert.equal(shouldRebuildWorkspaceManifest("app/src/main.rs"), false);
+  assert.equal(shouldRebuildWorkspaceManifest("app/main.rs"), false);
   assert.equal(shouldRebuildWorkspaceManifest("target/debug/build/generated/out/schema.rs"), false);
   assert.equal(shouldRebuildWorkspaceManifest("zeta-rs/app-server/Cargo.toml"), false);
 });

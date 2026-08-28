@@ -1,6 +1,6 @@
 use crate::{
     Color, Component, ComponentElement, ComputedElement, Element, ElementLength, PaintRect, Point,
-    Rect, Size, UiScene,
+    Rect, Size, TextSpan, UiScene,
 };
 use zui::ui::Icon;
 
@@ -24,6 +24,11 @@ enum ActionViewItemContent {
     IconAndLabel {
         icon: Icon,
         label: String,
+    },
+    IconAndStyledLabel {
+        icon: Icon,
+        accessible_label: String,
+        spans: Vec<TextSpan>,
     },
 }
 
@@ -70,6 +75,25 @@ impl ActionViewItem {
         }
     }
 
+    /// Creates an icon action with one accessible label and styled visible text runs.
+    pub fn icon_and_styled_label(
+        icon: Icon,
+        accessible_label: impl Into<String>,
+        spans: impl IntoIterator<Item = TextSpan>,
+        state: ButtonState,
+    ) -> Self {
+        Self {
+            content: ActionViewItemContent::IconAndStyledLabel {
+                icon,
+                accessible_label: accessible_label.into(),
+                spans: spans.into_iter().collect(),
+            },
+            state,
+            selection: ButtonSelection::Unselected,
+            main_axis_extent: None,
+        }
+    }
+
     /// Overrides this item's extent along its ActionBar's orientation axis.
     pub const fn with_main_axis_extent(mut self, extent: f32) -> Self {
         self.main_axis_extent = Some(extent);
@@ -103,6 +127,18 @@ impl ActionViewItem {
             ActionViewItemContent::IconAndLabel { icon, label } => {
                 Button::icon_and_label(bounds, *icon, label.clone(), self.state, style.clone())
             }
+            ActionViewItemContent::IconAndStyledLabel {
+                icon,
+                accessible_label,
+                spans,
+            } => Button::icon_and_styled_label(
+                bounds,
+                *icon,
+                accessible_label.clone(),
+                spans.clone(),
+                self.state,
+                style.clone(),
+            ),
         }
         .with_selection(self.selection);
         scene.draw_component(&button);

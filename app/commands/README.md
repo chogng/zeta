@@ -17,8 +17,8 @@ items, keyboard shortcuts, and future command-palette entries converge on a
 | Cross-module execution request | `CommandRequest` |
 | Generic handler registration and lookup | `CommandRegistry<Context>` |
 | `ElementId` mapping | `app` host adapter |
-| Keybinding context and platform defaults | `app/src/keybindings.rs` |
-| Built-in handler registration and product state | `app/src/command_dispatch.rs` |
+| Keybinding context and platform defaults | `app/workbench/platform/keybindings.rs` |
+| Built-in handler registration and product state | `app/workbench/product/command_dispatch.rs` |
 
 This crate must remain independent of `ProductApp`, `zui` and native platform events,
 terminal state, workspace state, and the keybinding runtime. A command request

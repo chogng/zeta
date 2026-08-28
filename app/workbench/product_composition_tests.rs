@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 #[test]
 fn product_composition_uses_scene_draw_component() {
-    let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let source_root = app_root().join("workbench");
     let mut violations = Vec::new();
     visit_rust_sources(&source_root, &mut |path, source| {
         if path
@@ -29,7 +29,7 @@ fn product_composition_uses_scene_draw_component() {
 
 #[test]
 fn zui_backend_neutral_modules_remain_platform_independent() {
-    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let workspace = app_root();
     let zui_root = workspace.join("zui").join("src");
     let mut violations = Vec::new();
     for module in [
@@ -65,7 +65,7 @@ fn zui_backend_neutral_modules_remain_platform_independent() {
 
 #[test]
 fn public_zui_facade_owns_desktop_framework_composition() {
-    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let workspace = app_root();
     let manifest = fs::read_to_string(workspace.join("zui").join("Cargo.toml"))
         .expect("zui manifest should be readable");
     for required in ["glyphon =", "wgpu =", "winit ="] {
@@ -93,7 +93,7 @@ fn public_zui_facade_owns_desktop_framework_composition() {
 
 #[test]
 fn ui_crates_have_one_way_dependencies_while_backends_stay_internal_modules() {
-    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let workspace = app_root();
     assert!(
         !workspace.join("ui").exists(),
         "the mixed app/ui crate must not return; use ui-components and workbench"
@@ -170,7 +170,7 @@ fn ui_crates_have_one_way_dependencies_while_backends_stay_internal_modules() {
 
 #[test]
 fn component_crate_remains_graphics_backend_neutral() {
-    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let workspace = app_root();
     let ui_root = workspace.join("ui-components");
     let manifest = fs::read_to_string(ui_root.join("Cargo.toml"))
         .expect("UI components manifest should be readable");
@@ -200,9 +200,9 @@ fn component_crate_remains_graphics_backend_neutral() {
 
 #[test]
 fn product_uses_only_zui_for_desktop_framework_hosting() {
-    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let product_manifest =
-        fs::read_to_string(workspace.join("Cargo.toml")).expect("app manifest should be readable");
+    let workspace = app_root();
+    let product_manifest = fs::read_to_string(workspace.join("workbench/Cargo.toml"))
+        .expect("Workbench manifest should be readable");
     assert!(
         product_manifest
             .lines()
@@ -231,9 +231,9 @@ fn product_uses_only_zui_for_desktop_framework_hosting() {
 }
 
 #[test]
-fn app_app_server_adapter_owns_the_zeta_rs_client_boundary() {
-    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let source_root = workspace.join("src");
+fn workbench_app_server_adapter_owns_the_zeta_rs_client_boundary() {
+    let workspace = app_root();
+    let source_root = workspace.join("workbench");
     let app_server_file = source_root.join("app_server.rs");
     let app_server_root = source_root.join("app_server");
     let mut violations = Vec::new();
@@ -252,22 +252,21 @@ fn app_app_server_adapter_owns_the_zeta_rs_client_boundary() {
     });
     assert!(
         violations.is_empty(),
-        "app modules must access zeta-rs App Server client through crate::app_server:\n{}",
+        "Workbench modules must access zeta-rs App Server client through crate::app_server:\n{}",
         violations.join("\n")
     );
 
-    let product_manifest =
-        fs::read_to_string(workspace.join("Cargo.toml")).expect("app manifest should be readable");
+    let product_manifest = fs::read_to_string(workspace.join("workbench/Cargo.toml"))
+        .expect("Workbench manifest should be readable");
     assert!(
         product_manifest
             .lines()
             .any(|line| line.trim_start().starts_with("zeta-app-server-client =")),
-        "app must own the shared zeta-rs App Server client dependency"
+        "Workbench must own the shared zeta-rs App Server client dependency"
     );
 
     for relative_manifest in [
         "ui-components/Cargo.toml",
-        "workbench/Cargo.toml",
         "zui/Cargo.toml",
         "editor/Cargo.toml",
         "settings/Cargo.toml",
@@ -284,9 +283,9 @@ fn app_app_server_adapter_owns_the_zeta_rs_client_boundary() {
 }
 
 #[test]
-fn desktop_app_state_is_private_to_the_app_composition_boundary() {
-    let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    let state_source = fs::read_to_string(source_root.join("app/state.rs"))
+fn desktop_app_state_is_private_to_the_workbench_composition_boundary() {
+    let source_root = app_root().join("workbench");
+    let state_source = fs::read_to_string(source_root.join("product/state.rs"))
         .expect("ProductApp state source should be readable");
     assert!(
         state_source.contains("pub(crate) struct ProductApp"),
@@ -302,12 +301,12 @@ fn desktop_app_state_is_private_to_the_app_composition_boundary() {
         "ProductApp state fields must use the app-composition visibility boundary"
     );
 
-    let product_app_source = fs::read_to_string(source_root.join("app.rs"))
+    let product_app_source = fs::read_to_string(source_root.join("product.rs"))
         .expect("ProductApp composition source should be readable");
     assert!(
         product_app_source.contains("mod state;")
             && product_app_source.contains("pub(crate) use state::ProductApp;"),
-        "app must own and re-export the product state type"
+        "Workbench must own and re-export the product state type"
     );
     assert!(
         !product_app_source.contains("state: state::ProductAppState"),
@@ -315,12 +314,12 @@ fn desktop_app_state_is_private_to_the_app_composition_boundary() {
     );
 
     for relative_path in [
-        "app/frame.rs",
-        "app/interaction.rs",
-        "app/runtime.rs",
-        "app/workbench.rs",
-        "app/workbench_resize.rs",
-        "app/workbench_tabs_resize.rs",
+        "product/frame.rs",
+        "product/interaction.rs",
+        "product/runtime.rs",
+        "product/workbench.rs",
+        "product/workbench_resize.rs",
+        "product/workbench_tabs_resize.rs",
     ] {
         let source = fs::read_to_string(source_root.join(relative_path))
             .unwrap_or_else(|error| panic!("could not read {relative_path}: {error}"));
@@ -333,7 +332,7 @@ fn desktop_app_state_is_private_to_the_app_composition_boundary() {
 
 #[test]
 fn gpu_backend_does_not_own_interaction_or_accessibility_frames() {
-    let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let workspace = app_root();
     let backend_root = workspace.join("zui/src/render/wgpu");
 
     let mut violations = Vec::new();
@@ -353,11 +352,11 @@ fn gpu_backend_does_not_own_interaction_or_accessibility_frames() {
 
 #[test]
 fn every_component_declares_a_zui_element() {
-    let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let workspace_root = app_root();
     let mut violations = Vec::new();
     let mut implementation_count = 0;
     for crate_root in workspace_crate_roots(workspace_root) {
-        let source_root = crate_root.join("src");
+        let source_root = crate_source_root(&crate_root);
         visit_rust_sources(&source_root, &mut |path, source| {
             let implementations = source
                 .match_indices(" Component for ")
@@ -392,10 +391,10 @@ fn every_component_declares_a_zui_element() {
 
 #[test]
 fn production_components_do_not_reintroduce_manual_component_inspection() {
-    let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let workspace_root = app_root();
     let mut violations = Vec::new();
     for crate_root in workspace_crate_roots(workspace_root) {
-        visit_rust_sources(&crate_root.join("src"), &mut |path, source| {
+        visit_rust_sources(&crate_source_root(&crate_root), &mut |path, source| {
             if is_test_source(path) {
                 return;
             }
@@ -418,11 +417,11 @@ fn production_components_do_not_reintroduce_manual_component_inspection() {
 
 #[test]
 fn production_composition_does_not_register_inspection_nodes_directly() {
-    let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let workspace_root = app_root();
     let registration_owner = workspace_root.join("zui/src/ui/presentation/scene.rs");
     let mut violations = Vec::new();
     for crate_root in workspace_crate_roots(workspace_root) {
-        visit_rust_sources(&crate_root.join("src"), &mut |path, source| {
+        visit_rust_sources(&crate_source_root(&crate_root), &mut |path, source| {
             if is_test_source(path)
                 || path == registration_owner
                 || !source.contains("with_inspection_node(")
@@ -446,14 +445,14 @@ fn production_composition_does_not_register_inspection_nodes_directly() {
 
 #[test]
 fn zui_consumers_use_capability_oriented_namespaces() {
-    let workspace_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let workspace_root = app_root();
     let zui_root = workspace_root.join("zui");
     let mut violations = Vec::new();
     for crate_root in workspace_crate_roots(workspace_root) {
         if crate_root == zui_root {
             continue;
         }
-        visit_rust_sources(&crate_root.join("src"), &mut |path, source| {
+        visit_rust_sources(&crate_source_root(&crate_root), &mut |path, source| {
             if is_test_source(path) {
                 return;
             }
@@ -502,14 +501,26 @@ fn visit_rust_sources(root: &Path, visitor: &mut impl FnMut(&Path, &str)) {
 }
 
 fn workspace_crate_roots(workspace_root: &Path) -> Vec<PathBuf> {
-    let mut roots = vec![workspace_root.to_path_buf()];
-    roots.extend(
-        fs::read_dir(workspace_root)
-            .expect("Rust workspace directory")
-            .map(|entry| entry.expect("Rust workspace entry").path())
-            .filter(|path| path.join("Cargo.toml").is_file() && path.join("src").is_dir())
-            .collect::<Vec<_>>(),
-    );
+    let mut roots = fs::read_dir(workspace_root)
+        .expect("Rust workspace directory")
+        .map(|entry| entry.expect("Rust workspace entry").path())
+        .filter(|path| path.join("Cargo.toml").is_file())
+        .collect::<Vec<_>>();
     roots.sort();
     roots
+}
+
+fn crate_source_root(crate_root: &Path) -> PathBuf {
+    let conventional = crate_root.join("src");
+    if conventional.is_dir() {
+        conventional
+    } else {
+        crate_root.to_path_buf()
+    }
+}
+
+fn app_root() -> &'static Path {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("Workbench must remain inside app")
 }

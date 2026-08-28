@@ -23,7 +23,7 @@ use zeta_app_server_protocol::protocol::language::LanguageHoverParams;
 use zeta_app_server_protocol::protocol::language::LanguageLocationKindDto;
 use zeta_app_server_protocol::protocol::language::LanguageLocationsParams;
 use zeta_app_server_protocol::protocol::language::LanguageSynchronizeParams;
-use zeta_language_service::LanguageRequestKind;
+use zeta_lsp_manager::LanguageRequestKind;
 use zui::app::AppProxy;
 
 use super::remote::RemoteLanguageEvent;
@@ -324,6 +324,7 @@ fn drive_command(
         RemoteLanguageCommand::Close(path) => {
             match client.close_language_document(LanguageCloseParams {
                 workspace_folder_id: None,
+                session_directory: None,
                 path: path.clone(),
             }) {
                 Ok(()) => Ok(()),

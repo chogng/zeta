@@ -1,4 +1,5 @@
 use zeta_editor::CodeEditor;
+use zeta_editor::CodeEditorCaretStyle;
 use zeta_editor::CodeEditorCommand;
 use zeta_editor::CodeEditorDocument;
 use zeta_editor::CodeEditorHeader;
@@ -24,7 +25,7 @@ use zui::ui::TextStyle;
 use zui::ui::UiScene;
 
 const MAX_VISIBLE_ROWS: usize = 8;
-const MIN_EDITOR_HEIGHT: f32 = 44.0;
+const EDITOR_VERTICAL_PADDING: f32 = 12.0;
 const PLACEHOLDER_HORIZONTAL_INSET: f32 = 12.0;
 
 /// Focus state used by the compact ChatInput editor.
@@ -90,7 +91,7 @@ impl ChatInputEditor {
     }
 
     pub fn preferred_height(&self) -> f32 {
-        (self.visible_row_count() as f32 * CodeEditor::row_height()).max(MIN_EDITOR_HEIGHT)
+        self.visible_row_count() as f32 * CodeEditor::row_height() + EDITOR_VERTICAL_PADDING * 2.0
     }
 
     pub(crate) fn apply(&mut self, command: CodeEditorCommand) {
@@ -178,6 +179,13 @@ impl ChatInputEditor {
     ) -> bool {
         self.hide_ghost_text();
         let editor = self.code_editor(bounds, CaretVisibility::Visible);
+        let content_bounds = editor_content_bounds(bounds);
+        let point = Point::new(
+            point.x,
+            point
+                .y
+                .clamp(content_bounds.origin.y, content_bounds.bottom() - 1.0),
+        );
         let Some(position) = editor.text_position_at(point) else {
             return false;
         };
@@ -212,7 +220,7 @@ impl ChatInputEditor {
 
     fn code_editor(&self, bounds: Rect, caret_visibility: CaretVisibility) -> CodeEditor<'_> {
         CodeEditor::new(
-            bounds,
+            editor_content_bounds(bounds),
             &self.document,
             self.viewport,
             CodeEditorHeader::Hidden,
@@ -220,6 +228,7 @@ impl ChatInputEditor {
         )
         .with_presentation(CodeEditorPresentation::Compact)
         .with_caret_visibility(caret_visibility)
+        .with_caret_style(CodeEditorCaretStyle::Block)
     }
 }
 
@@ -266,11 +275,11 @@ impl Component for ChatInputView<'_> {
                     self.placeholder,
                     Point::new(
                         self.bounds.origin.x + PLACEHOLDER_HORIZONTAL_INSET,
-                        self.bounds.origin.y,
+                        self.bounds.origin.y + EDITOR_VERTICAL_PADDING,
                     ),
                     zui::ui::Size::new(
                         (self.bounds.size.width - PLACEHOLDER_HORIZONTAL_INSET).max(0.0),
-                        self.bounds.size.height,
+                        (self.bounds.size.height - EDITOR_VERTICAL_PADDING * 2.0).max(0.0),
                     ),
                     TextStyle::new(13.0, self.placeholder_color)
                         .with_family(FontFamily::Monospace)
@@ -279,6 +288,15 @@ impl Component for ChatInputView<'_> {
             });
         }
     }
+}
+
+fn editor_content_bounds(bounds: Rect) -> Rect {
+    Rect::from_xywh(
+        bounds.origin.x,
+        bounds.origin.y + EDITOR_VERTICAL_PADDING,
+        bounds.size.width,
+        (bounds.size.height - EDITOR_VERTICAL_PADDING * 2.0).max(0.0),
+    )
 }
 
 #[cfg(test)]

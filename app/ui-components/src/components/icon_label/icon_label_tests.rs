@@ -1,5 +1,5 @@
 use super::{IconLabel, IconLabelStyle};
-use crate::{Color, Component, Rect, TextStyle, UiScene};
+use crate::{Color, Component, Rect, TextSpan, TextStyle, UiScene};
 use zui::ui::{Icon, IconDefinition, IconId};
 
 const TEST_ICON: Icon = Icon::new(
@@ -48,4 +48,24 @@ fn icon_label_skips_content_when_bounds_are_empty() {
 
     assert!(scene.icons().is_empty());
     assert!(scene.text_blocks().is_empty());
+}
+
+#[test]
+fn icon_label_keeps_styled_text_runs_in_one_label() {
+    let base = TextStyle::new(13.0, Color::rgb(30, 30, 30));
+    let label = IconLabel::from_spans(
+        Rect::from_xywh(20.0, 10.0, 180.0, 28.0),
+        TEST_ICON,
+        [
+            TextSpan::new("Changes 5 • ", base.clone()),
+            TextSpan::new("+84", base.clone().with_color(Color::rgb(16, 124, 16))),
+        ],
+        IconLabelStyle::new(base),
+    );
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+
+    label.paint(&mut scene);
+
+    assert_eq!(scene.text_blocks()[0].text(), "Changes 5 • +84");
+    assert_eq!(scene.text_blocks()[0].spans().len(), 2);
 }

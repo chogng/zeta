@@ -7,7 +7,7 @@ use zeta_app_server_protocol::protocol::config::{
     SemanticCodeIndexSelectionDto, ToolSearchConfigDto, ToolSearchEmbeddingStatusDto,
     ToolSearchModeDto,
 };
-use zeta_language_server_catalog::{LanguageServerCatalogState, LanguageServerExecutionPolicy};
+use zeta_lsp_server_provider::{LanguageServerCatalogState, LanguageServerExecutionPolicy};
 use zeta_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSnapshot};
 
 use super::{catalog_from_configuration, editor_diagnostic, language_document, language_id};
@@ -134,9 +134,9 @@ fn desktop_configuration_does_not_start_unconfigured_language_servers() {
 
 #[test]
 fn desktop_adapter_projects_language_diagnostics_without_lsp_presentation_types() {
-    let diagnostic = zeta_language_service::LanguageDiagnostic {
-        range: zeta_language_service::LanguageTextRange::new(4..9),
-        severity: zeta_language_service::LanguageDiagnosticSeverity::Warning,
+    let diagnostic = zeta_lsp_manager::LanguageDiagnostic {
+        range: zeta_lsp_manager::LanguageTextRange::new(4..9),
+        severity: zeta_lsp_manager::LanguageDiagnosticSeverity::Warning,
         message: "unused value".into(),
         source: Some("rustc".into()),
         code: Some("unused_variables".into()),

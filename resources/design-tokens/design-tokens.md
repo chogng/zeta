@@ -31,10 +31,10 @@ Colors: 164 · Sizes: 27
 | `input.placeholderForeground` | platform.theme.components | `#8f8f8f` | `#767676` | `--zeta-input-placeholder-foreground` |
 | `selection.foreground` | platform.theme.components | `#ffffff` | `#000000` | `--zeta-selection-foreground` |
 | `selection.background` | platform.theme.components | `#264f78` | `#add6ff` | `--zeta-selection-background` |
-| `hover.foreground` | platform.theme.components | `#cccccc` | `#3b3b3b` | `--zeta-hover-foreground` |
-| `hover.background` | platform.theme.components | `#252526` | `#f8f8f8` | `--zeta-hover-background` |
-| `hover.border` | platform.theme.components | `#454545` | `#d4d4d4` | `--zeta-hover-border` |
-| `hover.shadow` | platform.theme.components | `#00000066` | `#00000029` | `--zeta-hover-shadow` |
+| `hover.foreground` | platform.theme.components | `#f5f5f7` | `#f5f5f7` | `--zeta-hover-foreground` |
+| `hover.background` | platform.theme.components | `#2d2e33` | `#2d2e33` | `--zeta-hover-background` |
+| `hover.border` | platform.theme.components | `#ffffff18` | `#ffffff18` | `--zeta-hover-border` |
+| `hover.shadow` | platform.theme.components | `#00000030` | `#00000030` | `--zeta-hover-shadow` |
 | `list.hoverBackground` | platform.theme.components | `#2a2d2e` | `#e8e8e8` | `--zeta-list-hover-background` |
 | `list.activeSelectionForeground` | platform.theme.components | `#ffffff` | `#ffffff` | `--zeta-list-active-selection-foreground` |
 | `list.activeSelectionBackground` | platform.theme.components | `#04395e` | `#0060c0` | `--zeta-list-active-selection-background` |
@@ -95,9 +95,9 @@ Colors: 164 · Sizes: 27
 | `editor.inputBackground` | editor.presentation | `#313131` | `#ffffff` | `--zeta-editor-input-background` |
 | `editor.listHoverBackground` | editor.presentation | `#2a2d2e` | `#e8e8e8` | `--zeta-editor-list-hover-background` |
 | `editor.descriptionForeground` | editor.presentation | `#b8b8b8` | `#616161` | `--zeta-editor-description-foreground` |
-| `editor.hoverForeground` | editor.presentation | `#cccccc` | `#3b3b3b` | `--zeta-editor-hover-foreground` |
-| `editor.hoverBackground` | editor.presentation | `#252526` | `#f8f8f8` | `--zeta-editor-hover-background` |
-| `editor.hoverBorder` | editor.presentation | `#454545` | `#d4d4d4` | `--zeta-editor-hover-border` |
+| `editor.hoverForeground` | editor.presentation | `#f5f5f7` | `#f5f5f7` | `--zeta-editor-hover-foreground` |
+| `editor.hoverBackground` | editor.presentation | `#2d2e33` | `#2d2e33` | `--zeta-editor-hover-background` |
+| `editor.hoverBorder` | editor.presentation | `#ffffff18` | `#ffffff18` | `--zeta-editor-hover-border` |
 | `editor.inlayHintForeground` | editor.presentation | `#8f8f8f` | `#767676` | `--zeta-editor-inlay-hint-foreground` |
 | `editor.inlineCompletionForeground` | editor.presentation | `#8f8f8f` | `#767676` | `--zeta-editor-inline-completion-foreground` |
 | `diffEditor.removedLineBackground` | editor.presentation | `#4b1818` | `#ffebe9` | `--zeta-diff-editor-removed-line-background` |

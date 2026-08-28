@@ -1,7 +1,7 @@
 use crate::{
-    Color, Component, ContextView, ContextViewAnchorAlignment, ContextViewAnchorAxis,
-    ContextViewAnchorPosition, ContextViewPlacement, ContextViewStyle, Edges, PaintRect, Rect,
-    Size, UiScene,
+    BoxShadow, Color, Component, ContextView, ContextViewAnchorAlignment, ContextViewAnchorAxis,
+    ContextViewAnchorPosition, ContextViewPlacement, ContextViewStyle, Edges, PaintRect, Point,
+    Rect, Size, UiScene,
 };
 
 fn context_view(
@@ -197,4 +197,24 @@ fn component_paint_places_the_shell_in_an_overlay_layer() {
 
     assert_eq!(scene.rects().len(), 1);
     assert_eq!(scene.rect_layers(), &[1]);
+}
+
+#[test]
+fn style_paints_a_shell_shadow_outside_the_content_clip() {
+    let shadow = BoxShadow::new(Color::rgba(0, 0, 0, 48))
+        .with_offset(Point::new(0.0, 4.0))
+        .with_blur_radius(12.0);
+    let view = ContextView::new(
+        Rect::from_xywh(0.0, 0.0, 400.0, 300.0),
+        Rect::from_xywh(40.0, 40.0, 20.0, 20.0),
+        Size::new(120.0, 80.0),
+        ContextViewPlacement::new(),
+        ContextViewStyle::new(Color::rgb(45, 46, 51)).with_shadow(shadow),
+    );
+    let mut scene = UiScene::new(Color::TRANSPARENT);
+
+    view.draw(&mut scene, |_scene, _content_bounds| {});
+
+    assert_eq!(scene.rects()[0].shadow(), Some(shadow));
+    assert_eq!(scene.rects()[0].clip_bounds(), None);
 }

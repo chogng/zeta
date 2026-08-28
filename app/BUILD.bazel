@@ -1,20 +1,14 @@
-load("//app:defs.bzl", "app_rust_binary", "app_rust_library")
+load("//app:defs.bzl", "app_rust_binary")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
 
 package(default_visibility = ["//visibility:public"])
 
-app_rust_library(
-    name = "app_lib",
-    crate_name = "app",
-    package_name = "app",
-)
-
 app_rust_binary(
     name = "app",
     crate_name = "app",
-    crate_root = "src/bin/app.rs",
+    crate_root = "main.rs",
     package_name = "app",
-    deps = [":app_lib"],
+    source_globs = ["*.rs"],
 )
 
 exports_files([
@@ -24,7 +18,7 @@ exports_files([
 filegroup(
     name = "app_sources",
     srcs = glob([
-        "src/**/*.rs",
+        "*.rs",
         "Cargo.toml",
     ]) + [
         "//:Cargo.lock",
@@ -44,7 +38,7 @@ filegroup(
         "//app/theme:theme_sources",
         "//app/ui-components:ui-components_sources",
         "//app/workbench:workbench_sources",
-        "//app/workbench-model:workbench_model_sources",
+        "//app/workbench-model:workbench-model_sources",
         "//app/zui:zui_sources",
         "//app/zui-demo:zui_demo_sources",
     ],

@@ -2,7 +2,7 @@ use crate::{
     Color, Component, ComponentElement, Element, PaintIcon, Point, Rect, TextBlock, TextStyle,
     UiScene,
 };
-use zui::ui::Icon;
+use zui::ui::{Icon, TextSpan};
 
 /// Presentation metrics and colors for an icon followed by a single text label.
 #[derive(Clone, Debug, PartialEq)]
@@ -46,6 +46,7 @@ pub struct IconLabel {
     bounds: Rect,
     icon: Icon,
     label: String,
+    spans: Vec<TextSpan>,
     style: IconLabelStyle,
 }
 
@@ -55,6 +56,25 @@ impl IconLabel {
             bounds,
             icon,
             label: label.into(),
+            spans: Vec::new(),
+            style,
+        }
+    }
+
+    /// Creates an icon label whose visible text uses multiple colors or font treatments.
+    pub fn from_spans(
+        bounds: Rect,
+        icon: Icon,
+        spans: impl IntoIterator<Item = TextSpan>,
+        style: IconLabelStyle,
+    ) -> Self {
+        let spans = spans.into_iter().collect::<Vec<_>>();
+        let label = spans.iter().map(TextSpan::text).collect::<String>();
+        Self {
+            bounds,
+            icon,
+            label,
+            spans,
             style,
         }
     }
@@ -108,12 +128,24 @@ impl Component for IconLabel {
             return;
         }
         let text_y = self.bounds.origin.y + (self.bounds.size.height - text_height) * 0.5;
-        scene.draw_text(TextBlock::new(
-            self.label.clone(),
-            Point::new(text_x, text_y),
-            crate::Size::new(text_width, text_height),
-            self.style.text_style.clone(),
-        ));
+        let origin = Point::new(text_x, text_y);
+        let bounds = crate::Size::new(text_width, text_height);
+        let text = if self.spans.is_empty() {
+            TextBlock::new(
+                self.label.clone(),
+                origin,
+                bounds,
+                self.style.text_style.clone(),
+            )
+        } else {
+            TextBlock::from_spans(
+                self.spans.clone(),
+                origin,
+                bounds,
+                self.style.text_style.clone(),
+            )
+        };
+        scene.draw_text(text);
     }
 }
 

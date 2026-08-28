@@ -5,7 +5,7 @@ use crate::remote_connection_process::RemoteWindowLaunchEvent;
 use crate::remote_tunnel_process::RemoteTunnelEvent;
 use crate::session_host::SessionRuntimeEvent;
 use crate::terminal_session::{TerminalSessionEventEnvelope, TerminalSessionReady};
-use zeta_language_service::LanguageServiceEvent;
+use zeta_lsp_manager::LanguageServiceEvent;
 
 pub(crate) enum ProductEvent {
     Session(SessionRuntimeEvent),

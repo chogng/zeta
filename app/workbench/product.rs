@@ -92,21 +92,21 @@ use zui::window::WindowOptions;
 
 #[path = "app_server.rs"]
 pub(crate) mod app_server;
-#[path = "app/command_dispatch.rs"]
+#[path = "product/command_dispatch.rs"]
 pub(crate) mod command_dispatch;
-#[path = "app/events.rs"]
+#[path = "product/events.rs"]
 mod events;
 #[path = "features/editor/file_editor_input.rs"]
 pub(crate) mod file_editor_input;
 pub(crate) use zeta_editor_host as file_editor_pane;
-#[path = "app/frame.rs"]
+#[path = "product/frame.rs"]
 mod frame;
 pub(crate) use zeta_scm as git_branch_context_menu;
 #[path = "features/workspace/git_branch_context_menu_input.rs"]
 pub(crate) mod git_branch_context_menu_input;
 #[path = "platform/input_method.rs"]
 pub(crate) mod input_method;
-#[path = "app/interaction.rs"]
+#[path = "product/interaction.rs"]
 mod interaction;
 #[path = "platform/keybindings.rs"]
 pub(crate) mod keybindings;
@@ -128,11 +128,11 @@ pub(crate) mod launch_test_support;
 #[cfg(test)]
 #[path = "features/remote/launch_tests.rs"]
 pub(crate) mod launch_tests;
-#[path = "app/lifecycle.rs"]
+#[path = "product/lifecycle.rs"]
 mod lifecycle;
-#[path = "app/mouse_wheel.rs"]
+#[path = "product/mouse_wheel.rs"]
 pub(crate) mod mouse_wheel;
-#[path = "app/presentation.rs"]
+#[path = "product/presentation.rs"]
 mod presentation;
 #[path = "platform/product_event.rs"]
 pub(crate) mod product_event;
@@ -158,17 +158,17 @@ pub(crate) mod remote_connection_tunnel_tests;
 pub(crate) mod remote_tunnel_manager_input;
 #[path = "features/remote/remote_tunnel_process.rs"]
 pub(crate) mod remote_tunnel_process;
-#[path = "app/run.rs"]
+#[path = "product/run.rs"]
 mod run;
-#[path = "app/runtime.rs"]
+#[path = "product/runtime.rs"]
 mod runtime;
 #[path = "features/agent/session_catalog.rs"]
 pub(crate) mod session_catalog;
 #[path = "features/agent/session_host.rs"]
 pub(crate) mod session_host;
-#[path = "app/state.rs"]
+#[path = "product/state.rs"]
 mod state;
-#[path = "app/tab_context_menu.rs"]
+#[path = "product/tab_context_menu.rs"]
 pub(crate) mod tab_context_menu;
 pub(crate) use zeta_terminal_workspace as terminal_blocks;
 #[path = "features/terminal/terminal_history.rs"]

@@ -1,6 +1,6 @@
 use crate::{
-    Color, Component, ComponentContext, ComponentElement, ComputedElement, CornerRadii, Edges,
-    Element, PaintRect, Point, Rect, Size, UiScene,
+    BoxShadow, Color, Component, ComponentContext, ComponentElement, ComputedElement, CornerRadii,
+    Edges, Element, PaintRect, Point, Rect, Size, UiScene,
 };
 
 /// Axis on which a [`ContextView`] is placed beside its anchor.
@@ -92,6 +92,7 @@ pub struct ContextViewStyle {
     background: Color,
     corner_radii: CornerRadii,
     padding: Edges,
+    shadow: Option<BoxShadow>,
 }
 
 impl ContextViewStyle {
@@ -100,6 +101,7 @@ impl ContextViewStyle {
             background,
             corner_radii: CornerRadii::uniform(0.0),
             padding: Edges::uniform(0.0),
+            shadow: None,
         }
     }
 
@@ -110,6 +112,11 @@ impl ContextViewStyle {
 
     pub const fn with_padding(mut self, padding: Edges) -> Self {
         self.padding = padding;
+        self
+    }
+
+    pub const fn with_shadow(mut self, shadow: BoxShadow) -> Self {
+        self.shadow = Some(shadow);
         self
     }
 }
@@ -271,10 +278,12 @@ impl ContextView {
     }
 
     fn paint_shell(&self, scene: &mut UiScene) {
-        scene.draw_rect(
-            PaintRect::new(self.bounds(), self.style.background)
-                .with_corner_radii(self.style.corner_radii),
-        );
+        let mut shell = PaintRect::new(self.bounds(), self.style.background)
+            .with_corner_radii(self.style.corner_radii);
+        if let Some(shadow) = self.style.shadow {
+            shell = shell.with_shadow(shadow);
+        }
+        scene.draw_rect(shell);
     }
 }
 

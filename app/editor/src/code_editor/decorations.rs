@@ -2,9 +2,11 @@ use zui::ui::{PaintRect, Point, Rect, Size, UiScene};
 
 use super::text_metrics::{display_columns, display_columns_until, expand_tabs};
 use super::{
-    CELL_WIDTH, CONTENT_HORIZONTAL_PADDING, CodeEditor, CodeEditorInlineHighlight,
-    CodeEditorSyntaxToken, ROW_HEIGHT, paint_text_block,
+    CELL_WIDTH, CONTENT_HORIZONTAL_PADDING, CodeEditor, CodeEditorCaretStyle,
+    CodeEditorInlineHighlight, CodeEditorSyntaxToken, ROW_HEIGHT, paint_text_block,
 };
+
+const BAR_CARET_WIDTH: f32 = 1.5;
 
 impl CodeEditor<'_> {
     pub fn caret_bounds(&self) -> Option<Rect> {
@@ -30,7 +32,10 @@ impl CodeEditor<'_> {
         Some(Rect::from_xywh(
             x,
             layout.body.origin.y + (visual_row - visible.start) as f32 * ROW_HEIGHT,
-            1.5,
+            match self.caret_style {
+                CodeEditorCaretStyle::Bar => BAR_CARET_WIDTH,
+                CodeEditorCaretStyle::Block => CELL_WIDTH,
+            },
             ROW_HEIGHT,
         ))
     }
@@ -190,7 +195,15 @@ impl CodeEditor<'_> {
         }
         if self.caret_visibility == zui::ui::CaretVisibility::Visible {
             scene.draw_rect(PaintRect::new(
-                Rect::from_xywh(caret_x, bounds.origin.y, 1.5, ROW_HEIGHT),
+                Rect::from_xywh(
+                    caret_x,
+                    bounds.origin.y,
+                    match self.caret_style {
+                        CodeEditorCaretStyle::Bar => BAR_CARET_WIDTH,
+                        CodeEditorCaretStyle::Block => CELL_WIDTH,
+                    },
+                    ROW_HEIGHT,
+                ),
                 self.style.caret(),
             ));
         }

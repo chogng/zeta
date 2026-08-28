@@ -3,6 +3,8 @@
 //! Feature crates own the state and UI of the content mounted into Workbench panes. This crate
 //! owns the Workbench chrome around that content and the ordering of logical changes and bindings.
 
+extern crate self as zeta_workbench;
+
 use zeta_ui_components::*;
 use zui::ui::*;
 
@@ -12,6 +14,7 @@ mod keybinding_hint;
 mod layout;
 mod panepart;
 mod presentation;
+mod product;
 mod surface;
 mod tabpart;
 
@@ -41,12 +44,34 @@ pub use presentation::{
     terminal_mouse_position_for_viewport, terminal_pane_bounds_for_viewport,
     terminal_pane_mouse_position_for_viewport, terminal_pane_sash_for_viewport,
 };
+pub use product::run;
 pub use surface::{WorkspaceSurface, WorkspaceSurfaceKind};
 pub use tabpart::*;
 pub use zeta_workbench_model::{
     ClosedTab, Pane, PaneContainer, PaneGroup, PaneGroupId, PaneInput, PaneInputId, PaneInputKind,
     PaneNode, PanePart, PaneSplitDirection, PaneSplitId, TabGroup, TabGroupId, TabId, TabInput,
     TabInputChange, TabInputKey, TabInputMetadata, TabPart, TabStatus, TabStatusKind, Workbench,
+};
+
+#[allow(unused_imports)]
+pub(crate) use product::{
+    PRODUCT_DISPLAY_NAME, ProductApp, app_server, command_dispatch, file_editor_input,
+    file_editor_pane, git_branch_context_menu, git_branch_context_menu_input, input_method,
+    keybindings, language_service_host, launch, launch_progress, mouse_wheel, product_event,
+    remote_connection_cli, remote_connection_launch_input, remote_connection_manager_input,
+    remote_connection_picker_input, remote_connection_process, remote_connection_tunnel,
+    remote_tunnel_manager_input, remote_tunnel_process, session_catalog, session_host,
+    tab_context_menu, terminal_blocks, terminal_history, terminal_input,
+    terminal_output_scroll_view, terminal_pointer, terminal_selection, terminal_session,
+    thread_timeline_scroll, workspace_context, workspace_path_picker, workspace_path_picker_input,
+    workspace_surface,
+};
+
+#[cfg(test)]
+#[allow(unused_imports)]
+pub(crate) use product::{
+    launch_profile_tests, launch_progress_tests, launch_test_support, launch_tests,
+    remote_connection_cli_tests, remote_connection_tunnel_tests,
 };
 
 #[cfg(test)]
@@ -58,3 +83,6 @@ mod interaction_tests;
 #[cfg(test)]
 #[path = "presentation_tests.rs"]
 mod presentation_tests;
+#[cfg(test)]
+#[path = "product_composition_tests.rs"]
+mod product_composition_tests;

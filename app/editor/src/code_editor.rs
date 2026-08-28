@@ -150,6 +150,14 @@ pub enum CodeEditorPresentation {
     Compact,
 }
 
+/// Visual treatment used for the focused editor caret.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum CodeEditorCaretStyle {
+    #[default]
+    Bar,
+    Block,
+}
+
 /// Whether long source rows remain horizontally scrollable or wrap to the viewport width.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum CodeEditorLineWrapping {
@@ -428,6 +436,7 @@ pub struct CodeEditor<'a> {
     line_wrapping: CodeEditorLineWrapping,
     visual_projection: CodeEditorVisualProjection,
     caret_visibility: CaretVisibility,
+    caret_style: CodeEditorCaretStyle,
     ghost_text: Option<&'a str>,
     diagnostics: &'a [CodeEditorDiagnostic],
 }
@@ -458,6 +467,7 @@ impl<'a> CodeEditor<'a> {
             line_wrapping: CodeEditorLineWrapping::None,
             visual_projection,
             caret_visibility: CaretVisibility::Visible,
+            caret_style: CodeEditorCaretStyle::Bar,
             ghost_text: None,
             diagnostics: &[],
         }
@@ -473,6 +483,12 @@ impl<'a> CodeEditor<'a> {
     /// Projects host-owned focus blink state into caret paint.
     pub const fn with_caret_visibility(mut self, visibility: CaretVisibility) -> Self {
         self.caret_visibility = visibility;
+        self
+    }
+
+    /// Selects the caret treatment without changing focus or blink state.
+    pub const fn with_caret_style(mut self, style: CodeEditorCaretStyle) -> Self {
+        self.caret_style = style;
         self
     }
 

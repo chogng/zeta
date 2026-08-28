@@ -8,7 +8,7 @@
 `zeta-git` 是 Zeta 中“如何调用 Git、如何解释 Git 结果”的唯一实现 owner。完整 owner 不等于
 当前已经实现完整 SCM：本阶段提供仓库打开、结构化状态快照、本地 branch、remote、分页 commit
 graph、local/remote-tracking refs、credential-free remote identity、最近 commit、revision file content、HEAD-to-working-tree 文本 Diff/增删行统计、typed
-stage/unstage/discard/commit/fetch/pull/push、local branch switch 和 patch check/apply；持续监听、
+stage/unstage/discard/commit/fetch/pull/push、local branch switch、worktree inventory 和 patch check/apply；持续监听、
 状态缓存与 tag/worktree mutation 尚未实现。App Server 与 Desktop 已通过 Git SCM 纵向切片消费这些能力，但该 service/protocol/UI
 不属于本 crate。
 
@@ -39,6 +39,7 @@ Git domain owner 下，而不是建立平级的 `zeta-git-utils`：
 | `src/status.rs` | porcelain-v2 snapshot 与 HEAD/change/submodule model | `GitRepositorySnapshot`、`GitHead`、private `parse_status` |
 | `src/content.rs` | 有界读取 HEAD 或 index 中一个 repository-relative file | `GitFileRevision`、`GitClient::read_file_at_revision` |
 | `src/text_diff.rs` | 从同一次状态快照构建 repository-wide 或 path-scoped 的有界 UTF-8 HEAD/worktree Diff 与文件级、聚合增删行统计 | `GitTextDiffSnapshot`、`GitTextDiff`、`GitDiffStatistics`、`GitClient::text_diff_snapshot[_under]` |
+| `src/worktree.rs` | 解析 primary/linked/locked/prunable worktree inventory，不决定产品工作区替换 | `GitWorktree`、`GitWorktreeAvailability`、`GitClient::worktrees` |
 | `src/info.rs` | local branches、fetch/push remote URLs、credential-free remote identity、bounded recent history | `GitBranch`、`GitRemote`、`GitRemoteIdentity`、`GitRemoteProvider`、`GitCommitSummary` |
 | `src/graph.rs` | local/remote-tracking refs 与单次 `git log --all` traversal 的分页 graph page | `GitGraph`、`GitGraphCursor`、`GitReference`、`GitReferenceKind`、private `parse_references` |
 | `src/mutation.rs` | path set/commit request validation 与常用 index/worktree/branch/remote mutation | `GitPathspecSet`、`GitCommitRequest`、`GitCommitResult`、`GitClient::switch_branch` |
@@ -106,6 +107,11 @@ GitClient::switch_branch
 ├─ GitBranch from GitClient::local_branches
 └─ GitClient::run_mutation
    └─ git switch -- <local-branch>
+
+GitClient::worktrees
+└─ GitClient::run_query
+   └─ git worktree list --porcelain -z
+      └─ GitWorktree + GitWorktreeAvailability
 
 GitClient::commit / fetch / pull_fast_forward / push
 └─ GitClient::run_mutation[_with_stdin]
@@ -282,6 +288,7 @@ policy/approval。它们都不能复制本 crate 的 command/parsing 实现。
 - `content_tests.rs`：HEAD/index 内容与 missing path；
 - `text_diff_tests.rs`：modified/deleted/untracked 汇总、replacement 统计及 binary/size skip；
 - `info_tests.rs`：branch、remote fetch/push URL、history limit；
+- `worktree_tests.rs`：raw NUL fixture、detached/异常 record、primary/linked inventory、locked reason 与 prunable checkout；
 - `mutation_tests.rs`：validation、stage/unstage/discard/commit、local branch switch 及失败时
   保留当前分支和工作树，以及本地 bare remote 驱动的 fetch/fast-forward pull/push；
 - `patch_tests.rs`：quoted paths、check/apply、unapplied rejection、three-way conflict 与

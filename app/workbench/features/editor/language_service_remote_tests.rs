@@ -8,7 +8,7 @@ use zeta_app_server_protocol::protocol::language::LanguageCompletionsResult;
 use zeta_app_server_protocol::protocol::language::LanguageDiagnosticSeverityDto;
 use zeta_app_server_protocol::protocol::language::LanguagePositionDto;
 use zeta_app_server_protocol::protocol::language::LanguageRangeDto;
-use zeta_language_service::LanguageDocumentPosition;
+use zeta_lsp_manager::LanguageDocumentPosition;
 
 use super::project_completions;
 use super::project_diagnostics;

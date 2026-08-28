@@ -18,16 +18,16 @@ use zeta_editor::{
 use zeta_editor_host::FileEditorHost;
 use zeta_editor_host::FileEditorTab;
 use zeta_install_context::InstallContext;
-use zeta_language_server_catalog::{
-    BASH_LANGUAGE_SERVER_ID, JSON_LANGUAGE_SERVER_ID, LanguageServerCatalog,
-    LanguageServerExecutionPolicy, LanguageServerPreference, RUST_ANALYZER_SERVER_ID,
-    TYPESCRIPT_LANGUAGE_SERVER_ID,
-};
-use zeta_language_service::{
+use zeta_lsp_manager::{
     LanguageCompletionTrigger, LanguageCompletions, LanguageDocumentPosition,
     LanguageDocumentRevision, LanguageHover, LanguageLocations, LanguageRequestId,
     LanguageRequestKind, LanguageServerState, LanguageService, LanguageServiceConfiguration,
     LanguageServiceDocument, LanguageServiceEvent, LanguageServiceEventSink,
+};
+use zeta_lsp_server_provider::{
+    BASH_LANGUAGE_SERVER_ID, JSON_LANGUAGE_SERVER_ID, LanguageServerCatalog,
+    LanguageServerExecutionPolicy, LanguageServerPreference, RUST_ANALYZER_SERVER_ID,
+    TYPESCRIPT_LANGUAGE_SERVER_ID,
 };
 use zui::app::AppProxy;
 
@@ -516,19 +516,19 @@ impl ProductLanguageService {
             }
             LanguageServiceEvent::Locations(definitions) => {
                 let request_kind = match definitions.kind {
-                    zeta_language_service::LanguageLocationKind::Declaration => {
+                    zeta_lsp_manager::LanguageLocationKind::Declaration => {
                         LanguageRequestKind::Declaration
                     }
-                    zeta_language_service::LanguageLocationKind::Definition => {
+                    zeta_lsp_manager::LanguageLocationKind::Definition => {
                         LanguageRequestKind::Definition
                     }
-                    zeta_language_service::LanguageLocationKind::Implementation => {
+                    zeta_lsp_manager::LanguageLocationKind::Implementation => {
                         LanguageRequestKind::Implementation
                     }
-                    zeta_language_service::LanguageLocationKind::TypeDefinition => {
+                    zeta_lsp_manager::LanguageLocationKind::TypeDefinition => {
                         LanguageRequestKind::TypeDefinition
                     }
-                    zeta_language_service::LanguageLocationKind::Reference => {
+                    zeta_lsp_manager::LanguageLocationKind::Reference => {
                         LanguageRequestKind::References
                     }
                 };
@@ -645,22 +645,16 @@ struct ProductDocumentDiagnostics {
     items: Vec<CodeEditorDiagnostic>,
 }
 
-fn editor_diagnostic(
-    diagnostic: &zeta_language_service::LanguageDiagnostic,
-) -> CodeEditorDiagnostic {
+fn editor_diagnostic(diagnostic: &zeta_lsp_manager::LanguageDiagnostic) -> CodeEditorDiagnostic {
     let severity = match diagnostic.severity {
-        zeta_language_service::LanguageDiagnosticSeverity::Error => {
-            CodeEditorDiagnosticSeverity::Error
-        }
-        zeta_language_service::LanguageDiagnosticSeverity::Warning => {
+        zeta_lsp_manager::LanguageDiagnosticSeverity::Error => CodeEditorDiagnosticSeverity::Error,
+        zeta_lsp_manager::LanguageDiagnosticSeverity::Warning => {
             CodeEditorDiagnosticSeverity::Warning
         }
-        zeta_language_service::LanguageDiagnosticSeverity::Information => {
+        zeta_lsp_manager::LanguageDiagnosticSeverity::Information => {
             CodeEditorDiagnosticSeverity::Information
         }
-        zeta_language_service::LanguageDiagnosticSeverity::Hint => {
-            CodeEditorDiagnosticSeverity::Hint
-        }
+        zeta_lsp_manager::LanguageDiagnosticSeverity::Hint => CodeEditorDiagnosticSeverity::Hint,
     };
     let mut projected =
         CodeEditorDiagnostic::new(diagnostic.range.byte_range(), severity, &diagnostic.message);
@@ -731,7 +725,7 @@ fn resolve_configuration(
 fn language_document(
     workspace_root: &Path,
     tab: &FileEditorTab,
-) -> Result<LanguageServiceDocument, zeta_language_service::LanguageServiceError> {
+) -> Result<LanguageServiceDocument, zeta_lsp_manager::LanguageServiceError> {
     let path = if tab.path().is_absolute() {
         tab.path().to_path_buf()
     } else {

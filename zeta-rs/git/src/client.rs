@@ -25,6 +25,23 @@ const DEFAULT_QUERY_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_MUTATION_TIMEOUT: Duration = Duration::from_secs(30);
 const DEFAULT_MAX_OUTPUT_BYTES: usize = 8 * 1024 * 1024;
 const DISABLED_HOOKS_PATH: &str = if cfg!(windows) { "NUL" } else { "/dev/null" };
+const REPOSITORY_SELECTOR_ENVIRONMENT: [&str; 15] = [
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_CONFIG",
+    "GIT_CONFIG_PARAMETERS",
+    "GIT_CONFIG_COUNT",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_IMPLICIT_WORK_TREE",
+    "GIT_GRAFT_FILE",
+    "GIT_INDEX_FILE",
+    "GIT_NO_REPLACE_OBJECTS",
+    "GIT_REPLACE_REF_BASE",
+    "GIT_PREFIX",
+    "GIT_SHALLOW_FILE",
+    "GIT_COMMON_DIR",
+];
 
 /// Resource limits applied to every system Git process started by [`GitClient`].
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -232,6 +249,9 @@ impl GitClient {
     fn configure_command(&self, invocation: &GitInvocation) -> (Command, String) {
         let command_for_log = render_command(&self.executable, &invocation.args);
         let mut command = Command::new(&self.executable);
+        for name in REPOSITORY_SELECTOR_ENVIRONMENT {
+            command.env_remove(name);
+        }
         command
             .current_dir(&invocation.cwd)
             .env("GIT_TERMINAL_PROMPT", "0")

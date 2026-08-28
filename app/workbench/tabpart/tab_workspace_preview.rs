@@ -3,6 +3,7 @@
 use crate::AccessibilityExpansion;
 use crate::AccessibilityRole;
 use crate::Border;
+use crate::BoxShadow;
 use crate::Button;
 use crate::ButtonBackgrounds;
 use crate::ButtonState;
@@ -125,7 +126,7 @@ impl<'a> TabWorkspacePreview<'a> {
             self.tab.name,
             bounds.origin,
             Size::new(bounds.size.width, 20.0),
-            TextStyle::new(13.0, self.style.colors.foreground)
+            TextStyle::new(13.0, self.style.colors.hover_foreground)
                 .with_weight(FontWeight::Bold)
                 .with_line_height(20.0),
         ));
@@ -133,7 +134,7 @@ impl<'a> TabWorkspacePreview<'a> {
             self.tab.status.label(),
             Point::new(bounds.origin.x, bounds.origin.y + 22.0),
             Size::new(bounds.size.width, 18.0),
-            TextStyle::new(11.0, self.style.colors.muted_foreground).with_line_height(18.0),
+            TextStyle::new(11.0, preview_muted_foreground(&self.style)).with_line_height(18.0),
         ));
     }
 }
@@ -169,9 +170,14 @@ impl Component for TabWorkspacePreview<'_> {
                 .with_position(ContextViewAnchorPosition::After)
                 .with_gap(8.0)
                 .with_viewport_margin(8.0),
-            ContextViewStyle::new(self.style.colors.menu_background)
+            ContextViewStyle::new(self.style.colors.hover_background)
                 .with_corner_radii(CornerRadii::uniform(6.0))
-                .with_padding(Edges::uniform(12.0)),
+                .with_padding(Edges::uniform(12.0))
+                .with_shadow(
+                    BoxShadow::new(self.style.colors.hover_shadow)
+                        .with_offset(Point::new(0.0, 4.0))
+                        .with_blur_radius(12.0),
+                ),
         );
         preview.draw_components(context, |context, content_bounds| {
             context.draw_component(
@@ -186,7 +192,7 @@ impl Component for TabWorkspacePreview<'_> {
             );
             context.scene_mut().draw_rect(
                 PaintRect::new(preview.bounds(), Color::TRANSPARENT)
-                    .with_border(Border::uniform(1.0, self.style.colors.border))
+                    .with_border(Border::uniform(1.0, self.style.colors.hover_border))
                     .with_corner_radii(CornerRadii::uniform(6.0)),
             );
             self.paint_header(context.scene_mut(), content_bounds);
@@ -237,8 +243,8 @@ impl Component for TabWorkspacePreview<'_> {
                 ScrollAxis::Vertical,
                 ScrollViewStyle::new(
                     ScrollbarStyle::new(
-                        self.style.colors.control_hover_background,
-                        self.style.colors.muted_foreground,
+                        preview_control_background(&self.style),
+                        preview_muted_foreground(&self.style),
                     )
                     .with_thickness(6.0)
                     .with_inset(1.0),
@@ -265,7 +271,8 @@ impl Component for TabWorkspacePreview<'_> {
                         label,
                         Point::new(row_bounds.origin.x, row_bounds.origin.y + 3.0),
                         Size::new(row_bounds.size.width, 18.0),
-                        TextStyle::new(12.0, self.style.colors.foreground).with_line_height(18.0),
+                        TextStyle::new(12.0, self.style.colors.hover_foreground)
+                            .with_line_height(18.0),
                     ));
                 }
             });
@@ -311,11 +318,8 @@ impl Component for TabWorkspacePreview<'_> {
                     label,
                     self.button_state(disclosure_id),
                     ButtonStyle::new(
-                        ButtonBackgrounds::new(self.style.colors.control_hover_background)
-                            .with_hovered(self.style.colors.tab_active_background)
-                            .with_focused(self.style.colors.tab_active_background)
-                            .with_pressed(self.style.colors.border),
-                        TextStyle::new(12.0, self.style.colors.foreground),
+                        preview_button_backgrounds(&self.style),
+                        TextStyle::new(12.0, self.style.colors.hover_foreground),
                     )
                     .with_corner_radii(CornerRadii::uniform(4.0))
                     .with_padding(Edges::new(6.0, 8.0, 6.0, 8.0)),
@@ -409,12 +413,29 @@ impl Component for TabWorkspacePreview<'_> {
 
 fn preview_button_style(style: &WorkbenchUiStyle) -> ButtonStyle {
     ButtonStyle::new(
-        ButtonBackgrounds::new(style.colors.control_hover_background)
-            .with_hovered(style.colors.tab_active_background)
-            .with_focused(style.colors.tab_active_background)
-            .with_pressed(style.colors.border),
-        TextStyle::new(12.0, style.colors.foreground),
+        preview_button_backgrounds(style),
+        TextStyle::new(12.0, style.colors.hover_foreground),
     )
     .with_corner_radii(CornerRadii::uniform(4.0))
     .with_padding(Edges::new(6.0, 8.0, 6.0, 8.0))
+}
+
+fn preview_button_backgrounds(style: &WorkbenchUiStyle) -> ButtonBackgrounds {
+    ButtonBackgrounds::new(preview_control_background(style))
+        .with_hovered(with_alpha(style.colors.hover_foreground, 28))
+        .with_focused(with_alpha(style.colors.hover_foreground, 28))
+        .with_pressed(with_alpha(style.colors.hover_foreground, 40))
+}
+
+fn preview_control_background(style: &WorkbenchUiStyle) -> Color {
+    with_alpha(style.colors.hover_foreground, 16)
+}
+
+fn preview_muted_foreground(style: &WorkbenchUiStyle) -> Color {
+    with_alpha(style.colors.hover_foreground, 184)
+}
+
+fn with_alpha(color: Color, alpha: u8) -> Color {
+    let [red, green, blue, _] = color.components();
+    Color::rgba(red, green, blue, alpha)
 }
