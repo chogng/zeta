@@ -17,15 +17,6 @@
   cursor: grabbing;
 }
 
-.stanza-editor-minimap-gpu {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-
 .stanza-editor-minimap-row {
   position: absolute;
   right: 4px;

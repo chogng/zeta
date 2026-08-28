@@ -12,7 +12,7 @@ test("toolbar submenu items retain toolbar button semantics", async () => {
 	});
 	const [
 		{ MenuId, SubmenuItemAction },
-		{ createMenuEntryActionViewItem },
+		{ createActionViewItem },
 	] =
 		await Promise.all([
 			import("../../../../platform/actions/common/actions.js"),
@@ -28,7 +28,7 @@ test("toolbar submenu items retain toolbar button semantics", async () => {
 		enabled: true,
 		run() {},
 	};
-	const item = createMenuEntryActionViewItem(
+	const item = createActionViewItem(
 		new SubmenuItemAction({
 			title: "More",
 			submenu: MenuId.for("test.toolbar.submenu"),
@@ -71,7 +71,7 @@ test("menu entry actions switch to their alternative while Alt is held", async (
 		{ ModifierKeyEmitter },
 		{ MenuItemAction },
 		{ ContextKeyService },
-		{ createMenuEntryActionViewItem },
+		{ createActionViewItem },
 		{ resolveContextMenuActions },
 	] = await Promise.all([
 		import("../../../../base/browser/dom.js"),
@@ -101,7 +101,7 @@ test("menu entry actions switch to their alternative while Alt is held", async (
 		contexts,
 		commandService,
 	);
-	const item = createMenuEntryActionViewItem(primary, { showContextMenu() {} });
+	const item = createActionViewItem(primary, { showContextMenu() {} });
 	assert.ok(item);
 	const container = dom.window.document.createElement("div");
 	dom.window.document.body.append(container);
@@ -146,12 +146,19 @@ test("DropdownWithPrimaryActionViewItem presents one split toolbar item", async 
 	let primaryRuns = 0;
 	const primaryAction = { ...testAction("new"), run: () => primaryRuns++ };
 	const dropdownAction = testAction("select-profile");
+	let splitViewItem: import("../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js").DropdownWithPrimaryActionViewItem | undefined;
 	using toolbar = new ToolBar(dom.window.document.body, {
 		contextMenuProvider,
-		actionViewItemProvider: (item, options) => new DropdownWithPrimaryActionViewItem(item, dropdownAction, [testAction("cmd")], contextMenuProvider, options),
+		actionViewItemProvider: (item, options) => {
+			splitViewItem = new DropdownWithPrimaryActionViewItem(item, dropdownAction, [testAction("cmd")], contextMenuProvider, options);
+			return splitViewItem;
+		},
 	});
 	toolbar.setActions([primaryAction]);
 	dom.window.document.body.append(toolbar.element);
+	assert.ok(splitViewItem);
+	const visibility: boolean[] = [];
+	splitViewItem.onDidChangeDropdownVisibility((visible) => visibility.push(visible));
 
 	const splitItem = toolbar.element.querySelector<HTMLElement>(".zeta-dropdown-with-primary-action-view-item");
 	const primaryButton = splitItem?.querySelector<HTMLButtonElement>(".zeta-dropdown-with-primary-primary > .zeta-button");
@@ -181,7 +188,117 @@ test("DropdownWithPrimaryActionViewItem presents one split toolbar item", async 
 	shownOptions?.onHide?.(false);
 	assert.equal(dropdownButton.getAttribute("aria-expanded"), "false");
 	assert.equal(splitItem.classList.contains("active"), false);
+	assert.deepEqual(visibility, [true, false]);
 
+	splitViewItem.update(testAction("select-other"), [testAction("other")]);
+	const updatedDropdownButton = splitItem.querySelector<HTMLButtonElement>(".zeta-dropdown-with-primary-dropdown > .zeta-button");
+	assert.ok(updatedDropdownButton);
+	assert.notEqual(updatedDropdownButton, dropdownButton);
+	splitViewItem.focus(true);
+	assert.equal(dom.window.document.activeElement, updatedDropdownButton);
+	splitViewItem.showDropdown();
+	assert.deepEqual(shownOptions?.actions.map(({ id }) => id), ["other"]);
+	assert.equal(splitItem.classList.contains("active"), true);
+	splitViewItem.update(testAction("select-final"), [testAction("final")]);
+	assert.equal(splitItem.classList.contains("active"), false);
+	splitViewItem.showDropdown();
+	assert.deepEqual(shownOptions?.actions.map(({ id }) => id), ["final"]);
+	shownOptions?.onHide?.(false);
+	assert.deepEqual(visibility, [true, false, true, false, true, false]);
+
+	dom.window.close();
+});
+
+test("menu action grouping supports primary predicates, separators, and submenu inlining", async () => {
+	const [
+		{ Separator, SubmenuAction },
+		{ getActionBarActions, getFlatContextMenuActions },
+	] = await Promise.all([
+		import("../../../../base/common/actions.js"),
+		import("../../../../platform/actions/browser/menuEntryActionViewItem.js"),
+	]);
+	const first = testAction("first");
+	const second = testAction("second");
+	const child = testAction("child");
+	const trailing = testAction("trailing");
+	const submenu = new SubmenuAction("submenu", "Submenu", [child]);
+	const groups = [
+		["primary.one", [first]],
+		["primary.two", [submenu]],
+		["secondary.one", [second]],
+		["secondary.two", [trailing]],
+	] as const;
+
+	const grouped = getActionBarActions(
+		groups,
+		(group) => group.startsWith("primary."),
+		(action) => action === submenu,
+		true,
+	);
+
+	assert.deepEqual(grouped.primary.map(({ id }) => id), [
+		"first",
+		Separator.ID,
+		"child",
+	]);
+	assert.deepEqual(grouped.secondary.map(({ id }) => id), [
+		"second",
+		Separator.ID,
+		"trailing",
+	]);
+	assert.deepEqual(
+		getFlatContextMenuActions(groups, undefined, undefined).map(({ id }) => id),
+		["first", Separator.ID, "submenu", Separator.ID, "second", Separator.ID, "trailing"],
+	);
+});
+
+test("menu toolbar applies custom primary groups and submenu inlining", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const [
+		{ SubmenuAction },
+		{ Event },
+		{ MenuId },
+		{ MenuWorkbenchToolBar },
+	] = await Promise.all([
+		import("../../../../base/common/actions.js"),
+		import("../../../../base/common/event.js"),
+		import("../../../../platform/actions/common/actions.js"),
+		import("../../../../platform/actions/browser/toolbar.js"),
+	]);
+	const child = testAction("inline-child");
+	const secondary = testAction("secondary");
+	const groups = [
+		["inline", [new SubmenuAction("submenu", "Submenu", [child])]],
+		["secondary", [secondary]],
+	] as const;
+	const menu = {
+		onDidChange: Event.None,
+		getActions: () => groups,
+		dispose() {},
+		[Symbol.dispose]() {},
+	};
+	const menuService = {
+		createMenu: () => menu,
+		getMenuActions: () => groups,
+	} as import("../../../../platform/actions/common/menuService.js").IMenuService;
+	using toolbar = new MenuWorkbenchToolBar(
+		dom.window.document.body,
+		menuService,
+		{ showContextMenu() {} },
+		MenuId.for("test.toolbar.custom-groups"),
+		{
+			toolbarOptions: {
+				primaryGroup: "inline",
+				shouldInlineSubmenu: () => true,
+			},
+		},
+	);
+
+	assert.deepEqual(
+		[...toolbar.element.querySelectorAll<HTMLElement>("[data-action-id]")]
+			.map(({ dataset }) => dataset.actionId),
+		["inline-child", "zeta.toolbar.moreActions"],
+	);
 	dom.window.close();
 });
 
@@ -363,13 +480,17 @@ test("menu toolbar projects empty state as a stable visual class", async () => {
 		menuId,
 	);
 	dom.window.document.body.append(toolbar.element);
+	let menuChanges = 0;
+	toolbar.onDidChangeMenuItems(() => menuChanges++);
 
 	assert.equal(toolbar.element.hidden, true);
 	assert.equal(toolbar.element.classList.contains("empty"), true);
 	contexts.setContext("test.toolbar.visible", true);
+	assert.equal(menuChanges, 1);
 	assert.equal(toolbar.element.hidden, false);
 	assert.equal(toolbar.element.classList.contains("empty"), false);
 	contexts.setContext("test.toolbar.visible", false);
+	assert.equal(menuChanges, 2);
 	assert.equal(toolbar.element.hidden, true);
 	assert.equal(toolbar.element.classList.contains("empty"), true);
 

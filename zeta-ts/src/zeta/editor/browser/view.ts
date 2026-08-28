@@ -636,7 +636,6 @@ export class View extends Disposable {
 			host: this.element,
 			model: this.model,
 			readLayout: () => this.viewport.layout,
-			readRenderingContext: () => this.createRenderingContext(this.viewport.layout),
 			scrollTo: position => this.scrollTo(position),
 			readMarkers: () => this.viewOverlays.decorationsPart.minimapMarkers(),
 			readMarkersRevision: () => this.viewOverlays.decorationsPart.markersRevision,

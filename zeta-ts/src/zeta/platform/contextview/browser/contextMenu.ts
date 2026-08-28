@@ -16,7 +16,7 @@ import {
 import type {
 	IMenuService,
 } from "../../actions/common/menuService.js";
-import { resolveAlternativeMenuActions, shouldUseAlternativeMenuActions } from "../../actions/browser/menuEntryActionViewItem.js";
+import { getFlatContextMenuActions, resolveAlternativeMenuActions, shouldUseAlternativeMenuActions } from "../../actions/browser/menuEntryActionViewItem.js";
 import {
 	createServiceIdentifier,
 } from "../../instantiation/common/instantiation.js";
@@ -58,21 +58,20 @@ export function resolveContextMenuActions(
 	options: ContextMenuOptions,
 	menuService: IMenuService,
 ): readonly IAction[] {
-	const actions = "actions" in options
-		? options.actions
-		: menuService
-			.getMenuActions(options.menuId, options.menuActionOptions)
-			.flatMap(([, groupActions], index, groups) => [
-				...groupActions,
-				...(index < groups.length - 1 ? [new Separator()] : []),
-			]);
 	const targetWindow = "ownerDocument" in options.anchor
 		? options.anchor.ownerDocument.defaultView
 		: window;
-	const resolved = targetWindow
-		? resolveAlternativeMenuActions(actions, shouldUseAlternativeMenuActions(targetWindow))
-		: actions;
-	return trimSeparators(resolved);
+	if ("actions" in options) {
+		const actions = targetWindow
+			? resolveAlternativeMenuActions(options.actions, shouldUseAlternativeMenuActions(targetWindow))
+			: options.actions;
+		return trimSeparators(actions);
+	}
+	return trimSeparators(getFlatContextMenuActions(
+		menuService.getMenuActions(options.menuId, options.menuActionOptions),
+		undefined,
+		targetWindow ?? undefined,
+	));
 }
 
 function trimSeparators(actions: readonly IAction[]): readonly IAction[] {

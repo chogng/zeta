@@ -12,9 +12,6 @@ export function minimapContentWidth(density: number, minimapWidth = MINIMAP_WIDT
 	return Math.min(availableWidth, Math.max(MINIMAP_MINIMUM_CONTENT_WIDTH, density * availableWidth));
 }
 
-/** Right inset shared by the DOM and GPU minimap projections. */
-export const MINIMAP_CONTENT_RIGHT = MINIMAP_CONTENT_RIGHT_INSET;
-
 interface MinimapSliderLayout {
 	readonly visible: boolean;
 	readonly height: number;

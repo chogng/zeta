@@ -135,7 +135,6 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/viewparts/composition/compositionPart.ts",
 		"browser/viewparts/selections/selectionsPart.ts",
 		"browser/viewparts/viewCursors/viewCursorsPart.ts",
-		"browser/viewparts/minimap/gpuMinimapRenderer.ts",
 		"browser/config/fontMeasurements.ts",
 		"browser/config/charWidthReader.ts",
 		"browser/config/editorConfiguration.ts",

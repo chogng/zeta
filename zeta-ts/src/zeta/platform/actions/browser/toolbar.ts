@@ -1,14 +1,15 @@
 import type { ActionBarOrientation, ActionViewItemProvider } from "../../../base/browser/ui/actionbar/actionbar.js";
 import type { AnchorPosition } from "../../../base/browser/ui/contextview/contextview.js";
 import { ToolBar, type MoreActionsPlacement, type ToolBarPresentation } from "../../../base/browser/ui/toolbar/toolbar.js";
-import { Separator, type IAction } from "../../../base/common/actions.js";
+import { SubmenuAction, type IAction } from "../../../base/common/actions.js";
+import { Emitter } from "../../../base/common/event.js";
 import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
 import type { IContextKeyService } from "../../contextkey/common/contextkey.js";
-import { createMenuEntryActionViewItem } from "./menuEntryActionViewItem.js";
+import { createActionViewItem, getActionBarActions } from "./menuEntryActionViewItem.js";
 import { MenuId, type IMenuActionOptions } from "../common/actions.js";
 import type { IMenu, IMenuChangeEvent, IMenuService } from "../common/menuService.js";
 
-export interface WorkbenchToolBarOptions {
+export interface IWorkbenchToolBarOptions {
 	readonly ariaLabel?: string;
 	readonly orientation?: ActionBarOrientation;
 	readonly actionViewItemProvider?: ActionViewItemProvider;
@@ -28,7 +29,7 @@ export class WorkbenchToolBar extends ToolBar {
 	constructor(
 		container: HTMLElement,
 		contextMenuProvider: IContextMenuProvider,
-		options: WorkbenchToolBarOptions = {},
+		options: IWorkbenchToolBarOptions = {},
 	) {
 		super(container, {
 			contextMenuProvider,
@@ -40,19 +41,29 @@ export class WorkbenchToolBar extends ToolBar {
 			hoverAnchorPosition: options.hoverAnchorPosition,
 			actionViewItemProvider: (action, actionViewItemOptions) =>
 				options.actionViewItemProvider?.(action, actionViewItemOptions) ??
-				createMenuEntryActionViewItem(action, contextMenuProvider, actionViewItemOptions),
+				createActionViewItem(action, contextMenuProvider, actionViewItemOptions),
 		});
 	}
 }
 
-export interface MenuWorkbenchToolBarOptions extends WorkbenchToolBarOptions {
+export interface IMenuWorkbenchToolBarOptions extends IWorkbenchToolBarOptions {
 	readonly menuOptions?: IMenuActionOptions;
 	readonly contextKeyService?: IContextKeyService;
+	readonly toolbarOptions?: IToolBarRenderOptions;
+}
+
+export interface IToolBarRenderOptions {
+	readonly primaryGroup?: string | ((group: string) => boolean);
+	readonly shouldInlineSubmenu?: (action: SubmenuAction, group: string, groupSize: number) => boolean;
+	readonly useSeparatorsInPrimaryActions?: boolean;
 }
 
 /** Keeps a WorkbenchToolBar synchronized with one registered menu location. */
 export class MenuWorkbenchToolBar extends WorkbenchToolBar {
+	private readonly changeMenuItemsEmitter = this._register(new Emitter<this>());
+	readonly onDidChangeMenuItems = this.changeMenuItemsEmitter.event;
 	private readonly menuOptions: IMenuActionOptions | undefined;
+	private readonly toolbarOptions: IToolBarRenderOptions | undefined;
 	private readonly menu: IMenu;
 
 	constructor(
@@ -60,13 +71,17 @@ export class MenuWorkbenchToolBar extends WorkbenchToolBar {
 		menuService: IMenuService,
 		contextMenuProvider: IContextMenuProvider,
 		menuId: MenuId,
-		options: MenuWorkbenchToolBarOptions = {},
+		options: IMenuWorkbenchToolBarOptions = {},
 	) {
 		super(container, contextMenuProvider, options);
 		this.menuOptions = options.menuOptions;
+		this.toolbarOptions = options.toolbarOptions;
 		const menu = this._register(menuService.createMenu(menuId, options.contextKeyService));
 		this.menu = menu;
-		this._register(menu.onDidChange((event) => this.update(event)));
+		this._register(menu.onDidChange((event) => {
+			this.update(event);
+			this.changeMenuItemsEmitter.fire(this);
+		}));
 		this.update();
 	}
 
@@ -80,21 +95,19 @@ export class MenuWorkbenchToolBar extends WorkbenchToolBar {
 
 	private update(event?: IMenuChangeEvent): void {
 		const groups = this.menu.getActions(this.menuOptions);
-		const primary = groups
-			.filter(([group]) => group === "navigation")
-			.flatMap(([, actions]) => actions);
-		const menuSecondary = Separator.join(
-			...groups
-				.filter(([group]) => group !== "navigation")
-				.map(([, actions]) => [...actions]),
+		const { primary, secondary } = getActionBarActions(
+			groups,
+			this.toolbarOptions?.primaryGroup,
+			this.toolbarOptions?.shouldInlineSubmenu,
+			this.toolbarOptions?.useSeparatorsInPrimaryActions,
 		);
-		const empty = primary.length === 0 && menuSecondary.length === 0;
+		const empty = primary.length === 0 && secondary.length === 0;
 		this.element.hidden = empty;
 		this.element.classList.toggle("empty", empty);
 		if (event?.isStructuralChange === false) {
-			super.updateActions(primary, menuSecondary);
+			super.updateActions(primary, secondary);
 			return;
 		}
-		super.setActions(primary, menuSecondary);
+		super.setActions(primary, secondary);
 	}
 }
