@@ -5,6 +5,7 @@ import { type LanguageConfigurationSource } from "../common/languages/languageCo
 import { type TextModel } from "../common/model/textModel.js";
 import { type DocumentTextStyleAttributes } from "../common/model/documentSchema.js";
 import type { ILanguageFeaturesService } from '../common/services/languageFeatures.js';
+import type { ISemanticTokensStylingService } from '../common/services/semanticTokensStyling.js';
 import { type DocumentCollaborationInvite } from "../common/services/documentCollaborationService.js";
 import { type DocumentCollaborationMember } from "../common/services/documentCollaborationService.js";
 import { type DocumentCollaborationRoomRole } from "../common/services/documentCollaborationService.js";
@@ -32,6 +33,7 @@ export interface TextEditorContributionConfigurationContext {
 	readonly editorWorker: IEditorWorkerClient;
 	readonly languageId: string;
 	readonly languageFeaturesService: ILanguageFeaturesService;
+	readonly semanticTokensStylingService: ISemanticTokensStylingService;
 	readonly configurations: LanguageConfigurationSource;
 	readonly selections: EditorSelectionController;
 	readonly tabFocus: TabFocus;

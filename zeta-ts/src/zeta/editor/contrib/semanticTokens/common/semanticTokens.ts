@@ -1,11 +1,11 @@
-import { Disposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languages/languageFeatureRegistry.js";
 import { LanguageRequestCoordinator, type LanguageRequestOptions, type LanguageRequestOutcome, type LanguageWorker, type LanguageWorkerRequest } from "../../../common/languages/languageRequestCoordinator.js";
 import { LanguageResultAcceptance } from "../../../common/languages/languageResultStore.js";
-import { createLanguageTokenStore, type LanguageToken, type LanguageTokenResult } from "../../../common/tokens/languageTokens.js";
-import { type LanguageTokenLine } from "../../../common/tokens/languageTokenLineIndex.js";
+import { createLanguageTokenStore, type LanguageTokenResult } from "../../../common/tokens/languageTokens.js";
 import { type TextModel } from "../../../common/model/textModel.js";
+import type { SemanticTokenModelSource } from '../../../common/services/semanticTokensStyling.js';
 
 export const SEMANTIC_TOKENS_LANE = "semanticTokens";
 export type SemanticTokensLane = typeof SEMANTIC_TOKENS_LANE;
@@ -65,12 +65,6 @@ class SemanticTokensProviderWorker implements LanguageWorker<SemanticTokensLane,
 	[Symbol.dispose](): void { this.dispose(); }
 }
 
-/** Stable common semantic-token source shape; browser presentation stays outside this contract. */
-export interface SemanticTokensModelPart {
-	readonly textModel: TextModel;
-	readonly onDidChange: (listener: (...args: any[]) => void) => IDisposable;
-	readonly lines: readonly LanguageTokenLine[];
-	getLineTokens(lineIndex: number): readonly LanguageToken[];
-}
+export type SemanticTokensModelPart = SemanticTokenModelSource;
 
 const EMPTY_RESULT: LanguageTokenResult = Object.freeze({ tokens: Object.freeze([]) });

@@ -30,6 +30,7 @@ import { TabFocus } from "./config/tabFocus.js";
 import { resolveEditorConfiguration } from "./config/editorConfiguration.js";
 import { getEditorContributions, type EditorCapability, type TextEditorContributionContext } from "./editorExtensions.js";
 import { type BracketColorizationSource, type SemanticTokenSource } from "./viewparts/semanticTokens/semanticTokenPresentation.js";
+import { SemanticTokensStylingService } from '../common/services/semanticTokensStylingService.js';
 import { type EditorLineVisibilitySource } from "../common/viewModel/viewModelLines.js";
 import { type LanguageLexicalContextSource } from "../common/languages/languageLexicalContext.js";
 
@@ -202,6 +203,7 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 			}
 			const languageConfigurationService = options.languageConfigurationService ?? this._register(new LanguageConfigurationService());
 			const languageFeaturesService = options.languageFeaturesService ?? this._register(new LanguageFeaturesService(languageConfigurationService));
+			const semanticTokensStylingService = this._register(new SemanticTokensStylingService());
 			const configurations = languageConfigurationService;
 			this.selections = this._register(new EditorSelectionController(
 				model,
@@ -234,6 +236,7 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 					editorWorker,
 					languageId,
 					languageFeaturesService,
+					semanticTokensStylingService,
 					configurations,
 					selections: this.selections,
 					tabFocus,

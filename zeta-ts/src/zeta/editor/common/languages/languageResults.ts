@@ -2,8 +2,10 @@ import { TextRange, type TextPosition, type TextSnapshot } from "../core/text.js
 import { VersionedLanguageResultStore } from "./languageResultStore.js";
 import { type TextModel } from "../model/textModel.js";
 
-export { attachLanguageTokenResultDelta, createLanguageTokenSnapshotNormalizer, createLanguageTokenStore, getLanguageTokenResultDelta } from "../tokens/languageTokens.js";
-export type { LanguageToken, LanguageTokenResult, LanguageTokenResultDelta, LanguageTokenResultSplice } from "../tokens/languageTokens.js";
+export { attachLanguageTokenResultDelta, getLanguageTokenResultDelta } from '../services/semanticTokensDto.js';
+export type { LanguageTokenResultDelta, LanguageTokenResultSplice } from '../services/semanticTokensDto.js';
+export { createLanguageTokenSnapshotNormalizer, createLanguageTokenStore } from "../tokens/languageTokens.js";
+export type { LanguageToken, LanguageTokenResult } from "../tokens/languageTokens.js";
 
 export enum LanguageDiagnosticSeverity {
 	Error = "error",

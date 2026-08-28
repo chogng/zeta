@@ -3,7 +3,8 @@ import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { type VersionedLanguageResult } from "../languages/languageRequestCoordinator.js";
 import { LanguageResultStoreChangeReason, type VersionedLanguageResultStore } from "../languages/languageResultStore.js";
-import { getLanguageTokenResultDelta, type LanguageToken, type LanguageTokenResult, type LanguageTokenResultDelta, type LanguageTokenResultSplice } from "./languageTokens.js";
+import { getLanguageTokenResultDelta, type LanguageTokenResultDelta, type LanguageTokenResultSplice } from '../services/semanticTokensDto.js';
+import { type LanguageToken, type LanguageTokenResult } from "./languageTokens.js";
 import { TextPosition, TextRange, type TextModelChange } from "../core/text.js";
 import { type TextModel } from "../model/textModel.js";
 

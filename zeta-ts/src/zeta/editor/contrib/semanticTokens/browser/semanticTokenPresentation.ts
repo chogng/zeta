@@ -1,2 +1,0 @@
-export { SemanticTokenModifier, SemanticTokenPresentation, createStanzaSemanticTokenSource, createOverlaySemanticTokenSource, projectStanzaSemanticTokenLine, resolveStanzaSemanticTokenModifiers, resolveStanzaSemanticTokenPresentation, snapshotStanzaSemanticTokenLines } from "../../../browser/viewparts/semanticTokens/semanticTokenPresentation.js";
-export type { BracketColorizationSpan, ResolvedSemanticToken, SemanticTokenLine, SemanticTokenResolver, SemanticTokenSource } from "../../../browser/viewparts/semanticTokens/semanticTokenPresentation.js";
