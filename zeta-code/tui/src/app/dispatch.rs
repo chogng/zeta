@@ -26,6 +26,7 @@ use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
 use zeta_app_server_protocol::protocol::skills::SkillCatalogReloadDto;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryMutationDto;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryPermissionDto;
 use zeta_protocol::TurnId;
 
 #[cfg(test)]
@@ -48,12 +49,13 @@ pub(crate) fn execute_product_command<T>(
     mut conversation: ActiveConversation,
     client: &mut AppServerClient<T>,
     invocation: SlashCommandInvocation,
+    additional_directory_permissions: Vec<WorkspaceAdditionalDirectoryPermissionDto>,
 ) -> Result<ProductCommandOutput, String>
 where
     T: JsonRpcTransport,
 {
     conversation
-        .try_execute(client, invocation)
+        .try_execute(client, invocation, &additional_directory_permissions)
         .map(|output| ProductCommandOutput {
             conversation,
             events: output.events,
@@ -73,7 +75,12 @@ impl ActiveConversation {
     ) where
         T: JsonRpcTransport,
     {
-        match execute_product_command(self.clone(), client, invocation) {
+        match execute_product_command(
+            self.clone(),
+            client,
+            invocation,
+            config::TerminalSettings::default().additional_directory_permissions(),
+        ) {
             Ok(output) => {
                 *self = output.conversation;
                 for event in output.events {
@@ -94,6 +101,7 @@ impl ActiveConversation {
         &mut self,
         client: &mut AppServerClient<T>,
         invocation: SlashCommandInvocation,
+        additional_directory_permissions: &[WorkspaceAdditionalDirectoryPermissionDto],
     ) -> Result<CommandOutput, CommandExecutionError>
     where
         T: JsonRpcTransport,
@@ -126,6 +134,7 @@ impl ActiveConversation {
                     .events
                     .push(AppEvent::SkillsViewOpened(load_selection(
                         client,
+                        self.session_id(),
                         SkillCatalogReloadDto::Refresh,
                     )?));
             }
@@ -215,6 +224,7 @@ impl ActiveConversation {
                         client,
                         self.session_id(),
                         std::path::PathBuf::from(&arguments),
+                        additional_directory_permissions.to_vec(),
                     )?;
                     let result = match update.mutation {
                         WorkspaceAdditionalDirectoryMutationDto::Added => {

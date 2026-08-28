@@ -22,6 +22,7 @@ fn input_uses_the_zeta_protocol_and_canonical_safe_point_identity() {
         enablement: HookEnablement::Enabled,
     };
     let request = BeforeToolHookRequest {
+        session_id: zeta_protocol::SessionId::new("session").unwrap(),
         thread_id: ThreadId::new("thread-7").unwrap(),
         turn_id: TurnId::new("turn-3").unwrap(),
         tool_call_id: ToolCallId::new("tool-9").unwrap(),

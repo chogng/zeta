@@ -141,8 +141,10 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageSynchronizeParams = decode(params)?;
-        let workspace =
-            self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
+        let workspace = self.language_workspace_root_for(
+            params.document.workspace_folder_id.as_deref(),
+            params.document.session_directory.as_ref(),
+        )?;
         let source_path = workspace
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -161,7 +163,10 @@ impl AppServer {
         _cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageCloseParams = decode(params)?;
-        let workspace = self.language_workspace_root_for(params.workspace_folder_id.as_deref())?;
+        let workspace = self.language_workspace_root_for(
+            params.workspace_folder_id.as_deref(),
+            params.session_directory.as_ref(),
+        )?;
         let source_path = workspace
             .resolve_for_write(&params.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -179,8 +184,10 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageDocumentDiagnosticsParams = decode(params)?;
-        let workspace =
-            self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
+        let workspace = self.language_workspace_root_for(
+            params.document.workspace_folder_id.as_deref(),
+            params.document.session_directory.as_ref(),
+        )?;
         let source_path = workspace
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -229,7 +236,10 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageWorkspaceDiagnosticsParams = decode(params)?;
-        let workspace = self.language_workspace_root_for(params.workspace_folder_id.as_deref())?;
+        let workspace = self.language_workspace_root_for(
+            params.workspace_folder_id.as_deref(),
+            params.session_directory.as_ref(),
+        )?;
         let snapshot = self
             .config
             .as_ref()
@@ -325,8 +335,10 @@ impl AppServer {
         ),
         RpcError,
     > {
-        let workspace =
-            self.language_workspace_root_for(document.workspace_folder_id.as_deref())?;
+        let workspace = self.language_workspace_root_for(
+            document.workspace_folder_id.as_deref(),
+            document.session_directory.as_ref(),
+        )?;
         let source_path = workspace
             .resolve_existing(&document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -422,8 +434,10 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageResolveCompletionParams = decode(params)?;
-        let workspace =
-            self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
+        let workspace = self.language_workspace_root_for(
+            params.document.workspace_folder_id.as_deref(),
+            params.document.session_directory.as_ref(),
+        )?;
         let source_path = workspace
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -459,8 +473,10 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageExecuteCommandParams = decode(params)?;
-        let workspace =
-            self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
+        let workspace = self.language_workspace_root_for(
+            params.document.workspace_folder_id.as_deref(),
+            params.document.session_directory.as_ref(),
+        )?;
         let source_path = workspace
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -564,8 +580,10 @@ impl AppServer {
         options: LanguageFormattingOptionsDto,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        let workspace =
-            self.language_workspace_root_for(document.workspace_folder_id.as_deref())?;
+        let workspace = self.language_workspace_root_for(
+            document.workspace_folder_id.as_deref(),
+            document.session_directory.as_ref(),
+        )?;
         let source_path = workspace
             .resolve_existing(&document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -681,8 +699,10 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageInlayHintsParams = decode(params)?;
-        let workspace =
-            self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
+        let workspace = self.language_workspace_root_for(
+            params.document.workspace_folder_id.as_deref(),
+            params.document.session_directory.as_ref(),
+        )?;
         let source_path = workspace
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -789,8 +809,10 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageSemanticTokensParams = decode(params)?;
-        let workspace =
-            self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
+        let workspace = self.language_workspace_root_for(
+            params.document.workspace_folder_id.as_deref(),
+            params.document.session_directory.as_ref(),
+        )?;
         let source_path = workspace
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -839,8 +861,10 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageLocationsParams = decode(params)?;
-        let workspace =
-            self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
+        let workspace = self.language_workspace_root_for(
+            params.document.workspace_folder_id.as_deref(),
+            params.document.session_directory.as_ref(),
+        )?;
         let source_path = workspace
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -944,8 +968,10 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageHierarchyParams = decode(params)?;
-        let workspace =
-            self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
+        let workspace = self.language_workspace_root_for(
+            params.document.workspace_folder_id.as_deref(),
+            params.document.session_directory.as_ref(),
+        )?;
         let source_path = workspace
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -1047,7 +1073,10 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageWorkspaceSymbolsParams = decode(params)?;
-        let workspace = self.language_workspace_root_for(params.workspace_folder_id.as_deref())?;
+        let workspace = self.language_workspace_root_for(
+            params.workspace_folder_id.as_deref(),
+            params.session_directory.as_ref(),
+        )?;
         let snapshot = self
             .config
             .as_ref()
@@ -1180,8 +1209,10 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageCodeActionsParams = decode(params)?;
-        let workspace =
-            self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
+        let workspace = self.language_workspace_root_for(
+            params.document.workspace_folder_id.as_deref(),
+            params.document.session_directory.as_ref(),
+        )?;
         let source_path = workspace
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;
@@ -1260,8 +1291,10 @@ impl AppServer {
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: LanguageResolveCodeActionParams = decode(params)?;
-        let workspace =
-            self.language_workspace_root_for(params.document.workspace_folder_id.as_deref())?;
+        let workspace = self.language_workspace_root_for(
+            params.document.workspace_folder_id.as_deref(),
+            params.document.session_directory.as_ref(),
+        )?;
         let source_path = workspace
             .resolve_existing(&params.document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;

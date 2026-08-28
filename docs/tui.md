@@ -638,7 +638,7 @@ TUI 不能靠检查 ToolCall 名称或 arguments JSON 自行弹窗并决定策�
 [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md#22-外部-agent-配置导入仅限-desktop)，
 Skill 来源边界见 [`skills.md`](skills.md#151-外部-agent-skill-导入仅限-desktop)。
 
-`/add-dir <path>` 是另一条 Session 级目录授权流程。TUI 发送 `workspace/additionalDirectories/add`，默认允许读取和修改文件；App Server 规范化目录并建立仅对当前 Session 有效的授权，使 `read_file`、`write_file`、`edit`、`grep` 与 `glob` 接受该目录下的绝对路径。不带参数的 `/add-dir` 打开可搜索列表，Enter 通过 remove RPC 撤销目录。Config 页的 Directory permissions 标签按目录提供 Read files、Modify files、Run commands、Watch file changes 和 Load project configuration 五个开关，并通过带期望版本的 `workspace/additionalDirectories/permissions/set` 更新后端权限。Run commands 允许 `shell-command` 和 Session Terminal 在该目录启动；Load project configuration 为该 Session 加载 `.zeta/instructions` 与 `.zeta/agents`；Watch file changes 在文件变化后刷新这两类配置。关闭 Read files 会同时关闭依赖读取能力的其它开关；过期页面会被后端拒绝。新增、移除和权限修改都会撤销旧凭证，活动 Terminal 随执行权限撤销而终止，下一次工具调用和模型调用取得新快照。该流程不写入对话历史，也不改变主 Workspace 或 cwd。
+`/add-dir <path>` 是 Session 级目录授权流程。Config 页的 Add-dir 标签始终显示 Read files、Modify files、Run commands、Watch file changes、Workspace Files、Workspace Search、Instructions & Agents、Skills、MCP、LSP、Hooks 和 Plugins 十二项默认授权；TUI 发送 `workspace/additionalDirectories/add` 时把当前默认值交给 App Server。当前 Session 已有附加目录时，同一标签页在默认项后追加该目录的十二项开关，并通过带期望版本的 `workspace/additionalDirectories/permissions/set` 更新后端权限。不带参数的 `/add-dir` 打开可搜索目录列表，Enter 通过 remove RPC 撤销目录。除 Read files 外的开关都依赖读取权限；MCP 和 Plugins 只授权发现声明，不代替连接或安装确认；MCP、LSP、Hooks 或 Plugin 后续需要启动进程时还必须具有 Run commands。新增、移除和权限修改都会撤销旧凭证，活动 Terminal、搜索任务和语言服务随相关权限撤销而退出或失效。该流程不写入对话历史，也不改变主 Workspace 或 cwd。
 
 Feature 之间不能依赖彼此的私有模块。跨功能结果由 `app/` 协调，交互复用通过
 `components/`，纯布局复用通过 `ui/`；只有重复已经出现且语义一致时才提取公开的小型 value
@@ -1062,7 +1062,7 @@ lib_tests.rs
   `ImageAttachmentRef` → durable `UserImageAttachment` → provider 临时 image block”纵切。TUI
   不建立私有 blob store；Thread history 与 command receipt 不持久化 data URL；
 - status line 已按固定顺序显示可独立开关的权限模式、模型、Git 分支和 Git 变更；workspace 路径只在空会话 Welcome Banner 显示，Turn 运行状态不进入该行，usage 也不从 transcript 推导；
-- Config surface 包含 Config、Directory permissions、Providers 与 Language servers 四个标签页。Mouse interactions 是 Config 标签页中的 item，由 `<profile>/zeta-code/terminal.json` 保存，不进入 App Server 配置。Directory permissions 管理当前 Session 每个附加目录的读取、修改、执行、配置监听和配置加载能力，不写入 profile 配置；五项能力均由 App Server 消费，其中配置加载范围明确为 `.zeta/instructions` 与 `.zeta/agents`。Providers 通过 `provider/list` 展示后端注册表中的完整供应商目录，列表仅显示供应商名称；隐藏输入框通过 `provider/apiKey/set` 把 API key 写入 profile SecretStore，密钥不在列表中展示。MCP、Skill、Plugin 和 Hook 不再作为 Config tab 重复展示，已有 `/mcp` 与 `/skills` 页面继续拥有各自能力。
+- Config surface 包含 Config、Add-dir、Providers 与 Language servers 四个标签页。Mouse interactions 和 Add-dir 的十二项新增目录默认授权由 `<profile>/zeta-code/terminal.json` 保存，不进入 App Server 配置；默认授权只保存能力集合，不保存目录或 Session。Add-dir 同时管理当前 Session 每个附加目录的十二项独立能力，目录授权不写入 profile 配置；发现类开关会显示当前找到的条目数，但不会绕过 MCP 连接或 Plugin 安装确认。Providers 通过 `provider/list` 展示后端注册表中的完整供应商目录，列表仅显示供应商名称；隐藏输入框通过 `provider/apiKey/set` 把 API key 写入 profile SecretStore，密钥不在列表中展示。`/mcp` 与 `/skills` 页面继续管理各自的运行状态和可用条目。
 
 新增能力必须先证明是 `zeta code` 产品要求，再按 canonical contract 和垂直 feature 接入；不能
 因为 Native 已有 richer component，或某能力技术上可实现，就把它复制成 TUI backlog。

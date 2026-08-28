@@ -1,8 +1,6 @@
 use super::*;
 use crate::AdditionalDirectoryContribution;
-use crate::AdditionalDirectoryContributionPolicy;
 use crate::AdditionalDirectoryPermission;
-use crate::AdditionalInstructionsPolicy;
 use zeta_workspace::WorkspaceTrustDecision;
 use zeta_workspace::WorkspaceTrustSource;
 
@@ -186,6 +184,31 @@ fn capability_snapshots_include_only_directories_granting_that_capability() {
 }
 
 #[test]
+fn dropping_authority_revokes_existing_snapshots() {
+    let working = tempfile::tempdir().unwrap();
+    let additional = tempfile::tempdir().unwrap();
+    let token = {
+        let root = WorkspaceRoot::open(additional.path()).unwrap();
+        let mut authority =
+            WorkspaceAccessAuthority::new(WorkspaceRoot::open(working.path()).unwrap());
+        authority
+            .add_directory(
+                authorization(root),
+                AdditionalDirectorySource::SessionCommand,
+                file_permissions(),
+            )
+            .unwrap();
+        authority
+            .snapshot_for(WorkspaceCapability::InspectRepository)
+            .unwrap()
+            .additional_roots()[0]
+            .clone()
+    };
+
+    assert!(token.ensure_active().is_err());
+}
+
+#[test]
 fn source_lifetime_controls_contribution_policy() {
     let working = tempfile::tempdir().unwrap();
     let additional = tempfile::tempdir().unwrap();
@@ -197,7 +220,8 @@ fn source_lifetime_controls_contribution_policy() {
             AdditionalDirectorySource::SessionCommand,
             AdditionalDirectoryPermissions::new([
                 AdditionalDirectoryPermission::ReadFiles,
-                AdditionalDirectoryPermission::LoadProjectConfiguration,
+                AdditionalDirectoryPermission::LoadInstructionsAndAgents,
+                AdditionalDirectoryPermission::DiscoverSkills,
             ])
             .unwrap(),
         )
@@ -211,13 +235,23 @@ fn source_lifetime_controls_contribution_policy() {
         .unwrap();
     assert!(
         authority
-            .contribution_policy(&root, AdditionalInstructionsPolicy::Exclude)
+            .contribution_policy(&root)
             .allows(AdditionalDirectoryContribution::Skills)
+    );
+    assert!(
+        authority
+            .contribution_policy(&root)
+            .allows(AdditionalDirectoryContribution::ProjectInstructions)
+    );
+    assert!(
+        !authority
+            .contribution_policy(&root)
+            .allows(AdditionalDirectoryContribution::McpServers)
     );
     authority.remove_directory(&root, AdditionalDirectorySource::SessionCommand);
     assert_eq!(
-        authority.contribution_policy(&root, AdditionalInstructionsPolicy::Include),
-        AdditionalDirectoryContributionPolicy::FileAccessOnly
+        authority.contribution_policy(&root).contributions().len(),
+        0
     );
 }
 

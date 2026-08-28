@@ -13,7 +13,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 use zeta_async_utils::CancellationSource;
 use zeta_shell_command::RipgrepExecutable;
-use zeta_workspace::WorkspaceRoot;
+use zeta_workspace::{TrustedWorkspace, WorkspaceCapability, WorkspaceRoot};
 
 const MAX_ACTIVE_SEARCHES: usize = 32;
 const SEARCH_RETENTION: Duration = Duration::from_secs(300);
@@ -28,6 +28,7 @@ const MAX_GLOB_BYTES: usize = 1024;
 /// session, or other caller boundary.
 pub struct SearchService {
     workspace: RwLock<WorkspaceRoot>,
+    workspace_authorization: RwLock<Option<TrustedWorkspace>>,
     ripgrep: RipgrepExecutable,
     next_search_id: AtomicU64,
     jobs: Mutex<HashMap<String, SearchJob>>,
@@ -38,10 +39,31 @@ impl SearchService {
     pub fn new(workspace: WorkspaceRoot, ripgrep: RipgrepExecutable) -> Self {
         Self {
             workspace: RwLock::new(workspace),
+            workspace_authorization: RwLock::new(None),
             ripgrep,
             next_search_id: AtomicU64::new(1),
             jobs: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// Creates a search service whose running jobs stop when the host revokes the workspace.
+    pub fn new_authorized(
+        workspace: TrustedWorkspace,
+        ripgrep: RipgrepExecutable,
+    ) -> Result<Self, SearchError> {
+        workspace
+            .ensure_active()
+            .map_err(|_| SearchError::Unavailable)?;
+        if workspace.capability() != WorkspaceCapability::SearchRepositoryContent {
+            return Err(SearchError::InvalidInput);
+        }
+        Ok(Self {
+            workspace: RwLock::new(workspace.root().clone()),
+            workspace_authorization: RwLock::new(Some(workspace)),
+            ripgrep,
+            next_search_id: AtomicU64::new(1),
+            jobs: Mutex::new(HashMap::new()),
+        })
     }
 
     /// Selects the workspace used by searches started after this call.
@@ -52,11 +74,26 @@ impl SearchService {
             .workspace
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = workspace;
+        *self
+            .workspace_authorization
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
     }
 
     /// Starts a query and returns its opaque search ID.
     pub fn start(&self, owner: SearchOwner, query: SearchQuery) -> Result<String, SearchError> {
         validate_query(&query)?;
+        let authorization = self
+            .workspace_authorization
+            .read()
+            .map_err(|_| SearchError::Busy)?
+            .clone();
+        if authorization
+            .as_ref()
+            .is_some_and(|workspace| workspace.ensure_active().is_err())
+        {
+            return Err(SearchError::Unavailable);
+        }
         let mut jobs = self.jobs.lock().map_err(|_| SearchError::Busy)?;
         cleanup_jobs(&mut jobs);
         if jobs.len() >= MAX_ACTIVE_SEARCHES {
@@ -84,7 +121,16 @@ impl SearchService {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clone();
         let ripgrep = self.ripgrep.clone();
-        thread::spawn(move || run_search(workspace, ripgrep, query, cancellation, state));
+        thread::spawn(move || {
+            run_search(
+                workspace,
+                authorization,
+                ripgrep,
+                query,
+                cancellation,
+                state,
+            )
+        });
         Ok(search_id)
     }
 
@@ -211,6 +257,7 @@ fn validate_glob(pattern: &str) -> Result<(), SearchError> {
 
 fn run_search(
     workspace: WorkspaceRoot,
+    authorization: Option<TrustedWorkspace>,
     ripgrep: RipgrepExecutable,
     query: SearchQuery,
     cancellation: CancellationSource,
@@ -253,6 +300,14 @@ fn run_search(
             Err(_) => break None,
         }
         if token.is_cancelled() {
+            cancelled = true;
+            let _ = child.kill();
+            break child.wait().ok();
+        }
+        if authorization
+            .as_ref()
+            .is_some_and(|workspace| workspace.ensure_active().is_err())
+        {
             cancelled = true;
             let _ = child.kill();
             break child.wait().ok();

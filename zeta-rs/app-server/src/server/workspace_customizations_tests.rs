@@ -196,7 +196,7 @@ fn authorized_additional_customizations_are_session_scoped_refreshable_and_revoc
             ),
             zeta_workspace_access::AdditionalDirectoryPermissions::new([
                 zeta_workspace_access::AdditionalDirectoryPermission::ReadFiles,
-                zeta_workspace_access::AdditionalDirectoryPermission::LoadProjectConfiguration,
+                zeta_workspace_access::AdditionalDirectoryPermission::LoadInstructionsAndAgents,
             ])
             .unwrap(),
         )

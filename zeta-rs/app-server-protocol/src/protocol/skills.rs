@@ -81,6 +81,9 @@ pub struct SkillDiagnosticDto {
 pub struct SkillListParams {
     #[serde(default)]
     pub reload: SkillCatalogReloadDto,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_id: Option<zeta_protocol::SessionId>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -121,6 +124,9 @@ pub enum SkillResourceKindDto {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SkillResourceOpenParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_id: Option<zeta_protocol::SessionId>,
     pub skill_id: SkillId,
     pub skill_content_digest: ContentDigest,
     #[schemars(length(min = 1, max = 1024))]

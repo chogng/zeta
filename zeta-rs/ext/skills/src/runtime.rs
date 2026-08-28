@@ -7,6 +7,7 @@ use zeta_config::SkillEnablement;
 use zeta_config::SkillSourceEnablement;
 use zeta_config::SkillsConfig;
 use zeta_protocol::FrozenSkillActivation;
+use zeta_protocol::SessionId;
 use zeta_protocol::SkillActivationReason;
 use zeta_protocol::SkillId;
 use zeta_protocol::SkillRef;
@@ -43,6 +44,11 @@ pub trait SkillConfigSnapshotProvider: Send + Sync {
 /// replacement; implementations must not expose arbitrary client-provided paths.
 pub trait DynamicSkillSourceProvider: Send + Sync {
     fn snapshot(&self) -> Result<DynamicSkillSourceSnapshot, String>;
+}
+
+/// Supplies Session-authorized additional-directory Skill roots.
+pub trait SessionSkillSourceProvider: Send + Sync {
+    fn snapshot(&self, session_id: &SessionId) -> Result<DynamicSkillSourceSnapshot, String>;
 }
 
 /// One immutable generation of host-authorized dynamic Skill sources.
@@ -100,6 +106,7 @@ pub struct SkillRuntimeSnapshot {
 pub struct SkillRuntime {
     built_in_source: BuiltInSkillSource,
     dynamic_sources: Mutex<Option<Arc<dyn DynamicSkillSourceProvider>>>,
+    session_sources: Mutex<Option<Arc<dyn SessionSkillSourceProvider>>>,
     pub(crate) config: Arc<dyn SkillConfigSnapshotProvider>,
     pub(crate) workspace_root: Mutex<Option<PathBuf>>,
     pub(crate) state: Mutex<SkillRuntimeState>,
@@ -165,6 +172,7 @@ impl SkillRuntime {
         Ok(Arc::new(Self {
             built_in_source,
             dynamic_sources: Mutex::new(dynamic_sources),
+            session_sources: Mutex::new(None),
             config,
             workspace_root: Mutex::new(None),
             state: Mutex::new(SkillRuntimeState {
@@ -178,6 +186,25 @@ impl SkillRuntime {
 
     pub fn list(&self, reload: SkillCatalogReload) -> Result<Arc<SkillRuntimeSnapshot>, String> {
         self.reconcile(reload)
+    }
+
+    pub fn list_for_session(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Arc<SkillRuntimeSnapshot>, String> {
+        self.session_catalog(session_id)
+            .map(|(_, snapshot)| snapshot)
+    }
+
+    pub fn bind_session_sources(
+        &self,
+        provider: Arc<dyn SessionSkillSourceProvider>,
+    ) -> Result<(), String> {
+        *self
+            .session_sources
+            .lock()
+            .map_err(|_| "Session Skill source lock poisoned".to_string())? = Some(provider);
+        Ok(())
     }
 
     /// Replaces host-authorized dynamic sources and publishes their visible projection.
@@ -196,11 +223,27 @@ impl SkillRuntime {
         self.activate_available(selected, SkillActivationReason::Explicit)
     }
 
+    pub fn activate_explicit_for_session(
+        &self,
+        session_id: &SessionId,
+        selected: &SkillRef,
+    ) -> Result<ActivatedSkill, String> {
+        self.activate_session_available(session_id, selected, SkillActivationReason::Explicit)
+    }
+
     pub(crate) fn activate_model_selected(
         &self,
         selected: &SkillRef,
     ) -> Result<ActivatedSkill, String> {
         self.activate_available(selected, SkillActivationReason::Automatic)
+    }
+
+    pub(crate) fn activate_model_selected_for_session(
+        &self,
+        session_id: &SessionId,
+        selected: &SkillRef,
+    ) -> Result<ActivatedSkill, String> {
+        self.activate_session_available(session_id, selected, SkillActivationReason::Automatic)
     }
 
     pub(crate) fn select_automatic(
@@ -218,6 +261,22 @@ impl SkillRuntime {
         };
         state
             .catalog
+            .activate(&selected, SkillActivationReason::Automatic)
+            .map(Some)
+            .map_err(|error| error.to_string())
+    }
+
+    pub(crate) fn select_automatic_for_session(
+        &self,
+        session_id: &SessionId,
+        input: &[UserInput],
+        excluded: &[SkillId],
+    ) -> Result<Option<ActivatedSkill>, String> {
+        let (catalog, snapshot) = self.session_catalog(session_id)?;
+        let Some(selected) = crate::selector::select(snapshot.as_ref(), input, excluded) else {
+            return Ok(None);
+        };
+        catalog
             .activate(&selected, SkillActivationReason::Automatic)
             .map(Some)
             .map_err(|error| error.to_string())
@@ -255,6 +314,19 @@ impl SkillRuntime {
         }
         state
             .catalog
+            .read_resource(selected, path)
+            .map_err(|error| error.to_string())
+    }
+
+    pub fn read_resource_for_session(
+        &self,
+        session_id: &SessionId,
+        selected: &SkillRef,
+        path: &SkillResourcePath,
+    ) -> Result<SkillResource, String> {
+        let (catalog, snapshot) = self.session_catalog(session_id)?;
+        require_available(snapshot.as_ref(), selected)?;
+        catalog
             .read_resource(selected, path)
             .map_err(|error| error.to_string())
     }
@@ -314,6 +386,88 @@ impl SkillRuntime {
                 frozen.reason,
             )
             .map_err(|error| error.to_string())
+    }
+
+    pub(crate) fn load_frozen_for_session(
+        &self,
+        session_id: &SessionId,
+        frozen: &FrozenSkillActivation,
+    ) -> Result<ActivatedSkill, String> {
+        let (catalog, _) = self.session_catalog(session_id)?;
+        catalog
+            .activate(
+                &SkillRef::pinned(frozen.id.clone(), frozen.content_digest.clone()),
+                frozen.reason,
+            )
+            .map_err(|error| error.to_string())
+    }
+
+    fn activate_session_available(
+        &self,
+        session_id: &SessionId,
+        selected: &SkillRef,
+        reason: SkillActivationReason,
+    ) -> Result<ActivatedSkill, String> {
+        let (catalog, snapshot) = self.session_catalog(session_id)?;
+        require_available(snapshot.as_ref(), selected)?;
+        catalog
+            .activate(selected, reason)
+            .map_err(|error| error.to_string())
+    }
+
+    fn session_catalog(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<(SkillCatalog, Arc<SkillRuntimeSnapshot>), String> {
+        let provider = self
+            .session_sources
+            .lock()
+            .map_err(|_| "Session Skill source lock poisoned".to_string())?
+            .clone();
+        let config = self.config.snapshot()?;
+        let workspace_root = self
+            .workspace_root
+            .lock()
+            .map_err(|_| "Workspace Skill source lock poisoned".to_string())?
+            .clone();
+        let mut composition = compose_sources(
+            &self.built_in_source,
+            &config,
+            workspace_root.as_deref(),
+            self.dynamic_sources
+                .lock()
+                .map_err(|_| "Dynamic Skill source lock poisoned".to_string())?
+                .as_ref()
+                .map(|provider| provider.snapshot())
+                .transpose()?,
+        )?;
+        let session = provider
+            .map(|provider| provider.snapshot(session_id))
+            .transpose()?
+            .unwrap_or(DynamicSkillSourceSnapshot {
+                generation: 1,
+                roots: Vec::new(),
+            });
+        for root in session.roots {
+            composition.fingerprint.push(SourceFingerprint {
+                id: root.view().id().clone(),
+                root: root.host_root().to_path_buf(),
+                generation: session.generation,
+            });
+            composition.roots.push(root);
+        }
+        composition
+            .fingerprint
+            .sort_by(|left, right| left.id.cmp(&right.id));
+        let catalog = SkillCatalog::discover(composition.roots)
+            .map_err(|error| format!("failed to discover Session Skill catalog: {error}"))?;
+        let snapshot = Arc::new(project_snapshot(
+            session.generation.max(1),
+            catalog.snapshot().as_ref(),
+            &config,
+            composition.diagnostics,
+        ));
+        Ok((catalog, snapshot))
     }
 
     pub(crate) fn watched_paths(&self) -> Vec<PathBuf> {
@@ -585,6 +739,24 @@ fn project_snapshot(
 
 fn same_projection(current: &SkillRuntimeSnapshot, next: &SkillRuntimeSnapshot) -> bool {
     current.entries == next.entries && current.diagnostics == next.diagnostics
+}
+
+fn require_available(snapshot: &SkillRuntimeSnapshot, selected: &SkillRef) -> Result<(), String> {
+    let entry = snapshot
+        .entries
+        .iter()
+        .find(|entry| entry.catalog_entry.id() == &selected.id)
+        .ok_or_else(|| format!("Skill '{}' is not available", selected.id.name))?;
+    if entry.enablement != SkillEnablement::Enabled {
+        return Err(format!("Skill '{}' is disabled", selected.id.name));
+    }
+    if !matches!(
+        entry.catalog_entry.compatibility(),
+        SkillCompatibility::Compatible
+    ) {
+        return Err(format!("Skill '{}' is not compatible", selected.id.name));
+    }
+    Ok(())
 }
 
 fn source_unavailable_diagnostic(source: &SkillSourceId, message: &str) -> SkillRuntimeDiagnostic {

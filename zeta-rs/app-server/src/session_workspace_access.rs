@@ -179,6 +179,26 @@ impl SessionWorkspaceAccess {
             .transpose()
     }
 
+    pub(crate) fn roots_for(
+        &self,
+        capability: WorkspaceCapability,
+    ) -> std::collections::BTreeSet<std::path::PathBuf> {
+        self.authorities
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .values()
+            .filter_map(|authority| authority.snapshot_for(capability).ok())
+            .flat_map(|snapshot| {
+                snapshot
+                    .additional_roots()
+                    .iter()
+                    .filter(|workspace| workspace.ensure_active().is_ok())
+                    .map(|workspace| workspace.root().canonical_path().to_path_buf())
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
     pub(crate) fn workspace_for(
         &self,
         session_id: &SessionId,
@@ -196,5 +216,46 @@ impl SessionWorkspaceAccess {
                     || workspace.root().requested_path() == path
             })
             .cloned())
+    }
+}
+
+impl zeta_skills_extension::SessionSkillSourceProvider for SessionWorkspaceAccess {
+    fn snapshot(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<zeta_skills_extension::DynamicSkillSourceSnapshot, String> {
+        let generation = self.revision(session_id).max(1);
+        let workspaces = self
+            .snapshot_for(session_id, WorkspaceCapability::DiscoverSkills)
+            .map_err(|error| error.to_string())?
+            .into_iter()
+            .flat_map(|snapshot| snapshot.additional_roots().to_vec());
+        let mut roots = Vec::new();
+        for workspace in workspaces {
+            workspace
+                .ensure_active()
+                .map_err(|error| error.to_string())?;
+            let skill_root = workspace.root().canonical_path().join(".zeta/skills");
+            if skill_root.is_dir() {
+                let suffix = workspace
+                    .root()
+                    .trust_id()
+                    .as_str()
+                    .strip_prefix("sha256:")
+                    .unwrap_or(workspace.root().trust_id().as_str())
+                    .chars()
+                    .take(16)
+                    .collect::<String>();
+                let id = zeta_skills::SkillSourceId::new(format!(
+                    "workspace:skill-source:additional-{suffix}"
+                ))
+                .map_err(|error| error.to_string())?;
+                roots.push(
+                    zeta_skills::SkillSourceRoot::workspace(id, skill_root)
+                        .map_err(|error| error.to_string())?,
+                );
+            }
+        }
+        Ok(zeta_skills_extension::DynamicSkillSourceSnapshot { generation, roots })
     }
 }

@@ -54,6 +54,7 @@ pub(super) enum ToolExecutionCompletion {
 }
 
 pub(super) struct ToolExecutionContext<'a> {
+    session_id: &'a zeta_protocol::SessionId,
     thread_id: &'a ThreadId,
     turn_id: &'a TurnId,
     item_id: &'a ItemId,
@@ -64,6 +65,7 @@ pub(super) struct ToolExecutionContext<'a> {
 
 impl<'a> ToolExecutionContext<'a> {
     pub(super) fn new(
+        session_id: &'a zeta_protocol::SessionId,
         thread_id: &'a ThreadId,
         turn_id: &'a TurnId,
         item_id: &'a ItemId,
@@ -72,6 +74,7 @@ impl<'a> ToolExecutionContext<'a> {
         cancellation: &'a CancellationToken,
     ) -> Self {
         Self {
+            session_id,
             thread_id,
             turn_id,
             item_id,
@@ -83,6 +86,10 @@ impl<'a> ToolExecutionContext<'a> {
 
     pub(super) fn thread_id(&self) -> &ThreadId {
         self.thread_id
+    }
+
+    pub(super) fn session_id(&self) -> &zeta_protocol::SessionId {
+        self.session_id
     }
 
     pub(super) fn turn_id(&self) -> &TurnId {

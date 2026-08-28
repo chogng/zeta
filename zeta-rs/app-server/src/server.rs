@@ -936,6 +936,10 @@ impl AppServer {
             self.updates.clone(),
             self.combined_dynamic_skill_sources(),
         )?;
+        let session_sources: Arc<dyn zeta_skills_extension::SessionSkillSourceProvider> =
+            Arc::clone(&self.workspace_runtime_mut().session_workspace_access)
+                as Arc<dyn zeta_skills_extension::SessionSkillSourceProvider>;
+        runtime.bind_session_sources(session_sources)?;
         let mut builder = zeta_extension_api::ExtensionRegistryBuilder::new();
         zeta_skills_extension::install(&mut builder, Arc::clone(&runtime));
         if let Some(backend) = web_search_backend {

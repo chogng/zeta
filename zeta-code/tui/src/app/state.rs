@@ -255,7 +255,7 @@ impl App {
                 }
             },
             SelectionActions::Config(actions) => match actions.get(item_id)?.clone() {
-                ConfigSelectionAction::SetMouseInteractions(edit) => {
+                ConfigSelectionAction::SetTerminalSettings(edit) => {
                     Some(AppCommand::EditConfig(edit))
                 }
                 ConfigSelectionAction::SetAdditionalDirectoryPermissions(edit) => {

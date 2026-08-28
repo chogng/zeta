@@ -104,20 +104,29 @@ impl SkillReadTool {
             Err(error) => return not_started(error.to_string()),
         };
         let id = SkillId::new(source, name);
+        let session_id = invocation.context().session_id();
         match arguments.target {
-            SkillReadTarget::Instructions => self.read_instructions(id),
+            SkillReadTarget::Instructions => self.read_instructions(session_id, id),
             SkillReadTarget::Resource {
                 skill_content_digest,
                 path,
-            } => self.read_resource(id, skill_content_digest, path),
+            } => self.read_resource(session_id, id, skill_content_digest, path),
         }
     }
 
-    fn read_instructions(&self, id: SkillId) -> ToolExecutionOutcome {
-        let activated = match self
-            .runtime
-            .activate_model_selected(&SkillRef::follow_latest(id))
-        {
+    fn read_instructions(
+        &self,
+        session_id: Option<&zeta_protocol::SessionId>,
+        id: SkillId,
+    ) -> ToolExecutionOutcome {
+        let selected = SkillRef::follow_latest(id);
+        let activated = match session_id.map_or_else(
+            || self.runtime.activate_model_selected(&selected),
+            |session_id| {
+                self.runtime
+                    .activate_model_selected_for_session(session_id, &selected)
+            },
+        ) {
             Ok(activated) => activated,
             Err(error) => return model_error(error),
         };
@@ -133,6 +142,7 @@ impl SkillReadTool {
 
     fn read_resource(
         &self,
+        session_id: Option<&zeta_protocol::SessionId>,
         id: SkillId,
         skill_content_digest: String,
         path: String,
@@ -149,7 +159,13 @@ impl SkillReadTool {
             return not_started("SKILL.md must be read through the instructions target");
         }
         let selected = SkillRef::pinned(id, digest);
-        let resource = match self.runtime.read_model_resource(&selected, &path) {
+        let resource = match session_id.map_or_else(
+            || self.runtime.read_model_resource(&selected, &path),
+            |session_id| {
+                self.runtime
+                    .read_resource_for_session(session_id, &selected, &path)
+            },
+        ) {
             Ok(resource) => resource,
             Err(error) => return model_error(error),
         };

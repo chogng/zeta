@@ -343,8 +343,10 @@ impl AppServer {
         ),
         RpcError,
     > {
-        let workspace =
-            self.language_workspace_root_for(document.workspace_folder_id.as_deref())?;
+        let workspace = self.language_workspace_root_for(
+            document.workspace_folder_id.as_deref(),
+            document.session_directory.as_ref(),
+        )?;
         let source_path = workspace
             .resolve_existing(&document.path)
             .map_err(|_| language_error(AppServerErrorName::LanguageRequestFailed))?;

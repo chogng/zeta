@@ -88,6 +88,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     let slash_registry = client
         .list_skills(SkillListParams {
             reload: SkillCatalogReloadDto::Cached,
+            session_id: None,
         })
         .ok()
         .and_then(|catalog| skill_slash_command_registry(&server_slash_commands, &catalog).ok())
@@ -271,6 +272,11 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             let mut request_client = client.clone();
                             let next_conversation = conversation.clone();
                             let next_subscription = thread_subscription.clone();
+                            let additional_directory_permissions = config_resource
+                                .as_ref()
+                                .map(ConfigResource::settings)
+                                .unwrap_or_default()
+                                .additional_directory_permissions();
                             pending_request = spawn_request(
                                 "zeta-tui-product-command",
                                 move || {
@@ -279,6 +285,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                             next_conversation,
                                             &mut request_client,
                                             invocation,
+                                            additional_directory_permissions,
                                         )
                                         .and_then(
                                             |output| {
@@ -711,12 +718,14 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     } => {
                         if pending_request.is_none() {
                             let mut request_client = client.clone();
+                            let skill_session_id = conversation.session_id().clone();
                             pending_request = spawn_request(
                                 "zeta-tui-set-skill-enablement",
                                 move || {
                                     RequestCompletion::Presentation(
                                         skills::set_enablement(
                                             &mut request_client,
+                                            &skill_session_id,
                                             skill_id,
                                             enablement,
                                         )
@@ -801,12 +810,14 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
             if pending_request.is_none() && skills_refresh_requested {
                 let request_client = client.clone();
                 let server_slash_commands = server_slash_commands.clone();
+                let skills_session_id = conversation.session_id().clone();
                 pending_request = spawn_request(
                     "zeta-tui-refresh-skills",
                     move || {
                         RequestCompletion::SkillsRefreshed(refresh_skills_and_registry(
                             request_client,
                             server_slash_commands,
+                            skills_session_id,
                         ))
                     },
                     &mut app,

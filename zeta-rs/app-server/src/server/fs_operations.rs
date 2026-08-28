@@ -19,6 +19,7 @@ use zeta_file_system::FileType;
 use zeta_file_system::FileWriteCondition;
 use zeta_file_system::MissingTargetBehavior;
 use zeta_file_system::file_revision;
+use zeta_workspace::WorkspaceCapability;
 
 const MAX_EDITOR_FILE_BYTES: usize = 50 * 1024 * 1024;
 const BINARY_PREVIEW_RESOURCE_TTL: Duration = Duration::from_secs(300);
@@ -27,7 +28,11 @@ impl AppServer {
     pub(super) fn fs_get_metadata(&self, params: &Value) -> Result<Value, RpcError> {
         let params: FsGetMetadataParams = decode(params)?;
         let metadata = self
-            .file_system_service_for(params.workspace_folder_id.as_deref())?
+            .file_system_for_request(
+                params.workspace_folder_id.as_deref(),
+                params.session_directory.as_ref(),
+                WorkspaceCapability::BrowseProductFiles,
+            )?
             .get_metadata(&params.path)
             .map_err(file_system_error)?;
         result(&metadata_result(metadata))
@@ -36,7 +41,11 @@ impl AppServer {
     pub(super) fn fs_read_directory(&self, params: &Value) -> Result<Value, RpcError> {
         let params: FsReadDirectoryParams = decode(params)?;
         let entries = self
-            .file_system_service_for(params.workspace_folder_id.as_deref())?
+            .file_system_for_request(
+                params.workspace_folder_id.as_deref(),
+                params.session_directory.as_ref(),
+                WorkspaceCapability::BrowseProductFiles,
+            )?
             .read_directory(&params.path)
             .map_err(file_system_error)?
             .into_iter()
@@ -51,7 +60,11 @@ impl AppServer {
     pub(super) fn fs_read_file(&self, params: &Value) -> Result<Value, RpcError> {
         let params: FsReadFileParams = decode(params)?;
         let content = self
-            .file_system_service_for(params.workspace_folder_id.as_deref())?
+            .file_system_for_request(
+                params.workspace_folder_id.as_deref(),
+                params.session_directory.as_ref(),
+                WorkspaceCapability::BrowseProductFiles,
+            )?
             .read_file_with_revision(&params.path, MAX_EDITOR_FILE_BYTES)
             .map_err(file_system_error)?;
         let text = String::from_utf8(content.bytes).map_err(|_| {
@@ -70,7 +83,11 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let params: FsReadBinaryFileParams = decode(params)?;
         let content = self
-            .file_system_service_for(params.workspace_folder_id.as_deref())?
+            .file_system_for_request(
+                params.workspace_folder_id.as_deref(),
+                params.session_directory.as_ref(),
+                WorkspaceCapability::BrowseProductFiles,
+            )?
             .read_file_with_revision(&params.path, MAX_RESOURCE_BYTES)
             .map_err(file_system_error)?;
         let metadata = self
@@ -102,7 +119,11 @@ impl AppServer {
             None => FileWriteCondition::Unconditional,
         };
         let metadata = self
-            .file_system_service_for(params.workspace_folder_id.as_deref())?
+            .file_system_for_request(
+                params.workspace_folder_id.as_deref(),
+                params.session_directory.as_ref(),
+                WorkspaceCapability::MutateRepository,
+            )?
             .write_file_with_condition(
                 &params.path,
                 params.content.as_bytes(),
@@ -119,7 +140,11 @@ impl AppServer {
     pub(super) fn fs_create_file(&self, params: &Value) -> Result<Value, RpcError> {
         let params: FsCreateFileParams = decode(params)?;
         let metadata = self
-            .file_system_service_for(params.workspace_folder_id.as_deref())?
+            .file_system_for_request(
+                params.workspace_folder_id.as_deref(),
+                params.session_directory.as_ref(),
+                WorkspaceCapability::MutateRepository,
+            )?
             .create_file(&params.path, existing_behavior(params.existing))
             .map_err(file_system_error)?;
         result(&metadata_result(metadata))
@@ -127,13 +152,17 @@ impl AppServer {
 
     pub(super) fn fs_rename(&self, params: &Value) -> Result<Value, RpcError> {
         let params: FsRenameParams = decode(params)?;
-        self.file_system_service_for(params.workspace_folder_id.as_deref())?
-            .rename(
-                &params.source,
-                &params.target,
-                existing_behavior(params.existing),
-            )
-            .map_err(file_system_error)?;
+        self.file_system_for_request(
+            params.workspace_folder_id.as_deref(),
+            params.session_directory.as_ref(),
+            WorkspaceCapability::MutateRepository,
+        )?
+        .rename(
+            &params.source,
+            &params.target,
+            existing_behavior(params.existing),
+        )
+        .map_err(file_system_error)?;
         result(&())
     }
 
@@ -147,10 +176,31 @@ impl AppServer {
             FsDeleteMode::FileOrEmptyDirectory => FileDeleteMode::FileOrEmptyDirectory,
             FsDeleteMode::Recursive => FileDeleteMode::Recursive,
         };
-        self.file_system_service_for(params.workspace_folder_id.as_deref())?
-            .delete(&params.path, missing, mode)
-            .map_err(file_system_error)?;
+        self.file_system_for_request(
+            params.workspace_folder_id.as_deref(),
+            params.session_directory.as_ref(),
+            WorkspaceCapability::MutateRepository,
+        )?
+        .delete(&params.path, missing, mode)
+        .map_err(file_system_error)?;
         result(&())
+    }
+
+    fn file_system_for_request(
+        &self,
+        workspace_folder_id: Option<&str>,
+        session_directory: Option<
+            &zeta_app_server_protocol::protocol::workspace::WorkspaceSessionDirectorySelector,
+        >,
+        capability: WorkspaceCapability,
+    ) -> Result<std::sync::Arc<dyn zeta_file_system::WorkspaceFileSystem>, RpcError> {
+        match (workspace_folder_id, session_directory) {
+            (Some(_), Some(_)) => Err(RpcError::new(-32602, AppServerErrorName::InvalidParams)),
+            (_, Some(selector)) => {
+                self.file_system_service_for_session_directory(selector, capability)
+            }
+            (_, None) => self.file_system_service_for(workspace_folder_id),
+        }
     }
 }
 

@@ -43,6 +43,7 @@ use zeta_code_index_semantic::SqliteCodeIndexVectorStore;
 use zeta_config::ConfigStore;
 use zeta_config::SemanticCodeIndexModelSelection;
 use zeta_config::ToolSearchConfig;
+use zeta_config::{WorkspaceConfigScope, WorkspaceConfigStore, WorkspaceId};
 use zeta_core::{
     InterruptTurnRequest, MultiAgentCoordinator, SequenceExpectation, SessionCoordinator,
     ThreadController, TurnExecutor,
@@ -84,6 +85,8 @@ pub(super) struct WorkspaceRuntime {
     pub(super) git: Option<Arc<GitRuntime>>,
     pub(super) workspace_search: Option<Arc<SearchService>>,
     pub(super) folder_workspace_search: BTreeMap<String, Arc<SearchService>>,
+    pub(super) session_additional_directory_search:
+        BTreeMap<(SessionId, PathBuf), Arc<SearchService>>,
     pub(super) ripgrep: Option<RipgrepExecutable>,
     pub(super) code_index: Option<Arc<CodeIndexRuntime>>,
     pub(super) symbol_index: Option<Arc<SymbolIndexRuntime>>,
@@ -96,7 +99,7 @@ pub(super) struct WorkspaceRuntime {
     pub(super) debug_adapters: Option<Arc<crate::debug_service::DebugAdapterService>>,
     pub(super) folder_debug_adapters:
         BTreeMap<String, Arc<crate::debug_service::DebugAdapterService>>,
-    session_workspace_access: Arc<SessionWorkspaceAccess>,
+    pub(super) session_workspace_access: Arc<SessionWorkspaceAccess>,
     pub(super) turn_executor: TurnExecutor,
 }
 
@@ -130,6 +133,7 @@ impl WorkspaceRuntime {
             git: None,
             workspace_search: None,
             folder_workspace_search: BTreeMap::new(),
+            session_additional_directory_search: BTreeMap::new(),
             ripgrep: None,
             code_index: None,
             symbol_index: None,
@@ -1584,6 +1588,41 @@ impl AppServer {
             .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?
             .map(|snapshot| snapshot.additional_roots().to_vec())
             .unwrap_or_default();
+        if let Some(host) = &self.local_workspace_host {
+            let hook_workspaces = access
+                .snapshot_for(session_id, WorkspaceCapability::DiscoverHooks)
+                .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?
+                .into_iter()
+                .flat_map(|snapshot| snapshot.additional_roots().to_vec())
+                .filter_map(|discovery| {
+                    access
+                        .workspace_for(
+                            session_id,
+                            discovery.root().canonical_path(),
+                            WorkspaceCapability::ExecuteProcess,
+                        )
+                        .transpose()
+                        .map(|execution| execution.map(|execution| (discovery, execution)))
+                })
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?
+                .into_iter()
+                .map(|(discovery, execution)| {
+                    read_additional_workspace_config(discovery.root())
+                        .map(|document| (document.hooks, discovery, execution))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            host.hooks
+                .replace_session_workspaces(session_id.clone(), hook_workspaces)
+                .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
+        }
+        let mut language_roots = access.roots_for(WorkspaceCapability::UseLanguageServices);
+        let execution_roots = access.roots_for(WorkspaceCapability::ExecuteProcess);
+        language_roots.retain(|root| execution_roots.contains(root));
+        self.language
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retain_workspace_roots(&language_roots);
         if let Some(customizations) = &customizations {
             customizations.reconcile_session(session_id, load_workspaces);
         }
@@ -1599,6 +1638,22 @@ impl AppServer {
             .session_additional_directory_watchers
             .retain(|(candidate_session, root), _| {
                 candidate_session != session_id || desired.contains_key(root)
+            });
+        runtime
+            .session_additional_directory_search
+            .retain(|(candidate_session, root), _| {
+                if candidate_session != session_id {
+                    return true;
+                }
+                access
+                    .workspace_for(
+                        session_id,
+                        root,
+                        WorkspaceCapability::SearchRepositoryContent,
+                    )
+                    .ok()
+                    .flatten()
+                    .is_some()
             });
         let Some(customizations) = customizations else {
             return Ok(());
@@ -1644,8 +1699,14 @@ impl AppServer {
         runtime
             .session_additional_directory_watchers
             .retain(|(candidate, _), _| candidate != session_id);
+        runtime
+            .session_additional_directory_search
+            .retain(|(candidate, _), _| candidate != session_id);
         if let Some(customizations) = &runtime._customizations {
             customizations.remove_session(session_id);
+        }
+        if let Some(host) = &self.local_workspace_host {
+            host.hooks.remove_session(session_id);
         }
         drop(runtime);
         self.terminate_revoked_terminal_sessions();
@@ -1775,6 +1836,7 @@ impl AppServer {
             git: Some(Arc::clone(&git)),
             workspace_search: None,
             folder_workspace_search: BTreeMap::new(),
+            session_additional_directory_search: BTreeMap::new(),
             ripgrep: None,
             code_index: Some(code_index),
             symbol_index: Some(symbol_index),
@@ -1933,6 +1995,7 @@ impl AppServer {
         host.hooks
             .bind_workspace(workspace.clone())
             .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
+        customizations.bind_hooks(Arc::clone(&host.hooks));
         host.tools.replace_executable(Some(local_port), true)?;
         self.bind_workspace_skills(&canonical_root)?;
         let context_source = Arc::new(CodeRetrievalContextSource::new(
@@ -1966,6 +2029,7 @@ impl AppServer {
             git: Some(Arc::clone(&git)),
             workspace_search: Some(Arc::clone(&workspace_search)),
             folder_workspace_search: BTreeMap::new(),
+            session_additional_directory_search: BTreeMap::new(),
             ripgrep: Some(ripgrep),
             code_index: Some(code_index),
             symbol_index: Some(symbol_index),
@@ -2274,10 +2338,42 @@ impl AppServer {
             .ok_or_else(|| RpcError::new(-32040, AppServerErrorName::FileSystemUnavailable))
     }
 
+    pub(super) fn file_system_service_for_session_directory(
+        &self,
+        selector: &zeta_app_server_protocol::protocol::workspace::WorkspaceSessionDirectorySelector,
+        capability: WorkspaceCapability,
+    ) -> Result<Arc<dyn WorkspaceFileSystem>, RpcError> {
+        let workspace = self.session_additional_directory_workspace(
+            &selector.session_id,
+            &selector.root,
+            capability,
+        )?;
+        Ok(Arc::new(LocalFileSystem::new(workspace.root().clone())))
+    }
+
     pub(super) fn language_workspace_root_for(
         &self,
         workspace_folder_id: Option<&str>,
+        session_directory: Option<
+            &zeta_app_server_protocol::protocol::workspace::WorkspaceSessionDirectorySelector,
+        >,
     ) -> Result<WorkspaceRoot, RpcError> {
+        if workspace_folder_id.is_some() && session_directory.is_some() {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        if let Some(selector) = session_directory {
+            let language = self.session_additional_directory_workspace(
+                &selector.session_id,
+                &selector.root,
+                WorkspaceCapability::UseLanguageServices,
+            )?;
+            self.session_additional_directory_workspace(
+                &selector.session_id,
+                &selector.root,
+                WorkspaceCapability::ExecuteProcess,
+            )?;
+            return Ok(language.root().clone());
+        }
         let runtime = self
             .workspace_runtime
             .read()
@@ -2325,6 +2421,40 @@ impl AppServer {
             .workspace_search
             .clone()
             .ok_or_else(|| RpcError::new(-32050, AppServerErrorName::SearchUnavailable))
+    }
+
+    pub(super) fn workspace_search_service_for_session_directory(
+        &self,
+        selector: &zeta_app_server_protocol::protocol::workspace::WorkspaceSessionDirectorySelector,
+    ) -> Result<Arc<SearchService>, RpcError> {
+        let workspace = self.session_additional_directory_workspace(
+            &selector.session_id,
+            &selector.root,
+            WorkspaceCapability::SearchRepositoryContent,
+        )?;
+        let key = (
+            selector.session_id.clone(),
+            workspace.root().canonical_path().to_path_buf(),
+        );
+        let mut runtime = self
+            .workspace_runtime
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(search) = runtime.session_additional_directory_search.get(&key) {
+            return Ok(Arc::clone(search));
+        }
+        let ripgrep = runtime
+            .ripgrep
+            .clone()
+            .ok_or_else(|| RpcError::new(-32050, AppServerErrorName::SearchUnavailable))?;
+        let search = Arc::new(
+            SearchService::new_authorized(workspace, ripgrep)
+                .map_err(|_| RpcError::new(-32043, AppServerErrorName::WorkspaceTrustRequired))?,
+        );
+        runtime
+            .session_additional_directory_search
+            .insert(key, Arc::clone(&search));
+        Ok(search)
     }
 
     pub(super) fn terminal_service(
@@ -2475,6 +2605,26 @@ impl AppServer {
         }
         Ok(())
     }
+}
+
+pub(super) fn read_additional_workspace_config(
+    root: &WorkspaceRoot,
+) -> Result<zeta_config::WorkspaceConfigDocument, WorkspaceRuntimeError> {
+    let digest = Sha256::digest(root.canonical_path().to_string_lossy().as_bytes());
+    let workspace_id = WorkspaceId::new(format!(
+        "additional-{}",
+        digest[..16]
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>()
+    ))
+    .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
+    WorkspaceConfigStore::open(
+        root.canonical_path().join(".zeta/config.toml"),
+        WorkspaceConfigScope::new(workspace_id),
+    )
+    .read_document()
+    .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))
 }
 
 fn session_additional_directory_snapshots(

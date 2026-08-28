@@ -20,6 +20,7 @@ use zeta_app_server_protocol::protocol::config::{ProviderConfigDto, ProviderConf
 use zeta_app_server_protocol::protocol::session::SessionReadParams;
 use zeta_app_server_protocol::protocol::skills::SkillEnablementDto;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryListParams;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryPermissionDto;
 use zeta_client::ClientError;
 use zeta_client::ClientRequest;
 use zeta_client::ClientResponse;
@@ -233,7 +234,13 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
     assert_eq!(skill_id.name.as_str(), "skill-creator");
     assert_eq!(enablement, SkillEnablementDto::Disabled);
 
-    let view = crate::features::skills::set_enablement(&mut client, skill_id, enablement).unwrap();
+    let view = crate::features::skills::set_enablement(
+        &mut client,
+        &zeta_protocol::SessionId::new("test-session").unwrap(),
+        skill_id,
+        enablement,
+    )
+    .unwrap();
     app.update(AppEvent::SkillsViewReplaced(view));
     app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
     let disabled = app.selection_view().unwrap();
@@ -382,14 +389,23 @@ fn add_dir_adds_lists_and_removes_the_exact_session_directory() {
     let mut conversation = ActiveConversation::start(&mut client, "add dir".into()).unwrap();
     let mut app = App::new();
 
-    conversation.execute(
+    let output = super::execute_product_command(
+        conversation,
         &mut client,
         invocation(
             TuiSlashCommandAction::AddDir,
             &additional.display().to_string(),
         ),
-        &mut app,
-    );
+        vec![
+            WorkspaceAdditionalDirectoryPermissionDto::ReadFiles,
+            WorkspaceAdditionalDirectoryPermissionDto::ExecuteCommands,
+        ],
+    )
+    .unwrap();
+    conversation = output.conversation;
+    for event in output.events {
+        app.update(event);
+    }
 
     let listed = client
         .list_workspace_additional_directories(WorkspaceAdditionalDirectoryListParams {
@@ -400,6 +416,13 @@ fn add_dir_adds_lists_and_removes_the_exact_session_directory() {
     assert_eq!(
         listed.directories[0].root,
         additional.canonicalize().unwrap()
+    );
+    assert_eq!(
+        listed.directories[0].permissions,
+        vec![
+            WorkspaceAdditionalDirectoryPermissionDto::ReadFiles,
+            WorkspaceAdditionalDirectoryPermissionDto::ExecuteCommands,
+        ]
     );
     conversation.execute(
         &mut client,

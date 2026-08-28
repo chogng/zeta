@@ -33,6 +33,7 @@ fn hook(event: ConfigHookEvent, tool_names: &[&str]) -> HookConfig {
 
 fn before_request(tool_name: &str) -> BeforeToolHookRequest {
     BeforeToolHookRequest {
+        session_id: zeta_protocol::SessionId::new("session").unwrap(),
         thread_id: ThreadId::new("thread-test").unwrap(),
         turn_id: TurnId::new("turn-test").unwrap(),
         tool_call_id: ToolCallId::new("tool-test").unwrap(),
@@ -42,6 +43,7 @@ fn before_request(tool_name: &str) -> BeforeToolHookRequest {
 
 fn after_request(tool_name: &str, outcome: HookOutcome) -> AfterToolHookRequest {
     AfterToolHookRequest {
+        session_id: zeta_protocol::SessionId::new("session").unwrap(),
         thread_id: ThreadId::new("thread-test").unwrap(),
         turn_id: TurnId::new("turn-test").unwrap(),
         tool_call_id: ToolCallId::new("tool-test").unwrap(),
@@ -77,6 +79,7 @@ fn empty_matcher_matches_tool_events_but_not_another_event() {
         &HookInvocation::AfterTool(&after_request("file-system", HookOutcome::Failed))
     ));
     let completed = TurnCompletedHookRequest {
+        session_id: zeta_protocol::SessionId::new("session").unwrap(),
         thread_id: ThreadId::new("thread-test").unwrap(),
         turn_id: TurnId::new("turn-test").unwrap(),
     };

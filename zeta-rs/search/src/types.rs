@@ -77,6 +77,7 @@ pub enum SearchError {
     NotFound,
     NotOwner,
     Busy,
+    Unavailable,
 }
 
 impl fmt::Display for SearchError {
@@ -86,6 +87,7 @@ impl fmt::Display for SearchError {
             Self::NotFound => formatter.write_str("search job was not found"),
             Self::NotOwner => formatter.write_str("search job belongs to another owner"),
             Self::Busy => formatter.write_str("search is busy"),
+            Self::Unavailable => formatter.write_str("search workspace is unavailable"),
         }
     }
 }

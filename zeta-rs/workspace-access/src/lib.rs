@@ -19,7 +19,6 @@ pub use additional_directory::AdditionalDirectorySource;
 pub use authority::WorkspaceAccessAuthority;
 pub use contributions::AdditionalDirectoryContribution;
 pub use contributions::AdditionalDirectoryContributionPolicy;
-pub use contributions::AdditionalInstructionsPolicy;
 pub use error::WorkspaceAccessError;
 pub use permissions::AdditionalDirectoryPermission;
 pub use permissions::AdditionalDirectoryPermissions;

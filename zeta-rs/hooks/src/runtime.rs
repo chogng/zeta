@@ -7,6 +7,7 @@ use crate::protocol::HookInvocation;
 use crate::protocol::encode_input;
 use crate::records::HookRunLog;
 use crate::records::HookRunRecord;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::RwLock;
 use zeta_async_utils::CancellationToken;
@@ -19,7 +20,16 @@ use zeta_core::BeforeToolHookRequest;
 use zeta_core::CoreError;
 use zeta_core::HookService;
 use zeta_core::TurnCompletedHookRequest;
+use zeta_protocol::SessionId;
+use zeta_workspace::TrustedWorkspace;
 use zeta_workspace::WorkspaceRoot;
+
+struct SessionHookBinding {
+    config: HooksConfig,
+    discovery: TrustedWorkspace,
+    execution: TrustedWorkspace,
+    process: Arc<dyn HookProcessExecutor>,
+}
 
 /// Shared host runtime for declarative Hooks.
 ///
@@ -30,6 +40,7 @@ pub struct DeclarativeHookRuntime {
     config: RwLock<HooksConfig>,
     policy: Arc<dyn ActionPolicyService>,
     process: RwLock<Option<Arc<dyn HookProcessExecutor>>>,
+    session_bindings: RwLock<BTreeMap<SessionId, Vec<SessionHookBinding>>>,
     runs: HookRunLog,
 }
 
@@ -40,6 +51,7 @@ impl DeclarativeHookRuntime {
             config: RwLock::new(config),
             policy,
             process: RwLock::new(None),
+            session_bindings: RwLock::new(BTreeMap::new()),
             runs: HookRunLog::new(),
         }
     }
@@ -85,6 +97,54 @@ impl DeclarativeHookRuntime {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     }
 
+    /// Replaces additional-directory Hook bindings for one Session.
+    pub fn replace_session_workspaces(
+        &self,
+        session_id: SessionId,
+        workspaces: Vec<(HooksConfig, TrustedWorkspace, TrustedWorkspace)>,
+    ) -> Result<(), HookWorkspaceBindingError> {
+        let mut bindings = Vec::new();
+        for (config, discovery, execution) in workspaces {
+            discovery
+                .ensure_active()
+                .map_err(|error| HookWorkspaceBindingError {
+                    message: error.to_string(),
+                })?;
+            execution
+                .ensure_active()
+                .map_err(|error| HookWorkspaceBindingError {
+                    message: error.to_string(),
+                })?;
+            let process = Arc::new(
+                NativeHookProcessExecutor::new(execution.root().clone())
+                    .map_err(|message| HookWorkspaceBindingError { message })?,
+            );
+            bindings.push(SessionHookBinding {
+                config,
+                discovery,
+                execution,
+                process,
+            });
+        }
+        let mut sessions = self
+            .session_bindings
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if bindings.is_empty() {
+            sessions.remove(&session_id);
+        } else {
+            sessions.insert(session_id, bindings);
+        }
+        Ok(())
+    }
+
+    pub fn remove_session(&self, session_id: &SessionId) {
+        self.session_bindings
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(session_id);
+    }
+
     /// Returns the bounded, non-durable projection of recent Hook invocations.
     pub fn recent_runs(&self) -> Vec<HookRunRecord> {
         self.runs.snapshot()
@@ -100,12 +160,14 @@ impl DeclarativeHookRuntime {
             config: RwLock::new(config),
             policy,
             process: RwLock::new(Some(process)),
+            session_bindings: RwLock::new(BTreeMap::new()),
             runs: HookRunLog::new(),
         }
     }
 
     fn run_event(
         &self,
+        session_id: &SessionId,
         invocation: &HookInvocation<'_>,
         cancellation: &CancellationToken,
     ) -> Result<HookDecision, CoreError> {
@@ -122,9 +184,44 @@ impl DeclarativeHookRuntime {
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone();
-        let Some(process) = process else {
-            return Ok(HookDecision::Continue);
-        };
+        if let Some(process) = process {
+            let decision = self.run_config(&config, process.as_ref(), invocation, cancellation)?;
+            if matches!(decision, HookDecision::Deny { .. }) {
+                return Ok(decision);
+            }
+        }
+        let sessions = self
+            .session_bindings
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(bindings) = sessions.get(session_id) {
+            for binding in bindings {
+                if binding.discovery.ensure_active().is_err()
+                    || binding.execution.ensure_active().is_err()
+                {
+                    continue;
+                }
+                let decision = self.run_config(
+                    &binding.config,
+                    binding.process.as_ref(),
+                    invocation,
+                    cancellation,
+                )?;
+                if matches!(decision, HookDecision::Deny { .. }) {
+                    return Ok(decision);
+                }
+            }
+        }
+        Ok(HookDecision::Continue)
+    }
+
+    fn run_config(
+        &self,
+        config: &HooksConfig,
+        process: &dyn HookProcessExecutor,
+        invocation: &HookInvocation<'_>,
+        cancellation: &CancellationToken,
+    ) -> Result<HookDecision, CoreError> {
         for hook in config.hooks.values() {
             cancellation
                 .check()
@@ -159,7 +256,11 @@ impl HookService for DeclarativeHookRuntime {
         request: &BeforeToolHookRequest,
         cancellation: &CancellationToken,
     ) -> Result<BeforeToolHookDecision, CoreError> {
-        match self.run_event(&HookInvocation::BeforeTool(request), cancellation)? {
+        match self.run_event(
+            &request.session_id,
+            &HookInvocation::BeforeTool(request),
+            cancellation,
+        )? {
             HookDecision::Continue => Ok(BeforeToolHookDecision::Continue),
             HookDecision::Deny { reason } => Ok(BeforeToolHookDecision::Deny { reason }),
         }
@@ -171,7 +272,11 @@ impl HookService for DeclarativeHookRuntime {
         cancellation: &CancellationToken,
     ) -> Result<(), CoreError> {
         require_observational_result(
-            self.run_event(&HookInvocation::AfterTool(request), cancellation)?,
+            self.run_event(
+                &request.session_id,
+                &HookInvocation::AfterTool(request),
+                cancellation,
+            )?,
             "afterTool",
         )
     }
@@ -182,7 +287,11 @@ impl HookService for DeclarativeHookRuntime {
         cancellation: &CancellationToken,
     ) -> Result<(), CoreError> {
         require_observational_result(
-            self.run_event(&HookInvocation::TurnCompleted(request), cancellation)?,
+            self.run_event(
+                &request.session_id,
+                &HookInvocation::TurnCompleted(request),
+                cancellation,
+            )?,
             "turnCompleted",
         )
     }

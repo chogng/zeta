@@ -630,7 +630,8 @@ impl ThreadController {
             .get(&session_id)
             .unwrap_or(&registries.fallback);
         let contributed_activations = extensions
-            .contribute_skill_activations(zeta_extension_api::SkillActivationContext::new(
+            .contribute_skill_activations(zeta_extension_api::SkillActivationContext::for_session(
+                &session_id,
                 &normalized_input,
             ))
             .map_err(|error| CoreError::InvalidInput(error.to_string()))?;

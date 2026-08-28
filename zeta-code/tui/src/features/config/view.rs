@@ -41,7 +41,7 @@ pub(crate) struct AdditionalDirectoryPermissionEdit {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ConfigSelectionAction {
-    SetMouseInteractions(ConfigEdit),
+    SetTerminalSettings(ConfigEdit),
     SetAdditionalDirectoryPermissions(AdditionalDirectoryPermissionEdit),
     OpenProviderApiKey {
         provider: String,
@@ -99,12 +99,14 @@ pub(crate) fn config_view(
     let mut actions = BTreeMap::new();
     let mouse_id = SelectionItemId::new("terminal-mouse-interactions");
     let mouse_enabled = terminal.mouse_interactions();
+    let mut toggled_terminal = terminal;
+    toggled_terminal.set_mouse_interactions(!mouse_enabled);
     actions.insert(
         mouse_id.clone(),
-        ConfigSelectionAction::SetMouseInteractions(ConfigEdit {
+        ConfigSelectionAction::SetTerminalSettings(ConfigEdit {
             terminal: TerminalSettingsEdit {
                 expected_revision: terminal_revision,
-                mouse_interactions: !mouse_enabled,
+                settings: toggled_terminal,
             },
             server_config: config.clone(),
             providers: providers.clone(),
@@ -139,7 +141,7 @@ pub(crate) fn config_view(
                 "Config",
                 vec![
                     SelectionTab::new("Config", config_items),
-                    SelectionTab::new("Directory permissions", permission_items),
+                    SelectionTab::new("Add-dir", permission_items),
                     SelectionTab::new("Providers", provider_items),
                     SelectionTab::new("Language servers", language_servers(config)),
                 ],
@@ -162,6 +164,35 @@ fn additional_directory_permission_items(
     actions: &mut BTreeMap<SelectionItemId, ConfigSelectionAction>,
 ) -> Vec<SelectionItem> {
     let mut items = Vec::new();
+    let default_permissions = terminal.additional_directory_permissions();
+    for permission in all_additional_directory_permissions() {
+        let id = SelectionItemId::new(format!(
+            "additional-directory-default-{}",
+            permission_id(permission)
+        ));
+        let enabled = default_permissions.contains(permission);
+        let permissions = toggled_permissions(&default_permissions, *permission);
+        let mut settings = terminal;
+        settings.set_additional_directory_permissions(&permissions);
+        actions.insert(
+            id.clone(),
+            ConfigSelectionAction::SetTerminalSettings(ConfigEdit {
+                terminal: TerminalSettingsEdit {
+                    expected_revision: terminal_revision,
+                    settings,
+                },
+                server_config: config.clone(),
+                providers: providers.clone(),
+                session_id: session_id.clone(),
+                additional_directories: snapshot.clone(),
+            }),
+        );
+        items.push(
+            SelectionItem::new(permission_title(permission))
+                .with_id(id)
+                .with_columns(permission_title(permission), "", checkbox(enabled)),
+        );
+    }
     for (directory_index, directory) in snapshot.directories.iter().enumerate() {
         for permission in all_additional_directory_permissions() {
             let id = SelectionItemId::new(format!(
@@ -194,14 +225,18 @@ fn additional_directory_permission_items(
                 ))
                 .with_id(id)
                 .with_columns(
-                    permission_title(permission),
-                    permission_description(permission),
+                    format!(
+                        "{} · {}",
+                        permission_title(permission),
+                        directory.root.display()
+                    ),
+                    permission_description(permission, directory),
                     checkbox(enabled),
                 ),
             );
         }
     }
-    or_empty(items, "No additional directories in this Session")
+    items
 }
 
 fn all_additional_directory_permissions() -> &'static [WorkspaceAdditionalDirectoryPermissionDto] {
@@ -211,7 +246,14 @@ fn all_additional_directory_permissions() -> &'static [WorkspaceAdditionalDirect
         Permission::WriteFiles,
         Permission::ExecuteCommands,
         Permission::WatchFileChanges,
-        Permission::LoadProjectConfiguration,
+        Permission::UseWorkspaceFiles,
+        Permission::UseWorkspaceSearch,
+        Permission::LoadInstructionsAndAgents,
+        Permission::DiscoverSkills,
+        Permission::DiscoverMcp,
+        Permission::UseLanguageServices,
+        Permission::DiscoverHooks,
+        Permission::DiscoverPlugins,
     ]
 }
 
@@ -244,9 +286,16 @@ fn permission_id(permission: &WorkspaceAdditionalDirectoryPermissionDto) -> &'st
         WorkspaceAdditionalDirectoryPermissionDto::WriteFiles => "write-files",
         WorkspaceAdditionalDirectoryPermissionDto::ExecuteCommands => "execute-commands",
         WorkspaceAdditionalDirectoryPermissionDto::WatchFileChanges => "watch-file-changes",
-        WorkspaceAdditionalDirectoryPermissionDto::LoadProjectConfiguration => {
-            "load-project-configuration"
+        WorkspaceAdditionalDirectoryPermissionDto::UseWorkspaceFiles => "workspace-files",
+        WorkspaceAdditionalDirectoryPermissionDto::UseWorkspaceSearch => "workspace-search",
+        WorkspaceAdditionalDirectoryPermissionDto::LoadInstructionsAndAgents => {
+            "instructions-and-agents"
         }
+        WorkspaceAdditionalDirectoryPermissionDto::DiscoverSkills => "skills",
+        WorkspaceAdditionalDirectoryPermissionDto::DiscoverMcp => "mcp",
+        WorkspaceAdditionalDirectoryPermissionDto::UseLanguageServices => "lsp",
+        WorkspaceAdditionalDirectoryPermissionDto::DiscoverHooks => "hooks",
+        WorkspaceAdditionalDirectoryPermissionDto::DiscoverPlugins => "plugins",
     }
 }
 
@@ -256,26 +305,73 @@ fn permission_title(permission: &WorkspaceAdditionalDirectoryPermissionDto) -> &
         WorkspaceAdditionalDirectoryPermissionDto::WriteFiles => "Modify files",
         WorkspaceAdditionalDirectoryPermissionDto::ExecuteCommands => "Run commands",
         WorkspaceAdditionalDirectoryPermissionDto::WatchFileChanges => "Watch file changes",
-        WorkspaceAdditionalDirectoryPermissionDto::LoadProjectConfiguration => {
-            "Load project configuration"
+        WorkspaceAdditionalDirectoryPermissionDto::UseWorkspaceFiles => "Workspace Files",
+        WorkspaceAdditionalDirectoryPermissionDto::UseWorkspaceSearch => "Workspace Search",
+        WorkspaceAdditionalDirectoryPermissionDto::LoadInstructionsAndAgents => {
+            "Instructions & Agents"
         }
+        WorkspaceAdditionalDirectoryPermissionDto::DiscoverSkills => "Skills",
+        WorkspaceAdditionalDirectoryPermissionDto::DiscoverMcp => "MCP",
+        WorkspaceAdditionalDirectoryPermissionDto::UseLanguageServices => "LSP",
+        WorkspaceAdditionalDirectoryPermissionDto::DiscoverHooks => "Hooks",
+        WorkspaceAdditionalDirectoryPermissionDto::DiscoverPlugins => "Plugins",
     }
 }
 
-fn permission_description(permission: &WorkspaceAdditionalDirectoryPermissionDto) -> &'static str {
+fn permission_description(
+    permission: &WorkspaceAdditionalDirectoryPermissionDto,
+    directory: &zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryDto,
+) -> String {
     match permission {
-        WorkspaceAdditionalDirectoryPermissionDto::ReadFiles => "Allow read_file, grep and glob",
+        WorkspaceAdditionalDirectoryPermissionDto::ReadFiles => {
+            "Allow read_file, grep and glob".into()
+        }
         WorkspaceAdditionalDirectoryPermissionDto::WriteFiles => {
-            "Allow file-writing tools; requires Read files"
+            "Allow file-writing tools and apply_patch; requires Read files".into()
         }
         WorkspaceAdditionalDirectoryPermissionDto::ExecuteCommands => {
-            "Allow shell-command and Session terminals; requires Read files"
+            "Allow shell-command and Session terminals; requires Read files".into()
         }
         WorkspaceAdditionalDirectoryPermissionDto::WatchFileChanges => {
             "Refresh authorized project configuration after file changes; requires Read files"
+                .into()
         }
-        WorkspaceAdditionalDirectoryPermissionDto::LoadProjectConfiguration => {
-            "Load .zeta/instructions and .zeta/agents for this Session; requires Read files"
+        WorkspaceAdditionalDirectoryPermissionDto::UseWorkspaceFiles => {
+            "Show this directory in Workspace Files; requires Read files".into()
+        }
+        WorkspaceAdditionalDirectoryPermissionDto::UseWorkspaceSearch => {
+            "Search this directory from Workspace Search; requires Read files".into()
+        }
+        WorkspaceAdditionalDirectoryPermissionDto::LoadInstructionsAndAgents => {
+            "Load .zeta/instructions and .zeta/agents; requires Read files".into()
+        }
+        WorkspaceAdditionalDirectoryPermissionDto::DiscoverSkills => {
+            format!(
+                "Discover Skills from this directory ({} found); requires Read files",
+                directory.contributions.skills.len()
+            )
+        }
+        WorkspaceAdditionalDirectoryPermissionDto::DiscoverMcp => {
+            format!(
+                "Authorize MCP declarations ({} found); connect them separately",
+                directory.contributions.mcp_servers.len()
+            )
+        }
+        WorkspaceAdditionalDirectoryPermissionDto::UseLanguageServices => {
+            "Use language servers for this directory; starting them also requires Run commands"
+                .into()
+        }
+        WorkspaceAdditionalDirectoryPermissionDto::DiscoverHooks => {
+            format!(
+                "Discover Hooks ({} found); running them also requires Run commands",
+                directory.contributions.hooks.len()
+            )
+        }
+        WorkspaceAdditionalDirectoryPermissionDto::DiscoverPlugins => {
+            format!(
+                "Authorize Plugin requests ({} found); installation stays separate",
+                directory.contributions.plugins.len()
+            )
         }
     }
 }

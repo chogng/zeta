@@ -8,7 +8,14 @@ pub enum AdditionalDirectoryPermission {
     WriteFiles,
     ExecuteCommands,
     WatchFileChanges,
-    LoadProjectConfiguration,
+    UseWorkspaceFiles,
+    UseWorkspaceSearch,
+    LoadInstructionsAndAgents,
+    DiscoverSkills,
+    DiscoverMcp,
+    UseLanguageServices,
+    DiscoverHooks,
+    DiscoverPlugins,
 }
 
 /// Validated capability set attached to one additional-directory authorization.
@@ -63,10 +70,25 @@ impl AdditionalDirectoryPermissions {
             WorkspaceCapability::ObserveFileChanges => {
                 AdditionalDirectoryPermission::WatchFileChanges
             }
-            WorkspaceCapability::LoadExecutableConfiguration
-            | WorkspaceCapability::ActivateWorkspaceExtension
-            | WorkspaceCapability::UseWorkspaceDeclaredTool => {
-                AdditionalDirectoryPermission::LoadProjectConfiguration
+            WorkspaceCapability::BrowseProductFiles => {
+                AdditionalDirectoryPermission::UseWorkspaceFiles
+            }
+            WorkspaceCapability::SearchRepositoryContent => {
+                AdditionalDirectoryPermission::UseWorkspaceSearch
+            }
+            WorkspaceCapability::LoadExecutableConfiguration => {
+                AdditionalDirectoryPermission::LoadInstructionsAndAgents
+            }
+            WorkspaceCapability::DiscoverSkills => AdditionalDirectoryPermission::DiscoverSkills,
+            WorkspaceCapability::UseWorkspaceDeclaredTool => {
+                AdditionalDirectoryPermission::DiscoverMcp
+            }
+            WorkspaceCapability::UseLanguageServices => {
+                AdditionalDirectoryPermission::UseLanguageServices
+            }
+            WorkspaceCapability::DiscoverHooks => AdditionalDirectoryPermission::DiscoverHooks,
+            WorkspaceCapability::ActivateWorkspaceExtension => {
+                AdditionalDirectoryPermission::DiscoverPlugins
             }
         };
         self.allows(permission)

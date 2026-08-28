@@ -2,6 +2,7 @@ use crate::ExtensionError;
 use crate::PromptFragment;
 use std::sync::Arc;
 use zeta_protocol::FrozenSkillActivation;
+use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
 use zeta_protocol::TurnId;
 use zeta_protocol::UserInput;
@@ -9,12 +10,27 @@ use zeta_tools::ToolExecutor;
 
 /// Immutable user input available while a new Turn's capability activations are resolved.
 pub struct SkillActivationContext<'a> {
+    session_id: Option<&'a SessionId>,
     user_input: &'a [UserInput],
 }
 
 impl<'a> SkillActivationContext<'a> {
     pub fn new(user_input: &'a [UserInput]) -> Self {
-        Self { user_input }
+        Self {
+            session_id: None,
+            user_input,
+        }
+    }
+
+    pub fn for_session(session_id: &'a SessionId, user_input: &'a [UserInput]) -> Self {
+        Self {
+            session_id: Some(session_id),
+            user_input,
+        }
+    }
+
+    pub fn session_id(&self) -> Option<&'a SessionId> {
+        self.session_id
     }
 
     pub fn user_input(&self) -> &'a [UserInput] {
@@ -35,6 +51,7 @@ pub trait SkillActivationContributor: Send + Sync {
 
 /// Immutable facts exposed at one model-invocation safe point.
 pub struct TurnInputContext<'a> {
+    session_id: Option<&'a SessionId>,
     thread_id: &'a ThreadId,
     turn_id: &'a TurnId,
     activated_skills: &'a [FrozenSkillActivation],
@@ -47,10 +64,29 @@ impl<'a> TurnInputContext<'a> {
         activated_skills: &'a [FrozenSkillActivation],
     ) -> Self {
         Self {
+            session_id: None,
             thread_id,
             turn_id,
             activated_skills,
         }
+    }
+
+    pub fn for_session(
+        session_id: &'a SessionId,
+        thread_id: &'a ThreadId,
+        turn_id: &'a TurnId,
+        activated_skills: &'a [FrozenSkillActivation],
+    ) -> Self {
+        Self {
+            session_id: Some(session_id),
+            thread_id,
+            turn_id,
+            activated_skills,
+        }
+    }
+
+    pub fn session_id(&self) -> Option<&'a SessionId> {
+        self.session_id
     }
 
     pub fn thread_id(&self) -> &'a ThreadId {

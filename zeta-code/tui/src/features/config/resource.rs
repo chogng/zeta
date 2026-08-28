@@ -18,7 +18,7 @@ enum ResourceSnapshot {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct TerminalSettingsEdit {
     pub(crate) expected_revision: u64,
-    pub(crate) mouse_interactions: bool,
+    pub(crate) settings: TerminalSettings,
 }
 
 /// Host-local terminal preferences displayed alongside the App Server configuration snapshot.
@@ -77,9 +77,9 @@ impl ConfigResource {
             return Err("terminal settings changed on disk; reopen /config and try again".into());
         }
 
-        let mut settings = settings_from_snapshot(&current)
+        settings_from_snapshot(&current)
             .map_err(|error| format!("rejected {}: {error}", self.path.display()))?;
-        settings.set_mouse_interactions(edit.mouse_interactions);
+        let settings = edit.settings.validate()?;
         let mut contents = serde_json::to_vec_pretty(&settings)
             .map_err(|error| format!("could not serialize terminal settings: {error}"))?;
         contents.push(b'\n');
@@ -97,7 +97,9 @@ fn settings_from_snapshot(snapshot: &ResourceSnapshot) -> Result<TerminalSetting
     match snapshot {
         ResourceSnapshot::Missing => Ok(TerminalSettings::default()),
         ResourceSnapshot::Contents(contents) => {
-            serde_json::from_slice(contents).map_err(|error| format!("invalid JSON: {error}"))
+            serde_json::from_slice::<TerminalSettings>(contents)
+                .map_err(|error| format!("invalid JSON: {error}"))?
+                .validate()
         }
     }
 }

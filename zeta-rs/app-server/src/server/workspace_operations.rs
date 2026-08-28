@@ -382,16 +382,91 @@ fn additional_directory_dtos(
 ) -> Vec<WorkspaceAdditionalDirectoryDto> {
     directories
         .into_iter()
-        .map(|directory| WorkspaceAdditionalDirectoryDto {
-            root: directory.root,
-            trust: workspace_trust_state(directory.decision),
-            permissions: directory
-                .permissions
-                .entries()
-                .map(additional_directory_permission_dto)
-                .collect(),
+        .map(|directory| {
+            let contributions =
+                additional_directory_contributions(&directory.root, &directory.permissions);
+            WorkspaceAdditionalDirectoryDto {
+                root: directory.root,
+                trust: workspace_trust_state(directory.decision),
+                permissions: directory
+                    .permissions
+                    .entries()
+                    .map(additional_directory_permission_dto)
+                    .collect(),
+                contributions,
+            }
         })
         .collect()
+}
+
+fn additional_directory_contributions(
+    root: &std::path::Path,
+    permissions: &AdditionalDirectoryPermissions,
+) -> zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryContributionsDto {
+    use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryContributionsDto;
+    use zeta_workspace_access::AdditionalDirectoryPermission as Permission;
+
+    let mut result = WorkspaceAdditionalDirectoryContributionsDto::default();
+    if permissions.allows(Permission::DiscoverSkills) {
+        let skill_root = root.join(".zeta/skills");
+        if let Ok(entries) = std::fs::read_dir(skill_root) {
+            result
+                .skills
+                .extend(entries.filter_map(Result::ok).filter_map(|entry| {
+                    entry
+                        .path()
+                        .join("SKILL.md")
+                        .is_file()
+                        .then(|| entry.file_name().to_string_lossy().into_owned())
+                }));
+        }
+    }
+    let needs_config = permissions.allows(Permission::DiscoverSkills)
+        || permissions.allows(Permission::DiscoverMcp)
+        || permissions.allows(Permission::DiscoverHooks)
+        || permissions.allows(Permission::DiscoverPlugins);
+    if !needs_config {
+        return result;
+    }
+    let workspace = match zeta_workspace::WorkspaceRoot::open(root) {
+        Ok(workspace) => workspace,
+        Err(error) => {
+            result.diagnostics.push(error.to_string());
+            return result;
+        }
+    };
+    let document = match super::workspace_runtime::read_additional_workspace_config(&workspace) {
+        Ok(document) => document,
+        Err(error) => {
+            result.diagnostics.push(error.to_string());
+            return result;
+        }
+    };
+    if permissions.allows(Permission::DiscoverMcp) {
+        result
+            .mcp_servers
+            .extend(document.mcp.servers.keys().map(ToString::to_string));
+    }
+    if permissions.allows(Permission::DiscoverHooks) {
+        result
+            .hooks
+            .extend(document.hooks.hooks.keys().map(ToString::to_string));
+    }
+    if permissions.allows(Permission::DiscoverPlugins) {
+        result.plugins.extend(
+            document
+                .plugin_requests
+                .requests
+                .keys()
+                .map(ToString::to_string),
+        );
+    }
+    result.skills.sort();
+    result.skills.dedup();
+    result.mcp_servers.sort();
+    result.hooks.sort();
+    result.plugins.sort();
+    result
 }
 
 fn additional_directory_mutation(
@@ -448,8 +523,29 @@ fn additional_directory_permission(
         WorkspaceAdditionalDirectoryPermissionDto::WatchFileChanges => {
             AdditionalDirectoryPermission::WatchFileChanges
         }
-        WorkspaceAdditionalDirectoryPermissionDto::LoadProjectConfiguration => {
-            AdditionalDirectoryPermission::LoadProjectConfiguration
+        WorkspaceAdditionalDirectoryPermissionDto::UseWorkspaceFiles => {
+            AdditionalDirectoryPermission::UseWorkspaceFiles
+        }
+        WorkspaceAdditionalDirectoryPermissionDto::UseWorkspaceSearch => {
+            AdditionalDirectoryPermission::UseWorkspaceSearch
+        }
+        WorkspaceAdditionalDirectoryPermissionDto::LoadInstructionsAndAgents => {
+            AdditionalDirectoryPermission::LoadInstructionsAndAgents
+        }
+        WorkspaceAdditionalDirectoryPermissionDto::DiscoverSkills => {
+            AdditionalDirectoryPermission::DiscoverSkills
+        }
+        WorkspaceAdditionalDirectoryPermissionDto::DiscoverMcp => {
+            AdditionalDirectoryPermission::DiscoverMcp
+        }
+        WorkspaceAdditionalDirectoryPermissionDto::UseLanguageServices => {
+            AdditionalDirectoryPermission::UseLanguageServices
+        }
+        WorkspaceAdditionalDirectoryPermissionDto::DiscoverHooks => {
+            AdditionalDirectoryPermission::DiscoverHooks
+        }
+        WorkspaceAdditionalDirectoryPermissionDto::DiscoverPlugins => {
+            AdditionalDirectoryPermission::DiscoverPlugins
         }
     }
 }
@@ -470,8 +566,29 @@ fn additional_directory_permission_dto(
         AdditionalDirectoryPermission::WatchFileChanges => {
             WorkspaceAdditionalDirectoryPermissionDto::WatchFileChanges
         }
-        AdditionalDirectoryPermission::LoadProjectConfiguration => {
-            WorkspaceAdditionalDirectoryPermissionDto::LoadProjectConfiguration
+        AdditionalDirectoryPermission::UseWorkspaceFiles => {
+            WorkspaceAdditionalDirectoryPermissionDto::UseWorkspaceFiles
+        }
+        AdditionalDirectoryPermission::UseWorkspaceSearch => {
+            WorkspaceAdditionalDirectoryPermissionDto::UseWorkspaceSearch
+        }
+        AdditionalDirectoryPermission::LoadInstructionsAndAgents => {
+            WorkspaceAdditionalDirectoryPermissionDto::LoadInstructionsAndAgents
+        }
+        AdditionalDirectoryPermission::DiscoverSkills => {
+            WorkspaceAdditionalDirectoryPermissionDto::DiscoverSkills
+        }
+        AdditionalDirectoryPermission::DiscoverMcp => {
+            WorkspaceAdditionalDirectoryPermissionDto::DiscoverMcp
+        }
+        AdditionalDirectoryPermission::UseLanguageServices => {
+            WorkspaceAdditionalDirectoryPermissionDto::UseLanguageServices
+        }
+        AdditionalDirectoryPermission::DiscoverHooks => {
+            WorkspaceAdditionalDirectoryPermissionDto::DiscoverHooks
+        }
+        AdditionalDirectoryPermission::DiscoverPlugins => {
+            WorkspaceAdditionalDirectoryPermissionDto::DiscoverPlugins
         }
     }
 }

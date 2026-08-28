@@ -36,6 +36,11 @@ pub enum WorkspaceCapability {
     ActivateWorkspaceExtension,
     UseWorkspaceDeclaredTool,
     MutateRepository,
+    BrowseProductFiles,
+    SearchRepositoryContent,
+    DiscoverSkills,
+    UseLanguageServices,
+    DiscoverHooks,
 }
 
 impl fmt::Display for WorkspaceCapability {
@@ -54,6 +59,11 @@ impl fmt::Display for WorkspaceCapability {
             }
             Self::UseWorkspaceDeclaredTool => formatter.write_str("use a workspace-declared tool"),
             Self::MutateRepository => formatter.write_str("mutate a repository"),
+            Self::BrowseProductFiles => formatter.write_str("browse files in a product surface"),
+            Self::SearchRepositoryContent => formatter.write_str("search repository content"),
+            Self::DiscoverSkills => formatter.write_str("discover Workspace Skills"),
+            Self::UseLanguageServices => formatter.write_str("use language services"),
+            Self::DiscoverHooks => formatter.write_str("discover Workspace Hooks"),
         }
     }
 }

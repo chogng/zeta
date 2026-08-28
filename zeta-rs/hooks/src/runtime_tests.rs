@@ -123,6 +123,7 @@ fn test_workspace() -> WorkspaceRoot {
 
 fn before_request(tool_name: &str) -> BeforeToolHookRequest {
     BeforeToolHookRequest {
+        session_id: zeta_protocol::SessionId::new("session").unwrap(),
         thread_id: ThreadId::new("thread-test").unwrap(),
         turn_id: TurnId::new("turn-test").unwrap(),
         tool_call_id: ToolCallId::new("tool-test").unwrap(),
@@ -132,6 +133,7 @@ fn before_request(tool_name: &str) -> BeforeToolHookRequest {
 
 fn after_request(tool_name: &str, outcome: HookOutcome) -> AfterToolHookRequest {
     AfterToolHookRequest {
+        session_id: zeta_protocol::SessionId::new("session").unwrap(),
         thread_id: ThreadId::new("thread-test").unwrap(),
         turn_id: TurnId::new("turn-test").unwrap(),
         tool_call_id: ToolCallId::new("tool-test").unwrap(),

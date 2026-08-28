@@ -5,6 +5,7 @@ use zeta_search::{SearchMatch, SearchMatchRange};
 fn maps_protocol_query_to_workspace_search_query() {
     let query = search_query(WorkspaceSearchStartParams {
         workspace_folder_id: None,
+        session_directory: None,
         query: "needle".into(),
         pattern_kind: WorkspaceSearchPatternKind::Regex,
         case_sensitivity: WorkspaceSearchCaseSensitivity::Insensitive,

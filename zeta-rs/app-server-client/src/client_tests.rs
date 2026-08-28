@@ -136,6 +136,7 @@ fn client_reads_workspace_directories_through_the_typed_contract() {
     let result = client
         .read_directory(FsReadDirectoryParams {
             workspace_folder_id: None,
+            session_directory: None,
             path: "nested".into(),
         })
         .unwrap();
@@ -249,6 +250,7 @@ fn client_drives_language_documents_and_requests_through_typed_methods() {
     ])));
     let document = LanguageDocumentDto {
         workspace_folder_id: None,
+        session_directory: None,
         path: "src/main.rs".into(),
         language_id: "rust".into(),
         revision: 7,
@@ -289,6 +291,7 @@ fn client_drives_language_documents_and_requests_through_typed_methods() {
     client
         .close_language_document(LanguageCloseParams {
             workspace_folder_id: None,
+            session_directory: None,
             path: document.path,
         })
         .unwrap();
@@ -376,24 +379,28 @@ fn client_reads_writes_and_versions_workspace_files_through_typed_contracts() {
     let read = client
         .read_file(FsReadFileParams {
             workspace_folder_id: None,
+            session_directory: None,
             path: "src/main.rs".into(),
         })
         .unwrap();
     let binary = client
         .read_binary_file(FsReadBinaryFileParams {
             workspace_folder_id: None,
+            session_directory: None,
             path: "paper.pdf".into(),
         })
         .unwrap();
     let metadata = client
         .get_file_metadata(FsGetMetadataParams {
             workspace_folder_id: None,
+            session_directory: None,
             path: "src/main.rs".into(),
         })
         .unwrap();
     let written = client
         .write_file(FsWriteFileParams {
             workspace_folder_id: None,
+            session_directory: None,
             path: "src/main.rs".into(),
             content: "fn main() { }\n".into(),
             expected_revision: None,
@@ -717,6 +724,7 @@ fn embedded_skill_catalog_lists_built_ins_and_persists_enablement() {
     let listed = client
         .list_skills(SkillListParams {
             reload: SkillCatalogReloadDto::Refresh,
+            session_id: None,
         })
         .unwrap();
     assert_eq!(listed.skills.len(), 1);
@@ -725,6 +733,7 @@ fn embedded_skill_catalog_lists_built_ins_and_persists_enablement() {
 
     let opened = client
         .open_skill_resource(SkillResourceOpenParams {
+            session_id: None,
             skill_id: listed.skills[0].id.clone(),
             skill_content_digest: listed.skills[0].content_digest.clone(),
             path: "assets/icon.png".into(),

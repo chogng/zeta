@@ -47,6 +47,7 @@ pub(crate) fn add<T>(
     client: &mut AppServerClient<T>,
     session_id: &SessionId,
     root: PathBuf,
+    permissions: Vec<WorkspaceAdditionalDirectoryPermissionDto>,
 ) -> Result<WorkspaceAdditionalDirectoryMutationResult, ClientError>
 where
     T: JsonRpcTransport,
@@ -54,10 +55,7 @@ where
     client.add_workspace_additional_directory(WorkspaceAdditionalDirectoryAddParams {
         session_id: session_id.clone(),
         root,
-        permissions: vec![
-            WorkspaceAdditionalDirectoryPermissionDto::ReadFiles,
-            WorkspaceAdditionalDirectoryPermissionDto::WriteFiles,
-        ],
+        permissions,
     })
 }
 
@@ -141,9 +139,16 @@ fn permission_label(permission: &WorkspaceAdditionalDirectoryPermissionDto) -> &
         WorkspaceAdditionalDirectoryPermissionDto::WriteFiles => "write files",
         WorkspaceAdditionalDirectoryPermissionDto::ExecuteCommands => "execute commands",
         WorkspaceAdditionalDirectoryPermissionDto::WatchFileChanges => "watch changes",
-        WorkspaceAdditionalDirectoryPermissionDto::LoadProjectConfiguration => {
-            "load project configuration"
+        WorkspaceAdditionalDirectoryPermissionDto::UseWorkspaceFiles => "workspace files",
+        WorkspaceAdditionalDirectoryPermissionDto::UseWorkspaceSearch => "workspace search",
+        WorkspaceAdditionalDirectoryPermissionDto::LoadInstructionsAndAgents => {
+            "instructions and agents"
         }
+        WorkspaceAdditionalDirectoryPermissionDto::DiscoverSkills => "skills",
+        WorkspaceAdditionalDirectoryPermissionDto::DiscoverMcp => "mcp",
+        WorkspaceAdditionalDirectoryPermissionDto::UseLanguageServices => "lsp",
+        WorkspaceAdditionalDirectoryPermissionDto::DiscoverHooks => "hooks",
+        WorkspaceAdditionalDirectoryPermissionDto::DiscoverPlugins => "plugins",
     }
 }
 

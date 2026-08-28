@@ -276,6 +276,18 @@ impl AppServerLanguageRuntime {
         self.shutdown();
     }
 
+    pub(super) fn retain_workspace_roots(&mut self, roots: &std::collections::BTreeSet<PathBuf>) {
+        self.workspace_runtimes
+            .retain(|root, _| roots.contains(root));
+        if self
+            .active_workspace_root
+            .as_ref()
+            .is_some_and(|root| !roots.contains(root))
+        {
+            self.active_workspace_root = None;
+        }
+    }
+
     pub(super) fn ensure(
         &mut self,
         workspace_root: &Path,

@@ -158,6 +158,7 @@ impl ToolExecutorRuntime {
             call,
             authorization,
             cancellation,
+            identity.session_id(),
             identity.turn_id(),
             sink,
         )
@@ -169,6 +170,7 @@ impl ToolExecutorRuntime {
         call: &ToolCall,
         authorization: &ToolAuthorization,
         cancellation: &CancellationToken,
+        session_id: &zeta_protocol::SessionId,
         turn_id: &TurnId,
         sink: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
@@ -210,7 +212,8 @@ impl ToolExecutorRuntime {
             turn_id.clone(),
             binding.clone(),
             payload,
-            ToolExecutionContext::new(self.environment_id.clone(), cancellation.clone(), authority),
+            ToolExecutionContext::new(self.environment_id.clone(), cancellation.clone(), authority)
+                .with_session_id(session_id.clone()),
         );
         let outcome = pollster::block_on(self.executor.execute(invocation));
         if !matches!(outcome, ToolExecutionOutcome::SandboxDenied(_)) {

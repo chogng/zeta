@@ -39,6 +39,7 @@ pub(super) struct WorkspaceCustomizations {
     harness_instructions: RwLock<Arc<HarnessInstructions>>,
     session_workspace_access: Arc<SessionWorkspaceAccess>,
     additional: Mutex<BTreeMap<SessionId, BTreeMap<PathBuf, AdditionalCustomizationCatalog>>>,
+    hooks: RwLock<Option<Arc<zeta_hooks::DeclarativeHookRuntime>>>,
 }
 
 impl WorkspaceCustomizations {
@@ -66,7 +67,15 @@ impl WorkspaceCustomizations {
             harness_instructions: RwLock::new(harness_instructions),
             session_workspace_access,
             additional: Mutex::new(BTreeMap::new()),
+            hooks: RwLock::new(None),
         }))
+    }
+
+    pub(super) fn bind_hooks(&self, hooks: Arc<zeta_hooks::DeclarativeHookRuntime>) {
+        *self
+            .hooks
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(hooks);
     }
 
     pub(super) fn instruction_snapshot(&self) -> Arc<InstructionCatalogSnapshot> {
@@ -168,6 +177,8 @@ impl WorkspaceCustomizations {
         root: &Path,
         changed: &FsChanged,
     ) {
+        let refresh_hooks = matches!(changed, FsChanged::RescanRequired { .. })
+            || matches!(changed, FsChanged::PathsChanged { paths, .. } if paths.iter().any(|path| affects(path, ".zeta/config.toml")));
         let mut additional = self
             .additional
             .lock()
@@ -176,6 +187,10 @@ impl WorkspaceCustomizations {
             .get_mut(session_id)
             .and_then(|catalogs| catalogs.get_mut(root))
         else {
+            drop(additional);
+            if refresh_hooks {
+                self.refresh_session_hooks(session_id);
+            }
             return;
         };
         if catalog.workspace.ensure_active().is_err() {
@@ -194,6 +209,51 @@ impl WorkspaceCustomizations {
                     catalog.agents.refresh();
                 }
             }
+        }
+        drop(additional);
+        if refresh_hooks {
+            self.refresh_session_hooks(session_id);
+        }
+    }
+
+    fn refresh_session_hooks(&self, session_id: &SessionId) {
+        let Some(hooks) = self
+            .hooks
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+        else {
+            return;
+        };
+        let workspaces = self
+            .session_workspace_access
+            .snapshot_for(
+                session_id,
+                zeta_workspace::WorkspaceCapability::DiscoverHooks,
+            )
+            .ok()
+            .flatten()
+            .into_iter()
+            .flat_map(|snapshot| snapshot.additional_roots().to_vec())
+            .filter_map(|discovery| {
+                self.session_workspace_access
+                    .workspace_for(
+                        session_id,
+                        discovery.root().canonical_path(),
+                        zeta_workspace::WorkspaceCapability::ExecuteProcess,
+                    )
+                    .ok()
+                    .flatten()
+                    .map(|execution| (discovery, execution))
+            })
+            .filter_map(|(discovery, execution)| {
+                super::workspace_runtime::read_additional_workspace_config(discovery.root())
+                    .ok()
+                    .map(|document| (document.hooks, discovery, execution))
+            })
+            .collect();
+        if let Err(error) = hooks.replace_session_workspaces(session_id.clone(), workspaces) {
+            log::warn!("failed to refresh additional-directory Hooks: {error}");
         }
     }
 

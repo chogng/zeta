@@ -167,6 +167,7 @@ fn executor_runtime_preserves_registry_binding_environment_and_output() {
                 grant_id: GrantId::new("test"),
             },
             &CancellationSource::new().token(),
+            &zeta_protocol::SessionId::new("session-7").unwrap(),
             &TurnId::new("turn-7").unwrap(),
             &mut sink,
         )
@@ -235,6 +236,7 @@ fn executor_runtime_rechecks_and_retires_a_revoked_workspace_guard() {
             grant_id: GrantId::new("test"),
         },
         &CancellationSource::new().token(),
+        &zeta_protocol::SessionId::new("session-9").unwrap(),
         &TurnId::new("turn-9").unwrap(),
         &mut RecordingSink::default(),
     );
@@ -295,6 +297,7 @@ fn executor_runtime_preserves_original_image_detail_until_model_capability_gate(
                 grant_id: GrantId::new("test"),
             },
             &CancellationSource::new().token(),
+            &zeta_protocol::SessionId::new("session-8").unwrap(),
             &TurnId::new("turn-8").unwrap(),
             &mut RecordingSink::default(),
         )

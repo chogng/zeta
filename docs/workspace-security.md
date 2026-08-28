@@ -12,7 +12,7 @@
 | 打开工作区 | 建立主工作目录和当前项目 | 默认允许访问主目录 | 已实现 |
 | `/add-dir` | 不变 | 为当前 Session 增加附加目录，并默认允许读取和修改文件 | TUI 与 App Server 已实现 |
 | `/cd` | 切换主工作目录和当前项目 | 重新建立默认访问与项目配置作用域 | 尚未实现 |
-| 搜索内容 | 不变 | 默认搜索主目录；`grep`/`glob` 可显式搜索 Session 附加目录 | 部分具备 |
+| 搜索内容 | 不变 | 默认搜索主目录；`grep`/`glob` 与 Workspace Search 可按各自开关搜索 Session 附加目录 | 已实现 |
 | 导入外部 Agent 配置 | 不变 | 使用一次性导入来源，不产生持续目录授权 | 只读检查已实现 |
 
 ## 两道安全门
@@ -82,7 +82,7 @@ Restricted root 的安全 Files 与 watcher 会继续保留。
 
 ## 工作目录、附加目录与 `/cd`
 
-当前 App Server 保留一个活动主 Workspace identity；`workspace/folders/set` 的产品多目录路由与 Session 级附加目录授权是两条不同流程。`/add-dir` 已接入 TUI 和本地文件工具，但不会把附加目录变成 Workspace folder。实现继续区分三种操作：
+当前 App Server 保留一个活动主 Workspace identity；`workspace/folders/set` 的产品多目录路由与 Session 级附加目录授权是两条不同流程。`/add-dir` 已接入 TUI、文件工具和 Add-dir 页列出的各项能力，但不会把附加目录变成 Workspace folder。实现继续区分三种操作：
 
 - **主工作目录**：当前项目、默认相对路径、项目配置和 session discovery 的根。
 - **附加目录**：额外文件访问 root；它不成为第二个项目，也不改变主工作目录。
@@ -94,25 +94,32 @@ Restricted root 的安全 Files 与 watcher 会继续保留。
 | --- | --- | --- | --- | --- |
 | 启动时的主目录 | ✅ | 主目录 | 完整项目配置 | 直到 `/cd` 或进程结束 |
 | 启动参数 `--add-dir` | ❌ | 尚未实现 | 尚未实现 | 本次启动 |
-| 会话命令 `/add-dir` | ❌ | 主目录 + 获得对应能力的附加目录 | 打开“加载项目配置”后，为当前 Session 加载 `.zeta/instructions` 与 `.zeta/agents` | 当前会话 |
+| 会话命令 `/add-dir` | ❌ | 主目录 + 获得对应能力的附加目录 | 按 Add-dir 页的独立开关加载 | 当前会话 |
 | 持久 `additionalDirectories` | ❌ | 尚未实现 | ❌ | 配置有效期间 |
 | `/cd` | ✅ | 以新主目录重新解析 | 加载新主目录的完整项目配置 | 直到再次切换 |
 
-`/add-dir` 默认打开“读取文件”和“修改文件”。`zeta code` 的 Config 页面提供当前 Session 的“Directory permissions”标签，每个附加目录分别管理以下开关：
+`/add-dir` 默认打开“读取文件”和“修改文件”。`zeta code` 的 Config 页面提供“Add-dir”标签：即使当前 Session 还没有附加目录，页面也始终显示以下十二项默认授权；以后执行 `/add-dir` 时，新目录使用这组默认值。当前 Session 已有附加目录时，页面会在默认授权后继续显示每个目录自己的十二项开关，修改目录开关不会反向改变默认值。
 
 | 开关 | 控制的权限 | 当前是否生效 |
 | --- | --- | --- |
 | Read files | `read_file`、`grep`、`glob` 读取或搜索该目录 | 已生效，默认打开 |
-| Modify files | `write_file`、`edit` 修改该目录 | 已生效，默认打开 |
+| Modify files | `write_file`、`edit`、`apply_patch` 以及文件系统写接口修改该目录 | 已生效，默认打开；单次 `apply_patch` 不能跨两个根 |
 | Run commands | 允许 `shell-command` 和 Session Terminal 在该目录启动进程 | 已生效；执行前再次检查目录凭证，关闭后终止该目录中仍活动的 Terminal |
 | Watch file changes | 允许后台监听该目录变化 | 已生效；用于刷新该 Session 已授权的项目配置，不发布为产品级 Workspace 文件事件 |
-| Load project configuration | 允许加载 `.zeta/instructions` 与 `.zeta/agents` | 已生效；只投影到授权它的 Session，关闭后立即移除 |
+| Workspace Files | 允许产品文件接口浏览该目录 | 已生效；请求必须携带精确的 `sessionId + root` |
+| Workspace Search | 允许产品内容搜索该目录 | 已生效；搜索任务持有可撤销目录凭证 |
+| Instructions & Agents | 允许加载 `.zeta/instructions` 与 `.zeta/agents` | 已生效；只进入授权它的 Session，关闭后立即移除 |
+| Skills | 允许发现和使用 `.zeta/skills` | 已生效；列表、Turn 激活、提示内容和 `skills-read` 均按 Session 取目录 |
+| MCP | 允许发现 `.zeta/config.toml` 中的 MCP 声明 | 已生效；这里只授权声明来源，连接仍由 MCP 页面和 MCP 生命周期管理 |
+| LSP | 允许语言服务处理该目录 | 已生效；启动语言服务还要求 Run commands，任一权限关闭都会移除该目录的运行实例 |
+| Hooks | 允许发现该目录的 Hook | 已生效；实际运行还要求 Run commands，并且只处理对应 Session 的事件 |
+| Plugins | 允许发现该目录的 Plugin 请求 | 已生效；请求仍需经过 Plugin 安装、信任和激活流程，发现不等于安装 |
 
-除“读取文件”外的能力都依赖读取权限。关闭 Read files 会同时关闭该目录的其它开关；后端也拒绝“未允许读取却允许修改、执行、监听或加载配置”的无效权限组合。相对路径仍解析到主 Workspace，访问附加目录必须使用绝对路径。`apply_patch`、Workspace Files 和 Workspace Search 仍只使用产品打开的主 Workspace。
+除“读取文件”外的能力都依赖读取权限。关闭 Read files 会同时关闭该目录的其它开关；后端也拒绝“未允许读取却打开其它能力”的无效权限组合。相对路径仍解析到主 Workspace，本地工具访问附加目录必须使用绝对路径；产品文件、搜索和语言服务接口改用精确的 Session 目录选择器。
 
-Rust API 不使用一个 `bool` 表示目录是否“全权可用”。`AdditionalDirectoryPermissions` 保存完整能力集合，`AdditionalDirectorySource` 保存目录来源。目录已加入不能被解释成所有 Tool 都已获权；只有打开对应开关，消费方才会取得相应能力的目录凭证。当前项目配置开关只加载 `.zeta/instructions` 与 `.zeta/agents`，不授权 Skill、Plugin、MCP、LSP、Hook 或 Workspace Search。
+Rust API 不使用一个 `bool` 表示目录是否“全权可用”。`AdditionalDirectoryPermissions` 保存完整能力集合，`AdditionalDirectorySource` 保存目录来源。目录已加入不能被解释成所有 Tool 都已获权；只有打开对应开关，消费方才会取得相应能力的目录凭证。MCP 与 Plugin 开关只授权发现声明，不能绕过各自的连接、安装、信任或激活决策。
 
-`/add-dir` 本身是用户对该精确目录的会话级授权动作。App Server 规范化路径后签发 `ExplicitUserDecision` lease，但不写入 User Config；移除目录、归档 Session 或切换主 Workspace 都会撤销 lease。`workspace/additionalDirectories/list|add|remove|permissions/set` 只接受声明 `workspaceTrustHost` 的产品连接；不同 Session 的权限互不可见。权限更新携带期望版本，过期页面不能覆盖较新的选择。添加、移除或关闭能力都会推进版本并撤销旧凭证；同一 Turn 的后续文件 Tool 调用会取得最新能力快照。已经发给模型的单次请求保持不变，下一次模型调用才会看到更新后的可读目录。
+`/add-dir` 本身是用户对该精确目录的会话级授权动作。十二项默认授权保存在 `zeta code` 的 profile 设置中，只决定以后新增目录的初始权限，不保留任何目录路径或 Session 授权。App Server 规范化路径后签发 `ExplicitUserDecision` lease，但不写入 User Config；移除目录、归档 Session 或切换主 Workspace 都会撤销 lease。`workspace/additionalDirectories/list|add|remove|permissions/set` 只接受声明 `workspaceTrustHost` 的产品连接；不同 Session 的权限互不可见。权限更新携带期望版本，过期页面不能覆盖较新的选择。添加、移除或关闭能力都会推进版本并撤销旧凭证；同一 Turn 的后续文件 Tool 调用会取得最新能力快照。已经发给模型的单次请求保持不变，下一次模型调用才会看到更新后的可读目录。
 
 Core 在每次模型调用边界把 Session identity 交给 `HarnessContextProvider`。App Server 从文件工具使用的同一权限集合取得“读取文件”快照，再交给 `zeta-agent-environment` 生成 `<filesystem><workspace_roots>`：主 Workspace 是第一项，仍允许读取的附加目录随后列出，cwd 不变，相对路径仍属于主 Workspace。Core 把完整环境快照放在持久 Thread 历史之后的请求尾部；它不制造持久用户消息，目录变化也不会改动 system instructions 前缀。
 
@@ -154,20 +161,15 @@ authority。活动 Turn 会阻止 authority switch，直到旧 runtime 能一致
   内容替换不会自动失效信任。
 - Path validation 与后续 I/O 不是 atomic；在 hostile concurrent mutation 的 threat model 下，
   仍需 handle-relative filesystem API。
-- `/add-dir` 当前让 `zeta code` 当前 Session 的模型环境、本地读写工具、`shell-command`、Session Terminal、项目配置加载和配置 watcher 识别附加目录。Workspace Files 与 Workspace Search 继续只展示和搜索产品打开的 Workspace。`--add-dir` 启动参数、用户设置中的持久附加目录、`apply_patch`、Skill、Plugin、MCP、LSP 与 Hook 尚未接入附加目录。
+- `/add-dir` 的十二项 Session 能力已经接入；MCP 与 Plugin 目前只发现声明，连接、安装和激活仍由各自的权限流程决定。`--add-dir` 启动参数和用户设置中的持久附加目录尚未接入。
 
 ## 后续计划
 
 1. 把 Session 之外的 `LaunchArgument` 与 `PersistentConfiguration` source 接入各自 host owner。
-2. 让 `apply_patch` 使用附加目录的修改能力快照；Skills、Plugin、MCP、LSP 与 Hook 若要接入，必须分别增加明确的能力和 Session 隔离。
-3. 增加 `/cd` authority switch；它替换项目 identity 并重新加载主目录配置，而不是复用
+2. 增加 `/cd` authority switch；它替换项目 identity 并重新加载主目录配置，而不是复用
    `add-dir` mutation。
-4. 在 host trust resolver 中增加 filesystem identity change invalidation。
-5. 继续把 App Server 已提交的 capability availability 投影到更多 Workbench surface；当前
-Workspace Trust editor 与 language/diagnostics gate 已投影 Restricted/Trusted 状态。
-6. Workspace MCP/LSP/extension activation、Hook 和 repository mutation 全部使用
-   root-bound capability。
-7. 增加 restricted-safe content Search backend，或 narrow sandboxed host-owned Search
+3. 在 host trust resolver 中增加 filesystem identity change invalidation。
+4. 增加 restricted-safe content Search backend，或 narrow sandboxed host-owned Search
    capability。
 
 潜在方向包括 organization-managed trust policy、signed Workspace provenance 与

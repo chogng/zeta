@@ -522,7 +522,7 @@ fn additional_directory_permissions_are_revision_bound_and_filter_capability_sna
                     "sessionId": session.session_id,
                     "root": additional.path,
                     "expectedRevision": 2,
-                    "permissions": ["readFiles", "executeCommands", "watchFileChanges", "loadProjectConfiguration"]
+                    "permissions": ["readFiles", "executeCommands", "watchFileChanges", "loadInstructionsAndAgents"]
                 }
             })
             .to_string(),

@@ -1,5 +1,6 @@
 use crate::CoreError;
 use zeta_async_utils::CancellationToken;
+use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
 use zeta_protocol::ToolCallId;
 use zeta_protocol::TurnId;
@@ -7,6 +8,7 @@ use zeta_protocol::TurnId;
 /// Canonical request evaluated before a Tool crosses its execution boundary.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BeforeToolHookRequest {
+    pub session_id: SessionId,
     pub thread_id: ThreadId,
     pub turn_id: TurnId,
     pub tool_call_id: ToolCallId,
@@ -23,6 +25,7 @@ pub enum BeforeToolHookDecision {
 /// Canonical request observed after a Tool result has been committed.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AfterToolHookRequest {
+    pub session_id: SessionId,
     pub thread_id: ThreadId,
     pub turn_id: TurnId,
     pub tool_call_id: ToolCallId,
@@ -40,6 +43,7 @@ pub enum HookOutcome {
 /// Canonical request observed after durable Turn completion.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TurnCompletedHookRequest {
+    pub session_id: SessionId,
     pub thread_id: ThreadId,
     pub turn_id: TurnId,
 }

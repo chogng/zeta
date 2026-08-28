@@ -59,6 +59,7 @@ pub struct ToolExecutionContext {
     environment_id: ToolEnvironmentId,
     cancellation: CancellationToken,
     authority: ToolRuntimeAuthority,
+    session_id: Option<zeta_protocol::SessionId>,
 }
 
 /// Exact runtime boundary selected by policy for one materialized tool invocation.
@@ -82,7 +83,17 @@ impl ToolExecutionContext {
             environment_id,
             cancellation,
             authority,
+            session_id: None,
         }
+    }
+
+    pub fn with_session_id(mut self, session_id: zeta_protocol::SessionId) -> Self {
+        self.session_id = Some(session_id);
+        self
+    }
+
+    pub fn session_id(&self) -> Option<&zeta_protocol::SessionId> {
+        self.session_id.as_ref()
     }
 
     pub fn environment_id(&self) -> &ToolEnvironmentId {

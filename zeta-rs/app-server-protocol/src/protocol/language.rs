@@ -1,4 +1,5 @@
 use crate::protocol::fs::{FsDeleteMode, FsExistingTargetBehavior, FsMissingTargetBehavior};
+use crate::protocol::workspace::WorkspaceSessionDirectorySelector;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -41,6 +42,9 @@ pub struct LanguageDocumentDto {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub workspace_folder_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
     pub path: PathBuf,
     pub language_id: String,
     #[ts(type = "number")]
@@ -63,6 +67,9 @@ pub struct LanguageCloseParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub workspace_folder_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
     pub path: PathBuf,
 }
 
@@ -227,6 +234,9 @@ pub struct LanguageWorkspaceDiagnosticsParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub workspace_folder_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
     pub language_id: String,
 }
 
@@ -336,6 +346,9 @@ pub struct LanguageWorkspaceSymbolsParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub workspace_folder_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
     pub language_id: String,
     #[schemars(length(max = 1024))]
     pub query: String,

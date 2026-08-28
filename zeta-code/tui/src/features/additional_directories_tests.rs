@@ -12,6 +12,7 @@ fn additional_directory_view_maps_exact_roots_to_remove_actions() {
     let view = selection_view(WorkspaceAdditionalDirectoryListResult {
         revision: 3,
         directories: vec![WorkspaceAdditionalDirectoryDto {
+            contributions: Default::default(),
             root: PathBuf::from("/workspace/shared"),
             trust: WorkspaceTrustStateDto::Restricted,
             permissions: vec![WorkspaceAdditionalDirectoryPermissionDto::ReadFiles],

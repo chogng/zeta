@@ -8,22 +8,27 @@ use zeta_app_server_protocol::protocol::skills::SkillCatalogReloadDto;
 use zeta_app_server_protocol::protocol::skills::SkillEnablementDto;
 use zeta_app_server_protocol::protocol::skills::SkillListParams;
 use zeta_app_server_protocol::protocol::skills::SkillSetEnablementParams;
-use zeta_protocol::SkillId;
+use zeta_protocol::{SessionId, SkillId};
 
 pub(crate) fn load_selection<T>(
     client: &mut AppServerClient<T>,
+    session_id: &SessionId,
     reload: SkillCatalogReloadDto,
 ) -> Result<SkillSelectionView, ClientError>
 where
     T: JsonRpcTransport,
 {
     client
-        .list_skills(SkillListParams { reload })
+        .list_skills(SkillListParams {
+            reload,
+            session_id: Some(session_id.clone()),
+        })
         .map(|catalog| skills_selection_view(&catalog))
 }
 
 pub(crate) fn set_enablement<T>(
     client: &mut AppServerClient<T>,
+    session_id: &SessionId,
     skill_id: SkillId,
     enablement: SkillEnablementDto,
 ) -> Result<SkillSelectionView, ClientError>
@@ -37,5 +42,5 @@ where
         skill_id,
         enablement,
     })?;
-    load_selection(client, SkillCatalogReloadDto::Cached)
+    load_selection(client, session_id, SkillCatalogReloadDto::Cached)
 }

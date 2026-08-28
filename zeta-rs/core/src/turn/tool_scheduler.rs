@@ -149,6 +149,7 @@ impl ToolScheduler {
             let frozen_policy_revision = turn.policy_revision.as_str();
             let approval_mode = turn.approval_mode;
             let execution = ToolExecutionContext::new(
+                &snapshot.session_id,
                 thread_id,
                 turn_id,
                 &pending.item_id,
@@ -520,6 +521,7 @@ impl ToolScheduler {
         }
         let hook_decision = self.hooks.before_tool(
             &BeforeToolHookRequest {
+                session_id: context.session_id().clone(),
                 thread_id: context.thread_id().clone(),
                 turn_id: context.turn_id().clone(),
                 tool_call_id: tool_call_id.clone(),
@@ -585,6 +587,7 @@ impl ToolScheduler {
             .unwrap_or(HookOutcome::Failed);
         self.hooks.after_tool(
             &AfterToolHookRequest {
+                session_id: context.session_id().clone(),
                 thread_id: context.thread_id().clone(),
                 turn_id: context.turn_id().clone(),
                 tool_call_id: tool_call_id.clone(),

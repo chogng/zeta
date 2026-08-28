@@ -41,7 +41,12 @@ impl SkillActivationContributor for SkillRuntime {
                 | UserInput::Mention { .. } => None,
             })
             .map(|selected| {
-                self.activate_explicit(selected)
+                input
+                    .session_id()
+                    .map_or_else(
+                        || self.activate_explicit(selected),
+                        |session_id| self.activate_explicit_for_session(session_id, selected),
+                    )
                     .map(|skill| skill.activation().clone())
                     .map_err(ExtensionError::new)
             })
@@ -50,10 +55,13 @@ impl SkillActivationContributor for SkillRuntime {
             .iter()
             .map(|activation| activation.id.clone())
             .collect::<Vec<_>>();
-        if let Some(selected) = self
-            .select_automatic(input.user_input(), &excluded)
-            .map_err(ExtensionError::new)?
-        {
+        let automatic = input.session_id().map_or_else(
+            || self.select_automatic(input.user_input(), &excluded),
+            |session_id| {
+                self.select_automatic_for_session(session_id, input.user_input(), &excluded)
+            },
+        );
+        if let Some(selected) = automatic.map_err(ExtensionError::new)? {
             activations.push(selected.activation().clone());
         }
         Ok(activations)
@@ -65,8 +73,12 @@ impl TurnInputContributor for SkillRuntime {
         &self,
         input: TurnInputContext<'_>,
     ) -> Result<Vec<PromptFragment>, ExtensionError> {
-        let snapshot = self
-            .list(crate::SkillCatalogReload::Cached)
+        let snapshot = input
+            .session_id()
+            .map_or_else(
+                || self.list(crate::SkillCatalogReload::Cached),
+                |session_id| self.list_for_session(session_id),
+            )
             .map_err(ExtensionError::new)?;
         let mut fragments = catalog_prompt(snapshot.as_ref())
             .into_iter()
@@ -75,7 +87,10 @@ impl TurnInputContributor for SkillRuntime {
             .activated_skills()
             .iter()
             .map(|frozen| {
-                let activated = self.load_frozen(frozen).map_err(ExtensionError::new)?;
+                let activated = input.session_id().map_or_else(
+                    || self.load_frozen(frozen),
+                    |session_id| self.load_frozen_for_session(session_id, frozen),
+                ).map_err(ExtensionError::new)?;
                 let identity = format!("{}:{}", frozen.id.source, frozen.id.name);
                 Ok(PromptFragment::new(
                     PromptFragmentSource::new(

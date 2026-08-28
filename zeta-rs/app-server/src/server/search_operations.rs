@@ -18,8 +18,11 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let params: WorkspaceSearchStartParams = decode(params)?;
         let workspace_folder_id = params.workspace_folder_id.clone();
-        let search_id = self
-            .workspace_search_service_for(workspace_folder_id.as_deref())?
+        let search = self.search_service_for_request(
+            workspace_folder_id.as_deref(),
+            params.session_directory.as_ref(),
+        )?;
+        let search_id = search
             .start(search_owner(connection), search_query(params))
             .map_err(search_error)?;
         result(&WorkspaceSearchStartResult { search_id })
@@ -32,9 +35,12 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let params: WorkspaceSearchReadParams = decode(params)?;
         let workspace_folder_id = params.workspace_folder_id;
+        let search = self.search_service_for_request(
+            workspace_folder_id.as_deref(),
+            params.session_directory.as_ref(),
+        )?;
         let search_id = params.search_id;
-        let page = self
-            .workspace_search_service_for(workspace_folder_id.as_deref())?
+        let page = search
             .read(
                 search_owner(connection),
                 &search_id,
@@ -51,10 +57,27 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: WorkspaceSearchCancelParams = decode(params)?;
-        self.workspace_search_service_for(params.workspace_folder_id.as_deref())?
-            .cancel(search_owner(connection), &params.search_id)
-            .map_err(search_error)?;
+        self.search_service_for_request(
+            params.workspace_folder_id.as_deref(),
+            params.session_directory.as_ref(),
+        )?
+        .cancel(search_owner(connection), &params.search_id)
+        .map_err(search_error)?;
         result(&())
+    }
+
+    fn search_service_for_request(
+        &self,
+        workspace_folder_id: Option<&str>,
+        session_directory: Option<
+            &zeta_app_server_protocol::protocol::workspace::WorkspaceSessionDirectorySelector,
+        >,
+    ) -> Result<std::sync::Arc<zeta_search::SearchService>, RpcError> {
+        match (workspace_folder_id, session_directory) {
+            (Some(_), Some(_)) => Err(RpcError::new(-32602, AppServerErrorName::InvalidParams)),
+            (_, Some(selector)) => self.workspace_search_service_for_session_directory(selector),
+            (_, None) => self.workspace_search_service_for(workspace_folder_id),
+        }
     }
 }
 
@@ -113,6 +136,7 @@ fn search_error(error: SearchError) -> RpcError {
         SearchError::NotFound => RpcError::new(-32051, AppServerErrorName::SearchNotFound),
         SearchError::NotOwner => RpcError::new(-32052, AppServerErrorName::SearchNotOwner),
         SearchError::Busy => RpcError::new(-32053, AppServerErrorName::SearchBusy),
+        SearchError::Unavailable => RpcError::new(-32050, AppServerErrorName::SearchUnavailable),
     }
 }
 

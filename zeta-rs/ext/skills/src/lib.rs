@@ -11,6 +11,7 @@ pub use extension::install;
 pub use runtime::BuiltInSkillSource;
 pub use runtime::DynamicSkillSourceProvider;
 pub use runtime::DynamicSkillSourceSnapshot;
+pub use runtime::SessionSkillSourceProvider;
 pub use runtime::SkillCatalogReload;
 pub use runtime::SkillConfigSnapshotProvider;
 pub use runtime::SkillRuntime;

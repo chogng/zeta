@@ -82,10 +82,12 @@ pub(super) struct SkillRequestCompletion {
 pub(super) fn refresh_skills_and_registry(
     mut client: AppServerRequestHandle,
     server_slash_commands: Vec<SlashCommandDefinition>,
+    session_id: zeta_protocol::SessionId,
 ) -> Result<SkillRequestCompletion, String> {
     let catalog = client
         .list_skills(SkillListParams {
             reload: SkillCatalogReloadDto::Cached,
+            session_id: Some(session_id),
         })
         .map_err(|error| error.to_string())?;
     let registry = skill_slash_command_registry(&server_slash_commands, &catalog)

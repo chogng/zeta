@@ -12263,6 +12263,16 @@
         "path": {
           "type": "string"
         },
+        "sessionDirectory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "workspaceFolderId": {
           "type": [
             "string",
@@ -12295,6 +12305,16 @@
         },
         "path": {
           "type": "string"
+        },
+        "sessionDirectory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "workspaceFolderId": {
           "type": [
@@ -12334,6 +12354,16 @@
       "properties": {
         "path": {
           "type": "string"
+        },
+        "sessionDirectory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "workspaceFolderId": {
           "type": [
@@ -12391,6 +12421,16 @@
         "path": {
           "type": "string"
         },
+        "sessionDirectory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "workspaceFolderId": {
           "type": [
             "string",
@@ -12442,6 +12482,16 @@
         "path": {
           "type": "string"
         },
+        "sessionDirectory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "workspaceFolderId": {
           "type": [
             "string",
@@ -12474,6 +12524,16 @@
       "properties": {
         "path": {
           "type": "string"
+        },
+        "sessionDirectory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "workspaceFolderId": {
           "type": [
@@ -12510,6 +12570,16 @@
         "existing": {
           "$ref": "#/$defs/FsExistingTargetBehavior"
         },
+        "sessionDirectory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "source": {
           "type": "string"
         },
@@ -12545,6 +12615,16 @@
         },
         "path": {
           "type": "string"
+        },
+        "sessionDirectory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "workspaceFolderId": {
           "type": [
@@ -14238,6 +14318,16 @@
         "path": {
           "type": "string"
         },
+        "sessionDirectory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "workspaceFolderId": {
           "type": [
             "string",
@@ -14864,6 +14954,16 @@
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
+        },
+        "sessionDirectory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "text": {
           "maxLength": 10485760,
@@ -16251,6 +16351,16 @@
         "languageId": {
           "type": "string"
         },
+        "sessionDirectory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "workspaceFolderId": {
           "type": [
             "string",
@@ -16427,6 +16537,16 @@
         "query": {
           "maxLength": 1024,
           "type": "string"
+        },
+        "sessionDirectory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "workspaceFolderId": {
           "type": [
@@ -20668,6 +20788,16 @@
         "reload": {
           "$ref": "#/$defs/SkillCatalogReloadDto",
           "default": "cached"
+        },
+        "sessionId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionId"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "type": "object"
@@ -20738,6 +20868,16 @@
           "maxLength": 1024,
           "minLength": 1,
           "type": "string"
+        },
+        "sessionId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionId"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "skillContentDigest": {
           "$ref": "#/$defs/ContentDigest"
@@ -24940,9 +25080,62 @@
       ],
       "type": "object"
     },
+    "WorkspaceAdditionalDirectoryContributionsDto": {
+      "description": "Inert declarations discovered from one authorized additional directory.",
+      "properties": {
+        "diagnostics": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "hooks": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "mcpServers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "plugins": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "skills": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "skills",
+        "mcpServers",
+        "hooks",
+        "plugins",
+        "diagnostics"
+      ],
+      "type": "object"
+    },
     "WorkspaceAdditionalDirectoryDto": {
       "description": "One session-scoped directory that extends file access without changing the primary Workspace.",
       "properties": {
+        "contributions": {
+          "$ref": "#/$defs/WorkspaceAdditionalDirectoryContributionsDto",
+          "default": {
+            "diagnostics": [],
+            "hooks": [],
+            "mcpServers": [],
+            "plugins": [],
+            "skills": []
+          }
+        },
         "permissions": {
           "items": {
             "$ref": "#/$defs/WorkspaceAdditionalDirectoryPermissionDto"
@@ -25037,7 +25230,14 @@
         "writeFiles",
         "executeCommands",
         "watchFileChanges",
-        "loadProjectConfiguration"
+        "useWorkspaceFiles",
+        "useWorkspaceSearch",
+        "loadInstructionsAndAgents",
+        "discoverSkills",
+        "discoverMcp",
+        "useLanguageServices",
+        "discoverHooks",
+        "discoverPlugins"
       ],
       "type": "string"
     },
@@ -25222,6 +25422,16 @@
           "minLength": 1,
           "type": "string"
         },
+        "sessionDirectory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "workspaceFolderId": {
           "type": [
             "string",
@@ -25318,6 +25528,16 @@
           "minLength": 1,
           "type": "string"
         },
+        "sessionDirectory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "workspaceFolderId": {
           "type": [
             "string",
@@ -25405,6 +25625,16 @@
           "minLength": 1,
           "type": "string"
         },
+        "sessionDirectory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WorkspaceSessionDirectorySelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "workspaceFolderId": {
           "type": [
             "string",
@@ -25431,6 +25661,22 @@
       },
       "required": [
         "searchId"
+      ],
+      "type": "object"
+    },
+    "WorkspaceSessionDirectorySelector": {
+      "description": "Selects one Session-scoped additional directory for a Workspace capability request.",
+      "properties": {
+        "root": {
+          "type": "string"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "root"
       ],
       "type": "object"
     },

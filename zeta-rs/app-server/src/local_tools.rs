@@ -685,8 +685,18 @@ impl LocalExecutorReviewer {
             )
             .with_workspace_guard(workspace));
         }
+        if call.name.as_str() == "apply_patch" {
+            let (review, patch, workspace) = self.prepare_apply_patch(call, session_id)?;
+            return Ok(PreparedToolExecution::new(
+                review,
+                ToolPayload::FunctionArguments(json!({
+                    "patch": patch,
+                    "workspace_root": workspace.root().canonical_path(),
+                })),
+            )
+            .with_workspace_guard(workspace));
+        }
         let review = match call.name.as_str() {
-            "apply_patch" => self.prepare_apply_patch(call),
             _ => Err(CoreError::Policy(format!(
                 "local executor reviewer does not own tool {}",
                 call.name
@@ -822,13 +832,31 @@ impl LocalExecutorReviewer {
         Ok((workspace, relative, absolute))
     }
 
-    fn prepare_apply_patch(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
+    fn prepare_apply_patch(
+        &self,
+        call: &ToolCall,
+        session_id: Option<&zeta_protocol::SessionId>,
+    ) -> Result<(ActionReviewRequest, String, TrustedWorkspace), CoreError> {
+        if call.arguments.get("workspace_root").is_some() {
+            return Err(CoreError::Policy(
+                "apply_patch workspace_root is host-owned".into(),
+            ));
+        }
         let patch = call
             .arguments
             .get("patch")
             .and_then(serde_json::Value::as_str)
             .ok_or_else(|| CoreError::Policy("apply_patch patch must be a string".into()))?;
-        let targets = materialize_patch_targets(self.workspace.root(), patch)?;
+        let mut workspaces = vec![self.workspace.clone()];
+        if let Some(session_id) = session_id
+            && let Some(snapshot) = self
+                .session_workspace_access
+                .snapshot_for(session_id, WorkspaceCapability::MutateRepository)
+                .map_err(|error| CoreError::Policy(error.to_string()))?
+        {
+            workspaces.extend(snapshot.additional_roots().iter().cloned());
+        }
+        let (workspace, rewritten_patch, targets) = materialize_patch_targets(&workspaces, patch)?;
         let capabilities = targets.iter().flat_map(|target| {
             [
                 Capability::new(CapabilityKind::FileRead, target.clone()),
@@ -841,7 +869,7 @@ impl LocalExecutorReviewer {
             "targets": &targets,
         }))
         .map_err(|error| CoreError::Policy(error.to_string()))?;
-        Ok(ActionReviewRequest::new(
+        let review = ActionReviewRequest::new(
             ResolvedAction::new(
                 ActionDigest::from_canonical_bytes(canonical),
                 ActionKind::FileSystemMutation,
@@ -853,15 +881,21 @@ impl LocalExecutorReviewer {
                 reason: "apply_patch validates every target through WorkspaceRoot and commits host-mediated file mutations".into(),
             },
             self.action_policy_revision.clone(),
-        ))
+        );
+        Ok((review, rewritten_patch, workspace))
     }
 }
 
 fn materialize_patch_targets(
-    workspace: &WorkspaceRoot,
+    workspaces: &[TrustedWorkspace],
     patch: &str,
-) -> Result<Vec<String>, CoreError> {
+) -> Result<(TrustedWorkspace, String, Vec<String>), CoreError> {
+    let primary = workspaces
+        .first()
+        .ok_or_else(|| CoreError::Policy("apply_patch has no authorized workspace".into()))?;
+    let mut selected: Option<TrustedWorkspace> = None;
     let mut targets = Vec::new();
+    let mut rewritten = Vec::new();
     for line in patch.lines() {
         let operation = [
             ("*** Update File: ", true),
@@ -871,6 +905,7 @@ fn materialize_patch_targets(
         .into_iter()
         .find_map(|(prefix, existing)| line.strip_prefix(prefix).map(|path| (path, existing)));
         let Some((path, existing)) = operation else {
+            rewritten.push(line.to_owned());
             continue;
         };
         if path.trim().is_empty() {
@@ -878,13 +913,49 @@ fn materialize_patch_targets(
                 "apply_patch contains an empty target path".into(),
             ));
         }
-        let resolved = if existing {
-            workspace.resolve_existing(path)
+        let path = Path::new(path);
+        let (workspace, relative) = if path.is_absolute() {
+            workspaces
+                .iter()
+                .filter_map(|workspace| {
+                    path.strip_prefix(workspace.root().canonical_path())
+                        .or_else(|_| path.strip_prefix(workspace.root().requested_path()))
+                        .ok()
+                        .map(|relative| (workspace.clone(), relative.to_path_buf()))
+                })
+                .max_by_key(|(workspace, _)| workspace.root().canonical_path().components().count())
+                .ok_or_else(|| {
+                    CoreError::Policy(format!(
+                        "apply_patch target is not in an authorized writable directory: {}",
+                        path.display()
+                    ))
+                })?
         } else {
-            workspace.resolve_for_write(path)
+            (primary.clone(), path.to_path_buf())
+        };
+        if let Some(selected) = &selected
+            && selected.root() != workspace.root()
+        {
+            return Err(CoreError::Policy(
+                "one apply_patch call cannot modify more than one workspace root".into(),
+            ));
+        }
+        selected = Some(workspace.clone());
+        let resolved = if existing {
+            workspace.root().resolve_existing(&relative)
+        } else {
+            workspace.root().resolve_for_write(&relative)
         }
         .map_err(|error| CoreError::Policy(error.to_string()))?;
         targets.push(resolved.display().to_string());
+        let prefix = if existing && line.starts_with("*** Update File: ") {
+            "*** Update File: "
+        } else if existing {
+            "*** Delete File: "
+        } else {
+            "*** Add File: "
+        };
+        rewritten.push(format!("{prefix}{}", relative.display()));
     }
     targets.sort();
     targets.dedup();
@@ -893,7 +964,11 @@ fn materialize_patch_targets(
             "apply_patch contains no file operations to review".into(),
         ));
     }
-    Ok(targets)
+    Ok((
+        selected.expect("a patch with targets selected one workspace"),
+        rewritten.join("\n"),
+        targets,
+    ))
 }
 
 struct LocalShellPolicy {

@@ -1,4 +1,5 @@
 use crate::protocol::resources::ResourceMetadataResult;
+use crate::protocol::workspace::WorkspaceSessionDirectorySelector;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -21,6 +22,9 @@ pub struct FsGetMetadataParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub workspace_folder_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
     pub path: PathBuf,
 }
 
@@ -43,6 +47,9 @@ pub struct FsReadDirectoryParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub workspace_folder_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
     pub path: PathBuf,
 }
 
@@ -68,6 +75,9 @@ pub struct FsReadFileParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub workspace_folder_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
     pub path: PathBuf,
 }
 
@@ -87,6 +97,9 @@ pub struct FsReadBinaryFileParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub workspace_folder_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
     pub path: PathBuf,
 }
 
@@ -106,6 +119,9 @@ pub struct FsWriteFileParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub workspace_folder_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
     pub path: PathBuf,
     pub content: String,
     /// When supplied, rejects the write if the file no longer has this exact revision.
@@ -155,6 +171,9 @@ pub struct FsCreateFileParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub workspace_folder_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
     pub path: PathBuf,
     pub existing: FsExistingTargetBehavior,
 }
@@ -166,6 +185,9 @@ pub struct FsRenameParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub workspace_folder_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
     pub source: PathBuf,
     pub target: PathBuf,
     pub existing: FsExistingTargetBehavior,
@@ -178,6 +200,9 @@ pub struct FsDeleteParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub workspace_folder_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
     pub path: PathBuf,
     pub missing: FsMissingTargetBehavior,
     pub mode: FsDeleteMode,

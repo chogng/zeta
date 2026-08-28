@@ -77,6 +77,35 @@ fn applies_an_update_and_an_add_after_preparing_the_whole_patch() {
 }
 
 #[test]
+fn applies_a_host_selected_workspace_root() {
+    let primary = TestWorkspace::new();
+    let selected = TestWorkspace::new();
+    let tool = ApplyPatchTool::new(
+        environment_id(),
+        primary.root(),
+        ApplyPatchLimits::default(),
+    )
+    .unwrap();
+    let definition = tool.definition();
+    let patch = "*** Begin Patch\n*** Add File: selected.txt\n+selected\n*** End Patch\n";
+
+    let outcome = resolve(tool.execute(invocation(
+        &definition,
+        json!({"patch": patch, "workspace_root": selected.path()}),
+    )));
+
+    let ToolExecutionOutcome::Returned(output) = outcome else {
+        panic!("patch should return a tool output");
+    };
+    assert_eq!(output.status(), ToolOutputStatus::Success);
+    assert!(!primary.path().join("selected.txt").exists());
+    assert_eq!(
+        fs::read_to_string(selected.path().join("selected.txt")).unwrap(),
+        "selected\n"
+    );
+}
+
+#[test]
 fn failed_later_operation_does_not_commit_an_earlier_add() {
     let workspace = TestWorkspace::new();
     workspace.write("src/lib.rs", "actual\n");

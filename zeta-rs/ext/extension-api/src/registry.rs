@@ -138,9 +138,12 @@ impl ExtensionRegistry {
         let mut activations = Vec::new();
         let mut identities = BTreeSet::new();
         for contributor in &self.skill_activation {
-            for activation in
-                contributor.contribute(SkillActivationContext::new(input.user_input()))?
-            {
+            for activation in contributor.contribute(match input.session_id() {
+                Some(session_id) => {
+                    SkillActivationContext::for_session(session_id, input.user_input())
+                }
+                None => SkillActivationContext::new(input.user_input()),
+            })? {
                 if !identities.insert(activation.id.clone()) {
                     return Err(ExtensionError::new(format!(
                         "multiple extensions activated Skill '{}:{}'",
@@ -159,11 +162,19 @@ impl ExtensionRegistry {
     ) -> Result<Vec<PromptFragment>, ExtensionError> {
         let mut fragments = Vec::new();
         for contributor in &self.turn_input {
-            fragments.extend(contributor.contribute(TurnInputContext::new(
-                input.thread_id(),
-                input.turn_id(),
-                input.activated_skills(),
-            ))?);
+            fragments.extend(contributor.contribute(match input.session_id() {
+                Some(session_id) => TurnInputContext::for_session(
+                    session_id,
+                    input.thread_id(),
+                    input.turn_id(),
+                    input.activated_skills(),
+                ),
+                None => TurnInputContext::new(
+                    input.thread_id(),
+                    input.turn_id(),
+                    input.activated_skills(),
+                ),
+            })?);
         }
         Ok(fragments)
     }

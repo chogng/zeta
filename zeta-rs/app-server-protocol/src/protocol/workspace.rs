@@ -47,6 +47,14 @@ pub enum WorkspaceTrustStateDto {
     Trusted,
 }
 
+/// Selects one Session-scoped additional directory for a Workspace capability request.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceSessionDirectorySelector {
+    pub session_id: SessionId,
+    pub root: PathBuf,
+}
+
 /// Reads the durable user decision and effective UserConfig state for one exact canonical Workspace.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -167,6 +175,19 @@ pub struct WorkspaceAdditionalDirectoryDto {
     pub root: PathBuf,
     pub trust: WorkspaceTrustStateDto,
     pub permissions: Vec<WorkspaceAdditionalDirectoryPermissionDto>,
+    #[serde(default)]
+    pub contributions: WorkspaceAdditionalDirectoryContributionsDto,
+}
+
+/// Inert declarations discovered from one authorized additional directory.
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceAdditionalDirectoryContributionsDto {
+    pub skills: Vec<String>,
+    pub mcp_servers: Vec<String>,
+    pub hooks: Vec<String>,
+    pub plugins: Vec<String>,
+    pub diagnostics: Vec<String>,
 }
 
 /// User-visible capability granted to one session-scoped additional directory.
@@ -179,7 +200,14 @@ pub enum WorkspaceAdditionalDirectoryPermissionDto {
     WriteFiles,
     ExecuteCommands,
     WatchFileChanges,
-    LoadProjectConfiguration,
+    UseWorkspaceFiles,
+    UseWorkspaceSearch,
+    LoadInstructionsAndAgents,
+    DiscoverSkills,
+    DiscoverMcp,
+    UseLanguageServices,
+    DiscoverHooks,
+    DiscoverPlugins,
 }
 
 /// Reads the additional directories retained by one product Session.

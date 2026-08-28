@@ -434,12 +434,18 @@ impl TurnExecutor {
                 return Ok(TurnExecutionOutcome::WaitingForCapability);
             }
         }
+        let session_id = self
+            .threads
+            .read_thread(thread_id)
+            .map_err(ExecutionFailure::persistence)?
+            .session_id;
         let sequence = self
             .threads
             .complete_turn_without_agent_message(thread_id, turn_id)
             .map_err(ExecutionFailure::persistence)?;
         let _ = self.hooks.turn_completed(
             &TurnCompletedHookRequest {
+                session_id,
                 thread_id: thread_id.clone(),
                 turn_id: turn_id.clone(),
             },
@@ -639,7 +645,8 @@ impl TurnExecutor {
             };
             let extension_fragments = self
                 .extensions
-                .contribute_turn_input(zeta_extension_api::TurnInputContext::new(
+                .contribute_turn_input(zeta_extension_api::TurnInputContext::for_session(
+                    &snapshot.session_id,
                     thread_id,
                     turn_id,
                     &turn.activated_skills,
@@ -834,8 +841,14 @@ impl TurnExecutor {
                         continue 'model_steps;
                     }
                 };
+                let session_id = self
+                    .threads
+                    .read_thread(thread_id)
+                    .map_err(ExecutionFailure::persistence)?
+                    .session_id;
                 let _ = self.hooks.turn_completed(
                     &TurnCompletedHookRequest {
+                        session_id,
                         thread_id: thread_id.clone(),
                         turn_id: turn_id.clone(),
                     },

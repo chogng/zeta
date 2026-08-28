@@ -15,6 +15,7 @@ use serde_json::json;
 use std::fmt;
 use std::fs;
 use std::future;
+use std::path::PathBuf;
 use zeta_tools::{
     ToolConcurrency, ToolConflictClass, ToolDefinition, ToolExecutionFuture, ToolExecutionOutcome,
     ToolExecutor, ToolInputSchema, ToolInvocation, ToolLoading, ToolName, ToolOutput,
@@ -132,6 +133,15 @@ impl ApplyPatchTool {
                 self.limits.max_patch_bytes()
             ));
         }
+        let workspace = match input.workspace_root {
+            Some(root) => match WorkspaceRoot::open(root) {
+                Ok(workspace) => workspace,
+                Err(error) => {
+                    return not_started(format!("workspace root is unavailable: {error}"));
+                }
+            },
+            None => self.workspace.clone(),
+        };
         let document = match PatchDocument::parse(&input.patch) {
             Ok(document) => document,
             Err(error) => return returned_error(format!("invalid patch: {error}")),
@@ -147,7 +157,7 @@ impl ApplyPatchTool {
             return not_started("patch application was cancelled before writes began");
         }
 
-        let prepared = match self.prepare(document) {
+        let prepared = match Self::prepare(&workspace, document) {
             Ok(prepared) => prepared,
             Err(error) => return returned_error(format!("patch could not be prepared: {error}")),
         };
@@ -172,19 +182,24 @@ impl ApplyPatchTool {
         }
     }
 
-    fn prepare(&self, document: PatchDocument) -> Result<Vec<PreparedChange>, PatchError> {
+    fn prepare(
+        workspace: &WorkspaceRoot,
+        document: PatchDocument,
+    ) -> Result<Vec<PreparedChange>, PatchError> {
         document
             .operations
             .into_iter()
-            .map(|operation| self.prepare_operation(operation))
+            .map(|operation| Self::prepare_operation(workspace, operation))
             .collect()
     }
 
-    fn prepare_operation(&self, operation: PatchOperation) -> Result<PreparedChange, PatchError> {
+    fn prepare_operation(
+        workspace: &WorkspaceRoot,
+        operation: PatchOperation,
+    ) -> Result<PreparedChange, PatchError> {
         match operation {
             PatchOperation::Update { path, hunks } => {
-                let target = self
-                    .workspace
+                let target = workspace
                     .resolve_existing(&path)
                     .map_err(PatchError::sandbox)?;
                 let metadata = fs::metadata(&target).map_err(PatchError::io)?;
@@ -205,8 +220,7 @@ impl ApplyPatchTool {
                 })
             }
             PatchOperation::Add { path, lines } => {
-                let target = self
-                    .workspace
+                let target = workspace
                     .resolve_for_write(&path)
                     .map_err(PatchError::sandbox)?;
                 if target.exists() {
@@ -233,8 +247,7 @@ impl ApplyPatchTool {
                 })
             }
             PatchOperation::Delete { path } => {
-                let target = self
-                    .workspace
+                let target = workspace
                     .resolve_existing(&path)
                     .map_err(PatchError::sandbox)?;
                 if !fs::metadata(&target).map_err(PatchError::io)?.is_file() {
@@ -272,6 +285,8 @@ impl ToolExecutor for ApplyPatchTool {
 #[serde(deny_unknown_fields)]
 struct ApplyPatchInput {
     patch: String,
+    #[serde(default)]
+    workspace_root: Option<PathBuf>,
 }
 
 fn apply_patch_definition() -> Result<ToolDefinition, ApplyPatchError> {

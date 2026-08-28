@@ -356,7 +356,7 @@ fn apply_patch_reviewer_materializes_workspace_paths_before_policy() {
             "patch": "*** Begin Patch\n*** Add File: added.txt\n+hello\n*** End Patch"
         }),
     };
-    let review = reviewer.prepare_apply_patch(&patch).unwrap();
+    let (review, _, _) = reviewer.prepare_apply_patch(&patch, None).unwrap();
     assert!(matches!(
         LocalShellPolicy::default()
             .decide(&review, &CancellationSource::new().token())
@@ -371,7 +371,55 @@ fn apply_patch_reviewer_materializes_workspace_paths_before_policy() {
             "patch": "*** Begin Patch\n*** Add File: ../outside.txt\n+bad\n*** End Patch"
         }),
     };
-    assert!(reviewer.prepare_apply_patch(&escaping).is_err());
+    assert!(reviewer.prepare_apply_patch(&escaping, None).is_err());
+}
+
+#[test]
+fn apply_patch_reviewer_selects_the_session_authorized_additional_directory() {
+    let primary = TestWorkspace::new();
+    let additional = TestWorkspace::new();
+    let access = Arc::new(crate::session_workspace_access::SessionWorkspaceAccess::default());
+    let session_id = SessionId::new("apply-patch-additional-directory").unwrap();
+    access
+        .add_directory(
+            session_id.clone(),
+            primary.root(),
+            WorkspaceAuthorization::new(
+                additional.root(),
+                WorkspaceTrustDecision::Trusted(WorkspaceTrustSource::ExplicitUserDecision),
+            ),
+            AdditionalDirectoryPermissions::new([
+                AdditionalDirectoryPermission::ReadFiles,
+                AdditionalDirectoryPermission::WriteFiles,
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+    let reviewer = LocalExecutorReviewer {
+        workspace: primary.trusted(),
+        ripgrep: RipgrepExecutable::from_path(primary.ripgrep()).unwrap(),
+        action_policy_revision: local_policy_revision(),
+        session_workspace_access: access,
+    };
+    let absolute = additional.path().join("added.txt");
+    let call = ToolCall {
+        id: ToolCallId::new("apply-patch-additional").unwrap(),
+        name: ToolName::new("apply_patch").unwrap(),
+        arguments: json!({
+            "patch": format!(
+                "*** Begin Patch\n*** Add File: {}\n+hello\n*** End Patch",
+                absolute.display()
+            )
+        }),
+    };
+
+    let (_, rewritten, workspace) = reviewer
+        .prepare_apply_patch(&call, Some(&session_id))
+        .unwrap();
+
+    assert_eq!(workspace.root(), &additional.root());
+    assert!(rewritten.contains("*** Add File: added.txt"));
+    assert!(!rewritten.contains(&absolute.display().to_string()));
 }
 
 #[test]

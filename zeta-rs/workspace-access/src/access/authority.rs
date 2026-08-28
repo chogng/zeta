@@ -2,7 +2,6 @@ use crate::AdditionalDirectory;
 use crate::AdditionalDirectoryContributionPolicy;
 use crate::AdditionalDirectoryPermissions;
 use crate::AdditionalDirectorySource;
-use crate::AdditionalInstructionsPolicy;
 use crate::WorkspaceAccessError;
 use crate::WorkspaceAccessMutation;
 use crate::WorkspaceAccessRevision;
@@ -180,32 +179,57 @@ impl WorkspaceAccessAuthority {
     pub fn contribution_policy(
         &self,
         root: &WorkspaceRoot,
-        instructions: AdditionalInstructionsPolicy,
     ) -> AdditionalDirectoryContributionPolicy {
-        use crate::AdditionalDirectoryPermission;
+        use crate::AdditionalDirectoryContribution as Contribution;
+        use crate::AdditionalDirectoryPermission as Permission;
 
-        let permitted = self
+        let contributions = self
             .authorizations
             .get(root.canonical_path())
             .into_iter()
             .flat_map(BTreeMap::iter)
-            .any(|(source, grant)| {
-                source.permits_project_contributions()
-                    && grant
-                        .permissions
-                        .allows(AdditionalDirectoryPermission::LoadProjectConfiguration)
+            .filter(|(source, _)| source.permits_project_contributions())
+            .flat_map(|(_, grant)| {
+                let permissions = &grant.permissions;
+                [
+                    permissions
+                        .allows(Permission::LoadInstructionsAndAgents)
+                        .then_some(
+                            [
+                                Contribution::AgentDefinitions,
+                                Contribution::ProjectInstructions,
+                                Contribution::InstructionRules,
+                                Contribution::LocalInstructions,
+                            ]
+                            .as_slice(),
+                        ),
+                    permissions
+                        .allows(Permission::DiscoverSkills)
+                        .then_some([Contribution::Skills].as_slice()),
+                    permissions
+                        .allows(Permission::DiscoverMcp)
+                        .then_some([Contribution::McpServers].as_slice()),
+                    permissions
+                        .allows(Permission::UseLanguageServices)
+                        .then_some([Contribution::LanguageServices].as_slice()),
+                    permissions
+                        .allows(Permission::DiscoverHooks)
+                        .then_some([Contribution::Hooks].as_slice()),
+                    permissions.allows(Permission::DiscoverPlugins).then_some(
+                        [
+                            Contribution::EnabledPlugins,
+                            Contribution::ExtraKnownMarketplaces,
+                        ]
+                        .as_slice(),
+                    ),
+                ]
+                .into_iter()
+                .flatten()
+                .flatten()
+                .copied()
+                .collect::<Vec<_>>()
             });
-        if !permitted {
-            return AdditionalDirectoryContributionPolicy::FileAccessOnly;
-        }
-        match instructions {
-            AdditionalInstructionsPolicy::Exclude => {
-                AdditionalDirectoryContributionPolicy::AllowlistedProjectContributions
-            }
-            AdditionalInstructionsPolicy::Include => {
-                AdditionalDirectoryContributionPolicy::AllowlistedProjectContributionsWithInstructions
-            }
-        }
+        AdditionalDirectoryContributionPolicy::new(contributions)
     }
 
     /// Replaces the complete permission set for one root/source pair.

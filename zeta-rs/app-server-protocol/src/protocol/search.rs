@@ -1,3 +1,4 @@
+use crate::protocol::workspace::WorkspaceSessionDirectorySelector;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -27,6 +28,9 @@ pub struct WorkspaceSearchStartParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub workspace_folder_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
     #[schemars(length(min = 1, max = 16384))]
     pub query: String,
     pub pattern_kind: WorkspaceSearchPatternKind,
@@ -53,6 +57,9 @@ pub struct WorkspaceSearchReadParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub workspace_folder_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
     #[schemars(length(min = 1))]
     pub search_id: String,
     pub after_match: usize,
@@ -97,6 +104,9 @@ pub struct WorkspaceSearchCancelParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub workspace_folder_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub session_directory: Option<WorkspaceSessionDirectorySelector>,
     #[schemars(length(min = 1))]
     pub search_id: String,
 }

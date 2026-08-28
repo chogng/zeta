@@ -550,7 +550,8 @@ fn config_mouse_selection_emits_a_revision_bound_edit() {
     assert!(matches!(
         action,
         Some(AppCommand::EditConfig(edit))
-            if edit.terminal.expected_revision == 7 && !edit.terminal.mouse_interactions
+            if edit.terminal.expected_revision == 7
+                && !edit.terminal.settings.mouse_interactions()
     ));
 }
 
@@ -560,6 +561,7 @@ fn config_directory_permission_selection_emits_a_revision_bound_server_edit() {
     let directories = WorkspaceAdditionalDirectoryListResult {
         revision: 3,
         directories: vec![WorkspaceAdditionalDirectoryDto {
+            contributions: Default::default(),
             root: "/workspace/shared".into(),
             trust: WorkspaceTrustStateDto::Trusted,
             permissions: vec![
@@ -578,6 +580,9 @@ fn config_directory_permission_selection_emits_a_revision_bound_server_edit() {
         &directories,
     )));
     app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    for _ in 0..12 {
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    }
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
