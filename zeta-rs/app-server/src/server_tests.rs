@@ -199,7 +199,7 @@ fn model_ref(model: &str) -> ModelRef {
 fn provider_rpc_lists_the_backend_catalog_and_stores_api_keys_without_projecting_values() {
     let secrets = Arc::new(MemorySecretStore::default());
     let server = server().with_provider_credentials(Arc::new(
-        crate::provider_credentials::ProviderCredentialService::new(
+        zeta_model_provider::ProviderCredentialService::new(
             zeta_model_provider_config::ProviderConfigRegistry::builtin(),
             secrets,
         ),

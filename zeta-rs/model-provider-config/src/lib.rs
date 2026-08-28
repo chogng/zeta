@@ -12,6 +12,7 @@ mod static_model_spec;
 pub use config::ModelContextConfig;
 pub use config::ModelProviderConfig;
 pub use config::NormalizedModelProviderConfig;
+pub use definition::ApiKeyHeader;
 pub use definition::ApiKeyPolicy;
 pub use definition::ApiProfile;
 pub use definition::ApprovalReviewModelDefault;

@@ -1159,7 +1159,7 @@ pub fn open_local_app_server_with_code_index_providers(
     }
     .with_model_catalog(direct_catalog)
     .with_provider_credentials(Arc::new(
-        crate::provider_credentials::ProviderCredentialService::new(
+        zeta_model_provider::ProviderCredentialService::new(
             provider_configs.clone(),
             Arc::clone(&profile_secrets),
         ),

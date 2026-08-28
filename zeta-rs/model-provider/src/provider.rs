@@ -1,8 +1,8 @@
 use crate::ModelProviderError;
+use crate::ProviderCredentialService;
 use crate::lazy_client::LazyOperationClient;
 use crate::providers;
 use crate::providers::ProviderAdapter;
-use crate::providers::ProviderTarget;
 use std::sync::Arc;
 use zeta_api::ApiProtocol;
 use zeta_api::ContentPart;
@@ -21,15 +21,12 @@ use zeta_client::ResolvedApiTarget;
 use zeta_client::ZetaClient;
 use zeta_context_engine::ContextTokenMeasurementCapability;
 use zeta_context_engine::ContextTokenMeasurementOutcome;
-use zeta_http_client::HttpHeader;
 use zeta_http_client::UreqHttpClient;
 use zeta_kimi::KimiOAuth;
-use zeta_model_provider_config::ApiKeyPolicy;
 use zeta_model_provider_config::Model;
 use zeta_model_provider_config::ModelId;
 use zeta_model_provider_config::ModelProviderConfig;
 use zeta_model_provider_config::NormalizedModelProviderConfig;
-use zeta_model_provider_config::ProviderAdapter as ProviderAdapterKind;
 use zeta_model_provider_config::ProviderConfigError;
 use zeta_model_provider_config::ProviderConfigRegistry;
 use zeta_model_provider_config::ProviderDefinition;
@@ -44,13 +41,21 @@ use zeta_models_manager::ModelsManagerError;
 use zeta_protocol::CapabilitySupport;
 use zeta_protocol::ModelOutputTransport;
 use zeta_protocol::ModelRef;
-use zeta_secrets::SecretKey;
 use zeta_secrets::SecretStore;
-use zeta_secrets::UnavailableSecretStore;
 
-pub fn provider_api_key_secret_key(provider: &ProviderId) -> SecretKey {
-    SecretKey::new(format!("provider/{provider}/default/api-key"))
-        .expect("validated provider IDs produce valid secret keys")
+enum ProviderConnection {
+    Direct {
+        credential_headers: Vec<zeta_http_client::HttpHeader>,
+    },
+    Subscription {
+        target: ResolvedApiTarget,
+    },
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum RemoteMeasurement {
+    Enabled,
+    Disabled,
 }
 
 #[derive(Clone)]
@@ -59,18 +64,20 @@ pub struct Provider {
     config: NormalizedModelProviderConfig,
     models: ModelsManager,
     adapter: Arc<dyn ProviderAdapter>,
+    target: ResolvedApiTarget,
+    remote_measurement: RemoteMeasurement,
     client: Arc<dyn OperationClient>,
     local_counter: providers::measurement::LocalInputTokenCounter,
 }
 
 impl Provider {
-    pub(crate) fn instantiate(
+    fn instantiate(
         definition: ProviderDefinition,
         config: NormalizedModelProviderConfig,
         models: ModelsManager,
         client: Arc<dyn OperationClient>,
         local_tokenizers: Arc<dyn LocalTokenizerService>,
-        adapter_target: Option<ProviderTarget>,
+        connection: ProviderConnection,
     ) -> Result<Self, ModelProviderError> {
         if definition.id != config.provider {
             return Err(ProviderConfigError::ProviderMismatch {
@@ -79,7 +86,20 @@ impl Provider {
             }
             .into());
         }
-        let adapter = providers::instantiate(definition.adapter, &config, adapter_target);
+        let adapter = providers::instantiate(definition.adapter, &config);
+        let (target, remote_measurement) = match connection {
+            ProviderConnection::Direct {
+                mut credential_headers,
+            } => {
+                let mut headers = adapter.fixed_headers();
+                headers.append(&mut credential_headers);
+                (
+                    ResolvedApiTarget::new(config.base_url.clone(), headers),
+                    RemoteMeasurement::Enabled,
+                )
+            }
+            ProviderConnection::Subscription { target } => (target, RemoteMeasurement::Disabled),
+        };
         let local_counter = providers::measurement::LocalInputTokenCounter::new(
             config.provider.clone(),
             local_tokenizers,
@@ -89,6 +109,8 @@ impl Provider {
             config,
             models,
             adapter,
+            target,
+            remote_measurement,
             client,
             local_counter,
         })
@@ -141,6 +163,7 @@ impl Provider {
             model.capabilities.image_detail_original == CapabilitySupport::Supported;
         let _image_detail_decisions = request.sanitize_image_details(supports_original);
         self.adapter.complete(
+            &self.target,
             model.id.as_str(),
             &request,
             self.client.as_ref(),
@@ -161,6 +184,7 @@ impl Provider {
             model.capabilities.image_detail_original == CapabilitySupport::Supported;
         let _image_detail_decisions = request.sanitize_image_details(supports_original);
         self.adapter.stream(
+            &self.target,
             model.id.as_str(),
             &request,
             self.client.as_ref(),
@@ -174,9 +198,12 @@ impl Provider {
         model_id: &ModelId,
     ) -> Result<ContextTokenMeasurementCapability, ModelProviderError> {
         let model = self.resolve_model(model_id)?;
-        let provider = self
-            .adapter
-            .input_token_measurement_capability(model.id.as_str());
+        let provider = if self.remote_measurement == RemoteMeasurement::Enabled {
+            self.adapter
+                .input_token_measurement_capability(model.id.as_str())
+        } else {
+            ContextTokenMeasurementCapability::Unavailable
+        };
         if provider != ContextTokenMeasurementCapability::Unavailable {
             Ok(provider)
         } else if self.local_counter.supports(model.id.as_str()) {
@@ -193,12 +220,17 @@ impl Provider {
         cancellation: &CancellationToken,
     ) -> Result<ContextTokenMeasurementOutcome, ModelProviderError> {
         let model = self.resolve_model(model_id)?;
-        let provider = self.adapter.measure_input(
-            model.id.as_str(),
-            request,
-            self.client.as_ref(),
-            cancellation,
-        );
+        let provider = if self.remote_measurement == RemoteMeasurement::Enabled {
+            self.adapter.measure_input(
+                &self.target,
+                model.id.as_str(),
+                request,
+                self.client.as_ref(),
+                cancellation,
+            )
+        } else {
+            Ok(ContextTokenMeasurementOutcome::Unavailable)
+        };
         match provider {
             Ok(ContextTokenMeasurementOutcome::Measured(measurement)) => {
                 return Ok(ContextTokenMeasurementOutcome::Measured(measurement));
@@ -236,8 +268,7 @@ pub struct ModelProviderRuntime {
     configs: ProviderConfigRegistry,
     models: ModelsManager,
     client: Arc<dyn OperationClient>,
-    secrets: Arc<dyn SecretStore>,
-    enforce_api_keys: bool,
+    credentials: Option<ProviderCredentialService>,
     local_tokenizers: Arc<dyn LocalTokenizerService>,
     chatgpt_oauth: Option<Arc<ChatGptOAuth>>,
     kimi_oauth: Option<Arc<KimiOAuth>>,
@@ -257,8 +288,7 @@ impl ModelProviderRuntime {
             configs,
             models,
             client,
-            secrets: Arc::new(UnavailableSecretStore),
-            enforce_api_keys: false,
+            credentials: None,
             local_tokenizers: Arc::new(LocalTokenizerRegistry::new()),
             chatgpt_oauth: None,
             kimi_oauth: None,
@@ -279,12 +309,12 @@ impl ModelProviderRuntime {
         secrets: Arc<dyn SecretStore>,
     ) -> Self {
         let models = ModelsManager::new(configs.clone());
+        let credentials = ProviderCredentialService::new(configs.clone(), Arc::clone(&secrets));
         Self {
             configs,
             models,
             client,
-            secrets,
-            enforce_api_keys: true,
+            credentials: Some(credentials),
             local_tokenizers: Arc::new(LocalTokenizerRegistry::new()),
             chatgpt_oauth: None,
             kimi_oauth: None,
@@ -303,13 +333,13 @@ impl ModelProviderRuntime {
         self
     }
 
-    /// Installs the native Kimi Code OAuth authority used by subscription model rows.
+    /// Installs the Kimi Code OAuth authority used by subscription model rows.
     pub fn with_kimi_oauth(mut self, kimi_oauth: Arc<KimiOAuth>) -> Self {
         self.kimi_oauth = Some(kimi_oauth);
         self
     }
 
-    /// Installs the native ChatGPT OAuth authority used by subscription model rows.
+    /// Installs the ChatGPT OAuth authority used by subscription model rows.
     pub fn with_chatgpt_oauth(mut self, chatgpt_oauth: Arc<ChatGptOAuth>) -> Self {
         self.chatgpt_oauth = Some(chatgpt_oauth);
         self
@@ -342,8 +372,8 @@ impl ModelProviderRuntime {
         model_ref: &ModelRef,
     ) -> Result<Arc<dyn ModelInvoker>, ModelProviderError> {
         let normalized = self.configs.normalize_for(config, &model_ref.provider)?;
-        let adapter_target = self.adapter_target(&normalized, model_ref)?;
-        self.instantiate_normalized_with_target(normalized, adapter_target)?
+        let connection = self.connection(model_ref)?;
+        self.instantiate_normalized_with_connection(normalized, connection)?
             .build_model(&model_ref.model)
     }
 
@@ -354,8 +384,8 @@ impl ModelProviderRuntime {
         request: &ModelRequest,
     ) -> Result<ModelResponse, ModelProviderError> {
         let normalized = self.configs.normalize_for(config, &model_ref.provider)?;
-        let adapter_target = self.adapter_target(&normalized, model_ref)?;
-        self.instantiate_normalized_with_target(normalized, adapter_target)?
+        let connection = self.connection(model_ref)?;
+        self.instantiate_normalized_with_connection(normalized, connection)?
             .complete(&model_ref.model, request)
     }
 
@@ -363,13 +393,14 @@ impl ModelProviderRuntime {
         &self,
         normalized: NormalizedModelProviderConfig,
     ) -> Result<Provider, ModelProviderError> {
-        self.instantiate_normalized_with_target(normalized, None)
+        let connection = self.direct_connection(&normalized.provider)?;
+        self.instantiate_normalized_with_connection(normalized, connection)
     }
 
-    fn instantiate_normalized_with_target(
+    fn instantiate_normalized_with_connection(
         &self,
         normalized: NormalizedModelProviderConfig,
-        adapter_target: Option<ProviderTarget>,
+        connection: ProviderConnection,
     ) -> Result<Provider, ModelProviderError> {
         let definition = self
             .configs
@@ -382,15 +413,11 @@ impl ModelProviderRuntime {
             self.models.clone(),
             self.client.clone(),
             self.local_tokenizers.clone(),
-            adapter_target,
+            connection,
         )
     }
 
-    fn adapter_target(
-        &self,
-        config: &NormalizedModelProviderConfig,
-        model: &ModelRef,
-    ) -> Result<Option<ProviderTarget>, ModelProviderError> {
+    fn connection(&self, model: &ModelRef) -> Result<ProviderConnection, ModelProviderError> {
         match find_static_model(model).map(|spec| spec.runtime) {
             Some(StaticModelRuntime::KimiCode) => self
                 .kimi_oauth
@@ -399,7 +426,7 @@ impl ModelProviderRuntime {
                     ModelProviderError::Credential("Kimi Code OAuth is unavailable".into())
                 })?
                 .api_target()
-                .map(|target| Some(ProviderTarget::subscription(target)))
+                .map(|target| ProviderConnection::Subscription { target })
                 .map_err(|error| ModelProviderError::Credential(error.to_string())),
             Some(StaticModelRuntime::ChatGptSubscription) => self
                 .chatgpt_oauth
@@ -408,65 +435,24 @@ impl ModelProviderRuntime {
                     ModelProviderError::Credential("ChatGPT OAuth is unavailable".into())
                 })?
                 .api_target()
-                .map(|target| Some(ProviderTarget::subscription(target)))
+                .map(|target| ProviderConnection::Subscription { target })
                 .map_err(|error| ModelProviderError::Credential(error.to_string())),
-            Some(StaticModelRuntime::ProviderApi) | None => self.provider_api_target(config),
+            Some(StaticModelRuntime::ProviderApi) | None => self.direct_connection(&model.provider),
         }
     }
 
-    fn provider_api_target(
+    fn direct_connection(
         &self,
-        config: &NormalizedModelProviderConfig,
-    ) -> Result<Option<ProviderTarget>, ModelProviderError> {
-        if !self.enforce_api_keys {
-            return Ok(None);
-        }
-        let definition = self
-            .configs
-            .get(&config.provider)
-            .expect("normalized provider is registered");
-        if definition.api_key_policy == ApiKeyPolicy::Unsupported {
-            return Ok(None);
-        }
-        let secret = self
-            .secrets
-            .load(&provider_api_key_secret_key(&config.provider))?;
-        let Some(secret) = secret else {
-            return match definition.api_key_policy {
-                ApiKeyPolicy::Optional => Ok(None),
-                ApiKeyPolicy::Required => Err(ModelProviderError::Credential(format!(
-                    "no API key is stored for provider '{}'",
-                    config.provider
-                ))),
-                ApiKeyPolicy::Unsupported => unreachable!("handled above"),
-            };
-        };
-        let value = std::str::from_utf8(secret.expose())
-            .map_err(|_| ModelProviderError::Credential("stored API key is not UTF-8".into()))?;
-        if value.is_empty() || value.chars().any(char::is_control) {
-            return Err(ModelProviderError::Credential(
-                "stored API key is invalid".into(),
-            ));
-        }
-        let mut headers = match definition.adapter {
-            ProviderAdapterKind::Google => {
-                vec![HttpHeader::new("x-goog-api-client", "zeta/0.1")]
-            }
-            ProviderAdapterKind::Zai => {
-                vec![HttpHeader::new("Accept-Language", "en-US,en")]
-            }
-            _ => Vec::new(),
-        };
-        headers.push(match definition.adapter {
-            ProviderAdapterKind::Anthropic => HttpHeader::new("x-api-key", value),
-            ProviderAdapterKind::Google => HttpHeader::new("x-goog-api-key", value),
-            ProviderAdapterKind::Ollama => unreachable!("Ollama rejects API-key storage"),
-            _ => HttpHeader::new("Authorization", format!("Bearer {value}")),
-        });
-        Ok(Some(ProviderTarget::provider_api(ResolvedApiTarget::new(
-            config.base_url.clone(),
-            headers,
-        ))))
+        provider: &ProviderId,
+    ) -> Result<ProviderConnection, ModelProviderError> {
+        let credential_headers = self
+            .credentials
+            .as_ref()
+            .map(|credentials| credentials.request_headers(provider))
+            .transpose()
+            .map_err(|error| ModelProviderError::Credential(error.to_string()))?
+            .unwrap_or_default();
+        Ok(ProviderConnection::Direct { credential_headers })
     }
 }
 
@@ -492,7 +478,7 @@ impl crate::SemanticModelProvider for ModelProviderRuntime {
         crate::semantic_runtime::SemanticRuntimeResolver {
             configs: self.configs.clone(),
             client: Arc::clone(&self.client),
-            secrets: Arc::clone(&self.secrets),
+            credentials: self.credentials.clone(),
         }
         .embedding_runtime(request)
     }
@@ -504,7 +490,7 @@ impl crate::SemanticModelProvider for ModelProviderRuntime {
         crate::semantic_runtime::SemanticRuntimeResolver {
             configs: self.configs.clone(),
             client: Arc::clone(&self.client),
-            secrets: Arc::clone(&self.secrets),
+            credentials: self.credentials.clone(),
         }
         .rerank_runtime(request)
     }

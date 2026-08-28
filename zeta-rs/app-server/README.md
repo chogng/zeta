@@ -173,9 +173,7 @@ vectors。用户选择模型并对 exact Workspace 授权源码外发后，Trust
 Trusted Workspace 同时获得 built-in read-only `search_code` 工具。它只接受
 `workspace-code-index-read-only` exact grant，调用 canonical `CodeRetrievalService`，并返回 bounded、
 current-source-verified excerpts 与 degradation；未配置 semantic 时自然退回 lexical。semantic grant
-精确绑定 Workspace、model selection 与 provider config，provider URL 或模型变化会卸载旧 runtime 并
-要求重新授权。`provider/list` 从同一个 built-in provider registry 投影供应商名称、API key 策略与
-是否已配置；`provider/apiKey/set` 只把入站密钥写入 profile `SecretStore`，不写普通配置、响应或日志。
+精确绑定 Workspace、model selection 与 provider config，provider URL 或模型变化会卸载旧 runtime 并要求重新授权。`provider/list` 通过 `zeta-model-provider::ProviderCredentialService` 从 built-in provider registry 读取供应商名称、API Key 策略与是否已配置；`provider/apiKey/set` 只负责协议转换并委托同一服务写入 profile `SecretStore`，App Server 不复制密钥校验、SecretKey 或 Header 规则，也不把密钥写入普通配置、响应或日志。
 
 Tool Search 拥有独立的 `toolSearch.embeddingModel`，不复用 CodeIndex 的模型选择。只有 User Config
 明确设置 `toolSearch.mode = "hybridEmbedding"` 才会调用；默认 `lexical` 不产生 embedding 请求。

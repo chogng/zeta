@@ -13,7 +13,7 @@ credential、secret、connection pool 或 process-local adapter。
 | --- | --- | --- |
 | `ModelProviderConfig` | 用户/host 可配置值 | provider、base URL、max output 与 per-model context metadata |
 | `ModelContextConfig` | 单模型的 Core budget metadata | positive context window、optional auto-compact limit |
-| `ProviderDefinition` | provider-owned declaration | adapter identity、HTTP/WebSocket API profile、endpoint/catalog/defaults、API key policy |
+| `ProviderDefinition` | provider-owned declaration | adapter identity、HTTP/WebSocket API profile、endpoint/catalog/defaults、API Key policy/header |
 | `NormalizedModelProviderConfig` | runtime-ready immutable config | provider/profile/base URL 已确定 |
 | `ProviderConfigRegistry` | definition authority | validate、register、merge、selection、normalize |
 | `STATIC_MODEL_CATALOG` / `StaticModelSpec` | 唯一 built-in model 目录 | model/provider ID、access、context、capabilities、reasoning、defaults |
@@ -25,6 +25,7 @@ credential、secret、connection pool 或 process-local adapter。
 | `EndpointPolicy` | provider default 或 configured-only | 不执行 DNS/network validation |
 | `ModelCatalogPolicy` | listed-only 或 allow-unlisted | 声明 static gate，由 `zeta-models-manager` 执行 canonical resolution |
 | `ApiKeyPolicy` | unsupported、optional 或 required | 只声明 host secret binding 要求，不持有密钥 |
+| `ApiKeyHeader` | Bearer、`x-api-key` 或 `x-goog-api-key` | 只声明 direct request 的认证 Header 形状，不读取密钥 |
 | `ApprovalReviewModelDefault` | automatic review default | active model 或 provider-declared model |
 | `ProviderConfigError` | static/normalization error | 不包含 transport/auth failure |
 

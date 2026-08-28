@@ -18,42 +18,17 @@ use zeta_model_provider_config::InputTokenCountProfile;
 use zeta_model_provider_config::NormalizedModelProviderConfig;
 
 pub(crate) struct GoogleAdapter {
-    target: ResolvedApiTarget,
     token_counter: Option<super::measurement::ProviderInputTokenCounter>,
     endpoint: ApiEndpoint,
 }
 
 impl GoogleAdapter {
     pub(crate) fn new(config: &NormalizedModelProviderConfig) -> Self {
-        let headers = vec![HttpHeader::new("x-goog-api-client", "zeta/0.1")];
         Self {
-            target: ResolvedApiTarget::new(config.base_url.clone(), headers.clone()),
             token_counter: super::measurement::ProviderInputTokenCounter::from_config(
                 config,
-                headers,
                 InputTokenCountProfile::GoogleGenerateContent,
             ),
-            endpoint: api_endpoint(config.api_profile),
-        }
-    }
-
-    pub(crate) fn with_target(
-        config: &NormalizedModelProviderConfig,
-        target: ResolvedApiTarget,
-        supports_input_measurement: bool,
-    ) -> Self {
-        let token_counter = supports_input_measurement
-            .then(|| {
-                super::measurement::ProviderInputTokenCounter::from_config(
-                    config,
-                    target.headers.clone(),
-                    InputTokenCountProfile::GoogleGenerateContent,
-                )
-            })
-            .flatten();
-        Self {
-            target,
-            token_counter,
             endpoint: api_endpoint(config.api_profile),
         }
     }
@@ -62,6 +37,10 @@ impl GoogleAdapter {
 impl ProviderAdapter for GoogleAdapter {
     fn protocol(&self) -> ApiProtocol {
         self.endpoint.protocol()
+    }
+
+    fn fixed_headers(&self) -> Vec<HttpHeader> {
+        vec![HttpHeader::new("x-goog-api-client", "zeta/0.1")]
     }
 
     fn input_token_measurement_capability(&self, model: &str) -> ContextTokenMeasurementCapability {
@@ -78,6 +57,7 @@ impl ProviderAdapter for GoogleAdapter {
 
     fn measure_input(
         &self,
+        target: &ResolvedApiTarget,
         model: &str,
         request: &ModelRequest,
         client: &dyn OperationClient,
@@ -90,7 +70,7 @@ impl ProviderAdapter for GoogleAdapter {
         else {
             return Ok(ContextTokenMeasurementOutcome::Unavailable);
         };
-        let count = match counter.count(model, request, client, cancellation) {
+        let count = match counter.count(target, model, request, client, cancellation) {
             Ok(count) => count,
             Err(ModelProviderError::Api(ApiError::InvalidRequest(_))) => {
                 return Ok(ContextTokenMeasurementOutcome::Unavailable);
@@ -102,24 +82,20 @@ impl ProviderAdapter for GoogleAdapter {
 
     fn complete(
         &self,
+        target: &ResolvedApiTarget,
         model: &str,
         request: &ModelRequest,
         client: &dyn OperationClient,
         cancellation: &CancellationToken,
     ) -> Result<ModelResponse, ModelProviderError> {
         self.endpoint
-            .complete_with_client_and_cancellation(
-                &self.target,
-                model,
-                request,
-                client,
-                cancellation,
-            )
+            .complete_with_client_and_cancellation(target, model, request, client, cancellation)
             .map_err(Into::into)
     }
 
     fn stream(
         &self,
+        target: &ResolvedApiTarget,
         model: &str,
         request: &ModelRequest,
         client: &dyn OperationClient,
@@ -128,7 +104,7 @@ impl ProviderAdapter for GoogleAdapter {
     ) -> Result<ModelResponse, ModelProviderError> {
         stream_endpoint(
             self.endpoint,
-            &self.target,
+            target,
             model,
             request,
             client,

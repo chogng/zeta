@@ -10,7 +10,6 @@ use zeta_context_engine::ContextTokenCount;
 use zeta_context_engine::ContextTokenMeasurement;
 use zeta_context_engine::ContextTokenMeasurementOutcome;
 use zeta_context_engine::ContextTokenMeasurementSource;
-use zeta_http_client::HttpHeader;
 use zeta_model_provider_config::InputTokenCountModelPolicy;
 use zeta_model_provider_config::InputTokenCountProfile;
 use zeta_model_provider_config::ModelId;
@@ -23,7 +22,7 @@ use zeta_protocol::ModelRef;
 
 pub(crate) struct ProviderInputTokenCounter {
     endpoint: InputTokenCountEndpoint,
-    target: ResolvedApiTarget,
+    base_url: String,
     models: InputTokenCountModelPolicy,
 }
 
@@ -71,7 +70,6 @@ impl LocalInputTokenCounter {
 impl ProviderInputTokenCounter {
     pub(crate) fn from_config(
         config: &NormalizedModelProviderConfig,
-        headers: Vec<HttpHeader>,
         expected_profile: InputTokenCountProfile,
     ) -> Option<Self> {
         let count = config.input_token_count.as_ref()?;
@@ -80,7 +78,7 @@ impl ProviderInputTokenCounter {
         }
         Some(Self {
             endpoint: endpoint(count.profile),
-            target: ResolvedApiTarget::new(count.base_url.clone(), headers),
+            base_url: count.base_url.clone(),
             models: count.models.clone(),
         })
     }
@@ -93,13 +91,16 @@ impl ProviderInputTokenCounter {
 
     pub(crate) fn count(
         &self,
+        invocation_target: &ResolvedApiTarget,
         model: &str,
         request: &ModelRequest,
         client: &dyn OperationClient,
         cancellation: &CancellationToken,
     ) -> Result<InputTokenCount, ModelProviderError> {
+        let target =
+            ResolvedApiTarget::new(self.base_url.clone(), invocation_target.headers.clone());
         self.endpoint
-            .count_with_client_and_cancellation(&self.target, model, request, client, cancellation)
+            .count_with_client_and_cancellation(&target, model, request, client, cancellation)
             .map_err(Into::into)
     }
 }

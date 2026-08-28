@@ -1,10 +1,12 @@
 use super::{AppServer, RpcError, decode, result};
-use crate::provider_credentials::ProviderCredentialError;
 use serde_json::Value;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_app_server_protocol::protocol::provider::{
-    ProviderApiKeySetParams, ProviderApiKeySetResult, ProviderListResult,
+    ProviderApiKeyPolicyDto, ProviderApiKeySetParams, ProviderApiKeySetResult,
+    ProviderCatalogEntryDto, ProviderListResult,
 };
+use zeta_model_provider::ProviderCredentialError;
+use zeta_model_provider_config::ApiKeyPolicy;
 use zeta_model_provider_config::ProviderId;
 
 impl AppServer {
@@ -13,8 +15,17 @@ impl AppServer {
             .provider_credentials
             .as_ref()
             .ok_or_else(provider_credentials_unavailable)?
-            .list()
+            .catalog()
             .map_err(provider_credential_error)?;
+        let providers = providers
+            .into_iter()
+            .map(|provider| ProviderCatalogEntryDto {
+                provider: provider.provider.to_string(),
+                display_name: provider.display_name,
+                api_key_policy: api_key_policy_dto(provider.api_key_policy),
+                api_key_configured: provider.api_key_configured,
+            })
+            .collect();
         result(&ProviderListResult { providers })
     }
 
@@ -45,12 +56,22 @@ fn provider_credential_error(error: ProviderCredentialError) -> RpcError {
         | ProviderCredentialError::InvalidApiKey => {
             RpcError::new(-32602, AppServerErrorName::InvalidParams)
         }
-        ProviderCredentialError::SecretStore(error) => {
-            let _ = error;
-            RpcError::new(
-                -32094,
-                AppServerErrorName::ProviderCredentialOperationFailed,
-            )
-        }
+        ProviderCredentialError::SecretStore(_) => RpcError::new(
+            -32094,
+            AppServerErrorName::ProviderCredentialOperationFailed,
+        ),
+        ProviderCredentialError::ApiKeyMissing(_)
+        | ProviderCredentialError::InvalidStoredApiKey(_) => RpcError::new(
+            -32094,
+            AppServerErrorName::ProviderCredentialOperationFailed,
+        ),
+    }
+}
+
+fn api_key_policy_dto(policy: ApiKeyPolicy) -> ProviderApiKeyPolicyDto {
+    match policy {
+        ApiKeyPolicy::Unsupported => ProviderApiKeyPolicyDto::Unsupported,
+        ApiKeyPolicy::Optional => ProviderApiKeyPolicyDto::Optional,
+        ApiKeyPolicy::Required => ProviderApiKeyPolicyDto::Required,
     }
 }

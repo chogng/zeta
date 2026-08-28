@@ -1,4 +1,5 @@
 use super::default_provider;
+use crate::ApiKeyHeader;
 use crate::ApiProfile;
 use crate::InputTokenCountDefinition;
 use crate::InputTokenCountProfile;
@@ -14,6 +15,7 @@ pub(super) fn definition() -> ProviderDefinition {
         ApiProfile::AnthropicMessages,
         "https://api.anthropic.com",
     )
+    .with_api_key_header(ApiKeyHeader::XApiKey)
     .with_native_streaming()
     .with_input_token_count(InputTokenCountDefinition::invocation_base(
         InputTokenCountProfile::AnthropicMessages,

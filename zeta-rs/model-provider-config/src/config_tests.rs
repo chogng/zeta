@@ -300,6 +300,21 @@ fn builtin_provider_api_key_policies_are_explicit() {
             .filter(|provider| provider.id.as_str() != "ollama")
             .any(|provider| provider.api_key_policy == ApiKeyPolicy::Required)
     );
+    assert_eq!(
+        registry
+            .get(&provider_id("anthropic"))
+            .unwrap()
+            .api_key_header,
+        ApiKeyHeader::XApiKey
+    );
+    assert_eq!(
+        registry.get(&provider_id("google")).unwrap().api_key_header,
+        ApiKeyHeader::XGoogApiKey
+    );
+    assert_eq!(
+        registry.get(&provider_id("openai")).unwrap().api_key_header,
+        ApiKeyHeader::Bearer
+    );
 }
 
 #[test]

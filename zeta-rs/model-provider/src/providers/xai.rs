@@ -6,24 +6,12 @@ use zeta_client::{OperationClient, ResolvedApiTarget};
 use zeta_model_provider_config::NormalizedModelProviderConfig;
 
 pub(crate) struct XaiAdapter {
-    target: ResolvedApiTarget,
     endpoint: ApiEndpoint,
 }
 
 impl XaiAdapter {
     pub(crate) fn new(config: &NormalizedModelProviderConfig) -> Self {
         Self {
-            target: ResolvedApiTarget::new(config.base_url.clone(), Vec::new()),
-            endpoint: api_endpoint(config.api_profile),
-        }
-    }
-
-    pub(crate) fn with_target(
-        config: &NormalizedModelProviderConfig,
-        target: ResolvedApiTarget,
-    ) -> Self {
-        Self {
-            target,
             endpoint: api_endpoint(config.api_profile),
         }
     }
@@ -36,19 +24,14 @@ impl ProviderAdapter for XaiAdapter {
 
     fn complete(
         &self,
+        target: &ResolvedApiTarget,
         model: &str,
         request: &ModelRequest,
         client: &dyn OperationClient,
         cancellation: &CancellationToken,
     ) -> Result<ModelResponse, ModelProviderError> {
         self.endpoint
-            .complete_with_client_and_cancellation(
-                &self.target,
-                model,
-                request,
-                client,
-                cancellation,
-            )
+            .complete_with_client_and_cancellation(target, model, request, client, cancellation)
             .map_err(Into::into)
     }
 }

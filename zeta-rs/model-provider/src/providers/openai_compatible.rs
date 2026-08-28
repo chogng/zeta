@@ -9,24 +9,12 @@ use zeta_client::{OperationClient, ResolvedApiTarget};
 use zeta_model_provider_config::NormalizedModelProviderConfig;
 
 pub(crate) struct OpenAiCompatibleAdapter {
-    target: ResolvedApiTarget,
     endpoint: ApiEndpoint,
 }
 
 impl OpenAiCompatibleAdapter {
     pub(crate) fn new(config: &NormalizedModelProviderConfig) -> Self {
         Self {
-            target: ResolvedApiTarget::new(config.base_url.clone(), Vec::new()),
-            endpoint: api_endpoint(config.api_profile),
-        }
-    }
-
-    pub(crate) fn with_target(
-        config: &NormalizedModelProviderConfig,
-        target: ResolvedApiTarget,
-    ) -> Self {
-        Self {
-            target,
             endpoint: api_endpoint(config.api_profile),
         }
     }
@@ -39,24 +27,20 @@ impl ProviderAdapter for OpenAiCompatibleAdapter {
 
     fn complete(
         &self,
+        target: &ResolvedApiTarget,
         model: &str,
         request: &ModelRequest,
         client: &dyn OperationClient,
         cancellation: &CancellationToken,
     ) -> Result<ModelResponse, ModelProviderError> {
         self.endpoint
-            .complete_with_client_and_cancellation(
-                &self.target,
-                model,
-                request,
-                client,
-                cancellation,
-            )
+            .complete_with_client_and_cancellation(target, model, request, client, cancellation)
             .map_err(Into::into)
     }
 
     fn stream(
         &self,
+        target: &ResolvedApiTarget,
         model: &str,
         request: &ModelRequest,
         client: &dyn OperationClient,
@@ -65,7 +49,7 @@ impl ProviderAdapter for OpenAiCompatibleAdapter {
     ) -> Result<ModelResponse, ModelProviderError> {
         stream_endpoint(
             self.endpoint,
-            &self.target,
+            target,
             model,
             request,
             client,

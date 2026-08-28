@@ -16,7 +16,6 @@ use zeta_model_provider_config::InputTokenCountProfile;
 use zeta_model_provider_config::NormalizedModelProviderConfig;
 
 pub(crate) struct AnthropicAdapter {
-    target: ResolvedApiTarget,
     token_counter: Option<super::measurement::ProviderInputTokenCounter>,
     endpoint: ApiEndpoint,
 }
@@ -24,33 +23,10 @@ pub(crate) struct AnthropicAdapter {
 impl AnthropicAdapter {
     pub(crate) fn new(config: &NormalizedModelProviderConfig) -> Self {
         Self {
-            target: ResolvedApiTarget::new(config.base_url.clone(), Vec::new()),
             token_counter: super::measurement::ProviderInputTokenCounter::from_config(
                 config,
-                Vec::new(),
                 InputTokenCountProfile::AnthropicMessages,
             ),
-            endpoint: api_endpoint(config.api_profile),
-        }
-    }
-
-    pub(crate) fn with_target(
-        config: &NormalizedModelProviderConfig,
-        target: ResolvedApiTarget,
-        supports_input_measurement: bool,
-    ) -> Self {
-        let token_counter = supports_input_measurement
-            .then(|| {
-                super::measurement::ProviderInputTokenCounter::from_config(
-                    config,
-                    target.headers.clone(),
-                    InputTokenCountProfile::AnthropicMessages,
-                )
-            })
-            .flatten();
-        Self {
-            target,
-            token_counter,
             endpoint: api_endpoint(config.api_profile),
         }
     }
@@ -75,6 +51,7 @@ impl ProviderAdapter for AnthropicAdapter {
 
     fn measure_input(
         &self,
+        target: &ResolvedApiTarget,
         model: &str,
         request: &ModelRequest,
         client: &dyn OperationClient,
@@ -87,30 +64,26 @@ impl ProviderAdapter for AnthropicAdapter {
         else {
             return Ok(ContextTokenMeasurementOutcome::Unavailable);
         };
-        let count = counter.count(model, request, client, cancellation)?;
+        let count = counter.count(target, model, request, client, cancellation)?;
         super::measurement::estimated_provider_measurement(count, "anthropic-count-tokens-v1")
     }
 
     fn complete(
         &self,
+        target: &ResolvedApiTarget,
         model: &str,
         request: &ModelRequest,
         client: &dyn OperationClient,
         cancellation: &CancellationToken,
     ) -> Result<ModelResponse, ModelProviderError> {
         self.endpoint
-            .complete_with_client_and_cancellation(
-                &self.target,
-                model,
-                request,
-                client,
-                cancellation,
-            )
+            .complete_with_client_and_cancellation(target, model, request, client, cancellation)
             .map_err(Into::into)
     }
 
     fn stream(
         &self,
+        target: &ResolvedApiTarget,
         model: &str,
         request: &ModelRequest,
         client: &dyn OperationClient,
@@ -119,7 +92,7 @@ impl ProviderAdapter for AnthropicAdapter {
     ) -> Result<ModelResponse, ModelProviderError> {
         stream_endpoint(
             self.endpoint,
-            &self.target,
+            target,
             model,
             request,
             client,

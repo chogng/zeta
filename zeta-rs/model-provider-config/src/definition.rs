@@ -81,6 +81,15 @@ pub enum ApiKeyPolicy {
     Required,
 }
 
+/// Declares how a validated provider API key is attached to direct HTTP requests.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", tag = "type")]
+pub enum ApiKeyHeader {
+    Bearer,
+    XApiKey,
+    XGoogApiKey,
+}
+
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum BaseUrlNormalization {
@@ -124,6 +133,7 @@ pub struct ProviderDefinition {
     pub endpoint: EndpointPolicy,
     pub model_catalog_policy: ModelCatalogPolicy,
     pub api_key_policy: ApiKeyPolicy,
+    pub api_key_header: ApiKeyHeader,
     #[serde(default)]
     pub output_transport: ModelOutputTransport,
     #[serde(default)]
@@ -155,6 +165,7 @@ impl ProviderDefinition {
             endpoint,
             model_catalog_policy,
             api_key_policy: ApiKeyPolicy::Required,
+            api_key_header: ApiKeyHeader::Bearer,
             output_transport: ModelOutputTransport::Unary,
             websocket_api_profile: WebSocketApiProfile::Unavailable,
             models: Vec::new(),
@@ -176,6 +187,11 @@ impl ProviderDefinition {
 
     pub fn with_api_key_policy(mut self, policy: ApiKeyPolicy) -> Self {
         self.api_key_policy = policy;
+        self
+    }
+
+    pub fn with_api_key_header(mut self, header: ApiKeyHeader) -> Self {
+        self.api_key_header = header;
         self
     }
 

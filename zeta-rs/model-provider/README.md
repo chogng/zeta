@@ -156,9 +156,7 @@ provider 名称或 `ApiProfile` 猜测；
 WebSocket eligibility 由独立的 `WebSocketApiProfile` fail closed 声明，不能从
 `ModelOutputTransport` 或 HTTP compatibility 推断。底层 connector 已实现，但 protocol codec、session
 reuse、sticky turn state、prewarm、`previous_response_id` 和 HTTP fallback 尚未进入本 runtime。
-direct provider runtime 会按 `ApiKeyPolicy` 从 host 注入的 `SecretStore` materialize API key：
-Anthropic 使用 `x-api-key`、Google 使用 `x-goog-api-key`，其余远端 adapter 使用 Bearer header；
-Ollama 不读取 key，OpenAI-compatible 允许无 key endpoint。semantic runtime 继续使用同一个 store。
+`ProviderCredentialService` 是供应商 API Key 的唯一所有者：App Server 通过它校验并写入 host 注入的 `SecretStore`，direct 和 semantic runtime 通过它解析 `ApiKeyPolicy` 与 `ApiKeyHeader`。`Provider` 合并 adapter 声明的固定 Header 与认证 Header，并唯一持有最终 `ResolvedApiTarget`；各 provider adapter 只负责协议、endpoint、固定 Header 和响应处理。Anthropic 使用 `x-api-key`、Google 使用 `x-goog-api-key`，其余远端 adapter 使用 Bearer Header；Ollama 不读取 Key，OpenAI-compatible 允许无 Key endpoint。
 更多 stream profile 与动态 catalog 的长期设计仍在系统文档中演进。完整
 ChatGPT subscription 通过 `zeta-chatgpt` 提供的 fresh authenticated target 进入 OpenAI Responses adapter；Agent loop 仍由 Zeta Core `TurnExecutor` 持有。
 新增能力应保持 invoker immutable、profile explicit、

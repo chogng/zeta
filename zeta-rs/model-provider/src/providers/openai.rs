@@ -19,7 +19,6 @@ use zeta_model_provider_config::InputTokenCountProfile;
 use zeta_model_provider_config::NormalizedModelProviderConfig;
 
 pub(crate) struct OpenAiAdapter {
-    target: ResolvedApiTarget,
     token_counter: Option<super::measurement::ProviderInputTokenCounter>,
     endpoint: ApiEndpoint,
 }
@@ -27,33 +26,10 @@ pub(crate) struct OpenAiAdapter {
 impl OpenAiAdapter {
     pub(crate) fn new(config: &NormalizedModelProviderConfig) -> Self {
         Self {
-            target: ResolvedApiTarget::new(config.base_url.clone(), Vec::new()),
             token_counter: super::measurement::ProviderInputTokenCounter::from_config(
                 config,
-                Vec::new(),
                 InputTokenCountProfile::OpenAiResponses,
             ),
-            endpoint: api_endpoint(config.api_profile),
-        }
-    }
-
-    pub(crate) fn with_target(
-        config: &NormalizedModelProviderConfig,
-        target: ResolvedApiTarget,
-        supports_input_measurement: bool,
-    ) -> Self {
-        let token_counter = supports_input_measurement
-            .then(|| {
-                super::measurement::ProviderInputTokenCounter::from_config(
-                    config,
-                    target.headers.clone(),
-                    InputTokenCountProfile::OpenAiResponses,
-                )
-            })
-            .flatten();
-        Self {
-            target,
-            token_counter,
             endpoint: api_endpoint(config.api_profile),
         }
     }
@@ -78,6 +54,7 @@ impl ProviderAdapter for OpenAiAdapter {
 
     fn measure_input(
         &self,
+        target: &ResolvedApiTarget,
         model: &str,
         request: &ModelRequest,
         client: &dyn OperationClient,
@@ -90,7 +67,7 @@ impl ProviderAdapter for OpenAiAdapter {
         else {
             return Ok(ContextTokenMeasurementOutcome::Unavailable);
         };
-        let count = counter.count(model, request, client, cancellation)?;
+        let count = counter.count(target, model, request, client, cancellation)?;
         let count = u32::try_from(count.get()).map_err(|_| {
             ModelProviderError::InvalidResponse("input token count exceeds supported range".into())
         })?;
@@ -104,24 +81,20 @@ impl ProviderAdapter for OpenAiAdapter {
 
     fn complete(
         &self,
+        target: &ResolvedApiTarget,
         model: &str,
         request: &ModelRequest,
         client: &dyn OperationClient,
         cancellation: &CancellationToken,
     ) -> Result<ModelResponse, ModelProviderError> {
         self.endpoint
-            .complete_with_client_and_cancellation(
-                &self.target,
-                model,
-                request,
-                client,
-                cancellation,
-            )
+            .complete_with_client_and_cancellation(target, model, request, client, cancellation)
             .map_err(Into::into)
     }
 
     fn stream(
         &self,
+        target: &ResolvedApiTarget,
         model: &str,
         request: &ModelRequest,
         client: &dyn OperationClient,
@@ -130,7 +103,7 @@ impl ProviderAdapter for OpenAiAdapter {
     ) -> Result<ModelResponse, ModelProviderError> {
         stream_endpoint(
             self.endpoint,
-            &self.target,
+            target,
             model,
             request,
             client,

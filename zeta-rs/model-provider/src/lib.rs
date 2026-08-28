@@ -1,5 +1,6 @@
 //! Model-provider instantiation, transport configuration, and API adaptation.
 
+mod auth;
 mod error;
 mod lazy_client;
 mod provider;
@@ -16,7 +17,6 @@ pub use provider::ModelProviderRuntime;
 pub use provider::ModelRuntimeRequest;
 pub use provider::Provider;
 pub use provider::UnavailableModel;
-pub use provider::provider_api_key_secret_key;
 pub use semantic_models::EmbeddingInvoker;
 pub use semantic_models::EmbeddingRequest;
 pub use semantic_models::EmbeddingResponse;
@@ -59,5 +59,13 @@ pub use zeta_protocol::ProviderId;
 mod tests;
 
 #[cfg(test)]
+#[path = "auth_tests.rs"]
+mod auth_tests;
+
+#[cfg(test)]
 #[path = "semantic_model_tests.rs"]
 mod semantic_model_tests;
+pub use auth::ProviderCredentialError;
+pub use auth::ProviderCredentialService;
+pub use auth::ProviderCredentialStatus;
+pub use auth::provider_api_key_secret_key;

@@ -3,11 +3,8 @@ use std::sync::Arc;
 use zeta_api::SemanticApiEndpoint;
 use zeta_client::OperationClient;
 use zeta_client::ResolvedApiTarget;
-use zeta_http_client::HttpHeader;
 use zeta_model_provider_config::ProviderAdapter;
 use zeta_model_provider_config::ProviderConfigRegistry;
-use zeta_secrets::SecretKey;
-use zeta_secrets::SecretStore;
 
 use crate::EmbeddingInvoker;
 use crate::EmbeddingRequest;
@@ -15,18 +12,17 @@ use crate::EmbeddingResponse;
 use crate::EmbeddingRuntimeRequest;
 use crate::EmbeddingVector;
 use crate::ModelProviderError;
+use crate::ProviderCredentialService;
 use crate::RerankInvoker;
 use crate::RerankRequest;
 use crate::RerankResponse;
 use crate::RerankRuntimeRequest;
 use crate::SemanticModelProvider;
 
-const OPENAI_API_KEY_SECRET: &str = "provider/openai/default/api-key";
-
 pub(crate) struct SemanticRuntimeResolver {
     pub(crate) configs: ProviderConfigRegistry,
     pub(crate) client: Arc<dyn OperationClient>,
-    pub(crate) secrets: Arc<dyn SecretStore>,
+    pub(crate) credentials: Option<ProviderCredentialService>,
 }
 
 impl SemanticModelProvider for SemanticRuntimeResolver {
@@ -88,7 +84,13 @@ impl SemanticRuntimeResolver {
                 operation.label()
             )));
         }
-        let headers = credential_headers(definition.adapter, self.secrets.as_ref())?;
+        let headers = self
+            .credentials
+            .as_ref()
+            .map(|credentials| credentials.request_headers(provider))
+            .transpose()
+            .map_err(|error| ModelProviderError::Credential(error.to_string()))?
+            .unwrap_or_default();
         Ok(SemanticHttpRuntime {
             target: ResolvedApiTarget::new(normalized.base_url, headers),
             endpoint: SemanticApiEndpoint::OpenAiCompatible,
@@ -110,36 +112,6 @@ impl SemanticOperation {
             Self::Rerank => "rerank",
         }
     }
-}
-
-fn credential_headers(
-    adapter: ProviderAdapter,
-    secrets: &dyn SecretStore,
-) -> Result<Vec<HttpHeader>, ModelProviderError> {
-    let key = match adapter {
-        ProviderAdapter::OpenAi => Some(OPENAI_API_KEY_SECRET),
-        ProviderAdapter::OpenAiCompatible => None,
-        ProviderAdapter::Ollama => None,
-        _ => unreachable!("semantic provider support was checked before credential resolution"),
-    };
-    let Some(key) = key else {
-        return Ok(Vec::new());
-    };
-    let key = SecretKey::new(key).expect("static provider secret key is valid");
-    let secret = secrets.load(&key)?.ok_or_else(|| {
-        ModelProviderError::Credential(format!("no API key is stored for {key:?}"))
-    })?;
-    let value = std::str::from_utf8(secret.expose())
-        .map_err(|_| ModelProviderError::Credential("stored API key is not UTF-8".into()))?;
-    if value.is_empty() || value.chars().any(char::is_control) {
-        return Err(ModelProviderError::Credential(
-            "stored API key is invalid".into(),
-        ));
-    }
-    Ok(vec![HttpHeader::new(
-        "Authorization",
-        format!("Bearer {value}"),
-    )])
 }
 
 #[derive(Clone)]
