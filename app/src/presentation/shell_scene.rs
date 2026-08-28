@@ -29,7 +29,6 @@ use crate::shell_interaction::{
     FIRST_TAB_CONTAINER_SESSION_TAB, INSPECTOR_RESIZE_HANDLE, MAIN_SURFACE, SESSION_SEARCH_INPUT,
     TAB_CONTAINER_RESIZE_HANDLE, TERMINAL_OUTPUT, WINDOW, WORKSPACE_PANE, WORKSPACE_PANE_TOOLBAR,
 };
-use crate::shell_style::ShellPalette;
 use crate::tab_context_menu::{TabContextMenu, TabContextMenuState};
 use crate::terminal_blocks::{TerminalBlockLineKind, project_block_lines};
 use crate::terminal_output_scroll_view::TerminalOutputScrollView;
@@ -49,6 +48,7 @@ use zeta_session::SessionPaneState;
 use zeta_session::SessionPaneView;
 use zeta_session::draw_session_pane;
 use zeta_terminal_workspace::PaneBinding;
+use zeta_ui_theme::UiTheme;
 use zeta_workbench::SessionSearchState;
 use zeta_workbench::WorkspacePaneNavigation;
 use zeta_workbench::WorkspacePaneSelection;
@@ -283,7 +283,7 @@ pub(crate) struct PaneView<'a> {
 
 #[derive(Clone)]
 pub(crate) struct ShellPresentationModel<'a> {
-    pub(crate) palette: ShellPalette,
+    pub(crate) palette: UiTheme,
     pub(crate) terminal: Option<&'a TerminalCore>,
     pub(crate) terminal_panes: &'a [PaneView<'a>],
     pub(crate) pane_group: Option<&'a PanePart>,
@@ -425,7 +425,7 @@ fn build_shell_presentation_with_bindings(
     mut animation_bindings: Option<&mut dyn zui::ui::AnimationBinding>,
 ) -> ShellPresentation {
     let palette = model.palette;
-    let mut frame = UiFrame::<InteractionFrame>::new(palette.background);
+    let mut frame = UiFrame::<InteractionFrame>::new(palette.workbench_background);
     frame.draw_component(&InteractionRegion::new(
         "Window",
         WINDOW,
@@ -491,7 +491,7 @@ fn build_shell_presentation_with_bindings(
     );
     let titlebar = Titlebar::new(
         layout.titlebar(),
-        palette.workbench_ui_style(),
+        zeta_workbench::WorkbenchUiStyle::from_theme(palette),
         model.tab_part,
         model.active_tab_input,
         model.tab_container.is_expanded(),
@@ -753,7 +753,7 @@ fn draw_shell_overlays(
         Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
         model.remote_connection_picker,
         model.caret_visibility,
-        palette.remote_ui_style(),
+        zeta_settings::RemoteUiStyle::from_theme(palette),
         text_layout,
         model.dispatch,
         WINDOW,
@@ -772,7 +772,7 @@ fn draw_shell_overlays(
         Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
         model.remote_connection_manager,
         model.caret_visibility,
-        palette.remote_ui_style(),
+        zeta_settings::RemoteUiStyle::from_theme(palette),
         text_layout,
         model.dispatch,
         WINDOW,
@@ -794,7 +794,7 @@ fn draw_shell_overlays(
         Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
         model.remote_tunnel_manager,
         model.caret_visibility,
-        palette.remote_ui_style(),
+        zeta_settings::RemoteUiStyle::from_theme(palette),
         text_layout,
         model.dispatch,
         WINDOW,
@@ -956,7 +956,7 @@ fn draw_workspace_pane(
     bounds: Rect,
     view: WorkspacePanePresentationView<'_>,
     text_layout: &mut TextInputLayoutEngine,
-    palette: ShellPalette,
+    palette: UiTheme,
 ) -> Option<Rect> {
     let workspace_pane = InteractionRegion::new(
         "WorkspacePane",
@@ -994,13 +994,12 @@ fn draw_workspace_pane(
             "Workspace pane toolbar",
         )
         .with_parent(WORKSPACE_PANE);
-        let navigation_style = palette.workspace_navigation_style();
+        let navigation_style = zeta_workbench::WorkspaceNavigationStyle::from_theme(palette);
         let search_caret = context.with_component(&toolbar, |context, _| {
             context.scene_mut().draw_rect(
-                PaintRect::new(toolbar_bounds, palette.surface_raised).with_border(Border::new(
-                    zui::ui::Edges::new(0.0, 0.0, 1.0, 0.0),
-                    palette.border,
-                )),
+                PaintRect::new(toolbar_bounds, palette.side_bar_background).with_border(
+                    Border::new(zui::ui::Edges::new(0.0, 0.0, 1.0, 0.0), palette.border),
+                ),
             );
             let navigation = WorkspacePaneNavigation::new(
                 WorkspacePaneNavigation::bounds_in(toolbar_bounds),
@@ -1018,7 +1017,7 @@ fn draw_workspace_pane(
                         view.workspace.files(),
                         view.context.upstream_distance(),
                         view.caret_visibility,
-                        palette.files_toolbar_style(),
+                        zeta_files::FilesToolbarStyle::from_theme(palette),
                         WORKSPACE_PANE_TOOLBAR,
                         text_layout,
                         view.dispatch,
@@ -1034,13 +1033,13 @@ fn draw_workspace_pane(
                 let editor = EditorPane::new(
                     content_bounds,
                     view.workspace.editor(),
-                    palette.scm_pane_style(),
+                    zeta_scm::ScmPaneStyle::from_theme(palette),
                     WORKSPACE_PANE,
                 );
                 context.draw_component(&editor);
             }
             WorkspacePaneSelection::Files => {
-                let files_style = palette.files_pane_style();
+                let files_style = zeta_files::FilesPaneStyle::from_theme(palette);
                 let explorer = FilesPane::new(
                     content_bounds,
                     view.workspace.files(),
@@ -1063,7 +1062,7 @@ fn draw_file_editor_inspector(
     bounds: Rect,
     view: FileEditorPresentationView<'_>,
     text_layout: &mut TextInputLayoutEngine,
-    palette: ShellPalette,
+    palette: UiTheme,
 ) -> Option<Rect> {
     let inspector = InteractionRegion::new(
         "InspectorWorkbench",
@@ -1111,8 +1110,8 @@ fn draw_file_editor_inspector(
 }
 
 /// Paints a Native-owned Workbench surface before feature content.
-fn draw_workspace_surface(scene: &mut UiScene, bounds: Rect, palette: ShellPalette) {
-    scene.draw_rect(PaintRect::new(bounds, palette.surface_raised));
+fn draw_workspace_surface(scene: &mut UiScene, bounds: Rect, palette: UiTheme) {
+    scene.draw_rect(PaintRect::new(bounds, palette.side_bar_background));
 }
 
 /// Paints the Native-owned outer border of the Inspector Part after feature content.
@@ -1120,7 +1119,7 @@ fn draw_workspace_surface(scene: &mut UiScene, bounds: Rect, palette: ShellPalet
 /// This boundary separates the right Inspector slot from the main
 /// workspace. Files and SCM components own only their internal geometry and
 /// must not redraw this edge.
-fn draw_inspector_border(scene: &mut UiScene, bounds: Rect, palette: ShellPalette) {
+fn draw_inspector_border(scene: &mut UiScene, bounds: Rect, palette: UiTheme) {
     scene.draw_rect(
         PaintRect::new(bounds, Color::TRANSPARENT).with_border(Border::new(
             zui::ui::Edges::new(0.0, 0.0, 0.0, 1.0),
@@ -1134,21 +1133,19 @@ fn draw_tab_container(
     bounds: Rect,
     view: TabContainerView<'_>,
     text_layout: &mut TextInputLayoutEngine,
-    palette: ShellPalette,
+    palette: UiTheme,
 ) -> Option<Rect> {
-    context
-        .scene_mut()
-        .draw_rect(
-            PaintRect::new(bounds, palette.surface_raised).with_border(Border::new(
-                zui::ui::Edges::new(0.0, 1.0, 0.0, 0.0),
-                palette.border,
-            )),
-        );
+    context.scene_mut().draw_rect(
+        PaintRect::new(bounds, palette.side_bar_background).with_border(Border::new(
+            zui::ui::Edges::new(0.0, 1.0, 0.0, 0.0),
+            palette.border,
+        )),
+    );
     let toolbar = TabContainerToolbar::new(
         bounds,
         view.search.input(),
         view.caret_visibility,
-        palette.workbench_ui_style(),
+        zeta_workbench::WorkbenchUiStyle::from_theme(palette),
         text_layout,
         view.dispatch,
     );
@@ -1188,7 +1185,7 @@ fn draw_tab_container(
         groups,
         view.selected_id,
         TabContainerPlacement::Body,
-        palette.workbench_ui_style(),
+        zeta_workbench::WorkbenchUiStyle::from_theme(palette),
         view.dispatch,
     );
     context.draw_component(&tab_container);
@@ -1206,7 +1203,7 @@ fn draw_sash(
     identity: ElementId,
     name: &'static str,
     label: &'static str,
-    palette: ShellPalette,
+    palette: UiTheme,
 ) {
     let sash = Sash::new(bounds, orientation, state, SashStyle::new(palette.accent));
     context.draw_component(
@@ -1228,7 +1225,7 @@ fn draw_main(
     context: &mut ComponentContext<'_, '_>,
     layout: ShellLayout,
     view: MainPresentationView<'_>,
-    palette: ShellPalette,
+    palette: UiTheme,
     text_layout: &mut TextInputLayoutEngine,
 ) -> MainDrawResult {
     let active_screen = match view.workspace_surface {
@@ -1259,7 +1256,7 @@ fn draw_main(
     context.with_component(&main_surface, |context, _| {
         context
             .scene_mut()
-            .draw_rect(PaintRect::new(layout.main(), palette.background));
+            .draw_rect(PaintRect::new(layout.main(), palette.workbench_background));
         context.with_clip(layout.main(), |context| {
             let mut ime_cursor_area = None;
             let mut remote_connection_manager_scroll_metrics = None;
@@ -1314,9 +1311,9 @@ fn draw_main(
                         dispatch: view.dispatch,
                     },
                     SettingsPaneStyle::new(
-                        palette.settings_page_style(),
-                        palette.settings_section_style(),
-                        palette.remote_ui_style(),
+                        zeta_settings::SettingsPageStyle::from_theme(palette),
+                        zeta_settings::SettingsSectionStyle::from_theme(palette),
+                        zeta_settings::RemoteUiStyle::from_theme(palette),
                     ),
                     text_layout,
                 );
@@ -1423,7 +1420,7 @@ fn draw_main(
                                     parent: MAIN_SURFACE,
                                 },
                                 text_layout,
-                                palette.session_pane_style(),
+                                zeta_session::SessionPaneStyle::from_theme(palette),
                             );
                         }
                     }
@@ -1560,7 +1557,7 @@ fn draw_terminal(
     layout: ShellLayout,
     view: PaneView<'_>,
     active_screen: ScreenBuffer,
-    palette: ShellPalette,
+    palette: UiTheme,
 ) {
     let bounds = terminal_content_bounds(layout, active_screen);
     draw_terminal_in_bounds(scene, bounds, view, active_screen, palette);
@@ -1571,10 +1568,10 @@ fn draw_terminal_in_bounds(
     bounds: Rect,
     view: PaneView<'_>,
     active_screen: ScreenBuffer,
-    palette: ShellPalette,
+    palette: UiTheme,
 ) {
     let Some(terminal) = view.core else {
-        draw_terminal_text(scene, "Starting shell…", bounds, palette.text_muted);
+        draw_terminal_text(scene, "Starting shell…", bounds, palette.muted_foreground);
         return;
     };
     if active_screen == ScreenBuffer::Alternate {
@@ -1597,7 +1594,7 @@ fn draw_grid(
     terminal: &TerminalCore,
     bounds: Rect,
     scroll_offset: usize,
-    palette: ShellPalette,
+    palette: UiTheme,
 ) {
     let cursor = terminal.grid().cursor();
     let cursor_visible = terminal.modes().cursor_visible() && scroll_offset == 0;
@@ -1651,7 +1648,7 @@ fn draw_block_list(
     scroll_offset: usize,
     scrollbar_presentation: ScrollbarPresentation,
     selection: Option<TerminalSelectionRange>,
-    palette: ShellPalette,
+    palette: UiTheme,
 ) {
     let lines = project_block_lines(terminal);
     TerminalOutputScrollView::new(
@@ -1666,10 +1663,10 @@ fn draw_block_list(
         for absolute_index in range {
             let line = &lines[absolute_index];
             let color = match line.kind {
-                TerminalBlockLineKind::Preamble => palette.text_muted,
+                TerminalBlockLineKind::Preamble => palette.muted_foreground,
                 TerminalBlockLineKind::Command => palette.accent,
-                TerminalBlockLineKind::Output => palette.text,
-                TerminalBlockLineKind::Status => palette.text_muted,
+                TerminalBlockLineKind::Output => palette.foreground,
+                TerminalBlockLineKind::Status => palette.muted_foreground,
             };
             draw_terminal_text(
                 scene,
@@ -1691,14 +1688,14 @@ fn draw_block_list(
                 selection,
                 TERMINAL_CELL_WIDTH,
                 TERMINAL_LINE_HEIGHT,
-                palette.terminal_selection,
+                palette.text_selection_background,
             );
         }
     });
 }
 
-fn terminal_cell_colors(style: zeta_terminal::CellStyle, palette: ShellPalette) -> (Color, Color) {
-    let mut foreground = terminal_color(style.foreground, palette.text, palette);
+fn terminal_cell_colors(style: zeta_terminal::CellStyle, palette: UiTheme) -> (Color, Color) {
+    let mut foreground = terminal_color(style.foreground, palette.foreground, palette);
     let mut background = terminal_color(style.background, Color::TRANSPARENT, palette);
     if style.inverse {
         std::mem::swap(&mut foreground, &mut background);
@@ -1706,7 +1703,7 @@ fn terminal_cell_colors(style: zeta_terminal::CellStyle, palette: ShellPalette) 
     (foreground, background)
 }
 
-fn terminal_color(color: TerminalColor, default: Color, palette: ShellPalette) -> Color {
+fn terminal_color(color: TerminalColor, default: Color, palette: UiTheme) -> Color {
     match color {
         TerminalColor::Default => default,
         TerminalColor::Indexed(index) => palette.terminal_indexed_color(index),
@@ -1724,7 +1721,7 @@ fn draw_terminal_text(scene: &mut UiScene, text: &str, bounds: Rect, color: Colo
     draw_text(scene, text, bounds, terminal_text_style(color));
 }
 
-fn draw_compact_scene(scene: &mut UiScene, viewport: LogicalViewport, palette: ShellPalette) {
+fn draw_compact_scene(scene: &mut UiScene, viewport: LogicalViewport, palette: UiTheme) {
     let bounds = Rect::from_xywh(
         12.0,
         12.0,
@@ -1732,7 +1729,7 @@ fn draw_compact_scene(scene: &mut UiScene, viewport: LogicalViewport, palette: S
         (viewport.height - 24.0).max(1.0),
     );
     scene.draw_rect(
-        PaintRect::new(bounds, palette.surface)
+        PaintRect::new(bounds, palette.content_background)
             .with_border(Border::uniform(1.0, palette.border))
             .with_corner_radii(CornerRadii::uniform(10.0)),
     );
@@ -1745,7 +1742,7 @@ fn draw_compact_scene(scene: &mut UiScene, viewport: LogicalViewport, palette: S
             (bounds.size.width - 36.0).max(1.0),
             30.0,
         ),
-        TextStyle::new(20.0, palette.text).with_weight(FontWeight::Bold),
+        TextStyle::new(20.0, palette.foreground).with_weight(FontWeight::Bold),
     );
 }
 

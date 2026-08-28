@@ -440,7 +440,7 @@ impl NativeApp {
             bounds,
             zeta_commands::AppCommandId::BINDABLE.len(),
             self.keybindings_resource.diagnostics().len(),
-            self.palette.settings_section_style().scroll_view,
+            zeta_settings::SettingsSectionStyle::from_theme(self.palette).scroll_view,
         ))
     }
 

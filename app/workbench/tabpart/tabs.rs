@@ -200,13 +200,12 @@ impl<'a> TabContainer<'a> {
     }
 
     fn tab_list(&self, group: &WorkbenchTabGroup<'_>, bounds: Rect) -> TabList {
-        let highlight = self.style.selected;
         let backgrounds = TabBackgrounds::new(Color::TRANSPARENT)
-            .with_hovered(highlight)
-            .with_focused(highlight)
-            .with_pressed(highlight);
+            .with_hovered(self.style.colors.tab_hover_background)
+            .with_focused(self.style.colors.tab_hover_background)
+            .with_pressed(self.style.colors.tab_hover_background);
         let tab_style = TabStyle::new(backgrounds)
-            .with_selected_backgrounds(TabBackgrounds::new(highlight))
+            .with_selected_backgrounds(TabBackgrounds::new(self.style.colors.tab_active_background))
             .with_corner_radii(CornerRadii::uniform(4.0));
         let tabs = if group.collapsed {
             Vec::new()
@@ -373,10 +372,10 @@ impl<'a> TabContainer<'a> {
         };
         let button_style = ButtonStyle::new(
             ButtonBackgrounds::new(Color::TRANSPARENT)
-                .with_hovered(self.style.surface_hovered)
-                .with_focused(self.style.surface_hovered)
-                .with_pressed(self.style.border),
-            TextStyle::new(12.0, self.style.text_muted),
+                .with_hovered(self.style.colors.control_hover_background)
+                .with_focused(Color::TRANSPARENT)
+                .with_pressed(self.style.colors.border),
+            TextStyle::new(12.0, self.style.colors.muted_foreground),
         )
         .with_corner_radii(CornerRadii::uniform(4.0))
         .with_padding(Edges::uniform(3.0))
@@ -410,6 +409,15 @@ impl<'a> TabContainer<'a> {
             || self.dispatch.is_pressed(tab.close_id)
     }
 
+    fn paint_tab_action_bar(&self, scene: &mut UiScene, tab: &WorkbenchTab<'_>, tab_bounds: Rect) {
+        let action_bar = self.tab_action_bar(tab, tab_bounds);
+        scene.draw_rect(
+            PaintRect::new(action_bar.bounds(), self.style.colors.action_bar_background)
+                .with_corner_radii(CornerRadii::uniform(4.0)),
+        );
+        scene.draw_component(&action_bar);
+    }
+
     fn button_state(&self, id: ElementId) -> ButtonState {
         if self.dispatch.is_pressed(id) {
             ButtonState::Pressed
@@ -428,7 +436,7 @@ impl<'a> TabContainer<'a> {
                 label,
                 Point::new(bounds.origin.x, bounds.origin.y + 2.0),
                 bounds.size,
-                TextStyle::new(11.0, self.style.text_muted)
+                TextStyle::new(11.0, self.style.colors.muted_foreground)
                     .with_weight(FontWeight::Bold)
                     .with_line_height(16.0),
             ));
@@ -457,7 +465,7 @@ impl<'a> TabContainer<'a> {
             STATUS_CONTAINER_SIZE,
         );
         scene.draw_rect(
-            PaintRect::new(status_bounds, self.style.surface)
+            PaintRect::new(status_bounds, self.style.colors.content_background)
                 .with_corner_radii(CornerRadii::uniform(STATUS_CONTAINER_SIZE * 0.5)),
         );
         if tab.kind == WorkbenchTabKind::Settings {
@@ -478,16 +486,16 @@ impl<'a> TabContainer<'a> {
             tab.name,
             Point::new(text_x, tab_bounds.origin.y + 7.0),
             Size::new(text_width, 18.0),
-            TextStyle::new(13.0, self.style.text).with_weight(FontWeight::Bold),
+            TextStyle::new(13.0, self.style.colors.foreground).with_weight(FontWeight::Bold),
         ));
         scene.draw_text(TextBlock::new(
             tab.workspace,
             Point::new(text_x, tab_bounds.origin.y + 27.0),
             Size::new(text_width, 15.0),
-            TextStyle::new(11.0, self.style.text_muted).with_line_height(15.0),
+            TextStyle::new(11.0, self.style.colors.foreground).with_line_height(15.0),
         ));
         if self.tab_action_bar_visible(tab) {
-            scene.draw_component(&self.tab_action_bar(tab, tab_bounds));
+            self.paint_tab_action_bar(scene, tab, tab_bounds);
         }
     }
 
@@ -521,7 +529,7 @@ impl<'a> TabContainer<'a> {
                 scene.draw_icon(PaintIcon::new(
                     self.style.pinned_icon,
                     pin_bounds,
-                    self.style.text_muted,
+                    self.style.colors.muted_foreground,
                 ));
                 text_x = pin_bounds.right() + 4.0;
             }
@@ -535,10 +543,10 @@ impl<'a> TabContainer<'a> {
             tab.name,
             Point::new(text_x, tab_bounds.origin.y + 3.0),
             Size::new((text_right - text_x).max(1.0), 18.0),
-            TextStyle::new(12.0, self.style.text).with_line_height(18.0),
+            TextStyle::new(12.0, self.style.colors.foreground).with_line_height(18.0),
         ));
         if self.tab_action_bar_visible(tab) {
-            scene.draw_component(&self.tab_action_bar(tab, tab_bounds));
+            self.paint_tab_action_bar(scene, tab, tab_bounds);
         }
     }
 
@@ -553,7 +561,7 @@ impl<'a> TabContainer<'a> {
         scene.draw_icon(PaintIcon::new(
             self.style.pinned_icon,
             icon_bounds,
-            self.style.text_muted,
+            self.style.colors.muted_foreground,
         ));
         let dot_bounds = Rect::from_xywh(
             bounds.right() - STATUS_DOT_SIZE,
@@ -579,11 +587,11 @@ impl<'a> TabContainer<'a> {
 
     const fn status_color(&self, kind: TabStatusKind) -> Color {
         match kind {
-            TabStatusKind::Idle => self.style.text_muted,
-            TabStatusKind::Busy => self.style.accent,
-            TabStatusKind::Attention | TabStatusKind::Warning => self.style.warning,
-            TabStatusKind::Success => self.style.success,
-            TabStatusKind::Error => self.style.error,
+            TabStatusKind::Idle => self.style.colors.muted_foreground,
+            TabStatusKind::Busy => self.style.colors.accent,
+            TabStatusKind::Attention | TabStatusKind::Warning => self.style.colors.warning,
+            TabStatusKind::Success => self.style.colors.success,
+            TabStatusKind::Error => self.style.colors.error,
         }
     }
 
@@ -597,7 +605,7 @@ impl<'a> TabContainer<'a> {
         scene.draw_icon(PaintIcon::new(
             self.style.settings_icon,
             icon_bounds,
-            self.style.text_muted,
+            self.style.colors.muted_foreground,
         ));
     }
 }

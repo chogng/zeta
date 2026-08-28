@@ -6,10 +6,11 @@ use crate::Point;
 use crate::Rect;
 use crate::TabPart;
 use crate::tabpart::identity::{
-    TAB_CONTAINER_TOGGLE, TITLEBAR, TITLEBAR_SETTINGS_CLOSE, TITLEBAR_SETTINGS_TAB,
-    TITLEBAR_TAB_CONTAINER, WORKSPACE_PANE_TOGGLE,
+    TAB_CONTAINER_TOGGLE, TITLEBAR, TITLEBAR_SETTINGS_BUTTON, TITLEBAR_SETTINGS_CLOSE,
+    TITLEBAR_SETTINGS_TAB, TITLEBAR_TAB_CONTAINER, WORKSPACE_PANE_TOGGLE,
 };
 use crate::tabpart::test_style;
+use crate::{TabInputKey, TabIntent, tab_intent_for_element};
 use zeta_icons::icons;
 use zui::ui::InteractionFrame;
 use zui::ui::UiDispatch;
@@ -107,9 +108,10 @@ fn expanded_tab_container_omits_horizontal_tabs_and_uses_the_active_icons() {
 
     frame.draw_component(&titlebar);
 
-    assert_eq!(frame.scene().icons().len(), 2);
+    assert_eq!(frame.scene().icons().len(), 3);
     assert_eq!(frame.scene().icons()[0].icon(), icons::LAYOUT_SIDEBAR_LEFT);
     assert_eq!(frame.scene().icons()[1].icon(), icons::LAYOUT_SIDEBAR_RIGHT);
+    assert_eq!(frame.scene().icons()[2].icon(), icons::GEAR);
     assert!(
         frame
             .scene()
@@ -118,4 +120,16 @@ fn expanded_tab_container_omits_horizontal_tabs_and_uses_the_active_icons() {
             .all(|text| text.text() != "Settings")
     );
     assert!(frame.interaction().node(TITLEBAR_TAB_CONTAINER).is_none());
+    assert_eq!(
+        frame
+            .interaction()
+            .node(TITLEBAR_SETTINGS_BUTTON)
+            .expect("expanded tabs expose the titlebar Settings button")
+            .role(),
+        zui::ui::AccessibilityRole::Button
+    );
+    assert_eq!(
+        tab_intent_for_element(&part, TITLEBAR_SETTINGS_BUTTON),
+        Some(TabIntent::Activate(TabInputKey::Settings))
+    );
 }

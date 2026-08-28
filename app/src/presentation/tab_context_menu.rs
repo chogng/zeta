@@ -3,8 +3,8 @@
 use crate::NativeApp;
 use crate::shell_interaction::TabContextMenuAction;
 use crate::shell_interaction::WINDOW;
-use crate::shell_style::ShellPalette;
 use crate::terminal_input::text_input_command;
+use zeta_ui_theme::UiTheme;
 use zui::input::ElementState;
 use zui::input::Key;
 use zui::input::KeyEvent;
@@ -41,16 +41,11 @@ impl TabContextMenu {
         tab_part: &zeta_workbench::TabPart,
         state: &TabContextMenuState,
         caret_visibility: CaretVisibility,
-        palette: ShellPalette,
+        palette: UiTheme,
         text_layout: &mut TextInputLayoutEngine,
         dispatch: &UiDispatch,
     ) -> Option<Self> {
-        let style = zeta_workbench::TabContextMenuStyle::new(
-            palette.surface,
-            palette.border,
-            palette.text,
-            palette.session_tab_highlight,
-        );
+        let style = zeta_workbench::TabContextMenuStyle::from_theme(palette);
         Some(Self {
             inner: zeta_workbench::TabContextMenu::new(
                 viewport,

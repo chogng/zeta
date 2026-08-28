@@ -1,5 +1,5 @@
 [package]
-name = "zeta-files"
+name = "zeta-ui-theme"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -7,15 +7,13 @@ publish.workspace = true
 
 [lib]
 doctest = false
-name = "zeta_files"
+name = "zeta_ui_theme"
 path = "src/lib.rs"
 
 [dependencies]
-zeta-commands = { workspace = true }
-zeta-file-search = { workspace = true }
 zeta-icons = { workspace = true }
+zeta-theme = { workspace = true }
 zeta-ui-components = { workspace = true }
-zeta-ui-theme = { workspace = true }
 zui = { workspace = true, default-features = false }
 
 [lints]

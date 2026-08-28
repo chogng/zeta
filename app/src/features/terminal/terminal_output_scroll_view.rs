@@ -5,8 +5,8 @@ use zeta_ui_components::{
 };
 use zui::ui::{Point, Rect, Size, UiScene};
 
-use crate::shell_style::ShellPalette;
 use crate::terminal_projection::block_view_range;
+use zeta_ui_theme::UiTheme;
 
 /// Product adapter from bottom-relative terminal history to a top-relative ScrollView.
 #[derive(Clone, Copy)]
@@ -17,7 +17,7 @@ pub(crate) struct TerminalOutputScrollView {
     line_height: f32,
     scroll_offset: usize,
     scrollbar_presentation: ScrollbarPresentation,
-    palette: ShellPalette,
+    palette: UiTheme,
 }
 
 impl TerminalOutputScrollView {
@@ -27,7 +27,7 @@ impl TerminalOutputScrollView {
         line_height: f32,
         scroll_offset: usize,
         scrollbar_presentation: ScrollbarPresentation,
-        palette: ShellPalette,
+        palette: UiTheme,
     ) -> Self {
         assert!(
             line_height.is_finite() && line_height > 0.0,

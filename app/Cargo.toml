@@ -49,6 +49,7 @@ zeta-terminal = { workspace = true }
 zeta-terminal-workspace = { workspace = true }
 zeta-text-file = { workspace = true }
 zeta-theme = { workspace = true }
+zeta-ui-theme = { workspace = true }
 zeta-commands = { workspace = true }
 zeta-ui-components = { workspace = true }
 zeta-workbench = { workspace = true }

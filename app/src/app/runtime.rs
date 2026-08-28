@@ -13,19 +13,17 @@ impl NativeApp {
         for diagnostic in &loaded.diagnostics {
             eprintln!("theme: {}", diagnostic.message);
         }
-        let Ok(palette) = ShellPalette::from_theme(&loaded.snapshot) else {
+        let Ok(palette) = UiTheme::from_snapshot(&loaded.snapshot) else {
             return;
         };
-        let Ok(editor_style) = code_editor_style(&loaded.snapshot) else {
-            return;
-        };
+        let editor_style = CodeEditorStyle::from_theme(palette);
         self.palette = palette;
         self.theme_scheme = loaded.snapshot.color_scheme();
         self.theme_follows_system = loaded.follows_system;
         self.session_pane.set_composer_style(editor_style.clone());
         self.code_editor_style = editor_style;
         self.workspace_pane_host
-            .set_editor_style(palette.multi_diff_editor_style());
+            .set_editor_style(zeta_editor::MultiDiffEditorStyle::from_theme(palette));
     }
 
     /// Mounts a workspace feature as the active leaf of the current Session workbench.

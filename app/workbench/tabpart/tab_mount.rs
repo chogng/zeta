@@ -7,10 +7,10 @@ use zui::ui::NavigationAxis;
 use super::identity::{
     FIRST_TAB_CONTAINER_SESSION_TAB, FIRST_TITLEBAR_SESSION_TAB, TAB_CONTAINER,
     TAB_CONTAINER_SETTINGS_ACTION, TAB_CONTAINER_SETTINGS_CLOSE, TAB_CONTAINER_SETTINGS_TAB,
-    TITLEBAR, TITLEBAR_SETTINGS_ACTION, TITLEBAR_SETTINGS_CLOSE, TITLEBAR_SETTINGS_TAB,
-    TITLEBAR_TAB_CONTAINER, WINDOW, session_tab_action_id, session_tab_close_id, session_tab_id,
-    tab_group_list_id, titlebar_session_tab_action_id, titlebar_session_tab_close_id,
-    titlebar_session_tab_id, titlebar_tab_group_list_id,
+    TITLEBAR, TITLEBAR_SETTINGS_ACTION, TITLEBAR_SETTINGS_BUTTON, TITLEBAR_SETTINGS_CLOSE,
+    TITLEBAR_SETTINGS_TAB, TITLEBAR_TAB_CONTAINER, WINDOW, session_tab_action_id,
+    session_tab_close_id, session_tab_id, tab_group_list_id, titlebar_session_tab_action_id,
+    titlebar_session_tab_close_id, titlebar_session_tab_id, titlebar_tab_group_list_id,
 };
 use crate::TabGroupId;
 use crate::TabId;
@@ -190,6 +190,9 @@ pub enum TabIntent {
 
 /// Resolves a tab or close-button identity without depending on current tab order.
 pub fn tab_intent_for_element(tab_part: &TabPart, element: ElementId) -> Option<TabIntent> {
+    if element == TITLEBAR_SETTINGS_BUTTON {
+        return Some(TabIntent::Activate(TabInputKey::Settings));
+    }
     for placement in [TabContainerPlacement::Body, TabContainerPlacement::Titlebar] {
         if element == placement.settings_action_id() {
             return tab_part

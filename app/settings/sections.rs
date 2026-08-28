@@ -1,6 +1,7 @@
 use zeta_ui_components::ScrollState;
 use zeta_ui_components::ScrollViewStyle;
 use zeta_ui_components::ScrollbarPresentation;
+use zeta_ui_theme::UiTheme;
 use zui::ui::AccessibilityRole;
 use zui::ui::Border;
 use zui::ui::Component;
@@ -42,6 +43,23 @@ pub struct SettingsSectionStyle {
     pub accent: zui::ui::Color,
     pub error: zui::ui::Color,
     pub scroll_view: ScrollViewStyle,
+}
+
+impl SettingsSectionStyle {
+    pub fn from_theme(theme: UiTheme) -> Self {
+        Self {
+            background: theme.workbench_background,
+            surface: theme.content_background,
+            surface_raised: theme.side_bar_background,
+            surface_hovered: theme.list_hover_background,
+            border: theme.border,
+            text: theme.foreground,
+            text_muted: theme.muted_foreground,
+            accent: theme.accent,
+            error: theme.error,
+            scroll_view: theme.file_list_scroll_view_style(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

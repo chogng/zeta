@@ -34,12 +34,13 @@ pub use identity::{
     SESSION_SEARCH_INPUT, TAB_CONTAINER, TAB_CONTAINER_ACTION_BAR, TAB_CONTAINER_LIST,
     TAB_CONTAINER_SETTINGS_ACTION, TAB_CONTAINER_SETTINGS_CLOSE, TAB_CONTAINER_SETTINGS_TAB,
     TAB_CONTAINER_TOGGLE, TAB_CONTAINER_TOOLBAR, TAB_LAYOUT_MENU_MOVE_TO_TITLEBAR, TITLEBAR,
-    TITLEBAR_SETTINGS_ACTION, TITLEBAR_SETTINGS_CLOSE, TITLEBAR_SETTINGS_TAB,
-    TITLEBAR_TAB_CONTAINER, TITLEBAR_TAB_LIST, WINDOW, WORKSPACE_PANE_TOGGLE,
-    session_tab_action_id, session_tab_close_id, session_tab_id, tab_group_list_id,
-    titlebar_session_tab_action_id, titlebar_session_tab_close_id, titlebar_session_tab_id,
-    titlebar_tab_group_list_id,
+    TITLEBAR_SETTINGS_ACTION, TITLEBAR_SETTINGS_BUTTON, TITLEBAR_SETTINGS_CLOSE,
+    TITLEBAR_SETTINGS_TAB, TITLEBAR_TAB_CONTAINER, TITLEBAR_TAB_LIST, WINDOW,
+    WORKSPACE_PANE_TOGGLE, session_tab_action_id, session_tab_close_id, session_tab_id,
+    tab_group_list_id, titlebar_session_tab_action_id, titlebar_session_tab_close_id,
+    titlebar_session_tab_id, titlebar_tab_group_list_id,
 };
+pub use style::WorkbenchColors;
 pub use style::WorkbenchUiStyle;
 pub use tab_mount::TabIntent;
 pub use tabs::{
@@ -63,17 +64,26 @@ fn test_style() -> WorkbenchUiStyle {
     )
     .with_padding(Edges::uniform(4.0));
     WorkbenchUiStyle::new(
-        Color::WHITE,
-        Color::rgb(246, 246, 247),
-        Color::rgb(248, 248, 249),
-        Color::rgb(222, 222, 224),
-        Color::rgb(38, 38, 41),
-        Color::rgb(126, 126, 132),
-        Color::rgb(235, 235, 237),
-        Color::rgb(15, 110, 96),
-        Color::rgb(16, 124, 16),
-        Color::rgb(154, 103, 0),
-        Color::rgb(180, 38, 38),
+        WorkbenchColors {
+            content_background: Color::WHITE,
+            side_bar_background: Color::rgb(246, 246, 247),
+            border: Color::rgb(222, 222, 224),
+            foreground: Color::rgb(38, 38, 41),
+            muted_foreground: Color::rgb(126, 126, 132),
+            control_hover_background: Color::rgb(232, 232, 232),
+            menu_background: Color::WHITE,
+            menu_hover_background: Color::rgb(226, 226, 228),
+            tab_hover_background: Color::rgb(226, 226, 228),
+            tab_active_background: Color::rgb(235, 235, 237),
+            action_bar_background: Color::rgb(245, 245, 246),
+            title_bar_background: Color::WHITE,
+            title_bar_action_foreground: Color::rgb(66, 66, 66),
+            title_bar_hover_background: Color::rgb(229, 229, 229),
+            accent: Color::rgb(15, 110, 96),
+            success: Color::rgb(16, 124, 16),
+            warning: Color::rgb(154, 103, 0),
+            error: Color::rgb(180, 38, 38),
+        },
         SearchBoxStyle::new(input, icons::SEARCH, Color::rgb(126, 126, 132)).with_icon_size(18.0),
         icons::GEAR,
         icons::ADD,

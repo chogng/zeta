@@ -1,5 +1,6 @@
 use zeta_ui_components::ButtonBackgrounds;
 use zeta_ui_components::ButtonStyle;
+use zeta_ui_theme::UiTheme;
 use zui::ui::Color;
 use zui::ui::Edges;
 use zui::ui::TextStyle;
@@ -14,6 +15,15 @@ pub struct WorkspaceNavigationStyle {
 }
 
 impl WorkspaceNavigationStyle {
+    pub fn from_theme(theme: UiTheme) -> Self {
+        Self::new(
+            theme.side_bar_background,
+            theme.foreground,
+            theme.list_hover_background,
+            theme.list_active_background,
+        )
+    }
+
     pub fn new(
         surface_raised: Color,
         text: Color,

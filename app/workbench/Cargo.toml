@@ -18,6 +18,7 @@ zeta-keybinding = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-session = { workspace = true }
 zeta-ui-components = { workspace = true }
+zeta-ui-theme = { workspace = true }
 zui = { workspace = true, default-features = false }
 
 [lints]

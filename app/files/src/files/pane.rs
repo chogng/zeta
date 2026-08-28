@@ -14,6 +14,7 @@ use super::tree_view::draw_row_background;
 use super::tree_view::file_row_state;
 
 use zeta_ui_components::ScrollViewStyle;
+use zeta_ui_theme::UiTheme;
 use zui::ui::Color;
 use zui::ui::ElementId;
 
@@ -31,6 +32,19 @@ pub struct FilesPaneStyle {
     pub text: Color,
     pub text_muted: Color,
     pub scroll_view: ScrollViewStyle,
+}
+
+impl FilesPaneStyle {
+    pub fn from_theme(theme: UiTheme) -> Self {
+        Self {
+            surface: theme.content_background,
+            selected_background: theme.list_active_background,
+            hovered_background: theme.list_hover_background,
+            text: theme.foreground,
+            text_muted: theme.muted_foreground,
+            scroll_view: theme.file_list_scroll_view_style(),
+        }
+    }
 }
 
 /// Files-pane rendering and interaction registration over retained `FilesState`.

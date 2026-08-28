@@ -30,7 +30,7 @@ fn style() -> TabContextMenuStyle {
         Color::WHITE,
         Color::rgb(220, 220, 220),
         Color::rgb(30, 30, 30),
-        Color::rgb(235, 235, 237),
+        Color::rgb(226, 226, 228),
     )
 }
 
@@ -98,6 +98,85 @@ fn pinned_target_changes_the_first_action_to_unpin() {
     assert!(state.target_is_pinned());
     assert_eq!(TabContextMenuAction::TogglePin.label(true), "Unpin tab");
     assert!(menu.item_bounds(0).is_some());
+}
+
+#[test]
+fn command_menu_only_uses_the_dark_fill_for_pointer_hover() {
+    let mut state = TabContextMenuState::default();
+    state.open_unpinned(session_tab(), Point::new(80.0, 120.0), None);
+    let mut dispatch = UiDispatch::default();
+    let part = TabPart::default();
+    let mut text_layout = TextInputLayoutEngine::new();
+    let menu = TabContextMenu::new(
+        Rect::from_xywh(0.0, 0.0, 1_000.0, 700.0),
+        &part,
+        &state,
+        CaretVisibility::Visible,
+        style(),
+        WINDOW,
+        &mut text_layout,
+        &dispatch,
+    )
+    .unwrap();
+    let first_bounds = menu.item_bounds(0).unwrap();
+    let second_bounds = menu.item_bounds(1).unwrap();
+    let mut initial = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
+    initial.draw_component(&menu);
+    let first_id = TabContextMenuAction::TogglePin.element_id();
+    dispatch.focus_element(initial.interaction(), first_id);
+    assert_eq!(dispatch.focused(), Some(first_id));
+    drop(initial);
+    drop(menu);
+
+    let menu = TabContextMenu::new(
+        Rect::from_xywh(0.0, 0.0, 1_000.0, 700.0),
+        &part,
+        &state,
+        CaretVisibility::Visible,
+        style(),
+        WINDOW,
+        &mut text_layout,
+        &dispatch,
+    )
+    .unwrap();
+    let mut focused = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
+    focused.draw_component(&menu);
+    let first_background = focused
+        .scene()
+        .rects()
+        .iter()
+        .find(|rect| rect.bounds() == first_bounds)
+        .expect("focused command item background");
+
+    assert_eq!(first_background.fill(), Color::TRANSPARENT);
+    dispatch.pointer_moved(
+        Point::new(second_bounds.origin.x + 2.0, second_bounds.origin.y + 2.0),
+        focused.interaction(),
+    );
+    drop(focused);
+    drop(menu);
+
+    let menu = TabContextMenu::new(
+        Rect::from_xywh(0.0, 0.0, 1_000.0, 700.0),
+        &part,
+        &state,
+        CaretVisibility::Visible,
+        style(),
+        WINDOW,
+        &mut text_layout,
+        &dispatch,
+    )
+    .unwrap();
+    let mut hovered = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
+    hovered.draw_component(&menu);
+    let second_background = hovered
+        .scene()
+        .rects()
+        .iter()
+        .find(|rect| rect.bounds() == second_bounds)
+        .expect("hovered command item background");
+
+    assert_eq!(second_background.fill(), Color::rgb(226, 226, 228));
 }
 
 #[test]

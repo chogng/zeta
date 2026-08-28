@@ -1,6 +1,7 @@
 //! Source-control snapshots for the Changes Workspace Pane.
 
 use zeta_editor::DiffEditorDocument;
+use zeta_ui_theme::UiTheme;
 use zui::ui::Color;
 
 #[path = "scm/layout.rs"]
@@ -23,6 +24,16 @@ pub struct ScmPaneStyle {
     pub surface: Color,
     pub border: Color,
     pub text_muted: Color,
+}
+
+impl ScmPaneStyle {
+    pub const fn from_theme(theme: UiTheme) -> Self {
+        Self {
+            surface: theme.content_background,
+            border: theme.border,
+            text_muted: theme.muted_foreground,
+        }
+    }
 }
 
 /// One changed-file snapshot supplied by the workspace host.

@@ -13,6 +13,7 @@ use zeta_ui_components::InputBoxState;
 use zeta_ui_components::InputBoxStateColors;
 use zeta_ui_components::InputBoxStyle;
 use zeta_ui_components::InteractionRegion;
+use zeta_ui_theme::UiTheme;
 use zui::ui::AccessibilityRole;
 use zui::ui::CaretVisibility;
 use zui::ui::Color;
@@ -61,16 +62,25 @@ pub struct TabContextMenuStyle {
     surface: Color,
     border: Color,
     text: Color,
-    highlight: Color,
+    hovered: Color,
 }
 
 impl TabContextMenuStyle {
-    pub const fn new(surface: Color, border: Color, text: Color, highlight: Color) -> Self {
+    pub const fn from_theme(theme: UiTheme) -> Self {
+        Self::new(
+            theme.menu_background,
+            theme.border,
+            theme.foreground,
+            theme.menu_hover_background,
+        )
+    }
+
+    pub const fn new(surface: Color, border: Color, text: Color, hovered: Color) -> Self {
         Self {
             surface,
             border,
             text,
-            highlight,
+            hovered,
         }
     }
 }
@@ -109,9 +119,6 @@ impl TabContextMenu {
                 ContextMenuItem::new(action.label(open.pinned), button_state(dispatch, id, true))
             })
             .collect();
-        let root_selection = selected_action(dispatch)
-            .map(ContextMenuSelection::Item)
-            .unwrap_or(ContextMenuSelection::None);
         let root_style = SharedContextMenuStyle::new(
             style.surface,
             button_style.clone(),
@@ -128,7 +135,7 @@ impl TabContextMenu {
             root_style
         };
         let root = ContextMenu::new(viewport, open.anchor, root_items, root_style)
-            .with_selection(root_selection);
+            .with_selection(ContextMenuSelection::None);
         let root_regions = action_regions(&root, open.pinned);
 
         let groups = (open.view == TabContextMenuView::Groups).then(|| {
@@ -155,11 +162,6 @@ impl TabContextMenu {
                 .iter()
                 .map(|(id, label)| ContextMenuItem::new(label, button_state(dispatch, *id, true)))
                 .collect();
-            let selection = entries
-                .iter()
-                .position(|(id, _)| is_active(dispatch, *id))
-                .map(ContextMenuSelection::Item)
-                .unwrap_or(ContextMenuSelection::None);
             let anchor = root.item_bounds(2).unwrap_or_else(|| {
                 Rect::from_xywh(root.bounds().right(), root.bounds().origin.y, 1.0, 1.0)
             });
@@ -180,7 +182,7 @@ impl TabContextMenu {
                         .with_viewport_margin(MENU_MARGIN),
                 ),
             )
-            .with_selection(selection);
+            .with_selection(ContextMenuSelection::None);
             (menu, entries)
         });
         let (groups, group_regions) = match groups {
@@ -349,12 +351,6 @@ fn menu_region(
     .with_navigation(NavigationGroupId::new(group), NavigationAxis::Vertical)
 }
 
-fn selected_action(dispatch: &UiDispatch) -> Option<usize> {
-    TabContextMenuAction::ALL
-        .into_iter()
-        .position(|action| is_active(dispatch, action.element_id()))
-}
-
 fn button_state(dispatch: &UiDispatch, id: ElementId, enabled: bool) -> ButtonState {
     if !enabled {
         ButtonState::Disabled
@@ -369,16 +365,13 @@ fn button_state(dispatch: &UiDispatch, id: ElementId, enabled: bool) -> ButtonSt
     }
 }
 
-fn is_active(dispatch: &UiDispatch, id: ElementId) -> bool {
-    dispatch.is_pressed(id) || dispatch.is_focused(id) || dispatch.is_hovered(id)
-}
-
 fn menu_button_style(style: TabContextMenuStyle) -> ButtonStyle {
     let backgrounds = ButtonBackgrounds::new(Color::TRANSPARENT)
-        .with_hovered(style.highlight)
-        .with_focused(style.highlight)
-        .with_pressed(style.highlight);
+        .with_hovered(style.hovered)
+        .with_focused(Color::TRANSPARENT)
+        .with_pressed(style.hovered);
     ButtonStyle::new(backgrounds, TextStyle::new(12.0, style.text))
+        .with_selected_backgrounds(ButtonBackgrounds::new(Color::TRANSPARENT))
         .with_corner_radii(CornerRadii::uniform(3.0))
         .with_padding(Edges::new(6.0, 8.0, 6.0, 8.0))
 }

@@ -7,6 +7,7 @@
 mod code_editor;
 mod diff_editor;
 mod multi_diff_editor;
+mod theme;
 
 pub use code_editor::{
     CodeEditor, CodeEditorCaseSensitivity, CodeEditorCommand, CodeEditorComposition,

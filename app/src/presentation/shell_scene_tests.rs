@@ -56,9 +56,9 @@ fn viewport() -> LogicalViewport {
 #[test]
 fn inspector_part_outer_border_is_owned_by_native_shell() {
     let bounds = Rect::from_xywh(680.0, 40.0, 320.0, 660.0);
-    let mut scene = UiScene::new(crate::shell_style::SHELL_PALETTE.background);
+    let mut scene = UiScene::new(zeta_ui_theme::DEFAULT_UI_THEME.workbench_background);
 
-    super::draw_inspector_border(&mut scene, bounds, crate::shell_style::SHELL_PALETTE);
+    super::draw_inspector_border(&mut scene, bounds, zeta_ui_theme::DEFAULT_UI_THEME);
 
     let frame = scene.rects().first().copied().expect("Inspector frame");
     assert_eq!(frame.bounds(), bounds);
@@ -66,7 +66,7 @@ fn inspector_part_outer_border_is_owned_by_native_shell() {
     assert_eq!(frame.border().widths(), Edges::new(0.0, 0.0, 0.0, 1.0));
     assert_eq!(
         frame.border().color(),
-        crate::shell_style::SHELL_PALETTE.border
+        zeta_ui_theme::DEFAULT_UI_THEME.border
     );
 }
 
@@ -223,7 +223,7 @@ fn presentation_with_active_tab_input(
     let initial = build_shell_presentation(
         viewport(),
         ShellPresentationModel {
-            palette: crate::shell_style::SHELL_PALETTE,
+            palette: zeta_ui_theme::DEFAULT_UI_THEME,
             terminal,
             terminal_panes: &[],
             pane_group,
@@ -277,7 +277,7 @@ fn presentation_with_active_tab_input(
     build_shell_presentation(
         viewport(),
         ShellPresentationModel {
-            palette: crate::shell_style::SHELL_PALETTE,
+            palette: zeta_ui_theme::DEFAULT_UI_THEME,
             terminal,
             terminal_panes: &[],
             pane_group,
@@ -426,11 +426,10 @@ fn expanded_inspector_part_file_row_hover_rebuilds_with_the_hover_background() {
         &mut dispatch,
     );
 
-    assert!(
-        hovered.frame().scene().rects().iter().any(|rect| {
-            rect.bounds() == row_bounds && rect.fill() == Color::rgb(242, 242, 242)
-        })
-    );
+    assert!(hovered.frame().scene().rects().iter().any(|rect| {
+        rect.bounds() == row_bounds
+            && rect.fill() == zeta_ui_theme::DEFAULT_UI_THEME.list_hover_background
+    }));
 }
 
 #[test]
@@ -478,7 +477,7 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
     let presentation = build_shell_presentation(
         viewport(),
         ShellPresentationModel {
-            palette: crate::shell_style::SHELL_PALETTE,
+            palette: zeta_ui_theme::DEFAULT_UI_THEME,
             terminal: None,
             terminal_panes: &[],
             pane_group: None,
@@ -614,7 +613,7 @@ fn primary_presentation_uses_a_flat_light_surface() {
     assert_eq!(composer_panel.border().widths().top, 1.0);
     assert_eq!(
         info_editor_separator.fill(),
-        crate::shell_style::SHELL_PALETTE.border
+        zeta_ui_theme::DEFAULT_UI_THEME.border
     );
     let intentional_pills = presentation
         .frame()
@@ -763,7 +762,7 @@ fn session_search_filters_tabs_by_session_name() {
     let presentation = build_shell_presentation(
         viewport(),
         ShellPresentationModel {
-            palette: crate::shell_style::SHELL_PALETTE,
+            palette: zeta_ui_theme::DEFAULT_UI_THEME,
             terminal: None,
             terminal_panes: &[],
             pane_group: None,
@@ -962,7 +961,7 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
     let presentation = build_shell_presentation(
         viewport(),
         ShellPresentationModel {
-            palette: crate::shell_style::SHELL_PALETTE,
+            palette: zeta_ui_theme::DEFAULT_UI_THEME,
             terminal: None,
             terminal_panes: &[],
             pane_group: Some(main_pane_group),
@@ -1186,7 +1185,7 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
     let dispatch = UiDispatch::default();
     let mut text_layout = TextInputLayoutEngine::new();
     let closed_model = ShellPresentationModel {
-        palette: crate::shell_style::SHELL_PALETTE,
+        palette: zeta_ui_theme::DEFAULT_UI_THEME,
         terminal: None,
         terminal_panes: &[],
         pane_group: None,
@@ -1362,7 +1361,7 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             height: 100.0,
         },
         ShellPresentationModel {
-            palette: crate::shell_style::SHELL_PALETTE,
+            palette: zeta_ui_theme::DEFAULT_UI_THEME,
             terminal: None,
             terminal_panes: &[],
             pane_group: None,

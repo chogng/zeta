@@ -18,7 +18,7 @@ use crate::shell_interaction::{
     FILE_EDITOR_REPLACE_INPUT, FILE_EDITOR_SEARCH_BAR, FILE_EDITOR_TAB_LIST, FileEditorAction,
     MAIN_SURFACE,
 };
-use crate::shell_style::ShellPalette;
+use zeta_ui_theme::UiTheme;
 use zui::ui::{AccessibilityRole, UiNode};
 
 #[path = "file_editor_pane_interaction.rs"]
@@ -76,7 +76,7 @@ pub(crate) struct FileEditorPane<'a> {
     parent: zui::ui::ElementId,
     host: &'a FileEditorHost,
     editor_style: CodeEditorStyle,
-    palette: ShellPalette,
+    palette: UiTheme,
     caret_visibility: CaretVisibility,
     prompt: FileEditorPrompt,
     search_mode: FileEditorSearchMode,
@@ -95,7 +95,7 @@ impl<'a> FileEditorPane<'a> {
         bounds: Rect,
         host: &'a FileEditorHost,
         editor_style: CodeEditorStyle,
-        palette: ShellPalette,
+        palette: UiTheme,
         caret_visibility: CaretVisibility,
     ) -> Self {
         Self {
@@ -190,7 +190,7 @@ impl<'a> FileEditorPane<'a> {
             self.search_input_bounds(0),
             "Find",
             query_state,
-            self.palette.session_search_style(),
+            self.palette.search_box_style(),
             search.query_input(),
             text_layout,
         ));
@@ -201,7 +201,7 @@ impl<'a> FileEditorPane<'a> {
                 self.search_input_bounds(1),
                 "Replace",
                 replacement_state,
-                self.palette.session_search_style(),
+                self.palette.search_box_style(),
                 search.replacement_input(),
                 text_layout,
             ));
@@ -482,7 +482,7 @@ impl Component for FileEditorPane<'_> {
     }
 
     fn paint(&self, scene: &mut UiScene) {
-        scene.draw_rect(PaintRect::new(self.bounds, self.palette.surface));
+        scene.draw_rect(PaintRect::new(self.bounds, self.palette.content_background));
         let tab_bounds = Rect::from_xywh(
             self.bounds.origin.x,
             self.bounds.origin.y,
@@ -500,9 +500,9 @@ impl Component for FileEditorPane<'_> {
                     scene.draw_rect(PaintRect::new(
                         bounds,
                         if active {
-                            self.palette.surface
+                            self.palette.content_background
                         } else {
-                            self.palette.surface_raised
+                            self.palette.side_bar_background
                         },
                     ));
                     let suffix = match tab.status() {
@@ -525,9 +525,9 @@ impl Component for FileEditorPane<'_> {
                         TextStyle::new(
                             12.0,
                             if active {
-                                self.palette.text
+                                self.palette.foreground
                             } else {
-                                self.palette.text_muted
+                                self.palette.muted_foreground
                             },
                         )
                         .with_line_height(18.0),
@@ -539,7 +539,7 @@ impl Component for FileEditorPane<'_> {
                             self.tab_close_bounds(index).origin.y + 1.0,
                         ),
                         zui::ui::Size::new(TAB_CLOSE_SIZE - 6.0, 18.0),
-                        TextStyle::new(14.0, self.palette.text_muted).with_line_height(18.0),
+                        TextStyle::new(14.0, self.palette.muted_foreground).with_line_height(18.0),
                     ));
                 }
             },
@@ -552,7 +552,7 @@ impl Component for FileEditorPane<'_> {
                 |scene, _element| {
                     scene.draw_rect(PaintRect::new(
                         self.search_bounds(),
-                        self.palette.surface_raised,
+                        self.palette.side_bar_background,
                     ));
                     if let Some(query) = self.search_query.as_ref() {
                         scene.draw_component(query);
@@ -573,16 +573,16 @@ impl Component for FileEditorPane<'_> {
                             summary_bounds.origin.y + 4.0,
                         ),
                         zui::ui::Size::new(summary_bounds.size.width - 8.0, 18.0),
-                        TextStyle::new(11.0, self.palette.text_muted).with_line_height(18.0),
+                        TextStyle::new(11.0, self.palette.muted_foreground).with_line_height(18.0),
                     ));
                     for action in self.search_actions() {
                         let bounds = self.search_action_bounds(action);
-                        scene.draw_rect(PaintRect::new(bounds, self.palette.surface));
+                        scene.draw_rect(PaintRect::new(bounds, self.palette.content_background));
                         scene.draw_text(TextBlock::new(
                             action.label(),
                             zui::ui::Point::new(bounds.origin.x + 7.0, bounds.origin.y + 3.0),
                             zui::ui::Size::new(bounds.size.width - 14.0, 18.0),
-                            TextStyle::new(11.0, self.palette.text).with_line_height(18.0),
+                            TextStyle::new(11.0, self.palette.foreground).with_line_height(18.0),
                         ));
                     }
                 },
@@ -595,7 +595,7 @@ impl Component for FileEditorPane<'_> {
                     .with_identity(FILE_EDITOR_NOTICE),
                 |scene, _element| {
                     let bounds = self.notice_bounds();
-                    scene.draw_rect(PaintRect::new(bounds, self.palette.surface_raised));
+                    scene.draw_rect(PaintRect::new(bounds, self.palette.side_bar_background));
                     scene.draw_rect(PaintRect::new(
                         Rect::from_xywh(
                             bounds.origin.x,
@@ -615,11 +615,14 @@ impl Component for FileEditorPane<'_> {
                             (bounds.size.width - action_width - 28.0).max(1.0),
                             18.0,
                         ),
-                        TextStyle::new(12.0, self.palette.text).with_line_height(18.0),
+                        TextStyle::new(12.0, self.palette.foreground).with_line_height(18.0),
                     ));
                     for (index, action) in notice.actions.iter().copied().enumerate() {
                         let action_bounds = self.notice_action_bounds(notice.actions.len(), index);
-                        scene.draw_rect(PaintRect::new(action_bounds, self.palette.surface));
+                        scene.draw_rect(PaintRect::new(
+                            action_bounds,
+                            self.palette.content_background,
+                        ));
                         scene.draw_text(TextBlock::new(
                             action.label(),
                             zui::ui::Point::new(
@@ -627,7 +630,7 @@ impl Component for FileEditorPane<'_> {
                                 action_bounds.origin.y + 3.0,
                             ),
                             zui::ui::Size::new(action_bounds.size.width - 20.0, 18.0),
-                            TextStyle::new(12.0, self.palette.text).with_line_height(18.0),
+                            TextStyle::new(12.0, self.palette.foreground).with_line_height(18.0),
                         ));
                     }
                 },
@@ -651,7 +654,7 @@ impl Component for FileEditorPane<'_> {
                         self.editor_bounds(),
                         point,
                         diagnostic,
-                        self.palette.editor_overlay_style(),
+                        zeta_editor_host::EditorOverlayStyle::from_theme(self.palette),
                     ));
                 } else if let (Some(point), Some(hover)) =
                     (self.pointer_position, self.language_hover)
@@ -660,7 +663,7 @@ impl Component for FileEditorPane<'_> {
                         self.editor_bounds(),
                         point,
                         hover,
-                        self.palette.editor_overlay_style(),
+                        zeta_editor_host::EditorOverlayStyle::from_theme(self.palette),
                     ));
                 }
                 if let (Some(caret), Some(completions)) =
@@ -671,7 +674,7 @@ impl Component for FileEditorPane<'_> {
                         zui::ui::Point::new(caret.origin.x, caret.bottom()),
                         completions,
                         self.completion_selection,
-                        self.palette.editor_overlay_style(),
+                        zeta_editor_host::EditorOverlayStyle::from_theme(self.palette),
                     ));
                 }
             },

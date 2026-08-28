@@ -20,7 +20,6 @@ use crate::shell_scene::{
     rebuild_shell_overlays, terminal_grid_size_for_bounds, terminal_grid_size_for_viewport,
     terminal_pane_bounds_for_viewport, terminal_pane_sash_for_viewport,
 };
-use crate::shell_style::{SHELL_PALETTE, ShellPalette, code_editor_style};
 use crate::terminal_pane_view::TerminalPaneViewState;
 use crate::terminal_session::{TerminalSession, TerminalSessionEvent, TerminalSessionKey};
 use crate::workspace_context::WorkspaceContext;
@@ -37,6 +36,7 @@ use zeta_terminal_workspace::PaneBinding;
 use zeta_terminal_workspace::TerminalPaneViews;
 use zeta_theme::{ColorScheme, ThemeLoadOptions, ThemeLoader, ThemeSurface, default_device_root};
 use zeta_ui_components::{SashOrientation, SashPointerPresence};
+use zeta_ui_theme::{DEFAULT_UI_THEME, UiTheme};
 use zeta_workbench::SessionSearchState;
 use zeta_workbench::{
     LogicalViewport, PaneGroupId as PaneId, PaneInput, PaneInputKind, PaneKey, PaneSplitDirection,
@@ -184,8 +184,6 @@ pub(crate) mod session_host;
 pub(crate) mod shell_interaction;
 #[path = "../presentation/shell_scene.rs"]
 pub(crate) mod shell_scene;
-#[path = "../presentation/shell_style.rs"]
-pub(crate) mod shell_style;
 #[path = "state.rs"]
 mod state;
 #[path = "../presentation/tab_context_menu.rs"]

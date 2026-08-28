@@ -6,7 +6,9 @@ use crate::{
     TextStyle, UiScene,
 };
 
-use super::identity::{TAB_CONTAINER_TOGGLE, TITLEBAR, WINDOW, WORKSPACE_PANE_TOGGLE};
+use super::identity::{
+    TAB_CONTAINER_TOGGLE, TITLEBAR, TITLEBAR_SETTINGS_BUTTON, WINDOW, WORKSPACE_PANE_TOGGLE,
+};
 use super::tabs::TabContainer;
 use super::tabs::TabContainerPlacement;
 use crate::PaneInputKind;
@@ -16,6 +18,7 @@ use zui::ui::{AccessibilityRole, CursorFeedback, FocusBehavior, NodeAction, UiDi
 
 pub const TITLEBAR_HEIGHT: f32 = 32.0;
 const TITLEBAR_ACTION_GAP: f32 = 8.0;
+const TITLEBAR_ACTION_ITEM_GAP: f32 = 4.0;
 const TOGGLE_SIZE: f32 = 24.0;
 const TOGGLE_ICON_SIZE: f32 = 18.0;
 
@@ -40,6 +43,7 @@ pub struct Titlebar<'a> {
     style: WorkbenchUiStyle,
     left_action_bar: ActionBar,
     right_action_bar: ActionBar,
+    settings_action_index: Option<usize>,
     tab_container: Option<TabContainer<'a>>,
     tab_container_toggle_label: &'static str,
     workspace_toggle_label: &'static str,
@@ -66,14 +70,18 @@ impl<'a> Titlebar<'a> {
             TOGGLE_SIZE,
             TOGGLE_SIZE,
         );
-        let workspace_toggle_max_x = (content_right - TOGGLE_SIZE).max(content_left);
-        let workspace_toggle_x = (content_right - TITLEBAR_ACTION_GAP - TOGGLE_SIZE)
+        let settings_action_visible = tabs_expanded;
+        let right_action_count = if settings_action_visible { 2.0 } else { 1.0 };
+        let right_action_width = right_action_count * TOGGLE_SIZE
+            + (right_action_count - 1.0) * TITLEBAR_ACTION_ITEM_GAP;
+        let right_action_max_x = (content_right - right_action_width).max(content_left);
+        let right_action_x = (content_right - TITLEBAR_ACTION_GAP - right_action_width)
             .max(tab_container_toggle_bounds.right() + TITLEBAR_ACTION_GAP)
-            .min(workspace_toggle_max_x);
-        let workspace_toggle_bounds = Rect::from_xywh(
-            workspace_toggle_x,
+            .min(right_action_max_x);
+        let right_action_bounds = Rect::from_xywh(
+            right_action_x,
             bounds.origin.y + (bounds.size.height - TOGGLE_SIZE) / 2.0,
-            TOGGLE_SIZE,
+            right_action_width,
             TOGGLE_SIZE,
         );
         let tab_container_toggle_state = if dispatch.is_pressed(TAB_CONTAINER_TOGGLE) {
@@ -90,6 +98,15 @@ impl<'a> Titlebar<'a> {
         } else if dispatch.is_focused(WORKSPACE_PANE_TOGGLE) {
             ButtonState::Focused
         } else if dispatch.is_hovered(WORKSPACE_PANE_TOGGLE) {
+            ButtonState::Hovered
+        } else {
+            ButtonState::Resting
+        };
+        let settings_action_state = if dispatch.is_pressed(TITLEBAR_SETTINGS_BUTTON) {
+            ButtonState::Pressed
+        } else if dispatch.is_focused(TITLEBAR_SETTINGS_BUTTON) {
+            ButtonState::Focused
+        } else if dispatch.is_hovered(TITLEBAR_SETTINGS_BUTTON) {
             ButtonState::Hovered
         } else {
             ButtonState::Resting
@@ -119,11 +136,11 @@ impl<'a> Titlebar<'a> {
             style.workspace_hidden_icon
         };
         let button_style = ButtonStyle::new(
-            ButtonBackgrounds::new(style.surface_raised)
-                .with_hovered(style.surface_hovered)
-                .with_focused(style.surface_hovered)
-                .with_pressed(style.border),
-            TextStyle::new(12.0, style.text_muted),
+            ButtonBackgrounds::new(style.colors.title_bar_background)
+                .with_hovered(style.colors.title_bar_hover_background)
+                .with_focused(style.colors.title_bar_hover_background)
+                .with_pressed(style.colors.border),
+            TextStyle::new(12.0, style.colors.title_bar_action_foreground),
         )
         .with_corner_radii(CornerRadii::uniform(4.0))
         .with_padding(Edges::uniform(3.0))
@@ -138,15 +155,26 @@ impl<'a> Titlebar<'a> {
             ))],
             ActionBarStyle::new(button_style.clone(), Size::new(TOGGLE_SIZE, TOGGLE_SIZE)),
         );
+        let mut right_actions = vec![ActionBarItem::Action(ActionViewItem::icon(
+            workspace_toggle_icon,
+            workspace_toggle_label,
+            workspace_toggle_state,
+        ))];
+        let settings_action_index = settings_action_visible.then(|| {
+            let index = right_actions.len();
+            right_actions.push(ActionBarItem::Action(ActionViewItem::icon(
+                style.settings_icon,
+                "Open Settings",
+                settings_action_state,
+            )));
+            index
+        });
         let right_action_bar = ActionBar::new(
-            workspace_toggle_bounds,
+            right_action_bounds,
             ActionBarOrientation::Horizontal,
-            vec![ActionBarItem::Action(ActionViewItem::icon(
-                workspace_toggle_icon,
-                workspace_toggle_label,
-                workspace_toggle_state,
-            ))],
-            ActionBarStyle::new(button_style, Size::new(TOGGLE_SIZE, TOGGLE_SIZE)),
+            right_actions,
+            ActionBarStyle::new(button_style, Size::new(TOGGLE_SIZE, TOGGLE_SIZE))
+                .with_gap(TITLEBAR_ACTION_ITEM_GAP),
         );
         let tabs_left = left_action_bar.bounds().right() + TITLEBAR_ACTION_GAP;
         let tabs_right = (right_action_bar.bounds().origin.x - TITLEBAR_ACTION_GAP).max(tabs_left);
@@ -161,6 +189,7 @@ impl<'a> Titlebar<'a> {
             style: style.clone(),
             left_action_bar,
             right_action_bar,
+            settings_action_index,
             tab_container: (!tabs_expanded).then(|| {
                 TabContainer::from_tab_part(
                     tabs_bounds,
@@ -178,7 +207,7 @@ impl<'a> Titlebar<'a> {
     }
 
     fn child_interaction_regions(&self) -> Vec<InteractionRegion> {
-        vec![
+        let mut regions = vec![
             InteractionRegion::new(
                 "TabContainerToggle",
                 TAB_CONTAINER_TOGGLE,
@@ -203,7 +232,24 @@ impl<'a> Titlebar<'a> {
             .with_cursor(CursorFeedback::Pointer)
             .with_focus(FocusBehavior::TabStop)
             .with_action(NodeAction::Activate),
-        ]
+        ];
+        if let Some(index) = self.settings_action_index {
+            regions.push(
+                InteractionRegion::new(
+                    "TitlebarSettingsButton",
+                    TITLEBAR_SETTINGS_BUTTON,
+                    self.right_action_bar
+                        .interactive_item_bounds(index)
+                        .expect("titlebar Settings action is enabled"),
+                    AccessibilityRole::Button,
+                    "Open Settings",
+                )
+                .with_cursor(CursorFeedback::Pointer)
+                .with_focus(FocusBehavior::TabStop)
+                .with_action(NodeAction::Activate),
+            );
+        }
+        regions
     }
 }
 
@@ -232,10 +278,9 @@ impl Component for Titlebar<'_> {
             context.draw_component(&region);
         }
         context.scene_mut().draw_rect(
-            PaintRect::new(self.bounds, self.style.surface_raised).with_border(Border::new(
-                Edges::new(0.0, 0.0, 1.0, 0.0),
-                self.style.border,
-            )),
+            PaintRect::new(self.bounds, self.style.colors.title_bar_background).with_border(
+                Border::new(Edges::new(0.0, 0.0, 1.0, 0.0), self.style.colors.border),
+            ),
         );
         if let Some(tab_container) = &self.tab_container {
             context.draw_component(tab_container);
@@ -246,10 +291,9 @@ impl Component for Titlebar<'_> {
 
     fn paint(&self, scene: &mut UiScene) {
         scene.draw_rect(
-            PaintRect::new(self.bounds, self.style.surface_raised).with_border(Border::new(
-                Edges::new(0.0, 0.0, 1.0, 0.0),
-                self.style.border,
-            )),
+            PaintRect::new(self.bounds, self.style.colors.title_bar_background).with_border(
+                Border::new(Edges::new(0.0, 0.0, 1.0, 0.0), self.style.colors.border),
+            ),
         );
         if let Some(tab_container) = &self.tab_container {
             scene.draw_component(tab_container);

@@ -12,7 +12,7 @@ use crate::shell_interaction::{
     FILE_EDITOR_REPLACE_INPUT, FILE_EDITOR_TAB_LIST, FileEditorAction, MAIN_SURFACE, WINDOW,
     file_editor_close_id, file_editor_tab_id,
 };
-use crate::shell_style::SHELL_PALETTE;
+use zeta_ui_theme::DEFAULT_UI_THEME;
 use zui::ui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame, UiNode};
 
 fn open(host: &mut FileEditorHost, path: &str, content: &str) {
@@ -37,7 +37,7 @@ fn pane_paints_tabs_dirty_state_and_only_the_active_document() {
         Rect::from_xywh(0.0, 0.0, 480.0, 240.0),
         &host,
         CodeEditorStyle::light(),
-        SHELL_PALETTE,
+        DEFAULT_UI_THEME,
         CaretVisibility::Visible,
     );
     let mut scene = UiScene::new(Color::WHITE);
@@ -63,7 +63,7 @@ fn empty_host_paints_only_the_file_surface() {
         Rect::from_xywh(0.0, 0.0, 320.0, 200.0),
         &host,
         CodeEditorStyle::light(),
-        SHELL_PALETTE,
+        DEFAULT_UI_THEME,
         CaretVisibility::Hidden,
     );
     let mut scene = UiScene::new(Color::WHITE);
@@ -86,7 +86,7 @@ fn pane_paints_editor_diagnostics_and_hover_details() {
         Rect::from_xywh(0.0, 0.0, 480.0, 240.0),
         &host,
         CodeEditorStyle::light(),
-        SHELL_PALETTE,
+        DEFAULT_UI_THEME,
         CaretVisibility::Visible,
     )
     .with_diagnostics(&diagnostics)
@@ -99,7 +99,7 @@ fn pane_paints_editor_diagnostics_and_hover_details() {
         scene
             .rects()
             .iter()
-            .any(|rect| rect.fill() == SHELL_PALETTE.error)
+            .any(|rect| rect.fill() == DEFAULT_UI_THEME.error)
     );
     assert!(
         scene
@@ -119,7 +119,7 @@ fn pane_registers_tabs_and_the_active_document_as_native_interactions() {
         bounds,
         &host,
         CodeEditorStyle::light(),
-        SHELL_PALETTE,
+        DEFAULT_UI_THEME,
         CaretVisibility::Visible,
     );
     let mut frame = UiFrame::<InteractionFrame>::new(Color::WHITE);
@@ -216,7 +216,7 @@ fn external_change_notice_exposes_safe_reload_and_overwrite_actions() {
         Rect::from_xywh(0.0, 0.0, 480.0, 240.0),
         &host,
         CodeEditorStyle::light(),
-        SHELL_PALETTE,
+        DEFAULT_UI_THEME,
         CaretVisibility::Visible,
     );
     let mut frame = UiFrame::<InteractionFrame>::new(Color::WHITE);
@@ -263,7 +263,7 @@ fn dirty_close_confirmation_traps_interaction_in_its_decision_bar() {
         Rect::from_xywh(0.0, 0.0, 480.0, 240.0),
         &host,
         CodeEditorStyle::light(),
-        SHELL_PALETTE,
+        DEFAULT_UI_THEME,
         CaretVisibility::Visible,
     )
     .with_prompt(FileEditorPrompt::ConfirmClose);
@@ -327,7 +327,7 @@ fn file_pane_soft_wrap_drives_visual_viewport_and_caret_reveal() {
         Rect::from_xywh(0.0, 0.0, 160.0, 72.0),
         &host,
         CodeEditorStyle::light(),
-        SHELL_PALETTE,
+        DEFAULT_UI_THEME,
         CaretVisibility::Visible,
     );
 
@@ -341,7 +341,7 @@ fn file_pane_soft_wrap_drives_visual_viewport_and_caret_reveal() {
         Rect::from_xywh(0.0, 0.0, 160.0, 72.0),
         &host,
         CodeEditorStyle::light(),
-        SHELL_PALETTE,
+        DEFAULT_UI_THEME,
         CaretVisibility::Visible,
     );
     assert!(pane.caret_bounds().is_some());
@@ -361,7 +361,7 @@ fn find_replace_bar_projects_native_inputs_and_editor_owned_match_count() {
         bounds,
         &host,
         CodeEditorStyle::light(),
-        SHELL_PALETTE,
+        DEFAULT_UI_THEME,
         CaretVisibility::Hidden,
     )
     .with_search(

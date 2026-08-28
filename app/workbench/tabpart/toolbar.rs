@@ -87,13 +87,16 @@ impl TabContainerToolbar {
             ButtonState::Resting
         };
         let button_backgrounds = ButtonBackgrounds::new(crate::Color::TRANSPARENT)
-            .with_hovered(style.selected)
-            .with_focused(style.selected)
-            .with_pressed(style.selected);
-        let button_style = ButtonStyle::new(button_backgrounds, TextStyle::new(12.0, style.text))
-            .with_corner_radii(CornerRadii::uniform(4.0))
-            .with_padding(Edges::uniform(3.0))
-            .with_icon_size(18.0);
+            .with_hovered(style.colors.control_hover_background)
+            .with_focused(style.colors.control_hover_background)
+            .with_pressed(style.colors.control_hover_background);
+        let button_style = ButtonStyle::new(
+            button_backgrounds,
+            TextStyle::new(12.0, style.colors.foreground),
+        )
+        .with_corner_radii(CornerRadii::uniform(4.0))
+        .with_padding(Edges::uniform(3.0))
+        .with_icon_size(18.0);
         let action_bar = ActionBar::new(
             action_bounds,
             ActionBarOrientation::Horizontal,
@@ -285,13 +288,13 @@ struct TabLayoutMenu {
 
 impl TabLayoutMenu {
     fn new(viewport: Rect, anchor: Rect, style: WorkbenchUiStyle, dispatch: &UiDispatch) -> Self {
-        let selected = ButtonBackgrounds::new(style.selected)
-            .with_hovered(style.selected)
-            .with_focused(style.selected)
-            .with_pressed(style.border);
+        let selected = ButtonBackgrounds::new(style.colors.menu_hover_background)
+            .with_hovered(style.colors.menu_hover_background)
+            .with_focused(style.colors.menu_hover_background)
+            .with_pressed(style.colors.border);
         let item_style = ButtonStyle::new(
             ButtonBackgrounds::new(crate::Color::TRANSPARENT),
-            TextStyle::new(13.0, style.text).with_line_height(18.0),
+            TextStyle::new(13.0, style.colors.foreground).with_line_height(18.0),
         )
         .with_selected_backgrounds(selected)
         .with_corner_radii(CornerRadii::uniform(2.0))
@@ -304,7 +307,7 @@ impl TabLayoutMenu {
                 button_state(dispatch, TAB_LAYOUT_MENU_MOVE_TO_TITLEBAR),
             )],
             ContextMenuStyle::new(
-                style.surface,
+                style.colors.menu_background,
                 item_style,
                 Size::new(LAYOUT_MENU_WIDTH, LAYOUT_MENU_ITEM_HEIGHT),
             )

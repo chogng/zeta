@@ -16,8 +16,8 @@ Schema 和模板由 Desktop registry 编译到 [`resources/design-tokens`](../..
 | `ThemeSurface` | 选择 graphical 或 terminal device preference；不把 UI preference 放进 `zeta-config` |
 
 Desktop 使用自己的 TypeScript resolver 和 CSS projection；Rust 与 TypeScript 通过同一 manifest、
-Schema 和 parity fixture 保持一致。Native/TUI adapter 只能把 snapshot 投影为自己的 component
-style，不能在本 crate 注册宿主状态或布局规则。TUI 可以只读取 token 子集并执行终端色彩能力降级。
+Schema 和 parity fixture 保持一致。`zeta-ui-theme` 与 TUI adapter 只能把 snapshot 投影为自己的
+component style，不能在本 crate 注册宿主状态或布局规则。TUI 可以只读取 token 子集并执行终端色彩能力降级。
 
 ## 执行路径与内部所有者
 

@@ -1,0 +1,9 @@
+load("//app:defs.bzl", "app_rust_library")
+
+app_rust_library(
+    name = "theme",
+    crate_name = "zeta_ui_theme",
+    package_name = "app/theme",
+    source_files = ["README.md"],
+    unit_tests = True,
+)

@@ -130,6 +130,7 @@ members = [
     "app/session",
     "app/settings",
     "app/terminal-workspace",
+    "app/theme",
     "app/ui-components",
     "app/workbench",
     "app/zui",
@@ -380,6 +381,7 @@ zeta-terminal-workspace = { path = "app/terminal-workspace" }
 zeta-terminal-detection = { path = "zeta-rs/terminal-detection" }
 zeta-text-file = { path = "zeta-rs/text-file" }
 zeta-theme = { path = "zeta-rs/theme" }
+zeta-ui-theme = { path = "app/theme" }
 zeta-thread-store = { path = "zeta-rs/thread-store" }
 zeta-thread-transcript = { path = "zeta-rs/thread-transcript" }
 zeta-tools = { path = "zeta-rs/tools" }

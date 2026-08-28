@@ -43,7 +43,7 @@ pub(crate) struct NativeApp {
     pub(super) physical_extent: PhysicalExtent,
     pub(super) scale_factor: f64,
     pub(super) failed: bool,
-    pub(super) palette: ShellPalette,
+    pub(super) palette: UiTheme,
     pub(super) theme_scheme: ColorScheme,
     pub(super) theme_follows_system: bool,
 }
@@ -146,7 +146,7 @@ impl NativeApp {
             physical_extent: PhysicalExtent::new(0, 0),
             scale_factor: 1.0,
             failed: false,
-            palette: SHELL_PALETTE,
+            palette: DEFAULT_UI_THEME,
             theme_scheme: ColorScheme::Light,
             theme_follows_system: true,
         }

@@ -1,0 +1,7 @@
+//! Converts shared theme snapshots into the complete set of UI component styles.
+
+mod palette;
+
+pub use palette::DEFAULT_UI_THEME;
+pub use palette::EditorSyntaxColors;
+pub use palette::UiTheme;

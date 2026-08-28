@@ -19,6 +19,7 @@ use zeta_ui_components::ScrollState;
 use zeta_ui_components::SearchBoxStyle;
 use zeta_ui_components::TreeItem;
 use zeta_ui_components::VirtualListLayout;
+use zeta_ui_theme::UiTheme;
 use zui::ui::Color;
 use zui::ui::CornerRadii;
 use zui::ui::Edges;
@@ -78,6 +79,15 @@ pub struct FilesToolbarStyle {
 }
 
 impl FilesToolbarStyle {
+    pub fn from_theme(theme: UiTheme) -> Self {
+        Self::new(
+            theme.foreground,
+            theme.list_hover_background,
+            theme.list_active_background,
+            theme.search_box_style(),
+        )
+    }
+
     pub fn new(
         text: Color,
         surface_hovered: Color,

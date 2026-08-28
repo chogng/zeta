@@ -1,6 +1,7 @@
 //! Host-resolved colors for one Session Pane.
 
 use zeta_ui_components::ScrollViewStyle;
+use zeta_ui_theme::UiTheme;
 use zui::ui::Color;
 
 #[derive(Clone, Copy)]
@@ -20,6 +21,23 @@ pub struct SessionPaneStyle {
 }
 
 impl SessionPaneStyle {
+    pub fn from_theme(theme: UiTheme) -> Self {
+        Self::new(
+            theme.content_background,
+            theme.side_bar_background,
+            theme.list_hover_background,
+            theme.border,
+            theme.foreground,
+            theme.muted_foreground,
+            theme.accent,
+            theme.success,
+            theme.warning,
+            theme.error,
+            theme.list_active_background,
+            theme.file_list_scroll_view_style(),
+        )
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub const fn new(
         surface: Color,

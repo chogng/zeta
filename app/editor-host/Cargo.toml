@@ -15,6 +15,7 @@ zeta-editor = { workspace = true }
 zeta-lsp-manager = { workspace = true }
 zeta-text-file = { workspace = true }
 zeta-ui-components = { workspace = true }
+zeta-ui-theme = { workspace = true }
 zui = { workspace = true, default-features = false }
 
 [lints]

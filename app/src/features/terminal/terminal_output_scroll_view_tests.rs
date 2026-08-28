@@ -1,6 +1,6 @@
 use super::TerminalOutputScrollView;
-use crate::shell_style::SHELL_PALETTE;
 use zeta_ui_components::ScrollbarPresentation;
+use zeta_ui_theme::DEFAULT_UI_THEME;
 use zui::ui::{Point, Rect};
 
 #[test]
@@ -11,7 +11,7 @@ fn bottom_relative_history_maps_to_scroll_view_content_coordinates() {
         18.0,
         4,
         ScrollbarPresentation::default(),
-        SHELL_PALETTE,
+        DEFAULT_UI_THEME,
     );
 
     assert_eq!(output.visible_line_range(), 16..26);
@@ -29,7 +29,7 @@ fn short_output_uses_the_viewport_origin_without_a_scrollbar() {
         18.0,
         0,
         ScrollbarPresentation::default(),
-        SHELL_PALETTE,
+        DEFAULT_UI_THEME,
     );
 
     assert_eq!(output.visible_line_range(), 0..2);
@@ -48,7 +48,7 @@ fn partial_line_at_viewport_bottom_does_not_shift_the_first_visible_row() {
         18.0,
         0,
         ScrollbarPresentation::default(),
-        SHELL_PALETTE,
+        DEFAULT_UI_THEME,
     );
 
     assert_eq!(output.visible_line_range(), 20..30);

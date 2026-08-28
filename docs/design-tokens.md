@@ -27,7 +27,7 @@ Zeta 采用“单一声明目录、共享版本化 contract、各宿主独立投
 | 语言中立 contract | `resources/design-tokens/` | 保存版本化 manifest、主题入口、用户主题 Schema/模板和跨运行时 conformance fixture |
 | Desktop 快照 | `colorTheme.ts` | 将 scheme、覆盖值和注册目录编译为只读颜色/尺寸表 |
 | Rust 快照与加载 | `zeta-rs/theme` | 嵌入同一 manifest，严格解析用户 JSON，选择 Graphical/Terminal 偏好并产生 RGBA snapshot |
-| 宿主投影 | Desktop theme binding、Native `shell_style`、TUI `ui/theme` | 把 snapshot 转成宿主组件公开的 palette/style；不注册新的产品语义 |
+| 宿主投影 | Desktop theme binding、`zeta-ui-theme`、TUI `ui/theme` | 把 snapshot 转成宿主组件公开的 palette/style；不注册新的产品语义 |
 | 产品主题偏好 | profile `configuration.json` | Desktop/app 使用 graphical key，Zeta Code 使用 TUI key；不进入 App Server Config revision |
 | 用户主题内容 | profile root 的 `themes/*.json` | 保存主题文档，不保存产品当前选择或 Config revision |
 | 离线治理 | `tokenCompiler.ts` 与 `build/desktop/compileDesignTokens.ts` | 校验所有 scheme，生成 manifest、Schema、模板和目录 |
@@ -79,10 +79,10 @@ flowchart LR
 - Desktop、Native 和 TUI 从同一 profile `configuration.json` 读取选择值，并使用 profile root 下的
   `themes/*.json` 加载用户主题内容；每个错误文件独立隔离，内置主题始终可回退。
   Native `app` 在没有显式用户主题时选择 `app` 入口。
-- 127 个语义颜色 token 与 23 个标准标量尺寸 token；四种 `ColorScheme` 均在编译期解析，高对比度当前继承对应明暗默认值。
+- 131 个语义颜色 token 与 23 个标准标量尺寸 token；四种 `ColorScheme` 均在编译期解析，高对比度当前继承对应明暗默认值。
 - 不可变颜色对象、注册贡献、主题快照和生成产物。
 - Stanza/Native CodeEditor 使用 source-neutral `editor.token.*` 角色；旧 `editor.semanticToken.*` 仅作为兼容覆盖入口。
-- Native shell、composer、terminal ANSI、scrollbar 和 multi-diff editor 已由共享 snapshot 构造组件 palette；没有宿主 selector 或 parser 固定色。
+- Rust Desktop 的 shell、composer、terminal ANSI、scrollbar 和 multi-diff editor 已由 `zeta-ui-theme` 从共享 snapshot 构造组件 palette；没有宿主 selector 或 parser 固定色。
 - TUI chrome 只消费 accent、chrome、error/success/warning、muted 和 highlight；Theme Pane preview
   额外消费有限的 syntax/diff 子集，并按 TrueColor、ANSI-256、ANSI-16、Monochrome 确定性降级。
 - Desktop Terminal 使用完整 terminal 前景、背景、光标和 ANSI 16 色 token；legacy editor runtime 仅保留迁移期兼容同步，Stanza Text Engine 是默认文本编辑器。

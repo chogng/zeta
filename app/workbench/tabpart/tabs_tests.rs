@@ -144,6 +144,10 @@ fn body_mount_arranges_tabs_vertically_with_two_line_session_information() {
         frame.scene().text_blocks()[0].style().weight(),
         FontWeight::Bold
     );
+    assert_eq!(
+        frame.scene().text_blocks()[1].style().color(),
+        Color::rgb(38, 38, 41)
+    );
 }
 
 #[test]
@@ -256,7 +260,7 @@ fn close_button_is_a_child_action_and_resolves_to_the_stable_tab_key() {
 
 #[test]
 fn tab_actions_button_is_hover_only_and_opens_actions_for_the_stable_tab_key() {
-    let (part, first_key, _) = part_with_two_sessions();
+    let (part, first_key, second_key) = part_with_two_sessions();
     let tab_id = part.tab_id(&first_key).unwrap();
     let mounts = [
         (
@@ -264,6 +268,7 @@ fn tab_actions_button_is_hover_only_and_opens_actions_for_the_stable_tab_key() {
             Rect::from_xywh(0.0, 36.0, 220.0, 664.0),
             session_tab_id(tab_id),
             session_tab_action_id(tab_id),
+            session_tab_close_id(tab_id),
             TAB_CONTAINER_SETTINGS_ACTION,
         ),
         (
@@ -271,17 +276,18 @@ fn tab_actions_button_is_hover_only_and_opens_actions_for_the_stable_tab_key() {
             Rect::from_xywh(40.0, 0.0, 700.0, 32.0),
             titlebar_session_tab_id(tab_id),
             titlebar_session_tab_action_id(tab_id),
+            titlebar_session_tab_close_id(tab_id),
             TITLEBAR_SETTINGS_ACTION,
         ),
     ];
 
-    for (placement, bounds, tab_element, action_element, settings_action) in mounts {
+    for (placement, bounds, tab_element, action_element, close_element, settings_action) in mounts {
         let mut dispatch = UiDispatch::default();
         let container = TabContainer::from_tab_part(
             bounds,
             bounds,
             &part,
-            Some(&first_key),
+            Some(&second_key),
             placement,
             test_style(),
             &dispatch,
@@ -301,7 +307,7 @@ fn tab_actions_button_is_hover_only_and_opens_actions_for_the_stable_tab_key() {
             bounds,
             bounds,
             &part,
-            Some(&first_key),
+            Some(&second_key),
             placement,
             test_style(),
             &dispatch,
@@ -329,6 +335,46 @@ fn tab_actions_button_is_hover_only_and_opens_actions_for_the_stable_tab_key() {
                 .filter(|icon| icon.icon() == zeta_icons::icons::ELLIPSIS)
                 .count(),
             1
+        );
+        let tab_background = hovered
+            .scene()
+            .rects()
+            .iter()
+            .find(|rect| rect.bounds() == tab_bounds)
+            .expect("hovered tab background");
+        assert_eq!(tab_background.fill(), Color::rgb(226, 226, 228));
+        let action_bounds = hovered
+            .interaction()
+            .node(action_element)
+            .expect("visible tab action")
+            .bounds();
+        let close_bounds = hovered
+            .interaction()
+            .node(close_element)
+            .expect("visible tab close")
+            .bounds();
+        let action_bar_bounds = Rect::from_xywh(
+            action_bounds.origin.x,
+            action_bounds.origin.y,
+            close_bounds.right() - action_bounds.origin.x,
+            action_bounds.size.height,
+        );
+        let action_background = hovered
+            .scene()
+            .rects()
+            .iter()
+            .find(|rect| rect.bounds() == action_bar_bounds)
+            .expect("tab action background");
+        assert_eq!(action_background.fill(), Color::rgb(245, 245, 246));
+        assert_eq!(
+            hovered
+                .scene()
+                .icons()
+                .iter()
+                .find(|icon| icon.icon() == zeta_icons::icons::ELLIPSIS)
+                .expect("tab actions icon")
+                .color(),
+            Color::rgb(126, 126, 132)
         );
     }
 }

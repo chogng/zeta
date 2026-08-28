@@ -1,21 +1,36 @@
 use crate::Color;
 use crate::Icon;
 use crate::SearchBoxStyle;
+use zeta_icons::icons;
+use zeta_ui_theme::UiTheme;
+
+/// Semantic colors consumed by Workbench chrome components.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct WorkbenchColors {
+    pub content_background: Color,
+    pub side_bar_background: Color,
+    pub border: Color,
+    pub foreground: Color,
+    pub muted_foreground: Color,
+    pub control_hover_background: Color,
+    pub menu_background: Color,
+    pub menu_hover_background: Color,
+    pub tab_hover_background: Color,
+    pub tab_active_background: Color,
+    pub action_bar_background: Color,
+    pub title_bar_background: Color,
+    pub title_bar_action_foreground: Color,
+    pub title_bar_hover_background: Color,
+    pub accent: Color,
+    pub success: Color,
+    pub warning: Color,
+    pub error: Color,
+}
 
 /// Host-resolved colors, icons, and input styling for Workbench chrome.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WorkbenchUiStyle {
-    pub(super) surface: Color,
-    pub(super) surface_raised: Color,
-    pub(super) surface_hovered: Color,
-    pub(super) border: Color,
-    pub(super) text: Color,
-    pub(super) text_muted: Color,
-    pub(super) selected: Color,
-    pub(super) accent: Color,
-    pub(super) success: Color,
-    pub(super) warning: Color,
-    pub(super) error: Color,
+    pub(super) colors: WorkbenchColors,
     pub(super) search: SearchBoxStyle,
     pub(super) settings_icon: Icon,
     pub(super) add_icon: Icon,
@@ -28,19 +43,42 @@ pub struct WorkbenchUiStyle {
 }
 
 impl WorkbenchUiStyle {
-    #[allow(clippy::too_many_arguments)]
+    pub fn from_theme(theme: UiTheme) -> Self {
+        Self::new(
+            WorkbenchColors {
+                content_background: theme.content_background,
+                side_bar_background: theme.side_bar_background,
+                border: theme.border,
+                foreground: theme.foreground,
+                muted_foreground: theme.muted_foreground,
+                control_hover_background: theme.list_hover_background,
+                menu_background: theme.menu_background,
+                menu_hover_background: theme.menu_hover_background,
+                tab_hover_background: theme.tab_hover_background,
+                tab_active_background: theme.tab_active_background,
+                action_bar_background: theme.action_bar_background,
+                title_bar_background: theme.title_bar_background,
+                title_bar_action_foreground: theme.title_bar_action_foreground,
+                title_bar_hover_background: theme.title_bar_hover_background,
+                accent: theme.accent,
+                success: theme.success,
+                warning: theme.warning,
+                error: theme.error,
+            },
+            theme.search_box_style(),
+            icons::GEAR,
+            icons::ADD,
+            icons::CLOSE,
+            icons::PINNED,
+            icons::LAYOUT_SIDEBAR_LEFT,
+            icons::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY,
+            icons::LAYOUT_SIDEBAR_RIGHT,
+            icons::LAYOUT_SIDEBAR_RIGHT_OFF_EMPTY,
+        )
+    }
+
     pub fn new(
-        surface: Color,
-        surface_raised: Color,
-        surface_hovered: Color,
-        border: Color,
-        text: Color,
-        text_muted: Color,
-        selected: Color,
-        accent: Color,
-        success: Color,
-        warning: Color,
-        error: Color,
+        colors: WorkbenchColors,
         search: SearchBoxStyle,
         settings_icon: Icon,
         add_icon: Icon,
@@ -52,17 +90,7 @@ impl WorkbenchUiStyle {
         workspace_hidden_icon: Icon,
     ) -> Self {
         Self {
-            surface,
-            surface_raised,
-            surface_hovered,
-            border,
-            text,
-            text_muted,
-            selected,
-            accent,
-            success,
-            warning,
-            error,
+            colors,
             search,
             settings_icon,
             add_icon,

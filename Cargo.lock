@@ -324,6 +324,7 @@ dependencies = [
  "zeta-text-file",
  "zeta-theme",
  "zeta-ui-components",
+ "zeta-ui-theme",
  "zeta-utils-path",
  "zeta-utils-pty",
  "zeta-workbench",
@@ -11319,6 +11320,7 @@ dependencies = [
  "zeta-editor-core",
  "zeta-syntax",
  "zeta-ui-components",
+ "zeta-ui-theme",
  "zui",
 ]
 
@@ -11347,6 +11349,7 @@ dependencies = [
  "zeta-lsp-manager",
  "zeta-text-file",
  "zeta-ui-components",
+ "zeta-ui-theme",
  "zui",
 ]
 
@@ -11450,6 +11453,7 @@ dependencies = [
  "zeta-file-search",
  "zeta-icons",
  "zeta-ui-components",
+ "zeta-ui-theme",
  "zui",
 ]
 
@@ -11937,6 +11941,7 @@ dependencies = [
  "zeta-diff",
  "zeta-editor",
  "zeta-ui-components",
+ "zeta-ui-theme",
  "zui",
 ]
 
@@ -11992,6 +11997,7 @@ dependencies = [
  "zeta-slash-commands",
  "zeta-thread-transcript",
  "zeta-ui-components",
+ "zeta-ui-theme",
  "zui",
 ]
 
@@ -12015,6 +12021,7 @@ dependencies = [
  "zeta-remote-connections",
  "zeta-remote-host",
  "zeta-ui-components",
+ "zeta-ui-theme",
  "zui",
 ]
 
@@ -12270,6 +12277,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-ui-theme"
+version = "0.1.0"
+dependencies = [
+ "zeta-icons",
+ "zeta-theme",
+ "zeta-ui-components",
+ "zui",
+]
+
+[[package]]
 name = "zeta-utils-image"
 version = "0.1.0"
 dependencies = [
@@ -12391,6 +12408,7 @@ dependencies = [
  "zeta-protocol",
  "zeta-session",
  "zeta-ui-components",
+ "zeta-ui-theme",
  "zui",
 ]
 

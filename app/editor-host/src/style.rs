@@ -1,5 +1,6 @@
 //! Host-resolved colors shared by editor overlays.
 
+use zeta_ui_theme::UiTheme;
 use zui::ui::Color;
 
 /// Colors required by editor search-adjacent popovers and diagnostic details.
@@ -13,6 +14,16 @@ pub struct EditorOverlayStyle {
 }
 
 impl EditorOverlayStyle {
+    pub const fn from_theme(theme: UiTheme) -> Self {
+        Self::new(
+            theme.side_bar_background,
+            theme.border,
+            theme.foreground,
+            theme.muted_foreground,
+            theme.list_hover_background,
+        )
+    }
+
     /// Creates the resolved colors used by editor overlays.
     pub const fn new(
         surface_raised: Color,

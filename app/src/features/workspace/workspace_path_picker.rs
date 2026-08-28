@@ -17,8 +17,8 @@ use zui::ui::{
 };
 
 use crate::shell_interaction::WINDOW;
-use crate::shell_style::ShellPalette;
 use crate::workspace_context::display_working_directory;
+use zeta_ui_theme::UiTheme;
 
 #[path = "workspace_path_picker_path.rs"]
 mod path_support;
@@ -289,20 +289,20 @@ impl WorkspacePathPicker {
         viewport: Rect,
         state: &WorkspacePathPickerState,
         caret_visibility: CaretVisibility,
-        palette: ShellPalette,
+        palette: UiTheme,
         text_layout: &mut TextInputLayoutEngine,
         dispatch: &UiDispatch,
     ) -> Option<Self> {
         let open = state.open.as_ref()?;
         let items = state.items();
         let resting_backgrounds = ButtonBackgrounds::new(zui::ui::Color::TRANSPARENT);
-        let selected_backgrounds = ButtonBackgrounds::new(palette.session_tab_highlight)
-            .with_hovered(palette.session_tab_highlight)
-            .with_focused(palette.session_tab_highlight)
+        let selected_backgrounds = ButtonBackgrounds::new(palette.list_active_background)
+            .with_hovered(palette.list_active_background)
+            .with_focused(palette.list_active_background)
             .with_pressed(palette.border);
         let button_style = ButtonStyle::new(
             resting_backgrounds,
-            TextStyle::new(13.0, palette.text).with_line_height(18.0),
+            TextStyle::new(13.0, palette.foreground).with_line_height(18.0),
         )
         .with_selected_backgrounds(selected_backgrounds)
         .with_corner_radii(CornerRadii::uniform(2.0))
@@ -341,7 +341,7 @@ impl WorkspacePathPicker {
             open.anchor,
             dropdown_items,
             DropdownStyle::new(
-                palette.surface,
+                palette.content_background,
                 button_style,
                 Size::new(PICKER_CONTENT_WIDTH, PICKER_ITEM_HEIGHT),
             )
@@ -380,7 +380,7 @@ impl WorkspacePathPicker {
             search_bounds,
             "Search folders...",
             search_state,
-            palette.session_search_style(),
+            palette.search_box_style(),
             state.search_input(),
             text_layout,
         );

@@ -23,7 +23,7 @@ pub(crate) use app::native_app::{
     remote_connection_picker_input, remote_connection_process, remote_connection_tunnel,
     remote_tunnel_manager, remote_tunnel_manager_input, remote_tunnel_manager_view,
     remote_tunnel_process, session_catalog, session_host, shell_interaction, shell_scene,
-    shell_style, tab_context_menu, terminal_blocks, terminal_input, terminal_output_scroll_view,
+    tab_context_menu, terminal_blocks, terminal_input, terminal_output_scroll_view,
     terminal_pane_view, terminal_pointer, terminal_projection, terminal_selection,
     terminal_session, thread_timeline_scroll, workspace_context, workspace_pane_host,
     workspace_path_picker, workspace_path_picker_input, workspace_surface,

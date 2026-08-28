@@ -23,6 +23,7 @@ zeta-protocol = { workspace = true }
 zeta-slash-commands = { workspace = true }
 zeta-thread-transcript = { workspace = true }
 zeta-ui-components = { workspace = true }
+zeta-ui-theme = { workspace = true }
 zui = { workspace = true, default-features = false }
 
 [lints]

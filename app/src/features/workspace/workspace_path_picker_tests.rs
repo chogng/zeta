@@ -6,8 +6,8 @@ use super::{
     WorkspacePathPickerState, workspace_path_item_id,
 };
 use crate::shell_interaction::COMPOSER;
-use crate::shell_style::SHELL_PALETTE;
 use zeta_ui_components::{ScrollAxis, ScrollCommand};
+use zeta_ui_theme::DEFAULT_UI_THEME;
 use zui::ui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
 use zui::ui::{CaretVisibility, Point, Rect, TextInputCommand, TextInputLayoutEngine};
 
@@ -67,7 +67,7 @@ fn picker_scrolls_all_children_without_paging() {
         Rect::from_xywh(0.0, 0.0, 1_000.0, 700.0),
         &state,
         CaretVisibility::Visible,
-        SHELL_PALETTE,
+        DEFAULT_UI_THEME,
         &mut text_layout,
         &dispatch,
     )
@@ -87,7 +87,7 @@ fn picker_scrolls_all_children_without_paging() {
         Rect::from_xywh(0.0, 0.0, 1_000.0, 700.0),
         &state,
         CaretVisibility::Visible,
-        SHELL_PALETTE,
+        DEFAULT_UI_THEME,
         &mut text_layout,
         &dispatch,
     )
@@ -134,12 +134,12 @@ fn picker_is_anchored_above_the_toolbar_and_registers_modal_menu_semantics() {
         Rect::from_xywh(0.0, 0.0, 1_000.0, 700.0),
         &state,
         CaretVisibility::Visible,
-        SHELL_PALETTE,
+        DEFAULT_UI_THEME,
         &mut text_layout,
         &dispatch,
     )
     .unwrap();
-    let mut frame = UiFrame::<InteractionFrame>::new(SHELL_PALETTE.background);
+    let mut frame = UiFrame::<InteractionFrame>::new(DEFAULT_UI_THEME.workbench_background);
     frame.draw_component(&picker);
     let scene = frame.scene();
 

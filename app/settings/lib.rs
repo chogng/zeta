@@ -36,9 +36,17 @@ pub use sections::{
 };
 pub use state::{SettingsActivation, SettingsState};
 
+use zeta_icons::icons;
+use zeta_ui_components::ButtonBackgrounds;
 use zeta_ui_components::ButtonStyle;
+use zeta_ui_components::InputBoxStateColors;
+use zeta_ui_components::InputBoxStyle;
 use zeta_ui_components::SearchBoxStyle;
+use zeta_ui_theme::UiTheme;
+use zui::ui::Border;
 use zui::ui::Color;
+use zui::ui::CornerRadii;
+use zui::ui::Edges;
 use zui::ui::ElementId;
 use zui::ui::Rect;
 
@@ -120,6 +128,65 @@ pub struct SettingsPageStyle {
 }
 
 impl SettingsPageStyle {
+    pub fn from_theme(theme: UiTheme) -> Self {
+        let search_input = InputBoxStyle::new(
+            InputBoxStateColors::new(
+                theme.side_bar_background,
+                theme.list_hover_background,
+                theme.content_background,
+            ),
+            InputBoxStateColors::new(theme.border, theme.border, theme.accent),
+            zui::ui::TextStyle::new(theme.font_size_body(), theme.foreground)
+                .with_line_height(18.0),
+            zui::ui::TextStyle::new(theme.font_size_body(), theme.muted_foreground)
+                .with_line_height(18.0),
+        )
+        .with_border_width(1.0)
+        .with_corner_radii(CornerRadii::uniform(6.0))
+        .with_padding(Edges::new(8.0, 10.0, 8.0, 10.0))
+        .with_selection_color(theme.text_selection_background)
+        .with_caret_color(theme.accent)
+        .with_preedit_underline_color(theme.accent);
+        let nav_button = ButtonStyle::new(
+            ButtonBackgrounds::new(Color::TRANSPARENT)
+                .with_hovered(theme.list_hover_background)
+                .with_focused(theme.list_hover_background)
+                .with_pressed(theme.border),
+            zui::ui::TextStyle::new(theme.font_size_body(), theme.foreground)
+                .with_line_height(18.0),
+        )
+        .with_selected_backgrounds(ButtonBackgrounds::new(theme.list_active_background))
+        .with_disabled_text_style(
+            zui::ui::TextStyle::new(theme.font_size_body(), theme.muted_foreground)
+                .with_line_height(18.0),
+        )
+        .with_corner_radii(CornerRadii::uniform(5.0))
+        .with_padding(Edges::new(7.0, 10.0, 7.0, 10.0));
+        let close_button = ButtonStyle::new(
+            ButtonBackgrounds::new(Color::TRANSPARENT)
+                .with_hovered(theme.list_hover_background)
+                .with_focused(theme.list_hover_background)
+                .with_pressed(theme.border),
+            zui::ui::TextStyle::new(theme.font_size_body(), theme.foreground)
+                .with_line_height(18.0),
+        )
+        .with_border(Border::uniform(0.0, Color::TRANSPARENT))
+        .with_corner_radii(CornerRadii::uniform(5.0))
+        .with_padding(Edges::uniform(6.0));
+        Self::new(
+            theme.workbench_background,
+            theme.side_bar_background,
+            theme.content_background,
+            theme.border,
+            theme.foreground,
+            theme.accent,
+            SearchBoxStyle::new(search_input, icons::SEARCH, theme.muted_foreground)
+                .with_icon_size(16.0),
+            nav_button,
+            close_button,
+        )
+    }
+
     /// Creates a Settings page style from host palette values and component contracts.
     #[allow(clippy::too_many_arguments)]
     pub fn new(

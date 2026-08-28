@@ -56,7 +56,7 @@ Native UI 当前明确不提供以下能力：
 | `zui` presentation | Element 树、基础 flow、computed geometry、paint primitive、scene、inspection，以及 view-local state/subscription 和 component mount resource | `zui::ui::{Element,Component,ComputedElement,UiScene,ViewState,ComponentRuntime}` | Button 语义、主题选择、产品 reducer、GPU 和业务 action/副作用 |
 | `zeta-ui-components` component | Button、TabList、ScrollView、InputBox 等组件的内部几何、视觉状态解释和 scene composition | `zeta_ui_components::{ButtonStyle,TabStyle,ScrollViewStyle,...}` | 产品 identity、业务 state、pointer capture、command、副作用 |
 | `zeta-workbench` | Workbench Titlebar、TabContainer、Toolbar、interaction identity、layout 与 presentation state | `zeta_workbench::{Titlebar,TabContainer,TabContainerState,...}` | Session、Terminal、Editor 等具体内容生命周期与 UI |
-| Theme / palette projection | 将共享主题 token 解析为 immutable snapshot，再映射为宿主 palette 或组件 style | `zeta_theme::ThemeSnapshot`、`ShellPalette` 及领域 style factory | 判断组件是否 hover、selected 或 visible；创建 selector |
+| Theme / palette projection | 将共享主题 token 解析为 immutable snapshot，再映射为宿主 palette 或组件 style | `zeta_theme::ThemeSnapshot`、`zeta_ui_theme::UiTheme` 及其 typed style factory | 判断组件是否 hover、selected 或 visible；创建 selector |
 | Product host | 选择组件、保存权威状态、投影交互状态、提供 bounds、组合 scene 和执行 action | `app`、`features/workspace`、`zeta-editor` 等 | 复制组件内部布局、从 primitive 反推语义、穿透修改共享组件内部状态 |
 
 这里的“组件拥有样式”表示组件拥有 style 字段的语义、状态到视觉的解释和内部绘制几何；不表示产品不能传入 palette-derived style。产品可以创建 `ButtonStyle` 的值，但不能假定 `Button` 内部的 icon、label、padding 和 state background 如何组合。
@@ -166,7 +166,7 @@ Native 中的 style struct 是组件公开的样式 contract。它可以包含�
 
 组件定义“这个字段代表什么”，主题和宿主决定“这个字段当前取什么值”。例如 `ButtonStyle::with_pressed` 的意义由 Button 定义，`palette.border` 是否适合作为 pressed color 由产品 style factory 决定。
 
-产品 style factory 可以位于 `shell_style.rs`、领域 crate 或组件调用方，但应以 `ThemeSnapshot` 或宿主 palette 为输入。组件实现不应直接依赖 `zeta_theme`、产品 profile、workspace 或业务 domain。
+共享快照到绘制颜色和 typed style 的转换由 `zeta-ui-theme` 统一拥有。组件实现不应直接依赖 `zeta_theme`、产品 profile、workspace 或业务 domain，也不应自行混合主题颜色。
 
 ### 5.4 Retained view state 与组件生命周期
 
@@ -191,7 +191,7 @@ zeta-theme token
 
 Native 组件新增颜色或标准尺寸时，先检查共享 token 是否已有准确语义；没有时在实际消费语义的 domain 注册 token，再让 Native host 投影到 palette 或 style。不要在 component paint 中复制十六进制颜色，也不要把组件状态判断塞进 token resolver。
 
-当前 Native 主题投影的主要实现是 `ThemeSnapshot` 到 `ShellPalette`，再由 `ShellPalette` 构造 `SearchBoxStyle`、`ButtonStyle`、`InputBoxStyle` 等 typed style；实现证据见 [`shell_style.rs`](../src/presentation/shell_style.rs:129) 和 [`design-tokens.md`](../../docs/design-tokens.md)。
+当前 Rust UI 主题投影由 `zeta-ui-theme` 将 `ThemeSnapshot` 原子转换成 `UiTheme`；Workbench、Session、Settings、Files、SCM 等能力 crate 再把它转换为自己拥有的 typed style。基础输入框、搜索框和滚动条样式由 `zeta-ui-theme` 提供；实现证据见 [`app/theme`](../theme/README.md) 和 [`design-tokens.md`](../../docs/design-tokens.md)。
 
 如果现有组件仍包含历史 fallback 常量，它们属于迁移限制，不构成新组件的样式先例；修改相关区域时应优先移到共享 token 或明确的宿主 fallback。
 

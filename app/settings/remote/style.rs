@@ -2,6 +2,7 @@
 
 use zeta_icons::icons;
 use zeta_ui_components::{InputBoxStateColors, InputBoxStyle, ScrollViewStyle, SearchBoxStyle};
+use zeta_ui_theme::UiTheme;
 use zui::ui::{CornerRadii, Edges, TextStyle};
 
 /// Colors and shared component styles needed by Remote overlays.
@@ -22,6 +23,23 @@ pub struct RemoteUiStyle {
 }
 
 impl RemoteUiStyle {
+    pub fn from_theme(theme: UiTheme) -> Self {
+        Self::new(
+            theme.content_background,
+            theme.side_bar_background,
+            theme.list_hover_background,
+            theme.border,
+            theme.foreground,
+            theme.muted_foreground,
+            theme.accent,
+            theme.error,
+            theme.text_selection_background,
+            theme.list_active_background,
+            theme.file_list_scroll_view_style(),
+            theme.picker_scroll_view_style(),
+        )
+    }
+
     /// Creates resolved style values for all Remote overlays.
     #[allow(clippy::too_many_arguments)]
     pub const fn new(
