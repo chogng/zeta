@@ -70,6 +70,6 @@ cargo test -p zeta-history
 bazel test //zeta-rs/history:history-unit-tests
 ```
 
-## 当前限制与演进
+## 兼容性边界
 
-当前新写入使用 schema version `14`，recovery 接受 version `12` 到 `14`。version 14 把 fork 历史写成有序的 `ForkTurnImported` 事实和一条 `ForkHistoryImportCompleted`，避免整段历史集中在单条记录中，并保存继承的上下文检查点；version 13 的 `ForkHistoryImported` 继续可读；version 12 增加 Thread Goal 的创建、更新、清除事实，并让 Goal 状态与跨 Turn 的已知 token 用量由 reducer 从 event log 恢复。version 11 的 Turn 级 token/cost ceiling 与价格快照不再属于当前协议；version 10 增加每次模型响应的 durable usage fact，缺失字段保持未知并由 reducer 聚合到 Thread；version 8 覆盖稳定 `ToolRepetition` Turn failure，version 7 覆盖运行中 `SteerTurn` 的 durable Item binding 与 backend delivery fact，version 6 覆盖 Turn 级供应商上下文溢出恢复 checkpoint，早期版本覆盖 Agent context seed、delegation、message/result facts、自动 Skill activation command snapshot 和结构化工具绑定。本 crate 只抽取已经在生产路径中使用的 Thread history record；Session envelope 仍由 `zeta-session-store` 拥有。Zeta fork 使用 canonical `ThreadEvent` 表达可独立恢复的子历史；查询、缓存和物理写入仍留在 Store/Storage。
+新记录使用 schema version `14`，恢复接受 version `12` 到 `14`。version `14` 使用有序的 `ForkTurnImported` 和 `ForkHistoryImportCompleted` 保存 fork 历史与继承的上下文检查点；version `13` 的 `ForkHistoryImported` 只保留读取兼容。Session envelope 仍由 `zeta-session-store` 拥有，查询和物理写入仍由 Store/Storage 负责。

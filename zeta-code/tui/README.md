@@ -56,7 +56,7 @@ Tool、approval policy 或 persistence。
   input 提交；slash popup 不清空或铺设独立背景，透明继承当前 TUI 主题 surface，选中项使用候选 highlight 色粗体且不添加行首标记；
 - Enter 按 composer 顺序提交由 text/image items 组成的 Turn；active Turn 执行期间仍可编辑并提交
   follow-up，Core 的 per-Thread mailbox 按接受顺序串行执行这些 Turn；
-- 启动及 `/new`、`/fork`、`/resume`、`/rewind` 后维护 active Thread subscription；`/fork` 的历史继承由 Core 按持久化的父 Thread sequence 完成，包括已结束 Turn、首个中断 Turn 的已持久化内容和最新上下文检查点，TUI 只切换订阅并安装子 Thread 的权威 snapshot；typed update 按 Session/Thread scope 和 durable sequence 过滤，并通过 `session/thread/read` 触发权威 snapshot resync，不在 TUI 内复制 Thread reducer；
+- 启动及 `/new`、`/fork`、`/resume`、`/rewind` 后维护 active Thread subscription；`/fork` 的历史继承由 Core 完成，TUI 只切换订阅并安装子 Thread 的权威 snapshot；typed update 按 Session/Thread scope 和 durable sequence 过滤，并通过 `session/thread/read` 触发权威 snapshot resync，不在 TUI 内复制 Thread reducer；具体 fork 语义见 [App Server API](../../docs/zeta-app-server-api.md#分叉-thread)；
 - `AppServerEvents` 与 terminal input 由独立、有界 event source 主动唤醒单写者 loop；typed request
   由 `RequestTask` 在后台执行，完成结果回到 event loop，排队的用户 intent 不会静默丢失；active
   Turn 不再使用 25 ms `session/thread/read` polling fallback；
