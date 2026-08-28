@@ -15,7 +15,7 @@ Before modifying this repository:
 - When comparing responsibilities, capabilities, implementation status, or design options, prefer a compact conclusion-oriented table when it makes the distinction clearer.
 - Use `✅` and `❌` only for genuinely binary judgments. Use explicit labels such as `部分具备`, `尚未完成`, `协调`, or `委托` for nuanced states.
 
-- 禁止往app/src中写入代码
+- 禁止往`app/src`中写入代码
 - 回复时请说人话, 避免抽象语言描述
 - 禁止 native, projection name
 - crate 主要负责能力和依赖隔离

@@ -12,3 +12,4 @@
 - zeta-settings：Settings、快捷键、连接管理、Picker、Tunnel 状态和 UI
 - zeta-workbench：TabPart、PanePart、布局、基础 UI 和跨能力生命周期入口
 - 考虑是否单个的ui界面都塞到workspace-ui里管理
+- 当进行重构、退场时，要实现将职责收进现有的或者新建文件，而不是在内部重新排版
