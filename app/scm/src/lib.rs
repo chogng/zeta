@@ -1,15 +1,12 @@
-//! Source-control snapshots for the Changes Workspace Pane.
+//! Source-control snapshots for the Changes Pane.
 
 use zeta_editor::DiffEditorDocument;
 use zeta_ui_theme::UiTheme;
 use zui::ui::Color;
 
-#[path = "scm/layout.rs"]
-mod layout;
 #[path = "scm/pane.rs"]
 mod pane;
 
-pub use layout::ScmLayout;
 pub use pane::EditorPane;
 pub use pane::EditorPaneState;
 pub use pane::ScrollbarPointerOutcome;

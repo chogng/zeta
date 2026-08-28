@@ -13,8 +13,6 @@ mod layout;
 mod panepart;
 mod tabpart;
 mod workbench;
-mod workspace_navigation;
-mod workspace_navigation_style;
 
 pub use command::{WorkbenchCommandDispatch, command_request_for_element};
 pub use host::{
@@ -41,11 +39,6 @@ pub use tabpart::{
     TabGroup, TabGroupId, TabInput, TabInputChange, TabInputKey, TabInputMetadata, TabPart,
 };
 pub use workbench::{ClosedTab, Workbench};
-pub use workspace_navigation::{
-    WORKSPACE_CHANGES, WORKSPACE_FILES, WORKSPACE_PANE, WORKSPACE_PANE_NAVIGATION,
-    WORKSPACE_PANE_TOOLBAR, WorkspacePaneNavigation, WorkspacePaneSelection,
-};
-pub use workspace_navigation_style::WorkspaceNavigationStyle;
 
 #[cfg(test)]
 #[path = "host_tests.rs"]

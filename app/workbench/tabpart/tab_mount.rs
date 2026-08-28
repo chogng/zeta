@@ -164,13 +164,20 @@ pub fn tab_input_element_id(
     let Some(selected) = selected else {
         return first_session_id(placement);
     };
-    if selected.is_settings() {
-        return placement.settings_id();
-    }
-    tab_part
-        .tab_id(selected)
-        .map(|id| placement.session_id(id))
+    mounted_tab_element_id(tab_part, selected, placement)
         .unwrap_or_else(|| first_session_id(placement))
+}
+
+/// Resolves one mounted tab without substituting another tab when the input is absent.
+pub fn mounted_tab_element_id(
+    tab_part: &TabPart,
+    tab: &TabInputKey,
+    placement: TabContainerPlacement,
+) -> Option<ElementId> {
+    if tab.is_settings() {
+        return tab_part.input(tab).map(|_| placement.settings_id());
+    }
+    tab_part.tab_id(tab).map(|id| placement.session_id(id))
 }
 
 fn first_session_id(placement: TabContainerPlacement) -> ElementId {

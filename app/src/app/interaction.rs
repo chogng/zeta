@@ -148,7 +148,7 @@ impl ProductApp {
             self.activate_composer_interaction_item(index);
             return;
         }
-        if let Some(action) = self.workspace_pane_host.activate_file_tree_element(id) {
+        if let Some(action) = self.files.activate(id) {
             match action {
                 FilesAction::OpenFile { path } => self.open_workspace_file(path),
                 FilesAction::LoadChildren { element, path } => {
@@ -158,7 +158,7 @@ impl ProductApp {
             }
             return;
         }
-        if self.workspace_pane_host.toggle_multi_diff_fold(id) {
+        if self.scm.editor_mut().toggle_fold_for_element(id) {
             return;
         }
         if self.activate_remote_connection_manager_element(id) {
@@ -297,10 +297,7 @@ impl ProductApp {
         self.cursor_position = None;
         self.file_editor_input.cancel_pointer();
         let pane_resize_cancelled = self.cancel_terminal_pane_resize();
-        if self
-            .workspace_pane_host
-            .leave_multi_diff_scrollbar(Instant::now())
-        {
+        if self.scm.editor_mut().scrollbar_pointer_left(Instant::now()) {
             self.rebuild_presentation();
             self.request_redraw();
         }
@@ -481,9 +478,10 @@ impl ProductApp {
         let Some(bounds) = self.multi_diff_bounds() else {
             return false;
         };
-        let outcome =
-            self.workspace_pane_host
-                .move_multi_diff_scrollbar(point, bounds, Instant::now());
+        let outcome = self
+            .scm
+            .editor_mut()
+            .scrollbar_pointer_moved(point, bounds, Instant::now());
         if outcome.presentation_changed {
             self.rebuild_presentation_on_next_redraw();
         }
@@ -497,12 +495,8 @@ impl ProductApp {
         let point = self.cursor_position.unwrap_or(Point::new(-1.0, -1.0));
         let now = Instant::now();
         let outcome = match state {
-            ElementState::Pressed => self
-                .workspace_pane_host
-                .press_multi_diff_scrollbar(point, bounds, now),
-            ElementState::Released => self
-                .workspace_pane_host
-                .release_multi_diff_scrollbar(point, bounds, now),
+            ElementState::Pressed => self.scm.editor_mut().press_scrollbar(point, bounds, now),
+            ElementState::Released => self.scm.editor_mut().release_scrollbar(point, bounds, now),
         };
         if outcome.presentation_changed {
             self.rebuild_presentation_on_next_redraw();

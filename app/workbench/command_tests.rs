@@ -7,7 +7,6 @@ use crate::TAB_CONTAINER_TOGGLE;
 use crate::TAB_LAYOUT_MENU_MOVE_TO_TITLEBAR;
 use crate::WORKSPACE_PANE_TOGGLE;
 use crate::WorkbenchHost;
-use crate::WorkspacePaneSelection;
 use zeta_files::FILES_REFRESH;
 use zeta_session::interaction::CONTEXT_DIFF;
 
@@ -26,11 +25,6 @@ fn workbench_elements_resolve_to_their_stable_commands() {
     assert_eq!(
         command_request_for_element(ADD_SESSION).map(|request| request.command_id()),
         Some(AppCommandId::AddSession)
-    );
-    assert_eq!(
-        command_request_for_element(WorkspacePaneSelection::Files.element_id())
-            .map(|request| request.command_id()),
-        Some(AppCommandId::ShowAgentFiles)
     );
     assert_eq!(
         command_request_for_element(FILES_REFRESH).map(|request| request.command_id()),

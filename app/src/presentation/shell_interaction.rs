@@ -24,10 +24,6 @@ pub(crate) use zeta_session::interaction::{COMPOSER_INFO_BAR, COMPOSER_PANEL, SE
 #[cfg(test)]
 pub(crate) use zeta_workbench::TAB_CONTEXT_MENU;
 pub(crate) use zeta_workbench::TabContextMenuAction;
-#[cfg(test)]
-pub(crate) use zeta_workbench::{WORKSPACE_CHANGES, WORKSPACE_FILES, WORKSPACE_PANE_NAVIGATION};
-pub(crate) use zeta_workbench::{WORKSPACE_PANE, WORKSPACE_PANE_TOOLBAR};
-
 const SHELL_SCOPE: u32 = 1;
 const FILE_EDITOR_ACTION_SCOPE: u32 = 7;
 

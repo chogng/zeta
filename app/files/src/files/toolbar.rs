@@ -8,8 +8,8 @@ use zui::ui::{
     NodeAction, UiDispatch, UiNode,
 };
 use zui::ui::{
-    CaretVisibility, Component, ComponentContext, ComponentElement, ComputedElement, Element, Rect,
-    Size, TextInputLayoutEngine, UiScene,
+    Border, CaretVisibility, Color, Component, ComponentContext, ComponentElement, ComputedElement,
+    Edges, Element, PaintRect, Rect, Size, TextInputLayoutEngine, UiScene,
 };
 
 use super::FilesState;
@@ -29,6 +29,8 @@ const ACTION_BAR_WIDTH: f32 = ACTION_SIZE * 2.0 + STATUS_WIDTH;
 pub struct FilesToolbar {
     bounds: Rect,
     parent: zui::ui::ElementId,
+    surface: Color,
+    border: Color,
     search_box: Option<SearchBox>,
     search_value: String,
     action_bar: ActionBar,
@@ -37,7 +39,6 @@ pub struct FilesToolbar {
 impl FilesToolbar {
     pub fn new(
         bounds: Rect,
-        navigation_bounds: Rect,
         files: &FilesState,
         upstream_distance: Option<(usize, usize)>,
         caret_visibility: CaretVisibility,
@@ -88,9 +89,9 @@ impl FilesToolbar {
         );
         let search_box = files.search_visible().then(|| {
             let search_bounds = Rect::from_xywh(
-                navigation_bounds.right() + PADDING,
+                bounds.origin.x + PADDING,
                 bounds.origin.y + 6.0,
-                (action_bounds.origin.x - navigation_bounds.right() - PADDING * 2.0).max(1.0),
+                (action_bounds.origin.x - bounds.origin.x - PADDING * 2.0).max(1.0),
                 (bounds.size.height - 12.0).max(1.0),
             );
             let search_state = if dispatch.is_focused(FILE_SEARCH_INPUT) {
@@ -112,6 +113,8 @@ impl FilesToolbar {
         Self {
             bounds,
             parent,
+            surface: palette.surface(),
+            border: palette.border(),
             search_box,
             search_value: files.search_input().text().to_owned(),
             action_bar,
@@ -178,6 +181,13 @@ impl FilesToolbar {
             None => None,
         }
     }
+
+    fn paint_surface(&self, scene: &mut UiScene) {
+        scene.draw_rect(
+            PaintRect::new(self.bounds, self.surface)
+                .with_border(Border::new(Edges::new(0.0, 0.0, 1.0, 0.0), self.border)),
+        );
+    }
 }
 
 impl Component for FilesToolbar {
@@ -210,6 +220,7 @@ impl Component for FilesToolbar {
     }
 
     fn paint(&self, scene: &mut UiScene) {
+        self.paint_surface(scene);
         if let Some(search_box) = self.search_box.as_ref() {
             scene.draw_component(search_box);
         }

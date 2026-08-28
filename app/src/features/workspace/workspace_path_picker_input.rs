@@ -109,7 +109,7 @@ impl ProductApp {
         }
         self.app_server_client = None;
         self.workspace_context.apply_git_snapshot(None);
-        self.replace_workspace_pane();
+        self.replace_workspace_capability_state();
         self.language_service
             .replace_workspace(self.workspace_context.working_directory());
         self.file_editor_host.replace_workspace();

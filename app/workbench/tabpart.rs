@@ -44,8 +44,8 @@ pub use style::WorkbenchColors;
 pub use style::WorkbenchUiStyle;
 pub use tab_mount::TabIntent;
 pub use tabs::{
-    TabContainer, TabContainerPlacement, WorkbenchTab, WorkbenchTabGroup, tab_input_element_id,
-    tab_intent_for_element, tab_key_for_element, workbench_tab_groups,
+    TabContainer, TabContainerPlacement, WorkbenchTab, WorkbenchTabGroup, mounted_tab_element_id,
+    tab_input_element_id, tab_intent_for_element, tab_key_for_element, workbench_tab_groups,
 };
 pub use tabs_state::TabContainerState;
 pub use titlebar::{TITLEBAR_HEIGHT, Titlebar, TitlebarInsets};

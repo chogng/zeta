@@ -5,7 +5,8 @@ pub(crate) struct ProductApp {
     pub(super) presentation: Option<ShellPresentation>,
     pub(super) frame_scheduler: FrameScheduler,
     pub(super) retained_runtime: RetainedRuntime,
-    pub(super) workspace_pane_host: WorkspacePaneHost,
+    pub(super) files: FilesState,
+    pub(super) scm: ScmState,
     pub(super) file_editor_host: FileEditorHost,
     pub(super) file_editor_input: FileEditorInputState,
     pub(super) file_editor_search: FileEditorSearchState,
@@ -64,7 +65,15 @@ impl ProductApp {
         } else {
             local_workspace_context
         };
-        let workspace_pane_host = WorkspacePaneHost::new(&workspace_context);
+        let mut files = FilesState::default();
+        files.set_workspace_root(workspace_context.working_directory().to_path_buf());
+        let mut scm = ScmState::default();
+        scm.replace_diffs(
+            workspace_context
+                .diffs()
+                .iter()
+                .map(|diff| ScmDiff::new(diff.path(), diff.document().clone())),
+        );
         let mut keybindings = keybindings::ProductKeybindings::default();
         let mut keybindings_resource = KeybindingsResource::new(
             local_profile_root().join("keybindings.json"),
@@ -94,7 +103,8 @@ impl ProductApp {
             presentation: None,
             frame_scheduler: FrameScheduler::default(),
             retained_runtime: RetainedRuntime::default(),
-            workspace_pane_host,
+            files,
+            scm,
             file_editor_input: FileEditorInputState::default(),
             file_editor_search: FileEditorSearchState::default(),
             language_service,

@@ -72,6 +72,8 @@ pub enum FilesAction {
 /// Theme values required by the Files toolbar.
 #[derive(Clone)]
 pub struct FilesToolbarStyle {
+    surface: Color,
+    border: Color,
     text: Color,
     surface_hovered: Color,
     selected_background: Color,
@@ -81,6 +83,8 @@ pub struct FilesToolbarStyle {
 impl FilesToolbarStyle {
     pub fn from_theme(theme: UiTheme) -> Self {
         Self::new(
+            theme.side_bar_background,
+            theme.border,
             theme.foreground,
             theme.list_hover_background,
             theme.list_active_background,
@@ -89,12 +93,16 @@ impl FilesToolbarStyle {
     }
 
     pub fn new(
+        surface: Color,
+        border: Color,
         text: Color,
         surface_hovered: Color,
         selected_background: Color,
         search: SearchBoxStyle,
     ) -> Self {
         Self {
+            surface,
+            border,
             text,
             surface_hovered,
             selected_background,
@@ -104,6 +112,14 @@ impl FilesToolbarStyle {
 
     pub fn search_style(&self) -> SearchBoxStyle {
         self.search.clone()
+    }
+
+    pub const fn surface(&self) -> Color {
+        self.surface
+    }
+
+    pub const fn border(&self) -> Color {
+        self.border
     }
 
     pub fn button_style(&self) -> ButtonStyle {
@@ -351,3 +367,7 @@ impl FilesState {
 #[cfg(test)]
 #[path = "command_tests.rs"]
 mod command_tests;
+
+#[cfg(test)]
+#[path = "state_tests.rs"]
+mod state_tests;

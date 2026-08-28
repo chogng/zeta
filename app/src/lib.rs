@@ -22,8 +22,8 @@ pub(crate) use app::{
     remote_tunnel_manager_input, remote_tunnel_process, session_catalog, session_host,
     shell_interaction, shell_scene, tab_context_menu, terminal_blocks, terminal_history,
     terminal_input, terminal_output_scroll_view, terminal_pointer, terminal_selection,
-    terminal_session, thread_timeline_scroll, workspace_context, workspace_pane_host,
-    workspace_path_picker, workspace_path_picker_input, workspace_surface,
+    terminal_session, thread_timeline_scroll, workspace_context, workspace_path_picker,
+    workspace_path_picker_input, workspace_surface,
 };
 
 #[cfg(test)]

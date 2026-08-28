@@ -206,8 +206,7 @@ fn execute_toggle_workspace_pane(app: &mut ProductApp, _request: &CommandRequest
         Some(zeta_workbench::PaneInputKind::Files) | Some(zeta_workbench::PaneInputKind::Diff) => {
             app.show_agent_pane()
         }
-        _ => app
-            .select_workspace_pane_view(crate::workspace_pane_host::WorkspacePaneSelection::Files),
+        _ => app.show_files_pane(),
     }
 }
 
@@ -216,11 +215,11 @@ fn execute_add_session(app: &mut ProductApp, _request: &CommandRequest) {
 }
 
 fn execute_show_agent_changes(app: &mut ProductApp, _request: &CommandRequest) {
-    app.select_workspace_pane_view(crate::workspace_pane_host::WorkspacePaneSelection::Changes);
+    app.show_changes_pane();
 }
 
 fn execute_show_agent_files(app: &mut ProductApp, _request: &CommandRequest) {
-    app.select_workspace_pane_view(crate::workspace_pane_host::WorkspacePaneSelection::Files);
+    app.show_files_pane();
 }
 
 fn execute_refresh_agent_files(app: &mut ProductApp, _request: &CommandRequest) {
@@ -231,8 +230,8 @@ fn execute_refresh_agent_files(app: &mut ProductApp, _request: &CommandRequest) 
 }
 
 fn execute_toggle_agent_file_search(app: &mut ProductApp, _request: &CommandRequest) {
-    let visible = !app.workspace_pane_host.search_visible();
-    app.workspace_pane_host.set_search_visible(visible);
+    let visible = !app.files.search_visible();
+    app.files.set_search_visible(visible);
     if visible {
         app.rebuild_presentation();
         if let Some(presentation) = app.presentation.as_ref() {
@@ -306,7 +305,7 @@ fn execute_show_workspace_diff(app: &mut ProductApp, _request: &CommandRequest) 
     if let Err(error) = app.refresh_git_from_app_server() {
         eprintln!("could not refresh Git snapshot: {error}");
     }
-    app.select_workspace_pane_view(crate::workspace_pane_host::WorkspacePaneSelection::Changes);
+    app.show_changes_pane();
 }
 
 fn execute_split_terminal_horizontal(app: &mut ProductApp, _request: &CommandRequest) {

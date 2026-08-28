@@ -171,7 +171,7 @@ impl ProductApp {
         else {
             return false;
         };
-        let changed = self.workspace_pane_host.scroll_multi_diff(
+        let changed = self.scm.editor_mut().scroll(
             multi_diff_scroll_pixels(delta),
             viewport,
             std::time::Instant::now(),
@@ -205,9 +205,7 @@ impl ProductApp {
         else {
             return false;
         };
-        let changed = self
-            .workspace_pane_host
-            .scroll_file_list(file_list_scroll_pixels(delta), viewport);
+        let changed = self.files.scroll(file_list_scroll_pixels(delta), viewport);
         if changed {
             self.rebuild_presentation_on_next_redraw();
         }

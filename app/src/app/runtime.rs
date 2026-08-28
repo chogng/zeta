@@ -22,15 +22,25 @@ impl ProductApp {
         self.theme_follows_system = loaded.follows_system;
         self.session_pane.set_composer_style(editor_style.clone());
         self.code_editor_style = editor_style;
-        self.workspace_pane_host
-            .set_editor_style(zeta_editor::MultiDiffEditorStyle::from_theme(palette));
+        self.scm
+            .editor_mut()
+            .set_style(zeta_editor::MultiDiffEditorStyle::from_theme(palette));
     }
 
-    /// Mounts a workspace feature as the active leaf of the current Session workbench.
-    ///
-    /// Files and Changes are ordinary `PaneInput`s. Their feature state stays in the workspace
-    /// feature, while this host only changes the descriptive binding and active-pane context.
-    pub(super) fn select_workspace_pane_view(&mut self, view: WorkspacePaneSelection) {
+    pub(super) fn show_files_pane(&mut self) {
+        self.open_workspace_input(PaneInput::files(
+            self.workspace_context.working_directory().to_path_buf(),
+        ));
+    }
+
+    pub(super) fn show_changes_pane(&mut self) {
+        self.open_workspace_input(PaneInput::diff(
+            self.workspace_context.working_directory().to_path_buf(),
+        ));
+    }
+
+    /// Mounts one workspace capability as the active input of the current PaneGroup.
+    fn open_workspace_input(&mut self, input: PaneInput) {
         let Some(tab_key) = self.active_session_tab_key() else {
             return;
         };
@@ -38,17 +48,9 @@ impl ProductApp {
             .workbench
             .workbench()
             .pane_part(&tab_key)
-            .map(|pane_part| pane_part.root_pane())
+            .map(|pane_part| pane_part.active_group())
         else {
             return;
-        };
-        let input = match view {
-            WorkspacePaneSelection::Changes => {
-                PaneInput::diff(self.workspace_context.working_directory().to_path_buf())
-            }
-            WorkspacePaneSelection::Files => {
-                PaneInput::files(self.workspace_context.working_directory().to_path_buf())
-            }
         };
         if self
             .workbench

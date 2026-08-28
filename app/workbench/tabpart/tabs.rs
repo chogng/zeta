@@ -27,6 +27,7 @@ pub use super::tab_mount::TabContainerPlacement;
 pub use super::tab_mount::WorkbenchTab;
 pub use super::tab_mount::WorkbenchTabGroup;
 use super::tab_mount::WorkbenchTabKind;
+pub use super::tab_mount::mounted_tab_element_id;
 pub use super::tab_mount::tab_input_element_id;
 pub use super::tab_mount::tab_intent_for_element;
 pub use super::tab_mount::tab_key_for_element;
@@ -64,6 +65,7 @@ pub struct TabContainer<'a> {
     content_bounds: Rect,
     groups: Vec<WorkbenchTabGroup<'a>>,
     selected_id: ElementId,
+    visible_action_bar_tab: Option<ElementId>,
     placement: TabContainerPlacement,
     style: WorkbenchUiStyle,
     dispatch: &'a UiDispatch,
@@ -105,10 +107,17 @@ impl<'a> TabContainer<'a> {
             content_bounds,
             groups,
             selected_id,
+            visible_action_bar_tab: None,
             placement,
             style,
             dispatch,
         }
+    }
+
+    /// Keeps one mounted tab's action bar visible independently of pointer and focus state.
+    pub fn with_visible_action_bar(mut self, tab: ElementId) -> Self {
+        self.visible_action_bar_tab = Some(tab);
+        self
     }
 
     pub fn from_tab_part(
@@ -400,7 +409,8 @@ impl<'a> TabContainer<'a> {
     }
 
     fn tab_action_bar_visible(&self, tab: &WorkbenchTab<'_>) -> bool {
-        self.dispatch.is_hovered(tab.id)
+        self.visible_action_bar_tab == Some(tab.id)
+            || self.dispatch.is_hovered(tab.id)
             || self.dispatch.is_hovered(tab.action_id)
             || self.dispatch.is_hovered(tab.close_id)
             || self.dispatch.is_focused(tab.action_id)

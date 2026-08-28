@@ -159,8 +159,7 @@ impl ProductApp {
                     return;
                 };
                 self.caret_blink.activity(Instant::now());
-                self.workspace_pane_host
-                    .apply_file_search_composition(composition);
+                self.files.apply_search_composition(composition);
                 self.rebuild_presentation();
                 self.request_redraw();
             }
@@ -314,7 +313,7 @@ impl ProductApp {
             self.session_search.cancel_composition();
         }
         if target != InputMethodTarget::FileSearch {
-            self.workspace_pane_host.cancel_file_search_composition();
+            self.files.cancel_search_composition();
         }
         if target != InputMethodTarget::GitBranchSearch {
             self.git_branch_context_menu.cancel_search_composition();

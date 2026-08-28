@@ -14,6 +14,7 @@ use super::tabs::TabContainerPlacement;
 use crate::PaneInputKind;
 use crate::TabInputKey;
 use crate::TabPart;
+use zui::ui::ElementId;
 use zui::ui::{AccessibilityRole, CursorFeedback, FocusBehavior, NodeAction, UiDispatch, UiNode};
 
 pub const TITLEBAR_HEIGHT: f32 = 32.0;
@@ -204,6 +205,15 @@ impl<'a> Titlebar<'a> {
             tab_container_toggle_label,
             workspace_toggle_label,
         }
+    }
+
+    /// Keeps one titlebar tab's action bar visible independently of pointer and focus state.
+    pub fn with_visible_tab_action_bar(mut self, tab: ElementId) -> Self {
+        self.tab_container = self
+            .tab_container
+            .take()
+            .map(|container| container.with_visible_action_bar(tab));
+        self
     }
 
     fn child_interaction_regions(&self) -> Vec<InteractionRegion> {

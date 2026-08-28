@@ -71,8 +71,7 @@ impl ProductApp {
                     }
                 };
                 self.workspace_context.apply_git_snapshot(Some(&snapshot));
-                self.workspace_pane_host
-                    .replace_workspace(&self.workspace_context);
+                self.replace_workspace_capability_state();
                 self.refresh_files_from_app_server();
                 self.dismiss_git_branch_context_menu();
             }

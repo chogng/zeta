@@ -2,6 +2,7 @@
 
 use super::TabContainer;
 use super::TabContainerPlacement;
+use super::mounted_tab_element_id;
 use super::tab_input_element_id;
 use super::tab_intent_for_element;
 use crate::Color;
@@ -86,6 +87,14 @@ fn each_mount_resolves_distinct_ui_identity_for_the_same_tab_input() {
             TabContainerPlacement::Titlebar,
         ),
         TITLEBAR_SETTINGS_TAB
+    );
+    assert_eq!(
+        mounted_tab_element_id(
+            &part,
+            &TabInputKey::session(SessionId::new("missing-session").unwrap()),
+            TabContainerPlacement::Body,
+        ),
+        None
     );
 }
 
@@ -376,6 +385,49 @@ fn tab_actions_button_is_hover_only_and_opens_actions_for_the_stable_tab_key() {
                 .color(),
             Color::rgb(126, 126, 132)
         );
+    }
+}
+
+#[test]
+fn explicitly_visible_action_bar_remains_rendered_without_hover() {
+    let (part, first_key, second_key) = part_with_two_sessions();
+    let tab_id = part.tab_id(&first_key).unwrap();
+    let mounts = [
+        (
+            TabContainerPlacement::Body,
+            Rect::from_xywh(0.0, 36.0, 220.0, 664.0),
+            session_tab_id(tab_id),
+            session_tab_action_id(tab_id),
+            session_tab_close_id(tab_id),
+        ),
+        (
+            TabContainerPlacement::Titlebar,
+            Rect::from_xywh(40.0, 0.0, 700.0, 32.0),
+            titlebar_session_tab_id(tab_id),
+            titlebar_session_tab_action_id(tab_id),
+            titlebar_session_tab_close_id(tab_id),
+        ),
+    ];
+
+    for (placement, bounds, tab_element, action_element, close_element) in mounts {
+        let dispatch = UiDispatch::default();
+        let container = TabContainer::from_tab_part(
+            bounds,
+            bounds,
+            &part,
+            Some(&second_key),
+            placement,
+            test_style(),
+            &dispatch,
+        )
+        .with_visible_action_bar(tab_element);
+        let mut frame = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
+
+        frame.draw_component(&container);
+
+        assert!(frame.interaction().node(action_element).is_some());
+        assert!(frame.interaction().node(close_element).is_some());
+        assert!(!dispatch.is_hovered(tab_element));
     }
 }
 

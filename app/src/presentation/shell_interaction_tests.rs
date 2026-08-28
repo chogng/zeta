@@ -23,7 +23,7 @@ fn sessions_toolbar_elements_have_stable_unique_identities() {
 }
 
 #[test]
-fn session_identity_namespace_does_not_overlap_workspace_pane_elements() {
+fn session_identity_namespace_does_not_overlap_capability_elements() {
     let session_ids = [
         TAB_CONTAINER_LIST,
         FIRST_TAB_CONTAINER_SESSION_TAB,
@@ -31,12 +31,12 @@ fn session_identity_namespace_does_not_overlap_workspace_pane_elements() {
         FIRST_TITLEBAR_SESSION_TAB,
         SESSION_HEADER,
     ];
-    let workspace_pane_ids = [FILE_SEARCH_INPUT, super::FILES_TOOLBAR];
+    let capability_ids = [FILE_SEARCH_INPUT, super::FILES_TOOLBAR];
 
     assert!(
         session_ids
             .into_iter()
-            .all(|session| !workspace_pane_ids.contains(&session))
+            .all(|session| !capability_ids.contains(&session))
     );
 }
 

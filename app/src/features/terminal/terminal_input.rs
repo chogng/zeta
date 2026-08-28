@@ -81,7 +81,7 @@ impl ProductApp {
             terminal_surface_visible: self.workspace_surface.is_terminal(),
             tab_container_visible: self.workbench.tab_container_state().is_expanded(),
             inspector_visible: self.workbench.inspector_state().is_expanded(),
-            file_search_visible: self.workspace_pane_host.search_visible(),
+            file_search_visible: self.files.search_visible(),
             composer_route: match self.session_pane.composer_route() {
                 ComposerRoute::Agent => "agent",
                 ComposerRoute::Shell => "shell",
@@ -162,21 +162,16 @@ impl ProductApp {
 
     fn file_search_keyboard_input(&mut self, event: &KeyEvent) {
         if event.logical_key == Key::Named(NamedKey::Escape) {
-            if self
-                .workspace_pane_host
-                .file_search_input()
-                .text()
-                .is_empty()
-            {
-                self.workspace_pane_host.set_search_visible(false);
+            if self.files.search_input().text().is_empty() {
+                self.files.set_search_visible(false);
             } else {
-                self.workspace_pane_host.clear_file_search();
+                self.files.clear_search();
             }
             self.file_search_changed();
             return;
         }
         if let Some(command) = text_input_command(event, self.modifiers) {
-            self.workspace_pane_host.apply_file_search(command);
+            self.files.apply_search(command);
             self.file_search_changed();
         }
     }
@@ -345,12 +340,8 @@ impl ProductApp {
             return false;
         };
         let navigation = match &event.logical_key {
-            Key::Named(NamedKey::ArrowRight) => {
-                self.workspace_pane_host.navigate_file_tree_right(focused)
-            }
-            Key::Named(NamedKey::ArrowLeft) => {
-                self.workspace_pane_host.navigate_file_tree_left(focused)
-            }
+            Key::Named(NamedKey::ArrowRight) => self.files.navigate_right(focused),
+            Key::Named(NamedKey::ArrowLeft) => self.files.navigate_left(focused),
             _ => return false,
         };
         let Some(navigation) = navigation else {
@@ -579,7 +570,7 @@ impl ProductApp {
             return;
         }
         if self.ui_dispatch.is_focused(FILE_SEARCH_INPUT) {
-            if let Some(text) = self.workspace_pane_host.selected_file_search_text()
+            if let Some(text) = self.files.selected_search_text()
                 && let Err(error) = write_clipboard_text(&self.clipboard, text.to_owned())
             {
                 eprintln!("could not copy file search text: {error}");
@@ -637,8 +628,7 @@ impl ProductApp {
             else {
                 return;
             };
-            self.workspace_pane_host
-                .apply_file_search(TextInputCommand::Insert(text));
+            self.files.apply_search(TextInputCommand::Insert(text));
             self.file_search_changed();
             return;
         }

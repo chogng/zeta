@@ -141,7 +141,7 @@ impl App<ProductEvent> for ProductApp {
                 if self.cancel_terminal_pane_resize() {
                     self.update_cursor();
                 }
-                self.workspace_pane_host.cancel_multi_diff_scrollbar();
+                self.scm.editor_mut().cancel_scrollbar_interaction();
                 self.terminal_view_mut().scroll.cancel_scrollbar();
                 self.workbench.dismiss_tab_context_menu();
                 self.git_branch_context_menu.dismiss();
@@ -309,7 +309,7 @@ impl App<ProductEvent> for ProductApp {
             self.caret_blink.advance(now),
             CaretBlinkAdvance::VisibilityChanged(_)
         );
-        let scrollbar_changed = self.workspace_pane_host.advance_multi_diff_scrollbar(now);
+        let scrollbar_changed = self.scm.editor_mut().advance_scrollbar(now);
         let settings_scrollbar_changed = self.settings.advance_keybindings_scrollbar(now);
         let terminal_scrollbar_changed = self.terminal_view_mut().scroll.advance_scrollbar(now);
         let sash_changed = self.workbench.advance_layout_sashes(now);
@@ -317,7 +317,7 @@ impl App<ProductEvent> for ProductApp {
             .retained_runtime
             .next_deadline()
             .is_some_and(|deadline| deadline <= now);
-        let file_search_changed = self.workspace_pane_host.poll_file_search();
+        let file_search_changed = self.files.poll_search();
         let file_editor_auto_scrolled = self.advance_file_editor_auto_scroll(now);
         if caret_changed
             || scrollbar_changed
@@ -334,7 +334,7 @@ impl App<ProductEvent> for ProductApp {
         let mut deadlines = FrameDeadlineSet::default();
         for deadline in [
             self.caret_blink.next_deadline(),
-            self.workspace_pane_host.multi_diff_scrollbar_deadline(),
+            self.scm.editor().scrollbar_deadline(),
             self.settings.keybindings_scrollbar_deadline(),
             self.terminal_view().scroll.scrollbar_deadline(),
             self.retained_runtime.next_deadline(),
@@ -350,7 +350,7 @@ impl App<ProductEvent> for ProductApp {
         {
             deadlines.include(deadline);
         }
-        if self.workspace_pane_host.file_search_pending() {
+        if self.files.search_pending() {
             deadlines.include(now + std::time::Duration::from_millis(50));
         }
         let control_flow = match deadlines.next_deadline() {

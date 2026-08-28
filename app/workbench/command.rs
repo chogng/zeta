@@ -8,7 +8,6 @@ use crate::ADD_SESSION;
 use crate::TAB_CONTAINER_TOGGLE;
 use crate::TAB_LAYOUT_MENU_MOVE_TO_TITLEBAR;
 use crate::WORKSPACE_PANE_TOGGLE;
-use crate::WorkspacePaneSelection;
 
 /// Result of routing one command through Workbench.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -21,15 +20,6 @@ pub enum WorkbenchCommandDispatch {
 
 /// Resolves a Workbench or mounted-capability element into its stable product command.
 pub fn command_request_for_element(element: ElementId) -> Option<CommandRequest> {
-    if let Some(selection) = WorkspacePaneSelection::from_element_id(element) {
-        return Some(
-            match selection {
-                WorkspacePaneSelection::Changes => AppCommandId::ShowAgentChanges,
-                WorkspacePaneSelection::Files => AppCommandId::ShowAgentFiles,
-            }
-            .into(),
-        );
-    }
     let command = match element {
         TAB_CONTAINER_TOGGLE | TAB_LAYOUT_MENU_MOVE_TO_TITLEBAR => AppCommandId::ToggleTabContainer,
         WORKSPACE_PANE_TOGGLE => AppCommandId::ToggleWorkspacePane,

@@ -6,6 +6,7 @@ use anyhow::anyhow;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
 use zeta_app_server_protocol::protocol::fs::FsGetMetadataParams;
 use zeta_app_server_protocol::protocol::fs::FsGetMetadataResult;
+use zeta_app_server_protocol::protocol::fs::FsReadDirectoryEntry;
 use zeta_app_server_protocol::protocol::fs::FsReadDirectoryParams;
 use zeta_app_server_protocol::protocol::fs::FsReadFileParams;
 use zeta_app_server_protocol::protocol::fs::FsWriteFileParams;
@@ -13,7 +14,9 @@ use zeta_app_server_protocol::protocol::git::GitBranchDto;
 use zeta_app_server_protocol::protocol::git::GitBranchSwitchParams;
 use zeta_app_server_protocol::protocol::git::GitTextDiffResult;
 use zeta_editor_host::FileEditorCloseRequest;
+use zeta_files::DirectoryEntry;
 use zeta_protocol::Session;
+use zeta_scm::ScmDiff;
 use zeta_terminal_workspace::PaneBinding;
 use zeta_text_file::TextFileAccess;
 use zeta_text_file::TextFileDiskVersion;
@@ -26,7 +29,6 @@ use crate::app_server::AppServerRequestHandle;
 use crate::app_server::ClientError;
 use crate::app_server::ServerNotification;
 use crate::session_catalog::session_model_options;
-use crate::workspace_pane_host::WorkspacePaneSelection;
 use zeta_workbench::PaneInput;
 use zeta_workbench::TabInputKey;
 
@@ -221,27 +223,32 @@ fn shell_completion_sources_changed(changed: &FsChanged) -> bool {
 }
 
 impl ProductApp {
-    pub(crate) fn replace_workspace_pane(&mut self) {
+    pub(crate) fn replace_workspace_capability_state(&mut self) {
         let pane_kind = self.active_workspace_pane_kind();
-        let removed = self
-            .workspace_pane_host
-            .replace_workspace(&self.workspace_context);
-        let view = match pane_kind {
-            Some(zeta_workbench::PaneInputKind::Diff) => Some(WorkspacePaneSelection::Changes),
-            Some(zeta_workbench::PaneInputKind::Files) => Some(WorkspacePaneSelection::Files),
-            _ => None,
-        };
-        if let Some(view) = view {
-            self.select_workspace_pane_view(view);
+        self.files
+            .set_workspace_root(self.workspace_context.working_directory().to_path_buf());
+        let mut removed = self.scm.replace_diffs([]);
+        removed.extend(self.sync_repository_state());
+        match pane_kind {
+            Some(zeta_workbench::PaneInputKind::Diff) => self.show_changes_pane(),
+            Some(zeta_workbench::PaneInputKind::Files) => self.show_files_pane(),
+            _ => {}
         }
         self.remove_scm_animation_tracks(removed);
     }
 
-    fn sync_workspace_pane_repository(&mut self) {
-        let removed = self
-            .workspace_pane_host
-            .sync_repository(&self.workspace_context);
+    fn sync_repository_capability_state(&mut self) {
+        let removed = self.sync_repository_state();
         self.remove_scm_animation_tracks(removed);
+    }
+
+    fn sync_repository_state(&mut self) -> Vec<zeta_editor::MultiDiffEditorItemIdentity> {
+        self.scm.replace_diffs(
+            self.workspace_context
+                .diffs()
+                .iter()
+                .map(|diff| ScmDiff::new(diff.path(), diff.document().clone())),
+        )
     }
 
     fn remove_scm_animation_tracks(
@@ -263,7 +270,7 @@ impl ProductApp {
             workspace_folder_id: None,
             path: PathBuf::from("."),
         }) {
-            Ok(result) => self.workspace_pane_host.refresh_files(result.entries),
+            Ok(result) => self.files.refresh(directory_entries(result.entries)),
             Err(error) => eprintln!("could not read App Server workspace directory: {error}"),
         }
     }
@@ -277,8 +284,8 @@ impl ProductApp {
             path,
         }) {
             Ok(result) => {
-                self.workspace_pane_host
-                    .complete_file_tree_directory_load(element, result.entries);
+                self.files
+                    .complete_directory_load(element, directory_entries(result.entries));
             }
             Err(error) => eprintln!("could not read App Server workspace directory: {error}"),
         }
@@ -432,7 +439,7 @@ impl ProductApp {
             .ok_or_else(|| anyhow!("App Server connection is unavailable"))?;
         let snapshot = read_git_snapshot(client)?;
         self.workspace_context.apply_git_snapshot(snapshot.as_ref());
-        self.sync_workspace_pane_repository();
+        self.sync_repository_capability_state();
         Ok(())
     }
 
@@ -561,6 +568,19 @@ fn git_is_unavailable(error: &ClientError) -> bool {
 
 fn client_error(error: ClientError) -> anyhow::Error {
     anyhow!(error.to_string())
+}
+
+fn directory_entries(entries: Vec<FsReadDirectoryEntry>) -> Vec<DirectoryEntry> {
+    entries
+        .into_iter()
+        .map(|entry| {
+            if entry.file_type == zeta_app_server_protocol::protocol::fs::FsFileType::Directory {
+                DirectoryEntry::directory(entry.name)
+            } else {
+                DirectoryEntry::file(entry.name)
+            }
+        })
+        .collect()
 }
 
 fn definition_editor_position(

@@ -8,20 +8,19 @@ use crate::git_branch_context_menu::GitBranchContextMenuState;
 use crate::keybindings::ProductKeybindings;
 use crate::shell_interaction::{
     CHANGES_PANE, COMPOSER, COMPOSER_INFO_BAR, COMPOSER_PANEL, FILE_EDITOR_DOCUMENT,
-    FILE_EDITOR_PANE, FILE_EDITOR_TAB_LIST, FILES_PANE, FILES_REFRESH, FILES_SEARCH,
+    FILE_EDITOR_PANE, FILE_EDITOR_TAB_LIST, FILES_PANE, FILES_REFRESH, FILES_SEARCH, FILES_TOOLBAR,
     INSPECTOR_RESIZE_HANDLE, MULTI_DIFF_EDITOR, SESSION_HEADER, SESSION_SEARCH_INPUT,
     TAB_CONTAINER_RESIZE_HANDLE, TAB_CONTAINER_SETTINGS_CLOSE, TAB_CONTAINER_SETTINGS_TAB,
-    TAB_CONTEXT_MENU, THREAD_TIMELINE, TITLEBAR, WORKSPACE_CHANGES, WORKSPACE_FILES,
-    WORKSPACE_PANE, WORKSPACE_PANE_NAVIGATION, WORKSPACE_PANE_TOOLBAR,
+    TAB_CONTEXT_MENU, THREAD_TIMELINE, TITLEBAR, WINDOW,
 };
 use crate::tab_context_menu::TabContextMenuState;
 use crate::workspace_context::WorkspaceContext;
-use crate::workspace_pane_host::WorkspacePaneHost;
 use crate::workspace_path_picker::WorkspacePathPickerState;
 use crate::workspace_surface::WorkspaceSurfaceKind;
-use zeta_app_server_protocol::protocol::fs::{FsFileType, FsReadDirectoryEntry};
 use zeta_editor::CodeEditorStyle;
 use zeta_editor_host::FileEditorHost;
+use zeta_files::{DirectoryEntry, FilesState};
+use zeta_scm::{ScmDiff, ScmState};
 use zeta_session::SessionPaneState;
 use zeta_session::interaction::ContextAction;
 use zeta_settings::RemoteConnectionManagerState;
@@ -34,10 +33,12 @@ use zeta_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, Te
 use zeta_ui_components::ScrollbarPresentation;
 use zeta_workbench::ADD_SESSION;
 use zeta_workbench::SessionSearchState;
+use zeta_workbench::TAB_CONTAINER_SETTINGS_ACTION;
+use zeta_workbench::TITLEBAR_SETTINGS_ACTION;
 use zeta_workbench::TabContainerState;
 use zeta_workbench::{
-    InspectorPartState, PaneInput, PanePart, PaneSplitDirection, TabInput, TabInputKey,
-    TabInputMetadata, TabPart, WorkbenchHost,
+    InspectorPartState, PaneGroupId, PaneInput, PanePart, PaneSplitDirection, TabInput,
+    TabInputKey, TabInputMetadata, TabPart, WorkbenchHost, pane_group_element_id,
 };
 use zui::runtime::AccessibilityNode;
 use zui::ui::{AccessibilityRole, CursorFeedback, DispatchInvalidation, UiDispatch, UiIntent};
@@ -78,15 +79,17 @@ fn presentation_with_dispatch(
     terminal: Option<&TerminalCore>,
     scroll_offset: usize,
 ) -> (ShellPresentation, UiDispatch) {
-    let workspace_pane_host = WorkspacePaneHost::default();
+    let files = FilesState::default();
+    let scm = ScmState::default();
     let mut dispatch = UiDispatch::default();
-    let presentation = presentation_with_workspace(
+    let presentation = presentation_with_capabilities(
         terminal,
         scroll_offset,
         TabContainerState::collapsed(),
         InspectorPartState::default(),
         TabContextMenuState::default(),
-        &workspace_pane_host,
+        &files,
+        &scm,
         &mut dispatch,
     );
     (presentation, dispatch)
@@ -136,26 +139,29 @@ fn presentation_with_parts_and_menu(
     inspector_part: InspectorPartState,
     tab_context_menu: TabContextMenuState,
 ) -> ShellPresentation {
-    let workspace_pane_host = WorkspacePaneHost::default();
+    let files = FilesState::default();
+    let scm = ScmState::default();
     let mut dispatch = UiDispatch::default();
-    presentation_with_workspace(
+    presentation_with_capabilities(
         terminal,
         scroll_offset,
         tab_container,
         inspector_part,
         tab_context_menu,
-        &workspace_pane_host,
+        &files,
+        &scm,
         &mut dispatch,
     )
 }
 
-fn presentation_with_workspace(
+fn presentation_with_capabilities(
     terminal: Option<&TerminalCore>,
     scroll_offset: usize,
     tab_container: TabContainerState,
     inspector_part: InspectorPartState,
     tab_context_menu: TabContextMenuState,
-    workspace_pane_host: &WorkspacePaneHost,
+    files: &FilesState,
+    scm: &ScmState,
     dispatch: &mut UiDispatch,
 ) -> ShellPresentation {
     presentation_with_active_tab_input(
@@ -164,7 +170,8 @@ fn presentation_with_workspace(
         tab_container,
         inspector_part,
         tab_context_menu,
-        workspace_pane_host,
+        files,
+        scm,
         dispatch,
         None,
     )
@@ -176,7 +183,8 @@ fn presentation_with_active_tab_input(
     tab_container: TabContainerState,
     inspector_part: InspectorPartState,
     tab_context_menu: TabContextMenuState,
-    workspace_pane_host: &WorkspacePaneHost,
+    files: &FilesState,
+    scm: &ScmState,
     dispatch: &mut UiDispatch,
     active_tab_input: Option<TabInputKey>,
 ) -> ShellPresentation {
@@ -187,11 +195,10 @@ fn presentation_with_active_tab_input(
     let file_editor_host = FileEditorHost::default();
     let code_editor_style = CodeEditorStyle::light();
     let workspace_tab_key = TabInputKey::session(
-        zeta_protocol::SessionId::new("workspace-pane-session")
-            .expect("test session ID is non-empty"),
+        zeta_protocol::SessionId::new("files-input-session").expect("test session ID is non-empty"),
     );
-    let workspace_pane_enabled = inspector_part.is_expanded() && active_tab_input.is_none();
-    let inspector_part = workspace_pane_enabled
+    let files_input_enabled = inspector_part.is_expanded() && active_tab_input.is_none();
+    let inspector_part = files_input_enabled
         .then(InspectorPartState::default)
         .unwrap_or(inspector_part);
     let mut workspace_workbench = WorkbenchHost::new();
@@ -206,19 +213,19 @@ fn presentation_with_active_tab_input(
         PaneInput::files(workspace_context.working_directory().to_path_buf()),
         PaneBinding::new,
     );
-    let workspace_pane_group = workspace_workbench
+    let files_pane_part = workspace_workbench
         .workbench()
         .pane_part(&workspace_tab_key)
-        .expect("workspace pane part");
-    let workspace_pane = workspace_pane_enabled.then(|| {
+        .expect("Files pane part");
+    let files_mount = files_input_enabled.then(|| {
         workspace_workbench
-            .mount(&workspace_tab_key, workspace_pane_group.root_pane())
-            .expect("workspace pane should mount")
+            .mount(&workspace_tab_key, files_pane_part.root_pane())
+            .expect("Files input should mount")
     });
     let active_tab_input = active_tab_input
         .as_ref()
-        .or(workspace_pane_enabled.then_some(&workspace_tab_key));
-    let pane_group = workspace_pane_enabled.then_some(workspace_pane_group);
+        .or(files_input_enabled.then_some(&workspace_tab_key));
+    let pane_group = files_input_enabled.then_some(files_pane_part);
     let tab_part = TabPart::default();
     let initial = build_shell_presentation(
         viewport(),
@@ -227,7 +234,7 @@ fn presentation_with_active_tab_input(
             terminal,
             terminal_panes: &[],
             pane_group,
-            active_pane: workspace_pane,
+            active_pane: files_mount,
             terminal_pane_resize_split: None,
             terminal_scroll_offset: scroll_offset,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
@@ -256,7 +263,8 @@ fn presentation_with_active_tab_input(
             dispatch,
             tab_container,
             inspector_part,
-            workspace_pane_host,
+            files,
+            scm,
             tab_context_menu: tab_context_menu.clone(),
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
@@ -281,7 +289,7 @@ fn presentation_with_active_tab_input(
             terminal,
             terminal_panes: &[],
             pane_group,
-            active_pane: workspace_pane,
+            active_pane: files_mount,
             terminal_pane_resize_split: None,
             terminal_scroll_offset: scroll_offset,
             terminal_scrollbar_presentation: ScrollbarPresentation::default(),
@@ -310,7 +318,8 @@ fn presentation_with_active_tab_input(
             dispatch,
             tab_container,
             inspector_part,
-            workspace_pane_host,
+            files,
+            scm,
             tab_context_menu,
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
@@ -331,7 +340,8 @@ fn presentation_with_active_tab_input(
 
 #[test]
 fn settings_tab_input_renders_settings_and_selects_the_tab_container_entry() {
-    let workspace_pane_host = WorkspacePaneHost::default();
+    let files = FilesState::default();
+    let scm = ScmState::default();
     let mut dispatch = UiDispatch::default();
     let presentation = presentation_with_active_tab_input(
         None,
@@ -339,7 +349,8 @@ fn settings_tab_input_renders_settings_and_selects_the_tab_container_entry() {
         TabContainerState::expanded(),
         InspectorPartState::default(),
         TabContextMenuState::default(),
-        &workspace_pane_host,
+        &files,
+        &scm,
         &mut dispatch,
         Some(TabInputKey::Settings),
     );
@@ -377,25 +388,21 @@ fn settings_tab_input_renders_settings_and_selects_the_tab_container_entry() {
 
 #[test]
 fn expanded_inspector_part_file_row_hover_rebuilds_with_the_hover_background() {
-    let mut workspace = WorkspacePaneHost::default();
-    workspace.refresh_files(vec![
-        FsReadDirectoryEntry {
-            name: "alpha.txt".into(),
-            file_type: FsFileType::File,
-        },
-        FsReadDirectoryEntry {
-            name: "beta.txt".into(),
-            file_type: FsFileType::File,
-        },
+    let mut files = FilesState::default();
+    files.refresh(vec![
+        DirectoryEntry::file("alpha.txt"),
+        DirectoryEntry::file("beta.txt"),
     ]);
+    let scm = ScmState::default();
     let mut dispatch = UiDispatch::default();
-    let initial = presentation_with_workspace(
+    let initial = presentation_with_capabilities(
         None,
         0,
         TabContainerState::collapsed(),
         InspectorPartState::expanded(),
         TabContextMenuState::default(),
-        &workspace,
+        &files,
+        &scm,
         &mut dispatch,
     );
     let accessibility_nodes = accessibility_nodes(&initial, &dispatch);
@@ -416,13 +423,14 @@ fn expanded_inspector_part_file_row_hover_rebuilds_with_the_hover_background() {
 
     assert_eq!(outcome.invalidation, DispatchInvalidation::Paint);
     assert!(dispatch.is_hovered(row_id));
-    let hovered = presentation_with_workspace(
+    let hovered = presentation_with_capabilities(
         None,
         0,
         TabContainerState::collapsed(),
         InspectorPartState::expanded(),
         TabContextMenuState::default(),
-        &workspace,
+        &files,
+        &scm,
         &mut dispatch,
     );
 
@@ -459,7 +467,8 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
     let session_search = SessionSearchState::default();
     let tab_part = TabPart::default();
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
-    let workspace_pane_host = WorkspacePaneHost::default();
+    let files = FilesState::default();
+    let scm = ScmState::default();
     let mut file_editor_host = FileEditorHost::default();
     file_editor_host.open(TextFileSnapshot::new(
         "src/main.rs".into(),
@@ -504,7 +513,8 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
             dispatch: &dispatch,
             tab_container: TabContainerState::collapsed(),
             inspector_part: InspectorPartState::expanded(),
-            workspace_pane_host: &workspace_pane_host,
+            files: &files,
+            scm: &scm,
             tab_context_menu: TabContextMenuState::default(),
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
@@ -529,7 +539,7 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
     assert!(
         accessibility_nodes
             .iter()
-            .any(|node| node.id == FILE_EDITOR_PANE && node.parent == Some(WORKSPACE_PANE))
+            .any(|node| node.id == FILE_EDITOR_PANE && node.parent == Some(WINDOW))
     );
     for id in [SESSION_HEADER, COMPOSER, THREAD_TIMELINE] {
         assert!(accessibility_nodes.iter().any(|node| node.id == id));
@@ -755,7 +765,8 @@ fn session_search_filters_tabs_by_session_name() {
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
-    let workspace_pane_host = WorkspacePaneHost::default();
+    let files = FilesState::default();
+    let scm = ScmState::default();
     let file_editor_host = FileEditorHost::default();
     let code_editor_style = CodeEditorStyle::light();
 
@@ -789,7 +800,8 @@ fn session_search_filters_tabs_by_session_name() {
             dispatch: &dispatch,
             tab_container: TabContainerState::expanded(),
             inspector_part: InspectorPartState::default(),
-            workspace_pane_host: &workspace_pane_host,
+            files: &files,
+            scm: &scm,
             tab_context_menu: TabContextMenuState::default(),
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
@@ -824,7 +836,7 @@ fn session_search_filters_tabs_by_session_name() {
 }
 
 #[test]
-fn workspace_pane_defaults_to_files_in_the_main_workbench_with_navigation_and_actions() {
+fn active_files_input_mounts_directly_in_its_pane_group_with_files_actions() {
     let inspector_part = InspectorPartState::expanded();
     let presentation = presentation_with_parts_and_menu(
         None,
@@ -834,21 +846,17 @@ fn workspace_pane_defaults_to_files_in_the_main_workbench_with_navigation_and_ac
         TabContextMenuState::default(),
     );
     let accessibility_nodes = accessibility_nodes(&presentation, &UiDispatch::default());
-    let workspace_pane = accessibility_nodes
+    let pane_group = accessibility_nodes
         .iter()
-        .find(|node| node.id == WORKSPACE_PANE)
+        .find(|node| node.id == pane_group_element_id(PaneGroupId::ROOT))
         .unwrap();
     let explorer = accessibility_nodes
         .iter()
         .find(|node| node.id == FILES_PANE)
         .unwrap();
-    let navigation = accessibility_nodes
-        .iter()
-        .find(|node| node.id == WORKSPACE_PANE_NAVIGATION)
-        .unwrap();
     let toolbar = accessibility_nodes
         .iter()
-        .find(|node| node.id == WORKSPACE_PANE_TOOLBAR)
+        .find(|node| node.id == FILES_TOOLBAR)
         .unwrap();
     let resize_handle = accessibility_nodes
         .iter()
@@ -857,36 +865,32 @@ fn workspace_pane_defaults_to_files_in_the_main_workbench_with_navigation_and_ac
     assert_eq!(
         accessibility_nodes
             .iter()
-            .find(|node| node.id == WORKSPACE_PANE)
+            .find(|node| node.id == pane_group_element_id(PaneGroupId::ROOT))
             .map(|node| node.bounds),
         Some(zui::ui::Rect::from_xywh(0.0, 32.0, 1000.0, 668.0))
     );
-    assert_eq!(workspace_pane.role, AccessibilityRole::Group);
-    assert_eq!(workspace_pane.label, "Workspace pane");
-    assert_eq!(explorer.parent, Some(WORKSPACE_PANE));
+    assert_eq!(pane_group.role, AccessibilityRole::Group);
+    assert_eq!(pane_group.label, "Files pane group");
+    assert_eq!(
+        explorer.parent,
+        Some(pane_group_element_id(PaneGroupId::ROOT))
+    );
     assert_eq!(explorer.label, "Files");
-    assert_eq!(navigation.role, AccessibilityRole::Toolbar);
-    assert_eq!(toolbar.label, "Workspace pane toolbar");
+    assert_eq!(toolbar.label, "Files toolbar");
+    assert_eq!(
+        toolbar.parent,
+        Some(pane_group_element_id(PaneGroupId::ROOT))
+    );
     assert!(resize_handle.is_none());
     assert_eq!(
         toolbar.bounds,
         zui::ui::Rect::from_xywh(0.0, 32.0, 1000.0, 36.0)
     );
     assert_eq!(
-        navigation.bounds,
-        zui::ui::Rect::from_xywh(0.0, 32.0, 128.0, 36.0)
-    );
-    assert_eq!(navigation.parent, Some(WORKSPACE_PANE_TOOLBAR));
-    assert_eq!(
         explorer.bounds,
         zui::ui::Rect::from_xywh(0.0, 68.0, 1000.0, 632.0)
     );
-    for id in [
-        WORKSPACE_CHANGES,
-        WORKSPACE_FILES,
-        FILES_REFRESH,
-        FILES_SEARCH,
-    ] {
+    for id in [FILES_REFRESH, FILES_SEARCH] {
         assert!(accessibility_nodes.iter().any(|node| node.id == id));
     }
     assert!(
@@ -901,10 +905,6 @@ fn workspace_pane_defaults_to_files_in_the_main_workbench_with_navigation_and_ac
         .iter()
         .map(|text| text.text())
         .collect::<Vec<_>>();
-    assert_eq!(
-        visible_text.iter().filter(|text| **text == "Files").count(),
-        1
-    );
     assert!(visible_text.contains(&"No files loaded"));
     assert!(visible_text.contains(&"↑0 ↓0"));
     assert_eq!(
@@ -927,13 +927,19 @@ fn workspace_pane_defaults_to_files_in_the_main_workbench_with_navigation_and_ac
 }
 
 #[test]
-fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_actions() {
+fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
     let session_pane = SessionPaneState::default();
     let session_search = SessionSearchState::default();
     let tab_part = TabPart::default();
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(2));
-    let mut agent_workspace = WorkspacePaneHost::default();
-    agent_workspace.sync_repository(&workspace_context);
+    let files = FilesState::default();
+    let mut scm = ScmState::default();
+    scm.replace_diffs(
+        workspace_context
+            .diffs()
+            .iter()
+            .map(|diff| ScmDiff::new(diff.path(), diff.document().clone())),
+    );
     let tab_key = TabInputKey::session(
         zeta_protocol::SessionId::new("session-1").expect("test session ID is non-empty"),
     );
@@ -988,7 +994,8 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
             dispatch: &dispatch,
             tab_container: TabContainerState::collapsed(),
             inspector_part: InspectorPartState::default(),
-            workspace_pane_host: &agent_workspace,
+            files: &files,
+            scm: &scm,
             tab_context_menu: TabContextMenuState::default(),
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),
@@ -1012,6 +1019,13 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
             .iter()
             .any(|node| node.id == CHANGES_PANE)
     );
+    assert_eq!(
+        accessibility_nodes
+            .iter()
+            .find(|node| node.id == CHANGES_PANE)
+            .and_then(|node| node.parent),
+        Some(pane_group_element_id(PaneGroupId::ROOT))
+    );
     assert!(
         accessibility_nodes
             .iter()
@@ -1034,13 +1048,6 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
     assert!(!visible_text.contains(&"No changed files"));
     assert!(!visible_text.contains(&"HEAD"));
     assert!(!visible_text.contains(&"Working Tree"));
-    assert_eq!(
-        visible_text
-            .iter()
-            .filter(|text| **text == "Changes")
-            .count(),
-        1
-    );
 }
 
 #[test]
@@ -1092,6 +1099,22 @@ fn open_tab_context_menu_is_topmost_and_exposes_generic_actions() {
             .iter()
             .any(|text| text.text() == "Move to group  ›")
     );
+}
+
+#[test]
+fn open_tab_context_menu_keeps_target_action_bar_visible_in_each_mount() {
+    for (tab_container, action) in [
+        (TabContainerState::expanded(), TAB_CONTAINER_SETTINGS_ACTION),
+        (TabContainerState::collapsed(), TITLEBAR_SETTINGS_ACTION),
+    ] {
+        let mut menu_state = TabContextMenuState::default();
+        menu_state.open_unpinned(TabInputKey::Settings, Point::new(80.0, 120.0), None);
+
+        let presentation =
+            presentation_with_tab_container_and_menu(None, 0, tab_container, menu_state);
+
+        assert!(presentation.interaction_frame().node(action).is_some());
+    }
 }
 
 #[test]
@@ -1173,7 +1196,8 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
     let session_search = SessionSearchState::default();
     let tab_part = TabPart::default();
     let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
-    let workspace_pane_host = WorkspacePaneHost::default();
+    let files = FilesState::default();
+    let scm = ScmState::default();
     let git_branch_context_menu = GitBranchContextMenuState::default();
     let workspace_path_picker = WorkspacePathPickerState::default();
     let remote_connection_picker = RemoteConnectionPickerState::default();
@@ -1212,7 +1236,8 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         dispatch: &dispatch,
         tab_container: TabContainerState::collapsed(),
         inspector_part: InspectorPartState::default(),
-        workspace_pane_host: &workspace_pane_host,
+        files: &files,
+        scm: &scm,
         tab_context_menu: TabContextMenuState::default(),
         git_branch_context_menu: &git_branch_context_menu,
         workspace_path_picker: &workspace_path_picker,
@@ -1352,7 +1377,8 @@ fn compact_viewport_uses_bounded_fallback_scene() {
     let workspace_context = WorkspaceContext::fixture("/tmp/project", None, None);
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
-    let workspace_pane_host = WorkspacePaneHost::default();
+    let files = FilesState::default();
+    let scm = ScmState::default();
     let file_editor_host = FileEditorHost::default();
     let code_editor_style = CodeEditorStyle::light();
     let presentation = build_shell_presentation(
@@ -1388,7 +1414,8 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             dispatch: &dispatch,
             tab_container: TabContainerState::collapsed(),
             inspector_part: InspectorPartState::default(),
-            workspace_pane_host: &workspace_pane_host,
+            files: &files,
+            scm: &scm,
             tab_context_menu: TabContextMenuState::default(),
             git_branch_context_menu: &GitBranchContextMenuState::default(),
             workspace_path_picker: &WorkspacePathPickerState::default(),

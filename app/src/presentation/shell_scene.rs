@@ -28,21 +28,21 @@ use crate::keybindings::ProductKeybindings;
 use crate::shell_interaction::{
     FILE_EDITOR_DOCUMENT, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT, FILE_SEARCH_INPUT,
     FIRST_TAB_CONTAINER_SESSION_TAB, INSPECTOR_RESIZE_HANDLE, MAIN_SURFACE, SESSION_SEARCH_INPUT,
-    TAB_CONTAINER_RESIZE_HANDLE, TERMINAL_OUTPUT, WINDOW, WORKSPACE_PANE, WORKSPACE_PANE_TOOLBAR,
+    TAB_CONTAINER_RESIZE_HANDLE, TERMINAL_OUTPUT, WINDOW,
 };
 use crate::tab_context_menu::{TabContextMenu, TabContextMenuState};
 use crate::terminal_blocks::{TerminalBlockLineKind, project_block_lines};
 use crate::terminal_output_scroll_view::TerminalOutputScrollView;
 use crate::terminal_selection::{TerminalSelectionRange, paint_terminal_selection};
 use crate::workspace_context::WorkspaceContext;
-use crate::workspace_pane_host::WorkspacePaneHost;
 use crate::workspace_path_picker::{WorkspacePathPicker, WorkspacePathPickerState};
 use crate::workspace_surface::WorkspaceSurfaceKind;
 use zeta_files::FilesLayout;
 use zeta_files::FilesPane;
+use zeta_files::FilesState;
 use zeta_files::FilesToolbar;
 use zeta_scm::EditorPane;
-use zeta_scm::ScmLayout;
+use zeta_scm::ScmState;
 use zeta_session::SessionPaneContext;
 use zeta_session::SessionPaneLayout;
 use zeta_session::SessionPaneState;
@@ -51,14 +51,12 @@ use zeta_session::draw_session_pane;
 use zeta_terminal_workspace::PaneBinding;
 use zeta_ui_theme::UiTheme;
 use zeta_workbench::SessionSearchState;
-use zeta_workbench::WorkspacePaneNavigation;
-use zeta_workbench::WorkspacePaneSelection;
 use zeta_workbench::{
     InspectorPartState, PaneGroupId as PaneId, PaneInputKind, PaneMount, PanePart, PanePartSashes,
     PaneSplitId, TITLEBAR_HEIGHT, TabContainer, TabContainerPlacement, TabContainerState,
     TabContainerToolbar, TabGroupId, TabInput, TabInputKey, TabPart, Titlebar, TitlebarInsets,
-    WorkbenchTab, WorkbenchTabGroup, pane_group_element_id, tab_input_element_id,
-    workbench_tab_groups,
+    WorkbenchTab, WorkbenchTabGroup, mounted_tab_element_id, pane_group_element_id,
+    tab_input_element_id, workbench_tab_groups,
 };
 
 type PaneViewMount<'a> = PaneMount<'a, PaneBinding>;
@@ -311,7 +309,8 @@ pub(crate) struct ShellPresentationModel<'a> {
     pub(crate) dispatch: &'a UiDispatch,
     pub(crate) tab_container: TabContainerState,
     pub(crate) inspector_part: InspectorPartState,
-    pub(crate) workspace_pane_host: &'a WorkspacePaneHost,
+    pub(crate) files: &'a FilesState,
+    pub(crate) scm: &'a ScmState,
     pub(crate) tab_context_menu: TabContextMenuState,
     pub(crate) git_branch_context_menu: &'a GitBranchContextMenuState,
     pub(crate) workspace_path_picker: &'a WorkspacePathPickerState,
@@ -334,15 +333,7 @@ struct TabContainerView<'a> {
     search: &'a SessionSearchState,
     tab_part: &'a TabPart,
     selected_id: ElementId,
-    caret_visibility: CaretVisibility,
-    dispatch: &'a UiDispatch,
-}
-
-#[derive(Clone, Copy)]
-struct WorkspacePanePresentationView<'a> {
-    workspace: &'a WorkspacePaneHost,
-    pane: Option<PaneViewMount<'a>>,
-    context: &'a WorkspaceContext,
+    visible_action_bar_tab: Option<&'a TabInputKey>,
     caret_visibility: CaretVisibility,
     dispatch: &'a UiDispatch,
 }
@@ -376,7 +367,8 @@ struct MainPresentationView<'a> {
     session_title: &'a str,
     session_pane: &'a SessionPaneState,
     session_pane_context: &'a SessionPaneContext,
-    workspace: &'a WorkspacePaneHost,
+    files: &'a FilesState,
+    scm: &'a ScmState,
     workspace_context: &'a WorkspaceContext,
     keybindings: &'a ProductKeybindings,
     keybinding_diagnostics: &'a [String],
@@ -490,7 +482,7 @@ fn build_shell_presentation_with_bindings(
         model.active_tab_input,
         TabContainerPlacement::Body,
     );
-    let titlebar = Titlebar::new(
+    let mut titlebar = Titlebar::new(
         layout.titlebar(),
         zeta_workbench::WorkbenchUiStyle::from_theme(palette),
         model.tab_part,
@@ -503,6 +495,11 @@ fn build_shell_presentation_with_bindings(
         ),
         model.dispatch,
     );
+    if let Some(tab) = model.tab_context_menu.target_tab().and_then(|tab| {
+        mounted_tab_element_id(model.tab_part, tab, TabContainerPlacement::Titlebar)
+    }) {
+        titlebar = titlebar.with_visible_tab_action_bar(tab);
+    }
     frame.draw_component(&titlebar);
     let session_search_caret = if let Some(bounds) = layout.tab_container() {
         frame.with_context(|context| {
@@ -515,6 +512,7 @@ fn build_shell_presentation_with_bindings(
                     search: model.session_search,
                     tab_part: model.tab_part,
                     selected_id,
+                    visible_action_bar_tab: model.tab_context_menu.target_tab(),
                     caret_visibility: model.caret_visibility,
                     dispatch: model.dispatch,
                 },
@@ -578,7 +576,8 @@ fn build_shell_presentation_with_bindings(
                 session_title,
                 session_pane: model.session_pane,
                 session_pane_context: &session_pane_context,
-                workspace: model.workspace_pane_host,
+                files: model.files,
+                scm: model.scm,
                 workspace_context: model.workspace_context,
                 keybindings: model.keybindings,
                 keybinding_diagnostics: model.keybinding_diagnostics,
@@ -949,110 +948,57 @@ pub(crate) fn terminal_pane_mouse_position_for_viewport(
         .then(|| (leaf.id(), TerminalMousePosition::new(row, col)))
 }
 
-fn draw_workspace_pane(
+fn draw_files_pane(
     context: &mut ComponentContext<'_, '_>,
     bounds: Rect,
-    view: WorkspacePanePresentationView<'_>,
+    files: &FilesState,
+    workspace_context: &WorkspaceContext,
+    parent: ElementId,
+    caret_visibility: CaretVisibility,
+    dispatch: &UiDispatch,
     text_layout: &mut TextInputLayoutEngine,
     palette: UiTheme,
 ) -> Option<Rect> {
-    let workspace_pane = InteractionRegion::new(
-        "WorkspacePane",
-        WORKSPACE_PANE,
+    let layout = FilesLayout::for_bounds(bounds);
+    let files_toolbar = FilesToolbar::new(
+        layout.toolbar(),
+        files,
+        workspace_context.upstream_distance(),
+        caret_visibility,
+        zeta_files::FilesToolbarStyle::from_theme(palette),
+        parent,
+        text_layout,
+        dispatch,
+    );
+    let search_caret = files_toolbar.search_caret_bounds();
+    context.draw_component(&files_toolbar);
+    let files_style = zeta_files::FilesPaneStyle::from_theme(palette);
+    context.draw_component(&FilesPane::new(
+        layout.content(),
+        files,
+        parent,
+        &files_style,
+        dispatch,
+    ));
+    dispatch
+        .is_focused(FILE_SEARCH_INPUT)
+        .then_some(search_caret)
+        .flatten()
+}
+
+fn draw_changes_pane(
+    context: &mut ComponentContext<'_, '_>,
+    bounds: Rect,
+    scm: &ScmState,
+    parent: ElementId,
+    palette: UiTheme,
+) {
+    context.draw_component(&EditorPane::new(
         bounds,
-        AccessibilityRole::Group,
-        "Workspace pane",
-    )
-    .with_parent(WINDOW);
-    let active_view = match view.pane.map(|pane| pane.kind()) {
-        Some(PaneInputKind::Diff) => Some(WorkspacePaneSelection::Changes),
-        Some(PaneInputKind::Files) | None => Some(WorkspacePaneSelection::Files),
-        Some(PaneInputKind::Agent)
-        | Some(PaneInputKind::Settings)
-        | Some(PaneInputKind::Terminal) => None,
-    };
-    context.with_component(&workspace_pane, |context, _| {
-        draw_workspace_surface(context.scene_mut(), bounds, palette);
-        let Some(active_view) = active_view else {
-            return None;
-        };
-        let toolbar_bounds = match active_view {
-            WorkspacePaneSelection::Changes => ScmLayout::for_bounds(bounds).toolbar(),
-            WorkspacePaneSelection::Files => FilesLayout::for_bounds(bounds).toolbar(),
-        };
-        let content_bounds = match active_view {
-            WorkspacePaneSelection::Changes => ScmLayout::for_bounds(bounds).content(),
-            WorkspacePaneSelection::Files => FilesLayout::for_bounds(bounds).content(),
-        };
-        let toolbar = InteractionRegion::new(
-            "WorkspacePaneToolbar",
-            WORKSPACE_PANE_TOOLBAR,
-            toolbar_bounds,
-            AccessibilityRole::Toolbar,
-            "Workspace pane toolbar",
-        )
-        .with_parent(WORKSPACE_PANE);
-        let navigation_style = zeta_workbench::WorkspaceNavigationStyle::from_theme(palette);
-        let search_caret = context.with_component(&toolbar, |context, _| {
-            context.scene_mut().draw_rect(
-                PaintRect::new(toolbar_bounds, palette.side_bar_background).with_border(
-                    Border::new(zui::ui::Edges::new(0.0, 0.0, 1.0, 0.0), palette.border),
-                ),
-            );
-            let navigation = WorkspacePaneNavigation::new(
-                WorkspacePaneNavigation::bounds_in(toolbar_bounds),
-                active_view,
-                &navigation_style,
-                view.dispatch,
-            );
-            context.draw_component(&navigation);
-            match active_view {
-                WorkspacePaneSelection::Changes => None,
-                WorkspacePaneSelection::Files => {
-                    let files_toolbar = FilesToolbar::new(
-                        toolbar_bounds,
-                        WorkspacePaneNavigation::bounds_in(toolbar_bounds),
-                        view.workspace.files(),
-                        view.context.upstream_distance(),
-                        view.caret_visibility,
-                        zeta_files::FilesToolbarStyle::from_theme(palette),
-                        WORKSPACE_PANE_TOOLBAR,
-                        text_layout,
-                        view.dispatch,
-                    );
-                    let search_caret = files_toolbar.search_caret_bounds();
-                    context.draw_component(&files_toolbar);
-                    Some(search_caret)
-                }
-            }
-        });
-        match active_view {
-            WorkspacePaneSelection::Changes => {
-                let editor = EditorPane::new(
-                    content_bounds,
-                    view.workspace.editor(),
-                    zeta_scm::ScmPaneStyle::from_theme(palette),
-                    WORKSPACE_PANE,
-                );
-                context.draw_component(&editor);
-            }
-            WorkspacePaneSelection::Files => {
-                let files_style = zeta_files::FilesPaneStyle::from_theme(palette);
-                let explorer = FilesPane::new(
-                    content_bounds,
-                    view.workspace.files(),
-                    WORKSPACE_PANE,
-                    &files_style,
-                    view.dispatch,
-                );
-                context.draw_component(&explorer);
-            }
-        }
-        view.dispatch
-            .is_focused(FILE_SEARCH_INPUT)
-            .then_some(search_caret.flatten())
-            .flatten()
-    })
+        scm.editor(),
+        zeta_scm::ScmPaneStyle::from_theme(palette),
+        parent,
+    ));
 }
 
 fn draw_file_editor_inspector(
@@ -1062,49 +1008,39 @@ fn draw_file_editor_inspector(
     text_layout: &mut TextInputLayoutEngine,
     palette: UiTheme,
 ) -> Option<Rect> {
-    let inspector = InteractionRegion::new(
-        "InspectorWorkbench",
-        WORKSPACE_PANE,
+    draw_workspace_surface(context.scene_mut(), bounds, palette);
+    let pane = FileEditorPane::new(
         bounds,
-        AccessibilityRole::Group,
-        "Inspector workbench · File editor",
-    )
-    .with_parent(WINDOW);
-    context.with_component(&inspector, |context, _| {
-        draw_workspace_surface(context.scene_mut(), bounds, palette);
-        let pane = FileEditorPane::new(
-            bounds,
-            view.host,
-            view.style.clone(),
-            palette,
-            if view.dispatch.is_focused(FILE_EDITOR_DOCUMENT) {
-                view.caret_visibility
-            } else {
-                CaretVisibility::Hidden
-            },
-        )
-        .with_parent(WORKSPACE_PANE)
-        .with_prompt(view.prompt)
-        .with_diagnostics(view.diagnostics)
-        .with_language_features(view.language_hover, view.language_completions)
-        .with_completion_selection(view.completion_selection)
-        .with_pointer_position(view.pointer_position)
-        .with_search(
-            view.search,
-            text_layout,
-            view.dispatch,
-            view.caret_visibility,
-        );
-        let ime_cursor_area = if view.dispatch.is_focused(FILE_EDITOR_DOCUMENT) {
-            pane.caret_bounds()
+        view.host,
+        view.style.clone(),
+        palette,
+        if view.dispatch.is_focused(FILE_EDITOR_DOCUMENT) {
+            view.caret_visibility
         } else {
-            view.dispatch
-                .focused()
-                .and_then(|focused| pane.search_caret_bounds(focused))
-        };
-        context.draw_component(&pane);
-        ime_cursor_area
-    })
+            CaretVisibility::Hidden
+        },
+    )
+    .with_parent(WINDOW)
+    .with_prompt(view.prompt)
+    .with_diagnostics(view.diagnostics)
+    .with_language_features(view.language_hover, view.language_completions)
+    .with_completion_selection(view.completion_selection)
+    .with_pointer_position(view.pointer_position)
+    .with_search(
+        view.search,
+        text_layout,
+        view.dispatch,
+        view.caret_visibility,
+    );
+    let ime_cursor_area = if view.dispatch.is_focused(FILE_EDITOR_DOCUMENT) {
+        pane.caret_bounds()
+    } else {
+        view.dispatch
+            .focused()
+            .and_then(|focused| pane.search_caret_bounds(focused))
+    };
+    context.draw_component(&pane);
+    ime_cursor_area
 }
 
 /// Paints a Desktop-owned Workbench surface before feature content.
@@ -1177,7 +1113,7 @@ fn draw_tab_container(
             ));
         }
     }
-    let tab_container = TabContainer::new(
+    let mut tab_container = TabContainer::new(
         bounds,
         TabContainerToolbar::content_bounds(bounds),
         groups,
@@ -1186,6 +1122,12 @@ fn draw_tab_container(
         zeta_workbench::WorkbenchUiStyle::from_theme(palette),
         view.dispatch,
     );
+    if let Some(tab) = view
+        .visible_action_bar_tab
+        .and_then(|tab| mounted_tab_element_id(view.tab_part, tab, TabContainerPlacement::Body))
+    {
+        tab_container = tab_container.with_visible_action_bar(tab);
+    }
     context.draw_component(&tab_container);
     view.dispatch
         .is_focused(SESSION_SEARCH_INPUT)
@@ -1319,25 +1261,49 @@ fn draw_main(
                 remote_connection_manager_scroll_metrics = draw.remote_connection_scroll_metrics;
                 remote_connection_manager_list_viewport = draw.remote_connection_list_viewport;
             } else {
-                let workspace_pane_active =
+                let active_workspace_input = view.active_pane.filter(|pane| {
                     !matches!(view.workspace_surface, WorkspaceSurfaceKind::Editor)
-                        && view.active_pane.is_some_and(|pane| {
-                            matches!(pane.kind(), PaneInputKind::Files | PaneInputKind::Diff)
-                        });
-                if workspace_pane_active {
-                    ime_cursor_area = draw_workspace_pane(
-                        context,
+                        && matches!(pane.kind(), PaneInputKind::Files | PaneInputKind::Diff)
+                });
+                if let Some(pane) = active_workspace_input {
+                    let pane_group_id = pane_group_element_id(pane.pane_id());
+                    let pane_group = InteractionRegion::new(
+                        "PaneGroup",
+                        pane_group_id,
                         layout.main(),
-                        WorkspacePanePresentationView {
-                            workspace: view.workspace,
-                            pane: view.active_pane,
-                            context: view.workspace_context,
-                            caret_visibility: view.caret_visibility,
-                            dispatch: view.dispatch,
+                        AccessibilityRole::Group,
+                        match pane.kind() {
+                            PaneInputKind::Files => "Files pane group",
+                            PaneInputKind::Diff => "Changes pane group",
+                            _ => unreachable!("workspace input kind was checked above"),
                         },
-                        text_layout,
-                        palette,
-                    );
+                    )
+                    .with_parent(MAIN_SURFACE);
+                    ime_cursor_area =
+                        context.with_component(&pane_group, |context, _| match pane.kind() {
+                            PaneInputKind::Files => draw_files_pane(
+                                context,
+                                layout.main(),
+                                view.files,
+                                view.workspace_context,
+                                pane_group_id,
+                                view.caret_visibility,
+                                view.dispatch,
+                                text_layout,
+                                palette,
+                            ),
+                            PaneInputKind::Diff => {
+                                draw_changes_pane(
+                                    context,
+                                    layout.main(),
+                                    view.scm,
+                                    pane_group_id,
+                                    palette,
+                                );
+                                None
+                            }
+                            _ => unreachable!("workspace input kind was checked above"),
+                        });
                 } else {
                     match view.workspace_surface {
                         WorkspaceSurfaceKind::Terminal => {
