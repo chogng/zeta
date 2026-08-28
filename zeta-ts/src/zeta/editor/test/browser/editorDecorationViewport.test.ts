@@ -339,6 +339,7 @@ test("Decoration overlays split at soft-wrapped visual line boundaries", () => {
 			() => DecorationPresentation.SearchMatch,
 		)],
 		lineWrapping: EditorLineWrapping.On,
+		minimap: { enabled: false },
 	});
 	viewport.layout({ width: 70, height: 60 });
 

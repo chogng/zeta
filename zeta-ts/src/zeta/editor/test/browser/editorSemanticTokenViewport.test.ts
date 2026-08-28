@@ -126,6 +126,7 @@ test("Viewport clips semantic token spans to every soft-wrapped text fragment", 
 		textMeasurer: new FixedTextMeasurer(),
 		semanticTokenSource: styling.createSource(index),
 		lineWrapping: EditorLineWrapping.On,
+		minimap: { enabled: false },
 	});
 	viewport.layout({ width: 70, height: 60 });
 

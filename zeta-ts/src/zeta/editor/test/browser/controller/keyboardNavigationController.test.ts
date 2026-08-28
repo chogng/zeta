@@ -232,6 +232,7 @@ test("Keyboard controller moves by measured visual rows when soft wrapping is en
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
 		lineWrapping: EditorLineWrapping.On,
+		minimap: { enabled: false },
 	});
 	viewport.layout({ width: 70, height: 40 });
 	using keyboard = new KeyboardNavigationController(

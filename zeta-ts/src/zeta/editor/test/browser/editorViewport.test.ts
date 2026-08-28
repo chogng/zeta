@@ -283,7 +283,7 @@ test("EditorViewport renders a canvas minimap and maps a primary click to docume
 	viewport.element.dispatchEvent(new dom.window.Event("scroll"));
 	assert.equal(viewport.viewportLayout.scrollPosition.top, 1950);
 	assert.equal(minimap.style.transform, "translate3d(254px, 1950px, 0)");
-	assert.equal(requiredElement<HTMLElement>(minimap, ".stanza-editor-minimap-slider").style.transform, "translate3d(0, 48.75px, 0)");
+	assert.equal(requiredElement<HTMLElement>(minimap, ".stanza-editor-minimap-slider").style.transform, "translate3d(0, 45px, 0)");
 
 	minimap.dispatchEvent(new dom.window.MouseEvent("pointerdown", {
 		bubbles: true,
@@ -291,8 +291,8 @@ test("EditorViewport renders a canvas minimap and maps a primary click to docume
 		button: 0,
 		clientY: 75,
 	}));
-	assert.equal(viewport.viewportLayout.scrollPosition.top, 2925);
-	assert.equal(requiredElement<HTMLElement>(minimap, ".stanza-editor-minimap-slider").style.transform, "translate3d(0, 73.125px, 0)");
+	assert.equal(viewport.viewportLayout.scrollPosition.top, 2210);
+	assert.equal(requiredElement<HTMLElement>(minimap, ".stanza-editor-minimap-slider").style.transform, "translate3d(0, 51px, 0)");
 
 	dom.window.document.dispatchEvent(new dom.window.MouseEvent("pointermove", {
 		bubbles: true,

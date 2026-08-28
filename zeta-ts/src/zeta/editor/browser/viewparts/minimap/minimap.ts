@@ -14,6 +14,7 @@ import { EditorViewPart, type EditorRenderingContext } from '../../view/viewPart
 import type { DiagnosticOverviewMarker } from '../overviewRuler/diagnosticOverviewMarkers.js';
 import type { DiffOverviewMarker } from '../overviewRuler/diffOverviewMarkers.js';
 import { MinimapCharRendererFactory } from './minimapCharRendererFactory.js';
+import { MinimapRenderLayout } from './minimapLayout.js';
 
 type MinimapMarker = DiagnosticOverviewMarker | DiffOverviewMarker;
 
@@ -23,6 +24,8 @@ interface MinimapOptions {
 	readonly options: EditorMinimapOptions;
 	readonly semanticTokenSource?: SemanticTokenSource;
 	readonly tabSize: number;
+	readonly paddingTop: number;
+	readonly paddingBottom: number;
 	readonly readLayout: () => EditorViewportLayout;
 	readonly readMinimapLayout: () => EditorMinimapLayoutInfo;
 	readonly readVisualProjection: () => EditorVisualLineProjection;
@@ -41,6 +44,7 @@ export class Minimap extends EditorViewPart {
 	private readonly slider: HTMLDivElement;
 	private readonly options: MinimapOptions;
 	private pointerId: number | undefined;
+	private pointerSliderOffset: number | undefined;
 	private renderedCanvasKey = '';
 	private renderedMarkersKey = '';
 	private semanticTokensRevision = 0;
@@ -87,6 +91,7 @@ export class Minimap extends EditorViewPart {
 		if (!visible) return;
 
 		const layout = context.layout;
+		const renderLayout = this.createRenderLayout(layout, minimapLayout);
 		this.updateScrollAutohide(layout.scrollPosition.top);
 		this.root.setTransform(`translate3d(${layout.scrollPosition.left + minimapLayout.minimapLeft}px, ${layout.scrollPosition.top}px, 0)`);
 		this.root.setWidth(minimapLayout.minimapWidth);
@@ -96,21 +101,21 @@ export class Minimap extends EditorViewPart {
 		if (this.canvas.width !== minimapLayout.minimapCanvasInnerWidth) this.canvas.width = minimapLayout.minimapCanvasInnerWidth;
 		if (this.canvas.height !== minimapLayout.minimapCanvasInnerHeight) this.canvas.height = minimapLayout.minimapCanvasInnerHeight;
 
-		this.renderSlider(layout, minimapLayout);
+		this.renderSlider(renderLayout);
 		const layoutKey = minimapLayoutKey(minimapLayout);
-		const canvasKey = `${layout.modelVersion}:${this.options.readProjectionRevision()}:${this.semanticTokensRevision}:${layoutKey}`;
+		const canvasKey = `${layout.modelVersion}:${this.options.readProjectionRevision()}:${this.semanticTokensRevision}:${layoutKey}:${renderLayout.key}`;
 		if (this.renderedCanvasKey !== canvasKey) {
-			this.renderCanvas(minimapLayout);
+			this.renderCanvas(minimapLayout, renderLayout);
 			this.renderedCanvasKey = canvasKey;
 		}
-		const markerKey = `${this.options.readMarkersRevision()}:${this.options.readVisualProjection().visualLineCount}:${layoutKey}`;
+		const markerKey = `${this.options.readMarkersRevision()}:${this.options.readProjectionRevision()}:${layoutKey}:${renderLayout.key}`;
 		if (this.renderedMarkersKey !== markerKey) {
-			this.renderMarkers(minimapLayout);
+			this.renderMarkers(renderLayout);
 			this.renderedMarkersKey = markerKey;
 		}
 	}
 
-	private renderCanvas(layout: EditorMinimapLayoutInfo): void {
+	private renderCanvas(layout: EditorMinimapLayoutInfo, renderLayout: MinimapRenderLayout): void {
 		const ownerWindow = this.canvas.ownerDocument.defaultView;
 		if (!ownerWindow || !('CanvasRenderingContext2D' in ownerWindow)) return;
 		const context = this.canvas.getContext('2d');
@@ -126,18 +131,20 @@ export class Minimap extends EditorViewPart {
 		const charRenderer = MinimapCharRendererFactory.create(layout.minimapScale, fontFamily, this.canvas.ownerDocument);
 		const projection = this.options.readVisualProjection();
 		const visualLineCount = projection.visualLineCount;
-		const rowCount = Math.min(visualLineCount, Math.max(0, Math.floor(height / layout.minimapLineHeight)));
+		const rowCount = layout.minimapIsSampling
+			? Math.min(visualLineCount, Math.max(0, Math.floor((height - renderLayout.topPaddingInnerHeight - renderLayout.bottomPaddingInnerHeight) / layout.minimapLineHeight)))
+			: renderLayout.endVisualLineIndexExclusive - renderLayout.startVisualLineIndex;
 		for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
 			const visualLineIndex = layout.minimapIsSampling
 				? Math.min(visualLineCount - 1, Math.floor(rowIndex * visualLineCount / rowCount))
-				: rowIndex;
+				: renderLayout.startVisualLineIndex + rowIndex;
 			const visualLine = projection.lineAt(visualLineIndex);
 			if (!visualLine) continue;
 			const lineText = this.options.model.getLineContent(visualLine.logicalLineIndex);
 			const tokens = this.options.semanticTokenSource?.getLineTokens(visualLine.logicalLineIndex) ?? [];
 			this.renderLine(
 				imageData,
-				rowIndex * layout.minimapLineHeight,
+				renderLayout.topPaddingInnerHeight + rowIndex * layout.minimapLineHeight,
 				lineText.slice(visualLine.startColumn, visualLine.endColumn),
 				visualLine.startColumn,
 				tokens,
@@ -195,63 +202,93 @@ export class Minimap extends EditorViewPart {
 		}
 	}
 
-	private renderMarkers(layout: EditorMinimapLayoutInfo): void {
+	private renderMarkers(renderLayout: MinimapRenderLayout): void {
 		const fragment = this.domNode.ownerDocument.createDocumentFragment();
-		const visualLineCount = this.options.readVisualProjection().visualLineCount;
-		const outerScale = layout.minimapCanvasOuterHeight / Math.max(1, visualLineCount);
+		const projection = this.options.readVisualProjection();
 		for (const marker of this.options.readMarkers()) {
+			const startVisualLineIndex = projection.firstVisualLineIndex(marker.startLineIndex);
+			const endVisualLineIndexExclusive = marker.endLineIndexExclusive >= projection.logicalLineCount
+				? projection.visualLineCount
+				: projection.firstVisualLineIndex(marker.endLineIndexExclusive);
+			const span = renderLayout.lineSpan(startVisualLineIndex, Math.max(startVisualLineIndex + 1, endVisualLineIndexExclusive));
+			if (!span) continue;
 			const element = h(this.domNode.ownerDocument, 'span');
-			element.className = `stanza-editor-minimap-marker ${marker.presentation}`;
-			element.style.top = `${marker.startLineIndex * outerScale}px`;
-			element.style.height = `${Math.max(2, (marker.endLineIndexExclusive - marker.startLineIndex) * outerScale)}px`;
+			element.className = `stanza-editor-minimap-diagnostic-marker ${marker.presentation}`;
+			element.style.top = `${span.top}px`;
+			element.style.height = `${Math.max(2, span.height)}px`;
 			if (marker.hoverText !== undefined) element.title = marker.hoverText;
 			fragment.append(element);
 		}
 		reset(this.markerLayer, fragment);
 	}
 
-	private renderSlider(layout: EditorViewportLayout, minimapLayout: EditorMinimapLayoutInfo): void {
-		const maximumScrollTop = layout.maximumScrollPosition.top;
-		if (maximumScrollTop === 0 || layout.contentSize.height <= 0) {
+	private renderSlider(layout: MinimapRenderLayout): void {
+		if (!layout.sliderNeeded) {
 			this.slider.hidden = true;
 			return;
 		}
 		this.slider.hidden = false;
-		const canvasHeight = minimapLayout.minimapCanvasOuterHeight;
-		const sliderHeight = Math.max(2, Math.min(canvasHeight, canvasHeight * layout.viewportSize.height / layout.contentSize.height));
-		const top = layout.scrollPosition.top / maximumScrollTop * Math.max(0, canvasHeight - sliderHeight);
-		this.slider.style.height = `${sliderHeight}px`;
-		this.slider.style.transform = `translate3d(0, ${top}px, 0)`;
+		this.slider.style.height = `${layout.sliderHeight}px`;
+		this.slider.style.transform = `translate3d(0, ${layout.sliderTop}px, 0)`;
 	}
 
 	private handlePointerDown(event: PointerEvent): void {
 		if (event.button !== 0) return;
 		const layout = this.options.readLayout();
 		if (layout.viewportSize.height <= 0) return;
+		const minimapLayout = this.options.readMinimapLayout();
+		const renderLayout = this.createRenderLayout(layout, minimapLayout);
+		const canvasOffset = this.canvasOffsetAt(event.clientY, layout, minimapLayout);
+		const hitsSlider = renderLayout.sliderNeeded
+			&& canvasOffset >= renderLayout.sliderTop
+			&& canvasOffset <= renderLayout.sliderTop + renderLayout.sliderHeight;
+		this.pointerSliderOffset = undefined;
+		if (renderLayout.sliderNeeded) {
+			this.pointerSliderOffset = hitsSlider ? canvasOffset - renderLayout.sliderTop : renderLayout.sliderHeight / 2;
+		}
 		this.pointerId = readPointerId(event);
 		this.domNode.classList.add('dragging');
 		event.preventDefault();
-		this.scrollAt(event.clientY, layout);
+		if (!hitsSlider) {
+			this.options.scrollTo({ left: layout.scrollPosition.left, top: renderLayout.scrollTopAt(canvasOffset) });
+		}
 	}
 
 	private handlePointerMove(event: PointerEvent): void {
 		if (this.pointerId === undefined || readPointerId(event) !== this.pointerId) return;
 		event.preventDefault();
-		this.scrollAt(event.clientY, this.options.readLayout());
+		const layout = this.options.readLayout();
+		const minimapLayout = this.options.readMinimapLayout();
+		const renderLayout = this.createRenderLayout(layout, minimapLayout);
+		const canvasOffset = this.canvasOffsetAt(event.clientY, layout, minimapLayout);
+		const top = this.pointerSliderOffset === undefined
+			? renderLayout.scrollTopAt(canvasOffset)
+			: renderLayout.scrollTopAtSliderPosition(canvasOffset, this.pointerSliderOffset);
+		this.options.scrollTo({ left: layout.scrollPosition.left, top });
 	}
 
 	private handlePointerEnd(event: PointerEvent): void {
 		if (this.pointerId === undefined || readPointerId(event) !== this.pointerId) return;
 		this.pointerId = undefined;
+		this.pointerSliderOffset = undefined;
 		this.domNode.classList.remove('dragging');
 	}
 
-	private scrollAt(clientY: number, layout: EditorViewportLayout): void {
-		if (!Number.isFinite(clientY) || layout.viewportSize.height <= 0) return;
+	private canvasOffsetAt(clientY: number, layout: EditorViewportLayout, minimapLayout: EditorMinimapLayoutInfo): number {
+		if (!Number.isFinite(clientY) || layout.viewportSize.height <= 0) return 0;
 		const bounds = this.domNode.getBoundingClientRect();
 		const renderedHeight = bounds.height > 0 ? bounds.height : layout.viewportSize.height;
-		const fraction = clamp((clientY - bounds.top) / renderedHeight, 0, 1);
-		this.options.scrollTo({ left: layout.scrollPosition.left, top: fraction * layout.maximumScrollPosition.top });
+		return clamp((clientY - bounds.top) / renderedHeight, 0, 1) * minimapLayout.minimapCanvasOuterHeight;
+	}
+
+	private createRenderLayout(editorLayout: EditorViewportLayout, minimapLayout: EditorMinimapLayoutInfo): MinimapRenderLayout {
+		return MinimapRenderLayout.create({
+			editorLayout,
+			minimapLayout,
+			visualLineCount: this.options.readVisualProjection().visualLineCount,
+			paddingTop: this.options.paddingTop,
+			paddingBottom: this.options.paddingBottom,
+		});
 	}
 }
 

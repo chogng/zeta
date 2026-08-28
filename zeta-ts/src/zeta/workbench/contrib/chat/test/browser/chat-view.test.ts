@@ -25,7 +25,7 @@ import { emptyEditorServiceState } from '../../../../../workbench/test/common/te
 import { IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent } from "../../../../../workbench/services/layout/browser/layoutService.js";
 import { ChatService } from "../../../../../workbench/services/chat/browser/chatService.js";
 import { ChatContextPickService } from "../../../../../workbench/services/chat/browser/chatContextPickService.js";
-import type { TurnError } from "../../../../../workbench/services/chat/common/chatService.js";
+import type { ThreadUpdateEnvelope, TurnError } from "../../../../../workbench/services/chat/common/chatService.js";
 import { ModelCatalogConfiguration } from "../../../../../workbench/services/chat/common/modelCatalog.js";
 import { WorkbenchConfigurationService } from "../../../../../workbench/services/configuration/browser/configurationService.js";
 import { AppServerSessionsManagementService } from "../../../../../sessions/services/sessions/browser/appServerSessionsManagementService.js";
@@ -1355,6 +1355,40 @@ interface FakeOptions {
 function createChatService(api: IRendererHost, configurationService?: WorkbenchConfigurationService): ChatService {
 	return new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events, ...(configurationService ? { configurationService } : {}) });
 }
+
+test("Chat service accepts committed fork-history import notifications", () => {
+	const fake = fakeApi();
+	using chat = createChatService(fake.api);
+	const updates: ThreadUpdateEnvelope[] = [];
+	using listener = chat.onDidUpdateThread(update => updates.push(update));
+
+	fake.emit({
+		method: "session/thread/update",
+		params: {
+			sessionId: "session-1",
+			threadId: "thread-1",
+			durableSequence: 2,
+			update: {
+				type: "committed",
+				event: {
+					type: "forkHistoryImported",
+					threadId: "thread-1",
+					sourceThreadId: "thread-source",
+					sourceSequence: 7,
+					turns: [],
+				},
+			},
+		},
+	});
+
+	assert.deepEqual(updates, [{
+		sessionId: "session-1",
+		threadId: "thread-1",
+		durableSequence: 2,
+		streamCursor: undefined,
+		update: { type: "committed", event: { type: "forkHistoryImported" } },
+	}]);
+});
 
 test("Chat service projects unique enabled Skills and submits the exact pinned reference", async () => {
 	const commit = {

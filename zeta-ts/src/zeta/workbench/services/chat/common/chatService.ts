@@ -136,6 +136,7 @@ export type ThreadCommittedEvent =
 		| "turnExecutionBound"
 		| "agentContextSeedCommitted"
 		| "historyImported"
+		| "forkHistoryImported"
 		| "contextCheckpointCommitted"
 		| "contextOverflowRecoveryCommitted"
 		| "turnAccepted"

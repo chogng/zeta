@@ -39,7 +39,7 @@
   pointer-events: none;
 }
 
-.stanza-editor-minimap-marker {
+.stanza-editor-minimap-diagnostic-marker {
   position: absolute;
   right: 0;
   z-index: 2;
@@ -47,31 +47,31 @@
   min-height: 2px;
 }
 
-.stanza-editor-minimap-marker.error-underline {
+.stanza-editor-minimap-diagnostic-marker.error-underline {
   background: var(--zeta-error-foreground);
 }
 
-.stanza-editor-minimap-marker.warning-underline {
+.stanza-editor-minimap-diagnostic-marker.warning-underline {
   background: var(--zeta-warning-foreground);
 }
 
-.stanza-editor-minimap-marker.information-underline {
+.stanza-editor-minimap-diagnostic-marker.information-underline {
   background: var(--zeta-focus-border);
 }
 
-.stanza-editor-minimap-marker.hint-underline {
+.stanza-editor-minimap-diagnostic-marker.hint-underline {
   background: var(--zeta-description-foreground);
 }
 
-.stanza-editor-minimap-marker.diff-added {
+.stanza-editor-minimap-diagnostic-marker.diff-added {
   background: var(--zeta-diff-editor-inserted-line-marker);
 }
 
-.stanza-editor-minimap-marker.diff-modified {
+.stanza-editor-minimap-diagnostic-marker.diff-modified {
   background: var(--zeta-focus-border);
 }
 
-.stanza-editor-minimap-marker.diff-deleted {
+.stanza-editor-minimap-diagnostic-marker.diff-deleted {
   background: var(--zeta-diff-editor-removed-line-marker);
 }
 

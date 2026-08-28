@@ -52,6 +52,33 @@ test('EditorView gives its input context a stable owner id and releases it', () 
 	dom.window.close();
 });
 
+test('EditorView refreshes minimap canvas dimensions when the window pixel ratio changes', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = dom.window.document.querySelector('main')!;
+	Object.defineProperty(dom.window, 'devicePixelRatio', { configurable: true, value: 2 });
+	using model = new TextModel('alpha\nbeta');
+	using selections = new EditorSelectionController(
+		model,
+		TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))),
+	);
+	using view = new EditorView({
+		container,
+		model,
+		selectionController: selections,
+		lineHeight: 20,
+		viewport: { textMeasurer: new FixedTextMeasurer() },
+	});
+
+	view.viewport.layout({ width: 800, height: 600 });
+	const canvas = view.viewport.element.querySelector<HTMLCanvasElement>('.stanza-editor-minimap-canvas')!;
+	const highDensityWidth = canvas.width;
+	Object.defineProperty(dom.window, 'devicePixelRatio', { configurable: true, value: 1 });
+	view.viewport.layout({ width: 800, height: 600 });
+
+	assert.equal(highDensityWidth, canvas.width * 2);
+	dom.window.close();
+});
+
 class FixedTextMeasurer implements TextMeasurer {
 	readonly horizontalPadding = 24;
 	readonly contentLeftPadding = 12;

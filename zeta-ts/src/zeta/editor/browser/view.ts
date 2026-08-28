@@ -421,7 +421,6 @@ export class View extends Disposable {
 	private readonly indentation: ResolvedEditorIndentationOptions;
 	private readonly minimap: EditorMinimapOptions;
 	private readonly minimapLayoutMemory = new ComputeOptionsMemory();
-	private readonly pixelRatio: number;
 	private readonly viewLineOptions: ViewLineOptions;
 	private readonly elementSizeObserver: ElementSizeObserver;
 	private softWrapping: boolean;
@@ -452,7 +451,6 @@ export class View extends Disposable {
 			...options.minimap,
 			enabled: options.minimap?.enabled ?? this.presentation === 'document',
 		}) as EditorMinimapOptions;
-		this.pixelRatio = Math.max(1, ownerDocument.defaultView?.devicePixelRatio ?? 1);
 		this.softWrapping = options.lineWrapping === EditorLineWrapping.On;
 		try {
 			this.indentation = resolveEditorIndentationOptions(options.indentation);
@@ -635,6 +633,8 @@ export class View extends Disposable {
 			options: this.minimap,
 			semanticTokenSource: options.semanticTokenSource,
 			tabSize: this.indentation.tabSize,
+			paddingTop: this.padding.top,
+			paddingBottom: this.padding.bottom,
 			readLayout: () => this.viewport.layout,
 			readMinimapLayout: () => this.computeMinimapLayout(this.viewport.layout.viewportSize.width, this.viewport.layout.viewportSize.height),
 			readVisualProjection: () => this.visualProjection,
@@ -1024,7 +1024,7 @@ export class View extends Disposable {
 			outerHeight: viewportHeight,
 			lineHeight: this.viewport.layout.lineHeight,
 			typicalHalfwidthCharacterWidth: Math.max(1, this.textMeasurer.measureLineWidth('n')),
-			pixelRatio: this.pixelRatio,
+			pixelRatio: Math.max(1, this.element.ownerDocument.defaultView?.devicePixelRatio ?? 1),
 			scrollBeyondLastLine: false,
 			paddingTop: this.padding.top,
 			paddingBottom: this.padding.bottom,
