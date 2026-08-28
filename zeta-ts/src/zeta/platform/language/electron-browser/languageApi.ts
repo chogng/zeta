@@ -1,5 +1,5 @@
 import type { LanguageCodeActionDto, LanguageCodeActionsResult, LanguageCodeLensesResult, LanguageColorPresentationsResult, LanguageCompletionDetailsResult, LanguageCompletionsResult, LanguageDocumentColorsResult, LanguageDocumentDiagnosticsResult, LanguageDocumentLinksResult, LanguageDocumentSymbolsResult, LanguageFoldingRangesResult, LanguageFormattingResult, LanguageHierarchyResultDto, LanguageHoverResult, LanguageInlayHintsResult, LanguageLinkedEditingRangesResult, LanguageLocationsResult, LanguagePrepareRenameResult, LanguageSemanticTokensResult, LanguageSignatureHelpResult, LanguageWorkspaceDiagnosticsResult, LanguageWorkspaceEditDto, LanguageWorkspaceSymbolsResult } from "../../../../../generated/app-server/types.js";
-import { CancellationError } from "../../../base/common/cancellation.js";
+import { CancellationError } from "../../../base/common/errors.js";
 import { invoke } from "../../ipc/electron-browser/rendererIpc.js";
 import type { ILanguageApi, LanguageRequestOptions } from "../common/languageApi.js";
 

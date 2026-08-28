@@ -1,4 +1,4 @@
-import { isCancellationError } from "../../../../base/common/cancellation.js";
+import { isCancellationError } from "../../../../base/common/errors.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type Event } from "../../../../base/common/event.js";
 import { type SyntaxService } from "../../../common/languages/syntax/syntaxService.js";

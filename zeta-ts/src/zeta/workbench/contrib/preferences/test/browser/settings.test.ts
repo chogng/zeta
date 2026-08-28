@@ -35,7 +35,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { h } = await import('../../../../../base/browser/dom.js');
-const { noEvent } = await import('../../../../../base/common/event.js');
+const { Event } = await import('../../../../../base/common/event.js');
 const { DisposableStore } = await import('../../../../../base/common/lifecycle.js');
 const { ConfigurationRegistry } = await import('../../../../../platform/configuration/common/configurationRegistry.js');
 const { IClipboardService: ClipboardServiceId } = await import('../../../../../platform/clipboard/common/clipboardService.js');
@@ -71,7 +71,7 @@ const { DefaultSettings, SettingsEditorModel } = await import('../../../../../wo
 const { WorkbenchConfigurationService } = await import('../../../../../workbench/services/configuration/browser/configurationService.js');
 
 const localizationService: ILocalizationService = {
-	onDidChange: noEvent,
+	onDidChange: Event.None,
 	whenReady: Promise.resolve(),
 	translate: (_bundle, _key, fallback) => fallback,
 };
@@ -263,8 +263,8 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 		},
 	};
 	const contextMenuProvider: ContextMenuService = {
-		onDidShowContextMenu: noEvent,
-		onDidHideContextMenu: noEvent,
+		onDidShowContextMenu: Event.None,
+		onDidHideContextMenu: Event.None,
 		showContextMenu: options => {
 			menuActions = 'actions' in options ? options.actions : [];
 			hideMenu = 'onHide' in options ? options.onHide : undefined;

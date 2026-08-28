@@ -104,6 +104,11 @@ export interface EditorBrowserOptions {
 	readonly minimap?: EditorMinimap;
 	readonly activeLineHighlight?: EditorActiveLineHighlight;
 	readonly showLineNumbers?: boolean;
+	readonly occurrencesHighlight?: 'off' | 'singleFile' | 'multiFile';
+	readonly occurrencesHighlightDelay?: number;
+	readonly selectionHighlight?: boolean;
+	readonly selectionHighlightMultiline?: boolean;
+	readonly selectionHighlightMaxLength?: number;
 	readonly glyphMargin?: boolean;
 	readonly showSymbolIcons?: boolean;
 	readonly rulers?: readonly EditorRuler[];
@@ -370,6 +375,15 @@ function validateOptions(options: EditorBrowserOptions): void {
 	if (options.insertFinalNewLine !== undefined && typeof options.insertFinalNewLine !== "boolean") {
 		throw new TypeError("Editor final newline option must be boolean");
 	}
+	if (options.occurrencesHighlight !== undefined && options.occurrencesHighlight !== "off" && options.occurrencesHighlight !== "singleFile" && options.occurrencesHighlight !== "multiFile") {
+		throw new TypeError("Editor occurrences highlight option is invalid");
+	}
+	if (options.occurrencesHighlightDelay !== undefined && (!Number.isSafeInteger(options.occurrencesHighlightDelay) || options.occurrencesHighlightDelay < 0 || options.occurrencesHighlightDelay > 2_000)) {
+		throw new RangeError("Editor occurrences highlight delay must be an integer between 0 and 2000");
+	}
+	if (options.selectionHighlightMaxLength !== undefined && (!Number.isSafeInteger(options.selectionHighlightMaxLength) || options.selectionHighlightMaxLength < 0)) {
+		throw new RangeError("Editor selection highlight maximum length must be a non-negative integer");
+	}
 	for (const [name, value] of [
 		["line numbers", options.showLineNumbers],
 		["glyph margin", options.glyphMargin],
@@ -383,6 +397,8 @@ function validateOptions(options: EditorBrowserOptions): void {
 		["inlay hints", options.inlayHints],
 		["CodeLens", options.codeLens],
 		["format on save", options.formatOnSave],
+		["selection highlight", options.selectionHighlight],
+		["multiline selection highlight", options.selectionHighlightMultiline],
 	] as const) {
 		if (value !== undefined && typeof value !== "boolean") throw new TypeError(`Editor ${name} option must be boolean`);
 	}

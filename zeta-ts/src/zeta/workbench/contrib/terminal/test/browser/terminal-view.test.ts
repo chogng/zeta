@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import type { IAction } from "../../../../../base/common/actions.js";
-import { noEvent } from "../../../../../base/common/event.js";
+import { Event } from "../../../../../base/common/event.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import type { ITerminalInstance } from "../../../../../workbench/services/terminal/common/terminal.js";
 
@@ -48,8 +48,8 @@ let shownProfileActions: readonly IAction[] = [];
 let shownProfileAnchor: unknown;
 
 const contextMenuService: IContextMenuService = {
-	onDidShowContextMenu: noEvent,
-	onDidHideContextMenu: noEvent,
+	onDidShowContextMenu: Event.None,
+	onDidHideContextMenu: Event.None,
 	showContextMenu(options) {
 		shownProfileActions = "actions" in options ? options.actions : [];
 		shownProfileAnchor = "actions" in options ? options.anchor : undefined;

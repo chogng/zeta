@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import type { IAction } from "../../../../../base/common/actions.js";
-import { noEvent } from "../../../../../base/common/event.js";
+import { Event } from "../../../../../base/common/event.js";
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import { OutputService } from "../../../../../workbench/services/output/browser/outputService.js";
@@ -15,8 +15,8 @@ test("Output projects channel selection and active-channel clearing into the Pan
 	const installedGlobals = installDomGlobals(browser);
 	let shownActions: readonly IAction[] = [];
 	const contextMenus: IContextMenuService = {
-		onDidShowContextMenu: noEvent,
-		onDidHideContextMenu: noEvent,
+		onDidShowContextMenu: Event.None,
+		onDidHideContextMenu: Event.None,
 		showContextMenu: options => { shownActions = "actions" in options ? options.actions : []; },
 		hideContextMenu() {},
 	};
@@ -59,9 +59,9 @@ test("Tasks projects its refresh action into the Panel title", async () => {
 		tasks: [],
 		activeRuns: [],
 		lastRun: undefined,
-		onDidChangeTasks: noEvent,
-		onDidStartTask: noEvent,
-		onDidChangeTaskRun: noEvent,
+		onDidChangeTasks: Event.None,
+		onDidStartTask: Event.None,
+		onDidChangeTaskRun: Event.None,
 		registerTaskProvider: () => toDisposable(() => undefined),
 		registerTaskProviders: () => ({ replace() {}, dispose() {}, [Symbol.dispose]() {} }),
 		refresh: async () => { refreshCount += 1; return []; },

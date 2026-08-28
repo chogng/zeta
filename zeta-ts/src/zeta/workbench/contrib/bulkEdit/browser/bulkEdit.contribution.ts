@@ -1,5 +1,5 @@
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { isCancellationError } from "../../../../base/common/cancellation.js";
+import { isCancellationError } from "../../../../base/common/errors.js";
 import { type LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
 import { ITextModelService } from "../../../../editor/common/services/textModelService.js";
 import { IDialogService } from "../../../../platform/dialogs/common/dialogs.js";

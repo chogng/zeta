@@ -8,7 +8,7 @@ import type {
 	IMenubarControl,
 } from "../../../../../../workbench/browser/parts/titlebar/menubarControl.js";
 import { h } from "../../../../../../base/browser/dom.js";
-import { noEvent } from "../../../../../../base/common/event.js";
+import { Event } from "../../../../../../base/common/event.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -56,8 +56,8 @@ const { BrowserMenubarControl } = await import(
 );
 
 const contextMenuService: IContextMenuService = {
-	onDidShowContextMenu: noEvent,
-	onDidHideContextMenu: noEvent,
+	onDidShowContextMenu: Event.None,
+	onDidHideContextMenu: Event.None,
 	showContextMenu() {},
 	hideContextMenu() {},
 };
@@ -227,8 +227,8 @@ test("browser titlebar uses one icon trigger for the application menus", () => {
 
 	let menuLabels: readonly string[] = [];
 	const menuContextService: IContextMenuService = {
-		onDidShowContextMenu: noEvent,
-		onDidHideContextMenu: noEvent,
+		onDidShowContextMenu: Event.None,
+		onDidHideContextMenu: Event.None,
 		showContextMenu(options) {
 			if ("actions" in options) {
 				menuLabels = options.actions.map((action) => action.label);

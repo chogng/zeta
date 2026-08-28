@@ -20,7 +20,6 @@ export const TextEditorCapability = Object.freeze({
 	documentSymbolProviders: capability<readonly LanguageDocumentSymbolProvider[]>("editor.capability.documentSymbolProviders"),
 	folding: capability<EditorFoldingModel>("editor.capability.folding"),
 	languageLexicalContext: capability<LanguageLexicalContextSource>("editor.capability.languageLexicalContext"),
-	occurrenceDecorations: capability<TextDecorationCollection<void>>("editor.capability.occurrenceDecorations"),
 	rustSyntaxFacts: capability<RustSyntaxFactsService | undefined>("editor.capability.rustSyntaxFacts"),
 	searchDecorations: capability<TextDecorationCollection<void>>("editor.capability.searchDecorations"),
 	semanticTokenSource: capability<SemanticTokenSource>("editor.capability.semanticTokenSource"),

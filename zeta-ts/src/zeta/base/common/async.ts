@@ -1,4 +1,4 @@
-import { CancellationError } from './cancellation.js';
+import { CancellationError } from './errors.js';
 
 export interface CancelablePromise<T> extends Promise<T> {
 	cancel(): void;

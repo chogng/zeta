@@ -2,7 +2,7 @@ import { shell } from "electron";
 import { app, BrowserWindow, dialog, ipcMain, Menu, screen, type Event as ElectronEvent } from "electron/main";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { isCancellationError } from "../../base/common/cancellation.js";
+import { isCancellationError } from "../../base/common/errors.js";
 import { Disposable, DisposableStore, DisposableTracker, installDisposableTracker, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { assertDefined } from "../../base/common/types.js";
 import { ZetaApplicationName } from '../common/application.js';

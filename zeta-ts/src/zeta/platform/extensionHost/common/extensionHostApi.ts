@@ -1,5 +1,6 @@
 import { VSBuffer } from "../../../base/common/buffer.js";
-import { CancellationError, throwIfCancelled } from "../../../base/common/cancellation.js";
+import { throwIfCancelled } from "../../../base/common/cancellation.js";
+import { CancellationError } from "../../../base/common/errors.js";
 import type { AppServerConnectionState } from "../../app-server/common/appServerApi.js";
 import type { DisposableHandle } from "../../ipc/common/ipc.js";
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { h } from "../../../../base/browser/dom.js";
-import { noEvent } from "../../../../base/common/event.js";
+import { Event } from "../../../../base/common/event.js";
 
 test("toolbar submenu items retain toolbar button semantics", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
@@ -427,7 +427,7 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 		menus,
 		{
 			inChordMode: false,
-			onDidUpdateKeybindings: noEvent,
+			onDidUpdateKeybindings: Event.None,
 			resolveKeybinding() { throw new Error("Not used"); },
 			resolveUserBinding() { return undefined; },
 			lookupKeybindings() { return []; },

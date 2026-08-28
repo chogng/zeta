@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { isCancellationError } from "../../../../base/common/cancellation.js";
+import { isCancellationError } from "../../../../base/common/errors.js";
 import { runServerHostRemoteCommand } from "../../../../platform/remote/electron-main/serverHostRemoteCommand.js";
 
 test("command observer failures reject the command instead of escaping the process event handler", async () => {

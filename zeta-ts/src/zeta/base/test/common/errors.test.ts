@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { CancellationError } from '../../common/cancellation.js';
-import { BugIndicatingError, ErrorHandler, errorHandler, getErrorMessage, onBugIndicatingError, onUnexpectedError, setUnexpectedErrorHandler, toError } from '../../common/errors.js';
+import { BugIndicatingError, CancellationError, ErrorHandler, errorHandler, getErrorMessage, onBugIndicatingError, onUnexpectedError, setUnexpectedErrorHandler, toError } from '../../common/errors.js';
 
 test('toError preserves Error instances', () => {
 	const error = new TypeError('failure');

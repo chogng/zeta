@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CancellationError } from "../../../../base/common/cancellation.js";
+import { CancellationError } from "../../../../base/common/errors.js";
 import { invokeExtensionHost, normalizeExtensionHostPayload, normalizeExtensionHostSnapshot, type ExtensionHostInvocationRequest, type JsonValue } from "../../common/extensionHostApi.js";
 
 const DIGEST = `sha256:${"a".repeat(64)}`;

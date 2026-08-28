@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Emitter, noEvent } from "../../../../../base/common/event.js";
+import { Emitter, Event } from "../../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { FileKind, FileNotFoundError, type IFileBytes, type IFileService, type IFileStat, type IFileWriteResult } from "../../../../../platform/files/common/files.js";
@@ -18,7 +18,7 @@ test("TaskService discovers tasks, writes one terminal command, and tracks its e
 		"Cargo.toml": "[workspace]",
 	});
 	const workspace: IWorkspaceContextService = {
-		onDidChangeWorkspace: noEvent,
+		onDidChangeWorkspace: Event.None,
 		getWorkspace: () => ({ id: "workspace", folders: [{ id: "workspace", uri: root, name: "project", index: 0 }] }),
 		getWorkbenchState: () => 2,
 	};
@@ -52,7 +52,7 @@ test("TaskService discovers tasks, writes one terminal command, and tracks its e
 test("TaskService atomically owns dynamic providers and merges their tasks on refresh", async () => {
 	const root = URI.file("C:\\project");
 	const files = new FakeFileService(root, { ".vscode/tasks.json": '{"version":"2.0.0","tasks":[{"label":"Build","command":"build","group":"build"}]}' });
-	const workspace: IWorkspaceContextService = { onDidChangeWorkspace: noEvent, getWorkspace: () => ({ id: "workspace", folders: [{ id: "workspace", uri: root, name: "project", index: 0 }] }), getWorkbenchState: () => 2 };
+	const workspace: IWorkspaceContextService = { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: "workspace", folders: [{ id: "workspace", uri: root, name: "project", index: 0 }] }), getWorkbenchState: () => 2 };
 	using terminals = new FakeTerminalService();
 	using service = new TaskService(files, workspace, terminals);
 	const registration = service.registerTaskProviders([{ id: "demo.provider", provideTasks: () => [{ id: "verify", label: "Verify", command: "demo --verify", group: "test" }] }]);
@@ -77,7 +77,7 @@ test("TaskService atomically owns dynamic providers and merges their tasks on re
 
 test("TaskService retains the last good task set when a provider refresh fails", async () => {
 	const root = URI.file("C:\\project");
-	const workspace: IWorkspaceContextService = { onDidChangeWorkspace: noEvent, getWorkspace: () => ({ id: "workspace", folders: [{ id: "workspace", uri: root, name: "project", index: 0 }] }), getWorkbenchState: () => 2 };
+	const workspace: IWorkspaceContextService = { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: "workspace", folders: [{ id: "workspace", uri: root, name: "project", index: 0 }] }), getWorkbenchState: () => 2 };
 	using terminals = new FakeTerminalService();
 	using service = new TaskService(new FakeFileService(root, {}), workspace, terminals);
 	let fail = false;
@@ -93,7 +93,7 @@ test("TaskService retains the last good task set when a provider refresh fails",
 });
 
 class FakeFileService implements IFileService {
-	readonly onDidChangeFiles = noEvent;
+	readonly onDidChangeFiles = Event.None;
 	constructor(private readonly root: URI, private readonly files: Readonly<Record<string, string>>) {}
 	async stat(resource: URI) { const path = this.relative(resource); if (!(path in this.files)) throw new FileNotFoundError(resource); return { resource, kind: FileKind.File, sizeBytes: this.files[path]!.length, readonly: false, modifiedAtMillis: undefined }; }
 	async readFile(resource: URI) { const path = this.relative(resource); if (!(path in this.files)) throw new FileNotFoundError(resource); return { resource, content: this.files[path]!, revision: "1" }; }
@@ -111,9 +111,9 @@ class FakeTerminalService extends Disposable implements ITerminalService {
 	readonly instances: FakeTerminalInstance[] = [];
 	activeInstance: ITerminalInstance | undefined;
 	readonly onDidCreateInstance = this.createEmitter.event;
-	readonly onDidDisposeInstance = noEvent;
-	readonly onDidChangeInstances = noEvent;
-	readonly onDidChangeActiveInstance = noEvent;
+	readonly onDidDisposeInstance = Event.None;
+	readonly onDidChangeInstances = Event.None;
+	readonly onDidChangeActiveInstance = Event.None;
 	async getProfiles(): Promise<readonly ITerminalProfile[]> { return [{ profileId: "command-prompt", title: "Command Prompt", isDefault: true }]; }
 	async createTerminal(options: ITerminalCreateOptions): Promise<ITerminalInstance> { const terminal = this._register(new FakeTerminalInstance(`terminal-${this.instances.length + 1}`, options.workspaceFolderId ?? "folder", options.title ?? "Terminal")); this.instances.push(terminal); this.activeInstance = terminal; this.createEmitter.fire(terminal); return terminal; }
 	async relaunchTerminal() {}
@@ -128,10 +128,10 @@ class FakeTerminalInstance extends Disposable implements ITerminalInstance {
 	state: TerminalInstanceState = "running";
 	exitCode: number | undefined;
 	private readonly commandEmitter = this._register(new Emitter<ITerminalCommandStatusEvent>());
-	readonly onDidWriteData = noEvent;
+	readonly onDidWriteData = Event.None;
 	readonly onDidChangeCommandStatus = this.commandEmitter.event;
-	readonly onDidExit = noEvent;
-	readonly onDidChangeState = noEvent;
+	readonly onDidExit = Event.None;
+	readonly onDidChangeState = Event.None;
 	constructor(readonly id: string, readonly workspaceFolderId: string, readonly title: string) { super(); }
 	write(data: string): void { this.writes.push(data); }
 	resize(_dimensions: ITerminalDimensions): void {}

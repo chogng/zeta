@@ -12,7 +12,10 @@ import { type EditorLineRange } from "../../../common/viewModel.js";
 
 export enum DecorationPresentation {
 	SearchMatch = "search-match",
-	OccurrenceHighlight = "occurrence-highlight",
+	WordHighlight = "word-highlight",
+	WordHighlightStrong = "word-highlight-strong",
+	WordHighlightText = "word-highlight-text",
+	SelectionHighlight = "selection-highlight",
 	BracketMatch = "bracket-match",
 	ErrorUnderline = "error-underline",
 	WarningUnderline = "warning-underline",
@@ -248,7 +251,10 @@ function validatePresentation(
 ): void {
 	if (
 		presentation !== DecorationPresentation.SearchMatch &&
-		presentation !== DecorationPresentation.OccurrenceHighlight &&
+		presentation !== DecorationPresentation.WordHighlight &&
+		presentation !== DecorationPresentation.WordHighlightStrong &&
+		presentation !== DecorationPresentation.WordHighlightText &&
+		presentation !== DecorationPresentation.SelectionHighlight &&
 		presentation !== DecorationPresentation.BracketMatch &&
 		presentation !== DecorationPresentation.ErrorUnderline &&
 		presentation !== DecorationPresentation.WarningUnderline &&

@@ -1,4 +1,4 @@
-import { noEvent } from '../../../base/common/event.js';
+import { Event } from '../../../base/common/event.js';
 import { noneDisposable } from '../../../base/common/lifecycle.js';
 import type { IContextKeyService } from '../../../platform/contextkey/common/contextkey.js';
 import { WorkbenchState, type IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
@@ -33,17 +33,17 @@ export function createTestWorkbenchContextKeysHandler(contextKeyService: IContex
 const emptyGroup: EditorGroupState = Object.freeze({ id: 'test-group', editors: Object.freeze([]), activeEditorInstanceId: undefined });
 
 const emptyWorkspaceContextService: IWorkspaceContextService = Object.freeze({
-	onDidChangeWorkspace: noEvent,
+	onDidChangeWorkspace: Event.None,
 	getWorkspace: () => Object.freeze({ id: 'test-workspace', folders: Object.freeze([]) }),
 	getWorkbenchState: () => WorkbenchState.EMPTY,
 });
 
 const emptyEditorGroupsService: IEditorGroupsService = Object.freeze({
 	whenReady: Promise.resolve(),
-	onDidChangeGroups: noEvent,
-	onDidAddGroup: noEvent,
-	onDidRemoveGroup: noEvent,
-	onDidActivateGroup: noEvent,
+	onDidChangeGroups: Event.None,
+	onDidAddGroup: Event.None,
+	onDidRemoveGroup: Event.None,
+	onDidActivateGroup: Event.None,
 	groups: Object.freeze([emptyGroup]),
 	activeGroup: emptyGroup,
 	count: 1,
@@ -56,7 +56,7 @@ const emptyEditorService: IEditorService = Object.freeze({
 });
 
 const emptyLayoutService: IWorkbenchLayoutService = Object.freeze({
-	onDidChangePartVisibility: noEvent,
+	onDidChangePartVisibility: Event.None,
 	isPartVisible: () => false,
 	isPanelMaximized: () => false,
 	showPart: () => {},
@@ -68,9 +68,9 @@ const emptyLayoutService: IWorkbenchLayoutService = Object.freeze({
 });
 
 const emptyWorkingCopyService: IWorkingCopyService = Object.freeze({
-	onDidRegister: noEvent,
-	onDidUnregister: noEvent,
-	onDidChangeDirty: noEvent,
+	onDidRegister: Event.None,
+	onDidUnregister: Event.None,
+	onDidChangeDirty: Event.None,
 	hasDirtyWorkingCopies: false,
 	register: () => noneDisposable,
 	get: () => Object.freeze([]),

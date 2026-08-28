@@ -32,11 +32,14 @@ import { WorkspaceSymbolService, type LanguageWorkspaceSymbolProvider } from "..
 import { LanguageHierarchyService, type LanguageCallHierarchyProvider, type LanguageTypeHierarchyProvider } from "../../contrib/callHierarchy/common/languageHierarchy.js";
 import { SemanticTokensService, type LanguageSemanticTokensProvider } from "../../contrib/semanticTokens/common/semanticTokens.js";
 import { FoldingRangeService, type LanguageFoldingRangeProvider } from "../../contrib/folding/common/folding.js";
+import { type DocumentHighlightProvider, type MultiDocumentHighlightProvider } from "../languages/documentHighlights.js";
 
 /** Language provider boundary consumed by browser and host adapters. */
 export interface ILanguageFeaturesService extends IDisposable {
 	readonly languages: LanguageRegistry;
 	readonly configurations: LanguageConfigurationSource;
+	readonly documentHighlightProvider: LanguageFeatureProviderRegistry<DocumentHighlightProvider>;
+	readonly multiDocumentHighlightProvider: LanguageFeatureProviderRegistry<MultiDocumentHighlightProvider>;
 	registerLanguage(description: LanguageDescription, options?: LanguageRegistrationOptions): IDisposable;
 	registerLanguages(contributions: readonly LanguageDescriptionContribution[]): LanguageDescriptionRegistration;
 	resolveLanguageId(input: TextResourceLanguageInput): string | undefined;
@@ -128,6 +131,8 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 	private readonly typeHierarchyProviders: LanguageFeatureProviderRegistry<LanguageTypeHierarchyProvider>;
 	private readonly semanticTokensProviders: LanguageFeatureProviderRegistry<LanguageSemanticTokensProvider>;
 	private readonly foldingRangeProviders: LanguageFeatureProviderRegistry<LanguageFoldingRangeProvider>;
+	readonly documentHighlightProvider: LanguageFeatureProviderRegistry<DocumentHighlightProvider>;
+	readonly multiDocumentHighlightProvider: LanguageFeatureProviderRegistry<MultiDocumentHighlightProvider>;
 
 	constructor() {
 		super();
@@ -161,6 +166,8 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 		this.typeHierarchyProviders = this._register(new LanguageFeatureProviderRegistry());
 		this.semanticTokensProviders = this._register(new LanguageFeatureProviderRegistry());
 		this.foldingRangeProviders = this._register(new LanguageFeatureProviderRegistry());
+		this.documentHighlightProvider = this._register(new LanguageFeatureProviderRegistry());
+		this.multiDocumentHighlightProvider = this._register(new LanguageFeatureProviderRegistry());
 	}
 
 	registerLanguage(description: LanguageDescription, options: LanguageRegistrationOptions = {}): IDisposable {
@@ -403,6 +410,7 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 	createFoldingRangeService(model: TextModel, resource?: URI): FoldingRangeService {
 		return new FoldingRangeService(model, this.foldingRangeProviders, resource);
 	}
+
 }
 
 interface LanguageProviderRegistrations {

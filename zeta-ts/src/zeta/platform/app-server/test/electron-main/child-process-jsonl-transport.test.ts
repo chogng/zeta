@@ -3,9 +3,7 @@ import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { EventEmitter, once } from "node:events";
 import test from "node:test";
 import { PassThrough, Writable } from "node:stream";
-import {
-	isCancellationError,
-} from "../../../../base/common/cancellation.js";
+import { isCancellationError } from "../../../../base/common/errors.js";
 import {
 	ChildProcessJsonlTransport,
 	type ChildProcessJsonlTransportOptions,

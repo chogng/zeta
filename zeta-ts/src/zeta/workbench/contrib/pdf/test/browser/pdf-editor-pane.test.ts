@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { CancellationError } from "../../../../../base/common/cancellation.js";
+import { CancellationError } from "../../../../../base/common/errors.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { FileKind, type IFileService } from "../../../../../platform/files/common/files.js";
 import type { EditorInput } from "../../../../../workbench/browser/parts/editor/editorInput.js";

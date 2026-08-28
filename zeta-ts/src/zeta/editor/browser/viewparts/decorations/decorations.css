@@ -13,8 +13,7 @@
   box-sizing: border-box;
 }
 
-.stanza-editor-decoration.search-match,
-.stanza-editor-decoration.occurrence-highlight {
+.stanza-editor-decoration.search-match {
   background: var(--zeta-search-match-background);
 }
 

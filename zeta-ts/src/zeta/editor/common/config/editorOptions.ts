@@ -1193,6 +1193,8 @@ export interface EditorOptionValueMap {
 	[EditorOption.mouseWheelScrollSensitivity]: number;
 	[EditorOption.mouseWheelZoom]: boolean;
 	[EditorOption.multiCursorMergeOverlapping]: boolean;
+	[EditorOption.occurrencesHighlight]: 'off' | 'singleFile' | 'multiFile';
+	[EditorOption.occurrencesHighlightDelay]: number;
 	[EditorOption.wordSegmenterLocales]: readonly string[];
 	[EditorOption.wordSeparators]: string;
 	[EditorOption.wordWrapColumn]: number;
@@ -1830,7 +1832,7 @@ const numberCompatibilityDefaults = {
 	lineNumbersMinChars: 5,
 	mouseWheelScrollSensitivity: 1,
 	multiCursorLimit: 10_000,
-	occurrencesHighlightDelay: 0,
+	occurrencesHighlightDelay: 250,
 	overviewRulerLanes: 3,
 	quickSuggestionsDelay: 10,
 	revealHorizontalRightPadding: 15,

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { noEvent } from '../../../../base/common/event.js';
+import { Event } from '../../../../base/common/event.js';
 import { URI } from '../../../../base/common/uri.js';
 import { OperatingSystem } from '../../../../base/common/platform.js';
 import { WorkbenchState, type IWorkspaceContextService } from '../../../workspace/common/workspace.js';
@@ -10,7 +10,7 @@ test('LabelService formats workspace paths and invalidates registered formatters
 	const root = URI.file('/workspace');
 	const resource = URI.file('/workspace/src/main.ts');
 	const workspace: IWorkspaceContextService = {
-		onDidChangeWorkspace: noEvent,
+		onDidChangeWorkspace: Event.None,
 		getWorkspace: () => ({ id: 'workspace', folders: [{ id: 'root', uri: root, name: 'workspace', index: 0 }] }),
 		getWorkbenchState: () => WorkbenchState.FOLDER,
 	};

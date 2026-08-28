@@ -1,5 +1,3 @@
-import { isCancellationError } from './cancellation.js';
-
 export interface ErrorListenerCallback {
 	(error: unknown): void;
 }
@@ -51,6 +49,27 @@ export class ErrorHandler {
 }
 
 export const errorHandler = new ErrorHandler();
+
+export const canceledName = 'Canceled';
+
+export function isCancellationError(error: unknown): error is CancellationError {
+	if (error instanceof CancellationError) return true;
+	return error instanceof Error && error.name === canceledName && error.message === canceledName;
+}
+
+export class CancellationError extends Error {
+	public constructor(message = 'Operation cancelled', public readonly reason?: unknown) {
+		super(message, { cause: reason });
+		this.name = 'CancellationError';
+	}
+}
+
+/** @deprecated Use `new CancellationError()` instead. */
+export function canceled(): Error {
+	const error = new Error(canceledName);
+	error.name = error.message;
+	return error;
+}
 
 export function setUnexpectedErrorHandler(handler: (error: unknown) => void): void {
 	errorHandler.setUnexpectedErrorHandler(handler);

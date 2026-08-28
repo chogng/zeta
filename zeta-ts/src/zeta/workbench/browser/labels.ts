@@ -1,6 +1,6 @@
 import { IconLabel, type IconLabelValueOptions } from '../../base/browser/ui/iconlabel/iconlabel.js';
 import { getPathLabel, type IRelativePathProvider } from '../../base/common/labels.js';
-import { noEvent, Emitter, type Event } from '../../base/common/event.js';
+import { Emitter, Event } from '../../base/common/event.js';
 import { Disposable, type IDisposable } from '../../base/common/lifecycle.js';
 import { basenameOrAuthority, dirnameResource, isEqualResource } from './resourceLabelHelpers.js';
 import type { URI } from '../../base/common/uri.js';
@@ -49,7 +49,7 @@ export interface IResourceLabelsContainer {
 }
 
 export const DEFAULT_LABELS_CONTAINER: IResourceLabelsContainer = {
-	onDidChangeVisibility: noEvent,
+	onDidChangeVisibility: Event.None,
 };
 
 export interface ResourceLabelServices {

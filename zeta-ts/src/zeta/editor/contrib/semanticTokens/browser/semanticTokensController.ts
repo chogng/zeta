@@ -1,4 +1,4 @@
-import { isCancellationError } from "../../../../base/common/cancellation.js";
+import { isCancellationError } from "../../../../base/common/errors.js";
 import { type Event } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type SemanticTokensService } from "../common/semanticTokens.js";

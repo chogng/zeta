@@ -1,10 +1,31 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { Emitter, noEvent, runWithBufferedEvents } from "../../common/event.js";
-import { type IDisposable, noneDisposable } from "../../common/lifecycle.js";
+import { Emitter, Event, runWithBufferedEvents } from "../../common/event.js";
+import { DisposableStore, type IDisposable, noneDisposable } from "../../common/lifecycle.js";
 
-test("noEvent returns the reusable empty disposable", () => {
-	assert.equal(noEvent(() => undefined), noneDisposable);
+test("Event.None returns the reusable empty disposable", () => {
+	assert.equal(Event.None(() => undefined), noneDisposable);
+});
+
+test("Emitter binds listener context and registers subscriptions with their owner", () => {
+	using emitter = new Emitter<number>();
+	const context = { total: 1 };
+	const subscriptions: IDisposable[] = [];
+	emitter.event(function (this: typeof context, event) {
+		this.total += event;
+	}, context, subscriptions);
+
+	assert.equal(emitter.hasListeners(), true);
+	emitter.fire(2);
+	assert.equal(context.total, 3);
+	assert.equal(subscriptions.length, 1);
+	subscriptions[0].dispose();
+	assert.equal(emitter.hasListeners(), false);
+
+	using store = new DisposableStore();
+	emitter.event(() => context.total += 1, undefined, store);
+	store.clear();
+	assert.equal(emitter.hasListeners(), false);
 });
 
 test("Emitter delivers synchronously and subscriptions are disposable", () => {
@@ -44,24 +65,27 @@ test("Emitter treats repeated listener registrations independently", () => {
 	emitter.dispose();
 });
 
-test("Emitter reports the first and final listener lifecycle", () => {
+test("Emitter reports listener lifecycle in registration order", () => {
 	const lifecycle: string[] = [];
 	const emitter = new Emitter<void>({
-		onWillAddFirstListener: () => lifecycle.push("add"),
-		onDidRemoveLastListener: () => lifecycle.push("remove"),
+		onWillAddFirstListener: () => lifecycle.push("will-first"),
+		onDidAddFirstListener: () => lifecycle.push("did-first"),
+		onDidAddListener: () => lifecycle.push("did-add"),
+		onWillRemoveListener: () => lifecycle.push("will-remove"),
+		onDidRemoveLastListener: () => lifecycle.push("did-remove-last"),
 	});
 	const first = emitter.event(() => undefined);
 	const second = emitter.event(() => undefined);
-	assert.deepEqual(lifecycle, ["add"]);
+	assert.deepEqual(lifecycle, ["will-first", "did-first", "did-add", "did-add"]);
 
 	first.dispose();
-	assert.deepEqual(lifecycle, ["add"]);
+	assert.deepEqual(lifecycle, ["will-first", "did-first", "did-add", "did-add", "will-remove"]);
 	second.dispose();
-	assert.deepEqual(lifecycle, ["add", "remove"]);
+	assert.deepEqual(lifecycle, ["will-first", "did-first", "did-add", "did-add", "will-remove", "will-remove", "did-remove-last"]);
 
 	emitter.event(() => undefined);
 	emitter.dispose();
-	assert.deepEqual(lifecycle, ["add", "remove", "add", "remove"]);
+	assert.deepEqual(lifecycle.slice(-4), ["will-first", "did-first", "did-add", "did-remove-last"]);
 });
 
 test("Emitter snapshots registrations before delivering an event", () => {

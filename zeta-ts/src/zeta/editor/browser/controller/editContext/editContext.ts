@@ -1,5 +1,5 @@
 import { stopEvent } from "../../../../base/browser/dom.js";
-import { Emitter, type Event as EditorEvent, noEvent } from "../../../../base/common/event.js";
+import { Emitter, Event, type Event as EditorEvent } from "../../../../base/common/event.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type TextSelectionOffsets } from "../../../common/commands/editorEditCommand.js";
 import { type CompositionController } from "../compositionController.js";
@@ -98,9 +98,9 @@ export abstract class EditContext extends Disposable {
 	readonly onWillTextUpdate: EditorEvent<EditorViewTextUpdateEvent> = this.willTextUpdateEmitter.event;
 	readonly onWillKeydown: EditorEvent<KeyboardEvent> = this.willKeydownEmitter.event;
 	/** Native EditContext publishes this event; textarea uses an empty event. */
-	readonly onDidTextUpdate: EditorEvent<EditContextTextUpdate> = noEvent;
+	readonly onDidTextUpdate: EditorEvent<EditContextTextUpdate> = Event.None;
 	/** Native EditContext publishes composition formatting; textarea has no equivalent. */
-	readonly onDidTextFormatUpdate: EditorEvent<EditContextTextFormatUpdate> = noEvent;
+	readonly onDidTextFormatUpdate: EditorEvent<EditContextTextFormatUpdate> = Event.None;
 	abstract readonly onDidSelect: EditorEvent<void>;
 	abstract readonly onDidKeydown: EditorEvent<KeyboardEvent>;
 	abstract readonly onDidCompositionStart: EditorEvent<EditContextCompositionEvent>;

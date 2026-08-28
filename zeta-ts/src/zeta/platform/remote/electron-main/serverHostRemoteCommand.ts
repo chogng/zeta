@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
-import { CancellationError } from "../../../base/common/cancellation.js";
 import { throwIfCancelled } from "../../../base/common/cancellation.js";
+import { CancellationError } from "../../../base/common/errors.js";
 
 const SSH_HOST_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,251}[A-Za-z0-9])?$/;
 const MAX_OUTPUT_LENGTH = 1024 * 1024;

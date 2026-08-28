@@ -1,7 +1,6 @@
 import { APP_SERVER_METHODS, APP_SERVER_NOTIFICATIONS, type AppServerMethod, type AppServerMethodDefinition, type InitializeResult, type MethodParams, type MethodResult, type ServerCapabilities, type ServerNotification } from "../../../../../generated/app-server/types.js";
 import { VSBuffer } from "../../../base/common/buffer.js";
-import { CancellationError } from "../../../base/common/cancellation.js";
-import { toError } from "../../../base/common/errors.js";
+import { CancellationError, toError } from "../../../base/common/errors.js";
 import { isRecord } from "../../../base/common/types.js";
 import type { AppServerConnectionState } from "../common/appServerApi.js";
 import { AppServerRemoteError } from "../common/appServerError.js";

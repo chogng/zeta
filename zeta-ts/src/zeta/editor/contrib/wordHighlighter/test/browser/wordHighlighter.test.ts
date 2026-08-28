@@ -1,13 +1,16 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
+import { URI } from '../../../../../base/common/uri.js';
 import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
-import { DecorationPresentation, createStanzaDecorationSource } from '../../../../browser/viewparts/decorations/decorationPresentation.js';
-import { EditorCommandHistoryMode, EditorSelectionController } from '../../../../common/cursor/editorSelectionController.js';
+import { createStanzaDecorationSource } from '../../../../browser/viewparts/decorations/decorationPresentation.js';
 import { TextSelection, TextSelectionSet } from '../../../../common/core/selection.js';
 import { TextPosition, TextRange } from '../../../../common/core/text.js';
+import { EditorSelectionController } from '../../../../common/cursor/editorSelectionController.js';
+import { DocumentHighlightKind } from '../../../../common/languages/documentHighlights.js';
 import { TextDecorationCollection } from '../../../../common/model/decorationCollection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
+import { LanguageFeaturesService } from '../../../../common/services/languageService.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({
@@ -17,95 +20,160 @@ for (const [name, value] of Object.entries({
 	Element: browserEnvironment.window.Element,
 	HTMLElement: browserEnvironment.window.HTMLElement,
 	Event: browserEnvironment.window.Event,
+	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
 })) {
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { EditorViewport } = await import('../../../../browser/view.js');
-const { OccurrenceHighlightController } = await import('../../browser/wordHighlighter.js');
+const { EditorView, EditorViewport } = await import('../../../../browser/view.js');
+const { getHighlightDecorationOptions } = await import('../../browser/highlightDecorations.js');
+const { TextualMultiDocumentHighlightFeature } = await import('../../browser/textualHighlightProvider.js');
+const { WordHighlighterContribution } = await import('../../browser/wordHighlighter.js');
 
-test('Occurrence highlights find complete Unicode cursor words without matching substrings', () => {
-	using model = new TextModel('café caféine café\nCafé');
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 2)));
-	using decorations = new TextDecorationCollection<void>(model);
-	using controller = new OccurrenceHighlightController(selections, decorations);
+test('Word highlighter uses the textual provider for complete Unicode words', async () => {
+	using languages = new LanguageFeaturesService();
+	using textualProvider = new TextualMultiDocumentHighlightFeature(languages);
+	using harness = createHarness('café caféine café\nCafé', languages, URI.parse('file:///one.ts'), 'singleFile');
 
-	assert.deepEqual(decorationRanges(decorations), [
+	harness.controller.restoreViewState(true);
+	await settleHighlights();
+
+	assert.deepEqual(decorationRanges(harness.decorations), [
 		TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 4)),
 		TextRange.from(TextPosition.at(0, 13), TextPosition.at(0, 17)),
 	]);
 });
 
-test('Occurrence highlights use explicit single-line selections and ignore whitespace or multiline ranges', () => {
-	using model = new TextModel('item itemized item\nitem');
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 0), TextPosition.at(0, 2))));
-	using decorations = new TextDecorationCollection<void>(model);
-	using controller = new OccurrenceHighlightController(selections, decorations);
+test('Word highlighter prefers semantic providers and renders read and write kinds independently', async () => {
+	using languages = new LanguageFeaturesService();
+	using textualProvider = new TextualMultiDocumentHighlightFeature(languages);
+	using semanticProvider = languages.documentHighlightProvider.register({
+		languageIds: ['typescript'],
+		provideDocumentHighlights: () => [
+			{ range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 4)), kind: DocumentHighlightKind.Read },
+			{ range: TextRange.from(TextPosition.at(0, 5), TextPosition.at(0, 9)), kind: DocumentHighlightKind.Write },
+		],
+	});
+	using harness = createHarness('item item', languages, URI.parse('file:///semantic.ts'), 'singleFile');
 
-	assert.deepEqual(decorationRanges(decorations), [
-		TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 2)),
-		TextRange.from(TextPosition.at(0, 5), TextPosition.at(0, 7)),
-		TextRange.from(TextPosition.at(0, 14), TextPosition.at(0, 16)),
-		TextRange.from(TextPosition.at(1, 0), TextPosition.at(1, 2)),
-	]);
-	selections.setSelections(TextSelectionSet.single(caret(0, 4)));
-	assert.deepEqual(decorationRanges(decorations), []);
-	selections.setSelections(TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 0), TextPosition.at(1, 1))));
-	assert.deepEqual(decorationRanges(decorations), []);
+	harness.controller.restoreViewState(true);
+	await settleHighlights();
+
+	assert.deepEqual(harness.decorations.decorations.map(decoration => decoration.metadata), [DocumentHighlightKind.Read, DocumentHighlightKind.Write]);
+	assert.equal(harness.viewport.element.querySelectorAll('.word-highlight').length, 1);
+	assert.equal(harness.viewport.element.querySelectorAll('.word-highlight-strong').length, 1);
 });
 
-test('Occurrence highlight controller projects and clears current-word decorations without changing selections', () => {
+test('Multi-file word highlighting updates every open editor sharing the language service', async () => {
+	using languages = new LanguageFeaturesService();
+	using textualProvider = new TextualMultiDocumentHighlightFeature(languages);
+	using first = createHarness('item one item', languages, URI.parse('file:///one.ts'), 'multiFile');
+	using second = createHarness('item two', languages, URI.parse('file:///two.ts'), 'multiFile');
+
+	first.controller.restoreViewState(true);
+	await settleHighlights();
+
+	assert.deepEqual([first.decorations.size, second.decorations.size], [2, 1]);
+});
+
+test('Word highlighter cancels a stale provider request when the selection changes', async () => {
+	using languages = new LanguageFeaturesService();
+	let aborted = false;
+	using semanticProvider = languages.documentHighlightProvider.register({
+		languageIds: ['typescript'],
+		provideDocumentHighlights: (_request, token) => new Promise(resolve => {
+			token.onCancellationRequested(() => {
+				aborted = true;
+				resolve([]);
+			});
+		}),
+	});
+	using harness = createHarness('item other', languages, URI.parse('file:///cancel.ts'), 'singleFile');
+
+	harness.controller.restoreViewState(true);
+	await new Promise(resolve => setTimeout(resolve, 1));
+	harness.selections.setSelections(TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 6))));
+	await settleHighlights();
+
+	assert.equal(aborted, true);
+	assert.equal(harness.decorations.size, 0);
+});
+
+test('Word highlighter obeys the off mode and navigates existing highlights', async () => {
+	using languages = new LanguageFeaturesService();
+	using textualProvider = new TextualMultiDocumentHighlightFeature(languages);
+	using disabled = createHarness('item item', languages, URI.parse('file:///disabled.ts'), 'off');
+	disabled.controller.restoreViewState(true);
+	await settleHighlights();
+	assert.equal(disabled.decorations.size, 0);
+
+	using enabled = createHarness('item item', languages, URI.parse('file:///enabled.ts'), 'singleFile');
+	enabled.controller.restoreViewState(true);
+	await settleHighlights();
+	enabled.controller.moveNext();
+	assert.deepEqual(enabled.selections.selections.primary, TextSelection.collapsedAt(TextPosition.at(0, 5)));
+	enabled.controller.moveBack();
+	assert.deepEqual(enabled.selections.selections.primary, TextSelection.collapsedAt(TextPosition.at(0, 0)));
+});
+
+function createHarness(text: string, languages: LanguageFeaturesService, resource: URI, mode: 'off' | 'singleFile' | 'multiFile'): EditorHarness {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
-	using model = new TextModel('item itemized item\nitem');
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 1)));
-	using decorations = new TextDecorationCollection<void>(model);
-	using viewport = new EditorViewport({
+	const model = new TextModel(text);
+	const selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
+	const decorations = new TextDecorationCollection<DocumentHighlightKind | undefined>(model);
+	const viewport = new EditorViewport({
 		container,
 		model,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
-		decorationSources: [createStanzaDecorationSource(decorations, () => DecorationPresentation.OccurrenceHighlight)],
+		decorationSources: [createStanzaDecorationSource(decorations, decoration => getHighlightDecorationOptions(decoration.metadata))],
 	});
-	using controller = new OccurrenceHighlightController(selections, decorations);
-	viewport.layout({ width: 240, height: 40 });
-
-	assert.equal(decorations.size, 3);
-	assert.equal(viewport.element.querySelectorAll('.occurrence-highlight').length, 3);
-	assert.deepEqual(selections.selections.primary, caret(0, 1));
-
-	selections.setSelections(TextSelectionSet.single(caret(0, 4)));
-	assert.equal(decorations.size, 0);
-	assert.equal(viewport.element.querySelectorAll('.occurrence-highlight').length, 0);
-	dom.window.close();
-});
-
-test('Occurrence highlight controller ignores the transient pre-command selection during replacement', () => {
-	using model = new TextModel('const paper = 1;');
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.from(
-		TextPosition.at(0, 0),
-		TextPosition.at(0, model.getLineLength(0)),
-	)));
-	using decorations = new TextDecorationCollection<void>(model);
-	using controller = new OccurrenceHighlightController(selections, decorations);
-
-	assert.doesNotThrow(() => selections.execute({
-		edits: [{ range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, model.getLineLength(0))), text: 'x' }],
-		selectionsAfter: [{ anchorOffset: 1, activeOffset: 1 }],
-		primarySelectionIndex: 0,
-		historyMode: EditorCommandHistoryMode.Isolated,
-	}));
-	assert.equal(model.getText(), 'x');
-	assert.deepEqual(selections.selections.primary, caret(0, 1));
-});
-
-function caret(lineIndex: number, columnIndex: number): TextSelection {
-	return TextSelection.collapsedAt(TextPosition.at(lineIndex, columnIndex));
+	const view = new EditorView(viewport, selections);
+	const controller = new WordHighlighterContribution(view, selections, decorations, {
+		resource,
+		languageId: 'typescript',
+		languageFeaturesService: languages,
+		mode,
+		delay: 0,
+	});
+	view.layout({ width: 240, height: 60 });
+	return new EditorHarness(dom, model, selections, decorations, viewport, view, controller);
 }
 
-function decorationRanges(decorations: TextDecorationCollection<void>): readonly TextRange[] {
+class EditorHarness implements Disposable {
+	constructor(
+		private readonly dom: JSDOM,
+		readonly model: TextModel,
+		readonly selections: EditorSelectionController,
+		readonly decorations: TextDecorationCollection<DocumentHighlightKind | undefined>,
+		readonly viewport: InstanceType<typeof EditorViewport>,
+		readonly view: InstanceType<typeof EditorView>,
+		readonly controller: InstanceType<typeof WordHighlighterContribution>,
+	) {}
+
+	dispose(): void {
+		this.controller.dispose();
+		this.view.dispose();
+		this.viewport.dispose();
+		this.decorations.dispose();
+		this.selections.dispose();
+		this.model.dispose();
+		this.dom.window.close();
+	}
+
+	[Symbol.dispose](): void {
+		this.dispose();
+	}
+}
+
+function decorationRanges(decorations: TextDecorationCollection<DocumentHighlightKind | undefined>): readonly TextRange[] {
 	return decorations.decorations.map(decoration => decoration.range);
+}
+
+async function settleHighlights(): Promise<void> {
+	await new Promise(resolve => setTimeout(resolve, 10));
 }
 
 class FixedTextMeasurer implements TextMeasurer {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Emitter, noEvent } from "../../../../../base/common/event.js";
+import { Emitter, Event } from "../../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { type AppServerConnectionState } from "../../../../../platform/app-server/common/appServerApi.js";
@@ -74,7 +74,7 @@ test("DebugService resolves adapter executables from the canonical factory sourc
 });
 
 class FakeFileService implements IFileService {
-	readonly onDidChangeFiles = noEvent;
+	readonly onDidChangeFiles = Event.None;
 	constructor(private readonly root: URI, private readonly document = launchJson) {}
 	async stat(resource: URI) { return { resource, kind: FileKind.File, sizeBytes: this.document.length, readonly: false, modifiedAtMillis: undefined }; }
 	async readFile(resource: URI) { if (!resource.path.endsWith("/.vscode/launch.json")) throw new FileNotFoundError(resource); return { resource, content: this.document, revision: "1" }; }
@@ -91,13 +91,13 @@ class FakeTaskService extends Disposable implements ITaskService {
 	readonly activeRuns = Object.freeze([]);
 	lastRun: ITaskRun | undefined;
 	readonly ran: string[] = [];
-	readonly onDidChangeTasks = noEvent;
-	readonly onDidStartTask = noEvent;
-	readonly onDidChangeTaskRun = noEvent;
+	readonly onDidChangeTasks = Event.None;
+	readonly onDidStartTask = Event.None;
+	readonly onDidChangeTaskRun = Event.None;
 	registerTaskProvider(_provider: TaskProvider) { return toDisposable(() => undefined); }
 	registerTaskProviders(_providers: readonly TaskProvider[]): TaskProviderRegistration { const registration = toDisposable(() => undefined) as TaskProviderRegistration; registration.replace = () => undefined; return registration; }
 	async refresh() { return this.tasks; }
-	async run(taskValue: IWorkspaceTask): Promise<ITaskRun> { this.ran.push(taskValue.label); const run = { task: taskValue, terminal: {} as ITaskRun["terminal"], status: "succeeded" as const, exitCode: 0, onDidChangeStatus: noEvent }; this.lastRun = run; return run; }
+	async run(taskValue: IWorkspaceTask): Promise<ITaskRun> { this.ran.push(taskValue.label); const run = { task: taskValue, terminal: {} as ITaskRun["terminal"], status: "succeeded" as const, exitCode: 0, onDidChangeStatus: Event.None }; this.lastRun = run; return run; }
 	async terminate() {}
 }
 
@@ -146,5 +146,5 @@ class TestStorageService implements IStorageService {
 	async flush(reason: WillSaveStateReason = WillSaveStateReason.PERIODIC): Promise<void> { this.saveEmitter.fire({ reason }); }
 }
 
-function workspaceService(root: URI): IWorkspaceContextService { return { onDidChangeWorkspace: noEvent, getWorkspace: () => ({ id: "workspace", folders: [{ id: "workspace", uri: root, name: "project", index: 0 }] }), getWorkbenchState: () => 2 }; }
+function workspaceService(root: URI): IWorkspaceContextService { return { onDidChangeWorkspace: Event.None, getWorkspace: () => ({ id: "workspace", folders: [{ id: "workspace", uri: root, name: "project", index: 0 }] }), getWorkbenchState: () => 2 }; }
 function task(label: string): IWorkspaceTask { return Object.freeze({ id: `vscode:${label}`, label, command: label, source: "vscode", group: "other" }); }

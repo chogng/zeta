@@ -3,7 +3,7 @@ import { isNonEmptyArray } from "../../../../base/common/arrays.js";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import type { URI } from "../../../../base/common/uri.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
-import { CancellationError } from "../../../../base/common/cancellation.js";
+import { CancellationError } from "../../../../base/common/errors.js";
 import { validateJsonValue } from "../../../../base/common/jsonValue.js";
 import { Dimension, type IDimension, type IRectangle } from "../../../../base/browser/geometry.js";
 import { observeElementSize } from "../../../../base/browser/observer.js";

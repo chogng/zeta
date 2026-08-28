@@ -1,5 +1,5 @@
-import { isCancellationError, throwIfCancelled } from "../../../../../base/common/cancellation.js";
-import { getErrorMessage } from "../../../../../base/common/errors.js";
+import { throwIfCancelled } from "../../../../../base/common/cancellation.js";
+import { getErrorMessage, isCancellationError } from "../../../../../base/common/errors.js";
 import { type URI } from "../../../../../base/common/uri.js";
 import { FileKind, FileNotFoundError, type IFileService } from "../../../../../platform/files/common/files.js";
 import { normalizeTextLineEndings } from "../../../../../editor/common/core/text.js";

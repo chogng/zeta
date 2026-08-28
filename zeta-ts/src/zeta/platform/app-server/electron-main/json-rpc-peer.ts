@@ -1,5 +1,5 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import { CancellationError } from "../../../base/common/cancellation.js";
+import { CancellationError } from "../../../base/common/errors.js";
 import { getOrSet } from "../../../base/common/map.js";
 import {
 	DisposableStore,
