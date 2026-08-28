@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
-import { toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
+import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { IMenu, IMenuService } from "../../../../../platform/actions/common/menuService.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
@@ -146,7 +146,7 @@ function emptyMenuService(): IMenuService {
 	const menu = Object.assign(toDisposable(() => {}), {
 		onDidChange: () => toDisposable(() => {}),
 		getActions: () => [],
-	}) satisfies IMenu & IDisposable;
+	}) satisfies IMenu;
 	return {
 		createMenu: () => menu,
 		getMenuActions: () => [],

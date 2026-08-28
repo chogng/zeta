@@ -27,7 +27,7 @@ import type {
 export class NativeMenubarControl extends Disposable
 	implements IMenubarControl {
 	private readonly api: INativeMenubarApi;
-	private readonly menu: IMenu & Disposable;
+	private readonly menu: IMenu;
 	private readonly actionsByRevision = new Map<
 		number,
 		ReadonlyMap<string, IAction>

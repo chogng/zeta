@@ -39,7 +39,7 @@ export interface IMenuChangeEvent {
 	readonly isToggleChange: boolean;
 }
 
-export interface IMenu {
+export interface IMenu extends IDisposable {
 	readonly onDidChange: Event<IMenuChangeEvent>;
 
 	getActions(options?: IMenuActionOptions): readonly MenuActionGroup[];
@@ -49,7 +49,7 @@ export interface IMenuService {
 	createMenu(
 		id: MenuId,
 		contextKeyService?: IContextKeyService,
-	): IMenu & IDisposable;
+	): IMenu;
 
 	getMenuActions(
 		id: MenuId,
@@ -77,7 +77,7 @@ export class MenuService implements IMenuService {
 	createMenu(
 		id: MenuId,
 		contextKeyService: IContextKeyService = this.contextKeyService,
-	): IMenu & IDisposable {
+	): IMenu {
 		return new Menu(id, this.commandService, contextKeyService);
 	}
 

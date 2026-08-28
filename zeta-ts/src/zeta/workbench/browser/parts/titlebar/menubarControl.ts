@@ -17,7 +17,7 @@ export interface IMenubarControl extends IDisposable {
 /** Compact application-menu trigger used by web, Windows, and Linux. */
 export class BrowserMenubarControl extends Disposable
 	implements IMenubarControl {
-	private readonly menu: IMenu & IDisposable;
+	private readonly menu: IMenu;
 	private readonly contextMenuService: IContextMenuService;
 	private readonly button: Button;
 	private active = false;

@@ -53,7 +53,7 @@ export interface MenuWorkbenchToolBarOptions extends WorkbenchToolBarOptions {
 /** Keeps a WorkbenchToolBar synchronized with one registered menu location. */
 export class MenuWorkbenchToolBar extends WorkbenchToolBar {
 	private readonly menuOptions: IMenuActionOptions | undefined;
-	private readonly menu: IMenu & Disposable;
+	private readonly menu: IMenu;
 
 	constructor(
 		container: HTMLElement,
