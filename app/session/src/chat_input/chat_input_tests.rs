@@ -7,6 +7,11 @@ use zeta_editor::CodeEditorCommand;
 use zeta_editor::CodeEditorLanguage;
 use zeta_editor::CodeEditorSelectionMode;
 use zeta_input_classifier::InputConversation;
+use zeta_ui_components::ScrollCommand;
+use zeta_ui_components::ScrollDelta;
+use zui::ui::Point;
+use zui::ui::Rect;
+use zui::ui::Size;
 use zui::ui::TextInputCompositionCursor;
 use zui::ui::TextInputCompositionEvent;
 
@@ -265,4 +270,54 @@ fn recent_submission_history_overrides_model_and_shell_allowlists() {
     chat_input.mark_agent_message_submitted("echo productions");
     chat_input.set_text("echo productions");
     assert_eq!(chat_input.route(), ComposerRoute::Agent);
+}
+
+#[test]
+fn interaction_scroll_is_owned_and_reset_by_chat_input() {
+    let mut chat_input = ChatInput::for_working_directory(".");
+
+    chat_input.set_text("/");
+    assert!(chat_input.interaction().is_visible());
+    assert!(chat_input.scroll_interaction(
+        ScrollCommand::ByPixels(ScrollDelta::vertical(70.0)),
+        Size::new(300.0, 100.0),
+        Size::new(300.0, 400.0),
+    ));
+    assert_eq!(
+        chat_input.interaction_scroll().offset(),
+        Point::new(0.0, 70.0)
+    );
+
+    chat_input.activate_selected_interaction();
+    assert!(chat_input.interaction().is_model_picker_visible());
+    assert_eq!(chat_input.interaction_scroll(), Default::default());
+    assert!(chat_input.scroll_interaction(
+        ScrollCommand::ByPixels(ScrollDelta::vertical(35.0)),
+        Size::new(300.0, 100.0),
+        Size::new(300.0, 400.0),
+    ));
+
+    chat_input.dismiss_interaction();
+    assert!(chat_input.interaction().is_visible());
+    assert!(!chat_input.interaction().is_model_picker_visible());
+    assert_eq!(chat_input.interaction_scroll(), Default::default());
+
+    chat_input.set_text("");
+    assert!(!chat_input.interaction().is_visible());
+    assert_eq!(chat_input.interaction_scroll(), Default::default());
+}
+
+#[test]
+fn interaction_scroll_reveals_content_from_geometry() {
+    let mut chat_input = ChatInput::default();
+
+    assert!(chat_input.scroll_interaction(
+        ScrollCommand::EnsureVisible(Rect::from_xywh(0.0, 238.0, 300.0, 34.0)),
+        Size::new(300.0, 102.0),
+        Size::new(300.0, 340.0),
+    ));
+
+    assert_eq!(chat_input.interaction_scroll().vertical_offset(), 170.0);
+    chat_input.reset_interaction_scroll();
+    assert_eq!(chat_input.interaction_scroll(), Default::default());
 }

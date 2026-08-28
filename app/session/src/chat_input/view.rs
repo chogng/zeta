@@ -1,20 +1,3 @@
-mod layout;
-
-use std::path::PathBuf;
-
-pub use layout::ComposerPanelLayout;
-pub use layout::INTERACTION_ROW_HEIGHT;
-pub use layout::interaction_content_size;
-pub use layout::interaction_list_bounds;
-pub use layout::interaction_preferred_height;
-pub use layout::interaction_selection_scroll_command;
-
-use crate::ChatInput;
-use crate::ChatInputEditor;
-use crate::ChatInputFocus;
-use crate::ChatInputInteractionPaneState;
-use crate::ChatInputInteractionState;
-use crate::ComposerRoute;
 use zeta_ui_components::InteractionRegion;
 use zeta_ui_components::KeycapSequence;
 use zeta_ui_components::KeycapStyle;
@@ -26,66 +9,32 @@ use zui::ui::{
 
 use crate::SessionPaneContext;
 use crate::SessionPaneStyle;
-use crate::chat_input_interaction_pane::draw_chat_input_interaction_pane;
-use crate::chat_input_toolbar::ChatInputToolbar;
 use crate::interaction::{COMPOSER, COMPOSER_INFO_BAR, COMPOSER_PANEL};
+
+use super::ChatInput;
+use super::ComposerPanelLayout;
+use super::ComposerRoute;
+use super::editor::ChatInputFocus;
+use super::interaction_view::draw_chat_input_interaction;
+use super::toolbar::ChatInputToolbar;
 
 const INFO_KEYCAP_SIZE: f32 = 16.0;
 const INFO_KEYCAP_LABEL_GAP: f32 = 6.0;
 const INFO_KEYCAP_BACKGROUND: Color = Color::rgb(96, 97, 102);
 
-/// Retained input and interaction-surface state for one ChatWidget.
-pub(crate) struct ChatInputPaneState {
-    input: ChatInput,
-    interaction_pane: ChatInputInteractionPaneState,
-}
-
-impl ChatInputPaneState {
-    pub(crate) fn for_working_directory(working_directory: impl Into<PathBuf>) -> Self {
-        Self {
-            input: ChatInput::for_working_directory(working_directory),
-            interaction_pane: ChatInputInteractionPaneState::default(),
-        }
-    }
-
-    pub(crate) const fn input(&self) -> &ChatInput {
-        &self.input
-    }
-
-    pub(crate) fn update_input<R>(&mut self, update: impl FnOnce(&mut ChatInput) -> R) -> R {
-        let previous_surface = self.input.interaction().surface();
-        let result = update(&mut self.input);
-        if previous_surface != self.input.interaction().surface() {
-            self.interaction_pane.reset();
-        }
-        result
-    }
-
-    pub(crate) const fn interaction_pane(&self) -> &ChatInputInteractionPaneState {
-        &self.interaction_pane
-    }
-
-    pub(crate) fn interaction_pane_mut(&mut self) -> &mut ChatInputInteractionPaneState {
-        &mut self.interaction_pane
-    }
-}
-
 #[derive(Clone, Copy)]
-pub(crate) struct ChatInputPaneView<'a> {
-    pub context: &'a SessionPaneContext,
-    pub editor: &'a ChatInputEditor,
-    pub interaction: &'a ChatInputInteractionState,
-    pub interaction_pane: &'a ChatInputInteractionPaneState,
-    pub route: ComposerRoute,
-    pub caret_visibility: CaretVisibility,
-    pub dispatch: &'a UiDispatch,
-    pub parent: ElementId,
+pub(crate) struct ChatInputView<'a> {
+    pub(crate) input: &'a ChatInput,
+    pub(crate) context: &'a SessionPaneContext,
+    pub(crate) caret_visibility: CaretVisibility,
+    pub(crate) dispatch: &'a UiDispatch,
+    pub(crate) parent: ElementId,
 }
 
-pub(crate) fn draw_chat_input_pane(
+pub(crate) fn draw_chat_input(
     context: &mut ComponentContext<'_, '_>,
     layout: ComposerPanelLayout,
-    view: ChatInputPaneView<'_>,
+    view: ChatInputView<'_>,
     text_layout: &mut TextInputLayoutEngine,
     style: SessionPaneStyle,
 ) -> Option<Rect> {
@@ -102,17 +51,19 @@ pub(crate) fn draw_chat_input_pane(
             PaintRect::new(layout.panel(), style.surface)
                 .with_border(Border::new(Edges::new(1.0, 0.0, 0.0, 0.0), style.border)),
         );
-        if let (Some(bounds), Some(interaction)) = (layout.interaction(), view.interaction.view()) {
-            draw_chat_input_interaction_pane(
+        if let (Some(bounds), Some(interaction)) =
+            (layout.interaction(), view.input.interaction().view())
+        {
+            draw_chat_input_interaction(
                 context,
                 bounds,
                 interaction,
-                view.interaction_pane.scroll_state(),
+                view.input.interaction_scroll(),
                 view.dispatch,
                 style,
             );
         }
-        draw_info_bar(context, layout.info_bar(), view.route, style);
+        draw_info_bar(context, layout.info_bar(), view.input.route(), style);
         context
             .scene_mut()
             .draw_rect(PaintRect::new(layout.info_editor_separator(), style.border));
@@ -127,20 +78,21 @@ pub(crate) fn draw_chat_input_pane(
             .with_parent(COMPOSER_PANEL)
             .with_cursor(CursorFeedback::Text)
             .with_focus(FocusBehavior::TabStop)
-            .with_value(view.editor.text()),
+            .with_value(view.input.input().text()),
         );
         let editor_focus = if view.dispatch.is_focused(COMPOSER) {
             ChatInputFocus::Focused(view.caret_visibility)
         } else {
             ChatInputFocus::Blurred
         };
-        let placeholder = match view.route {
+        let placeholder = match view.input.route() {
             ComposerRoute::Agent => "Ask Zeta anything…",
             ComposerRoute::Shell => "Enter a shell command…",
         };
-        let editor = view
-            .editor
-            .view(layout.editor(), placeholder, editor_focus, style.text_muted);
+        let editor =
+            view.input
+                .input()
+                .view(layout.editor(), placeholder, editor_focus, style.text_muted);
         let caret_bounds = editor.caret_bounds();
         context.draw_component(&editor);
         let toolbar = ChatInputToolbar::new(
@@ -213,5 +165,5 @@ fn info_keycap_style() -> KeycapStyle {
 }
 
 #[cfg(test)]
-#[path = "chat_input_pane_tests.rs"]
+#[path = "view_tests.rs"]
 mod tests;

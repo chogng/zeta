@@ -1,14 +1,10 @@
-use super::ChatInputPaneState;
 use super::draw_info_bar;
-use crate::ComposerRoute;
 use crate::SessionPaneStyle;
 use crate::interaction::COMPOSER_INFO_BAR;
-use zeta_ui_components::ScrollCommand;
-use zeta_ui_components::ScrollDelta;
-use zui::ui::Point;
-use zui::ui::Size;
 use zui::ui::{Color, Rect};
 use zui::ui::{InteractionFrame, UiDispatch, UiFrame};
+
+use super::super::ComposerRoute;
 
 const STYLE: SessionPaneStyle = SessionPaneStyle::new(
     Color::WHITE,
@@ -27,41 +23,6 @@ const STYLE: SessionPaneStyle = SessionPaneStyle::new(
         Color::rgba(100, 100, 100, 51),
     )),
 );
-
-#[test]
-fn interaction_scroll_is_owned_and_reset_by_the_chat_input_pane() {
-    let mut pane = ChatInputPaneState::for_working_directory(".");
-
-    pane.update_input(|input| input.set_text("/"));
-    assert!(pane.input().interaction().is_visible());
-    assert!(pane.interaction_pane_mut().apply_scroll(
-        ScrollCommand::ByPixels(ScrollDelta::vertical(70.0)),
-        Size::new(300.0, 100.0),
-        Size::new(300.0, 400.0),
-    ));
-    assert_eq!(
-        pane.interaction_pane().scroll_state().offset(),
-        Point::new(0.0, 70.0)
-    );
-
-    pane.update_input(|input| input.interaction_mut().activate_selected());
-    assert!(pane.input().interaction().is_model_picker_visible());
-    assert_eq!(pane.interaction_pane().scroll_state(), Default::default());
-    assert!(pane.interaction_pane_mut().apply_scroll(
-        ScrollCommand::ByPixels(ScrollDelta::vertical(35.0)),
-        Size::new(300.0, 100.0),
-        Size::new(300.0, 400.0),
-    ));
-
-    pane.update_input(|input| input.interaction_mut().dismiss("/"));
-    assert!(pane.input().interaction().is_visible());
-    assert!(!pane.input().interaction().is_model_picker_visible());
-    assert_eq!(pane.interaction_pane().scroll_state(), Default::default());
-
-    pane.update_input(|input| input.set_text(""));
-    assert!(!pane.input().interaction().is_visible());
-    assert_eq!(pane.interaction_pane().scroll_state(), Default::default());
-}
 
 #[test]
 fn chat_input_info_bar_paints_agent_and_shell_triggers_as_keycaps() {

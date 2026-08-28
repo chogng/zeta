@@ -4,7 +4,7 @@ use zeta_slash_commands::{
     SlashCommandDefinition, SlashCommandsState,
 };
 
-use crate::ComposerRoute;
+use super::ComposerRoute;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum InteractionItemAction {
@@ -108,9 +108,9 @@ impl<'a> ChatInputInteractionView<'a> {
 
 /// State that selects and updates the active ChatInput interaction view.
 ///
-/// Presentation geometry, clipping, and scrolling belong to the ChatInput interaction pane and UI
-/// primitives; this model only owns Slash command and model-picker domain state and exposes an
-/// immutable render view.
+/// Presentation geometry, clipping, and scrolling belong to ChatInput and UI primitives; this
+/// model only owns Slash command and model-picker domain state and exposes an immutable render
+/// view.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ChatInputInteractionState {
     slash_commands: SlashCommandsState,
@@ -298,5 +298,5 @@ fn model_command() -> SlashCommandDefinition {
 }
 
 #[cfg(test)]
-#[path = "chat_input_interaction_tests.rs"]
+#[path = "interaction_tests.rs"]
 mod tests;

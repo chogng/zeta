@@ -12,27 +12,23 @@ use zui::ui::Rect;
 use zui::ui::TextInputLayoutEngine;
 use zui::ui::UiDispatch;
 
-use crate::ChatInputEditor;
-use crate::ChatInputInteractionPaneState;
-use crate::ChatInputInteractionState;
 use crate::ComposerPanelLayout;
-use crate::ComposerRoute;
 use crate::SessionPaneContext;
 use crate::SessionPaneStyle;
 use crate::ThreadTimeline;
 use crate::ThreadTimelineScroll;
 use crate::ThreadTimelineStyle;
 use crate::TranscriptState;
-use crate::chat_input_pane::ChatInputPaneState;
-use crate::chat_input_pane::ChatInputPaneView;
-use crate::chat_input_pane::draw_chat_input_pane;
+use crate::chat_input::ChatInput;
+use crate::chat_input::ChatInputView;
+use crate::chat_input::draw_chat_input;
 use crate::interaction::THREAD_TIMELINE;
 
 /// Complete retained state for the chat content and ChatInput surfaces.
 pub(crate) struct ChatWidgetState {
     transcript: TranscriptState,
     timeline_scroll: ThreadTimelineScroll,
-    input_pane: ChatInputPaneState,
+    input: ChatInput,
 }
 
 impl ChatWidgetState {
@@ -40,7 +36,7 @@ impl ChatWidgetState {
         Self {
             transcript: TranscriptState::default(),
             timeline_scroll: ThreadTimelineScroll::default(),
-            input_pane: ChatInputPaneState::for_working_directory(working_directory),
+            input: ChatInput::for_working_directory(working_directory),
         }
     }
 
@@ -60,51 +56,32 @@ impl ChatWidgetState {
         &mut self.timeline_scroll
     }
 
-    pub(crate) const fn input_pane(&self) -> &ChatInputPaneState {
-        &self.input_pane
+    pub(crate) const fn input(&self) -> &ChatInput {
+        &self.input
     }
 
-    pub(crate) fn input_pane_mut(&mut self) -> &mut ChatInputPaneState {
-        &mut self.input_pane
-    }
-
-    const fn editor(&self) -> &ChatInputEditor {
-        self.input_pane.input().input()
-    }
-
-    const fn interaction(&self) -> &ChatInputInteractionState {
-        self.input_pane.input().interaction()
-    }
-
-    const fn interaction_pane(&self) -> &ChatInputInteractionPaneState {
-        self.input_pane.interaction_pane()
-    }
-
-    const fn route(&self) -> ComposerRoute {
-        self.input_pane.input().route()
+    pub(crate) fn input_mut(&mut self) -> &mut ChatInput {
+        &mut self.input
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct ChatWidgetLayout {
     timeline: Rect,
-    input_pane: ComposerPanelLayout,
+    input: ComposerPanelLayout,
 }
 
 impl ChatWidgetLayout {
-    pub(crate) const fn new(timeline: Rect, input_pane: ComposerPanelLayout) -> Self {
-        Self {
-            timeline,
-            input_pane,
-        }
+    pub(crate) const fn new(timeline: Rect, input: ComposerPanelLayout) -> Self {
+        Self { timeline, input }
     }
 
     pub(crate) const fn timeline(self) -> Rect {
         self.timeline
     }
 
-    pub(crate) const fn input_pane(self) -> ComposerPanelLayout {
-        self.input_pane
+    pub(crate) const fn input(self) -> ComposerPanelLayout {
+        self.input
     }
 }
 
@@ -145,15 +122,12 @@ pub(crate) fn draw_chat_widget(
             ),
         ));
     });
-    draw_chat_input_pane(
+    draw_chat_input(
         component_context,
-        layout.input_pane(),
-        ChatInputPaneView {
+        layout.input(),
+        ChatInputView {
+            input: view.state.input(),
             context: view.context,
-            editor: view.state.editor(),
-            interaction: view.state.interaction(),
-            interaction_pane: view.state.interaction_pane(),
-            route: view.state.route(),
             caret_visibility: view.caret_visibility,
             dispatch: view.dispatch,
             parent: view.parent,

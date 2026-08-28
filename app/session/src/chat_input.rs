@@ -1,24 +1,51 @@
+mod editor;
+mod interaction;
+mod interaction_view;
+mod layout;
+mod shell_completion;
+mod toolbar;
+mod view;
+
 use std::path::Path;
 use std::path::PathBuf;
 
+use editor::ChatInputEditor;
+pub use interaction::ChatInputInteractionItem;
+use interaction::ChatInputInteractionState;
+pub use interaction::ChatInputInteractionView;
+pub use interaction::ComposerInteractionActivation;
+pub use interaction::ComposerModelOption;
+pub use interaction::SelectionDirection;
+pub use layout::ComposerPanelLayout;
+pub use layout::INTERACTION_ROW_HEIGHT;
+pub use layout::interaction_content_size;
+pub use layout::interaction_list_bounds;
+pub use layout::interaction_preferred_height;
+pub use layout::interaction_selection_scroll_command;
+use shell_completion::ShellGhostSuggestion;
+use shell_completion::shell_ghost_suggestion;
+pub(crate) use view::ChatInputView;
+pub(crate) use view::draw_chat_input;
 use zeta_editor::CodeEditorCommand;
 use zeta_editor::CodeEditorLanguage;
 use zeta_editor::CodeEditorSelectionMode;
 use zeta_editor::CodeEditorStyle;
-use zeta_editor::CodeEditorTextEdit;
 use zeta_input_classifier::InputClassificationContext;
 use zeta_input_classifier::InputClassifier;
 use zeta_input_classifier::InputConversation;
 use zeta_input_classifier::InputHistoryEntry;
 use zeta_input_classifier::InputRoute;
-use zeta_input_classifier::ShellCompletion;
 use zeta_input_classifier::ShellCompletionSnapshot;
+use zeta_slash_commands::SlashCommandCatalogError;
+use zeta_slash_commands::SlashCommandDefinition;
+use zeta_ui_components::ScrollAxis;
+use zeta_ui_components::ScrollCommand;
+use zeta_ui_components::ScrollMetrics;
+use zeta_ui_components::ScrollState;
 use zui::ui::Point;
 use zui::ui::Rect;
+use zui::ui::Size;
 use zui::ui::TextInputCompositionEvent;
-
-use crate::ChatInputEditor;
-use crate::ChatInputInteractionState;
 
 /// Current classifier-selected submission route for the Session ChatInput.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -40,15 +67,11 @@ enum AgentResponseState {
     Pending,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-struct ShellGhostSuggestion {
-    edit: CodeEditorTextEdit,
-}
-
 /// Input, routing, history, and completion state owned by one Session Pane.
 pub struct ChatInput {
     input: ChatInputEditor,
     interaction: ChatInputInteractionState,
+    interaction_scroll: ScrollState,
     route: ComposerRoute,
     classifier: InputClassifier,
     conversation: InputConversation,
@@ -72,6 +95,7 @@ impl ChatInput {
         Self {
             input: ChatInputEditor::default(),
             interaction: ChatInputInteractionState::new(),
+            interaction_scroll: ScrollState::default(),
             route: ComposerRoute::Agent,
             classifier: InputClassifier::for_working_directory(working_directory),
             conversation: InputConversation::Standalone,
@@ -92,8 +116,54 @@ impl ChatInput {
         &self.interaction
     }
 
-    pub fn interaction_mut(&mut self) -> &mut ChatInputInteractionState {
-        &mut self.interaction
+    pub(crate) const fn interaction_scroll(&self) -> ScrollState {
+        self.interaction_scroll
+    }
+
+    pub fn set_interaction_catalog(
+        &mut self,
+        slash_commands: Vec<SlashCommandDefinition>,
+        models: Vec<ComposerModelOption>,
+    ) -> Result<(), SlashCommandCatalogError> {
+        self.update_interaction(|interaction| interaction.set_catalog(slash_commands, models))
+    }
+
+    pub fn move_interaction_selection(&mut self, direction: SelectionDirection) {
+        self.update_interaction(|interaction| interaction.move_selection(direction));
+    }
+
+    pub fn activate_selected_interaction(&mut self) -> Option<ComposerInteractionActivation> {
+        self.update_interaction(ChatInputInteractionState::activate_selected)
+    }
+
+    pub fn complete_selected_slash(&mut self) -> Option<String> {
+        self.update_interaction(ChatInputInteractionState::complete_selected_slash)
+    }
+
+    pub fn dismiss_interaction(&mut self) -> bool {
+        let text = self.input.text().to_owned();
+        self.update_interaction(|interaction| interaction.dismiss(&text))
+    }
+
+    pub fn select_interaction_item(&mut self, index: usize) -> bool {
+        self.update_interaction(|interaction| interaction.select_item(index))
+    }
+
+    pub fn reset_interaction_scroll(&mut self) {
+        self.interaction_scroll = ScrollState::default();
+    }
+
+    pub fn scroll_interaction(
+        &mut self,
+        command: ScrollCommand,
+        viewport: Size,
+        content: Size,
+    ) -> bool {
+        self.interaction_scroll.apply(
+            command,
+            ScrollMetrics::new(viewport, content),
+            ScrollAxis::Vertical,
+        )
     }
 
     pub const fn route(&self) -> ComposerRoute {
@@ -368,7 +438,20 @@ impl ChatInput {
 
     fn refresh_interaction(&mut self) {
         let text = self.input.text().to_owned();
-        self.interaction.sync_input(&text, self.route);
+        let route = self.route;
+        self.update_interaction(|interaction| interaction.sync_input(&text, route));
+    }
+
+    fn update_interaction<R>(
+        &mut self,
+        update: impl FnOnce(&mut ChatInputInteractionState) -> R,
+    ) -> R {
+        let previous_surface = self.interaction.surface();
+        let result = update(&mut self.interaction);
+        if previous_surface != self.interaction.surface() {
+            self.reset_interaction_scroll();
+        }
+        result
     }
 
     fn leave_shell_history(&mut self) {
@@ -377,53 +460,6 @@ impl ChatInput {
     }
 }
 
-fn shell_ghost_suggestion(
-    input: &str,
-    cursor: usize,
-    completions: Vec<ShellCompletion>,
-) -> Option<ShellGhostSuggestion> {
-    let first = completions.iter().find(|completion| {
-        let range = completion.replace_range();
-        range.end == cursor
-            && input
-                .get(range)
-                .is_some_and(|typed| completion.replacement().starts_with(typed))
-    })?;
-    let range = first.replace_range();
-    let typed = input.get(range.clone())?;
-    let replacements = completions
-        .iter()
-        .filter(|completion| completion.replace_range() == range)
-        .map(ShellCompletion::replacement)
-        .filter(|replacement| replacement.starts_with(typed))
-        .collect::<Vec<_>>();
-    let first_replacement = *replacements.first()?;
-    let common_prefix_length = replacements
-        .iter()
-        .skip(1)
-        .fold(first_replacement.len(), |length, replacement| {
-            common_prefix_length(&first_replacement[..length], replacement)
-        });
-    if common_prefix_length <= typed.len() {
-        return None;
-    }
-    Some(ShellGhostSuggestion {
-        edit: CodeEditorTextEdit {
-            range,
-            new_text: first_replacement[..common_prefix_length].to_owned(),
-        },
-    })
-}
-
-fn common_prefix_length(left: &str, right: &str) -> usize {
-    for ((offset, left), right) in left.char_indices().zip(right.chars()) {
-        if left != right {
-            return offset;
-        }
-    }
-    left.len().min(right.len())
-}
-
 #[cfg(test)]
-#[path = "chat_input_tests.rs"]
+#[path = "chat_input/chat_input_tests.rs"]
 mod tests;

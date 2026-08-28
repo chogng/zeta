@@ -213,5 +213,5 @@ impl Component for ChatInputToolbar {
 }
 
 #[cfg(test)]
-#[path = "chat_input_toolbar_tests.rs"]
+#[path = "toolbar_tests.rs"]
 mod tests;

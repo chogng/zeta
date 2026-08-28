@@ -282,5 +282,5 @@ impl Component for ChatInputView<'_> {
 }
 
 #[cfg(test)]
-#[path = "chat_input_editor_tests.rs"]
+#[path = "editor_tests.rs"]
 mod tests;

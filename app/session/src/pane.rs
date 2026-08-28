@@ -30,14 +30,14 @@ impl SessionPaneLayout {
         preferred_composer_height: f32,
         preferred_interaction_height: f32,
     ) -> Self {
-        let input_pane = ComposerPanelLayout::for_main(
+        let input = ComposerPanelLayout::for_main(
             bounds,
             preferred_composer_height,
             preferred_interaction_height,
         );
-        let canvas = SessionCanvasLayout::for_output(input_pane.output());
+        let canvas = SessionCanvasLayout::for_output(input.output());
         Self {
-            chat_widget: ChatWidgetLayout::new(canvas.timeline(), input_pane),
+            chat_widget: ChatWidgetLayout::new(canvas.timeline(), input),
             canvas,
         }
     }
@@ -51,7 +51,7 @@ impl SessionPaneLayout {
     }
 
     pub const fn composer(self) -> ComposerPanelLayout {
-        self.chat_widget.input_pane()
+        self.chat_widget.input()
     }
 }
 

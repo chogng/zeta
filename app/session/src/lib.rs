@@ -5,11 +5,6 @@
 //! surfaces. Tabs, product effects, and other App Server capabilities remain outside this crate.
 
 mod chat_input;
-mod chat_input_editor;
-mod chat_input_interaction;
-mod chat_input_interaction_pane;
-mod chat_input_pane;
-mod chat_input_toolbar;
 mod chat_widget;
 pub mod interaction;
 mod pane;
@@ -25,23 +20,19 @@ mod timeline_scroll;
 mod transcript_state;
 
 pub(crate) use chat_input::ChatInput;
+pub use chat_input::ChatInputInteractionItem;
+pub use chat_input::ChatInputInteractionView;
+pub use chat_input::ComposerInteractionActivation;
+pub use chat_input::ComposerModelOption;
+pub use chat_input::ComposerPanelLayout;
 pub use chat_input::ComposerRoute;
 pub use chat_input::ComposerSubmission;
-pub(crate) use chat_input_editor::ChatInputEditor;
-pub(crate) use chat_input_editor::ChatInputFocus;
-pub use chat_input_interaction::ChatInputInteractionItem;
-pub(crate) use chat_input_interaction::ChatInputInteractionState;
-pub use chat_input_interaction::ChatInputInteractionView;
-pub use chat_input_interaction::ComposerInteractionActivation;
-pub use chat_input_interaction::ComposerModelOption;
-pub use chat_input_interaction::SelectionDirection;
-pub(crate) use chat_input_interaction_pane::ChatInputInteractionPaneState;
-pub use chat_input_pane::ComposerPanelLayout;
-pub use chat_input_pane::INTERACTION_ROW_HEIGHT;
-pub use chat_input_pane::interaction_content_size;
-pub use chat_input_pane::interaction_list_bounds;
-pub use chat_input_pane::interaction_preferred_height;
-pub use chat_input_pane::interaction_selection_scroll_command;
+pub use chat_input::INTERACTION_ROW_HEIGHT;
+pub use chat_input::SelectionDirection;
+pub use chat_input::interaction_content_size;
+pub use chat_input::interaction_list_bounds;
+pub use chat_input::interaction_preferred_height;
+pub use chat_input::interaction_selection_scroll_command;
 pub use pane::{SessionPaneLayout, SessionPaneView, draw_session_pane};
 pub use pane_context::SessionPaneContext;
 pub use pane_state::SessionPaneState;

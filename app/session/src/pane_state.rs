@@ -37,7 +37,7 @@ use crate::line_count;
 ///
 /// The product host supplies canonical Thread and transcript snapshots, mechanically assembled
 /// transcript changes, and executes submissions. The pane owns the Thread and one ChatWidget as a
-/// unit; the ChatWidget owns transcript, timeline scroll, and ChatInputPane state.
+/// unit; the ChatWidget owns transcript, timeline scroll, and ChatInput state.
 pub struct SessionPaneState {
     thread: Option<Thread>,
     chat_widget: ChatWidgetState,
@@ -66,11 +66,11 @@ impl SessionPaneState {
     }
 
     const fn chat_input(&self) -> &ChatInput {
-        self.chat_widget.input_pane().input()
+        self.chat_widget.input()
     }
 
     fn update_chat_input<R>(&mut self, update: impl FnOnce(&mut ChatInput) -> R) -> R {
-        self.chat_widget.input_pane_mut().update_input(update)
+        update(self.chat_widget.input_mut())
     }
 
     pub const fn timeline_scroll(&self) -> &crate::ThreadTimelineScroll {
@@ -111,9 +111,7 @@ impl SessionPaneState {
         models: Vec<ComposerModelOption>,
     ) -> Result<(), SlashCommandCatalogError> {
         self.update_chat_input(|chat_input| {
-            chat_input
-                .interaction_mut()
-                .set_catalog(slash_commands, models)
+            chat_input.set_interaction_catalog(slash_commands, models)
         })
     }
 
@@ -167,20 +165,19 @@ impl SessionPaneState {
     }
 
     pub fn move_composer_interaction_selection(&mut self, direction: SelectionDirection) {
-        self.update_chat_input(|chat_input| chat_input.interaction_mut().move_selection(direction));
+        self.update_chat_input(|chat_input| chat_input.move_interaction_selection(direction));
     }
 
     pub fn activate_composer_interaction(&mut self) -> Option<ComposerInteractionActivation> {
-        self.update_chat_input(|chat_input| chat_input.interaction_mut().activate_selected())
+        self.update_chat_input(ChatInput::activate_selected_interaction)
     }
 
     pub fn complete_selected_slash(&mut self) -> Option<String> {
-        self.update_chat_input(|chat_input| chat_input.interaction_mut().complete_selected_slash())
+        self.update_chat_input(ChatInput::complete_selected_slash)
     }
 
     pub fn dismiss_composer_interaction(&mut self) -> bool {
-        let text = self.chat_input().input().text().to_owned();
-        self.update_chat_input(|chat_input| chat_input.interaction_mut().dismiss(&text))
+        self.update_chat_input(ChatInput::dismiss_interaction)
     }
 
     pub fn composer_interaction_view(&self) -> Option<ChatInputInteractionView<'_>> {
@@ -196,14 +193,11 @@ impl SessionPaneState {
     }
 
     pub fn select_composer_interaction_item(&mut self, index: usize) -> bool {
-        self.update_chat_input(|chat_input| chat_input.interaction_mut().select_item(index))
+        self.update_chat_input(|chat_input| chat_input.select_interaction_item(index))
     }
 
     pub fn reset_composer_interaction_scroll(&mut self) {
-        self.chat_widget
-            .input_pane_mut()
-            .interaction_pane_mut()
-            .reset();
+        self.chat_widget.input_mut().reset_interaction_scroll();
     }
 
     pub fn scroll_composer_interaction(
@@ -213,9 +207,8 @@ impl SessionPaneState {
         content: Size,
     ) -> bool {
         self.chat_widget
-            .input_pane_mut()
-            .interaction_pane_mut()
-            .apply_scroll(command, viewport, content)
+            .input_mut()
+            .scroll_interaction(command, viewport, content)
     }
 
     pub fn replace_thread(

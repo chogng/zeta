@@ -1,7 +1,4 @@
 use zeta_ui_components::ListView;
-use zeta_ui_components::ScrollAxis;
-use zeta_ui_components::ScrollCommand;
-use zeta_ui_components::ScrollMetrics;
 use zeta_ui_components::ScrollState;
 use zui::ui::AccessibilityRole;
 use zui::ui::AccessibilitySelection;
@@ -20,45 +17,18 @@ use zui::ui::TextBlock;
 use zui::ui::TextStyle;
 use zui::ui::UiDispatch;
 
-use crate::ChatInputInteractionView;
-use crate::INTERACTION_ROW_HEIGHT;
 use crate::SessionPaneStyle;
 use crate::interaction::COMPOSER_INTERACTION;
 use crate::interaction::COMPOSER_PANEL;
 use crate::interaction::composer_interaction_item_id;
-use crate::interaction_list_bounds;
+
+use super::ChatInputInteractionView;
+use super::INTERACTION_ROW_HEIGHT;
+use super::interaction_list_bounds;
 
 const INTERACTION_TEXT_INSET: f32 = 10.0;
 
-/// Scroll state for the ChatInput interaction view inside one Session Pane.
-///
-/// The pane does not know which product View is mounted. Callers provide only viewport and content
-/// geometry; the pane retains the resulting scroll position and delegates clipping, translation,
-/// scrollbar geometry, and paint to `zeta_ui_components::ScrollView`.
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub struct ChatInputInteractionPaneState {
-    scroll_state: ScrollState,
-}
-
-impl ChatInputInteractionPaneState {
-    pub const fn scroll_state(self) -> ScrollState {
-        self.scroll_state
-    }
-
-    pub fn apply_scroll(&mut self, command: ScrollCommand, viewport: Size, content: Size) -> bool {
-        self.scroll_state.apply(
-            command,
-            ScrollMetrics::new(viewport, content),
-            ScrollAxis::Vertical,
-        )
-    }
-
-    pub fn reset(&mut self) {
-        self.scroll_state = ScrollState::default();
-    }
-}
-
-pub(crate) fn draw_chat_input_interaction_pane(
+pub(crate) fn draw_chat_input_interaction(
     context: &mut ComponentContext<'_, '_>,
     bounds: Rect,
     view: ChatInputInteractionView<'_>,
@@ -196,7 +166,3 @@ pub(crate) fn draw_chat_input_interaction_pane(
         });
     });
 }
-
-#[cfg(test)]
-#[path = "chat_input_interaction_pane_tests.rs"]
-mod tests;

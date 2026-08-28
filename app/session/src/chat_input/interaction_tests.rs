@@ -1,8 +1,8 @@
+use super::super::ComposerRoute;
 use super::ChatInputInteractionState;
 use super::ComposerInteractionActivation;
 use super::ComposerModelOption;
 use super::SelectionDirection;
-use crate::ComposerRoute;
 use zeta_protocol::{ModelId, ModelRef, ProviderId};
 
 fn model_option(provider: &str, model: &str, display_name: &str) -> ComposerModelOption {

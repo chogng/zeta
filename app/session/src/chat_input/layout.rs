@@ -1,4 +1,4 @@
-//! ChatInputPane layout owned by one Agent Session Pane.
+//! ChatInput layout owned by one Agent Session Pane.
 
 use zeta_ui_components::ScrollCommand;
 use zeta_ui_components::VirtualListLayout;
@@ -18,9 +18,9 @@ const MAX_VISIBLE_INTERACTION_ROWS: usize = 8;
 /// Logical height of one ChatInput interaction item.
 pub const INTERACTION_ROW_HEIGHT: f32 = 34.0;
 
-/// Resolved geometry for the ChatInputPane mounted at the bottom of a chat surface.
+/// Resolved geometry for the ChatInput mounted at the bottom of a chat surface.
 ///
-/// The layout keeps the editor, information bar, and toolbar fixed while the interaction pane
+/// The layout keeps the editor, information bar, and toolbar fixed while the interaction area
 /// list grows upward. The host owns the preferred heights and decides how to paint and register
 /// each returned region.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -123,7 +123,7 @@ impl ComposerPanelLayout {
         }
     }
 
-    /// Returns the full ChatInputPane bounds.
+    /// Returns the full ChatInput bounds.
     pub const fn panel(self) -> Rect {
         self.panel
     }
@@ -153,7 +153,7 @@ impl ComposerPanelLayout {
         self.toolbar
     }
 
-    /// Returns the chat content bounds above the ChatInputPane.
+    /// Returns the chat content bounds above the ChatInput.
     pub const fn output(self) -> Rect {
         self.output
     }
