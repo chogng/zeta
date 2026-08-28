@@ -50,10 +50,10 @@ pub fn run() -> ExitCode {
         return ExitCode::FAILURE;
     }
     let application_exit =
-        match Application::run(move |event_proxy| NativeApp::new(event_proxy, launch)) {
+        match Application::run(move |event_proxy| ProductApp::new(event_proxy, launch)) {
             Ok(application_exit) => application_exit,
             Err(error) => {
-                eprintln!("failed to run the native event loop: {error}");
+                eprintln!("failed to run the desktop event loop: {error}");
                 return ExitCode::FAILURE;
             }
         };

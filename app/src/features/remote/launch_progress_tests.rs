@@ -228,7 +228,7 @@ fn upload_progress_projects_a_safe_percentage() {
 }
 
 #[test]
-fn native_child_projection_throttles_upload_events_to_deciles() {
+fn desktop_child_progress_throttles_upload_events_to_deciles() {
     let mut projector = RemoteLaunchProgressProjector::default();
     let events = [0, 1, 9, 10, 19, 20, 99, 100]
         .into_iter()
@@ -268,7 +268,7 @@ fn native_child_projection_throttles_upload_events_to_deciles() {
 }
 
 #[test]
-fn native_child_projection_throttles_download_events_to_deciles() {
+fn desktop_child_progress_throttles_download_events_to_deciles() {
     let mut projector = RemoteLaunchProgressProjector::default();
     let events = [0, 1, 9, 10, 19, 20, 99, 100]
         .into_iter()

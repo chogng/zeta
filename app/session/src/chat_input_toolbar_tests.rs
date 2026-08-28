@@ -1,4 +1,4 @@
-use super::InputContextToolbar;
+use super::ChatInputToolbar;
 use crate::SessionPaneContext;
 use crate::SessionPaneStyle;
 use crate::interaction::CONTEXT_TOOLBAR;
@@ -41,7 +41,7 @@ fn toolbar_projects_four_real_context_values_as_action_buttons() {
     let context = context("~/Desktop/zeta", Some("main"), Some(7));
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
-    let toolbar = InputContextToolbar::new(
+    let toolbar = ChatInputToolbar::new(
         Rect::from_xywh(24.0, 600.0, 952.0, 24.0),
         &context,
         STYLE,
@@ -74,7 +74,7 @@ fn toolbar_scales_all_items_into_a_narrow_input_surface() {
     let context = context("/tmp/project", None, None);
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
-    let toolbar = InputContextToolbar::new(
+    let toolbar = ChatInputToolbar::new(
         Rect::from_xywh(24.0, 200.0, 192.0, 24.0),
         &context,
         STYLE,
@@ -92,7 +92,7 @@ fn toolbar_registers_the_same_button_bounds_used_for_painting() {
     let context = context("~/Desktop/zeta", Some("main"), Some(7));
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
-    let toolbar = InputContextToolbar::new(
+    let toolbar = ChatInputToolbar::new(
         Rect::from_xywh(24.0, 600.0, 952.0, 24.0),
         &context,
         STYLE,
@@ -116,7 +116,7 @@ fn toolbar_projects_host_hover_state_back_into_the_hit_button() {
     let context = context("~/Desktop/zeta", Some("main"), Some(7));
     let mut text_layout = TextInputLayoutEngine::new();
     let mut dispatch = UiDispatch::default();
-    let resting = InputContextToolbar::new(
+    let resting = ChatInputToolbar::new(
         Rect::from_xywh(24.0, 600.0, 952.0, 24.0),
         &context,
         STYLE,
@@ -130,7 +130,7 @@ fn toolbar_projects_host_hover_state_back_into_the_hit_button() {
         Point::new(first.origin.x + 1.0, first.origin.y + 1.0),
         frame.interaction(),
     );
-    let hovered = InputContextToolbar::new(
+    let hovered = ChatInputToolbar::new(
         Rect::from_xywh(24.0, 600.0, 952.0, 24.0),
         &context,
         STYLE,
@@ -150,7 +150,7 @@ fn toolbar_buttons_publish_accessible_labels_and_a_toolbar_parent() {
     let context = context("~/Desktop/zeta", Some("main"), Some(7));
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
-    let toolbar = InputContextToolbar::new(
+    let toolbar = ChatInputToolbar::new(
         Rect::from_xywh(24.0, 600.0, 952.0, 24.0),
         &context,
         STYLE,

@@ -15,6 +15,8 @@ use zeta_app_server_protocol::protocol::language::LanguageLocationsParams;
 use zeta_editor::{
     CodeEditorDiagnostic, CodeEditorDiagnosticSeverity, CodeEditorLanguage, CodeEditorRowSource,
 };
+use zeta_editor_host::FileEditorHost;
+use zeta_editor_host::FileEditorTab;
 use zeta_install_context::InstallContext;
 use zeta_language_server_catalog::{
     BASH_LANGUAGE_SERVER_ID, JSON_LANGUAGE_SERVER_ID, LanguageServerCatalog,
@@ -34,21 +36,20 @@ use self::remote::protocol_location_kind;
 use self::remote::protocol_position;
 use self::remote_session::RemoteLanguageSession;
 use crate::app_server::AppServerHost;
-use crate::file_editor_host::{FileEditorHost, FileEditorTab};
-use crate::native_event::NativeEvent;
+use crate::product_event::ProductEvent;
 
-struct NativeLanguageServiceEventSink {
-    event_proxy: AppProxy<NativeEvent>,
+struct ProductLanguageServiceEventSink {
+    event_proxy: AppProxy<ProductEvent>,
 }
 
-impl LanguageServiceEventSink for NativeLanguageServiceEventSink {
+impl LanguageServiceEventSink for ProductLanguageServiceEventSink {
     fn on_event(&self, event: LanguageServiceEvent) {
         let _ = self.event_proxy.send_event(event.into());
     }
 }
 
-/// Native composition adapter between retained file tabs and the product language service.
-pub(crate) struct NativeLanguageService {
+/// Desktop composition adapter between retained file tabs and the product language service.
+pub(crate) struct ProductLanguageService {
     service: Option<LanguageService>,
     remote: Option<RemoteLanguageSession>,
     is_remote: bool,
@@ -56,21 +57,21 @@ pub(crate) struct NativeLanguageService {
     install_context: InstallContext,
     config_generation: Option<u64>,
     workspace_root: PathBuf,
-    diagnostics: HashMap<PathBuf, NativeDocumentDiagnostics>,
+    diagnostics: HashMap<PathBuf, ProductDocumentDiagnostics>,
     server_states: HashMap<String, LanguageServerState>,
     hover: Option<LanguageHover>,
     completions: Option<LanguageCompletions>,
     definitions: Option<LanguageLocations>,
     request_error: Option<String>,
     pending_requests: PendingLanguageRequests,
-    event_proxy: AppProxy<NativeEvent>,
+    event_proxy: AppProxy<ProductEvent>,
 }
 
-impl NativeLanguageService {
+impl ProductLanguageService {
     /// Creates the host adapter without starting a local language-server process.
     ///
     /// Creates a Remote adapter before the shared Agent connection becomes available.
-    pub(crate) fn remote(workspace_root: &Path, event_proxy: AppProxy<NativeEvent>) -> Self {
+    pub(crate) fn remote(workspace_root: &Path, event_proxy: AppProxy<ProductEvent>) -> Self {
         Self {
             service: None,
             remote: None,
@@ -90,13 +91,13 @@ impl NativeLanguageService {
         }
     }
 
-    pub(crate) fn start(workspace_root: &Path, event_proxy: AppProxy<NativeEvent>) -> Self {
+    pub(crate) fn start(workspace_root: &Path, event_proxy: AppProxy<ProductEvent>) -> Self {
         // Persisted configuration is the canonical owner of language-server enablement. Keep the
         // local service disabled until that configuration arrives instead of briefly launching
         // every executable discovered on PATH.
         let catalog = LanguageServerCatalog::disabled();
         let install_context = InstallContext::current();
-        let events = Arc::new(NativeLanguageServiceEventSink {
+        let events = Arc::new(ProductLanguageServiceEventSink {
             event_proxy: event_proxy.clone(),
         });
         let service = LanguageService::start(
@@ -130,7 +131,7 @@ impl NativeLanguageService {
 
     pub(crate) fn start_remote(
         &mut self,
-        event_proxy: AppProxy<NativeEvent>,
+        event_proxy: AppProxy<ProductEvent>,
         target: AppServerHost,
     ) -> anyhow::Result<()> {
         self.attach_remote(RemoteLanguageSession::spawn(event_proxy, target)?);
@@ -146,7 +147,7 @@ impl NativeLanguageService {
             self.clear_requests();
             return;
         }
-        let events = Arc::new(NativeLanguageServiceEventSink {
+        let events = Arc::new(ProductLanguageServiceEventSink {
             event_proxy: self.event_proxy.clone(),
         });
         self.service = LanguageService::start(
@@ -185,7 +186,7 @@ impl NativeLanguageService {
             return;
         }
         self.shutdown_service();
-        let events = Arc::new(NativeLanguageServiceEventSink {
+        let events = Arc::new(ProductLanguageServiceEventSink {
             event_proxy: self.event_proxy.clone(),
         });
         self.service = LanguageService::start(
@@ -470,7 +471,7 @@ impl NativeLanguageService {
                         .collect();
                     self.diagnostics.insert(
                         diagnostics.path().to_path_buf(),
-                        NativeDocumentDiagnostics { revision, items },
+                        ProductDocumentDiagnostics { revision, items },
                     );
                 }
             }
@@ -586,7 +587,7 @@ impl NativeLanguageService {
     }
 }
 
-impl Drop for NativeLanguageService {
+impl Drop for ProductLanguageService {
     fn drop(&mut self) {
         self.shutdown_service();
     }
@@ -639,7 +640,7 @@ impl PendingLanguageRequests {
     }
 }
 
-struct NativeDocumentDiagnostics {
+struct ProductDocumentDiagnostics {
     revision: u64,
     items: Vec<CodeEditorDiagnostic>,
 }

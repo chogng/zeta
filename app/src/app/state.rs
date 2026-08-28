@@ -1,6 +1,6 @@
 use super::*;
 
-pub(crate) struct NativeApp {
+pub(crate) struct ProductApp {
     pub(super) window: Option<WindowHandle>,
     pub(super) presentation: Option<ShellPresentation>,
     pub(super) frame_scheduler: FrameScheduler,
@@ -8,8 +8,8 @@ pub(crate) struct NativeApp {
     pub(super) workspace_pane_host: WorkspacePaneHost,
     pub(super) file_editor_host: FileEditorHost,
     pub(super) file_editor_input: FileEditorInputState,
-    pub(super) file_editor_search: file_editor_search::FileEditorSearchState,
-    pub(super) language_service: language_service_host::NativeLanguageService,
+    pub(super) file_editor_search: FileEditorSearchState,
+    pub(super) language_service: language_service_host::ProductLanguageService,
     pub(super) session_search: SessionSearchState,
     pub(super) workbench: WorkbenchHost<PaneBinding>,
     pub(super) terminal_workspace: TerminalWorkspace,
@@ -20,7 +20,7 @@ pub(crate) struct NativeApp {
     pub(super) remote_connection_manager: RemoteConnectionManagerState,
     pub(super) remote_connection_launch: Option<remote_connection_process::RemoteConnectionLaunch>,
     pub(super) remote_tunnel_manager: RemoteTunnelManagerState,
-    pub(super) remote_tunnel_host: Option<NativeRemoteTunnelHost>,
+    pub(super) remote_tunnel_host: Option<ProductRemoteTunnelHost>,
     pub(super) ui_dispatch: UiDispatch,
     pub(super) session_runtime: Option<SessionRuntime>,
     pub(super) app_server_client: Option<AppServerRequestHandle>,
@@ -31,11 +31,11 @@ pub(crate) struct NativeApp {
     pub(super) text_layout: TextInputLayoutEngine,
     pub(super) caret_blink: CaretBlinkController,
     pub(super) code_editor_style: CodeEditorStyle,
-    pub(super) event_proxy: zui::app::AppProxy<NativeEvent>,
+    pub(super) event_proxy: zui::app::AppProxy<ProductEvent>,
     pub(super) clipboard: ClipboardHandle,
     pub(super) cursor_position: Option<Point>,
-    pub(super) command_registry: command_dispatch::NativeCommandRegistry,
-    pub(super) keybindings: keybindings::NativeKeybindings,
+    pub(super) command_registry: command_dispatch::ProductCommandRegistry,
+    pub(super) keybindings: keybindings::ProductKeybindings,
     pub(super) keybindings_resource: KeybindingsResource,
     pub(super) settings: SettingsState,
     pub(super) modifiers: ModifiersState,
@@ -48,8 +48,8 @@ pub(crate) struct NativeApp {
     pub(super) theme_follows_system: bool,
 }
 
-impl NativeApp {
-    pub(super) fn new(application: ApplicationHandle<NativeEvent>, launch: AppLaunch) -> Self {
+impl ProductApp {
+    pub(super) fn new(application: ApplicationHandle<ProductEvent>, launch: AppLaunch) -> Self {
         let event_proxy = application.proxy();
         let clipboard = application.clipboard();
         let local_workspace_context = WorkspaceContext::capture_current();
@@ -57,7 +57,7 @@ impl NativeApp {
         let remote_tunnel_host = app_server_host
             .ssh_transport()
             .map(|(host, ssh_executable)| {
-                NativeRemoteTunnelHost::new(host.clone(), ssh_executable.to_path_buf())
+                ProductRemoteTunnelHost::new(host.clone(), ssh_executable.to_path_buf())
             });
         let workspace_context = if app_server_host.is_remote() {
             WorkspaceContext::capture_remote(app_server_host.workspace_root().to_path_buf())
@@ -65,7 +65,7 @@ impl NativeApp {
             local_workspace_context
         };
         let workspace_pane_host = WorkspacePaneHost::new(&workspace_context);
-        let mut keybindings = keybindings::NativeKeybindings::default();
+        let mut keybindings = keybindings::ProductKeybindings::default();
         let mut keybindings_resource = KeybindingsResource::new(
             local_profile_root().join("keybindings.json"),
             zeta_keybinding::HostPlatform::current(),
@@ -79,12 +79,12 @@ impl NativeApp {
         let session_pane =
             SessionPaneState::for_working_directory(workspace_context.working_directory());
         let language_service = if launch.is_remote() {
-            language_service_host::NativeLanguageService::remote(
+            language_service_host::ProductLanguageService::remote(
                 workspace_context.working_directory(),
                 event_proxy.clone(),
             )
         } else {
-            language_service_host::NativeLanguageService::start(
+            language_service_host::ProductLanguageService::start(
                 workspace_context.working_directory(),
                 event_proxy.clone(),
             )
@@ -96,7 +96,7 @@ impl NativeApp {
             retained_runtime: RetainedRuntime::default(),
             workspace_pane_host,
             file_editor_input: FileEditorInputState::default(),
-            file_editor_search: file_editor_search::FileEditorSearchState::default(),
+            file_editor_search: FileEditorSearchState::default(),
             language_service,
             file_editor_host: FileEditorHost::default(),
             session_search: SessionSearchState::default(),

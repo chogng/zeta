@@ -1,6 +1,6 @@
 use super::*;
 
-impl NativeApp {
+impl ProductApp {
     pub(super) fn logical_pointer_position(&self, physical_x: f64, physical_y: f64) -> Point {
         let scale_factor = if self.scale_factor.is_finite() && self.scale_factor > 0.0 {
             self.scale_factor as f32
@@ -104,7 +104,7 @@ impl NativeApp {
                     if let Some(window) = self.window.as_ref()
                         && let Err(error) = window.start_window_drag()
                     {
-                        eprintln!("could not begin native window drag: {error}");
+                        eprintln!("could not begin desktop window drag: {error}");
                     }
                 }
                 UiIntent::Activate(id) => self.activate_shell_element(id),

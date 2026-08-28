@@ -7,14 +7,14 @@ use zui::ui::{
     NavigationAxis, UiDispatch,
 };
 
-use crate::NativeApp;
+use crate::ProductApp;
 use crate::git_branch_context_menu::{
     GIT_BRANCH_SEARCH_INPUT, GitBranchContextMenuState, GitBranchMenuActivation,
 };
 use crate::shell_interaction::CONTEXT_GIT_BRANCH;
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
 
-impl NativeApp {
+impl ProductApp {
     pub(super) fn toggle_git_branch_context_menu(&mut self) {
         if self.git_branch_context_menu.is_open() {
             self.dismiss_git_branch_context_menu();
@@ -61,8 +61,8 @@ impl NativeApp {
                     self.dismiss_git_branch_context_menu();
                     return true;
                 }
-                let projection = match self.switch_git_branch(branch.name().into()) {
-                    Ok(projection) => projection,
+                let snapshot = match self.switch_git_branch(branch.name().into()) {
+                    Ok(snapshot) => snapshot,
                     Err(error) => {
                         eprintln!("could not switch Git branch: {error}");
                         self.git_branch_context_menu.set_switch_error();
@@ -70,8 +70,7 @@ impl NativeApp {
                         return true;
                     }
                 };
-                self.workspace_context
-                    .apply_git_projection(Some(&projection));
+                self.workspace_context.apply_git_snapshot(Some(&snapshot));
                 self.workspace_pane_host
                     .replace_workspace(&self.workspace_context);
                 self.refresh_files_from_app_server();

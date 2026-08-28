@@ -15,7 +15,7 @@ const REMOTE_LAUNCH_PROGRESS_PREFIX: &str = "__APP_REMOTE_LAUNCH__:";
 const REMOTE_LAUNCH_ERROR_MAX_BYTES: usize = 4 * 1024;
 const REMOTE_LAUNCH_PROGRESS_MAX_LINE_BYTES: usize = 32 * 1024;
 
-/// Bounded child-process progress projected to the Native window that requested a Remote launch.
+/// Bounded child-process progress projected to the Desktop window that requested a Remote launch.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum RemoteLaunchProgressEvent {
     CheckingRuntime,

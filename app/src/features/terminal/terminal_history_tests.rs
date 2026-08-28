@@ -2,7 +2,7 @@ use super::{block_view_range, scroll_limit, visible_text_lines};
 use zeta_terminal::{GridSize, TerminalCore};
 
 #[test]
-fn block_projection_uses_the_same_range_for_scroll_limit_and_visible_text() {
+fn block_history_uses_the_same_range_for_scroll_limit_and_visible_text() {
     let mut terminal = TerminalCore::new(GridSize::new(3, 16));
     terminal.start_command("history");
     terminal.process_output(b"one\ntwo\nthree\nfour\n");

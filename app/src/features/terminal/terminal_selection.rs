@@ -4,10 +4,10 @@ use zui::services::{ClipboardError, ClipboardHandle};
 
 pub(crate) use zeta_terminal_workspace::{TerminalSelectionRange, paint_terminal_selection};
 
-use crate::NativeApp;
-use crate::terminal_projection::visible_text_lines;
+use crate::ProductApp;
+use crate::terminal_history::visible_text_lines;
 
-impl NativeApp {
+impl ProductApp {
     pub(super) fn route_terminal_selection_move(
         &mut self,
         position: Option<TerminalMousePosition>,

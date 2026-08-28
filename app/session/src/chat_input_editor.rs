@@ -27,23 +27,23 @@ const MAX_VISIBLE_ROWS: usize = 8;
 const MIN_EDITOR_HEIGHT: f32 = 44.0;
 const PLACEHOLDER_HORIZONTAL_INSET: f32 = 12.0;
 
-/// Focus projection used by the compact composer editor.
+/// Focus state used by the compact ChatInput editor.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum ComposerInputFocus {
+pub enum ChatInputFocus {
     #[default]
     Blurred,
     Focused(CaretVisibility),
 }
 
-/// Multiline document and retained viewport for one Session Pane composer.
-pub struct ComposerInput {
+/// Multiline document and retained viewport for one Session Pane ChatInput.
+pub struct ChatInputEditor {
     document: CodeEditorDocument,
     viewport: CodeEditorViewport,
     style: CodeEditorStyle,
     ghost_text: Option<String>,
 }
 
-impl Default for ComposerInput {
+impl Default for ChatInputEditor {
     fn default() -> Self {
         Self {
             document: CodeEditorDocument::from_text(""),
@@ -54,7 +54,7 @@ impl Default for ComposerInput {
     }
 }
 
-impl ComposerInput {
+impl ChatInputEditor {
     pub fn text(&self) -> &str {
         self.document.text()
     }
@@ -190,10 +190,10 @@ impl ComposerInput {
         &'a self,
         bounds: Rect,
         placeholder: &'a str,
-        focus: ComposerInputFocus,
+        focus: ChatInputFocus,
         placeholder_color: Color,
-    ) -> ComposerInputView<'a> {
-        ComposerInputView {
+    ) -> ChatInputView<'a> {
+        ChatInputView {
             bounds,
             input: self,
             placeholder,
@@ -223,18 +223,18 @@ impl ComposerInput {
     }
 }
 
-/// Compact CodeEditor projection with Agent-composer placeholder semantics.
-pub struct ComposerInputView<'a> {
+/// Compact CodeEditor view with ChatInput placeholder semantics.
+pub struct ChatInputView<'a> {
     bounds: Rect,
-    input: &'a ComposerInput,
+    input: &'a ChatInputEditor,
     placeholder: &'a str,
-    focus: ComposerInputFocus,
+    focus: ChatInputFocus,
     placeholder_color: Color,
 }
 
-impl ComposerInputView<'_> {
+impl ChatInputView<'_> {
     pub fn caret_bounds(&self) -> Option<Rect> {
-        let ComposerInputFocus::Focused(CaretVisibility::Visible) = self.focus else {
+        let ChatInputFocus::Focused(CaretVisibility::Visible) = self.focus else {
             return None;
         };
         self.input
@@ -243,18 +243,18 @@ impl ComposerInputView<'_> {
     }
 }
 
-impl Component for ComposerInputView<'_> {
+impl Component for ChatInputView<'_> {
     fn element(&self) -> ComponentElement {
-        Element::leaf("ComposerInput").in_bounds(self.bounds)
+        Element::leaf("ChatInput").in_bounds(self.bounds)
     }
 
     fn paint(&self, scene: &mut UiScene) {
         let caret_visibility = match self.focus {
-            ComposerInputFocus::Blurred => CaretVisibility::Hidden,
-            ComposerInputFocus::Focused(visibility) => visibility,
+            ChatInputFocus::Blurred => CaretVisibility::Hidden,
+            ChatInputFocus::Focused(visibility) => visibility,
         };
         let mut editor = self.input.code_editor(self.bounds, caret_visibility);
-        if matches!(self.focus, ComposerInputFocus::Focused(_))
+        if matches!(self.focus, ChatInputFocus::Focused(_))
             && let Some(ghost_text) = self.input.ghost_text.as_deref()
         {
             editor = editor.with_ghost_text(ghost_text);
@@ -282,5 +282,5 @@ impl Component for ComposerInputView<'_> {
 }
 
 #[cfg(test)]
-#[path = "composer_input_tests.rs"]
+#[path = "chat_input_editor_tests.rs"]
 mod tests;

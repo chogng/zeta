@@ -19,25 +19,25 @@ use zeta_keybindings_host::UserBindingTarget;
 
 use zeta_commands::AppCommandId;
 
-pub(crate) type NativeKeybindings = Keybindings<NativeKeybindingCatalog>;
-pub(crate) type NativeKeybindingResolution = KeybindingResolution<AppCommandId>;
+pub(crate) type ProductKeybindings = Keybindings<ProductKeybindingCatalog>;
+pub(crate) type ProductKeybindingResolution = KeybindingResolution<AppCommandId>;
 #[cfg(test)]
-pub(crate) type NativeUserBinding = UserBinding<NativeKeybindingCatalog>;
+pub(crate) type ProductUserBinding = UserBinding<ProductKeybindingCatalog>;
 #[cfg(test)]
-pub(crate) type NativeUserBindingTarget = UserBindingTarget<AppCommandId>;
+pub(crate) type ProductUserBindingTarget = UserBindingTarget<AppCommandId>;
 pub(crate) type KeybindingsResource =
-    zeta_keybindings_host::KeybindingsResource<NativeKeybindingCatalog>;
+    zeta_keybindings_host::KeybindingsResource<ProductKeybindingCatalog>;
 
 pub(crate) use zeta_keybindings_host::KeybindingsResourcePoll;
 
 /// Product context facts projected into the generic keybinding catalog.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct NativeKeybindingContext {
-    facts: NativeKeybindingFacts,
+pub(crate) struct ProductKeybindingContext {
+    facts: ProductKeybindingFacts,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct NativeKeybindingFacts {
+pub(crate) struct ProductKeybindingFacts {
     pub(crate) direct_terminal: bool,
     pub(crate) terminal_surface_visible: bool,
     pub(crate) tab_container_visible: bool,
@@ -46,11 +46,11 @@ pub(crate) struct NativeKeybindingFacts {
     pub(crate) composer_route: &'static str,
 }
 
-impl NativeKeybindingContext {
+impl ProductKeybindingContext {
     #[cfg(test)]
     pub(crate) const fn text_input() -> Self {
         Self {
-            facts: NativeKeybindingFacts {
+            facts: ProductKeybindingFacts {
                 direct_terminal: false,
                 terminal_surface_visible: false,
                 tab_container_visible: false,
@@ -64,7 +64,7 @@ impl NativeKeybindingContext {
     #[cfg(test)]
     pub(crate) const fn direct_terminal() -> Self {
         Self {
-            facts: NativeKeybindingFacts {
+            facts: ProductKeybindingFacts {
                 direct_terminal: true,
                 terminal_surface_visible: true,
                 tab_container_visible: false,
@@ -75,7 +75,7 @@ impl NativeKeybindingContext {
         }
     }
 
-    pub(crate) const fn from_facts(facts: NativeKeybindingFacts) -> Self {
+    pub(crate) const fn from_facts(facts: ProductKeybindingFacts) -> Self {
         Self { facts }
     }
 
@@ -113,7 +113,7 @@ impl NativeKeybindingContext {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum NativeBindingCondition {
+pub(crate) enum ProductBindingCondition {
     Always,
     TextInput,
     DirectTerminal,
@@ -121,12 +121,12 @@ pub(crate) enum NativeBindingCondition {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub(crate) struct NativeKeybindingCatalog;
+pub(crate) struct ProductKeybindingCatalog;
 
-impl KeybindingCatalog for NativeKeybindingCatalog {
+impl KeybindingCatalog for ProductKeybindingCatalog {
     type Command = AppCommandId;
-    type Condition = NativeBindingCondition;
-    type Context = NativeKeybindingContext;
+    type Condition = ProductBindingCondition;
+    type Context = ProductKeybindingContext;
 
     fn builtin_bindings(platform: HostPlatform) -> BindingSet<Self::Condition, Self::Command> {
         builtin_bindings(platform)
@@ -146,17 +146,17 @@ impl KeybindingCatalog for NativeKeybindingCatalog {
 
     fn parse_condition(source: Option<&str>) -> Result<Self::Condition, String> {
         let Some(source) = source else {
-            return Ok(NativeBindingCondition::Always);
+            return Ok(ProductBindingCondition::Always);
         };
         let expression = ContextExpression::parse(source).map_err(|error| error.to_string())?;
         if let Some(key) = expression
             .referenced_keys()
             .into_iter()
-            .find(|key| !NativeKeybindingContext::supports_key(key))
+            .find(|key| !ProductKeybindingContext::supports_key(key))
         {
             return Err(format!("unknown context key `{key}`"));
         }
-        Ok(NativeBindingCondition::Expression(expression))
+        Ok(ProductBindingCondition::Expression(expression))
     }
 
     fn condition_matches(condition: &Self::Condition, context: &Self::Context) -> bool {
@@ -165,14 +165,14 @@ impl KeybindingCatalog for NativeKeybindingCatalog {
 }
 
 fn condition_matches(
-    condition: &NativeBindingCondition,
-    context: &NativeKeybindingContext,
+    condition: &ProductBindingCondition,
+    context: &ProductKeybindingContext,
 ) -> bool {
     match condition {
-        NativeBindingCondition::Always => true,
-        NativeBindingCondition::TextInput => !context.facts.direct_terminal,
-        NativeBindingCondition::DirectTerminal => context.facts.direct_terminal,
-        NativeBindingCondition::Expression(expression) => {
+        ProductBindingCondition::Always => true,
+        ProductBindingCondition::TextInput => !context.facts.direct_terminal,
+        ProductBindingCondition::DirectTerminal => context.facts.direct_terminal,
+        ProductBindingCondition::Expression(expression) => {
             expression.evaluate(|key| context.value(key))
         }
     }
@@ -248,21 +248,21 @@ fn static_keyboard_shortcuts_binding() -> &'static KeySequence {
     })
 }
 
-fn builtin_bindings(platform: HostPlatform) -> BindingSet<NativeBindingCondition, AppCommandId> {
+fn builtin_bindings(platform: HostPlatform) -> BindingSet<ProductBindingCondition, AppCommandId> {
     let mut bindings = BindingSet::default();
     register(
         &mut bindings,
         "j",
         ShortcutModifiers::primary(),
         AppCommandId::ToggleTerminalSurface,
-        NativeBindingCondition::Always,
+        ProductBindingCondition::Always,
     );
     register(
         &mut bindings,
         ",",
         ShortcutModifiers::primary(),
         AppCommandId::OpenKeyboardShortcuts,
-        NativeBindingCondition::Always,
+        ProductBindingCondition::Always,
     );
     register_text_input_clipboard(&mut bindings);
     register(
@@ -270,59 +270,59 @@ fn builtin_bindings(platform: HostPlatform) -> BindingSet<NativeBindingCondition
         "s",
         ShortcutModifiers::primary(),
         AppCommandId::Save,
-        NativeBindingCondition::Always,
+        ProductBindingCondition::Always,
     );
     register(
         &mut bindings,
         "\\",
         ShortcutModifiers::primary(),
         AppCommandId::SplitTerminalHorizontal,
-        NativeBindingCondition::Always,
+        ProductBindingCondition::Always,
     );
     register(
         &mut bindings,
         "\\",
         ShortcutModifiers::primary().with_shift(),
         AppCommandId::SplitTerminalVertical,
-        NativeBindingCondition::Always,
+        ProductBindingCondition::Always,
     );
     register_direct_terminal_clipboard(&mut bindings, platform);
     bindings
 }
 
-fn register_text_input_clipboard(bindings: &mut BindingSet<NativeBindingCondition, AppCommandId>) {
+fn register_text_input_clipboard(bindings: &mut BindingSet<ProductBindingCondition, AppCommandId>) {
     register(
         bindings,
         "c",
         ShortcutModifiers::primary(),
         AppCommandId::Copy,
-        NativeBindingCondition::TextInput,
+        ProductBindingCondition::TextInput,
     );
     register(
         bindings,
         "v",
         ShortcutModifiers::primary(),
         AppCommandId::Paste,
-        NativeBindingCondition::TextInput,
+        ProductBindingCondition::TextInput,
     );
     register(
         bindings,
         "c",
         ShortcutModifiers::primary().with_shift(),
         AppCommandId::Copy,
-        NativeBindingCondition::TextInput,
+        ProductBindingCondition::TextInput,
     );
     register(
         bindings,
         "v",
         ShortcutModifiers::primary().with_shift(),
         AppCommandId::Paste,
-        NativeBindingCondition::TextInput,
+        ProductBindingCondition::TextInput,
     );
 }
 
 fn register_direct_terminal_clipboard(
-    bindings: &mut BindingSet<NativeBindingCondition, AppCommandId>,
+    bindings: &mut BindingSet<ProductBindingCondition, AppCommandId>,
     platform: HostPlatform,
 ) {
     let modifiers = if platform == HostPlatform::MacOs {
@@ -335,23 +335,23 @@ fn register_direct_terminal_clipboard(
         "c",
         modifiers,
         AppCommandId::Copy,
-        NativeBindingCondition::DirectTerminal,
+        ProductBindingCondition::DirectTerminal,
     );
     register(
         bindings,
         "v",
         modifiers,
         AppCommandId::Paste,
-        NativeBindingCondition::DirectTerminal,
+        ProductBindingCondition::DirectTerminal,
     );
 }
 
 fn register(
-    bindings: &mut BindingSet<NativeBindingCondition, AppCommandId>,
+    bindings: &mut BindingSet<ProductBindingCondition, AppCommandId>,
     key: &str,
     modifiers: ShortcutModifiers,
     command: AppCommandId,
-    condition: NativeBindingCondition,
+    condition: ProductBindingCondition,
 ) {
     let chord = Chord::logical(key, modifiers).expect("builtin shortcut key must be valid");
     bindings.register_command(
@@ -367,16 +367,16 @@ fn register(
 pub(crate) fn compile_user_bindings(
     contents: &[u8],
     platform: HostPlatform,
-) -> Result<Vec<NativeUserBinding>, zeta_keybindings_host::KeybindingsResourceError> {
-    zeta_keybindings_host::compile_user_bindings::<NativeKeybindingCatalog>(contents, platform)
+) -> Result<Vec<ProductUserBinding>, zeta_keybindings_host::KeybindingsResourceError> {
+    zeta_keybindings_host::compile_user_bindings::<ProductKeybindingCatalog>(contents, platform)
 }
 
 #[cfg(test)]
 pub(crate) fn binding_diagnostics(
-    rules: &[NativeUserBinding],
+    rules: &[ProductUserBinding],
     platform: HostPlatform,
 ) -> Vec<String> {
-    zeta_keybindings_host::binding_diagnostics::<NativeKeybindingCatalog>(rules, platform)
+    zeta_keybindings_host::binding_diagnostics::<ProductKeybindingCatalog>(rules, platform)
 }
 
 #[cfg(test)]

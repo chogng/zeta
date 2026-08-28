@@ -7,7 +7,7 @@ use super::{
 use zeta_terminal::{GridSize, TerminalCore};
 
 #[test]
-fn terminal_events_keep_their_native_session_identity() {
+fn terminal_events_keep_their_desktop_session_identity() {
     let key = TerminalSessionKey::new(7);
     let envelope = TerminalSessionEventEnvelope::new(key, TerminalSessionEvent::Output(vec![1]));
 
@@ -35,7 +35,7 @@ fn terminal_output_queries_leave_reply_bytes_for_the_session_owner() {
 }
 
 #[test]
-fn supported_shell_bootstrap_disables_echo_and_hides_the_native_prompt() {
+fn supported_shell_bootstrap_disables_echo_and_hides_the_desktop_prompt() {
     let bootstrap = shell_bootstrap("/bin/zsh").unwrap();
     let input = String::from_utf8(bootstrap.input).unwrap();
 

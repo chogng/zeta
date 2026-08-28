@@ -3,6 +3,19 @@ use std::time::Instant;
 use zeta_remote_connections::RemoteConnectionCatalog;
 use zeta_remote_connections::RemoteConnectionName;
 use zeta_remote_connections::RemoteConnectionSaveMode;
+use zeta_settings::REMOTE_CONNECTION_MANAGER;
+use zeta_settings::REMOTE_CONNECTION_MANAGER_CLOSE;
+use zeta_settings::REMOTE_CONNECTION_MANAGER_CONNECT;
+use zeta_settings::REMOTE_CONNECTION_MANAGER_DELETE;
+use zeta_settings::REMOTE_CONNECTION_MANAGER_HOST;
+use zeta_settings::REMOTE_CONNECTION_MANAGER_NAME;
+use zeta_settings::REMOTE_CONNECTION_MANAGER_NEW;
+use zeta_settings::REMOTE_CONNECTION_MANAGER_SAVE;
+use zeta_settings::REMOTE_CONNECTION_MANAGER_WORKSPACE;
+use zeta_settings::RemoteConnectionManagerField;
+use zeta_settings::RemoteConnectionSaveRequest;
+use zeta_settings::remote_connection_manager_item_id;
+use zeta_settings::remote_connection_manager_item_index;
 use zui::input::ElementState;
 use zui::input::Key;
 use zui::input::KeyEvent;
@@ -17,21 +30,8 @@ use zui::ui::NavigationAxis;
 use zui::ui::Point;
 use zui::ui::TextInputCommand;
 
-use crate::NativeApp;
+use crate::ProductApp;
 use crate::app_server::local_profile_root;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_CLOSE;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_CONNECT;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_DELETE;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_HOST;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_NAME;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_NEW;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_SAVE;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_WORKSPACE;
-use crate::remote_connection_manager::RemoteConnectionManagerField;
-use crate::remote_connection_manager::RemoteConnectionSaveRequest;
-use crate::remote_connection_manager::remote_connection_manager_item_id;
-use crate::remote_connection_manager::remote_connection_manager_item_index;
 use crate::terminal_input::text_input_command;
 use crate::terminal_selection::read_clipboard_text;
 use crate::terminal_selection::write_clipboard_text;
@@ -41,7 +41,7 @@ mod support;
 use support::is_remote_connection_manager_element;
 use support::remote_connection_manager_scroll_command;
 
-impl NativeApp {
+impl ProductApp {
     pub(super) fn open_remote_connection_settings(&mut self) -> bool {
         if self.remote_connection_manager.is_settings() {
             self.rebuild_and_focus_remote_connection_manager();

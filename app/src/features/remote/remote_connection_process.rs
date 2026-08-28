@@ -16,7 +16,7 @@ use zui::app::AppProxy;
 
 use crate::launch_progress::REMOTE_LAUNCH_PROGRESS_ENV;
 use crate::launch_progress::RemoteLaunchProgressEvent;
-use crate::native_event::NativeEvent;
+use crate::product_event::ProductEvent;
 
 const CHILD_POLL_INTERVAL: Duration = Duration::from_millis(100);
 static NEXT_REMOTE_LAUNCH_ID: AtomicU64 = AtomicU64::new(1);
@@ -74,7 +74,7 @@ impl RemoteConnectionLaunch {
 /// Starts a new app process without a shell and observes only its bounded launch progress.
 pub(crate) fn launch_remote_connection(
     name: &RemoteConnectionName,
-    event_proxy: AppProxy<NativeEvent>,
+    event_proxy: AppProxy<ProductEvent>,
 ) -> Result<RemoteConnectionLaunch, String> {
     let executable = std::env::current_exe()
         .map_err(|error| format!("could not locate the running app executable: {error}"))?;
@@ -84,7 +84,7 @@ pub(crate) fn launch_remote_connection(
 fn launch_remote_connection_with_executable(
     executable: &Path,
     name: &RemoteConnectionName,
-    event_proxy: AppProxy<NativeEvent>,
+    event_proxy: AppProxy<ProductEvent>,
 ) -> Result<RemoteConnectionLaunch, String> {
     let launch_id = NEXT_REMOTE_LAUNCH_ID.fetch_add(1, Ordering::Relaxed);
     let mut child = remote_connection_command(executable, name)
@@ -125,7 +125,7 @@ fn launch_remote_connection_with_executable(
 fn read_child_progress(
     launch_id: u64,
     progress_stream: impl std::io::Read,
-    event_proxy: &AppProxy<NativeEvent>,
+    event_proxy: &AppProxy<ProductEvent>,
 ) {
     for line in BufReader::new(progress_stream).lines() {
         let line = match line {
@@ -163,7 +163,7 @@ fn reap_child(
     launch_id: u64,
     child: Arc<Mutex<Option<Child>>>,
     progress_reader: std::thread::JoinHandle<()>,
-    event_proxy: &AppProxy<NativeEvent>,
+    event_proxy: &AppProxy<ProductEvent>,
 ) {
     loop {
         let status = match poll_child(&child) {
@@ -221,7 +221,7 @@ fn poll_child(child: &Arc<Mutex<Option<Child>>>) -> Result<Option<ExitStatus>, S
 }
 
 fn send_progress(
-    event_proxy: &AppProxy<NativeEvent>,
+    event_proxy: &AppProxy<ProductEvent>,
     launch_id: u64,
     progress: RemoteLaunchProgressEvent,
 ) {
@@ -234,8 +234,8 @@ fn send_progress(
     );
 }
 
-fn send_event(event_proxy: &AppProxy<NativeEvent>, event: RemoteWindowLaunchEvent) {
-    let _ = event_proxy.send_event(NativeEvent::RemoteWindowLaunch(event));
+fn send_event(event_proxy: &AppProxy<ProductEvent>, event: RemoteWindowLaunchEvent) {
+    let _ = event_proxy.send_event(ProductEvent::RemoteWindowLaunch(event));
 }
 
 fn terminate_child(child: &Arc<Mutex<Option<Child>>>) {

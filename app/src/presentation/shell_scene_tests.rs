@@ -4,12 +4,8 @@ use super::{
     terminal_mouse_position_for_viewport, terminal_pane_sash_for_viewport,
 };
 use crate::PRODUCT_DISPLAY_NAME;
-use crate::file_editor_host::FileEditorHost;
 use crate::git_branch_context_menu::GitBranchContextMenuState;
-use crate::keybindings::NativeKeybindings;
-use crate::remote_connection_manager::RemoteConnectionManagerState;
-use crate::remote_connection_picker::RemoteConnectionPickerState;
-use crate::remote_tunnel_manager::RemoteTunnelManagerState;
+use crate::keybindings::ProductKeybindings;
 use crate::shell_interaction::{
     CHANGES_PANE, COMPOSER, COMPOSER_INFO_BAR, COMPOSER_PANEL, FILE_EDITOR_DOCUMENT,
     FILE_EDITOR_PANE, FILE_EDITOR_TAB_LIST, FILES_PANE, FILES_REFRESH, FILES_SEARCH,
@@ -25,8 +21,12 @@ use crate::workspace_path_picker::WorkspacePathPickerState;
 use crate::workspace_surface::WorkspaceSurfaceKind;
 use zeta_app_server_protocol::protocol::fs::{FsFileType, FsReadDirectoryEntry};
 use zeta_editor::CodeEditorStyle;
+use zeta_editor_host::FileEditorHost;
 use zeta_session::SessionPaneState;
 use zeta_session::interaction::ContextAction;
+use zeta_settings::RemoteConnectionManagerState;
+use zeta_settings::RemoteConnectionPickerState;
+use zeta_settings::RemoteTunnelManagerState;
 use zeta_settings::SettingsState;
 use zeta_terminal::{GridSize, ScreenBuffer, TerminalCore};
 use zeta_terminal_workspace::PaneBinding;
@@ -54,7 +54,7 @@ fn viewport() -> LogicalViewport {
 }
 
 #[test]
-fn inspector_part_outer_border_is_owned_by_native_shell() {
+fn inspector_part_outer_border_is_owned_by_desktop_shell() {
     let bounds = Rect::from_xywh(680.0, 40.0, 320.0, 660.0);
     let mut scene = UiScene::new(zeta_ui_theme::DEFAULT_UI_THEME.workbench_background);
 
@@ -241,7 +241,7 @@ fn presentation_with_active_tab_input(
             },
             file_editor_host: &file_editor_host,
             file_editor_prompt: crate::file_editor_pane::FileEditorPrompt::None,
-            file_editor_search: &crate::file_editor_search::FileEditorSearchState::default(),
+            file_editor_search: &zeta_editor_host::FileEditorSearchState::default(),
             file_editor_diagnostics: &[],
             language_hover: None,
             language_completions: None,
@@ -263,7 +263,7 @@ fn presentation_with_active_tab_input(
             remote_connection_picker: &RemoteConnectionPickerState::default(),
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
-            keybindings: &NativeKeybindings::default(),
+            keybindings: &ProductKeybindings::default(),
             settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
             theme_scheme: zeta_theme::ColorScheme::Light,
@@ -295,7 +295,7 @@ fn presentation_with_active_tab_input(
             },
             file_editor_host: &file_editor_host,
             file_editor_prompt: crate::file_editor_pane::FileEditorPrompt::None,
-            file_editor_search: &crate::file_editor_search::FileEditorSearchState::default(),
+            file_editor_search: &zeta_editor_host::FileEditorSearchState::default(),
             file_editor_diagnostics: &[],
             language_hover: None,
             language_completions: None,
@@ -317,7 +317,7 @@ fn presentation_with_active_tab_input(
             remote_connection_picker: &RemoteConnectionPickerState::default(),
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
-            keybindings: &NativeKeybindings::default(),
+            keybindings: &ProductKeybindings::default(),
             settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
             theme_scheme: zeta_theme::ColorScheme::Light,
@@ -489,7 +489,7 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
             workspace_surface: WorkspaceSurfaceKind::Editor,
             file_editor_host: &file_editor_host,
             file_editor_prompt: crate::file_editor_pane::FileEditorPrompt::None,
-            file_editor_search: &crate::file_editor_search::FileEditorSearchState::default(),
+            file_editor_search: &zeta_editor_host::FileEditorSearchState::default(),
             file_editor_diagnostics: &[],
             language_hover: None,
             language_completions: None,
@@ -511,7 +511,7 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
             remote_connection_picker: &RemoteConnectionPickerState::default(),
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
-            keybindings: &NativeKeybindings::default(),
+            keybindings: &ProductKeybindings::default(),
             settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
             theme_scheme: zeta_theme::ColorScheme::Light,
@@ -774,7 +774,7 @@ fn session_search_filters_tabs_by_session_name() {
             workspace_surface: WorkspaceSurfaceKind::Agent,
             file_editor_host: &file_editor_host,
             file_editor_prompt: crate::file_editor_pane::FileEditorPrompt::None,
-            file_editor_search: &crate::file_editor_search::FileEditorSearchState::default(),
+            file_editor_search: &zeta_editor_host::FileEditorSearchState::default(),
             file_editor_diagnostics: &[],
             language_hover: None,
             language_completions: None,
@@ -796,7 +796,7 @@ fn session_search_filters_tabs_by_session_name() {
             remote_connection_picker: &RemoteConnectionPickerState::default(),
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
-            keybindings: &NativeKeybindings::default(),
+            keybindings: &ProductKeybindings::default(),
             settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
             theme_scheme: zeta_theme::ColorScheme::Light,
@@ -973,7 +973,7 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
             workspace_surface: WorkspaceSurfaceKind::Agent,
             file_editor_host: &file_editor_host,
             file_editor_prompt: crate::file_editor_pane::FileEditorPrompt::None,
-            file_editor_search: &crate::file_editor_search::FileEditorSearchState::default(),
+            file_editor_search: &zeta_editor_host::FileEditorSearchState::default(),
             file_editor_diagnostics: &[],
             language_hover: None,
             language_completions: None,
@@ -995,7 +995,7 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
             remote_connection_picker: &RemoteConnectionPickerState::default(),
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
-            keybindings: &NativeKeybindings::default(),
+            keybindings: &ProductKeybindings::default(),
             settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
             theme_scheme: zeta_theme::ColorScheme::Light,
@@ -1178,7 +1178,7 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
     let workspace_path_picker = WorkspacePathPickerState::default();
     let remote_connection_picker = RemoteConnectionPickerState::default();
     let remote_connection_manager = RemoteConnectionManagerState::default();
-    let keybindings = NativeKeybindings::default();
+    let keybindings = ProductKeybindings::default();
     let settings = SettingsState::default();
     let file_editor_host = FileEditorHost::default();
     let code_editor_style = CodeEditorStyle::light();
@@ -1197,7 +1197,7 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         workspace_surface: WorkspaceSurfaceKind::Agent,
         file_editor_host: &file_editor_host,
         file_editor_prompt: crate::file_editor_pane::FileEditorPrompt::None,
-        file_editor_search: &crate::file_editor_search::FileEditorSearchState::default(),
+        file_editor_search: &zeta_editor_host::FileEditorSearchState::default(),
         file_editor_diagnostics: &[],
         language_hover: None,
         language_completions: None,
@@ -1373,7 +1373,7 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             workspace_surface: WorkspaceSurfaceKind::Agent,
             file_editor_host: &file_editor_host,
             file_editor_prompt: crate::file_editor_pane::FileEditorPrompt::None,
-            file_editor_search: &crate::file_editor_search::FileEditorSearchState::default(),
+            file_editor_search: &zeta_editor_host::FileEditorSearchState::default(),
             file_editor_diagnostics: &[],
             language_hover: None,
             language_completions: None,
@@ -1395,7 +1395,7 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             remote_connection_picker: &RemoteConnectionPickerState::default(),
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
-            keybindings: &NativeKeybindings::default(),
+            keybindings: &ProductKeybindings::default(),
             settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
             theme_scheme: zeta_theme::ColorScheme::Light,

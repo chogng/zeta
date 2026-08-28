@@ -3,9 +3,6 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use anyhow::anyhow;
-use zeta_app_server_client::AppServerRequestHandle;
-use zeta_app_server_client::ClientError;
-use zeta_app_server_client::ServerNotification;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
 use zeta_app_server_protocol::protocol::fs::FsGetMetadataParams;
 use zeta_app_server_protocol::protocol::fs::FsGetMetadataResult;
@@ -15,6 +12,7 @@ use zeta_app_server_protocol::protocol::fs::FsWriteFileParams;
 use zeta_app_server_protocol::protocol::git::GitBranchDto;
 use zeta_app_server_protocol::protocol::git::GitBranchSwitchParams;
 use zeta_app_server_protocol::protocol::git::GitTextDiffResult;
+use zeta_editor_host::FileEditorCloseRequest;
 use zeta_protocol::Session;
 use zeta_terminal_workspace::PaneBinding;
 use zeta_text_file::TextFileAccess;
@@ -23,7 +21,10 @@ use zeta_text_file::TextFileModifiedAt;
 use zeta_text_file::TextFileSaveRequest;
 use zeta_text_file::TextFileSnapshot;
 
-use crate::NativeApp;
+use crate::ProductApp;
+use crate::app_server::AppServerRequestHandle;
+use crate::app_server::ClientError;
+use crate::app_server::ServerNotification;
 use crate::session_catalog::session_model_options;
 use crate::workspace_pane_host::WorkspacePaneSelection;
 use zeta_workbench::PaneInput;
@@ -35,7 +36,7 @@ pub(crate) use zeta_session::SessionRuntime;
 pub(crate) use zeta_session::SessionRuntimeEvent;
 pub(crate) use zeta_session::WorkspaceSwitchResult;
 
-impl NativeApp {
+impl ProductApp {
     pub(crate) fn add_session(&mut self) {
         let Some(session) = self.session_runtime.as_ref() else {
             eprintln!("could not create session: App Server session is unavailable");
@@ -60,7 +61,7 @@ impl NativeApp {
             .is_some_and(|target| target != self.workspace_context.working_directory());
         if switches_workspace
             && self.file_editor_host.request_workspace_replace()
-                == crate::file_editor_host::FileEditorCloseRequest::NeedsConfirmation
+                == FileEditorCloseRequest::NeedsConfirmation
         {
             eprintln!("could not open Session Workspace while the active file has unsaved changes");
             return;
@@ -219,7 +220,7 @@ fn shell_completion_sources_changed(changed: &FsChanged) -> bool {
     }
 }
 
-impl NativeApp {
+impl ProductApp {
     pub(crate) fn replace_workspace_pane(&mut self) {
         let pane_kind = self.active_workspace_pane_kind();
         let removed = self
@@ -430,8 +431,7 @@ impl NativeApp {
             .as_mut()
             .ok_or_else(|| anyhow!("App Server connection is unavailable"))?;
         let snapshot = read_git_snapshot(client)?;
-        self.workspace_context
-            .apply_git_projection(snapshot.as_ref());
+        self.workspace_context.apply_git_snapshot(snapshot.as_ref());
         self.sync_workspace_pane_repository();
         Ok(())
     }

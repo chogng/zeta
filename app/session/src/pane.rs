@@ -1,31 +1,26 @@
 //! Layout and presentation for one Agent Session Pane.
 
-use zeta_ui_components::InteractionRegion;
-use zui::ui::AccessibilityRole;
 use zui::ui::CaretVisibility;
 use zui::ui::ComponentContext;
-use zui::ui::CursorFeedback;
 use zui::ui::ElementId;
 use zui::ui::Rect;
 use zui::ui::TextInputLayoutEngine;
 use zui::ui::UiDispatch;
 
 use crate::ComposerPanelLayout;
-use crate::ComposerPanelView;
 use crate::SessionCanvasLayout;
 use crate::SessionHeader;
 use crate::SessionHeaderStyle;
 use crate::SessionPaneContext;
 use crate::SessionPaneState;
 use crate::SessionPaneStyle;
-use crate::ThreadTimeline;
-use crate::ThreadTimelineStyle;
-use crate::draw_composer_panel;
-use crate::interaction::THREAD_TIMELINE;
+use crate::chat_widget::ChatWidgetLayout;
+use crate::chat_widget::ChatWidgetView;
+use crate::chat_widget::draw_chat_widget;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SessionPaneLayout {
-    composer: ComposerPanelLayout,
+    chat_widget: ChatWidgetLayout,
     canvas: SessionCanvasLayout,
 }
 
@@ -35,14 +30,15 @@ impl SessionPaneLayout {
         preferred_composer_height: f32,
         preferred_interaction_height: f32,
     ) -> Self {
-        let composer = ComposerPanelLayout::for_main(
+        let input_pane = ComposerPanelLayout::for_main(
             bounds,
             preferred_composer_height,
             preferred_interaction_height,
         );
+        let canvas = SessionCanvasLayout::for_output(input_pane.output());
         Self {
-            canvas: SessionCanvasLayout::for_output(composer.output()),
-            composer,
+            chat_widget: ChatWidgetLayout::new(canvas.timeline(), input_pane),
+            canvas,
         }
     }
 
@@ -51,11 +47,11 @@ impl SessionPaneLayout {
     }
 
     pub const fn timeline(self) -> Rect {
-        self.canvas.timeline()
+        self.chat_widget.timeline()
     }
 
     pub const fn composer(self) -> ComposerPanelLayout {
-        self.composer
+        self.chat_widget.input_pane()
     }
 }
 
@@ -93,37 +89,12 @@ pub fn draw_session_pane(
         ),
         view.parent,
     ));
-    let timeline = InteractionRegion::new(
-        "ThreadTimeline",
-        THREAD_TIMELINE,
-        layout.timeline(),
-        AccessibilityRole::Group,
-        "Agent Thread timeline",
-    )
-    .with_parent(view.parent)
-    .with_cursor(CursorFeedback::Text);
-    component_context.with_component(&timeline, |component_context, _| {
-        component_context.draw_component(&ThreadTimeline::new(
-            layout.timeline(),
-            view.state.transcript(),
-            view.state.timeline_scroll().offset(),
-            ThreadTimelineStyle::new(
-                style.surface_raised,
-                style.text,
-                style.text_muted,
-                style.error,
-            ),
-        ));
-    });
-    draw_composer_panel(
+    draw_chat_widget(
         component_context,
-        layout.composer(),
-        ComposerPanelView {
+        layout.chat_widget,
+        ChatWidgetView {
+            state: view.state.chat_widget(),
             context: view.context,
-            editor: view.state.input(),
-            interaction: view.state.interaction(),
-            interaction_pane: view.state.interaction_pane(),
-            route: view.state.composer_route(),
             caret_visibility: view.caret_visibility,
             dispatch: view.dispatch,
             parent: view.parent,

@@ -1,6 +1,6 @@
 use super::*;
 
-impl NativeApp {
+impl ProductApp {
     pub(super) const fn terminal_view(&self) -> &TerminalPaneViewState {
         self.terminal_pane_views.active_view()
     }
@@ -371,7 +371,7 @@ impl NativeApp {
     }
 }
 
-impl NativeApp {
+impl ProductApp {
     /// Selects the singleton Settings workbench item and prepares its feature-owned state.
     pub(super) fn activate_settings_tab(&mut self) {
         let remote_selected = self.settings.section() == zeta_settings::SettingsPageSection::Remote;

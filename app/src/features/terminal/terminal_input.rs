@@ -14,9 +14,9 @@ use zui::services::ClipboardHandle;
 use zui::ui::TextInputCommand;
 use zui::ui::TextInputSelectionMode;
 
-use crate::NativeApp;
+use crate::ProductApp;
 use crate::keybindings::{
-    NativeKeybindingContext, NativeKeybindingFacts, NativeKeybindingResolution,
+    ProductKeybindingContext, ProductKeybindingFacts, ProductKeybindingResolution,
 };
 use crate::shell_interaction::{
     COMPOSER, COMPOSER_INTERACTION, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT,
@@ -29,7 +29,7 @@ use zeta_session::{ComposerRoute, ComposerSubmission};
 use zeta_settings::SETTINGS_SEARCH_INPUT;
 use zui::ui::{FocusDirection, NavigationAxis};
 
-impl NativeApp {
+impl ProductApp {
     pub(super) fn keyboard_input(&mut self, event: KeyEvent) {
         if event.state != ElementState::Pressed {
             return;
@@ -76,7 +76,7 @@ impl NativeApp {
             return;
         }
         let direct_terminal = self.is_direct_terminal_input();
-        let context = NativeKeybindingContext::from_facts(NativeKeybindingFacts {
+        let context = ProductKeybindingContext::from_facts(ProductKeybindingFacts {
             direct_terminal,
             terminal_surface_visible: self.workspace_surface.is_terminal(),
             tab_container_visible: self.workbench.tab_container_state().is_expanded(),
@@ -88,15 +88,15 @@ impl NativeApp {
             },
         });
         match self.keybindings.resolve(&event, self.modifiers, &context) {
-            NativeKeybindingResolution::Command(command) => {
+            ProductKeybindingResolution::Command(command) => {
                 self.dispatch_command(command.into());
                 self.sync_input_focus();
                 self.rebuild_presentation();
                 self.request_redraw();
                 return;
             }
-            NativeKeybindingResolution::Consumed => return,
-            NativeKeybindingResolution::NoMatch => {}
+            ProductKeybindingResolution::Consumed => return,
+            ProductKeybindingResolution::NoMatch => {}
         }
         if direct_terminal {
             self.direct_terminal_keyboard_input(&event);

@@ -1,8 +1,8 @@
 use super::events::handle_terminal_event;
 use super::*;
 
-impl App<NativeEvent> for NativeApp {
-    fn ready(&mut self, context: &mut AppContext<'_, NativeEvent>) {
+impl App<ProductEvent> for ProductApp {
+    fn ready(&mut self, context: &mut AppContext<'_, ProductEvent>) {
         if self.window.is_some() {
             self.request_redraw();
             return;
@@ -67,29 +67,30 @@ impl App<NativeEvent> for NativeApp {
             return;
         }
         let event_proxy = self.event_proxy.clone();
-        self.session_runtime = match SessionRuntime::spawn(self.app_server_host.clone(), move |event| {
-            event_proxy
-                .send_event(event.into())
-                .map_err(|_| "application event loop is unavailable".to_owned())
-        }) {
-            Ok(session) => Some(session),
-            Err(error) => {
-                self.fail(error);
-                context.exit();
-                return;
-            }
-        };
+        self.session_runtime =
+            match SessionRuntime::spawn(self.app_server_host.clone(), move |event| {
+                event_proxy
+                    .send_event(event.into())
+                    .map_err(|_| "application event loop is unavailable".to_owned())
+            }) {
+                Ok(session) => Some(session),
+                Err(error) => {
+                    self.fail(error);
+                    context.exit();
+                    return;
+                }
+            };
         self.window = Some(window);
         self.rebuild_presentation();
         self.sync_input_focus();
         self.request_redraw();
     }
 
-    fn resumed(&mut self, _context: &mut AppContext<'_, NativeEvent>) {
+    fn resumed(&mut self, _context: &mut AppContext<'_, ProductEvent>) {
         self.request_redraw();
     }
 
-    fn window_event(&mut self, context: &mut WindowContext<'_, NativeEvent>, event: WindowEvent) {
+    fn window_event(&mut self, context: &mut WindowContext<'_, ProductEvent>, event: WindowEvent) {
         if self.window.as_ref().map(WindowHandle::id) != Some(context.id()) {
             return;
         }
@@ -170,13 +171,13 @@ impl App<NativeEvent> for NativeApp {
         }
     }
 
-    fn redraw(&mut self, context: &mut WindowContext<'_, NativeEvent>) {
+    fn redraw(&mut self, context: &mut WindowContext<'_, ProductEvent>) {
         self.redraw_frame(context);
     }
 
     fn accessibility_action(
         &mut self,
-        _context: &mut AppContext<'_, NativeEvent>,
+        _context: &mut AppContext<'_, ProductEvent>,
         action: AccessibilityAction,
     ) {
         if self.window.as_ref().map(WindowHandle::id) != Some(action.window()) {
@@ -196,13 +197,13 @@ impl App<NativeEvent> for NativeApp {
         self.apply_dispatch_outcome(outcome);
     }
 
-    fn user_event(&mut self, _context: &mut AppContext<'_, NativeEvent>, event: NativeEvent) {
+    fn user_event(&mut self, _context: &mut AppContext<'_, ProductEvent>, event: ProductEvent) {
         match event {
-            NativeEvent::Session(event) => {
+            ProductEvent::Session(event) => {
                 self.handle_session_runtime_event(event);
                 return;
             }
-            NativeEvent::LanguageService(event) => {
+            ProductEvent::LanguageService(event) => {
                 self.language_service
                     .handle_event(event, &self.file_editor_host);
                 if let Some(target) = self
@@ -217,7 +218,7 @@ impl App<NativeEvent> for NativeApp {
                 self.request_redraw();
                 return;
             }
-            NativeEvent::RemoteLanguage(event) => {
+            ProductEvent::RemoteLanguage(event) => {
                 self.language_service
                     .handle_remote_event(event, &self.file_editor_host);
                 if let Some(target) = self
@@ -232,19 +233,19 @@ impl App<NativeEvent> for NativeApp {
                 self.request_redraw();
                 return;
             }
-            NativeEvent::RemoteWindowLaunch(event) => {
+            ProductEvent::RemoteWindowLaunch(event) => {
                 self.handle_remote_window_launch_event(event);
                 return;
             }
-            NativeEvent::RemoteTunnel(event) => {
+            ProductEvent::RemoteTunnel(event) => {
                 self.handle_remote_tunnel_event(event);
                 return;
             }
-            NativeEvent::Terminal(event) => {
+            ProductEvent::Terminal(event) => {
                 handle_terminal_event(self, event.key, event.event);
                 return;
             }
-            NativeEvent::TerminalReady(ready) => {
+            ProductEvent::TerminalReady(ready) => {
                 match self.terminal_workspace.handle_ready(ready) {
                     TerminalReadyOutcome::Active {
                         key,
@@ -277,7 +278,7 @@ impl App<NativeEvent> for NativeApp {
         }
     }
 
-    fn about_to_wait(&mut self, context: &mut AppContext<'_, NativeEvent>) {
+    fn about_to_wait(&mut self, context: &mut AppContext<'_, ProductEvent>) {
         let now = Instant::now();
         self.keybindings.advance_chord(now);
         if let Some(commit) = self.settings.advance_keyboard_shortcuts(now) {

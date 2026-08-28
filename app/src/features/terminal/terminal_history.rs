@@ -47,5 +47,5 @@ pub(crate) fn block_view_range(
 }
 
 #[cfg(test)]
-#[path = "terminal_projection_tests.rs"]
+#[path = "terminal_history_tests.rs"]
 mod tests;

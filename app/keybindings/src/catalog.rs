@@ -5,7 +5,7 @@ use zeta_keybinding::KeySequence;
 /// Supplies product-specific commands, builtin rules, conditions, and context matching.
 ///
 /// Implementations keep product vocabulary in the host while allowing the native keybinding
-/// engine and user-resource lifecycle to remain independent of `NativeApp` and product transports.
+/// engine and user-resource lifecycle to remain independent of `ProductApp` and product transports.
 pub trait KeybindingCatalog {
     type Command: Copy + Eq;
     type Condition: Clone + Eq;

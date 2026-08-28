@@ -18,6 +18,7 @@ use zeta_app_server_protocol::protocol::language::LanguagePositionDto;
 use zeta_app_server_protocol::protocol::language::LanguageRangeDto;
 use zeta_app_server_protocol::protocol::language::LanguageServerMessageNotification;
 use zeta_app_server_protocol::protocol::language::LanguageTextEditDto;
+use zeta_editor_host::FileEditorHost;
 use zeta_language_service::LanguageCommand;
 use zeta_language_service::LanguageCompletionInsertTextFormat;
 use zeta_language_service::LanguageCompletionItem;
@@ -40,10 +41,9 @@ use zeta_language_service::LanguageServiceDocument;
 use zeta_language_service::LanguageTextEdit;
 use zeta_language_service::LanguageTextRange;
 
-use super::NativeDocumentDiagnostics;
-use super::NativeLanguageService;
+use super::ProductDocumentDiagnostics;
+use super::ProductLanguageService;
 use super::editor_diagnostic;
-use crate::file_editor_host::FileEditorHost;
 
 /// Result or notification delivered by the Remote App Server language authority.
 #[derive(Debug)]
@@ -346,7 +346,7 @@ fn diagnostic_code(code: Value) -> String {
     }
 }
 
-impl NativeLanguageService {
+impl ProductLanguageService {
     pub(crate) fn handle_remote_event(
         &mut self,
         event: RemoteLanguageEvent,
@@ -372,7 +372,7 @@ impl NativeLanguageService {
                     .collect();
                 self.diagnostics.insert(
                     path,
-                    NativeDocumentDiagnostics {
+                    ProductDocumentDiagnostics {
                         revision: diagnostics.revision,
                         items,
                     },
@@ -489,7 +489,7 @@ fn request_kind_for_protocol_location(kind: LanguageLocationKindDto) -> Language
 }
 
 fn active_document_text<'a>(
-    service: &NativeLanguageService,
+    service: &ProductLanguageService,
     host: &'a FileEditorHost,
     path: &Path,
     revision: u64,

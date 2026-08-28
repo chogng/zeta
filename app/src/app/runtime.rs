@@ -1,6 +1,6 @@
 use super::*;
 
-impl NativeApp {
+impl ProductApp {
     pub(super) fn reload_theme(&mut self, system_scheme: ColorScheme) {
         let Ok(loader) = ThemeLoader::embedded() else {
             return;
@@ -171,7 +171,7 @@ impl NativeApp {
         self.failed = true;
     }
 
-    pub(super) fn redraw_frame(&mut self, context: &mut WindowContext<'_, NativeEvent>) {
+    pub(super) fn redraw_frame(&mut self, context: &mut WindowContext<'_, ProductEvent>) {
         let now = Instant::now();
         let retained_report = self.retained_runtime.advance(now);
         let _ = retained_report

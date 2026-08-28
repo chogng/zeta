@@ -11,7 +11,7 @@ use zui::app::AppProxy;
 
 use crate::PRODUCT_DISPLAY_NAME;
 use crate::app_server::AppServerHost;
-use crate::native_event::NativeEvent;
+use crate::product_event::ProductEvent;
 
 #[path = "terminal_session/remote.rs"]
 mod remote;
@@ -71,13 +71,13 @@ enum TerminalBackend {
 }
 
 impl TerminalSession {
-    /// Creates one terminal runtime on a short-lived worker and posts its result to the native
+    /// Creates one terminal runtime on a short-lived worker and posts its result to the desktop
     /// event loop. The worker owns the potentially blocking PTY setup; the event loop only adopts
     /// the finished `TerminalSession` when it receives `TerminalSessionReady`.
     pub(crate) fn spawn_async(
         key: TerminalSessionKey,
         size: GridSize,
-        event_proxy: AppProxy<NativeEvent>,
+        event_proxy: AppProxy<ProductEvent>,
         target: AppServerHost,
     ) -> Result<()> {
         std::thread::Builder::new()
@@ -94,7 +94,7 @@ impl TerminalSession {
     pub(crate) fn spawn(
         key: TerminalSessionKey,
         size: GridSize,
-        event_proxy: AppProxy<NativeEvent>,
+        event_proxy: AppProxy<ProductEvent>,
         target: AppServerHost,
     ) -> Result<Self> {
         let Some(connection) = target.remote_connection() else {
@@ -115,7 +115,7 @@ impl TerminalSession {
     fn spawn_local(
         key: TerminalSessionKey,
         size: GridSize,
-        event_proxy: AppProxy<NativeEvent>,
+        event_proxy: AppProxy<ProductEvent>,
     ) -> Result<Self> {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
@@ -210,7 +210,7 @@ fn spawn_event_forwarders(
     runtime: &Runtime,
     spawned: SpawnedProcess,
     key: TerminalSessionKey,
-    event_proxy: AppProxy<NativeEvent>,
+    event_proxy: AppProxy<ProductEvent>,
     suppress_until: Option<&'static [u8]>,
 ) -> Arc<ProcessHandle> {
     let SpawnedProcess {

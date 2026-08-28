@@ -20,7 +20,7 @@ items, keyboard shortcuts, and future command-palette entries converge on a
 | Keybinding context and platform defaults | `app/src/keybindings.rs` |
 | Built-in handler registration and product state | `app/src/command_dispatch.rs` |
 
-This crate must remain independent of `NativeApp`, `zui` and native platform events,
+This crate must remain independent of `ProductApp`, `zui` and native platform events,
 terminal state, workspace state, and the keybinding runtime. A command request
 is a stable product intent; it is not a domain state machine or a replacement
 for typed Session, Editor, Terminal, or App Server APIs.
@@ -30,7 +30,7 @@ for typed Session, Editor, Terminal, or App Server APIs.
 ```text
 pointer / menu / shortcut / command palette
   → CommandRequest(AppCommandId)
-  → CommandRegistry<NativeApp>
+  → CommandRegistry<ProductApp>
   → registered host handler
   → product state owner
   → invalidation / presentation rebuild
@@ -38,7 +38,7 @@ pointer / menu / shortcut / command palette
 
 `CommandRegistry<Context>` owns only command-to-handler registration and lookup.
 The registry is process-local to the host instance; it is not a global backend
-registry. `app` registers every built-in command during `NativeApp` startup,
+registry. `app` registers every built-in command during `ProductApp` startup,
 while each handler remains responsible for calling the domain state owner.
 `CommandRequest` currently carries only the command identity. A command that
 needs parameters should add a typed request payload when that command is

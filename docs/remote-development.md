@@ -158,7 +158,7 @@ flowchart LR
 | Electron Main Remote 窗口上下文 | `RemoteWindowMainContext` 将一个窗口的 Agent、命名连接、Tunnel、手动重连、回滚路由和状态事件绑定到同一个 `AppServerSupervisor` 与 Workspace context；重连和回滚共用串行恢复门；Workspace 变化时关闭该窗口的全部 Tunnel，窗口销毁时再释放监听器和 Tunnel coordinator | 创建应用窗口、在多个窗口之间共享 supervisor、保存 SSH 凭据 |
 | Electron Main Remote Tunnel coordinator | 调用 `zeta-remote-host` 管理 `ssh -N`、本地/远端 loopback 绑定和同端口有界恢复；自己拥有窗口/Workspace Tunnel lease、catalog 和销毁适配 | 公开监听、反向转发或领域协议 |
 | Electron Main Remote Browser adapter | 识别当前窗口是否为 Remote Workspace；把 Browser 的 loopback HTTP/HTTPS 顶层导航映射为 Tunnel load URL；按 requested/loaded origin 反向投影地址、保留历史 lease，并在 target 关闭、Tunnel 失败或 Workspace 变化时停止复用 | Browser DOM、通用导航策略、SSH child、非 loopback 公网 URL 或任意子资源代理 |
-| app Native Tunnel host | 从当前 Remote 窗口复用 host 与 OpenSSH executable；通过 `zeta-remote-host` 后台监督 `ssh -N`、自动本地端口和同端口有界恢复，自己负责 NativeEvent、可访问管理状态、Stop 和窗口级销毁 | Local 窗口任意选择 host、公开监听、反向转发、凭据输入或 Remote Server endpoint discovery |
+| app Native Tunnel host | 从当前 Remote 窗口复用 host 与 OpenSSH executable；通过 `zeta-remote-host` 后台监督 `ssh -N`、自动本地端口和同端口有界恢复，自己负责 ProductEvent、可访问管理状态、Stop 和窗口级销毁 | Local 窗口任意选择 host、公开监听、反向转发、凭据输入或 Remote Server endpoint discovery |
 | `platform/remote` | Remote URI、authority、原生连接元数据和 IPC 契约 | 各领域业务状态 |
 | `workbench/services/remote` | 后端状态的只读 Workbench 投影 | 启动 SSH 或决定重连 |
 | `workbench/contrib/remote` | 状态栏、saved-host 选择/管理 Quick Pick 和 Remote 恢复协调 | 连接事实源、catalog 文件解析或 SSH 启动 |
@@ -534,23 +534,17 @@ canonical package directory 序列化成确定性 rootless archives 与 `catalog
   `zeta-code/tui/src/features/sessions/active.rs`
 - Shared runtime fetch CLI boundary：`zeta-code/cli/src/remote_fetch.rs`
 - Shared atomic connection profiles：`zeta-rs/remote-connections/src/profile_store.rs`
-- app named connection CLI：`app/src/remote_connection_cli.rs`
-- app Native connection picker/process launcher：`app/src/remote_connection_picker.rs`、
-  `app/src/remote_connection_picker_input.rs`、`app/src/remote_connection_process.rs`、
-  `app/src/remote_connection_launch_input.rs`
-- app Native connection manager：`app/src/remote_connection_manager.rs`、
-  `app/src/remote_connection_manager_view.rs`、`app/src/remote_connection_manager_input.rs`
-- app pre-window CLI/Native launch progress protocol：`app/src/launch_progress.rs`
-- app foreground loopback Tunnel CLI：`app/src/remote_connection_tunnel.rs`；readiness gate 与恢复
-  supervisor：`zeta-rs/remote-host`
-- app Native Tunnel adapter/manager：`app/src/remote_tunnel_process.rs`、
-  `app/src/remote_tunnel_manager.rs`、`app/src/remote_tunnel_manager_input.rs`、
-  `app/src/remote_tunnel_manager_view.rs`
+- app named connection CLI：`app/src/features/remote/remote_connection_cli.rs`
+- app connection picker/process launcher：状态与界面由 `app/settings/remote/remote_connection_picker.rs` 持有；产品输入、进程和窗口启动接线位于 `app/src/features/remote/remote_connection_picker_input.rs`、`app/src/features/remote/remote_connection_process.rs`、`app/src/features/remote/remote_connection_launch_input.rs`
+- app connection manager：状态与界面由 `app/settings/remote/remote_connection_manager.rs`、`app/settings/remote/remote_connection_manager_view.rs` 持有；产品输入和持久化接线位于 `app/src/features/remote/remote_connection_manager_input.rs`
+- app pre-window CLI launch progress protocol：`app/src/features/remote/launch_progress.rs`
+- app foreground loopback Tunnel CLI：`app/src/features/remote/remote_connection_tunnel.rs`；readiness gate 与恢复 supervisor：`zeta-rs/remote-host`
+- app Tunnel adapter/manager：状态与界面由 `app/settings/remote/remote_tunnel_manager.rs`、`app/settings/remote/remote_tunnel_manager_view.rs` 持有；进程和产品输入接线位于 `app/src/features/remote/remote_tunnel_process.rs`、`app/src/features/remote/remote_tunnel_manager_input.rs`
 - app Remote bundle/build trust chain：`build/release/remote_runtime_bundle.py`、
   `build/release/build_remote_runtime_bundle.py`、`build/release/build_app_package.py`
 - Optional headless Remote runtime：`zeta-rs/remote-server`
 - Remote Terminal lease/attach：`zeta-rs/app-server/src/terminal_service.rs`、
-  `app/src/terminal_session/remote.rs`
+  `app/src/features/terminal/terminal_session/remote.rs`
 - Desktop Main Tunnel coordinator：`zeta-ts/src/zeta/platform/remote/electron-main/sshRemoteTunnelService.ts`
 - Desktop Main Tunnel listener readiness/recovery 测试：
   `zeta-ts/src/zeta/platform/remote/test/electron-main/sshRemoteTunnelService.test.ts`

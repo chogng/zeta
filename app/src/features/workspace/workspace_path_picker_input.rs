@@ -8,8 +8,7 @@ use zui::ui::{
     NavigationAxis, UiDispatch,
 };
 
-use crate::NativeApp;
-use crate::file_editor_host::FileEditorCloseRequest;
+use crate::ProductApp;
 use crate::session_host::WorkspaceSwitchResult;
 use crate::shell_interaction::CONTEXT_WORKING_DIRECTORY;
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
@@ -17,10 +16,11 @@ use crate::workspace_path_picker::{
     PICKER_ITEM_HEIGHT, WORKSPACE_PATH_SEARCH_INPUT, WorkspacePathPickerActivation,
     WorkspacePathPickerState, workspace_path_item_id,
 };
+use zeta_editor_host::FileEditorCloseRequest;
 
 const PICKER_ROWS_PER_WHEEL_STEP: f32 = 3.0;
 
-impl NativeApp {
+impl ProductApp {
     pub(super) fn toggle_workspace_path_picker(&mut self) {
         if self.workspace_path_picker.is_open() {
             self.dismiss_workspace_path_picker();
@@ -108,7 +108,7 @@ impl NativeApp {
             return false;
         }
         self.app_server_client = None;
-        self.workspace_context.apply_git_projection(None);
+        self.workspace_context.apply_git_snapshot(None);
         self.replace_workspace_pane();
         self.language_service
             .replace_workspace(self.workspace_context.working_directory());

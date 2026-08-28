@@ -31,7 +31,7 @@ use crate::app_server::{
     AppServerEvent, AppServerEvents, AppServerHost, AppServerRequestHandle, ClientError,
     ServerNotification,
 };
-use crate::native_event::NativeEvent;
+use crate::product_event::ProductEvent;
 
 const COMMAND_QUEUE_CAPACITY: usize = 64;
 const EVENT_POLL_INTERVAL: Duration = Duration::from_millis(25);
@@ -81,20 +81,20 @@ impl RemoteLanguageFailure {
 }
 
 #[derive(Debug)]
-struct NativeEventLoopUnavailable;
+struct ProductEventLoopUnavailable;
 
-impl fmt::Display for NativeEventLoopUnavailable {
+impl fmt::Display for ProductEventLoopUnavailable {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("native event loop is unavailable")
+        formatter.write_str("desktop event loop is unavailable")
     }
 }
 
-impl std::error::Error for NativeEventLoopUnavailable {}
+impl std::error::Error for ProductEventLoopUnavailable {}
 
 /// Owns the Remote App Server connection used by app language features.
 ///
 /// The dedicated connection prevents a slow language-server response from blocking Agent and
-/// filesystem requests. SSH credentials and reconnect policy remain in the native product host;
+/// filesystem requests. SSH credentials and reconnect policy remain in the desktop product host;
 /// the Remote App Server remains the only language and Workspace authority.
 pub(crate) struct RemoteLanguageSession {
     available: Arc<AtomicBool>,
@@ -105,7 +105,10 @@ pub(crate) struct RemoteLanguageSession {
 }
 
 impl RemoteLanguageSession {
-    pub(crate) fn spawn(event_proxy: AppProxy<NativeEvent>, target: AppServerHost) -> Result<Self> {
+    pub(crate) fn spawn(
+        event_proxy: AppProxy<ProductEvent>,
+        target: AppServerHost,
+    ) -> Result<Self> {
         if !target.is_remote() {
             return Err(anyhow!("Remote language session requires an SSH target"));
         }
@@ -183,7 +186,7 @@ impl Drop for RemoteLanguageSession {
 }
 
 fn run_remote_language_session(
-    event_proxy: AppProxy<NativeEvent>,
+    event_proxy: AppProxy<ProductEvent>,
     commands: Receiver<RemoteLanguageCommand>,
     target: AppServerHost,
     available: Arc<AtomicBool>,
@@ -201,7 +204,7 @@ fn run_remote_language_session(
                 available.store(false, Ordering::Release);
                 if failure
                     .error
-                    .downcast_ref::<NativeEventLoopUnavailable>()
+                    .downcast_ref::<ProductEventLoopUnavailable>()
                     .is_some()
                 {
                     return;
@@ -239,7 +242,7 @@ fn run_remote_language_session(
 }
 
 fn run_connection(
-    event_proxy: &AppProxy<NativeEvent>,
+    event_proxy: &AppProxy<ProductEvent>,
     commands: &Receiver<RemoteLanguageCommand>,
     target: &AppServerHost,
     available: &AtomicBool,
@@ -261,7 +264,7 @@ fn run_connection(
 }
 
 fn drive_connection(
-    event_proxy: &AppProxy<NativeEvent>,
+    event_proxy: &AppProxy<ProductEvent>,
     commands: &Receiver<RemoteLanguageCommand>,
     events: &AppServerEvents,
     client: &mut AppServerRequestHandle,
@@ -306,7 +309,7 @@ fn drive_connection(
 }
 
 fn drive_command(
-    event_proxy: &AppProxy<NativeEvent>,
+    event_proxy: &AppProxy<ProductEvent>,
     client: &mut AppServerRequestHandle,
     command: RemoteLanguageCommand,
 ) -> Result<()> {
@@ -390,7 +393,7 @@ fn drive_command(
 }
 
 fn document_failure(
-    event_proxy: &AppProxy<NativeEvent>,
+    event_proxy: &AppProxy<ProductEvent>,
     path: PathBuf,
     operation: &'static str,
     error: ClientError,
@@ -409,7 +412,7 @@ fn document_failure(
 }
 
 fn request_failure(
-    event_proxy: &AppProxy<NativeEvent>,
+    event_proxy: &AppProxy<ProductEvent>,
     request_id: u64,
     kind: LanguageRequestKind,
     path: PathBuf,
@@ -430,7 +433,7 @@ fn request_failure(
 }
 
 fn wait_for_reconnect(
-    event_proxy: &AppProxy<NativeEvent>,
+    event_proxy: &AppProxy<ProductEvent>,
     commands: &Receiver<RemoteLanguageCommand>,
     delay: Duration,
     closing: &AtomicBool,
@@ -520,10 +523,10 @@ fn reconnect_delay(attempt: usize) -> Duration {
     (INITIAL_RECONNECT_DELAY * multiplier).min(MAX_RECONNECT_DELAY)
 }
 
-fn send_event(event_proxy: &AppProxy<NativeEvent>, event: RemoteLanguageEvent) -> Result<()> {
+fn send_event(event_proxy: &AppProxy<ProductEvent>, event: RemoteLanguageEvent) -> Result<()> {
     event_proxy
-        .send_event(NativeEvent::RemoteLanguage(event))
-        .map_err(|_| NativeEventLoopUnavailable.into())
+        .send_event(ProductEvent::RemoteLanguage(event))
+        .map_err(|_| ProductEventLoopUnavailable.into())
 }
 
 #[cfg(test)]

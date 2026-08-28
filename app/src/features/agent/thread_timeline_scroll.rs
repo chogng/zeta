@@ -2,11 +2,11 @@
 
 use zui::input::MouseScrollDelta;
 
-use crate::NativeApp;
+use crate::ProductApp;
 use crate::shell_interaction::THREAD_TIMELINE;
 use zeta_session::TimelineScrollDelta;
 
-impl NativeApp {
+impl ProductApp {
     pub(super) fn route_thread_timeline_wheel(&mut self, delta: MouseScrollDelta) -> bool {
         let Some(point) = self.cursor_position else {
             return false;

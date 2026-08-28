@@ -110,7 +110,7 @@ fn pane_paints_editor_diagnostics_and_hover_details() {
 }
 
 #[test]
-fn pane_registers_tabs_and_the_active_document_as_native_interactions() {
+fn pane_registers_tabs_and_the_active_document_as_desktop_interactions() {
     let mut host = FileEditorHost::default();
     open(&mut host, "src/main.rs", "fn main() {}\n");
     open(&mut host, "README.md", "read me\n");
@@ -348,10 +348,10 @@ fn file_pane_soft_wrap_drives_visual_viewport_and_caret_reveal() {
 }
 
 #[test]
-fn find_replace_bar_projects_native_inputs_and_editor_owned_match_count() {
+fn find_replace_bar_projects_desktop_inputs_and_editor_owned_match_count() {
     let mut host = FileEditorHost::default();
     open(&mut host, "notes.txt", "one fish two fish");
-    let mut search = crate::file_editor_search::FileEditorSearchState::default();
+    let mut search = zeta_editor_host::FileEditorSearchState::default();
     search.show_replace();
     search.apply_query(TextInputCommand::Insert("fish".to_owned()));
     let mut text_layout = TextInputLayoutEngine::new();

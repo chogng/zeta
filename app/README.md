@@ -24,11 +24,10 @@
 ```text
 src/bin/app.rs          binary 入口，只调用 app::run()
 src/lib.rs              模块注册并导出 run()
-src/app.rs              产品组合模块入口
+src/app.rs              产品组合模块入口、产品状态与能力接线
 src/app/
-  native_app.rs         NativeApp 及产品模块接线
   run.rs                参数解析、启动准备和进程退出状态
-  state.rs              NativeApp 的产品状态
+  state.rs              ProductApp 的产品状态
   lifecycle.rs          zui::app::App 生命周期与窗口事件
   frame.rs              frame 调度与提交
   interaction.rs        产品交互分发
@@ -41,7 +40,7 @@ src/platform/           键盘、IME 和窗口事件适配
 src/presentation/       Shell 界面、Workbench Tab 菜单适配、交互标识和主题适配
 ```
 
-`NativeApp` 是唯一产品组合根，但不能继续吸收能力实现。跨功能协调应先确定长期负责的能力 crate，产品宿主只做必要调用。若某个改动让能力 crate 反向读取 `NativeApp` 字段，说明依赖方向已经错误。
+`ProductApp` 是唯一产品组合根，但不能继续吸收能力实现。跨功能协调应先确定长期负责的能力 crate，产品宿主只做必要调用。若某个改动让能力 crate 反向读取 `ProductApp` 字段，说明依赖方向已经错误。
 
 ## 启动路径
 
@@ -50,8 +49,8 @@ src/presentation/       Shell 界面、Workbench Tab 菜单适配、交互标识
 1. 处理内部 App Server daemon 和 `app-server` 子命令。
 2. 由 `AppInvocation::parse` 解析产品命令，由 `AppInvocation::resolve` 生成本地或远程启动配置。
 3. 远程启动先由 `launch_progress::prepare_remote_launch` 完成运行时检查和准备；失败时直接返回非零退出码，不创建窗口。
-4. `zui::app::Application::run` 创建 `NativeApp` 并进入事件循环。
-5. `NativeApp::ready` 打开窗口，启动终端、远程语言服务和 Agent Session，然后构建首帧。
+4. `zui::app::Application::run` 创建 `ProductApp` 并进入事件循环。
+5. `ProductApp::ready` 打开窗口，启动终端、远程语言服务和 Agent Session，然后构建首帧。
 6. 初始化失败或事件循环返回运行时错误时，进程返回非零退出码。
 
 `AppServerHost` 是产品到 App Server 的适配边界。本地和远程只是连接方式，Session、Thread、文件、Git、语言服务和终端的权威状态仍由各自能力及共享后端拥有。

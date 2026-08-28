@@ -1,7 +1,7 @@
 use super::*;
 
 pub(super) fn with_shell_presentation_model<R>(
-    app: &mut NativeApp,
+    app: &mut ProductApp,
     window_control_insets: WindowControlInsets,
     operation: impl FnOnce(
         ShellPresentationModel<'_>,
@@ -12,7 +12,7 @@ pub(super) fn with_shell_presentation_model<R>(
     let tab_container = app.workbench.tab_container_state();
     let inspector_part = app.workbench.inspector_state();
     let pane_resize_split = app.workbench.pane_resize_split();
-    let NativeApp {
+    let ProductApp {
         palette,
         retained_runtime,
         workbench,

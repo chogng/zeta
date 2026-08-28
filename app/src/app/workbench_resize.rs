@@ -1,13 +1,13 @@
 use std::time::Instant;
 
-use crate::NativeApp;
+use crate::ProductApp;
 use crate::shell_interaction::INSPECTOR_RESIZE_HANDLE;
 use crate::shell_scene::inspector_resize_snapshot_for_viewport;
 use zui::input::ElementState;
 use zui::ui::DispatchInvalidation;
 use zui::ui::Point;
 
-impl NativeApp {
+impl ProductApp {
     pub(super) fn route_inspector_resize_move(&mut self, point: Point) -> bool {
         if !self.workbench.inspector_is_resizing() {
             return false;

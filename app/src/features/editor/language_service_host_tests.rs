@@ -11,10 +11,10 @@ use zeta_language_server_catalog::{LanguageServerCatalogState, LanguageServerExe
 use zeta_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSnapshot};
 
 use super::{catalog_from_configuration, editor_diagnostic, language_document, language_id};
-use crate::file_editor_host::FileEditorHost;
+use zeta_editor_host::FileEditorHost;
 
 #[test]
-fn native_adapter_maps_editor_language_revision_and_workspace_path_without_lsp_types() {
+fn desktop_adapter_maps_editor_language_revision_and_workspace_path_without_lsp_types() {
     let mut host = FileEditorHost::default();
     host.open(TextFileSnapshot::new(
         "src/main.rs".into(),
@@ -37,7 +37,7 @@ fn native_adapter_maps_editor_language_revision_and_workspace_path_without_lsp_t
 }
 
 #[test]
-fn native_configuration_maps_persisted_mode_into_catalog_policy() {
+fn desktop_configuration_maps_persisted_mode_into_catalog_policy() {
     let mut language_servers = BTreeMap::new();
     language_servers.insert(
         "rust-analyzer".into(),
@@ -88,7 +88,7 @@ fn native_configuration_maps_persisted_mode_into_catalog_policy() {
 }
 
 #[test]
-fn native_configuration_does_not_start_unconfigured_language_servers() {
+fn desktop_configuration_does_not_start_unconfigured_language_servers() {
     let configuration = ConfigReadResult {
         revision: 1,
         generation: 1,
@@ -133,7 +133,7 @@ fn native_configuration_does_not_start_unconfigured_language_servers() {
 }
 
 #[test]
-fn native_adapter_projects_language_diagnostics_without_lsp_presentation_types() {
+fn desktop_adapter_projects_language_diagnostics_without_lsp_presentation_types() {
     let diagnostic = zeta_language_service::LanguageDiagnostic {
         range: zeta_language_service::LanguageTextRange::new(4..9),
         severity: zeta_language_service::LanguageDiagnosticSeverity::Warning,

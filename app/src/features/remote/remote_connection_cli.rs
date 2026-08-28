@@ -17,7 +17,7 @@ use crate::launch::AppLaunch;
 use crate::launch::LaunchParseError;
 use crate::remote_connection_tunnel::RemoteTunnelCommand;
 
-/// One complete command-line invocation before the native event loop starts.
+/// One complete command-line invocation before the desktop event loop starts.
 pub(crate) enum AppInvocation {
     Launch(AppLaunch),
     RemoteConnection(RemoteConnectionCommand),
@@ -42,7 +42,7 @@ impl AppInvocation {
             .map_err(AppInvocationParseError::Launch)
     }
 
-    /// Executes a management command or returns the launch selected for the native product.
+    /// Executes a management command or returns the launch selected for the desktop product.
     pub(crate) fn resolve(self) -> Result<Option<AppLaunch>, String> {
         let catalog = RemoteConnectionCatalog::from_profile_root(local_profile_root());
         let stdout = io::stdout();

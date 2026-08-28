@@ -22,7 +22,7 @@ contract。这个 crate 只服务于需要 loopback Tunnel 的产品能力。
 
 - `RemoteConnectionCatalog` 或产品配置文件的读取；
 - credentials、UI、窗口和命令注册；
-- `NativeEvent`、`AppProxy`、`ElementId` 或任何具体产品类型；
+- `ProductEvent`、`AppProxy`、`ElementId` 或任何具体产品类型；
 - 远端 runtime 的安装策略。
 
 产品应先解析自己的 profile/catalog，再将 `SshHost` 和 SSH executable 交给

@@ -4,7 +4,7 @@ use zui::input::{ElementState, ModifiersState, MouseButton, MouseScrollDelta};
 
 pub(crate) use zeta_terminal_workspace::{PointerInput, TerminalPointer};
 
-use crate::NativeApp;
+use crate::ProductApp;
 use crate::shell_scene::{
     terminal_mouse_position_for_viewport, terminal_pane_mouse_position_for_viewport,
 };
@@ -72,7 +72,7 @@ impl TerminalPointerRouting for TerminalPointer {
     }
 }
 
-impl NativeApp {
+impl ProductApp {
     pub(crate) fn terminal_pane_hit(
         &self,
         point: zui::ui::Point,

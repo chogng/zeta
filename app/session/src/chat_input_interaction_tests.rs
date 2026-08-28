@@ -1,5 +1,5 @@
+use super::ChatInputInteractionState;
 use super::ComposerInteractionActivation;
-use super::ComposerInteractionModel;
 use super::ComposerModelOption;
 use super::SelectionDirection;
 use crate::ComposerRoute;
@@ -19,11 +19,11 @@ fn model_option(provider: &str, model: &str, display_name: &str) -> ComposerMode
 
 #[test]
 fn slash_model_pushes_model_picker_and_escape_returns_to_commands() {
-    let mut model = ComposerInteractionModel::new();
+    let mut model = ChatInputInteractionState::new();
     model
         .set_catalog(Vec::new(), vec![model_option("openai", "gpt", "GPT")])
         .unwrap();
-    model.sync_for_composer("/model", ComposerRoute::Agent);
+    model.sync_input("/model", ComposerRoute::Agent);
 
     assert_eq!(
         model.activate_selected(),
@@ -37,12 +37,12 @@ fn slash_model_pushes_model_picker_and_escape_returns_to_commands() {
 
 #[test]
 fn model_activation_returns_exact_catalog_identity_and_closes() {
-    let mut model = ComposerInteractionModel::new();
+    let mut model = ChatInputInteractionState::new();
     let expected = model_option("anthropic", "sonnet", "Sonnet");
     model
         .set_catalog(Vec::new(), vec![expected.clone()])
         .unwrap();
-    model.sync_for_composer("/model", ComposerRoute::Agent);
+    model.sync_input("/model", ComposerRoute::Agent);
     model.activate_selected();
 
     assert_eq!(
@@ -54,8 +54,8 @@ fn model_activation_returns_exact_catalog_identity_and_closes() {
 
 #[test]
 fn slash_filter_and_keyboard_selection_share_one_visible_list() {
-    let mut model = ComposerInteractionModel::new();
-    model.sync_for_composer("/mo", ComposerRoute::Agent);
+    let mut model = ChatInputInteractionState::new();
+    model.sync_input("/mo", ComposerRoute::Agent);
     let view = model.view().unwrap();
     assert_eq!(view.items().len(), 1);
     assert_eq!(view.items()[0].label(), "/model");
@@ -65,24 +65,24 @@ fn slash_filter_and_keyboard_selection_share_one_visible_list() {
 }
 
 #[test]
-fn dismissed_slash_view_stays_closed_until_composer_text_changes() {
-    let mut model = ComposerInteractionModel::new();
-    model.sync_for_composer("/", ComposerRoute::Agent);
+fn dismissed_slash_view_stays_closed_until_chat_input_text_changes() {
+    let mut model = ChatInputInteractionState::new();
+    model.sync_input("/", ComposerRoute::Agent);
     assert!(model.dismiss("/"));
-    model.sync_for_composer("/", ComposerRoute::Agent);
+    model.sync_input("/", ComposerRoute::Agent);
     assert!(!model.is_visible());
 
-    model.sync_for_composer("/m", ComposerRoute::Agent);
+    model.sync_input("/m", ComposerRoute::Agent);
     assert!(model.is_visible());
 }
 
 #[test]
 fn shell_route_closes_agent_interactions() {
-    let mut model = ComposerInteractionModel::new();
-    model.sync_for_composer("/m", ComposerRoute::Agent);
+    let mut model = ChatInputInteractionState::new();
+    model.sync_input("/m", ComposerRoute::Agent);
     assert!(model.is_visible());
 
-    model.sync_for_composer("echo done", ComposerRoute::Shell);
+    model.sync_input("echo done", ComposerRoute::Shell);
 
     assert!(!model.is_visible());
 }

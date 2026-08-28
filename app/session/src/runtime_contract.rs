@@ -46,7 +46,7 @@ pub enum SessionRuntimeEvent {
     Connected(AppServerRequestHandle),
     /// The current connection became unavailable.
     Disconnected,
-    /// Catalog data needed by the composer.
+    /// Catalog data needed by ChatInput.
     Catalog {
         /// Slash commands advertised by the server.
         slash_commands: Vec<SlashCommandDefinition>,

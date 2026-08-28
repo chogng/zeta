@@ -1,7 +1,7 @@
 use super::*;
 
 pub(super) fn handle_terminal_event(
-    app: &mut NativeApp,
+    app: &mut ProductApp,
     key: TerminalSessionKey,
     event: TerminalSessionEvent,
 ) {
@@ -60,7 +60,7 @@ pub(super) fn handle_terminal_event(
         && current_block_status != Some(BlockStatus::Running)
     {
         if let Err(error) = app.refresh_git_from_app_server() {
-            eprintln!("could not refresh Git projection: {error}");
+            eprintln!("could not refresh Git snapshot: {error}");
         }
         app.refresh_files_from_app_server();
     }

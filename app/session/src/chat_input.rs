@@ -17,11 +17,10 @@ use zui::ui::Point;
 use zui::ui::Rect;
 use zui::ui::TextInputCompositionEvent;
 
-use crate::ComposerInput;
-use crate::ComposerInteractionModel;
-use crate::ComposerInteractionPaneState;
+use crate::ChatInputEditor;
+use crate::ChatInputInteractionState;
 
-/// Current classifier-selected submission route for the shared Agent Console composer.
+/// Current classifier-selected submission route for the Session ChatInput.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum ComposerRoute {
     #[default]
@@ -47,10 +46,9 @@ struct ShellGhostSuggestion {
 }
 
 /// Input, routing, history, and completion state owned by one Session Pane.
-pub struct Composer {
-    input: ComposerInput,
-    interaction: ComposerInteractionModel,
-    interaction_pane: ComposerInteractionPaneState,
+pub struct ChatInput {
+    input: ChatInputEditor,
+    interaction: ChatInputInteractionState,
     route: ComposerRoute,
     classifier: InputClassifier,
     conversation: InputConversation,
@@ -62,19 +60,18 @@ pub struct Composer {
     dismissed_shell_suggestion_input: Option<String>,
 }
 
-impl Default for Composer {
+impl Default for ChatInput {
     fn default() -> Self {
         Self::for_working_directory(std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
     }
 }
 
-impl Composer {
+impl ChatInput {
     pub fn for_working_directory(working_directory: impl Into<PathBuf>) -> Self {
         zeta_input_classifier::start_background_warmup();
         Self {
-            input: ComposerInput::default(),
-            interaction: ComposerInteractionModel::new(),
-            interaction_pane: ComposerInteractionPaneState::default(),
+            input: ChatInputEditor::default(),
+            interaction: ChatInputInteractionState::new(),
             route: ComposerRoute::Agent,
             classifier: InputClassifier::for_working_directory(working_directory),
             conversation: InputConversation::Standalone,
@@ -87,24 +84,16 @@ impl Composer {
         }
     }
 
-    pub const fn input(&self) -> &ComposerInput {
+    pub const fn input(&self) -> &ChatInputEditor {
         &self.input
     }
 
-    pub const fn interaction(&self) -> &ComposerInteractionModel {
+    pub const fn interaction(&self) -> &ChatInputInteractionState {
         &self.interaction
     }
 
-    pub fn interaction_mut(&mut self) -> &mut ComposerInteractionModel {
+    pub fn interaction_mut(&mut self) -> &mut ChatInputInteractionState {
         &mut self.interaction
-    }
-
-    pub const fn interaction_pane(&self) -> &ComposerInteractionPaneState {
-        &self.interaction_pane
-    }
-
-    pub fn interaction_pane_mut(&mut self) -> &mut ComposerInteractionPaneState {
-        &mut self.interaction_pane
     }
 
     pub const fn route(&self) -> ComposerRoute {
@@ -378,12 +367,8 @@ impl Composer {
     }
 
     fn refresh_interaction(&mut self) {
-        let was_visible = self.interaction.is_visible();
         let text = self.input.text().to_owned();
-        self.interaction.sync_for_composer(&text, self.route);
-        if was_visible != self.interaction.is_visible() {
-            self.interaction_pane.reset();
-        }
+        self.interaction.sync_input(&text, self.route);
     }
 
     fn leave_shell_history(&mut self) {
@@ -440,5 +425,5 @@ fn common_prefix_length(left: &str, right: &str) -> usize {
 }
 
 #[cfg(test)]
-#[path = "composer_tests.rs"]
+#[path = "chat_input_tests.rs"]
 mod tests;

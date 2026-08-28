@@ -1,5 +1,11 @@
 use std::time::Instant;
 
+use zeta_settings::REMOTE_TUNNEL_ITEM_HEIGHT;
+use zeta_settings::REMOTE_TUNNEL_MANAGER;
+use zeta_settings::REMOTE_TUNNEL_MANAGER_CLOSE;
+use zeta_settings::REMOTE_TUNNEL_OPEN;
+use zeta_settings::REMOTE_TUNNEL_REMOTE_PORT;
+use zeta_settings::is_remote_tunnel_manager_element;
 use zeta_ui_components::ScrollCommand;
 use zeta_ui_components::ScrollDelta;
 use zui::input::ElementState;
@@ -16,13 +22,7 @@ use zui::ui::NavigationAxis;
 use zui::ui::Point;
 use zui::ui::TextInputCommand;
 
-use crate::NativeApp;
-use crate::remote_tunnel_manager::REMOTE_TUNNEL_ITEM_HEIGHT;
-use crate::remote_tunnel_manager::REMOTE_TUNNEL_MANAGER;
-use crate::remote_tunnel_manager::REMOTE_TUNNEL_MANAGER_CLOSE;
-use crate::remote_tunnel_manager::REMOTE_TUNNEL_OPEN;
-use crate::remote_tunnel_manager::REMOTE_TUNNEL_REMOTE_PORT;
-use crate::remote_tunnel_manager::is_remote_tunnel_manager_element;
+use crate::ProductApp;
 use crate::remote_tunnel_process::RemoteTunnelEvent;
 use crate::remote_tunnel_process::RemoteTunnelId;
 use crate::terminal_input::text_input_command;
@@ -31,7 +31,7 @@ use crate::terminal_selection::write_clipboard_text;
 
 const MANAGER_ROWS_PER_WHEEL_STEP: f32 = 3.0;
 
-impl NativeApp {
+impl ProductApp {
     pub(super) fn open_remote_tunnel_manager(&mut self, restore_focus: Option<ElementId>) -> bool {
         let Some(host) = self.remote_tunnel_host.as_ref() else {
             eprintln!("Remote tunnels are available only in a Remote app window");

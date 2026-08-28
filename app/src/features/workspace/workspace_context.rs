@@ -129,12 +129,12 @@ impl WorkspaceContext {
         &self.diffs
     }
 
-    pub(crate) fn apply_git_projection(&mut self, projection: Option<&GitTextDiffResult>) {
+    pub(crate) fn apply_git_snapshot(&mut self, snapshot: Option<&GitTextDiffResult>) {
         self.clear_repository();
-        let Some(projection) = projection else {
+        let Some(snapshot) = snapshot else {
             return;
         };
-        let (branch, upstream_distance) = match &projection.status.head {
+        let (branch, upstream_distance) = match &snapshot.status.head {
             GitHeadDto::Branch { name, upstream, .. } => (
                 name.clone(),
                 upstream
@@ -149,11 +149,11 @@ impl WorkspaceContext {
         self.git_branch = Some(branch);
         self.git_repository_root = repository_root_from_workspace_path(
             &self.working_directory,
-            &projection.status.workspace_path,
+            &snapshot.status.workspace_path,
         );
         self.upstream_distance = upstream_distance;
-        self.change_count = projection.status.changes.len();
-        self.diffs = projection
+        self.change_count = snapshot.status.changes.len();
+        self.diffs = snapshot
             .diffs
             .iter()
             .filter_map(|diff| {
@@ -168,8 +168,8 @@ impl WorkspaceContext {
                     })
             })
             .collect();
-        self.diff_additions = projection.statistics.additions;
-        self.diff_deletions = projection.statistics.deletions;
+        self.diff_additions = snapshot.statistics.additions;
+        self.diff_deletions = snapshot.statistics.deletions;
     }
 
     pub(crate) fn switch_working_directory(

@@ -8,7 +8,7 @@ use crate::CommandRequest;
 /// A product-owned handler function registered for a stable command.
 ///
 /// The context type is supplied by the host. This keeps the registry
-/// independent of `NativeApp` while allowing each host to keep its product
+/// independent of `ProductApp` while allowing each host to keep its product
 /// state and domain services as the handler context.
 pub type CommandHandler<Context> = fn(&mut Context, &CommandRequest);
 

@@ -3,17 +3,17 @@ use std::time::Instant;
 use zeta_ui_components::{ScrollCommand, ScrollDelta};
 use zui::input::MouseScrollDelta;
 
-use crate::NativeApp;
+use crate::ProductApp;
 use crate::shell_interaction::{FILES_PANE, MULTI_DIFF_EDITOR};
+use crate::terminal_history::scroll_limit;
 use crate::terminal_pointer::TerminalPointerRouting;
-use crate::terminal_projection::scroll_limit;
 use zeta_files::FILE_LIST_ROW_HEIGHT;
 
 const LINES_PER_WHEEL_STEP: f32 = 3.0;
 const MULTI_DIFF_PIXELS_PER_LINE: f32 = 18.0;
 const SETTINGS_PIXELS_PER_LINE: f32 = 18.0;
 
-impl NativeApp {
+impl ProductApp {
     pub(super) fn mouse_wheel(&mut self, delta: MouseScrollDelta) {
         if self.route_remote_tunnel_manager_wheel(delta) {
             return;

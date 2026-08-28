@@ -5,7 +5,7 @@ use zeta_ui_components::{
 };
 use zui::ui::{Point, Rect, Size, UiScene};
 
-use crate::terminal_projection::block_view_range;
+use crate::terminal_history::block_view_range;
 use zeta_ui_theme::UiTheme;
 
 /// Product adapter from bottom-relative terminal history to a top-relative ScrollView.

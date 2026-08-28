@@ -1,16 +1,16 @@
 //! App Server runtime, state, presentation, and interaction for Session.
 //!
 //! The runtime owns Session/Thread requests, subscriptions, and reconnects. The Pane owns the
-//! backend-assembled transcript, timeline, and Composer. Tabs, product effects, and other App
-//! Server capabilities remain outside this crate.
+//! backend-assembled transcript and one ChatWidget composed from the timeline and ChatInput
+//! surfaces. Tabs, product effects, and other App Server capabilities remain outside this crate.
 
-mod composer;
-mod composer_input;
-mod composer_interaction;
-mod composer_interaction_pane;
-mod composer_layout;
-mod composer_panel;
-mod input_context_toolbar;
+mod chat_input;
+mod chat_input_editor;
+mod chat_input_interaction;
+mod chat_input_interaction_pane;
+mod chat_input_pane;
+mod chat_input_toolbar;
+mod chat_widget;
 pub mod interaction;
 mod pane;
 mod pane_context;
@@ -24,26 +24,24 @@ mod thread_timeline;
 mod timeline_scroll;
 mod transcript_state;
 
-pub(crate) use composer::Composer;
-pub use composer::ComposerRoute;
-pub use composer::ComposerSubmission;
-pub(crate) use composer_input::ComposerInput;
-pub(crate) use composer_input::ComposerInputFocus;
-pub use composer_interaction::ComposerInteractionActivation;
-pub use composer_interaction::ComposerInteractionItem;
-pub(crate) use composer_interaction::ComposerInteractionModel;
-pub use composer_interaction::ComposerInteractionView;
-pub use composer_interaction::ComposerModelOption;
-pub use composer_interaction::SelectionDirection;
-pub(crate) use composer_interaction_pane::ComposerInteractionPaneState;
-pub use composer_layout::ComposerPanelLayout;
-pub use composer_layout::INTERACTION_ROW_HEIGHT;
-pub use composer_layout::interaction_content_size;
-pub use composer_layout::interaction_list_bounds;
-pub use composer_layout::interaction_preferred_height;
-pub use composer_layout::interaction_selection_scroll_command;
-use composer_panel::ComposerPanelView;
-use composer_panel::draw_composer_panel;
+pub(crate) use chat_input::ChatInput;
+pub use chat_input::ComposerRoute;
+pub use chat_input::ComposerSubmission;
+pub(crate) use chat_input_editor::ChatInputEditor;
+pub(crate) use chat_input_editor::ChatInputFocus;
+pub use chat_input_interaction::ChatInputInteractionItem;
+pub(crate) use chat_input_interaction::ChatInputInteractionState;
+pub use chat_input_interaction::ChatInputInteractionView;
+pub use chat_input_interaction::ComposerInteractionActivation;
+pub use chat_input_interaction::ComposerModelOption;
+pub use chat_input_interaction::SelectionDirection;
+pub(crate) use chat_input_interaction_pane::ChatInputInteractionPaneState;
+pub use chat_input_pane::ComposerPanelLayout;
+pub use chat_input_pane::INTERACTION_ROW_HEIGHT;
+pub use chat_input_pane::interaction_content_size;
+pub use chat_input_pane::interaction_list_bounds;
+pub use chat_input_pane::interaction_preferred_height;
+pub use chat_input_pane::interaction_selection_scroll_command;
 pub use pane::{SessionPaneLayout, SessionPaneView, draw_session_pane};
 pub use pane_context::SessionPaneContext;
 pub use pane_state::SessionPaneState;

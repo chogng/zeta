@@ -1,13 +1,14 @@
 use std::{ops::Range, time::Instant};
 
 use zeta_editor::{CodeEditorCommand, CodeEditorPosition, CodeEditorSelectionMode};
+use zeta_editor_host::FileEditorAutoScrollDirection;
+use zeta_editor_host::FileEditorAutoScrollState;
+use zeta_editor_host::FileEditorCloseRequest;
 use zeta_language_service::LanguageRequestKind;
 use zui::input::{ElementState, Key, KeyEvent, MouseScrollDelta, NamedKey};
 use zui::ui::TextInputCompositionEvent;
 
-use crate::NativeApp;
-use crate::file_editor_auto_scroll::{FileEditorAutoScrollDirection, FileEditorAutoScrollState};
-use crate::file_editor_host::FileEditorCloseRequest;
+use crate::ProductApp;
 use crate::file_editor_pane::{FileEditorPane, FileEditorPrompt};
 use crate::shell_interaction::{
     FILE_EDITOR_DOCUMENT, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_PANE, FILE_EDITOR_REPLACE_INPUT,
@@ -127,7 +128,7 @@ impl FileEditorInputState {
     }
 }
 
-impl NativeApp {
+impl ProductApp {
     pub(super) fn file_editor_keyboard_input(&mut self, event: &KeyEvent) -> bool {
         if !self.workspace_surface.is_editor() {
             return false;

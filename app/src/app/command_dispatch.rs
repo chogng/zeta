@@ -2,15 +2,15 @@ use zeta_commands::AppCommandId;
 use zeta_commands::CommandRegistry;
 use zeta_commands::CommandRequest;
 
-use crate::NativeApp;
+use crate::ProductApp;
 use crate::shell_interaction;
 use zeta_workbench::PaneSplitDirection;
 
-pub(crate) type NativeCommandRegistry = CommandRegistry<NativeApp>;
+pub(crate) type ProductCommandRegistry = CommandRegistry<ProductApp>;
 
 /// Builds the product's process-local command registry.
-pub(crate) fn builtin_command_registry() -> NativeCommandRegistry {
-    let mut registry = NativeCommandRegistry::new();
+pub(crate) fn builtin_command_registry() -> ProductCommandRegistry {
+    let mut registry = ProductCommandRegistry::new();
     registry
         .register(AppCommandId::Copy, execute_copy)
         .expect("built-in command IDs must be unique");
@@ -119,7 +119,7 @@ pub(crate) fn builtin_command_registry() -> NativeCommandRegistry {
     registry
 }
 
-impl NativeApp {
+impl ProductApp {
     pub(super) fn dispatch_command(&mut self, request: CommandRequest) {
         if self.workbench.dispatch_command(request)
             == zeta_workbench::WorkbenchCommandDispatch::Handled
@@ -136,19 +136,19 @@ impl NativeApp {
     }
 }
 
-fn execute_copy(app: &mut NativeApp, _request: &CommandRequest) {
+fn execute_copy(app: &mut ProductApp, _request: &CommandRequest) {
     app.copy_keybinding_target();
 }
 
-fn execute_paste(app: &mut NativeApp, _request: &CommandRequest) {
+fn execute_paste(app: &mut ProductApp, _request: &CommandRequest) {
     app.paste_keybinding_target();
 }
 
-fn execute_save(app: &mut NativeApp, _request: &CommandRequest) {
+fn execute_save(app: &mut ProductApp, _request: &CommandRequest) {
     app.save_active_workspace_file();
 }
 
-fn execute_toggle_terminal_surface(app: &mut NativeApp, _request: &CommandRequest) {
+fn execute_toggle_terminal_surface(app: &mut ProductApp, _request: &CommandRequest) {
     let was_terminal = app.workspace_surface.is_terminal();
     app.workspace_surface.toggle_terminal();
     if app.workspace_surface.is_terminal() {
@@ -173,7 +173,7 @@ fn execute_toggle_terminal_surface(app: &mut NativeApp, _request: &CommandReques
     app.keybindings.cancel_chord();
 }
 
-fn execute_open_keyboard_shortcuts(app: &mut NativeApp, _request: &CommandRequest) {
+fn execute_open_keyboard_shortcuts(app: &mut ProductApp, _request: &CommandRequest) {
     app.activate_settings_tab();
     app.remote_connection_picker.dismiss();
     app.dismiss_remote_connection_manager();
@@ -182,7 +182,7 @@ fn execute_open_keyboard_shortcuts(app: &mut NativeApp, _request: &CommandReques
     app.keybindings.cancel_chord();
 }
 
-fn execute_manage_remote_tunnels(app: &mut NativeApp, _request: &CommandRequest) {
+fn execute_manage_remote_tunnels(app: &mut ProductApp, _request: &CommandRequest) {
     if app.remote_tunnel_host.is_none() {
         eprintln!("Remote tunnels are available only in a Remote app window");
         app.keybindings.cancel_chord();
@@ -195,7 +195,7 @@ fn execute_manage_remote_tunnels(app: &mut NativeApp, _request: &CommandRequest)
     app.keybindings.cancel_chord();
 }
 
-fn execute_toggle_workspace_pane(app: &mut NativeApp, _request: &CommandRequest) {
+fn execute_toggle_workspace_pane(app: &mut ProductApp, _request: &CommandRequest) {
     if app.workspace_surface.is_editor() {
         app.show_agent_pane();
         app.workbench.collapse_inspector();
@@ -211,26 +211,26 @@ fn execute_toggle_workspace_pane(app: &mut NativeApp, _request: &CommandRequest)
     }
 }
 
-fn execute_add_session(app: &mut NativeApp, _request: &CommandRequest) {
+fn execute_add_session(app: &mut ProductApp, _request: &CommandRequest) {
     app.add_session();
 }
 
-fn execute_show_agent_changes(app: &mut NativeApp, _request: &CommandRequest) {
+fn execute_show_agent_changes(app: &mut ProductApp, _request: &CommandRequest) {
     app.select_workspace_pane_view(crate::workspace_pane_host::WorkspacePaneSelection::Changes);
 }
 
-fn execute_show_agent_files(app: &mut NativeApp, _request: &CommandRequest) {
+fn execute_show_agent_files(app: &mut ProductApp, _request: &CommandRequest) {
     app.select_workspace_pane_view(crate::workspace_pane_host::WorkspacePaneSelection::Files);
 }
 
-fn execute_refresh_agent_files(app: &mut NativeApp, _request: &CommandRequest) {
+fn execute_refresh_agent_files(app: &mut ProductApp, _request: &CommandRequest) {
     if let Err(error) = app.refresh_git_from_app_server() {
-        eprintln!("could not refresh Git projection: {error}");
+        eprintln!("could not refresh Git snapshot: {error}");
     }
     app.refresh_files_from_app_server();
 }
 
-fn execute_toggle_agent_file_search(app: &mut NativeApp, _request: &CommandRequest) {
+fn execute_toggle_agent_file_search(app: &mut ProductApp, _request: &CommandRequest) {
     let visible = !app.workspace_pane_host.search_visible();
     app.workspace_pane_host.set_search_visible(visible);
     if visible {
@@ -244,7 +244,7 @@ fn execute_toggle_agent_file_search(app: &mut NativeApp, _request: &CommandReque
     }
 }
 
-fn execute_tab_context_menu_action(app: &mut NativeApp, request: &CommandRequest) {
+fn execute_tab_context_menu_action(app: &mut ProductApp, request: &CommandRequest) {
     debug_assert!(matches!(
         request.command_id(),
         AppCommandId::PinSession
@@ -290,42 +290,42 @@ fn execute_tab_context_menu_action(app: &mut NativeApp, request: &CommandRequest
     }
 }
 
-fn execute_pick_execution_location(app: &mut NativeApp, _request: &CommandRequest) {
+fn execute_pick_execution_location(app: &mut ProductApp, _request: &CommandRequest) {
     app.toggle_remote_connection_picker();
 }
 
-fn execute_pick_working_directory(app: &mut NativeApp, _request: &CommandRequest) {
+fn execute_pick_working_directory(app: &mut ProductApp, _request: &CommandRequest) {
     app.toggle_workspace_path_picker();
 }
 
-fn execute_pick_git_branch(app: &mut NativeApp, _request: &CommandRequest) {
+fn execute_pick_git_branch(app: &mut ProductApp, _request: &CommandRequest) {
     app.toggle_git_branch_context_menu();
 }
 
-fn execute_show_workspace_diff(app: &mut NativeApp, _request: &CommandRequest) {
+fn execute_show_workspace_diff(app: &mut ProductApp, _request: &CommandRequest) {
     if let Err(error) = app.refresh_git_from_app_server() {
-        eprintln!("could not refresh Git projection: {error}");
+        eprintln!("could not refresh Git snapshot: {error}");
     }
     app.select_workspace_pane_view(crate::workspace_pane_host::WorkspacePaneSelection::Changes);
 }
 
-fn execute_split_terminal_horizontal(app: &mut NativeApp, _request: &CommandRequest) {
+fn execute_split_terminal_horizontal(app: &mut ProductApp, _request: &CommandRequest) {
     app.split_active_pane(PaneSplitDirection::Horizontal);
 }
 
-fn execute_split_terminal_vertical(app: &mut NativeApp, _request: &CommandRequest) {
+fn execute_split_terminal_vertical(app: &mut ProductApp, _request: &CommandRequest) {
     app.split_active_pane(PaneSplitDirection::Vertical);
 }
 
-fn execute_focus_next_pane(app: &mut NativeApp, _request: &CommandRequest) {
+fn execute_focus_next_pane(app: &mut ProductApp, _request: &CommandRequest) {
     app.focus_next_pane();
 }
 
-fn execute_focus_previous_pane(app: &mut NativeApp, _request: &CommandRequest) {
+fn execute_focus_previous_pane(app: &mut ProductApp, _request: &CommandRequest) {
     app.focus_previous_pane();
 }
 
-fn execute_close_pane(app: &mut NativeApp, _request: &CommandRequest) {
+fn execute_close_pane(app: &mut ProductApp, _request: &CommandRequest) {
     app.close_active_pane();
 }
 

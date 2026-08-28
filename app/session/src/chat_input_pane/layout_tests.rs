@@ -6,7 +6,7 @@ use zeta_ui_components::ScrollCommand;
 use zui::ui::{Rect, Size};
 
 #[test]
-fn interaction_expands_panel_upward_and_preserves_fixed_composer_rows() {
+fn interaction_expands_pane_upward_and_preserves_fixed_chat_input_rows() {
     let main = Rect::from_xywh(0.0, 0.0, 800.0, 600.0);
     let closed = ComposerPanelLayout::for_main(main, 44.0, 0.0);
     let open = ComposerPanelLayout::for_main(main, 44.0, 200.0);

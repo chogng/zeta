@@ -28,13 +28,13 @@ const TOOLBAR_HORIZONTAL_PADDING: f32 = 7.0;
 const TOOLBAR_ICON_SIZE: f32 = 14.0;
 const TOOLBAR_CONTENT_GAP: f32 = 4.0;
 /// Product-owned action toolbar shared by command and future chat input surfaces.
-pub(crate) struct InputContextToolbar {
+pub(crate) struct ChatInputToolbar {
     action_bar: ActionBar,
     accessibility_labels: Vec<String>,
     bounds: Rect,
 }
 
-impl InputContextToolbar {
+impl ChatInputToolbar {
     pub(crate) fn new(
         bounds: Rect,
         context: &SessionPaneContext,
@@ -181,9 +181,9 @@ fn button_style(style: SessionPaneStyle, text_style: TextStyle, scale: f32) -> B
     .with_content_gap(TOOLBAR_CONTENT_GAP * scale)
 }
 
-impl Component for InputContextToolbar {
+impl Component for ChatInputToolbar {
     fn element(&self) -> ComponentElement {
-        Element::leaf("InputContextToolbar")
+        Element::leaf("ChatInputToolbar")
             .in_bounds(self.bounds)
             .with_identity(CONTEXT_TOOLBAR)
     }
@@ -213,5 +213,5 @@ impl Component for InputContextToolbar {
 }
 
 #[cfg(test)]
-#[path = "input_context_toolbar_tests.rs"]
+#[path = "chat_input_toolbar_tests.rs"]
 mod tests;

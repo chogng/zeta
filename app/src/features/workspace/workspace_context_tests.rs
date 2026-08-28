@@ -74,18 +74,18 @@ fn file_extension_selects_only_the_editor_language_contract() {
 
 #[test]
 fn repository_relative_workspace_path_recovers_only_an_ancestor_root() {
-    let working_directory = Path::new("repository/crates/native");
+    let working_directory = Path::new("repository/crates/desktop");
 
     assert_eq!(
-        repository_root_from_workspace_path(working_directory, "crates/native"),
+        repository_root_from_workspace_path(working_directory, "crates/desktop"),
         Some("repository".into())
     );
     assert_eq!(
-        repository_root_from_workspace_path(working_directory, "../native"),
+        repository_root_from_workspace_path(working_directory, "../desktop"),
         None
     );
     assert_eq!(
-        repository_root_from_workspace_path(working_directory, "other/native"),
+        repository_root_from_workspace_path(working_directory, "other/desktop"),
         None
     );
 }
@@ -110,7 +110,7 @@ fn repository_capture_builds_real_changed_file_diffs() {
     std::fs::write(root.join("untracked.txt"), "new\nfile\n").unwrap();
 
     let mut context = WorkspaceContext::capture(root.clone());
-    context.apply_git_projection(Some(&git_client(&root).git_text_diff().unwrap()));
+    context.apply_git_snapshot(Some(&git_client(&root).git_text_diff().unwrap()));
 
     assert_eq!(context.git_branch_label(), "main");
     assert_eq!(
@@ -128,7 +128,7 @@ fn repository_capture_builds_real_changed_file_diffs() {
 }
 
 #[test]
-fn switching_working_directory_replaces_path_and_repository_projection() {
+fn switching_working_directory_replaces_path_and_repository_state() {
     let root = std::env::temp_dir().join(format!(
         "app-workspace-switch-{}-{}",
         std::process::id(),
@@ -147,7 +147,7 @@ fn switching_working_directory_replaces_path_and_repository_projection() {
 }
 
 #[test]
-fn switching_branch_refreshes_the_repository_projection() {
+fn switching_branch_refreshes_the_repository_state() {
     let root = std::env::temp_dir().join(format!(
         "app-branch-switch-{}-{}",
         std::process::id(),
@@ -178,7 +178,7 @@ fn switching_branch_refreshes_the_repository_projection() {
             name: topic.name().into(),
         })
         .unwrap();
-    context.apply_git_projection(Some(&client.git_text_diff().unwrap()));
+    context.apply_git_snapshot(Some(&client.git_text_diff().unwrap()));
 
     assert_eq!(context.git_branch_label(), "topic");
     std::fs::remove_dir_all(root).unwrap();

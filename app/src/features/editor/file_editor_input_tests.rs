@@ -38,7 +38,7 @@ fn pixel_wheel_accumulates_sub_row_motion() {
 }
 
 #[test]
-fn close_confirmation_is_ephemeral_native_input_state() {
+fn close_confirmation_is_ephemeral_desktop_input_state() {
     let mut state = FileEditorInputState::default();
 
     assert_eq!(state.prompt(), FileEditorPrompt::None);

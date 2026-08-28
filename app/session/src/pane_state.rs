@@ -22,31 +22,25 @@ use zui::ui::Rect;
 use zui::ui::Size;
 use zui::ui::TextInputCompositionEvent;
 
-use crate::Composer;
-use crate::ComposerInput;
+use crate::ChatInput;
+use crate::ChatInputInteractionView;
 use crate::ComposerInteractionActivation;
-use crate::ComposerInteractionModel;
-use crate::ComposerInteractionPaneState;
-use crate::ComposerInteractionView;
 use crate::ComposerModelOption;
 use crate::ComposerRoute;
 use crate::ComposerSubmission;
 use crate::SelectionDirection;
-use crate::ThreadTimelineScroll;
-use crate::TranscriptState;
+use crate::chat_widget::ChatWidgetState;
 use crate::line_capacity;
 use crate::line_count;
 
 /// Complete retained state for one Agent Session Pane.
 ///
 /// The product host supplies canonical Thread and transcript snapshots, mechanically assembled
-/// transcript changes, and executes submissions. The pane owns their presentation state, Composer
-/// state, and timeline scroll position as one unit.
+/// transcript changes, and executes submissions. The pane owns the Thread and one ChatWidget as a
+/// unit; the ChatWidget owns transcript, timeline scroll, and ChatInputPane state.
 pub struct SessionPaneState {
     thread: Option<Thread>,
-    transcript: TranscriptState,
-    timeline_scroll: ThreadTimelineScroll,
-    composer: Composer,
+    chat_widget: ChatWidgetState,
 }
 
 impl Default for SessionPaneState {
@@ -59,9 +53,7 @@ impl SessionPaneState {
     pub fn for_working_directory(working_directory: impl Into<PathBuf>) -> Self {
         Self {
             thread: None,
-            transcript: TranscriptState::default(),
-            timeline_scroll: ThreadTimelineScroll::default(),
-            composer: Composer::for_working_directory(working_directory),
+            chat_widget: ChatWidgetState::for_working_directory(working_directory),
         }
     }
 
@@ -69,52 +61,48 @@ impl SessionPaneState {
         self.thread.as_ref()
     }
 
-    pub(crate) const fn transcript(&self) -> &TranscriptState {
-        &self.transcript
+    pub(crate) const fn chat_widget(&self) -> &ChatWidgetState {
+        &self.chat_widget
     }
 
-    pub const fn timeline_scroll(&self) -> &ThreadTimelineScroll {
-        &self.timeline_scroll
+    const fn chat_input(&self) -> &ChatInput {
+        self.chat_widget.input_pane().input()
     }
 
-    pub fn timeline_scroll_mut(&mut self) -> &mut ThreadTimelineScroll {
-        &mut self.timeline_scroll
+    fn update_chat_input<R>(&mut self, update: impl FnOnce(&mut ChatInput) -> R) -> R {
+        self.chat_widget.input_pane_mut().update_input(update)
     }
 
-    pub(crate) const fn input(&self) -> &ComposerInput {
-        self.composer.input()
+    pub const fn timeline_scroll(&self) -> &crate::ThreadTimelineScroll {
+        self.chat_widget.timeline_scroll()
     }
 
-    pub(crate) const fn interaction(&self) -> &ComposerInteractionModel {
-        self.composer.interaction()
-    }
-
-    pub(crate) const fn interaction_pane(&self) -> &ComposerInteractionPaneState {
-        self.composer.interaction_pane()
+    pub fn timeline_scroll_mut(&mut self) -> &mut crate::ThreadTimelineScroll {
+        self.chat_widget.timeline_scroll_mut()
     }
 
     pub fn composer_preferred_height(&self) -> f32 {
-        self.composer.input().preferred_height()
+        self.chat_input().input().preferred_height()
     }
 
     pub fn selected_composer_text(&self) -> Option<&str> {
-        self.composer.input().selected_text()
+        self.chat_input().input().selected_text()
     }
 
     pub const fn composer_route(&self) -> ComposerRoute {
-        self.composer.route()
+        self.chat_input().route()
     }
 
     pub fn composer_submission(&self) -> Option<ComposerSubmission> {
-        self.composer.submission()
+        self.chat_input().submission()
     }
 
     pub fn set_composer_text(&mut self, text: impl Into<String>) {
-        self.composer.set_text(text);
+        self.update_chat_input(|chat_input| chat_input.set_text(text));
     }
 
     pub fn set_composer_style(&mut self, style: CodeEditorStyle) {
-        self.composer.set_input_style(style);
+        self.update_chat_input(|chat_input| chat_input.set_input_style(style));
     }
 
     pub fn set_composer_catalog(
@@ -122,49 +110,51 @@ impl SessionPaneState {
         slash_commands: Vec<SlashCommandDefinition>,
         models: Vec<ComposerModelOption>,
     ) -> Result<(), SlashCommandCatalogError> {
-        self.composer
-            .interaction_mut()
-            .set_catalog(slash_commands, models)
+        self.update_chat_input(|chat_input| {
+            chat_input
+                .interaction_mut()
+                .set_catalog(slash_commands, models)
+        })
     }
 
     pub fn refresh_shell_workspace(&mut self) {
-        self.composer.refresh_shell_workspace();
+        self.update_chat_input(ChatInput::refresh_shell_workspace);
     }
 
     pub fn apply_composer_command(&mut self, command: CodeEditorCommand) {
-        self.composer.apply(command);
+        self.update_chat_input(|chat_input| chat_input.apply(command));
     }
 
     pub fn apply_composer_composition(&mut self, event: TextInputCompositionEvent) {
-        self.composer.apply_composition(event);
+        self.update_chat_input(|chat_input| chat_input.apply_composition(event));
     }
 
     pub fn cancel_composer_composition(&mut self) {
-        self.composer.cancel_composition();
+        self.update_chat_input(ChatInput::cancel_composition);
     }
 
     pub fn accept_shell_suggestion(&mut self) -> bool {
-        self.composer.accept_shell_suggestion()
+        self.update_chat_input(ChatInput::accept_shell_suggestion)
     }
 
     pub fn dismiss_shell_suggestion(&mut self) -> bool {
-        self.composer.dismiss_shell_suggestion()
+        self.update_chat_input(ChatInput::dismiss_shell_suggestion)
     }
 
     pub fn has_shell_suggestion(&self) -> bool {
-        self.composer.has_shell_suggestion()
+        self.chat_input().has_shell_suggestion()
     }
 
     pub fn mark_agent_message_submitted(&mut self, text: &str) {
-        self.composer.mark_agent_message_submitted(text);
+        self.update_chat_input(|chat_input| chat_input.mark_agent_message_submitted(text));
     }
 
     pub fn mark_shell_command_submitted(&mut self, command: &str) {
-        self.composer.mark_shell_command_submitted(command);
+        self.update_chat_input(|chat_input| chat_input.mark_shell_command_submitted(command));
     }
 
     pub fn clear_composer_after_submit(&mut self) {
-        self.composer.clear_after_submit();
+        self.update_chat_input(ChatInput::clear_after_submit);
     }
 
     pub fn move_composer_caret_to_point(
@@ -173,48 +163,47 @@ impl SessionPaneState {
         point: Point,
         mode: CodeEditorSelectionMode,
     ) -> bool {
-        self.composer.move_caret_to_point(bounds, point, mode)
+        self.update_chat_input(|chat_input| chat_input.move_caret_to_point(bounds, point, mode))
     }
 
     pub fn move_composer_interaction_selection(&mut self, direction: SelectionDirection) {
-        self.composer.interaction_mut().move_selection(direction);
+        self.update_chat_input(|chat_input| chat_input.interaction_mut().move_selection(direction));
     }
 
     pub fn activate_composer_interaction(&mut self) -> Option<ComposerInteractionActivation> {
-        self.composer.interaction_mut().activate_selected()
+        self.update_chat_input(|chat_input| chat_input.interaction_mut().activate_selected())
     }
 
     pub fn complete_selected_slash(&mut self) -> Option<String> {
-        self.composer.interaction_mut().complete_selected_slash()
+        self.update_chat_input(|chat_input| chat_input.interaction_mut().complete_selected_slash())
     }
 
     pub fn dismiss_composer_interaction(&mut self) -> bool {
-        let text = self.composer.input().text().to_owned();
-        let dismissed = self.composer.interaction_mut().dismiss(&text);
-        if dismissed {
-            self.composer.interaction_pane_mut().reset();
-        }
-        dismissed
+        let text = self.chat_input().input().text().to_owned();
+        self.update_chat_input(|chat_input| chat_input.interaction_mut().dismiss(&text))
     }
 
-    pub fn composer_interaction_view(&self) -> Option<ComposerInteractionView<'_>> {
-        self.composer.interaction().view()
+    pub fn composer_interaction_view(&self) -> Option<ChatInputInteractionView<'_>> {
+        self.chat_input().interaction().view()
     }
 
     pub fn composer_model_picker_visible(&self) -> bool {
-        self.composer.interaction().is_model_picker_visible()
+        self.chat_input().interaction().is_model_picker_visible()
     }
 
     pub fn composer_interaction_visible(&self) -> bool {
-        self.composer.interaction().is_visible()
+        self.chat_input().interaction().is_visible()
     }
 
     pub fn select_composer_interaction_item(&mut self, index: usize) -> bool {
-        self.composer.interaction_mut().select_item(index)
+        self.update_chat_input(|chat_input| chat_input.interaction_mut().select_item(index))
     }
 
     pub fn reset_composer_interaction_scroll(&mut self) {
-        self.composer.interaction_pane_mut().reset();
+        self.chat_widget
+            .input_pane_mut()
+            .interaction_pane_mut()
+            .reset();
     }
 
     pub fn scroll_composer_interaction(
@@ -223,7 +212,8 @@ impl SessionPaneState {
         viewport: Size,
         content: Size,
     ) -> bool {
-        self.composer
+        self.chat_widget
+            .input_pane_mut()
             .interaction_pane_mut()
             .apply_scroll(command, viewport, content)
     }
@@ -234,10 +224,12 @@ impl SessionPaneState {
         transcript: ThreadTranscriptSnapshot,
         scroll_limit: usize,
     ) {
-        let previous_line_count = line_count(&self.transcript);
-        synchronize_composer(&mut self.composer, &thread);
+        let previous_line_count = line_count(self.chat_widget.transcript());
+        self.update_chat_input(|chat_input| synchronize_chat_input(chat_input, &thread));
         self.thread = Some(thread);
-        self.transcript.replace_snapshot(transcript);
+        self.chat_widget
+            .transcript_mut()
+            .replace_snapshot(transcript);
         self.preserve_timeline_after_growth(previous_line_count, scroll_limit);
     }
 
@@ -246,31 +238,33 @@ impl SessionPaneState {
         update: ThreadTranscriptUpdateEnvelope,
         scroll_limit: usize,
     ) {
-        let previous_line_count = line_count(&self.transcript);
-        self.transcript.apply_update(update);
+        let previous_line_count = line_count(self.chat_widget.transcript());
+        self.chat_widget.transcript_mut().apply_update(update);
         self.preserve_timeline_after_growth(previous_line_count, scroll_limit);
     }
 
     pub fn timeline_scroll_limit(&self, bounds: Rect) -> usize {
-        line_count(&self.transcript).saturating_sub(line_capacity(bounds))
+        line_count(self.chat_widget.transcript()).saturating_sub(line_capacity(bounds))
     }
 
     pub fn set_working_directory(&mut self, working_directory: &Path) {
-        self.composer.set_working_directory(working_directory);
+        self.update_chat_input(|chat_input| chat_input.set_working_directory(working_directory));
     }
 
     fn preserve_timeline_after_growth(&mut self, previous_line_count: usize, scroll_limit: usize) {
-        let added_lines = line_count(&self.transcript).saturating_sub(previous_line_count);
-        self.timeline_scroll
+        let added_lines =
+            line_count(self.chat_widget.transcript()).saturating_sub(previous_line_count);
+        self.chat_widget
+            .timeline_scroll_mut()
             .preserve_view_after_growth(added_lines, scroll_limit);
-        self.timeline_scroll.clamp(scroll_limit);
+        self.chat_widget.timeline_scroll_mut().clamp(scroll_limit);
     }
 }
 
-fn synchronize_composer(composer: &mut Composer, thread: &Thread) {
-    composer.replace_classification_history(classification_history_for_thread(thread));
+fn synchronize_chat_input(chat_input: &mut ChatInput, thread: &Thread) {
+    chat_input.replace_classification_history(classification_history_for_thread(thread));
     let Some(turn) = thread.turns.last() else {
-        composer.synchronize_conversation(InputConversation::Standalone);
+        chat_input.synchronize_conversation(InputConversation::Standalone);
         return;
     };
     let has_agent_message = turn
@@ -279,7 +273,7 @@ fn synchronize_composer(composer: &mut Composer, thread: &Thread) {
         .any(|item| matches!(item, ThreadItem::AgentMessage { .. }));
     match (turn.status, has_agent_message) {
         (TurnStatus::Completed, true) => {
-            composer.synchronize_conversation(InputConversation::AgentFollowUp);
+            chat_input.synchronize_conversation(InputConversation::AgentFollowUp);
         }
         (
             TurnStatus::Created
@@ -289,8 +283,8 @@ fn synchronize_composer(composer: &mut Composer, thread: &Thread) {
             | TurnStatus::WaitingForCapability
             | TurnStatus::Cancelling,
             true,
-        ) => composer.mark_agent_response_started(),
-        _ => composer.synchronize_conversation(InputConversation::Standalone),
+        ) => chat_input.mark_agent_response_started(),
+        _ => chat_input.synchronize_conversation(InputConversation::Standalone),
     }
 }
 

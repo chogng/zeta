@@ -98,7 +98,7 @@ impl AppServerHost {
         }
     }
 
-    /// Returns the host-owned SSH inputs reusable by sibling native Remote capabilities.
+    /// Returns the host-owned SSH inputs reusable by sibling desktop Remote capabilities.
     pub(crate) fn ssh_transport(&self) -> Option<(&SshHost, &Path)> {
         match &self.backend {
             AppServerBackend::Local { .. } => None,

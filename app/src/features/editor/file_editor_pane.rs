@@ -2,6 +2,12 @@ use zeta_editor::{
     CodeEditor, CodeEditorDiagnostic, CodeEditorFoldControl, CodeEditorHeader,
     CodeEditorLineWrapping, CodeEditorNavigation, CodeEditorPosition, CodeEditorStyle,
 };
+use zeta_editor_host::FileEditorDiagnosticTooltip;
+use zeta_editor_host::FileEditorHost;
+use zeta_editor_host::FileEditorSearchMode;
+use zeta_editor_host::FileEditorSearchState;
+use zeta_editor_host::LanguageCompletionPopover;
+use zeta_editor_host::LanguageHoverPopover;
 use zeta_text_file::TextFileStatus;
 use zeta_ui_components::{InputBoxState, SearchBox};
 use zui::ui::{
@@ -9,10 +15,6 @@ use zui::ui::{
     TextInputLayoutEngine, TextStyle, UiScene,
 };
 
-use crate::file_editor_diagnostics::FileEditorDiagnosticTooltip;
-use crate::file_editor_host::FileEditorHost;
-use crate::file_editor_language_features::{LanguageCompletionPopover, LanguageHoverPopover};
-use crate::file_editor_search::{FileEditorSearchMode, FileEditorSearchState};
 use crate::shell_interaction::{
     FILE_EDITOR_DOCUMENT, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_NOTICE, FILE_EDITOR_PANE,
     FILE_EDITOR_REPLACE_INPUT, FILE_EDITOR_SEARCH_BAR, FILE_EDITOR_TAB_LIST, FileEditorAction,
@@ -56,7 +58,7 @@ const REPLACE_ACTIONS: [FileEditorAction; 2] = [
     FileEditorAction::ReplaceAll,
 ];
 
-/// Transient file-editor decision currently presented by the Native shell.
+/// Transient file-editor decision currently presented by the Desktop shell.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) enum FileEditorPrompt {
     #[default]
@@ -70,7 +72,7 @@ struct FileEditorNotice<'a> {
     modal: bool,
 }
 
-/// Native file-tab and document presentation over a retained [`FileEditorHost`].
+/// Desktop file-tab and document presentation over a retained [`FileEditorHost`].
 pub(crate) struct FileEditorPane<'a> {
     bounds: Rect,
     parent: zui::ui::ElementId,

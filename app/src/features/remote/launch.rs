@@ -33,7 +33,7 @@ const BUNDLED_REMOTE_RUNTIME_CATALOG_URL: Option<&str> =
     option_env!("APP_REMOTE_RUNTIME_CATALOG_URL");
 const REMOTE_RUNTIME_DOWNLOAD_CACHE: &str = "remote-runtime-downloads";
 
-/// Product-owned launch selection made before the native event loop starts.
+/// Product-owned launch selection made before the desktop event loop starts.
 ///
 /// A Remote launch carries only the SSH host, remote Workspace path, runtime reference, and
 /// optional OpenSSH executable. Credentials remain in the local OpenSSH configuration and agent.
@@ -503,7 +503,7 @@ fn default_remote_runtime_download_cache() -> PathBuf {
     local_profile_root().join(REMOTE_RUNTIME_DOWNLOAD_CACHE)
 }
 
-/// A launch argument error that can be shown without starting the native event loop.
+/// A launch argument error that can be shown without starting the desktop event loop.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum LaunchParseError {
     HelpRequested,

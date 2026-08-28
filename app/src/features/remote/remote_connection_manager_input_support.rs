@@ -3,19 +3,19 @@ use zeta_ui_components::ScrollDelta;
 use zui::input::MouseScrollDelta;
 use zui::ui::ElementId;
 
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_CLOSE;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_CONNECT;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_DELETE;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_HOST;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_ITEM_HEIGHT;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_LIST;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_NAME;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_NEW;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_SAVE;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_STATUS;
-use crate::remote_connection_manager::REMOTE_CONNECTION_MANAGER_WORKSPACE;
-use crate::remote_connection_manager::remote_connection_manager_item_index;
+use zeta_settings::REMOTE_CONNECTION_MANAGER;
+use zeta_settings::REMOTE_CONNECTION_MANAGER_CLOSE;
+use zeta_settings::REMOTE_CONNECTION_MANAGER_CONNECT;
+use zeta_settings::REMOTE_CONNECTION_MANAGER_DELETE;
+use zeta_settings::REMOTE_CONNECTION_MANAGER_HOST;
+use zeta_settings::REMOTE_CONNECTION_MANAGER_ITEM_HEIGHT;
+use zeta_settings::REMOTE_CONNECTION_MANAGER_LIST;
+use zeta_settings::REMOTE_CONNECTION_MANAGER_NAME;
+use zeta_settings::REMOTE_CONNECTION_MANAGER_NEW;
+use zeta_settings::REMOTE_CONNECTION_MANAGER_SAVE;
+use zeta_settings::REMOTE_CONNECTION_MANAGER_STATUS;
+use zeta_settings::REMOTE_CONNECTION_MANAGER_WORKSPACE;
+use zeta_settings::remote_connection_manager_item_index;
 
 const MANAGER_ROWS_PER_WHEEL_STEP: f32 = 3.0;
 

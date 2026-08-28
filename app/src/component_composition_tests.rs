@@ -22,7 +22,7 @@ fn product_composition_uses_scene_draw_component() {
 
     assert!(
         violations.is_empty(),
-        "Native product composition must use UiScene::draw_component so inspection ancestry is preserved:\n{}",
+        "Desktop product composition must use UiScene::draw_component so inspection ancestry is preserved:\n{}",
         violations.join("\n")
     );
 }
@@ -64,7 +64,7 @@ fn zui_backend_neutral_modules_remain_platform_independent() {
 }
 
 #[test]
-fn public_zui_facade_owns_native_framework_composition() {
+fn public_zui_facade_owns_desktop_framework_composition() {
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
     let manifest = fs::read_to_string(workspace.join("zui").join("Cargo.toml"))
         .expect("zui manifest should be readable");
@@ -199,7 +199,7 @@ fn component_crate_remains_graphics_backend_neutral() {
 }
 
 #[test]
-fn product_uses_only_zui_for_native_framework_hosting() {
+fn product_uses_only_zui_for_desktop_framework_hosting() {
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR"));
     let product_manifest =
         fs::read_to_string(workspace.join("Cargo.toml")).expect("app manifest should be readable");
@@ -284,34 +284,34 @@ fn app_app_server_adapter_owns_the_zeta_rs_client_boundary() {
 }
 
 #[test]
-fn native_app_state_is_private_to_the_app_composition_boundary() {
+fn desktop_app_state_is_private_to_the_app_composition_boundary() {
     let source_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let state_source = fs::read_to_string(source_root.join("app/state.rs"))
-        .expect("NativeApp state source should be readable");
+        .expect("ProductApp state source should be readable");
     assert!(
-        state_source.contains("pub(crate) struct NativeApp"),
-        "NativeApp should remain available to the product app without exposing its fields"
+        state_source.contains("pub(crate) struct ProductApp"),
+        "ProductApp should remain available to the product app without exposing its fields"
     );
     assert!(
         !state_source.contains("    pub(crate) "),
-        "NativeApp fields must not be crate-wide; expose them only to app composition descendants"
+        "ProductApp fields must not be crate-wide; expose them only to app composition descendants"
     );
     assert!(
         state_source.contains("    pub(super) window:")
             && state_source.contains("    pub(super) app_server_host:"),
-        "NativeApp state fields must use the app-composition visibility boundary"
+        "ProductApp state fields must use the app-composition visibility boundary"
     );
 
-    let native_app_source = fs::read_to_string(source_root.join("app/native_app.rs"))
-        .expect("NativeApp composition source should be readable");
+    let product_app_source = fs::read_to_string(source_root.join("app.rs"))
+        .expect("ProductApp composition source should be readable");
     assert!(
-        native_app_source.contains("mod state;")
-            && native_app_source.contains("pub(crate) use state::NativeApp;"),
-        "app::native_app must own and re-export the app state type"
+        product_app_source.contains("mod state;")
+            && product_app_source.contains("pub(crate) use state::ProductApp;"),
+        "app must own and re-export the product state type"
     );
     assert!(
-        !native_app_source.contains("state: state::NativeAppState"),
-        "NativeApp must not add a second wrapper state layer"
+        !product_app_source.contains("state: state::ProductAppState"),
+        "ProductApp must not add a second wrapper state layer"
     );
 
     for relative_path in [
@@ -326,7 +326,7 @@ fn native_app_state_is_private_to_the_app_composition_boundary() {
             .unwrap_or_else(|error| panic!("could not read {relative_path}: {error}"));
         assert!(
             !source.contains("pub(crate) fn"),
-            "{relative_path} must not expose NativeApp composition methods at crate scope"
+            "{relative_path} must not expose ProductApp composition methods at crate scope"
         );
     }
 }

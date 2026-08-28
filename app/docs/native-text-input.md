@@ -37,14 +37,14 @@ shaping geometry 和真实平台接入可以分别测试。
 | 能力 | 当前 owner | 状态 |
 | --- | --- | --- |
 | 原生 keyboard/IME event 与候选框 API | `zui::input` + private `window` native adapter | 委托 |
-| Composer、文件 Editor 与搜索框 focus、event routing、IME activation | `app/src/app` 的 `NativeApp` | ✅ |
+| Composer、文件 Editor 与搜索框 focus、event routing、IME activation | `app/src/app` 的 `ProductApp` | ✅ |
 | Composer committed text、selection、IME state 与 multiline viewport | `zeta-session::SessionPaneState` + `zeta-editor::CodeEditorDocument` | ✅ |
 | Committed text、selection、grapheme movement | `zui::TextInput` | ✅ |
 | Preedit/commit/cancel composition state | `zui::TextInput` | ✅ |
 | 单行 shaping、selection/caret/preedit geometry | `zui::TextInputLayoutEngine` | ✅ |
 | Caret blink phase state machine | `zui::CaretBlinkController` | ✅ |
 | Input-box chrome、状态与 scene composition | `zeta-ui-components::InputBox` | ✅ |
-| Blink deadline scheduling 与 redraw | `app/src/app` 的 `NativeApp` | ✅ |
+| Blink deadline scheduling 与 redraw | `app/src/app` 的 `ProductApp` | ✅ |
 | 文件 Editor mouse caret、drag selection、clipboard 与 viewport | `file_editor_input` + `zeta-editor` | ✅ |
 | 文件 Editor undo/redo 与 vertical navigation | `zeta-editor::CodeEditorDocument` | ✅ |
 | 平台 accessibility adapter | `zui` private AccessKit adapter | 委托；TextInput 现有 value/focus 随 frame 发布 |
@@ -79,13 +79,13 @@ pointer release on composer / file editor / search input
   → NativeWindow::set_ime_cursor_area(shaped caret)
 
 WindowEvent::KeyboardInput
-  → NativeApp routes by Workspace Surface and focused element
+  → ProductApp routes by Workspace Surface and focused element
   ├─ single-line → TextInputCommand → TextInput
   └─ file editor → CodeEditorCommand → active CodeEditorDocument
   → rebuild and redraw
 
 WindowEvent::Ime(Preedit)
-  → NativeApp maps platform event to TextInputCompositionEvent
+  → ProductApp maps platform event to TextInputCompositionEvent
   → active TextInput or CodeEditorDocument updates temporary composition
   → owning component paints preedit underline and caret
 

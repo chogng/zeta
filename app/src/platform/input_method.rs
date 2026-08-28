@@ -1,15 +1,15 @@
 use std::time::Instant;
 
+use zeta_settings::REMOTE_CONNECTION_SEARCH_INPUT;
+use zeta_settings::REMOTE_TUNNEL_REMOTE_PORT;
+use zeta_settings::RemoteConnectionManagerField;
 use zeta_terminal::{KeyModifiers, TerminalCore, TerminalKey};
 use zui::input::Ime;
 use zui::ui::{TextInputCompositionCursor, TextInputCompositionEvent};
 use zui::window::ImeCursorArea;
 
-use crate::NativeApp;
+use crate::ProductApp;
 use crate::git_branch_context_menu::GIT_BRANCH_SEARCH_INPUT;
-use crate::remote_connection_manager::RemoteConnectionManagerField;
-use crate::remote_connection_picker::REMOTE_CONNECTION_SEARCH_INPUT;
-use crate::remote_tunnel_manager::REMOTE_TUNNEL_REMOTE_PORT;
 use crate::shell_interaction::{
     COMPOSER, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT, FILE_SEARCH_INPUT,
     SESSION_SEARCH_INPUT,
@@ -114,7 +114,7 @@ impl InputMethodTarget {
     }
 }
 
-impl NativeApp {
+impl ProductApp {
     pub(super) fn ime_input(&mut self, event: Ime) {
         self.keybindings.cancel_chord();
         let target = self.input_method_target();

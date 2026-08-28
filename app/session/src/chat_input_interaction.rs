@@ -14,13 +14,13 @@ enum InteractionItemAction {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ComposerInteractionItem {
+pub struct ChatInputInteractionItem {
     label: String,
     description: String,
     action: InteractionItemAction,
 }
 
-impl ComposerInteractionItem {
+impl ChatInputInteractionItem {
     pub fn label(&self) -> &str {
         &self.label
     }
@@ -30,7 +30,7 @@ impl ComposerInteractionItem {
     }
 }
 
-/// Composer-facing model option normalized from the product's model catalog.
+/// ChatInput-facing model option normalized from the product's model catalog.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ComposerModelOption {
     pub label: String,
@@ -40,12 +40,12 @@ pub struct ComposerModelOption {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ModelPickerState {
-    items: Vec<ComposerInteractionItem>,
+    items: Vec<ChatInputInteractionItem>,
     selected: usize,
 }
 
 impl ModelPickerState {
-    fn new(items: Vec<ComposerInteractionItem>) -> Self {
+    fn new(items: Vec<ChatInputInteractionItem>) -> Self {
         Self { items, selected: 0 }
     }
 
@@ -66,6 +66,13 @@ pub enum SelectionDirection {
     Next,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ChatInputInteractionSurface {
+    Closed,
+    SlashCommands,
+    ModelPicker,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ComposerInteractionActivation {
     ComposerText(String),
@@ -74,19 +81,19 @@ pub enum ComposerInteractionActivation {
 }
 
 #[derive(Clone, Copy)]
-pub struct ComposerInteractionView<'a> {
+pub struct ChatInputInteractionView<'a> {
     title: &'static str,
-    items: &'a [ComposerInteractionItem],
+    items: &'a [ChatInputInteractionItem],
     selected: usize,
     can_go_back: bool,
 }
 
-impl<'a> ComposerInteractionView<'a> {
+impl<'a> ChatInputInteractionView<'a> {
     pub const fn title(self) -> &'static str {
         self.title
     }
 
-    pub const fn items(self) -> &'a [ComposerInteractionItem] {
+    pub const fn items(self) -> &'a [ChatInputInteractionItem] {
         self.items
     }
 
@@ -99,20 +106,20 @@ impl<'a> ComposerInteractionView<'a> {
     }
 }
 
-/// Session Pane model that selects and updates the active composer interaction view.
+/// State that selects and updates the active ChatInput interaction view.
 ///
-/// Presentation geometry, clipping, and scrolling belong to the Composer Pane and UI component
+/// Presentation geometry, clipping, and scrolling belong to the ChatInput interaction pane and UI
 /// primitives; this model only owns Slash command and model-picker domain state and exposes an
 /// immutable render view.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct ComposerInteractionModel {
+pub struct ChatInputInteractionState {
     slash_commands: SlashCommandsState,
-    slash_items: Vec<ComposerInteractionItem>,
-    models: Vec<ComposerInteractionItem>,
+    slash_items: Vec<ChatInputInteractionItem>,
+    models: Vec<ChatInputInteractionItem>,
     model_picker: Option<ModelPickerState>,
 }
 
-impl ComposerInteractionModel {
+impl ChatInputInteractionState {
     pub fn new() -> Self {
         let catalog = SlashCommandCatalog::with_local_and_server([model_command()], [])
             .expect("the native /model command is valid");
@@ -132,7 +139,7 @@ impl ComposerInteractionModel {
         self.slash_commands.set_catalog(catalog);
         self.models = models
             .into_iter()
-            .map(|option| ComposerInteractionItem {
+            .map(|option| ChatInputInteractionItem {
                 label: option.label,
                 description: option.description,
                 action: InteractionItemAction::SelectModel(option.model),
@@ -142,7 +149,7 @@ impl ComposerInteractionModel {
         Ok(())
     }
 
-    pub fn sync_for_composer(&mut self, text: &str, route: ComposerRoute) {
+    pub fn sync_input(&mut self, text: &str, route: ComposerRoute) {
         if route != ComposerRoute::Agent {
             self.close();
             return;
@@ -155,16 +162,26 @@ impl ComposerInteractionModel {
     }
 
     pub fn is_visible(&self) -> bool {
-        self.model_picker.is_some() || self.slash_commands.view().is_some()
+        self.surface() != ChatInputInteractionSurface::Closed
     }
 
     pub fn is_model_picker_visible(&self) -> bool {
-        self.model_picker.is_some()
+        self.surface() == ChatInputInteractionSurface::ModelPicker
     }
 
-    pub fn view(&self) -> Option<ComposerInteractionView<'_>> {
+    pub(crate) fn surface(&self) -> ChatInputInteractionSurface {
+        if self.model_picker.is_some() {
+            ChatInputInteractionSurface::ModelPicker
+        } else if self.slash_commands.view().is_some() {
+            ChatInputInteractionSurface::SlashCommands
+        } else {
+            ChatInputInteractionSurface::Closed
+        }
+    }
+
+    pub fn view(&self) -> Option<ChatInputInteractionView<'_>> {
         if let Some(view) = &self.model_picker {
-            return Some(ComposerInteractionView {
+            return Some(ChatInputInteractionView {
                 title: "Select model",
                 items: &view.items,
                 selected: view.selected,
@@ -172,7 +189,7 @@ impl ComposerInteractionModel {
             });
         }
         let view = self.slash_commands.view()?;
-        Some(ComposerInteractionView {
+        Some(ChatInputInteractionView {
             title: "Commands",
             items: &self.slash_items,
             selected: view.selected,
@@ -232,7 +249,7 @@ impl ComposerInteractionModel {
         Some(completion.replacement)
     }
 
-    pub fn dismiss(&mut self, _composer_text: &str) -> bool {
+    pub fn dismiss(&mut self, _input_text: &str) -> bool {
         if self.model_picker.take().is_some() {
             return true;
         }
@@ -257,7 +274,7 @@ impl ComposerInteractionModel {
             .map(|view| {
                 view.commands
                     .iter()
-                    .map(|command| ComposerInteractionItem {
+                    .map(|command| ChatInputInteractionItem {
                         label: format!("/{}", command.name),
                         description: command.description.clone(),
                         action: if command.name == "model" {
@@ -281,5 +298,5 @@ fn model_command() -> SlashCommandDefinition {
 }
 
 #[cfg(test)]
-#[path = "composer_interaction_tests.rs"]
+#[path = "chat_input_interaction_tests.rs"]
 mod tests;

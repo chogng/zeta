@@ -1,6 +1,6 @@
-//! Native input adapter for the Workbench-owned tab context menu.
+//! Desktop input adapter for the Workbench-owned tab context menu.
 
-use crate::NativeApp;
+use crate::ProductApp;
 use crate::shell_interaction::TabContextMenuAction;
 use crate::shell_interaction::WINDOW;
 use crate::terminal_input::text_input_command;
@@ -29,7 +29,7 @@ use zui::ui::UiNode;
 
 pub(crate) use zeta_workbench::TabContextMenuState;
 
-/// Adapts product colors and native text layout to the Workbench tab menu.
+/// Adapts product colors and desktop text layout to the Workbench tab menu.
 pub(crate) struct TabContextMenu {
     inner: zeta_workbench::TabContextMenu,
 }
@@ -75,7 +75,7 @@ impl Component for TabContextMenu {
     }
 }
 
-impl NativeApp {
+impl ProductApp {
     pub(crate) fn route_tab_context_menu_pointer_move(&mut self, point: Point) -> bool {
         if !self.workbench.tab_context_menu().is_open() {
             return false;

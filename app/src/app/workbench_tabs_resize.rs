@@ -1,12 +1,12 @@
 use std::time::Instant;
 
-use crate::NativeApp;
+use crate::ProductApp;
 use crate::shell_interaction::TAB_CONTAINER_RESIZE_HANDLE;
 use zui::input::ElementState;
 use zui::ui::DispatchInvalidation;
 use zui::ui::Point;
 
-impl NativeApp {
+impl ProductApp {
     pub(super) fn route_tab_container_resize_move(&mut self, point: Point) -> bool {
         if !self.workbench.tab_container_is_resizing() {
             return false;

@@ -1,6 +1,11 @@
 use std::time::Instant;
 
 use zeta_remote_connections::RemoteConnectionCatalog;
+use zeta_settings::REMOTE_CONNECTION_ITEM_HEIGHT;
+use zeta_settings::REMOTE_CONNECTION_SEARCH_INPUT;
+use zeta_settings::RemoteConnectionPickerAction;
+use zeta_settings::RemoteConnectionPickerState;
+use zeta_settings::remote_connection_item_id;
 use zeta_ui_components::ScrollCommand;
 use zeta_ui_components::ScrollDelta;
 use zui::input::ElementState;
@@ -18,20 +23,15 @@ use zui::ui::NavigationAxis;
 use zui::ui::Point;
 use zui::ui::UiDispatch;
 
-use crate::NativeApp;
+use crate::ProductApp;
 use crate::app_server::local_profile_root;
-use crate::remote_connection_picker::REMOTE_CONNECTION_ITEM_HEIGHT;
-use crate::remote_connection_picker::REMOTE_CONNECTION_SEARCH_INPUT;
-use crate::remote_connection_picker::RemoteConnectionPickerAction;
-use crate::remote_connection_picker::RemoteConnectionPickerState;
-use crate::remote_connection_picker::remote_connection_item_id;
 use crate::shell_interaction::CONTEXT_LOCATION;
 use crate::terminal_selection::read_clipboard_text;
 use crate::terminal_selection::write_clipboard_text;
 
 const PICKER_ROWS_PER_WHEEL_STEP: f32 = 3.0;
 
-impl NativeApp {
+impl ProductApp {
     pub(super) fn toggle_remote_connection_picker(&mut self) {
         if self.remote_connection_picker.is_open() {
             self.dismiss_remote_connection_picker();

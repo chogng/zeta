@@ -1,3 +1,14 @@
+use zeta_editor_host::FileEditorHost;
+use zeta_editor_host::FileEditorSearchState;
+use zeta_settings::REMOTE_CONNECTION_SEARCH_INPUT;
+use zeta_settings::REMOTE_TUNNEL_REMOTE_PORT;
+use zeta_settings::RemoteConnectionManager;
+use zeta_settings::RemoteConnectionManagerField;
+use zeta_settings::RemoteConnectionManagerState;
+use zeta_settings::RemoteConnectionPicker;
+use zeta_settings::RemoteConnectionPickerState;
+use zeta_settings::RemoteTunnelManager;
+use zeta_settings::RemoteTunnelManagerState;
 use zeta_terminal::{GridSize, ScreenBuffer, TerminalColor, TerminalCore, TerminalMousePosition};
 use zeta_ui_components::{
     InteractionRegion, Sash, SashOrientation, SashState, SashStyle, ScrollMetrics,
@@ -11,19 +22,9 @@ use zui::ui::{
 };
 
 use crate::PRODUCT_DISPLAY_NAME;
-use crate::file_editor_host::FileEditorHost;
 use crate::file_editor_pane::{FileEditorPane, FileEditorPrompt};
-use crate::file_editor_search::FileEditorSearchState;
 use crate::git_branch_context_menu::{GitBranchContextMenu, GitBranchContextMenuState};
-use crate::keybindings::NativeKeybindings;
-use crate::remote_connection_manager::RemoteConnectionManagerField;
-use crate::remote_connection_manager::RemoteConnectionManagerState;
-use crate::remote_connection_manager_view::RemoteConnectionManager;
-use crate::remote_connection_picker::RemoteConnectionPicker;
-use crate::remote_connection_picker::RemoteConnectionPickerState;
-use crate::remote_tunnel_manager::REMOTE_TUNNEL_REMOTE_PORT;
-use crate::remote_tunnel_manager::RemoteTunnelManagerState;
-use crate::remote_tunnel_manager_view::RemoteTunnelManager;
+use crate::keybindings::ProductKeybindings;
 use crate::shell_interaction::{
     FILE_EDITOR_DOCUMENT, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT, FILE_SEARCH_INPUT,
     FIRST_TAB_CONTAINER_SESSION_TAB, INSPECTOR_RESIZE_HANDLE, MAIN_SURFACE, SESSION_SEARCH_INPUT,
@@ -317,7 +318,7 @@ pub(crate) struct ShellPresentationModel<'a> {
     pub(crate) remote_connection_picker: &'a RemoteConnectionPickerState,
     pub(crate) remote_connection_manager: &'a RemoteConnectionManagerState,
     pub(crate) remote_tunnel_manager: &'a RemoteTunnelManagerState,
-    pub(crate) keybindings: &'a NativeKeybindings,
+    pub(crate) keybindings: &'a ProductKeybindings,
     pub(crate) settings: &'a SettingsState,
     pub(crate) keybinding_diagnostics: &'a [String],
     pub(crate) theme_scheme: zeta_theme::ColorScheme,
@@ -377,7 +378,7 @@ struct MainPresentationView<'a> {
     session_pane_context: &'a SessionPaneContext,
     workspace: &'a WorkspacePaneHost,
     workspace_context: &'a WorkspaceContext,
-    keybindings: &'a NativeKeybindings,
+    keybindings: &'a ProductKeybindings,
     keybinding_diagnostics: &'a [String],
     theme_scheme: zeta_theme::ColorScheme,
     theme_follows_system: bool,
@@ -760,10 +761,7 @@ fn draw_shell_overlays(
     ) {
         remote_connection_picker_scroll_metrics = connection_picker.scroll_metrics();
         remote_connection_picker_item_viewport = Some(connection_picker.item_viewport_bounds());
-        if model
-            .dispatch
-            .is_focused(crate::remote_connection_picker::REMOTE_CONNECTION_SEARCH_INPUT)
-        {
+        if model.dispatch.is_focused(REMOTE_CONNECTION_SEARCH_INPUT) {
             ime_cursor_area = connection_picker.search_caret_bounds();
         }
         frame.draw_component(&connection_picker);
@@ -1109,12 +1107,12 @@ fn draw_file_editor_inspector(
     })
 }
 
-/// Paints a Native-owned Workbench surface before feature content.
+/// Paints a Desktop-owned Workbench surface before feature content.
 fn draw_workspace_surface(scene: &mut UiScene, bounds: Rect, palette: UiTheme) {
     scene.draw_rect(PaintRect::new(bounds, palette.side_bar_background));
 }
 
-/// Paints the Native-owned outer border of the Inspector Part after feature content.
+/// Paints the Desktop-owned outer border of the Inspector Part after feature content.
 ///
 /// This boundary separates the right Inspector slot from the main
 /// workspace. Files and SCM components own only their internal geometry and

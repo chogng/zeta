@@ -1,10 +1,10 @@
-use super::ComposerInteractionPaneState;
+use super::ChatInputInteractionPaneState;
 use zeta_ui_components::{ScrollCommand, ScrollDelta};
 use zui::ui::{Point, Rect, Size};
 
 #[test]
 fn pane_scrolls_from_only_viewport_and_content_geometry() {
-    let mut pane = ComposerInteractionPaneState::default();
+    let mut pane = ChatInputInteractionPaneState::default();
 
     assert!(pane.apply_scroll(
         ScrollCommand::ByPixels(ScrollDelta::vertical(70.0)),
@@ -19,7 +19,7 @@ fn pane_scrolls_from_only_viewport_and_content_geometry() {
 
 #[test]
 fn pane_reveals_arbitrary_mounted_content_bounds() {
-    let mut pane = ComposerInteractionPaneState::default();
+    let mut pane = ChatInputInteractionPaneState::default();
 
     assert!(pane.apply_scroll(
         ScrollCommand::EnsureVisible(Rect::from_xywh(0.0, 238.0, 300.0, 34.0)),
