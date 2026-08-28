@@ -356,10 +356,10 @@ fn button_state(dispatch: &UiDispatch, id: ElementId, enabled: bool) -> ButtonSt
         ButtonState::Disabled
     } else if dispatch.is_pressed(id) {
         ButtonState::Pressed
-    } else if dispatch.is_focused(id) {
-        ButtonState::Focused
     } else if dispatch.is_hovered(id) {
         ButtonState::Hovered
+    } else if dispatch.is_focused(id) {
+        ButtonState::Focused
     } else {
         ButtonState::Resting
     }

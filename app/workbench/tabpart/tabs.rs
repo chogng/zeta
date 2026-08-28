@@ -50,7 +50,6 @@ const STATUS_DOT_SIZE: f32 = 10.0;
 const BODY_CLOSE_SIZE: f32 = 24.0;
 const TITLEBAR_CLOSE_SIZE: f32 = 18.0;
 const TAB_ACTION_GAP: f32 = 2.0;
-const TITLEBAR_PIN_SIZE: f32 = 12.0;
 
 struct GroupLayout<'a> {
     group: &'a WorkbenchTabGroup<'a>,
@@ -375,10 +374,6 @@ impl<'a> TabContainer<'a> {
             width,
             size,
         );
-        let icon_size = match self.placement {
-            TabContainerPlacement::Body => 16.0,
-            TabContainerPlacement::Titlebar => 12.0,
-        };
         let button_style = ButtonStyle::new(
             ButtonBackgrounds::new(Color::TRANSPARENT)
                 .with_hovered(self.style.colors.control_hover_background)
@@ -388,7 +383,7 @@ impl<'a> TabContainer<'a> {
         )
         .with_corner_radii(CornerRadii::uniform(4.0))
         .with_padding(Edges::uniform(3.0))
-        .with_icon_size(icon_size);
+        .with_icon_size(self.action_icon_size());
         ActionBar::new(
             bounds,
             ActionBarOrientation::Horizontal,
@@ -411,6 +406,7 @@ impl<'a> TabContainer<'a> {
     fn tab_action_bar_visible(&self, tab: &WorkbenchTab<'_>) -> bool {
         self.visible_action_bar_tab == Some(tab.id)
             || self.dispatch.is_hovered(tab.id)
+            || self.dispatch.is_focused(tab.id)
             || self.dispatch.is_hovered(tab.action_id)
             || self.dispatch.is_hovered(tab.close_id)
             || self.dispatch.is_focused(tab.action_id)
@@ -426,6 +422,40 @@ impl<'a> TabContainer<'a> {
                 .with_corner_radii(CornerRadii::uniform(4.0)),
         );
         scene.draw_component(&action_bar);
+    }
+
+    fn action_icon_size(&self) -> f32 {
+        match self.placement {
+            TabContainerPlacement::Body => 16.0,
+            TabContainerPlacement::Titlebar => 12.0,
+        }
+    }
+
+    fn pinned_action_icon_bounds(&self, tab: &WorkbenchTab<'_>, tab_bounds: Rect) -> Rect {
+        let close_bounds = self
+            .tab_action_bar(tab, tab_bounds)
+            .item_bounds(1)
+            .expect("tab close slot");
+        let icon_size = self.action_icon_size();
+        Rect::from_xywh(
+            close_bounds.origin.x + (close_bounds.size.width - icon_size) * 0.5,
+            close_bounds.origin.y + (close_bounds.size.height - icon_size) * 0.5,
+            icon_size,
+            icon_size,
+        )
+    }
+
+    fn paint_pinned_action_status(
+        &self,
+        scene: &mut UiScene,
+        tab: &WorkbenchTab<'_>,
+        tab_bounds: Rect,
+    ) {
+        scene.draw_icon(PaintIcon::new(
+            self.style.pinned_icon,
+            self.pinned_action_icon_bounds(tab, tab_bounds),
+            self.style.colors.muted_foreground,
+        ));
     }
 
     fn button_state(&self, id: ElementId) -> ButtonState {
@@ -468,6 +498,7 @@ impl<'a> TabContainer<'a> {
     }
 
     fn paint_body_tab(&self, scene: &mut UiScene, tab: &WorkbenchTab<'_>, tab_bounds: Rect) {
+        let action_bar_visible = self.tab_action_bar_visible(tab);
         let status_bounds = Rect::from_xywh(
             tab_bounds.origin.x + TAB_CONTENT_PADDING,
             tab_bounds.origin.y + (tab_bounds.size.height - STATUS_CONTAINER_SIZE) * 0.5,
@@ -480,14 +511,14 @@ impl<'a> TabContainer<'a> {
         );
         if tab.kind == WorkbenchTabKind::Settings {
             self.paint_settings_icon(scene, status_bounds, 18.0);
-        } else if tab.pinned {
-            self.paint_pinned_status(scene, tab, status_bounds);
         } else {
             self.paint_status_dot(scene, tab, status_bounds);
         }
         let text_x = status_bounds.right() + STATUS_CONTENT_GAP;
-        let text_right = if self.tab_action_bar_visible(tab) {
+        let text_right = if action_bar_visible {
             self.tab_action_bar(tab, tab_bounds).bounds().origin.x - 6.0
+        } else if tab.pinned {
+            self.pinned_action_icon_bounds(tab, tab_bounds).origin.x - 6.0
         } else {
             tab_bounds.right() - TAB_CONTENT_PADDING
         };
@@ -504,12 +535,15 @@ impl<'a> TabContainer<'a> {
             Size::new(text_width, 15.0),
             TextStyle::new(11.0, self.style.colors.foreground).with_line_height(15.0),
         ));
-        if self.tab_action_bar_visible(tab) {
+        if action_bar_visible {
             self.paint_tab_action_bar(scene, tab, tab_bounds);
+        } else if tab.pinned {
+            self.paint_pinned_action_status(scene, tab, tab_bounds);
         }
     }
 
     fn paint_titlebar_tab(&self, scene: &mut UiScene, tab: &WorkbenchTab<'_>, tab_bounds: Rect) {
+        let action_bar_visible = self.tab_action_bar_visible(tab);
         let mut text_x = tab_bounds.origin.x + TAB_CONTENT_PADDING;
         if tab.kind == WorkbenchTabKind::Settings {
             let icon_bounds = Rect::from_xywh(
@@ -529,23 +563,11 @@ impl<'a> TabContainer<'a> {
             );
             self.paint_status_dot(scene, tab, status_bounds);
             text_x = status_bounds.right() + 6.0;
-            if tab.pinned {
-                let pin_bounds = Rect::from_xywh(
-                    text_x,
-                    tab_bounds.origin.y + (tab_bounds.size.height - TITLEBAR_PIN_SIZE) * 0.5,
-                    TITLEBAR_PIN_SIZE,
-                    TITLEBAR_PIN_SIZE,
-                );
-                scene.draw_icon(PaintIcon::new(
-                    self.style.pinned_icon,
-                    pin_bounds,
-                    self.style.colors.muted_foreground,
-                ));
-                text_x = pin_bounds.right() + 4.0;
-            }
         }
-        let text_right = if self.tab_action_bar_visible(tab) {
+        let text_right = if action_bar_visible {
             self.tab_action_bar(tab, tab_bounds).bounds().origin.x - 4.0
+        } else if tab.pinned {
+            self.pinned_action_icon_bounds(tab, tab_bounds).origin.x - 4.0
         } else {
             tab_bounds.right() - TAB_CONTENT_PADDING
         };
@@ -555,31 +577,11 @@ impl<'a> TabContainer<'a> {
             Size::new((text_right - text_x).max(1.0), 18.0),
             TextStyle::new(12.0, self.style.colors.foreground).with_line_height(18.0),
         ));
-        if self.tab_action_bar_visible(tab) {
+        if action_bar_visible {
             self.paint_tab_action_bar(scene, tab, tab_bounds);
+        } else if tab.pinned {
+            self.paint_pinned_action_status(scene, tab, tab_bounds);
         }
-    }
-
-    fn paint_pinned_status(&self, scene: &mut UiScene, tab: &WorkbenchTab<'_>, bounds: Rect) {
-        let icon_size = 16.0;
-        let icon_bounds = Rect::from_xywh(
-            bounds.origin.x + (bounds.size.width - icon_size) * 0.5,
-            bounds.origin.y + (bounds.size.height - icon_size) * 0.5,
-            icon_size,
-            icon_size,
-        );
-        scene.draw_icon(PaintIcon::new(
-            self.style.pinned_icon,
-            icon_bounds,
-            self.style.colors.muted_foreground,
-        ));
-        let dot_bounds = Rect::from_xywh(
-            bounds.right() - STATUS_DOT_SIZE,
-            bounds.bottom() - STATUS_DOT_SIZE,
-            STATUS_DOT_SIZE,
-            STATUS_DOT_SIZE,
-        );
-        self.paint_status_dot(scene, tab, dot_bounds);
     }
 
     fn paint_status_dot(&self, scene: &mut UiScene, tab: &WorkbenchTab<'_>, bounds: Rect) {

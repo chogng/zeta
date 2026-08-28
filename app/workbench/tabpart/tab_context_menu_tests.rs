@@ -101,7 +101,7 @@ fn pinned_target_changes_the_first_action_to_unpin() {
 }
 
 #[test]
-fn command_menu_only_uses_the_dark_fill_for_pointer_hover() {
+fn command_menu_uses_the_dark_fill_for_pointer_hover_even_on_the_focused_item() {
     let mut state = TabContextMenuState::default();
     state.open_unpinned(session_tab(), Point::new(80.0, 120.0), None);
     let mut dispatch = UiDispatch::default();
@@ -150,10 +150,38 @@ fn command_menu_only_uses_the_dark_fill_for_pointer_hover() {
 
     assert_eq!(first_background.fill(), Color::TRANSPARENT);
     dispatch.pointer_moved(
-        Point::new(second_bounds.origin.x + 2.0, second_bounds.origin.y + 2.0),
+        Point::new(first_bounds.origin.x + 2.0, first_bounds.origin.y + 2.0),
         focused.interaction(),
     );
     drop(focused);
+    drop(menu);
+
+    let menu = TabContextMenu::new(
+        Rect::from_xywh(0.0, 0.0, 1_000.0, 700.0),
+        &part,
+        &state,
+        CaretVisibility::Visible,
+        style(),
+        WINDOW,
+        &mut text_layout,
+        &dispatch,
+    )
+    .unwrap();
+    let mut first_hovered = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
+    first_hovered.draw_component(&menu);
+    let first_background = first_hovered
+        .scene()
+        .rects()
+        .iter()
+        .find(|rect| rect.bounds() == first_bounds)
+        .expect("hovered focused command item background");
+
+    assert_eq!(first_background.fill(), Color::rgb(226, 226, 228));
+    dispatch.pointer_moved(
+        Point::new(second_bounds.origin.x + 2.0, second_bounds.origin.y + 2.0),
+        first_hovered.interaction(),
+    );
+    drop(first_hovered);
     drop(menu);
 
     let menu = TabContextMenu::new(

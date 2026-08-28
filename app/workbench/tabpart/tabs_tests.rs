@@ -268,7 +268,7 @@ fn close_button_is_a_child_action_and_resolves_to_the_stable_tab_key() {
 }
 
 #[test]
-fn tab_actions_button_is_hover_only_and_opens_actions_for_the_stable_tab_key() {
+fn tab_actions_button_is_hidden_at_rest_and_opens_actions_for_the_stable_tab_key() {
     let (part, first_key, second_key) = part_with_two_sessions();
     let tab_id = part.tab_id(&first_key).unwrap();
     let mounts = [
@@ -386,6 +386,135 @@ fn tab_actions_button_is_hover_only_and_opens_actions_for_the_stable_tab_key() {
             Color::rgb(126, 126, 132)
         );
     }
+}
+
+#[test]
+fn pinned_status_uses_the_close_slot_until_the_action_bar_is_visible() {
+    let (mut part, first_key, second_key) = part_with_two_sessions();
+    assert!(part.pin_tab(&first_key));
+    let tab_id = part.tab_id(&first_key).unwrap();
+    let mounts = [
+        (
+            TabContainerPlacement::Body,
+            Rect::from_xywh(0.0, 36.0, 220.0, 664.0),
+            session_tab_id(tab_id),
+            session_tab_close_id(tab_id),
+        ),
+        (
+            TabContainerPlacement::Titlebar,
+            Rect::from_xywh(40.0, 0.0, 700.0, 32.0),
+            titlebar_session_tab_id(tab_id),
+            titlebar_session_tab_close_id(tab_id),
+        ),
+    ];
+
+    for (placement, bounds, tab_element, close_element) in mounts {
+        let mut dispatch = UiDispatch::default();
+        let container = TabContainer::from_tab_part(
+            bounds,
+            bounds,
+            &part,
+            Some(&second_key),
+            placement,
+            test_style(),
+            &dispatch,
+        );
+        let mut resting = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
+        resting.draw_component(&container);
+        let tab_bounds = resting.interaction().node(tab_element).unwrap().bounds();
+        let tab = &container.groups[0].tabs[0];
+        let expected_pin_bounds = container.pinned_action_icon_bounds(tab, tab_bounds);
+        let pinned_icon = resting
+            .scene()
+            .icons()
+            .iter()
+            .find(|icon| icon.icon() == zeta_icons::icons::PINNED)
+            .expect("resting pinned status");
+
+        assert_eq!(pinned_icon.bounds(), expected_pin_bounds);
+        assert!(resting.interaction().node(close_element).is_none());
+        drop(container);
+
+        dispatch.pointer_moved(
+            Point::new(tab_bounds.origin.x + 2.0, tab_bounds.origin.y + 2.0),
+            resting.interaction(),
+        );
+        let container = TabContainer::from_tab_part(
+            bounds,
+            bounds,
+            &part,
+            Some(&second_key),
+            placement,
+            test_style(),
+            &dispatch,
+        );
+        let mut hovered = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
+        hovered.draw_component(&container);
+
+        assert!(hovered.interaction().node(close_element).is_some());
+        assert!(
+            hovered
+                .scene()
+                .icons()
+                .iter()
+                .all(|icon| icon.icon() != zeta_icons::icons::PINNED)
+        );
+        assert_eq!(
+            hovered
+                .scene()
+                .icons()
+                .iter()
+                .filter(|icon| icon.icon() == zeta_icons::icons::CLOSE)
+                .count(),
+            1
+        );
+    }
+}
+
+#[test]
+fn focused_tab_reveals_its_action_bar() {
+    let (part, first_key, second_key) = part_with_two_sessions();
+    let tab_id = part.tab_id(&first_key).unwrap();
+    let bounds = Rect::from_xywh(0.0, 36.0, 220.0, 664.0);
+    let mut dispatch = UiDispatch::default();
+    let container = TabContainer::from_tab_part(
+        bounds,
+        bounds,
+        &part,
+        Some(&second_key),
+        TabContainerPlacement::Body,
+        test_style(),
+        &dispatch,
+    );
+    let mut resting = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
+    resting.draw_component(&container);
+    drop(container);
+
+    dispatch.focus_element(resting.interaction(), session_tab_id(tab_id));
+    let container = TabContainer::from_tab_part(
+        bounds,
+        bounds,
+        &part,
+        Some(&second_key),
+        TabContainerPlacement::Body,
+        test_style(),
+        &dispatch,
+    );
+    let mut focused = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
+    focused.draw_component(&container);
+
+    assert!(
+        focused
+            .interaction()
+            .node(session_tab_action_id(tab_id))
+            .is_some()
+    );
+    assert!(
+        focused
+            .interaction()
+            .node(session_tab_close_id(tab_id))
+            .is_some()
+    );
 }
 
 #[test]
