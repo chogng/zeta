@@ -1,5 +1,6 @@
+import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { type LanguageConfigurationSource, type ResolvedLanguageConfiguration } from "./languageConfiguration.js";
+import { type LanguageConfigurationChangeEvent, type LanguageConfigurationSource, type ResolvedLanguageConfiguration } from "./languageConfiguration.js";
 import { assertLanguageId } from "./languageId.js";
 import { createLanguageLexicalLineScanner } from "./languageLexicalConfiguration.js";
 import { type LanguageLexicalBracketEvent, type LanguageLexicalLineResult, type LanguageLexicalLineScanner, type LanguageLexicalState } from "./languageLexicalLineScanner.js";
@@ -10,6 +11,7 @@ import { type LanguageToken } from "../tokens/languageTokens.js";
 export interface LanguageTokenizationSource {
 	readonly textModel: TextModel;
 	readonly modelVersion: number;
+	readonly onDidChange: Event<void>;
 	getLineTokens(lineIndex: number): readonly LanguageToken[];
 }
 
@@ -24,6 +26,7 @@ export interface LanguageLexicalContextSource {
 
 /** Extends lexical context with bracket events whose columns remain in source text coordinates. */
 export interface LanguageStructuralBracketSource extends LanguageLexicalContextSource {
+	readonly onDidChange: Event<void>;
 	getStructuralBracketEvents(lineIndex: number): readonly LanguageLexicalBracketEvent[];
 }
 
@@ -34,10 +37,12 @@ export interface LanguageStructuralBracketSource extends LanguageLexicalContextS
  * requested line and invalidates the affected suffix after model changes.
  */
 export class LanguageLexicalContextIndex extends Disposable implements LanguageStructuralBracketSource {
+	private readonly changeEmitter = this._register(new Emitter<void>());
 	private configuration: ResolvedLanguageConfiguration | undefined;
 	private scanner: LanguageLexicalLineScanner | undefined;
 	private bracketTokens: readonly string[] = Object.freeze([]);
 	private lineResults: LanguageLexicalLineResult[] = [];
+	readonly onDidChange: Event<void> = this.changeEmitter.event;
 
 	constructor(readonly textModel: TextModel, readonly languageId: string, private readonly configurations: LanguageConfigurationSource) {
 		super();
@@ -47,6 +52,9 @@ export class LanguageLexicalContextIndex extends Disposable implements LanguageS
 			throw new TypeError("Language lexical context requires a configuration source");
 		}
 		this._register(textModel.onDidChange(change => this.acceptModelChange(change)));
+		if (configurations.onDidChangeConfiguration) {
+			this._register(configurations.onDidChangeConfiguration(event => this.acceptConfigurationChange(event)));
+		}
 		this._register(toDisposable(() => {
 			this.configuration = undefined;
 			this.scanner = undefined;
@@ -137,22 +145,41 @@ export class LanguageLexicalContextIndex extends Disposable implements LanguageS
 	private acceptModelChange(change: TextModelChange): void {
 		const firstChangedLine = Math.min(...change.changes.map(contentChange => contentChange.range.start.lineIndex));
 		this.lineResults.length = Math.min(this.lineResults.length, firstChangedLine);
+		this.changeEmitter.fire();
+	}
+
+	private acceptConfigurationChange(event: LanguageConfigurationChangeEvent): void {
+		if (event.languageId !== this.languageId) return;
+		this.configuration = undefined;
+		this.scanner = undefined;
+		this.bracketTokens = Object.freeze([]);
+		this.lineResults = [];
+		this.changeEmitter.fire();
 	}
 
 }
 
 /** Uses grammar tokens when current and falls back to the deterministic lexical index. */
-export class TokenAwareLanguageLexicalContext implements LanguageStructuralBracketSource {
+export class TokenAwareLanguageLexicalContext extends Disposable implements LanguageStructuralBracketSource {
+	private readonly changeEmitter = this._register(new Emitter<void>());
 	readonly textModel;
 	readonly languageId;
+	readonly onDidChange: Event<void> = this.changeEmitter.event;
 
 	constructor(private readonly fallback: LanguageStructuralBracketSource, private readonly tokenization: LanguageTokenizationSource, private readonly configurations: LanguageConfigurationSource) {
+		super();
 		this.textModel = fallback.textModel;
 		this.languageId = fallback.languageId;
-		if (tokenization.textModel !== fallback.textModel) throw new TypeError("Token-aware lexical context requires one text model");
+		if (tokenization.textModel !== fallback.textModel) {
+			this.dispose();
+			throw new TypeError("Token-aware lexical context requires one text model");
+		}
+		this._register(fallback.onDidChange(() => this.changeEmitter.fire()));
+		this._register(tokenization.onDidChange(() => this.changeEmitter.fire()));
 	}
 
 	getStructuralLineContent(lineIndex: number, startColumn = 0, endColumn?: number): string {
+		this.assertNotDisposed();
 		const line = this.textModel.getLineContent(lineIndex);
 		const resolvedEnd = endColumn ?? line.length;
 		if (this.tokenization.modelVersion !== this.textModel.version) return this.fallback.getStructuralLineContent(lineIndex, startColumn, resolvedEnd);
@@ -167,19 +194,23 @@ export class TokenAwareLanguageLexicalContext implements LanguageStructuralBrack
 	}
 
 	getTokenTypeAt(position: TextPosition): string | undefined {
+		this.assertNotDisposed();
 		const token = this.tokenAt(position);
 		return token?.tokenType ?? this.fallback.getTokenTypeAt(position);
 	}
 
 	getLanguageIdAt(position: TextPosition): string {
+		this.assertNotDisposed();
 		return this.tokenAt(position)?.languageId ?? this.languageId;
 	}
 
 	supportsLanguageId(_languageId: string): boolean {
+		this.assertNotDisposed();
 		return true;
 	}
 
 	getStructuralBracketEvents(lineIndex: number): readonly LanguageLexicalBracketEvent[] {
+		this.assertNotDisposed();
 		if (this.tokenization.modelVersion !== this.textModel.version) return this.fallback.getStructuralBracketEvents(lineIndex);
 		const tokens = this.tokenization.getLineTokens(lineIndex);
 		const embedded = tokens.filter(token => token.languageId !== undefined && token.languageId !== this.languageId);

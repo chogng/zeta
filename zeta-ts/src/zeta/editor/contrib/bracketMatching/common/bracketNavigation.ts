@@ -1,12 +1,12 @@
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
-import { type LanguageBracketMatcher } from "./bracketMatching.js";
+import { type LanguageBracketPair, type LanguageBracketPairs } from "../../../common/languages/languageBracketPairs.js";
 import { type TextPosition } from "../../../common/core/text.js";
 
 /** Moves every active cursor to its lexically valid matching bracket when present. */
-export function jumpToMatchingBrackets(matcher: LanguageBracketMatcher, selections: TextSelectionSet): TextSelectionSet {
+export function jumpToMatchingBrackets(bracketPairs: LanguageBracketPairs, selections: TextSelectionSet): TextSelectionSet {
 	let changed = false;
 	const nextSelections = selections.selections.map(selection => {
-		const match = matcher.findMatch(selection.active);
+		const match = matchAtOrAfter(bracketPairs, selection.active);
 		if (!match) return selection;
 		const next = TextSelection.collapsedAt(isAtOpening(match.opening.start, match.opening.end, selection.active)
 			? match.closing.start
@@ -18,16 +18,22 @@ export function jumpToMatchingBrackets(matcher: LanguageBracketMatcher, selectio
 }
 
 /** Selects the full configured bracket pair around every active cursor when present. */
-export function selectToMatchingBrackets(matcher: LanguageBracketMatcher, selections: TextSelectionSet): TextSelectionSet {
+export function selectToMatchingBrackets(bracketPairs: LanguageBracketPairs, selections: TextSelectionSet): TextSelectionSet {
 	let changed = false;
 	const nextSelections = selections.selections.map(selection => {
-		const match = matcher.findMatch(selection.active);
+		const match = matchAtOrAfter(bracketPairs, selection.active);
 		if (!match) return selection;
 		const next = TextSelection.from(match.opening.start, match.closing.end);
 		changed ||= next.range.start.compareTo(selection.range.start) !== 0 || next.range.end.compareTo(selection.range.end) !== 0;
 		return next;
 	});
 	return changed ? TextSelectionSet.withPrimary(nextSelections, selections.primaryIndex) : selections;
+}
+
+function matchAtOrAfter(bracketPairs: LanguageBracketPairs, position: TextPosition): LanguageBracketPair | undefined {
+	return bracketPairs.matchBracket(position)
+		?? bracketPairs.findEnclosingBrackets(position)
+		?? bracketPairs.findNextBracket(position)?.pair;
 }
 
 function isAtOpening(start: TextPosition, end: TextPosition, position: TextPosition): boolean {

@@ -1,10 +1,10 @@
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
-import { type LanguageCharacterPair } from "../../../common/languages/languageConfiguration.js";
-import { type LanguageAutoClosingAction, type LanguageAutoClosingTrust } from "./pairEditing.js";
-import { TextPosition, TextRange } from "../../../common/core/text.js";
-import { type TextModel } from "../../../common/model/textModel.js";
-import { TrackedRangeStickiness, type TrackedRange } from "../../../common/model/trackedRange.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
+import { type EditorSelectionController } from "./editorSelectionController.js";
+import { type LanguageCharacterPair } from "../languages/languageConfiguration.js";
+import { type LanguageAutoClosingAction, type LanguageAutoClosingTrust } from "./languagePairEditing.js";
+import { TextPosition, TextRange } from "../core/text.js";
+import { type TextModel } from "../model/textModel.js";
+import { TrackedRangeStickiness, type TrackedRange } from "../model/trackedRange.js";
 
 interface AutoClosingEntry {
 	readonly open: string;

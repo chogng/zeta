@@ -112,6 +112,7 @@ export interface LanguageConfigurationChangeEvent {
 }
 
 export interface LanguageConfigurationSource {
+	readonly onDidChangeConfiguration?: Event<LanguageConfigurationChangeEvent>;
 	getLanguageConfiguration(languageId: string): ResolvedLanguageConfiguration;
 }
 

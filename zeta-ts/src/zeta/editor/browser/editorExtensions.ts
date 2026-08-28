@@ -10,7 +10,7 @@ import { type DocumentCollaborationInvite } from "../common/services/documentCol
 import { type DocumentCollaborationMember } from "../common/services/documentCollaborationService.js";
 import { type DocumentCollaborationRoomRole } from "../common/services/documentCollaborationService.js";
 import { type EditorBrowserOptions } from "./editorBrowser.js";
-import { type EditorLanguageEditingAdapter, type EditorView } from "./view.js";
+import { type EditorView } from "./view.js";
 import { type EditorViewport } from "./view.js";
 import { type DecorationSource } from "./viewparts/decorations/decorationPresentation.js";
 import { type EditorLineVisibilitySource } from "../common/viewModel/viewModelLines.js";
@@ -46,7 +46,6 @@ export interface TextEditorContributionConfigurationContext {
 	readonly setSemanticTokenSource: (source: SemanticTokenSource) => void;
 	readonly setBracketColorizationSource: (source: BracketColorizationSource) => void;
 	readonly setLanguageLexicalContext: (source: LanguageLexicalContextSource) => void;
-	readonly setLanguageEditing: (adapter: EditorLanguageEditingAdapter) => void;
 	readonly register: <T extends IDisposable>(value: T) => T;
 }
 

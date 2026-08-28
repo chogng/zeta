@@ -1,20 +1,20 @@
-import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type EditorLanguageEditingAdapter, type EditorLanguageTypeCommand } from "../../../browser/view/viewController.js";
-import { type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
-import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
-import { type TextSelectionSet } from "../../../common/core/selection.js";
-import { type TextModelChange } from "../../../common/core/text.js";
-import { type LanguageConfigurationSource } from "../../../common/languages/languageConfiguration.js";
-import { type LanguageLexicalContextSource } from "../../../common/languages/languageLexicalContext.js";
-import { LanguageLexicalContextIndex } from "../../../common/languages/languageLexicalContext.js";
-import { assertLanguageId } from "../../../common/languages/languageId.js";
-import { type TextModel } from "../../../common/model/textModel.js";
-import { resolveEditorIndentationOptions, type EditorIndentationOptions } from "../../../common/editorIndentation.js";
-import { LanguageAutoClosingTracker } from "../common/autoClosingTracker.js";
-import { createLanguageEnterCommand } from "../common/enter.js";
-import { createLanguagePairBackspaceCommand, createLanguagePairTypeCommand } from "../common/pairEditing.js";
+import { Disposable } from "../../../base/common/lifecycle.js";
+import { type EditorLanguageEditingAdapter, type EditorLanguageTypeCommand } from "../view/viewController.js";
+import { type EditorEditCommand } from "../../common/commands/editorEditCommand.js";
+import { type EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
+import { LanguageAutoClosingTracker } from "../../common/cursor/languageAutoClosingTracker.js";
+import { createLanguageEnterCommand } from "../../common/cursor/languageEnter.js";
+import { createLanguagePairBackspaceCommand, createLanguagePairTypeCommand } from "../../common/cursor/languagePairEditing.js";
+import { type TextSelectionSet } from "../../common/core/selection.js";
+import { type TextModelChange } from "../../common/core/text.js";
+import { type LanguageConfigurationSource } from "../../common/languages/languageConfiguration.js";
+import { type LanguageLexicalContextSource } from "../../common/languages/languageLexicalContext.js";
+import { LanguageLexicalContextIndex } from "../../common/languages/languageLexicalContext.js";
+import { assertLanguageId } from "../../common/languages/languageId.js";
+import { type TextModel } from "../../common/model/textModel.js";
+import { resolveEditorIndentationOptions, type EditorIndentationOptions } from "../../common/editorIndentation.js";
 
-/** Language-aware typing adapter selected by the bracket-matching contribution. */
+/** Browser input adapter for DOM-free language editing commands. */
 export class LanguageEditingAdapter extends Disposable implements EditorLanguageEditingAdapter {
 	private readonly autoClosingTracker: LanguageAutoClosingTracker;
 	private readonly lexicalContext: LanguageLexicalContextSource;

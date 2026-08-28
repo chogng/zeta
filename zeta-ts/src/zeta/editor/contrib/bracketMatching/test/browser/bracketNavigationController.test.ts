@@ -4,7 +4,8 @@ import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { LanguageConfigurationRegistry } from "../../../../common/languages/languageConfiguration.js";
-import { LanguageBracketMatcher } from "../../common/bracketMatching.js";
+import { LanguageBracketPairs } from "../../../../common/languages/languageBracketPairs.js";
+import { LanguageLexicalContextIndex } from "../../../../common/languages/languageLexicalContext.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
@@ -26,18 +27,19 @@ for (const [name, value] of Object.entries({
 const { EditorViewport } = await import("../../../../browser/view.js");
 const { BracketNavigationController } = await import("../../browser/bracketNavigationController.js");
 
-test("Go-to-bracket shortcut uses the Stanza lexical bracket matcher", () => {
+test("Go-to-bracket shortcut uses the shared structural bracket index", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("(value)");
 	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using configurations = configurationsForBrackets();
-	using matcher = new LanguageBracketMatcher(model, "typescript", configurations);
+	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
+	using bracketPairs = new LanguageBracketPairs(model, lexical);
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 60 });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);
-	using controller = new BracketNavigationController(input, viewport, selections, matcher);
+	using controller = new BracketNavigationController(input, viewport, selections, bracketPairs);
 
 	const jump = keydown(dom.window, "\\", { ctrlKey: true, shiftKey: true });
 	input.dispatchEvent(jump);
@@ -54,16 +56,18 @@ test("Bracket navigation controller rejects cross-model wiring and unrelated cho
 	using other = new TextModel("()");
 	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using configurations = configurationsForBrackets();
-	using matcher = new LanguageBracketMatcher(model, "typescript", configurations);
-	using otherMatcher = new LanguageBracketMatcher(other, "typescript", configurations);
+	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
+	using otherLexical = new LanguageLexicalContextIndex(other, "typescript", configurations);
+	using bracketPairs = new LanguageBracketPairs(model, lexical);
+	using otherBracketPairs = new LanguageBracketPairs(other, otherLexical);
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);
-	using controller = new BracketNavigationController(input, viewport, selections, matcher);
+	using controller = new BracketNavigationController(input, viewport, selections, bracketPairs);
 	const unrelated = keydown(dom.window, "\\", { ctrlKey: true });
 	input.dispatchEvent(unrelated);
 	assert.equal(unrelated.defaultPrevented, false);
-	assert.throws(() => new BracketNavigationController(input, viewport, selections, otherMatcher), /must share one text model/);
+	assert.throws(() => new BracketNavigationController(input, viewport, selections, otherBracketPairs), /must share one text model/);
 
 	dom.window.close();
 });

@@ -38,6 +38,7 @@ registerEditorPane({
 			showLineNumbers: configuration?.getValue(CodeEditorConfiguration.lineNumbers),
 			showIndentationGuides: configuration?.getValue(CodeEditorConfiguration.indentationGuides),
 			bracketPairColorization: configuration?.getValue(CodeEditorConfiguration.bracketPairColorization),
+			matchBrackets: configuration?.getValue(CodeEditorConfiguration.matchBrackets),
 			stickyScroll: configuration?.getValue(CodeEditorConfiguration.stickyScroll),
 			indentation: {
 				kind: configuration?.getValue(CodeEditorConfiguration.indentationKind),

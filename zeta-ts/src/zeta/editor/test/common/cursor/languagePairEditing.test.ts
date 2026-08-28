@@ -1,14 +1,14 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
-import { LanguageAutoClosingTracker } from "../../common/autoClosingTracker.js";
-import { registerBuiltinLanguageConfigurations } from "../../../../common/languages/languageBuiltinConfigurations.js";
-import { LanguageConfigurationRegistry } from "../../../../common/languages/languageConfiguration.js";
-import { LanguageLexicalContextIndex } from "../../../../common/languages/languageLexicalContext.js";
-import { createLanguagePairBackspaceCommand, createLanguagePairTypeCommand } from "../../common/pairEditing.js";
-import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
-import { TextPosition } from "../../../../common/core/text.js";
-import { TextModel } from "../../../../common/model/textModel.js";
+import { EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { LanguageAutoClosingTracker } from "../../../common/cursor/languageAutoClosingTracker.js";
+import { registerBuiltinLanguageConfigurations } from "../../../common/languages/languageBuiltinConfigurations.js";
+import { LanguageConfigurationRegistry } from "../../../common/languages/languageConfiguration.js";
+import { LanguageLexicalContextIndex } from "../../../common/languages/languageLexicalContext.js";
+import { createLanguagePairBackspaceCommand, createLanguagePairTypeCommand } from "../../../common/cursor/languagePairEditing.js";
+import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
+import { TextPosition } from "../../../common/core/text.js";
+import { TextModel } from "../../../common/model/textModel.js";
 
 test("Language pair typing auto-closes and overtypes one existing closer", () => {
 	using model = new TextModel("call");

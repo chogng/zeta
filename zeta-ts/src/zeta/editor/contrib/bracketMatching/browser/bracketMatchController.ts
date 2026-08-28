@@ -1,7 +1,7 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
-import { type LanguageBracketMatcher } from "../common/bracketMatching.js";
+import { type LanguageBracketPairs } from "../../../common/languages/languageBracketPairs.js";
 import { type TextRange } from "../../../common/core/text.js";
 import { TrackedRangeStickiness } from "../../../common/model/trackedRange.js";
 
@@ -9,16 +9,17 @@ import { TrackedRangeStickiness } from "../../../common/model/trackedRange.js";
 export class BracketMatchController extends Disposable {
 	constructor(
 		private readonly selections: EditorSelectionController,
-		private readonly matcher: LanguageBracketMatcher,
+		private readonly bracketPairs: LanguageBracketPairs,
 		private readonly decorations: TextDecorationCollection<void>,
+		private readonly mode: "never" | "near" | "always",
 	) {
 		super();
 		try {
-			if (selections.textModel !== matcher.textModel || selections.textModel !== decorations.textModel) {
+			if (selections.textModel !== bracketPairs.textModel || selections.textModel !== decorations.textModel) {
 				throw new TypeError("Stanza bracket matching dependencies must share one text model");
 			}
 			this._register(selections.onDidChange(() => this.update()));
-			this._register(matcher.textModel.onDidChange(() => this.update()));
+			this._register(bracketPairs.onDidChange(() => this.update()));
 			this.update();
 		} catch (error) {
 			this.dispose();
@@ -27,10 +28,15 @@ export class BracketMatchController extends Disposable {
 	}
 
 	private update(): void {
+		if (this.mode === "never") {
+			this.decorations.replaceAll([]);
+			return;
+		}
 		const ranges = new Map<string, TextRange>();
 		for (const selection of this.selections.selections.selections) {
 			if (!selection.collapsed) continue;
-			const match = this.matcher.findMatch(selection.active);
+			const match = this.bracketPairs.matchBracket(selection.active)
+				?? (this.mode === "always" ? this.bracketPairs.findEnclosingBrackets(selection.active) : undefined);
 			if (!match) continue;
 			ranges.set(rangeKey(match.opening), match.opening);
 			ranges.set(rangeKey(match.closing), match.closing);

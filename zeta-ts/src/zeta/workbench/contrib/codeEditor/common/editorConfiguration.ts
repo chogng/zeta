@@ -3,6 +3,7 @@ import { EditorIndentationKind } from "../../../../editor/common/editorIndentati
 import { EditorLineWrapping } from "../../../../editor/common/config/editorOptions.js";
 
 export type WrappingIndentSetting = "none" | "same" | "indent" | "deepIndent";
+export type MatchBracketsSetting = "never" | "near" | "always";
 
 /** Typed user preferences owned by the Workbench code-editor integration. */
 export const CodeEditorConfiguration = Object.freeze({
@@ -100,6 +101,19 @@ export const CodeEditorConfiguration = Object.freeze({
 		defaultValue: true,
 		parse: value => parseBoolean(value, "editor.bracketPairColorization.enabled"),
 		setting: booleanSetting("Bracket pair colorization", "Use matching colors to distinguish nested bracket pairs."),
+	}),
+	matchBrackets: ConfigurationsRegistry.registerConfiguration<MatchBracketsSetting>({
+		key: "editor.matchBrackets",
+		defaultValue: "always",
+		parse(value: unknown): MatchBracketsSetting {
+			if (value === "never" || value === "near" || value === "always") return value;
+			throw new TypeError(`editor.matchBrackets must be never, near, or always; received ${String(value)}`);
+		},
+		setting: selectSetting("Match brackets", "Choose when matching bracket pairs are highlighted.", [
+			{ value: "never", label: "Never" },
+			{ value: "near", label: "Near cursor" },
+			{ value: "always", label: "Always" },
+		]),
 	}),
 	stickyScroll: ConfigurationsRegistry.registerConfiguration<boolean>({
 		key: "editor.stickyScroll.enabled",

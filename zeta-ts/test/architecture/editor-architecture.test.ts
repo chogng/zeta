@@ -23,6 +23,30 @@ test("Editor production code does not depend on Workbench or generated transport
 	}
 });
 
+test("Bracket structure, cursor editing, and browser presentation keep separate owners", () => {
+	for (const file of [
+		"common/languages/languageBracketPairs.ts",
+		"common/cursor/languageAutoClosingTracker.ts",
+		"common/cursor/languagePairEditing.ts",
+		"common/cursor/languageEnter.ts",
+		"browser/controller/languageEditingAdapter.ts",
+	]) assert.equal(existsSync(join(editorRoot, file)), true, file);
+	for (const file of [
+		"contrib/bracketMatching/common/bracketMatching.ts",
+		"contrib/bracketMatching/common/bracketColorization.ts",
+		"contrib/bracketMatching/common/autoClosingTracker.ts",
+		"contrib/bracketMatching/common/pairEditing.ts",
+		"contrib/bracketMatching/common/enter.ts",
+		"contrib/bracketMatching/browser/languageEditingAdapter.ts",
+	]) assert.equal(existsSync(join(editorRoot, file)), false, file);
+	const contribution = readFileSync(join(editorRoot, "contrib/bracketMatching/browser/bracketMatching.contribution.ts"), "utf8");
+	assert.match(contribution, /LanguageBracketPairs/u);
+	assert.doesNotMatch(contribution, /LanguageLexicalContextIndex|TokenAwareLanguageLexicalContext|LanguageEditingAdapter|LanguageAutoClosingTracker/u);
+	const adapter = readFileSync(join(editorRoot, "browser/controller/languageEditingAdapter.ts"), "utf8");
+	assert.match(adapter, /common\/cursor\/language(?:AutoClosingTracker|Enter|PairEditing)/u);
+	assert.doesNotMatch(adapter, /\/contrib\//u);
+});
+
 test("Workbench owns App Server language, diff, and text-model adapters", () => {
 	for (const file of [
 		"services/language/browser/appServerSyntaxProviders.ts",

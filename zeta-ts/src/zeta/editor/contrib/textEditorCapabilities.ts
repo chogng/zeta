@@ -1,22 +1,22 @@
 import { type EditorCapability } from "../browser/editorExtensions.js";
 import { type LanguageDiagnostic } from "../common/languages/languageResults.js";
 import { type TextDecorationCollection } from "../common/model/decorationCollection.js";
-import { type LanguageBracketMatcher } from "./bracketMatching/common/bracketMatching.js";
+import { type LanguageBracketPairs } from "../common/languages/languageBracketPairs.js";
 import { type EditorFoldingModel } from "./folding/browser/foldingModel.js";
 import { type TokenizationTextModelPart } from "./tokenization/common/tokenizationTextModelPart.js";
 import { type UnicodeHighlight } from "./unicodeHighlighter/common/unicodeHighlighter.js";
 import { type SyntaxService } from "../common/languages/syntax/syntaxService.js";
 import { type SemanticTokenSource } from "../browser/viewparts/semanticTokens/semanticTokenPresentation.js";
-import { type LanguageLexicalContextSource } from "../common/languages/languageLexicalContext.js";
+import { type LanguageStructuralBracketSource } from "../common/languages/languageLexicalContext.js";
 import { type SemanticTokensModelPart, type SemanticTokensService } from "./semanticTokens/common/semanticTokens.js";
 
 /** Typed identities for shared runtime objects consumed by independently selected text-editor contributions. */
 export const TextEditorCapability = Object.freeze({
 	bracketDecorations: capability<TextDecorationCollection<void>>("editor.capability.bracketDecorations"),
-	bracketMatcher: capability<LanguageBracketMatcher>("editor.capability.bracketMatcher"),
+	bracketPairs: capability<LanguageBracketPairs>("editor.capability.bracketPairs"),
 	diagnosticDecorations: capability<TextDecorationCollection<LanguageDiagnostic>>("editor.capability.diagnosticDecorations"),
 	folding: capability<EditorFoldingModel>("editor.capability.folding"),
-	languageLexicalContext: capability<LanguageLexicalContextSource>("editor.capability.languageLexicalContext"),
+	languageLexicalContext: capability<LanguageStructuralBracketSource>("editor.capability.languageLexicalContext"),
 	searchDecorations: capability<TextDecorationCollection<void>>("editor.capability.searchDecorations"),
 	semanticTokenSource: capability<SemanticTokenSource>("editor.capability.semanticTokenSource"),
 	semanticTokens: capability<SemanticTokensService>("editor.capability.semanticTokens"),

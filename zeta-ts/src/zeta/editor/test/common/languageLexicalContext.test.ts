@@ -1,5 +1,6 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
+import { Event } from "../../../base/common/event.js";
 import { LanguageConfigurationRegistry } from "../../common/languages/languageConfiguration.js";
 import { LanguageLexicalContextIndex, TokenAwareLanguageLexicalContext } from "../../common/languages/languageLexicalContext.js";
 import { type LanguageToken } from "../../common/tokens/languageTokens.js";
@@ -154,8 +155,8 @@ test("Token-aware lexical context selects embedded languages and their structura
 	using javascript = configurations.register("javascript", { comments: { lineComment: "//" }, brackets: [{ open: "{", close: "}" }] });
 	using fallback = new LanguageLexicalContextIndex(model, "html", configurations);
 	const embedded = token(model, 0, 8, 17, "source", { languageId: "javascript" });
-	const tokenization = { textModel: model, modelVersion: model.version, getLineTokens: () => [embedded] };
-	const context = new TokenAwareLanguageLexicalContext(fallback, tokenization, configurations);
+	const tokenization = { textModel: model, modelVersion: model.version, onDidChange: Event.None, getLineTokens: () => [embedded] };
+	using context = new TokenAwareLanguageLexicalContext(fallback, tokenization, configurations);
 
 	assert.equal(context.getLanguageIdAt(TextPosition.at(0, 10)), "javascript");
 	assert.equal(context.getLanguageIdAt(TextPosition.at(0, 2)), "html");
@@ -168,7 +169,7 @@ test("Token-aware lexical context excludes grammar-declared unbalanced ranges", 
 	using language = configurations.register("demo", { brackets: [{ open: "{", close: "}" }] });
 	using fallback = new LanguageLexicalContextIndex(model, "demo", configurations);
 	const excluded = token(model, 0, 0, 11, "source", { balancedBrackets: false });
-	const context = new TokenAwareLanguageLexicalContext(fallback, { textModel: model, modelVersion: model.version, getLineTokens: () => [excluded] }, configurations);
+	using context = new TokenAwareLanguageLexicalContext(fallback, { textModel: model, modelVersion: model.version, onDidChange: Event.None, getLineTokens: () => [excluded] }, configurations);
 
 	assert.deepEqual(context.getStructuralBracketEvents(0).map(event => event.startColumn), [17, 18]);
 });

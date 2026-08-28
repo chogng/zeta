@@ -1,15 +1,15 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { createTypeTextCommand } from "../../../../common/cursor/cursorTypeOperations.js";
-import { EditorIndentationKind } from "../../../../common/editorIndentation.js";
-import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
-import { registerBuiltinLanguageConfigurations } from "../../../../common/languages/languageBuiltinConfigurations.js";
-import { LanguageConfigurationRegistry, LanguageIndentAction } from "../../../../common/languages/languageConfiguration.js";
-import { createLanguageEnterCommand } from "../../common/enter.js";
-import { LanguageLexicalContextIndex } from "../../../../common/languages/languageLexicalContext.js";
-import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
-import { TextPosition } from "../../../../common/core/text.js";
-import { TextModel } from "../../../../common/model/textModel.js";
+import { createTypeTextCommand } from "../../../common/cursor/cursorTypeOperations.js";
+import { EditorIndentationKind } from "../../../common/editorIndentation.js";
+import { EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { registerBuiltinLanguageConfigurations } from "../../../common/languages/languageBuiltinConfigurations.js";
+import { LanguageConfigurationRegistry, LanguageIndentAction } from "../../../common/languages/languageConfiguration.js";
+import { createLanguageEnterCommand } from "../../../common/cursor/languageEnter.js";
+import { LanguageLexicalContextIndex } from "../../../common/languages/languageLexicalContext.js";
+import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
+import { TextPosition } from "../../../common/core/text.js";
+import { TextModel } from "../../../common/model/textModel.js";
 
 test("Language Enter creates an indented line between configured brackets", () => {
 	using model = new TextModel("if (ok) {}");

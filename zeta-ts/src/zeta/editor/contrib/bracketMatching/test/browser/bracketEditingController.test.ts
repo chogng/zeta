@@ -4,7 +4,8 @@ import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { LanguageConfigurationRegistry } from "../../../../common/languages/languageConfiguration.js";
-import { LanguageBracketMatcher } from "../../common/bracketMatching.js";
+import { LanguageBracketPairs } from "../../../../common/languages/languageBracketPairs.js";
+import { LanguageLexicalContextIndex } from "../../../../common/languages/languageLexicalContext.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
@@ -32,12 +33,13 @@ test("Remove-brackets shortcut mutates through an isolated Stanza transaction", 
 	using model = new TextModel("(value)");
 	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using configurations = configurationsForBrackets();
-	using matcher = new LanguageBracketMatcher(model, "typescript", configurations);
+	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
+	using bracketPairs = new LanguageBracketPairs(model, lexical);
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 60 });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);
-	using controller = new BracketEditingController(input, viewport, selections, matcher);
+	using controller = new BracketEditingController(input, viewport, selections, bracketPairs);
 
 	const remove = keydown(dom.window, "Backspace", { ctrlKey: true, altKey: true });
 	input.dispatchEvent(remove);
@@ -56,16 +58,18 @@ test("Bracket editing controller rejects cross-model wiring and preserves unsupp
 	using other = new TextModel("()");
 	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using configurations = configurationsForBrackets();
-	using matcher = new LanguageBracketMatcher(model, "typescript", configurations);
-	using otherMatcher = new LanguageBracketMatcher(other, "typescript", configurations);
+	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
+	using otherLexical = new LanguageLexicalContextIndex(other, "typescript", configurations);
+	using bracketPairs = new LanguageBracketPairs(model, lexical);
+	using otherBracketPairs = new LanguageBracketPairs(other, otherLexical);
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);
-	using controller = new BracketEditingController(input, viewport, selections, matcher);
+	using controller = new BracketEditingController(input, viewport, selections, bracketPairs);
 	const unsupported = keydown(dom.window, "Backspace", { ctrlKey: true });
 	input.dispatchEvent(unsupported);
 	assert.equal(unsupported.defaultPrevented, false);
-	assert.throws(() => new BracketEditingController(input, viewport, selections, otherMatcher), /must share one text model/);
+	assert.throws(() => new BracketEditingController(input, viewport, selections, otherBracketPairs), /must share one text model/);
 
 	dom.window.close();
 });

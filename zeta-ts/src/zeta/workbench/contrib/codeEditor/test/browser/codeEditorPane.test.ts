@@ -227,6 +227,7 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 		showLineNumbers: false,
 		showIndentationGuides: false,
 		bracketPairColorization: false,
+		matchBrackets: "near",
 		stickyScroll: false,
 		suggestions: false,
 		inlineCompletions: false,
@@ -264,6 +265,7 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 	assert.equal(received?.showLineNumbers, false);
 	assert.equal(received?.showIndentationGuides, false);
 	assert.equal(received?.bracketPairColorization, false);
+	assert.equal(received?.matchBrackets, "near");
 	assert.equal(received?.stickyScroll, false);
 	assert.equal(received?.suggestions, false);
 	assert.equal(received?.inlineCompletions, false);

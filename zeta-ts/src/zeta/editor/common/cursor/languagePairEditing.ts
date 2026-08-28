@@ -1,11 +1,11 @@
-import { getPreviousDeleteRange } from "../../../common/cursor/cursorDeleteOperations.js";
-import { createSelectionEditCommand, type EditorSelectionEdit } from "../../../common/cursor/cursorTypeEditOperations.js";
-import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
-import { type LanguageAutoClosingPair, type LanguageCharacterPair, type ResolvedLanguageConfiguration } from "../../../common/languages/languageConfiguration.js";
-import { type LanguageLexicalContextSource } from "../../../common/languages/languageLexicalContext.js";
-import { type TextSelection, type TextSelectionSet } from "../../../common/core/selection.js";
-import { TextPosition, TextRange } from "../../../common/core/text.js";
-import { type TextModel } from "../../../common/model/textModel.js";
+import { getPreviousDeleteRange } from "./cursorDeleteOperations.js";
+import { createSelectionEditCommand, type EditorSelectionEdit } from "./cursorTypeEditOperations.js";
+import { EditorCommandHistoryMode, type EditorEditCommand } from "../commands/editorEditCommand.js";
+import { type LanguageAutoClosingPair, type LanguageCharacterPair, type ResolvedLanguageConfiguration } from "../languages/languageConfiguration.js";
+import { type LanguageLexicalContextSource } from "../languages/languageLexicalContext.js";
+import { type TextSelection, type TextSelectionSet } from "../core/selection.js";
+import { TextPosition, TextRange } from "../core/text.js";
+import { type TextModel } from "../model/textModel.js";
 
 export interface LanguagePairTypeCommand {
 	readonly command: EditorEditCommand;

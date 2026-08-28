@@ -1,13 +1,13 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
-import { LanguageAutoClosingTracker } from "../../common/autoClosingTracker.js";
-import { registerBuiltinLanguageConfigurations } from "../../../../common/languages/languageBuiltinConfigurations.js";
-import { LanguageConfigurationRegistry } from "../../../../common/languages/languageConfiguration.js";
-import { createLanguagePairBackspaceCommand, createLanguagePairTypeCommand, type LanguagePairTypeCommand } from "../../common/pairEditing.js";
-import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
-import { TextPosition, TextRange, type TextModelChange } from "../../../../common/core/text.js";
-import { TextModel } from "../../../../common/model/textModel.js";
+import { EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { LanguageAutoClosingTracker } from "../../../common/cursor/languageAutoClosingTracker.js";
+import { registerBuiltinLanguageConfigurations } from "../../../common/languages/languageBuiltinConfigurations.js";
+import { LanguageConfigurationRegistry } from "../../../common/languages/languageConfiguration.js";
+import { createLanguagePairBackspaceCommand, createLanguagePairTypeCommand, type LanguagePairTypeCommand } from "../../../common/cursor/languagePairEditing.js";
+import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
+import { TextPosition, TextRange, type TextModelChange } from "../../../common/core/text.js";
+import { TextModel } from "../../../common/model/textModel.js";
 
 test("Auto-closing trust follows external edits and rejects a changed closer", () => {
 	using model = new TextModel("x");

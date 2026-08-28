@@ -14,7 +14,7 @@ import { LanguageConfigurationService, type ILanguageConfigurationService } from
 import { LanguageFeaturesService } from '../common/services/languageFeaturesService.js';
 import { type TextModel } from "../common/model/textModel.js";
 import { type EditorIndentationOptions } from "../common/editorIndentation.js";
-import { type EditorActiveLineHighlight, type EditorLanguageEditingAdapter, type EditorRuler, type EditorTextDirection, type EditorView, type EditorViewport, type EditorViewportPresentation } from "./view.js";
+import { type EditorActiveLineHighlight, type EditorRuler, type EditorTextDirection, type EditorView, type EditorViewport, type EditorViewportPresentation } from "./view.js";
 import { CodeEditorWidget, type CodeEditorViewPositionState, type CodeEditorViewSelectionState, type CodeEditorViewState } from "./widget/codeEditor/codeEditorWidget.js";
 import { type EditorHitTarget } from "../common/viewModel/pointerHitTest.js";
 import { type EditorLineWrapping, type IEditorMinimapOptions, type IEditorOptions, type WrappingIndent } from "../common/config/editorOptions.js";
@@ -34,6 +34,7 @@ import { type BracketColorizationSource, type SemanticTokenSource } from "./view
 import { SemanticTokensStylingService } from '../common/services/semanticTokensStylingService.js';
 import { type EditorLineVisibilitySource } from "../common/viewModel/viewModelLines.js";
 import { type LanguageLexicalContextSource } from "../common/languages/languageLexicalContext.js";
+import { LanguageEditingAdapter } from "./controller/languageEditingAdapter.js";
 
 export interface EditorContextMenuRequest {
 	readonly position: TextPosition;
@@ -125,6 +126,7 @@ export interface EditorBrowserOptions {
 	readonly rulers?: readonly EditorRuler[];
 	readonly showIndentationGuides?: boolean;
 	readonly bracketPairColorization?: boolean;
+	readonly matchBrackets?: "never" | "near" | "always";
 	readonly stickyScroll?: boolean;
 	readonly suggestions?: CompletionsEnablement;
 	readonly inlineCompletions?: CompletionsEnablement;
@@ -227,7 +229,6 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 			let semanticTokenSource: SemanticTokenSource | undefined;
 			let bracketColorizationSource: BracketColorizationSource | undefined;
 			let languageLexicalContext: LanguageLexicalContextSource | undefined;
-			let languageEditing: EditorLanguageEditingAdapter | undefined;
 			const selectedContributions = getEditorContributions();
 			for (const contribution of selectedContributions) {
 				contribution.configure?.({
@@ -262,13 +263,10 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 						if (languageLexicalContext) throw new Error("Text editor lexical context is already configured");
 						languageLexicalContext = source;
 					},
-					setLanguageEditing: adapter => {
-						if (languageEditing) throw new Error("Text editor language editing is already configured");
-						languageEditing = adapter;
-					},
 					register: value => this._register(value),
 				});
 			}
+			const languageEditing = this._register(new LanguageEditingAdapter(model, this.selections, languageId, configurations, languageLexicalContext, options.indentation));
 			const ariaLabel = editorLabel(options.input);
 			this.codeEditor = this._register(new CodeEditorWidget({
 				container: options.container,
@@ -402,6 +400,9 @@ function validateOptions(options: EditorBrowserOptions): void {
 	}
 	if (options.selectionHighlightMaxLength !== undefined && (!Number.isSafeInteger(options.selectionHighlightMaxLength) || options.selectionHighlightMaxLength < 0)) {
 		throw new RangeError("Editor selection highlight maximum length must be a non-negative integer");
+	}
+	if (options.matchBrackets !== undefined && options.matchBrackets !== "never" && options.matchBrackets !== "near" && options.matchBrackets !== "always") {
+		throw new TypeError("Editor bracket matching option is invalid");
 	}
 	if (options.suggestions !== undefined && !isCompletionsEnablement(options.suggestions)) {
 		throw new TypeError("Editor suggestions option must be boolean or a language enablement map");

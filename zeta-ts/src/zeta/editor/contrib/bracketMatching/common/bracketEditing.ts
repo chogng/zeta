@@ -1,5 +1,5 @@
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
-import { type LanguageBracketMatcher } from "./bracketMatching.js";
+import { type LanguageBracketPairs } from "../../../common/languages/languageBracketPairs.js";
 import { type TextSelectionSet } from "../../../common/core/selection.js";
 import { type TextEdit } from "../../../common/core/text.js";
 
@@ -10,12 +10,12 @@ interface BracketDeletion {
 }
 
 /** Removes every distinct matched bracket pair containing a collapsed cursor. */
-export function createRemoveMatchingBracketsCommand(matcher: LanguageBracketMatcher, selections: TextSelectionSet): EditorEditCommand | undefined {
-	const model = matcher.textModel;
+export function createRemoveMatchingBracketsCommand(bracketPairs: LanguageBracketPairs, selections: TextSelectionSet): EditorEditCommand | undefined {
+	const model = bracketPairs.textModel;
 	const deletions = new Map<string, BracketDeletion>();
 	for (const selection of selections.selections) {
 		if (!selection.collapsed) continue;
-		const match = matcher.findMatch(selection.active);
+		const match = bracketPairs.matchBracket(selection.active) ?? bracketPairs.findEnclosingBrackets(selection.active);
 		if (!match) continue;
 		addDeletion(deletions, model.offsetAt(match.opening.start), model.offsetAt(match.opening.end), match.opening);
 		addDeletion(deletions, model.offsetAt(match.closing.start), model.offsetAt(match.closing.end), match.closing);
@@ -23,7 +23,7 @@ export function createRemoveMatchingBracketsCommand(matcher: LanguageBracketMatc
 	if (deletions.size === 0) return undefined;
 	const ordered = [...deletions.values()].sort((left, right) => left.startOffset - right.startOffset || left.endOffset - right.endOffset);
 	const selectionsAfter = selections.selections.map(selection => {
-		const match = selection.collapsed ? matcher.findMatch(selection.active) : undefined;
+		const match = selection.collapsed ? bracketPairs.matchBracket(selection.active) ?? bracketPairs.findEnclosingBrackets(selection.active) : undefined;
 		const targetOffset = match ? model.offsetAt(match.opening.start) : model.offsetAt(selection.active);
 		const mapped = mapOffsetThroughDeletions(targetOffset, ordered);
 		return Object.freeze({

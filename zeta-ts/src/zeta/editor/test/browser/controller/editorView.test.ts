@@ -12,7 +12,7 @@ import { TextSelection, TextSelectionSet } from "../../../common/core/selection.
 import { TextPosition, TextRange } from "../../../common/core/text.js";
 import { extendEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { TextModel } from "../../../common/model/textModel.js";
-import { LanguageEditingAdapter } from "../../../contrib/bracketMatching/browser/languageEditingAdapter.js";
+import { LanguageEditingAdapter } from "../../../browser/controller/languageEditingAdapter.js";
 
 class FixedTextMeasurer implements TextMeasurer {
 	readonly horizontalPadding = 24;

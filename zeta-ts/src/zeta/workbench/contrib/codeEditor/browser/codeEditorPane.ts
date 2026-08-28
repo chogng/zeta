@@ -76,6 +76,7 @@ export interface EditorPaneOptions {
 	readonly showLineNumbers?: boolean;
 	readonly showIndentationGuides?: boolean;
 	readonly bracketPairColorization?: boolean;
+	readonly matchBrackets?: EditorBrowserOptions["matchBrackets"];
 	readonly stickyScroll?: boolean;
 	readonly suggestions?: EditorBrowserOptions["suggestions"];
 	readonly inlineCompletions?: EditorBrowserOptions["inlineCompletions"];
@@ -180,6 +181,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 				showLineNumbers: this.options.showLineNumbers,
 				showIndentationGuides: this.options.showIndentationGuides,
 				bracketPairColorization: this.options.bracketPairColorization,
+				matchBrackets: this.options.matchBrackets,
 				stickyScroll: this.options.stickyScroll,
 				suggestions: this.options.suggestions,
 				inlineCompletions: this.options.inlineCompletions,

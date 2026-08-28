@@ -1,10 +1,10 @@
-import { getEditorIndentationUnit, getLeadingIndentation, normalizeEditorIndentation, normalizeEditorIndentationText, resolveEditorIndentationOptions, unshiftEditorIndentation, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from "../../../common/editorIndentation.js";
-import { createSelectionEditCommand, type EditorSelectionEdit } from "../../../common/cursor/cursorTypeEditOperations.js";
-import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
-import { LanguageIndentAction, type LanguageEnterAction, type LanguageOnEnterRule, type ResolvedLanguageConfiguration } from "../../../common/languages/languageConfiguration.js";
-import { type LanguageLexicalContextSource } from "../../../common/languages/languageLexicalContext.js";
-import { type TextSelection, type TextSelectionSet } from "../../../common/core/selection.js";
-import { type TextModel } from "../../../common/model/textModel.js";
+import { getEditorIndentationUnit, getLeadingIndentation, normalizeEditorIndentation, normalizeEditorIndentationText, resolveEditorIndentationOptions, unshiftEditorIndentation, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from "../editorIndentation.js";
+import { createSelectionEditCommand, type EditorSelectionEdit } from "./cursorTypeEditOperations.js";
+import { EditorCommandHistoryMode, type EditorEditCommand } from "../commands/editorEditCommand.js";
+import { LanguageIndentAction, type LanguageEnterAction, type LanguageOnEnterRule, type ResolvedLanguageConfiguration } from "../languages/languageConfiguration.js";
+import { type LanguageLexicalContextSource } from "../languages/languageLexicalContext.js";
+import { type TextSelection, type TextSelectionSet } from "../core/selection.js";
+import { type TextModel } from "../model/textModel.js";
 
 export interface LanguageEnterCommandOptions {
 	readonly indentation?: EditorIndentationOptions;

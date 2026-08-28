@@ -1,19 +1,19 @@
-import { type LanguageBracketColorizationIndex } from "../common/bracketColorization.js";
-import { type BracketColorizationSource as EditorBracketColorizationSource, type BracketColorizationSpan } from "../../../browser/viewparts/semanticTokens/semanticTokenPresentation.js";
+import { type LanguageBracketPairs } from '../../../common/languages/languageBracketPairs.js';
+import { type BracketColorizationSource as EditorBracketColorizationSource, type BracketColorizationSpan } from '../../../browser/viewparts/semanticTokens/semanticTokenPresentation.js';
 
-/** Adapts common lexical bracket nesting colors into Stanza's closed DOM vocabulary. */
+/** Adapts common structural bracket levels into the editor's closed DOM vocabulary. */
 export class BracketColorizationSource implements EditorBracketColorizationSource {
-	constructor(private readonly index: LanguageBracketColorizationIndex) {}
+	constructor(private readonly bracketPairs: LanguageBracketPairs) {}
 
 	get textModel() {
-		return this.index.textModel;
+		return this.bracketPairs.textModel;
 	}
 
 	getLineBrackets(lineIndex: number): readonly BracketColorizationSpan[] {
-		return Object.freeze(this.index.getLineColorizations(lineIndex).map(colorization => Object.freeze({
-			startColumn: colorization.startColumn,
-			endColumn: colorization.endColumn,
-			level: colorization.level,
-		})));
+		return Object.freeze(this.bracketPairs.getLineBrackets(lineIndex).flatMap(bracket => !bracket.isInvalid ? [Object.freeze({
+			startColumn: bracket.range.start.columnIndex,
+			endColumn: bracket.range.end.columnIndex,
+			level: bracket.nestingLevel % 6 + 1,
+		})] : []));
 	}
 }
