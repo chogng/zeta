@@ -22,6 +22,7 @@ use zeta_protocol::SessionUpdate;
 use zeta_protocol::SessionUpdateEnvelope;
 use zeta_protocol::Thread;
 use zeta_protocol::ThreadId;
+use zeta_protocol::ThreadOrigin;
 use zeta_protocol::TurnId;
 
 /// Mutable product Session/Thread selection used by one TUI conversation.
@@ -75,19 +76,18 @@ impl ActiveConversation {
         let session = client
             .read_session(SessionReadParams { session_id })?
             .session;
-        let thread_id = session
-            .threads
-            .iter()
-            .find(|thread| {
-                thread.thread_id == preferred_thread_id
-                    && thread.status == SessionThreadStatus::Active
+        let thread_id = current_conversation_thread(&session)
+            .or_else(|| {
+                session.threads.iter().find(|thread| {
+                    thread.thread_id == preferred_thread_id
+                        && thread.status == SessionThreadStatus::Active
+                        && is_conversation_thread(thread)
+                })
             })
             .or_else(|| {
-                session
-                    .threads
-                    .iter()
-                    .rev()
-                    .find(|thread| thread.status == SessionThreadStatus::Active)
+                session.threads.iter().rev().find(|thread| {
+                    thread.status == SessionThreadStatus::Active && is_conversation_thread(thread)
+                })
             })
             .map(|thread| thread.thread_id.clone())
             .ok_or_else(|| {
@@ -338,11 +338,12 @@ impl ActiveConversation {
         let session = client
             .read_session(SessionReadParams { session_id })?
             .session;
-        let thread_id = session
-            .threads
-            .iter()
-            .rev()
-            .find(|thread| thread.status == SessionThreadStatus::Active)
+        let thread_id = current_conversation_thread(&session)
+            .or_else(|| {
+                session.threads.iter().rev().find(|thread| {
+                    thread.status == SessionThreadStatus::Active && is_conversation_thread(thread)
+                })
+            })
             .map(|thread| thread.thread_id.clone())
             .ok_or_else(|| {
                 SessionsError(format!(
@@ -371,6 +372,22 @@ impl ActiveConversation {
             transcript: ConversationTranscript::Replace,
         }))
     }
+}
+
+fn current_conversation_thread(session: &Session) -> Option<&zeta_protocol::SessionThread> {
+    let current_thread_id = session.current_thread_id.as_ref()?;
+    session.threads.iter().find(|thread| {
+        thread.thread_id == *current_thread_id
+            && thread.status == SessionThreadStatus::Active
+            && is_conversation_thread(thread)
+    })
+}
+
+fn is_conversation_thread(thread: &zeta_protocol::SessionThread) -> bool {
+    matches!(
+        thread.origin,
+        ThreadOrigin::Root | ThreadOrigin::Fork { .. } | ThreadOrigin::Rewind { .. }
+    )
 }
 
 fn workspace_reconnect(

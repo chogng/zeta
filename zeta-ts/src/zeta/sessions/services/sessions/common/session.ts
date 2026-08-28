@@ -69,6 +69,7 @@ export interface Session {
 		readonly root: string;
 	} | null;
 	readonly nextApprovalMode: ApprovalMode;
+	readonly currentThreadId?: ThreadId | null;
 	readonly sequence: number;
 	readonly threads: readonly SessionThread[];
 	/** Server-owned projection; absent only before an active Session has been subscribed. */

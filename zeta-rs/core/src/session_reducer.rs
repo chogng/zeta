@@ -17,6 +17,7 @@ pub struct SessionSnapshot {
     pub model: Option<ModelRef>,
     pub workspace: Option<WorkspaceBinding>,
     pub next_approval_mode: ApprovalMode,
+    pub current_thread_id: Option<ThreadId>,
     /// True only for Session streams created before durable Workspace binding existed.
     pub workspace_binding_is_legacy: bool,
     pub sequence: u64,
@@ -34,6 +35,7 @@ impl SessionSnapshot {
             model: self.model.clone(),
             workspace: self.workspace.clone(),
             next_approval_mode: self.next_approval_mode,
+            current_thread_id: self.current_thread_id.clone(),
             sequence: self.sequence,
             threads: self
                 .threads
@@ -63,6 +65,7 @@ pub enum SessionCommandResult {
     SessionCreated,
     SessionModelChanged { model: ModelRef },
     SessionNextApprovalModeChanged { approval_mode: ApprovalMode },
+    SessionCurrentThreadChanged { thread_id: ThreadId },
     ThreadCreated { thread_id: ThreadId },
     SessionCompleted,
     SessionArchived,
@@ -118,6 +121,7 @@ pub fn reduce_session_event(
             model: model.clone(),
             workspace: workspace.clone(),
             next_approval_mode: ApprovalMode::AskPermissions,
+            current_thread_id: None,
             workspace_binding_is_legacy: envelope.schema_version < 3,
             sequence: 1,
             threads: Vec::new(),
@@ -185,6 +189,38 @@ pub fn reduce_session_event(
                 receipt: receipt.clone(),
                 result: SessionCommandResult::SessionNextApprovalModeChanged {
                     approval_mode: *approval_mode,
+                },
+                response_sequence: envelope.sequence,
+            });
+        }
+        SessionEvent::SessionCurrentThreadChanged { thread_id, .. } => {
+            let receipt = require_new_session_command(&snapshot, envelope)?;
+            if receipt.command
+                != (SessionCommand::SetCurrentThread {
+                    thread_id: thread_id.clone(),
+                })
+            {
+                return Err(CoreError::Journal(
+                    "Session current Thread command does not match its event".into(),
+                ));
+            }
+            let thread = snapshot
+                .threads
+                .iter()
+                .find(|thread| thread.membership.thread_id == *thread_id)
+                .ok_or_else(|| CoreError::NotFound(thread_id.to_string()))?;
+            if thread.membership.status != SessionThreadStatus::Active
+                || matches!(thread.membership.origin, ThreadOrigin::AgentSpawn { .. })
+            {
+                return Err(CoreError::Journal(
+                    "current Thread must be an active conversation Thread".into(),
+                ));
+            }
+            snapshot.current_thread_id = Some(thread_id.clone());
+            snapshot.commands.push(SessionCommandSnapshot {
+                receipt: receipt.clone(),
+                result: SessionCommandResult::SessionCurrentThreadChanged {
+                    thread_id: thread_id.clone(),
                 },
                 response_sequence: envelope.sequence,
             });
@@ -262,6 +298,33 @@ pub fn reduce_session_event(
                     if parent.membership.status != SessionThreadStatus::Active {
                         return Err(CoreError::Journal(
                             "a rewind parent must be an active Thread".into(),
+                        ));
+                    }
+                }
+                (
+                    SessionCommand::RewriteThread {
+                        parent_thread_id,
+                        before_turn_id,
+                        title: command_title,
+                        ..
+                    },
+                    ThreadOrigin::Rewind {
+                        parent_thread_id: origin_parent,
+                        before_turn_id: origin_turn,
+                        ..
+                    },
+                ) if command_title == title
+                    && parent_thread_id == origin_parent
+                    && before_turn_id == origin_turn =>
+                {
+                    let parent = snapshot
+                        .threads
+                        .iter()
+                        .find(|candidate| candidate.membership.thread_id == *parent_thread_id)
+                        .ok_or_else(|| CoreError::NotFound(parent_thread_id.to_string()))?;
+                    if parent.membership.status != SessionThreadStatus::Active {
+                        return Err(CoreError::Journal(
+                            "a rewrite parent must be an active Thread".into(),
                         ));
                     }
                 }
@@ -383,6 +446,9 @@ pub fn reduce_session_event(
                 ));
             }
             thread.membership.status = SessionThreadStatus::Active;
+            if !matches!(thread.membership.origin, ThreadOrigin::AgentSpawn { .. }) {
+                snapshot.current_thread_id = Some(thread_id.clone());
+            }
             update_thread_command_sequence(&mut snapshot, thread_id, envelope.sequence);
         }
         SessionEvent::SessionCompleted { .. } => {

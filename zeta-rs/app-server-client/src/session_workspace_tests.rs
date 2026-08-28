@@ -16,6 +16,7 @@ fn session(workspace: Option<WorkspaceBinding>) -> Session {
         model: None,
         workspace,
         next_approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+        current_thread_id: None,
         sequence: 1,
         threads: Vec::new(),
     }

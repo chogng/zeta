@@ -54,6 +54,63 @@ fn create_thread_commits_membership_and_child_stream() {
 }
 
 #[test]
+fn current_thread_selection_is_durable_session_state() {
+    let coordinator = coordinator();
+    let session = create_session(&coordinator);
+    let root = coordinator
+        .create_thread(CreateSessionThreadRequest {
+            command_id: CommandId::new("create-root").unwrap(),
+            session_id: session.session_id.clone(),
+            expected_sequence: SequenceExpectation::Exact(session.sequence),
+            title: "root".into(),
+        })
+        .unwrap();
+    let fork = coordinator
+        .fork_thread(ForkSessionThreadRequest {
+            command_id: CommandId::new("create-fork").unwrap(),
+            session_id: session.session_id.clone(),
+            expected_sequence: SequenceExpectation::Exact(root.sequence),
+            parent_thread_id: root.thread_id.clone(),
+            title: "fork".into(),
+        })
+        .unwrap();
+
+    assert_eq!(
+        coordinator
+            .read_session(&session.session_id)
+            .unwrap()
+            .current_thread_id,
+        Some(fork.thread_id)
+    );
+    let selected = coordinator
+        .set_current_thread(SetSessionCurrentThreadRequest {
+            command_id: CommandId::new("select-root").unwrap(),
+            session_id: session.session_id.clone(),
+            expected_sequence: SequenceExpectation::Exact(fork.sequence),
+            thread_id: root.thread_id.clone(),
+        })
+        .unwrap();
+    let replayed = coordinator
+        .set_current_thread(SetSessionCurrentThreadRequest {
+            command_id: CommandId::new("select-root").unwrap(),
+            session_id: session.session_id.clone(),
+            expected_sequence: SequenceExpectation::Exact(fork.sequence),
+            thread_id: root.thread_id.clone(),
+        })
+        .unwrap();
+
+    assert_eq!(selected.disposition, CommandDisposition::Committed);
+    assert_eq!(replayed.disposition, CommandDisposition::Replayed);
+    assert_eq!(
+        coordinator
+            .read_session(&session.session_id)
+            .unwrap()
+            .current_thread_id,
+        Some(root.thread_id)
+    );
+}
+
+#[test]
 fn stop_archives_session_and_interrupts_active_child_turns() {
     let coordinator = coordinator();
     let session = create_session(&coordinator);
@@ -410,7 +467,12 @@ fn fork_imports_the_exact_parent_snapshot_and_inherits_its_checkpoint() {
 
 #[test]
 fn rewind_creates_a_child_with_only_turns_before_the_checkpoint() {
-    let coordinator = coordinator();
+    let session_store = Arc::new(InMemorySessionStore::default());
+    let thread_store = Arc::new(InMemoryThreadStore::default());
+    let coordinator = SessionCoordinator::with_store(
+        session_store.clone(),
+        Arc::new(ThreadController::with_store(thread_store.clone())),
+    );
     let session = create_session(&coordinator);
     let root = coordinator
         .create_thread(CreateSessionThreadRequest {
@@ -515,4 +577,21 @@ fn rewind_creates_a_child_with_only_turns_before_the_checkpoint() {
             ..
         } if parent_thread_id == &root.thread_id && before_turn_id == &turn_ids[1]
     ));
+    assert_eq!(
+        coordinator
+            .read_session(&session.session_id)
+            .unwrap()
+            .current_thread_id,
+        Some(rewound.thread_id.clone())
+    );
+
+    drop(coordinator);
+    let recovered_threads = Arc::new(ThreadController::with_store(thread_store));
+    recovered_threads.recover_thread(&root.thread_id).unwrap();
+    recovered_threads
+        .recover_thread(&rewound.thread_id)
+        .unwrap();
+    let recovered = SessionCoordinator::with_store(session_store, recovered_threads);
+    let recovered = recovered.recover_session(&session.session_id).unwrap();
+    assert_eq!(recovered.current_thread_id, Some(rewound.thread_id));
 }

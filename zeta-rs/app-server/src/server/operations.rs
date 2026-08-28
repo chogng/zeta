@@ -26,10 +26,11 @@ use zeta_app_server_protocol::protocol::session::ThreadHistoryBoundary;
 use zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory;
 use zeta_app_server_protocol::protocol::session::{
     SessionCreateParams, SessionListResult, SessionReadParams, SessionRequest,
-    SessionRequestParams, SessionRequestResult, SessionResult, SessionSubscribeParams,
-    SessionSubscribeResult, SessionThreadProjection, SessionThreadReadParams,
-    SessionThreadReadResult, SessionThreadResult, SessionThreadSubscribeParams,
-    SessionThreadSubscribeResult, SessionThreadUnsubscribeParams, SessionUnsubscribeParams,
+    SessionRequestParams, SessionRequestResult, SessionResult, SessionRewriteResult,
+    SessionSubscribeParams, SessionSubscribeResult, SessionThreadProjection,
+    SessionThreadReadParams, SessionThreadReadResult, SessionThreadResult,
+    SessionThreadSubscribeParams, SessionThreadSubscribeResult, SessionThreadUnsubscribeParams,
+    SessionUnsubscribeParams,
 };
 use zeta_app_server_protocol::protocol::turn::{
     InputItem, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult,
@@ -38,10 +39,11 @@ use zeta_app_server_protocol::schema_hash;
 use zeta_core::{
     CreateSessionRequest, CreateSessionThreadRequest, ForkSessionThreadRequest,
     InterruptTurnRequest, ResolveTurnInteractionRequest, RewindSessionThreadRequest,
-    SequenceExpectation, SessionLifecycleRequest, SetSessionModelRequest,
-    SetSessionNextApprovalModeRequest, ShellTurnInvocation, StartContextCompactionRequest,
-    StartSessionShellTurnRequest, StartSessionTurnRequest, StartTurnDisposition,
-    SteerTurnDisposition, SteerTurnRequest, ThreadSnapshot, TurnExecutionBackend, TurnStatus,
+    RewriteSessionThreadRequest, SequenceExpectation, SessionLifecycleRequest,
+    SetSessionCurrentThreadRequest, SetSessionModelRequest, SetSessionNextApprovalModeRequest,
+    ShellTurnInvocation, StartContextCompactionRequest, StartSessionShellTurnRequest,
+    StartSessionTurnRequest, StartTurnDisposition, SteerTurnDisposition, SteerTurnRequest,
+    ThreadSnapshot, TurnExecutionBackend, TurnStatus,
 };
 use zeta_protocol::AgentRequestEnvelope;
 use zeta_protocol::ModelAccess;
@@ -57,6 +59,28 @@ struct SessionMutation {
     command_id: zeta_protocol::CommandId,
     session_id: zeta_protocol::SessionId,
     expected_sequence: u64,
+}
+
+struct RewriteSessionMutation {
+    parent_thread_id: zeta_protocol::ThreadId,
+    before_turn_id: zeta_protocol::TurnId,
+    title: String,
+    tool_mode: Option<zeta_protocol::ToolMode>,
+    input: Vec<InputItem>,
+}
+
+enum RewritePhase {
+    Rewind,
+    Start,
+}
+
+impl RewritePhase {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::Rewind => "rewind",
+            Self::Start => "start",
+        }
+    }
 }
 
 enum SessionLifecycleAction {
@@ -307,6 +331,29 @@ impl AppServer {
         })
     }
 
+    fn set_session_current_thread_request(
+        &self,
+        mutation: SessionMutation,
+        thread_id: zeta_protocol::ThreadId,
+    ) -> Result<SessionResult, RpcError> {
+        self.sessions
+            .set_current_thread(SetSessionCurrentThreadRequest {
+                command_id: mutation.command_id,
+                session_id: mutation.session_id.clone(),
+                expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
+                thread_id,
+            })
+            .map_err(core_error)?;
+        self.notify_session_updates(&mutation.session_id, mutation.expected_sequence)?;
+        Ok(SessionResult {
+            session: self
+                .sessions
+                .read_session(&mutation.session_id)
+                .map_err(core_error)?
+                .public_session(),
+        })
+    }
+
     pub(super) fn session_subscribe(
         &self,
         connection: &mut ConnectionState,
@@ -432,6 +479,11 @@ impl AppServer {
                     self.set_session_next_approval_mode_request(mutation, approval_mode)?,
                 ))
             }
+            SessionRequest::SetCurrentThread { thread_id } => {
+                result(&SessionRequestResult::Session(
+                    self.set_session_current_thread_request(mutation, thread_id)?,
+                ))
+            }
             SessionRequest::CreateThread { title } => result(&SessionRequestResult::Thread(
                 self.create_session_thread_request(connection.connection_id, mutation, title)?,
             )),
@@ -457,6 +509,25 @@ impl AppServer {
                     parent_thread_id,
                     before_turn_id,
                     title,
+                )?,
+            )),
+            SessionRequest::RewriteThread {
+                parent_thread_id,
+                before_turn_id,
+                title,
+                tool_mode,
+                input,
+            } => result(&SessionRequestResult::Rewrite(
+                self.rewrite_session_thread_request(
+                    connection.connection_id,
+                    mutation,
+                    RewriteSessionMutation {
+                        parent_thread_id,
+                        before_turn_id,
+                        title,
+                        tool_mode,
+                        input,
+                    },
                 )?,
             )),
             SessionRequest::StartTurn {
@@ -614,6 +685,69 @@ impl AppServer {
                 .map_err(core_error)?
                 .public_session(),
             thread_id: rewound.thread_id,
+        })
+    }
+
+    fn rewrite_session_thread_request(
+        &self,
+        connection_id: u64,
+        mutation: SessionMutation,
+        rewrite: RewriteSessionMutation,
+    ) -> Result<SessionRewriteResult, RpcError> {
+        let normalized_input = normalize_input(rewrite.input.clone());
+        let rewound = self
+            .sessions
+            .rewrite_thread(RewriteSessionThreadRequest {
+                command_id: rewrite_phase_command_id(&mutation.command_id, RewritePhase::Rewind)?,
+                session_id: mutation.session_id.clone(),
+                expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
+                parent_thread_id: rewrite.parent_thread_id,
+                before_turn_id: rewrite.before_turn_id,
+                title: rewrite.title,
+                tool_mode: rewrite.tool_mode,
+                input: normalized_input.clone(),
+            })
+            .map_err(core_error)?;
+        let thread_id = rewound.thread_id;
+        let thread_before = self
+            .sessions
+            .threads()
+            .read_thread(&thread_id)
+            .map_err(core_error)?;
+        let start_command_id = rewrite_phase_command_id(&mutation.command_id, RewritePhase::Start)?;
+        let turn = match super::start_turn::replayed_rewrite_result(
+            &thread_before,
+            &start_command_id,
+            &normalized_input,
+        )? {
+            Some(replayed) => replayed,
+            None => self.start_turn_request(
+                SessionMutation {
+                    command_id: start_command_id,
+                    session_id: mutation.session_id.clone(),
+                    expected_sequence: thread_before.sequence,
+                },
+                thread_id.clone(),
+                rewrite.tool_mode,
+                rewrite.input,
+            )?,
+        };
+        self.updates.subscribe_session_thread(
+            connection_id,
+            mutation.session_id.clone(),
+            thread_id.clone(),
+            0,
+        );
+        self.notify_session_updates(&mutation.session_id, mutation.expected_sequence)?;
+        self.notify_thread_updates(&thread_id, 0)?;
+        Ok(SessionRewriteResult {
+            session: self
+                .sessions
+                .read_session(&mutation.session_id)
+                .map_err(core_error)?
+                .public_session(),
+            thread_id,
+            turn,
         })
     }
 
@@ -949,18 +1083,7 @@ impl AppServer {
                 AppServerErrorName::CoreOperationFailed,
             ));
         }
-        let input = input
-            .into_iter()
-            .map(|item| match item {
-                InputItem::Text { text } => UserInput::Text { text },
-                InputItem::Context { name, content } => UserInput::Context { name, content },
-                InputItem::ImageAttachment { attachment } => {
-                    UserInput::ImageAttachment { attachment }
-                }
-                InputItem::Image { url } => UserInput::Image { url },
-                InputItem::Skill { skill } => UserInput::Skill { skill },
-            })
-            .collect::<Vec<_>>();
+        let input = normalize_input(input);
         let tool_mode = match requested_tool_mode {
             Some(tool_mode) => tool_mode,
             None => match self.config.as_ref() {
@@ -1525,6 +1648,31 @@ impl AppServer {
         self.updates.publish_thread(thread_id, &updates);
         Ok(())
     }
+}
+
+fn normalize_input(input: Vec<InputItem>) -> Vec<UserInput> {
+    input
+        .into_iter()
+        .map(|item| match item {
+            InputItem::Text { text } => UserInput::Text { text },
+            InputItem::Context { name, content } => UserInput::Context { name, content },
+            InputItem::ImageAttachment { attachment } => UserInput::ImageAttachment { attachment },
+            InputItem::Image { url } => UserInput::Image { url },
+            InputItem::Skill { skill } => UserInput::Skill { skill },
+        })
+        .collect()
+}
+
+fn rewrite_phase_command_id(
+    operation_id: &zeta_protocol::CommandId,
+    phase: RewritePhase,
+) -> Result<zeta_protocol::CommandId, RpcError> {
+    zeta_protocol::CommandId::new(format!(
+        "session-rewrite/{}/{}",
+        phase.as_str(),
+        operation_id.as_str()
+    ))
+    .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))
 }
 
 fn bounded_thread_snapshot(

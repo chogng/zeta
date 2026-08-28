@@ -1,7 +1,8 @@
 use crate::protocol::common::{SchemaHash, ServerInfo};
 use crate::protocol::initialize::{
-    APP_SERVER_PROTOCOL_MAJOR, CapabilityContract, InitializeResult, ProtocolCompatibilityError,
-    ProtocolVersion, REQUIRED_SESSION_CAPABILITIES, ServerCapabilities, ensure_protocol_compatible,
+    APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, CapabilityContract, InitializeResult,
+    ProtocolCompatibilityError, ProtocolVersion, REQUIRED_SESSION_CAPABILITIES, ServerCapabilities,
+    ensure_protocol_compatible,
 };
 use std::collections::BTreeMap;
 
@@ -67,17 +68,20 @@ fn missing_or_disabled_required_capability_is_fatal() {
 #[test]
 fn unsupported_required_capability_version_is_fatal() {
     let mut initialized = initialization();
-    initialized
-        .capabilities
-        .contracts
-        .insert("turns".into(), CapabilityContract { version: 3 });
+    let unsupported = APP_SERVER_CAPABILITY_VERSION + 1;
+    initialized.capabilities.contracts.insert(
+        "turns".into(),
+        CapabilityContract {
+            version: unsupported,
+        },
+    );
 
     assert!(matches!(
         ensure_protocol_compatible(&initialized, REQUIRED_SESSION_CAPABILITIES),
         Err(ProtocolCompatibilityError::CapabilityVersion {
             name: "turns",
-            received: 3,
+            received,
             ..
-        })
+        }) if received == unsupported
     ));
 }

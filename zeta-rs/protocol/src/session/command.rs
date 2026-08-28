@@ -3,7 +3,9 @@ use crate::ContextSeedDigest;
 use crate::DelegationId;
 use crate::ModelRef;
 use crate::ThreadId;
+use crate::ToolMode;
 use crate::TurnId;
+use crate::UserInput;
 use crate::WorkspaceBinding;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -31,6 +33,9 @@ pub enum SessionCommand {
     SetNextApprovalMode {
         approval_mode: ApprovalMode,
     },
+    SetCurrentThread {
+        thread_id: ThreadId,
+    },
     CreateThread {
         title: String,
     },
@@ -42,6 +47,15 @@ pub enum SessionCommand {
         parent_thread_id: ThreadId,
         before_turn_id: TurnId,
         title: String,
+    },
+    RewriteThread {
+        parent_thread_id: ThreadId,
+        before_turn_id: TurnId,
+        title: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        tool_mode: Option<ToolMode>,
+        input: Vec<UserInput>,
     },
     SpawnAgentThread {
         parent_thread_id: ThreadId,

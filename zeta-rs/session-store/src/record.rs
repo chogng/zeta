@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use zeta_protocol::{CommandId, SessionCommand, SessionEvent, SessionId};
 
-pub const CURRENT_SESSION_EVENT_SCHEMA_VERSION: u32 = 4;
+pub const CURRENT_SESSION_EVENT_SCHEMA_VERSION: u32 = 5;
 pub const MINIMUM_SUPPORTED_SESSION_EVENT_SCHEMA_VERSION: u32 = 1;
 
 pub const fn supports_session_event_schema_version(schema_version: u32) -> bool {

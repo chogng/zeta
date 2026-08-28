@@ -19626,6 +19626,17 @@
     "Session": {
       "description": "Canonical user-visible work container and its Thread topology.\n\nA Session owns Thread membership and lineage, but not the child Threads' Turn or Item history.\nEach Thread remains an independent ordering, persistence, and execution boundary.",
       "properties": {
+        "currentThreadId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadId"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Canonical conversation route resumed by every product client."
+        },
         "model": {
           "anyOf": [
             {
@@ -19775,6 +19786,26 @@
             "type",
             "sessionId",
             "approvalMode"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "sessionId": {
+              "$ref": "#/$defs/SessionId"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "const": "sessionCurrentThreadChanged",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "sessionId",
+            "threadId"
           ],
           "type": "object"
         },
@@ -19987,6 +20018,22 @@
         },
         {
           "properties": {
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "const": "setCurrentThread",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "threadId"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
             "title": {
               "type": "string"
             },
@@ -20042,6 +20089,48 @@
             "parentThreadId",
             "beforeTurnId",
             "title"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "beforeTurnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "input": {
+              "items": {
+                "$ref": "#/$defs/InputItem"
+              },
+              "minItems": 1,
+              "type": "array"
+            },
+            "parentThreadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "title": {
+              "type": "string"
+            },
+            "toolMode": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ToolMode"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": {
+              "const": "rewriteThread",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "parentThreadId",
+            "beforeTurnId",
+            "title",
+            "input"
           ],
           "type": "object"
         },
@@ -20267,6 +20356,22 @@
         {
           "properties": {
             "type": {
+              "const": "rewrite",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/SessionRewriteResult"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
               "const": "turn",
               "type": "string"
             },
@@ -20338,6 +20443,25 @@
       },
       "required": [
         "session"
+      ],
+      "type": "object"
+    },
+    "SessionRewriteResult": {
+      "properties": {
+        "session": {
+          "$ref": "#/$defs/Session"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "turn": {
+          "$ref": "#/$defs/TurnStartResult"
+        }
+      },
+      "required": [
+        "session",
+        "threadId",
+        "turn"
       ],
       "type": "object"
     },

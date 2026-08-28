@@ -62,6 +62,7 @@ fn bound_session(id: &str, root: &str, digest: char) -> Session {
             root: root.into(),
         }),
         next_approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+        current_thread_id: None,
         sequence: 1,
         threads: Vec::new(),
     }
@@ -86,11 +87,12 @@ fn recovery_reopens_the_exact_durable_conversation() {
 }
 
 #[test]
-fn recovery_uses_the_latest_active_thread_when_the_preferred_thread_is_missing() {
+fn recovery_uses_the_canonical_current_thread_over_stale_product_state() {
     let (mut client, state_root) = client();
     let mut conversation =
         ActiveConversation::start(&mut client, "recover fallback".into()).unwrap();
     let session_id = conversation.session_id().clone();
+    let stale_thread_id = conversation.thread_id().clone();
     conversation
         .fork_active_thread(&mut client, "surviving thread")
         .unwrap();
@@ -98,7 +100,7 @@ fn recovery_uses_the_latest_active_thread_when_the_preferred_thread_is_missing()
 
     let recovered = ActiveConversation::recover(
         &mut client,
-        TuiRecoveryState::new(session_id, ThreadId::new("missing-thread").unwrap()),
+        TuiRecoveryState::new(session_id, stale_thread_id),
     )
     .unwrap();
 

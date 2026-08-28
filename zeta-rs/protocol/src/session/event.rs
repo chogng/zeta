@@ -35,6 +35,10 @@ pub enum SessionEvent {
         session_id: SessionId,
         approval_mode: ApprovalMode,
     },
+    SessionCurrentThreadChanged {
+        session_id: SessionId,
+        thread_id: ThreadId,
+    },
     ThreadCreationPlanned {
         session_id: SessionId,
         thread: SessionThread,
@@ -64,6 +68,7 @@ impl SessionEvent {
             Self::SessionCreated { session_id, .. }
             | Self::SessionModelChanged { session_id, .. }
             | Self::SessionNextApprovalModeChanged { session_id, .. }
+            | Self::SessionCurrentThreadChanged { session_id, .. }
             | Self::ThreadCreationPlanned { session_id, .. }
             | Self::AgentThreadCreationPlanned { session_id, .. }
             | Self::ThreadAttached { session_id, .. }

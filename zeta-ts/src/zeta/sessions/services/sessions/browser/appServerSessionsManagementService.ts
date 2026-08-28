@@ -429,6 +429,7 @@ function toSession(
 		model: session.model ? toModelRef(session.model) : session.model,
 		workspace: session.workspace ? { ...session.workspace } : session.workspace,
 		nextApprovalMode: session.nextApprovalMode,
+		currentThreadId: session.currentThreadId,
 		sequence: session.sequence,
 		threads: session.threads.map((thread) => {
 			const projection = projectionByThread.get(thread.threadId);
@@ -501,7 +502,8 @@ function firstActiveThread(sessions: readonly Session[], currentWorkspaceRoot?: 
 	for (const session of sessions) {
 		if (session.status !== "active") continue;
 		if (currentWorkspaceRoot && session.workspace?.root && !sameWorkspacePath(session.workspace.root, currentWorkspaceRoot)) continue;
-		const thread = session.threads.find((candidate) => candidate.status === "active");
+		const thread = session.threads.find((candidate) => candidate.threadId === session.currentThreadId && candidate.status === "active" && candidate.origin.type !== "agentSpawn")
+			?? session.threads.find((candidate) => candidate.status === "active" && candidate.origin.type !== "agentSpawn");
 		if (thread) return { session, threadId: thread.threadId };
 	}
 	return undefined;

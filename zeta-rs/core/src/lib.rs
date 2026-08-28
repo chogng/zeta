@@ -83,9 +83,10 @@ pub use services::WriterLease;
 pub use session_coordinator::{
     CommandDisposition, CreateSessionRequest, CreateSessionResult, CreateSessionThreadRequest,
     ForkSessionThreadRequest, InMemorySessionStore, RewindSessionThreadRequest,
-    SequenceExpectation, SessionCoordinator, SessionLifecycleRequest, SessionMutationResult,
-    SessionThreadResult, SetSessionModelRequest, SetSessionNextApprovalModeRequest,
-    SpawnAgentThreadRequest, StartSessionShellTurnRequest, StartSessionTurnRequest,
+    RewriteSessionThreadRequest, SequenceExpectation, SessionCoordinator, SessionLifecycleRequest,
+    SessionMutationResult, SessionThreadResult, SetSessionCurrentThreadRequest,
+    SetSessionModelRequest, SetSessionNextApprovalModeRequest, SpawnAgentThreadRequest,
+    StartSessionShellTurnRequest, StartSessionTurnRequest,
 };
 pub use session_reducer::{
     SessionCommandResult, SessionCommandSnapshot, SessionSnapshot, SessionThreadSnapshot,

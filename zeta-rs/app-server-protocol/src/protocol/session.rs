@@ -68,6 +68,9 @@ pub enum SessionRequest {
     SetNextApprovalMode {
         approval_mode: ApprovalMode,
     },
+    SetCurrentThread {
+        thread_id: ThreadId,
+    },
     CreateThread {
         title: String,
     },
@@ -79,6 +82,16 @@ pub enum SessionRequest {
         parent_thread_id: ThreadId,
         before_turn_id: TurnId,
         title: String,
+    },
+    RewriteThread {
+        parent_thread_id: ThreadId,
+        before_turn_id: TurnId,
+        title: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        tool_mode: Option<ToolMode>,
+        #[schemars(length(min = 1))]
+        input: Vec<InputItem>,
     },
     StartTurn {
         thread_id: ThreadId,
@@ -231,6 +244,14 @@ pub struct SessionThreadResult {
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
+pub struct SessionRewriteResult {
+    pub session: Session,
+    pub thread_id: ThreadId,
+    pub turn: TurnStartResult,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
 pub struct SessionThreadReadResult {
     pub thread: Thread,
     pub transcript: ThreadTranscriptSnapshot,
@@ -257,6 +278,7 @@ pub struct SessionThreadSubscribeResult {
 pub enum SessionRequestResult {
     Session(SessionResult),
     Thread(SessionThreadResult),
+    Rewrite(SessionRewriteResult),
     Turn(TurnStartResult),
     TurnSteer(crate::protocol::turn::TurnSteerResult),
     TurnInterrupt(TurnInterruptResult),

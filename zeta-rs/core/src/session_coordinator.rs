@@ -58,6 +58,13 @@ pub struct SetSessionNextApprovalModeRequest {
     pub approval_mode: ApprovalMode,
 }
 
+pub struct SetSessionCurrentThreadRequest {
+    pub command_id: CommandId,
+    pub session_id: SessionId,
+    pub expected_sequence: SequenceExpectation,
+    pub thread_id: ThreadId,
+}
+
 pub struct StartSessionTurnRequest {
     pub command_id: CommandId,
     pub expected_sequence: SequenceExpectation,
@@ -106,6 +113,17 @@ pub struct RewindSessionThreadRequest {
     pub parent_thread_id: ThreadId,
     pub before_turn_id: TurnId,
     pub title: String,
+}
+
+pub struct RewriteSessionThreadRequest {
+    pub command_id: CommandId,
+    pub session_id: SessionId,
+    pub expected_sequence: SequenceExpectation,
+    pub parent_thread_id: ThreadId,
+    pub before_turn_id: TurnId,
+    pub title: String,
+    pub tool_mode: Option<ToolMode>,
+    pub input: Vec<UserInput>,
 }
 
 pub struct SessionLifecycleRequest {
@@ -399,6 +417,31 @@ impl SessionCoordinator {
         )
     }
 
+    pub fn set_current_thread(
+        &self,
+        request: SetSessionCurrentThreadRequest,
+    ) -> Result<SessionMutationResult, CoreError> {
+        validate_command_id(&request.command_id)?;
+        let thread_id = request.thread_id;
+        self.apply_single_command(
+            request.session_id,
+            request.expected_sequence,
+            SessionCommandReceipt {
+                command_id: request.command_id,
+                command: SessionCommand::SetCurrentThread {
+                    thread_id: thread_id.clone(),
+                },
+            },
+            |session_id| SessionEvent::SessionCurrentThreadChanged {
+                session_id,
+                thread_id: thread_id.clone(),
+            },
+            SessionCommandResult::SessionCurrentThreadChanged {
+                thread_id: thread_id.clone(),
+            },
+        )
+    }
+
     pub fn fork_thread(
         &self,
         request: ForkSessionThreadRequest,
@@ -452,6 +495,49 @@ impl SessionCoordinator {
                 parent_thread_id: request.parent_thread_id.clone(),
                 before_turn_id: request.before_turn_id.clone(),
                 title: request.title.clone(),
+            },
+            ThreadOrigin::Rewind {
+                parent_thread_id: request.parent_thread_id,
+                parent_sequence: parent.sequence,
+                before_turn_id: request.before_turn_id,
+            },
+            request.title,
+        )
+    }
+
+    pub fn rewrite_thread(
+        &self,
+        request: RewriteSessionThreadRequest,
+    ) -> Result<SessionThreadResult, CoreError> {
+        validate_command(&request.command_id, &request.title)?;
+        if request.input.is_empty() {
+            return Err(CoreError::InvalidInput(
+                "replacement input must not be empty".into(),
+            ));
+        }
+        let parent = self.threads.read_thread(&request.parent_thread_id)?;
+        if parent.session_id != request.session_id {
+            return Err(CoreError::InvalidInput(
+                "rewrite parent belongs to another Session".into(),
+            ));
+        }
+        if !parent
+            .turns
+            .iter()
+            .any(|turn| turn.turn_id == request.before_turn_id)
+        {
+            return Err(CoreError::NotFound(request.before_turn_id.to_string()));
+        }
+        self.plan_and_finish_thread(
+            request.command_id,
+            request.session_id,
+            request.expected_sequence,
+            SessionCommand::RewriteThread {
+                parent_thread_id: request.parent_thread_id.clone(),
+                before_turn_id: request.before_turn_id.clone(),
+                title: request.title.clone(),
+                tool_mode: request.tool_mode,
+                input: request.input,
             },
             ThreadOrigin::Rewind {
                 parent_thread_id: request.parent_thread_id,

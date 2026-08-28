@@ -309,11 +309,11 @@ use crate::protocol::search::{
 };
 use crate::protocol::session::{
     SessionCreateParams, SessionListResult, SessionReadParams, SessionRequest,
-    SessionRequestParams, SessionRequestResult, SessionResult, SessionSubscribeParams,
-    SessionSubscribeResult, SessionThreadProjection, SessionThreadReadParams,
-    SessionThreadReadResult, SessionThreadResult, SessionThreadSubscribeParams,
-    SessionThreadSubscribeResult, SessionThreadUnsubscribeParams, SessionUnsubscribeParams,
-    ThreadHistoryBoundary, ThreadSnapshotHistory,
+    SessionRequestParams, SessionRequestResult, SessionResult, SessionRewriteResult,
+    SessionSubscribeParams, SessionSubscribeResult, SessionThreadProjection,
+    SessionThreadReadParams, SessionThreadReadResult, SessionThreadResult,
+    SessionThreadSubscribeParams, SessionThreadSubscribeResult, SessionThreadUnsubscribeParams,
+    SessionUnsubscribeParams, ThreadHistoryBoundary, ThreadSnapshotHistory,
 };
 use crate::protocol::skills::{
     SkillCatalogReloadDto, SkillCompatibilityDto, SkillDiagnosticCodeDto, SkillDiagnosticDto,
@@ -2304,6 +2304,7 @@ typescript_bindings! {
     SessionSubscribeResult,
     SessionThreadProjection,
     SessionThreadResult,
+    SessionRewriteResult,
     ThreadGoalStatus,
     ThreadGoal,
     ThreadGoalSetParams,

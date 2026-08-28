@@ -5,6 +5,37 @@ import type { IServerEventApi } from "../../../../../platform/app-server/common/
 import type { ISessionApi, ITurnApi } from "../../../../../platform/sessions/common/sessionApi.js";
 import { AppServerSessionsManagementService } from "../../browser/appServerSessionsManagementService.js";
 
+test("AppServerSessionsManagementService resumes the canonical current Thread", async () => {
+	const current: SessionDto = {
+		...session(1),
+		currentThreadId: "thread-2",
+		threads: [
+			{ threadId: "thread-1", origin: { type: "root" }, status: "active" },
+			{ threadId: "thread-2", origin: { type: "rewind", parentThreadId: "thread-1", parentSequence: 4, beforeTurnId: "turn-2" }, status: "active" },
+		],
+	};
+	const api: ISessionApi = {
+		async create() { return { session: current }; },
+		async read() { return { session: current }; },
+		async list() { return { sessions: [current] }; },
+		async subscribe() { return { session: current, updates: [], threadProjections: [], agentTree: { roots: [] } }; },
+		async unsubscribe() {},
+		async createThread() { throw new Error("Not used"); },
+		async forkThread() { throw new Error("Not used"); },
+		async complete() { throw new Error("Not used"); },
+		async archive() { throw new Error("Not used"); },
+		async stop() { throw new Error("Not used"); },
+		async setModel() { throw new Error("Not used"); },
+		async setNextApprovalMode() { throw new Error("Not used"); },
+	};
+	const events: IServerEventApi = { subscribe: () => ({ dispose() {} }) };
+	using service = new AppServerSessionsManagementService({ session: api, events });
+
+	await service.initialize();
+
+	assert.equal(service.active?.threadId, "thread-2");
+});
+
 test("AppServerSessionsManagementService refreshes subscribed Sessions from canonical update snapshots", async () => {
 	let current = session(1);
 	const listeners = new Set<(event: ServerNotification) => void>();
@@ -245,6 +276,7 @@ function session(sequence: number): SessionDto {
 		title: "Session 1",
 		status: "active",
 		nextApprovalMode: "askPermissions",
+		currentThreadId: "thread-1",
 		sequence,
 		threads: [{ threadId: "thread-1", origin: { type: "root" }, status: "active" }],
 	};

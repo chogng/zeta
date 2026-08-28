@@ -1,7 +1,11 @@
-use crate::{
-    ApprovalMode, ModelRef, SessionId, SessionStatus, SessionThreadStatus, ThreadId, ThreadOrigin,
-    WorkspaceBinding,
-};
+use crate::ApprovalMode;
+use crate::ModelRef;
+use crate::SessionId;
+use crate::SessionStatus;
+use crate::SessionThreadStatus;
+use crate::ThreadId;
+use crate::ThreadOrigin;
+use crate::WorkspaceBinding;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -24,6 +28,10 @@ pub struct Session {
     pub workspace: Option<WorkspaceBinding>,
     #[serde(default)]
     pub next_approval_mode: ApprovalMode,
+    /// Canonical conversation route resumed by every product client.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub current_thread_id: Option<ThreadId>,
     #[ts(type = "number")]
     pub sequence: u64,
     pub threads: Vec<SessionThread>,

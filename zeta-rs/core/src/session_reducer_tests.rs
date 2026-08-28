@@ -119,6 +119,10 @@ fn reducer_projects_a_recoverable_thread_creation_saga() {
         session.public_session().threads[0].status,
         SessionThreadStatus::Active
     );
+    assert_eq!(
+        session.current_thread_id,
+        Some(ThreadId::new("thread_1").expect("test ID is non-empty"))
+    );
     assert_eq!(session.commands[1].response_sequence, 3);
 }
 

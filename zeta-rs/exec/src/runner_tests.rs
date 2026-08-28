@@ -283,6 +283,7 @@ fn session(ids: &TestIds) -> Session {
         model: None,
         workspace: None,
         next_approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+        current_thread_id: None,
         sequence: 0,
         threads: vec![],
     }

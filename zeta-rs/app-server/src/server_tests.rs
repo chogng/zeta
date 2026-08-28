@@ -1231,12 +1231,15 @@ fn initialize_advertises_the_server_slash_command_snapshot() {
     );
     assert_eq!(
         response["result"]["protocolVersion"],
-        serde_json::json!({ "major": 1, "revision": 3 })
+        serde_json::json!({
+            "major": zeta_app_server_protocol::protocol::initialize::APP_SERVER_PROTOCOL_MAJOR,
+            "revision": zeta_app_server_protocol::protocol::initialize::APP_SERVER_PROTOCOL_REVISION,
+        })
     );
     assert_eq!(response["result"]["capabilities"]["sessions"], true);
     assert_eq!(
         response["result"]["capabilities"]["contracts"]["sessions"]["version"],
-        2
+        zeta_app_server_protocol::protocol::initialize::APP_SERVER_CAPABILITY_VERSION
     );
 }
 
@@ -1302,6 +1305,10 @@ fn session_first_flow_exposes_canonical_session_and_thread_models() {
     assert_eq!(
         thread["result"]["value"]["session"]["threads"][0]["status"],
         "active"
+    );
+    assert_eq!(
+        thread["result"]["value"]["session"]["currentThreadId"],
+        thread_id
     );
     let read = call(
         &server,
@@ -1636,6 +1643,146 @@ fn rewind_endpoint_imports_only_history_before_the_selected_turn() {
         rewound["result"]["value"]["session"]["threads"][1]["origin"]["type"],
         "rewind"
     );
+    assert_eq!(
+        rewound["result"]["value"]["session"]["currentThreadId"],
+        child_id
+    );
+}
+
+#[test]
+fn rewrite_endpoint_replays_one_child_and_one_replacement_turn() {
+    let server = server();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let session = create_session(&server, &mut connection, 2, "session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let root = create_thread(&server, &mut connection, 3, "root", session_id, 1);
+    let root_id = root["result"]["value"]["threadId"].as_str().unwrap();
+
+    let first = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":4,"method":"session/request",
+            "params":{
+                "commandId":"turn-first","sessionId":session_id,
+                "expectedSequence":1,
+                "request":{"type":"startTurn","threadId":root_id,"input":[{"type":"text","text":"first"}]}
+            }
+        }),
+    );
+    wait_for_latest_turn(&server, root_id, TurnStatus::Completed);
+    let root_snapshot = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":5,"method":"session/thread/read",
+            "params":{"sessionId":session_id,"threadId":root_id}
+        }),
+    );
+    let second = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":6,"method":"session/request",
+            "params":{
+                "commandId":"turn-second","sessionId":session_id,
+                "expectedSequence":root_snapshot["result"]["thread"]["sequence"],
+                "request":{"type":"startTurn","threadId":root_id,"input":[{"type":"text","text":"second"}]}
+            }
+        }),
+    );
+    wait_for_latest_turn(&server, root_id, TurnStatus::Completed);
+
+    let rewrite_request = serde_json::json!({
+        "jsonrpc":"2.0","id":7,"method":"session/request",
+        "params":{
+            "commandId":"rewrite-operation","sessionId":session_id,"expectedSequence":3,
+            "request":{
+                "type":"rewriteThread",
+                "parentThreadId":root_id,
+                "beforeTurnId":second["result"]["value"]["turnId"],
+                "title":"rewritten",
+                "input":[{"type":"text","text":"replacement"}]
+            }
+        }
+    });
+    let rewritten = call(&server, &mut connection, rewrite_request.clone());
+    assert!(rewritten.get("error").is_none(), "{rewritten}");
+    let child_id = rewritten["result"]["value"]["threadId"].as_str().unwrap();
+    let replacement_turn_id = rewritten["result"]["value"]["turn"]["turnId"]
+        .as_str()
+        .unwrap();
+    wait_for_latest_turn(&server, child_id, TurnStatus::Completed);
+
+    let mut replay_request = rewrite_request;
+    replay_request["id"] = serde_json::json!(8);
+    let replayed = call(&server, &mut connection, replay_request);
+    assert!(replayed.get("error").is_none(), "{replayed}");
+    assert_eq!(replayed["result"]["value"]["threadId"], child_id);
+    assert_eq!(
+        replayed["result"]["value"]["turn"]["turnId"],
+        replacement_turn_id
+    );
+    assert_eq!(
+        replayed["result"]["value"]["session"]["currentThreadId"],
+        child_id
+    );
+    assert_eq!(
+        replayed["result"]["value"]["session"]["threads"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+
+    let child = server
+        .sessions()
+        .threads()
+        .read_thread(&zeta_protocol::ThreadId::new(child_id).unwrap())
+        .unwrap();
+    assert_eq!(child.turns.len(), 2);
+    assert_eq!(
+        child.turns[0].turn_id.as_str(),
+        first["result"]["value"]["turnId"]
+    );
+    assert_eq!(child.turns[1].turn_id.as_str(), replacement_turn_id);
+    assert_eq!(
+        child
+            .commands
+            .iter()
+            .filter(|command| {
+                command.receipt.command_id.as_str() == "session-rewrite/start/rewrite-operation"
+            })
+            .count(),
+        1
+    );
+    let session = server
+        .sessions()
+        .read_session(&zeta_protocol::SessionId::new(session_id).unwrap())
+        .unwrap();
+    assert!(session.commands.iter().any(|command| {
+        command.receipt.command_id.as_str() == "session-rewrite/rewind/rewrite-operation"
+    }));
+
+    let conflict = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":9,"method":"session/request",
+            "params":{
+                "commandId":"rewrite-operation","sessionId":session_id,"expectedSequence":3,
+                "request":{
+                    "type":"rewriteThread",
+                    "parentThreadId":root_id,
+                    "beforeTurnId":second["result"]["value"]["turnId"],
+                    "title":"rewritten",
+                    "input":[{"type":"text","text":"different replacement"}]
+                }
+            }
+        }),
+    );
+    assert_eq!(conflict["error"]["message"], "CommandConflict");
 }
 
 #[test]
