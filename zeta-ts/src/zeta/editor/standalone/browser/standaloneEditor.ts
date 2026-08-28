@@ -15,7 +15,7 @@ import { type StandaloneModelLanguageChangeEvent } from "./standaloneModelServic
 
 type StandaloneEditorBrowserOptions = Omit<EditorBrowserOptions,
 	"container" | "input" | "languageId" | "model" | "languageFeaturesService" |
-	"languageConfigurationService" | "syntaxWorkerFactory" | "completionWorkerFactory" | "instantiationService"
+	"languageConfigurationService" | "editorWorkerFactory" | "syntaxWorkerFactory" | "completionWorkerFactory" | "instantiationService"
 >;
 
 export interface IStandaloneEditorConstructionOptions extends StandaloneEditorBrowserOptions {
@@ -94,6 +94,7 @@ export function create(
 			model,
 			languageFeaturesService: services.languageFeaturesService,
 			languageConfigurationService: services.languageConfigurationService,
+			editorWorkerFactory: services.editorWorkerFactory,
 			syntaxWorkerFactory: services.syntaxWorkerFactory,
 			instantiationService: services.instantiationService,
 		};

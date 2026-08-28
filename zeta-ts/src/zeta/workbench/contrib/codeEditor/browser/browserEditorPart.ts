@@ -32,6 +32,7 @@ export function createBrowserEditorPart(options: BrowserEditorPartOptions): Edit
 	try {
 		return new EditorBrowser({
 			...options,
+			editorWorkerFactory: editorWorkers.editorWorkerFactory,
 			syntaxWorkerFactory: textMateService.syntaxWorkerFactory,
 			...(options.languageFeaturesService ? {} : { completionWorkerFactory: editorWorkers.completionWorkerFactory }),
 			...(ownsTextMateService ? { languageSupport: textMateService } : {}),

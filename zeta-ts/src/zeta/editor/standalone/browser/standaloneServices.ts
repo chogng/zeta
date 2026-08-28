@@ -4,6 +4,7 @@ import { IThemeService } from "../../../platform/theme/common/themeService.js";
 import { EditorWorkerService } from "../../browser/services/editorWorkerService.js";
 import { type LanguageCompletionWorkerFactory } from "../../common/languages/completion/languageCompletionService.js";
 import { type SyntaxWorkerFactory } from "../../common/languages/syntax/syntaxService.js";
+import { type EditorWorkerFactory } from "../../common/services/editorWorker.js";
 import { registerBuiltinLanguageConfigurations } from "../../common/languages/languageBuiltinConfigurations.js";
 import { registerBuiltinLanguageDescriptions } from "../../common/languages/languageBuiltinDescriptions.js";
 import { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
@@ -18,6 +19,7 @@ export interface StandaloneServiceOverrides {
 	readonly languageService?: ILanguageService;
 	readonly languageConfigurationService?: ILanguageConfigurationService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
+	readonly editorWorkerFactory?: EditorWorkerFactory;
 	readonly syntaxWorkerFactory?: SyntaxWorkerFactory;
 	/** Explicit Worker authority that replaces the local completion provider registry. */
 	readonly completionWorkerFactory?: LanguageCompletionWorkerFactory;
@@ -31,6 +33,7 @@ export class StandaloneServiceCollection extends Disposable {
 	readonly languageFeaturesService: ILanguageFeaturesService;
 	readonly themeService: IStandaloneThemeService;
 	readonly syntaxWorkerFactory: SyntaxWorkerFactory;
+	readonly editorWorkerFactory: EditorWorkerFactory;
 	readonly completionWorkerFactory: LanguageCompletionWorkerFactory | undefined;
 
 	constructor(overrides: StandaloneServiceOverrides) {
@@ -53,6 +56,7 @@ export class StandaloneServiceCollection extends Disposable {
 		if (!overrides.languageService) this._register(registerBuiltinLanguageDescriptions(this.languageService.languages));
 		if (!overrides.languageConfigurationService) this._register(registerBuiltinLanguageConfigurations(this.languageConfigurationService.configurations));
 		const workers = new EditorWorkerService();
+		this.editorWorkerFactory = overrides.editorWorkerFactory ?? workers.editorWorkerFactory;
 		this.syntaxWorkerFactory = overrides.syntaxWorkerFactory ?? workers.syntaxWorkerFactory;
 		this.completionWorkerFactory = overrides.completionWorkerFactory;
 	}

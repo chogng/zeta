@@ -3,6 +3,7 @@ import { registerEditorContribution } from "../../../browser/editorExtensions.js
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type EditorViewport } from "../../../browser/view.js";
+import { type IEditorWorkerClient } from "../../../common/services/editorWorker.js";
 import { createFormattingCommand, FormatService, type LanguageFormattingOptions } from "../common/formatCommands.js";
 
 export interface FormatControllerOptions {
@@ -15,7 +16,7 @@ export class FormatController extends Disposable {
 	private readonly options: LanguageFormattingOptions;
 	private readonly onError: (error: unknown) => void;
 
-	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: FormatService, private readonly languageId: string, options: FormatControllerOptions = {}) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: FormatService, private readonly editorWorker: IEditorWorkerClient, private readonly languageId: string, options: FormatControllerOptions = {}) {
 		super();
 		if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza format dependencies must share one text model");
 		this.options = options.formattingOptions ?? { tabSize: 4, insertSpaces: true };
@@ -30,7 +31,9 @@ export class FormatController extends Disposable {
 	async formatDocument(onError = this.onError): Promise<void> {
 		try {
 			const edits = await this.service.provideDocumentFormattingEdits(this.languageId, this.options);
-			const command = createFormattingCommand(this.viewport.textModel, this.selections.selections, edits);
+			const minimalEdits = await this.editorWorker.computeMoreMinimalEdits(edits);
+			if (!minimalEdits) return;
+			const command = createFormattingCommand(this.viewport.textModel, this.selections.selections, minimalEdits);
 			if (command) this.selections.execute(command);
 		} catch (error) {
 			onError(error);
@@ -41,7 +44,7 @@ export class FormatController extends Disposable {
 registerEditorContribution({ id: "editor.contrib.format", install: context => {
 	if (context.kind !== "text") return;
 	const service = context.register(new FormatService(context.model, context.languageFeaturesService.formattingProvider, context.options.input.resource));
-	const controller = context.register(new FormatController(context.view.element, context.viewport, context.selections, service, context.languageId, {
+	const controller = context.register(new FormatController(context.view.element, context.viewport, context.selections, service, context.editorWorker, context.languageId, {
 		formattingOptions: { tabSize: context.options.indentation?.tabSize ?? 4, insertSpaces: context.options.indentation?.kind !== "tabs" },
 		onError: context.onLanguageError,
 	}));

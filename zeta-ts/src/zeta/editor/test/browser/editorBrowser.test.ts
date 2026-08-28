@@ -124,6 +124,31 @@ test("Stanza editor browser derives indentation folds and projects their gutter 
 	dom.window.close();
 });
 
+test("Stanza editor browser marks named regions and comment MARK headers only", () => {
+	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = dom.window.document.querySelector<HTMLElement>("main")!;
+	const model = new TextModel("// #region Runtime\nconst folded = {\n};\n// #endregion\nconst marker = 1; // MARK: API\nconst fake = 'MARK: not a header';");
+	using languageConfigurationService = new LanguageConfigurationService();
+	using languageFeaturesService = new LanguageFeaturesService(languageConfigurationService);
+	using languageConfigurations = registerBuiltinLanguageConfigurations(languageConfigurationService.configurations);
+	const editorPart = new EditorBrowser({
+		container,
+		input: { resource: URI.file("C:\\project\\sections.ts"), label: "sections.ts" },
+		languageId: "typescript",
+		model,
+		languageFeaturesService,
+		languageConfigurationService,
+	});
+	editorPart.layout({ width: 500, height: 180 });
+
+	assert.deepEqual([...container.querySelectorAll<HTMLElement>(".stanza-editor-line.section-header")].map(line => Number(line.dataset.logicalLineIndex)), [0, 4]);
+
+	editorPart.dispose();
+	model.dispose();
+	dom.window.close();
+});
+
 test("Stanza editor disposal cancels an in-flight folding provider before late results project", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;

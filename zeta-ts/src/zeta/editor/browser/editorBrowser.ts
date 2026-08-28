@@ -21,6 +21,8 @@ import { type EditorLineWrapping, type IEditorOptions, type WrappingIndent } fro
 import { type LanguageLocation } from "../contrib/gotoSymbol/common/languageNavigation.js";
 import { type LanguageWorkspaceEdit } from "../common/languages/languageWorkspaceEdit.js";
 import { type ILanguageDiagnosticsService } from "../common/services/languageDiagnosticsService.js";
+import { EditorWorkerClient, type EditorWorkerFactory } from "../common/services/editorWorker.js";
+import { EditorWorker } from "../common/services/editorWebWorker.js";
 import { type DecorationSource, type OwnedDecorationSource } from "./viewparts/decorations/decorationPresentation.js";
 import { type IInstantiationService } from "../../platform/instantiation/common/instantiation.js";
 import { type IAccessibilityService } from "../../platform/accessibility/common/accessibility.js";
@@ -62,6 +64,13 @@ export interface EditorFindOptions {
 	readonly regularExpression?: boolean;
 }
 
+/** Selects the named source sections presented as editor line headers. */
+export interface EditorSectionHeaderOptions {
+	readonly showRegionSectionHeaders?: boolean;
+	readonly showMarkSectionHeaders?: boolean;
+	readonly markSectionHeaderRegex?: string;
+}
+
 export interface EditorBrowserOptions {
 	readonly container: HTMLElement;
 	readonly input: EditorResourceInput;
@@ -86,6 +95,8 @@ export interface EditorBrowserOptions {
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
 	/** Caller-owned text model rendered by this editor. */
 	readonly model: TextModel;
+	/** Host-selected execution boundary for model-versioned editor computations. */
+	readonly editorWorkerFactory?: EditorWorkerFactory;
 	readonly syntaxWorkerFactory?: SyntaxWorkerFactory;
 	readonly completionWorkerFactory?: LanguageCompletionWorkerFactory;
 	readonly languageSupport?: IDisposable;
@@ -99,6 +110,7 @@ export interface EditorBrowserOptions {
 	readonly lineHeight?: number;
 	readonly fontLigatures?: boolean;
 	readonly minimap?: EditorMinimap;
+	readonly sectionHeaders?: EditorSectionHeaderOptions | false;
 	readonly activeLineHighlight?: EditorActiveLineHighlight;
 	readonly showLineNumbers?: boolean;
 	readonly occurrencesHighlight?: 'off' | 'singleFile' | 'multiFile';
@@ -181,6 +193,9 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 			const onLanguageError = options.onLanguageError ?? reportLanguageError;
 			if (options.languageSupport) this._register(options.languageSupport);
 			const model = options.model;
+			const editorWorker = this._register(options.editorWorkerFactory
+				? options.editorWorkerFactory(model)
+				: new EditorWorkerClient(model, () => new EditorWorker()));
 			this.onDidChange = listener => model.onDidChange(() => listener());
 			if (options.languageFeaturesService && !options.languageConfigurationService) {
 				throw new TypeError('Editor language features require their language configuration service');
@@ -216,6 +231,7 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 					kind: "text",
 					options,
 					model,
+					editorWorker,
 					languageId,
 					languageFeaturesService,
 					configurations,
@@ -300,6 +316,7 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 				kind: "text",
 				options,
 				model,
+				editorWorker,
 				languageId,
 				languageFeaturesService,
 				configurations,

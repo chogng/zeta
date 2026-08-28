@@ -3,37 +3,33 @@ import { registerEditorContribution } from "../../../browser/editorExtensions.js
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
-import { TextRange } from "../../../common/core/text.js";
 import { type EditorViewport } from "../../../browser/view.js";
+import { type IEditorWorkerClient } from "../../../common/services/editorWorker.js";
+import { DEFAULT_WORD_REGEXP } from "../../../common/core/wordHelper.js";
 
-/** Replaces the current selection with the next or previous matching occurrence. */
+/** Replaces the current number or well-known value with its neighbor. */
 export class InPlaceReplaceController extends Disposable {
-	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly editorWorker: IEditorWorkerClient, private readonly wordDefinition: () => RegExp, private readonly onError: (error: unknown) => void) {
 		super();
 		if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza in-place replace dependencies must share a text model");
 		this._register(addDisposableListener(input, "keydown", event => {
 			if (event.defaultPrevented || event.isComposing || !event.shiftKey || event.key !== "Enter" || (!event.ctrlKey && !event.metaKey)) return;
 			stopEvent(event);
-			this.replace(event.altKey ? -1 : 1);
+			void this.replace(event.altKey ? -1 : 1).catch(this.onError);
 		}, true));
 	}
 
-	replace(direction: 1 | -1): boolean {
+	async replace(direction: 1 | -1): Promise<boolean> {
 		const model = this.viewport.textModel;
-		const selection = this.selections.selections.primary;
-		if (selection.range.empty) return false;
-		const value = model.getTextInRange(selection.range);
-		if (value.length === 0) return false;
-		const source = model.getText();
-		const start = model.offsetAt(selection.range.start);
-		const end = model.offsetAt(selection.range.end);
-		const occurrence = findOccurrence(source, value, direction, direction > 0 ? end : start);
-		if (!occurrence) return false;
-		const range = TextRange.from(model.positionAt(occurrence.start), model.positionAt(occurrence.end));
-		const command = createEditorEditCommand(model, this.selections.selections, [{ range, text: value }]);
+		const selectionState = this.selections.selections;
+		const selection = selectionState.primary;
+		if (selection.range.start.lineIndex !== selection.range.end.lineIndex) return false;
+		const result = await this.editorWorker.navigateValueSet(selection.range, direction > 0, this.wordDefinition());
+		if (!result || !this.selections.selections.equals(selectionState)) return false;
+		const command = createEditorEditCommand(model, this.selections.selections, [{ range: result.range, text: result.value }]);
 		if (!command) return false;
 		this.selections.execute(command);
-		this.viewport.revealPosition(range.start);
+		this.viewport.revealPosition(result.range.start);
 		return true;
 	}
 }
@@ -42,18 +38,13 @@ registerEditorContribution({
 	id: "editor.contrib.inPlaceReplace",
 	install: context => {
 		if (context.kind !== "text") return;
-		context.register(new InPlaceReplaceController(context.view.element, context.viewport, context.selections));
+		context.register(new InPlaceReplaceController(
+			context.view.element,
+			context.viewport,
+			context.selections,
+			context.editorWorker,
+			() => context.configurations.getLanguageConfiguration(context.languageId).wordPattern ?? DEFAULT_WORD_REGEXP,
+			context.onLanguageError,
+		));
 	},
 });
-
-function findOccurrence(source: string, value: string, direction: 1 | -1, anchor: number): { readonly start: number; readonly end: number } | undefined {
-	if (direction > 0) {
-		const next = source.indexOf(value, anchor);
-		const wrapped = next >= 0 ? next : source.indexOf(value, 0);
-		return wrapped >= 0 ? { start: wrapped, end: wrapped + value.length } : undefined;
-	}
-	const before = source.slice(0, Math.max(0, anchor - value.length + 1));
-	const previous = before.lastIndexOf(value);
-	const wrapped = previous >= 0 ? previous : source.lastIndexOf(value);
-	return wrapped >= 0 ? { start: wrapped, end: wrapped + value.length } : undefined;
-}

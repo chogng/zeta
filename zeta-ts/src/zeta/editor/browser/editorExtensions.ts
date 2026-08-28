@@ -16,6 +16,7 @@ import { type EditorLineVisibilitySource } from "../common/viewModel/viewModelLi
 import { type LanguageLexicalContextSource } from "../common/languages/languageLexicalContext.js";
 import { type BracketColorizationSource, type SemanticTokenSource } from "./viewparts/semanticTokens/semanticTokenPresentation.js";
 import { type TabFocus } from "./config/tabFocus.js";
+import { type IEditorWorkerClient } from "../common/services/editorWorker.js";
 
 /** Stable text-model mount point exposed to optional editor extensions. */
 export interface EditorCapability<T> {
@@ -28,6 +29,7 @@ export interface TextEditorContributionConfigurationContext {
 	readonly kind: "text";
 	readonly options: EditorBrowserOptions;
 	readonly model: TextModel;
+	readonly editorWorker: IEditorWorkerClient;
 	readonly languageId: string;
 	readonly languageFeaturesService: ILanguageFeaturesService;
 	readonly configurations: LanguageConfigurationSource;
@@ -50,6 +52,7 @@ export interface TextEditorContributionContext {
 	readonly kind: "text";
 	readonly options: EditorBrowserOptions;
 	readonly model: TextModel;
+	readonly editorWorker: IEditorWorkerClient;
 	readonly languageId: string;
 	readonly languageFeaturesService: ILanguageFeaturesService;
 	readonly configurations: LanguageConfigurationSource;

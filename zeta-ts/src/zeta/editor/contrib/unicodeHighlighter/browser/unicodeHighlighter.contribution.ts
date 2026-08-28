@@ -12,5 +12,5 @@ registerEditorContribution({ id: "editor.contrib.unicodeHighlighter", configure:
 	context.addDecorationSource(createStanzaDecorationSource(decorations, () => DecorationPresentation.UnicodeHighlight, decoration => `${decoration.metadata.kind} Unicode character U+${decoration.metadata.character.codePointAt(0)!.toString(16).toUpperCase()}`));
 }, install: context => {
 	if (context.kind !== "text" || context.options.showUnicodeHighlights === false || context.model.largeFile.tooLargeForTokenization) return;
-	context.register(new UnicodeHighlighterController(context.model, context.getCapability(TextEditorCapability.unicodeDecorations)));
+	context.register(new UnicodeHighlighterController(context.model, context.getCapability(TextEditorCapability.unicodeDecorations), context.editorWorker, context.onLanguageError));
 } });

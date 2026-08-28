@@ -1,26 +1,47 @@
 import "./media/sectionHeaders.css";
 import { Disposable } from "../../../../base/common/lifecycle.js";
+import { TextPosition } from "../../../common/core/text.js";
+import { type LanguageConfigurationSource } from "../../../common/languages/languageConfiguration.js";
+import { type LanguageLexicalContextSource } from "../../../common/languages/languageLexicalContext.js";
+import { findSectionHeaders, type FindSectionHeaderOptions } from "../../../common/services/findSectionHeaders.js";
+import { type TextModel } from "../../../common/model/textModel.js";
 import { type EditorViewport } from "../../../browser/view.js";
-import { type EditorFoldingModel } from "../../folding/browser/foldingModel.js";
 
-/** Marks logical lines that introduce a foldable section for browser presentation and accessibility. */
+/** Marks named source sections for browser presentation and accessibility. */
 export class SectionHeadersController extends Disposable {
-	constructor(private readonly viewport: EditorViewport, private readonly folding: EditorFoldingModel) {
+	constructor(
+		private readonly viewport: EditorViewport,
+		private readonly model: TextModel,
+		private readonly languageId: string,
+		private readonly configurations: LanguageConfigurationSource,
+		private readonly lexicalContext: LanguageLexicalContextSource,
+		private readonly options: Omit<FindSectionHeaderOptions, "foldingMarkers">,
+	) {
 		super();
-		if (folding.model !== viewport.textModel) throw new TypeError("Stanza section header dependencies must share a text model");
+		if (model !== viewport.textModel || lexicalContext.textModel !== model) throw new TypeError("Stanza section header dependencies must share a text model");
 		this._register(viewport.onDidChangeLayout(() => this.update()));
-		this._register(folding.onDidChange(() => this.update()));
-		this._register(viewport.textModel.onDidChange(() => this.update()));
+		this._register(model.onDidChange(() => this.update()));
 		this.update();
 	}
 
 	private update(): void {
-		const headers = new Set(this.folding.regions.map(region => region.startLineIndex));
+		const configuration = this.configurations.getLanguageConfiguration(this.languageId);
+		const headers = new Map(findSectionHeaders(this.model, {
+			...this.options,
+			foldingMarkers: configuration.foldingMarkers,
+		}).filter(header => !header.shouldBeInComments || this.lexicalContext.getTokenTypeAt(TextPosition.at(header.range.start.lineIndex, header.range.start.columnIndex)) === "comment")
+			.map(header => [header.range.start.lineIndex, header]));
 		for (const line of [...this.viewport.element.querySelectorAll<HTMLElement>(".stanza-editor-line")]) {
 			const logicalLineIndex = Number(line.dataset.logicalLineIndex);
-			line.classList.toggle("section-header", headers.has(logicalLineIndex));
-			if (headers.has(logicalLineIndex)) line.setAttribute("data-section-header", "true");
-			else line.removeAttribute("data-section-header");
+			const header = headers.get(logicalLineIndex);
+			line.classList.toggle("section-header", Boolean(header));
+			if (header) {
+				line.setAttribute("data-section-header", "true");
+				line.classList.toggle("section-header-separator", header.hasSeparatorLine);
+			} else {
+				line.removeAttribute("data-section-header");
+				line.classList.remove("section-header-separator");
+			}
 		}
 	}
 }

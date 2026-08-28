@@ -5,3 +5,7 @@
 .stanza-editor-line.section-header {
   border-top: 1px solid color-mix(in srgb, var(--zeta-widget-border) 45%, transparent);
 }
+
+.stanza-editor-line.section-header-separator {
+  border-top-style: double;
+}
