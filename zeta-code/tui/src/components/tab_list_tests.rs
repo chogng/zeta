@@ -7,6 +7,7 @@ use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
+use ratatui::layout::Rect;
 use ratatui::style::Color;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -41,6 +42,32 @@ fn horizontal_navigation_switches_tabs_and_wraps() {
         TabListInputOutcome::ActiveChanged
     );
     assert_eq!(tabs.active_tab().tab_label(), "Providers");
+}
+
+#[test]
+fn mouse_hit_testing_selects_tabs_and_ignores_the_gap() {
+    let mut tabs = TabListState::new(vec![TestTab("One"), TestTab("Two")]);
+    let area = Rect::new(4, 7, 20, 1);
+
+    assert_eq!(tabs.index_at(area, 4, 7), Some(0));
+    assert_eq!(tabs.index_at(area, 9, 7), None);
+    assert_eq!(
+        tabs.handle_mouse(area, 11, 7),
+        TabListInputOutcome::ActiveChanged
+    );
+    assert_eq!(tabs.active_index(), 1);
+    assert_eq!(
+        tabs.handle_mouse(area, 11, 7),
+        TabListInputOutcome::Consumed
+    );
+}
+
+#[test]
+fn mouse_hit_testing_follows_wrapped_tabs() {
+    let tabs = TabListState::new(vec![TestTab("One"), TestTab("Two")]);
+    let area = Rect::new(0, 0, 10, 2);
+
+    assert_eq!(tabs.index_at(area, 0, 1), Some(1));
 }
 
 #[test]

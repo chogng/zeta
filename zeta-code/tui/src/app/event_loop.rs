@@ -905,6 +905,10 @@ fn activate_pointer_item(
     column: u16,
     row: u16,
 ) -> Option<AppCommand> {
+    if let Some(index) = selection_tab_index_at(app, area, column, row) {
+        app.select_tab(index);
+        return None;
+    }
     if let Some(index) = selection_item_index_at(app, area, column, row) {
         return app.activate_visible_item(index);
     }
@@ -914,6 +918,23 @@ fn activate_pointer_item(
     }
     frame::slash_command_index_at(app, area, column, row)
         .and_then(|index| app.activate_slash_command(index))
+}
+
+fn selection_tab_index_at(
+    app: &App,
+    area: ratatui::layout::Rect,
+    column: u16,
+    row: u16,
+) -> Option<usize> {
+    let view = app.selection_pane()?;
+    let frame_areas = ui::frame_areas(
+        area,
+        ui::InteractionLayout::Expanded {
+            desired_height: pane::desired_height(view.body().desired_height(area.width)),
+        },
+    );
+    let pane_areas = pane::areas(frame_areas.interaction);
+    view.body().tab_index_at(pane_areas.body, column, row)
 }
 
 fn select_hovered_popup_item(app: &mut App, area: ratatui::layout::Rect, column: u16, row: u16) {

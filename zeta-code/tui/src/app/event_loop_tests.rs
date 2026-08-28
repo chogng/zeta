@@ -1,6 +1,8 @@
+use super::activate_pointer_item;
 use super::schedule_action;
 use super::select_hovered_popup_item;
 use super::selection_item_index_at;
+use super::selection_tab_index_at;
 use crate::app::App;
 use crate::app::AppCommand;
 use crate::app::AppEvent;
@@ -9,6 +11,7 @@ use crate::components::selection::SelectionItem;
 use crate::components::selection::SelectionItemId;
 use crate::components::selection::SelectionTab;
 use crate::components::selection::SelectionViewModel;
+use crate::mouse::MouseMode;
 use ratatui::layout::Rect;
 use std::collections::VecDeque;
 use std::path::PathBuf;
@@ -95,4 +98,36 @@ fn pointer_move_selects_an_actionable_row_in_a_generic_feature_pane() {
         app.selection_view().unwrap().selected_visible_index(),
         Some(1)
     );
+}
+
+#[test]
+fn pointer_click_switches_a_selection_tab() {
+    let mut app = App::new();
+    app.update(AppEvent::SelectionViewOpened(PaneViewModel::new(
+        SelectionViewModel::new(
+            "Feature",
+            vec![
+                SelectionTab::new("First", vec![SelectionItem::new("Read only")]),
+                SelectionTab::new("Second", vec![SelectionItem::new("Another item")]),
+            ],
+        )
+        .without_selection(),
+        "Esc back",
+    )));
+    let area = Rect::new(0, 0, 80, 24);
+    assert_eq!(app.mouse_mode(), MouseMode::UiClick);
+
+    let mut target = None;
+    'cells: for row in area.y..area.bottom() {
+        for column in area.x..area.right() {
+            if selection_tab_index_at(&app, area, column, row) == Some(1) {
+                target = Some((column, row));
+                break 'cells;
+            }
+        }
+    }
+    let (column, row) = target.expect("second selection tab should be clickable");
+
+    assert_eq!(activate_pointer_item(&mut app, area, column, row), None);
+    assert_eq!(app.selection_view().unwrap().active_tab_index(), 1);
 }

@@ -149,6 +149,19 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: &SelectionViewState)
 }
 
 impl SelectionViewState {
+    pub(crate) fn tab_index_at(&self, area: Rect, column: u16, row: u16) -> Option<usize> {
+        if !self.show_tabs() {
+            return None;
+        }
+        let content = content_area(area);
+        if content.is_empty() {
+            return None;
+        }
+        let tab_height = tab_list::desired_height(self.tabs(), content.width);
+        let areas = selection_areas(content, self, tab_height);
+        self.tab_list().index_at(areas[3], column, row)
+    }
+
     pub(crate) fn item_index_at(&self, area: Rect, column: u16, row: u16) -> Option<usize> {
         let content = content_area(area);
         if content.is_empty() {

@@ -163,6 +163,7 @@ pub(crate) struct SelectionViewModel {
 struct SelectionViewPresentation {
     title: String,
     search: Option<SearchBoxModel>,
+    query_mode: SelectionQueryMode,
     free_form_action: Option<SelectionItemId>,
     empty_message: String,
     activation_mode: SelectionActivationMode,
@@ -172,6 +173,12 @@ struct SelectionViewPresentation {
     initial_selected: usize,
     title_top_margin: usize,
     title_bottom_margin: usize,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SelectionQueryMode {
+    FilterItems,
+    InputOnly,
 }
 
 impl SelectionViewModel {
@@ -185,6 +192,7 @@ impl SelectionViewModel {
             presentation: SelectionViewPresentation {
                 title: title.into(),
                 search: None,
+                query_mode: SelectionQueryMode::FilterItems,
                 free_form_action: None,
                 empty_message: "No matching items".into(),
                 activation_mode: SelectionActivationMode::Enter,
@@ -248,13 +256,14 @@ impl SelectionViewModel {
         self
     }
 
-    pub(crate) fn with_secret_free_form(
+    pub(crate) fn with_secret_input(
         mut self,
         placeholder: impl Into<String>,
         action: SelectionItemId,
     ) -> Self {
         self.presentation.search =
             Some(SearchBoxModel::new(placeholder).initially_active().masked());
+        self.presentation.query_mode = SelectionQueryMode::InputOnly;
         self.presentation.free_form_action = Some(action);
         self
     }
@@ -344,6 +353,17 @@ impl SelectionViewState {
         self.tabs.active_index()
     }
 
+    pub(crate) fn select_tab(&mut self, index: usize) -> bool {
+        match self.tabs.select(index) {
+            TabListInputOutcome::ActiveChanged => {
+                self.select_first_visible();
+                true
+            }
+            TabListInputOutcome::Consumed => true,
+            TabListInputOutcome::Unhandled => false,
+        }
+    }
+
     pub(super) fn tab_list(&self) -> &TabListState<SelectionTab> {
         &self.tabs
     }
@@ -386,12 +406,13 @@ impl SelectionViewState {
     }
 
     pub(crate) fn mouse_mode(&self) -> MouseMode {
-        if self.model.selection_enabled
+        let tabs_are_clickable = self.model.show_tabs && self.tabs.tabs().len() > 1;
+        let items_are_clickable = self.model.selection_enabled
             && self
                 .visible_items()
                 .into_iter()
-                .any(|item| item.id().is_some())
-        {
+                .any(|item| item.id().is_some());
+        if tabs_are_clickable || items_are_clickable {
             MouseMode::UiClick
         } else {
             MouseMode::TerminalSelection
@@ -555,7 +576,7 @@ impl SelectionViewState {
 
     fn visible_indices(&self) -> Vec<usize> {
         let normalized_query = self.query().to_lowercase();
-        if normalized_query.is_empty() {
+        if normalized_query.is_empty() || self.model.query_mode == SelectionQueryMode::InputOnly {
             return (0..self.active_tab().items.len()).collect();
         }
         let mut matches = self

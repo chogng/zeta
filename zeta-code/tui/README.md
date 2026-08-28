@@ -107,7 +107,7 @@ Tool、approval policy 或 persistence。
 transcript 当前采用 plain-text wrapping；Native Agent Timeline 的 Markdown block、table、selection、
 折叠与虚拟化由
 [`native-agent-console.md`](../../app/docs/native-agent-console.md) 和
-[`zeta-markdown`](../../app/markdown/README.md) 拥有，不构成 TUI backlog。TUI 的 Mouse support 服务 slash/file-mention popup 和带可执行候选项的 Selection Pane；hover 复用选中态，左键复用 Enter 动作。Config 标签页中的 Mouse interactions item 可关闭鼠标交互，关闭后这些页面不捕获鼠标，任意屏幕文本框选由终端负责。
+[`zeta-markdown`](../../app/markdown/README.md) 拥有，不构成 TUI backlog。TUI 的 Mouse support 服务 slash/file-mention popup、多标签 Selection Pane 的左键切换和带可执行候选项的 Selection Pane；hover 复用选中态，左键复用 Enter 动作。Config 标签页中的 Mouse interactions item 可关闭鼠标交互，关闭后这些页面不捕获鼠标，任意屏幕文本框选由终端负责。
 `TextArea` 保留局部 keymap 扩展边界，但 Vim mode/motion/operator 不是当前 `zeta code` 产品要求。
 
 TUI 当前连接 CLI 提供的 profile/Workspace-scoped local App Server authority，不提供 remote
@@ -179,7 +179,7 @@ src/
 │   ├── composer/                  # editor, attachments, paste, slash/mention state and views
 │   ├── interaction/               # composer-preserving temporary view stack
 │   ├── selection/                 # reusable selection state and view
-│   ├── tab_list.rs                # reusable horizontal tab state, input, wrapping and view
+│   ├── tab_list.rs                # reusable horizontal tab state, mouse/keyboard input, wrapping and view
 │   └── transcript/                # transcript projection rendering and row estimation
 ├── features/
 │   ├── config.rs                  # config feature module root
@@ -241,7 +241,7 @@ src/
 | `ThreadSubscription` | crate-private | 分开维护 durable sequence、stream-instance cursor 与 history Turn cursor，分类 duplicate/gap/runtime switch，消费 bounded snapshot 和 older-page resync | 不应用 `ThreadEvent` reducer、不保存 Thread history 或 transient projection |
 | `features::interactions` | crate-private | full agent request → approval/user-input view state → exact typed response | 不决定 policy、不选择 owner、不支持未声明的 dynamic Tool |
 | `InteractionPane` | crate-private | 保留 composer、拥有 temporary view stack，并把 key/paste 路由到 active view 或 composer | 不保存 Plugin/Session 等产品 feature 状态 |
-| `components::tab_list::TabListState<T>` | crate-private | 拥有 tab 集合和当前项，处理左右/Tab 循环切换，并由同模块按 Unicode 宽度统一换行和绘制 | 不拥有 pane 内容、搜索、选择或产品 action |
+| `components::tab_list::TabListState<T>` | crate-private | 拥有 tab 集合和当前项，处理左右/Tab 循环切换与鼠标命中，并由同模块按 Unicode 宽度统一换行和绘制 | 不拥有 pane 内容、搜索、选择或产品 action |
 | `components::selection::SelectionViewState` | crate-private | 可配置 search/titled preview、Space search mode、过滤索引、候选 presentation highlight、选择与循环导航，并组合 `TabListState<SelectionTab>` 切换候选集合 | 不执行 action、不依赖产品 ID 或 App Server |
 | `components::selection::draw` | crate-private | generic title/search/items、可配置间距的水平分隔 preview、caption/footer Ratatui surface，并把 tab 区域委托给 `components::tab_list::draw` | 只读 selection state、不解释产品 action |
 | `ChatComposer` | private | blank/trim/submit、多行换行、paste routing、slash completion application、参数结构化与 local dispatch | 不自行实现 slash grammar，不拥有 cursor、Vim state 或 RPC |

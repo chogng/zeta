@@ -524,7 +524,7 @@ value；但不能调用领域接口或保存 canonical aggregate。
 | `interaction/` | composer 与 temporary view stack 的焦点、push/pop 和 routing | feature catalog、RPC、Thread lifecycle |
 | `composer/` | draft、Unicode cursor、attachments、paste bindings、slash parsing | Turn start、config mutation、App Server client |
 | `transcript/` | plain-text visible row、wrapping 与 scroll | canonical Thread snapshot、sequence、transient cursor；不复制 Native Markdown/diff/table 组件 |
-| `tab_list.rs` | tab 集合、当前项、横向切换、窄宽度换行和绘制 | pane 内容、搜索、产品 action |
+| `tab_list.rs` | tab 集合、当前项、键盘与鼠标横向切换、窄宽度换行和绘制 | pane 内容、搜索、产品 action |
 | `selection/` | query、filtered indices、selection 和通用列表渲染，并组合 `tab_list` 切换每组候选项 | Session/Skill identity 的业务 action |
 
 `features/thread/update.rs` 完成 committed/transient item 合并并暴露有稳定 identity 的可见
@@ -998,7 +998,7 @@ lib_tests.rs
 - `features/interactions` 把 owner-directed full request 转成 approval 或多问题 user-input Pane，
   只返回 exact typed response；owner selection、deadline 与 cancellation 留在 App Server；
 - `features/config/request.rs` 与 `features/skills/request.rs` 分别拥有已有 typed config/model 与 Skill catalog/enablement 调用，App 不再内联这些领域 payload；`ConfigResource` 有界读取、revision 校验并原子保存 `<profile>/zeta-code/terminal.json`，其鼠标交互设置只约束 TUI 本地 `MouseMode`，不进入 App Server 配置；
-- `components/tab_list.rs` 已拥有横向 tab 集合、当前项、左右/Tab 循环切换、窄宽度换行和 Ratatui 绘制；`components/selection` 组合它并只拥有 query/filter/selection state、输入 outcome 与列表 Ratatui view；`InteractionPane`、App 和产品 view builder 只消费 selection component contract；
+- `components/tab_list.rs` 已拥有横向 tab 集合、当前项、左右/Tab 循环切换、鼠标命中、窄宽度换行和 Ratatui 绘制；`components/selection` 组合它并只拥有 query/filter/selection state、输入 outcome 与列表 Ratatui view；`InteractionPane`、App 和产品 view builder 只消费 selection component contract；
 - `ui/layout.rs` 拥有跨 presentation surface 复用的纯 geometry；`ui/theme.rs` 只拥有共享主题
   snapshot 到终端色彩能力的窄投影，用户文件解析与完整 token catalog 留在 `zeta-theme`；
   component 不反向依赖 frame coordinator；
@@ -1051,7 +1051,7 @@ lib_tests.rs
   window 的 Markdown export。
   Native Agent Timeline 的 Markdown/table、任意 pointer selection、折叠与虚拟化属于 `app`，
   不是 TUI 的“尚未完成”；
-- Mouse 只覆盖 slash/file-mention popup 和可执行 Selection Pane 的左键命中与 hover。Config 标签页中的 Mouse interactions item 可关闭这类交互，关闭后页面把鼠标拖选留给宿主终端；完整 pointer/selection 交互不属于当前 `zeta code` 要求，Vim mode/motion/operator 也没有被产品文档接受；
+- Mouse 只覆盖 slash/file-mention popup、多标签 Selection Pane 的左键切换，以及可执行候选项的左键命中与 hover。Config 标签页中的 Mouse interactions item 可关闭这类交互，关闭后页面把鼠标拖选留给宿主终端；完整 pointer/selection 交互不属于当前 `zeta code` 要求，Vim mode/motion/operator 也没有被产品文档接受；
 - 当前入口通过 `AppServerSession` 消费 profile/Workspace-scoped local authority，不提供 remote
   selector 或自动 reconnect。若未来接受
   远程产品需求，connection/recovery contract 必须先进入 `zeta-app-server-client`；
@@ -1061,7 +1061,7 @@ lib_tests.rs
   `ImageAttachmentRef` → durable `UserImageAttachment` → provider 临时 image block”纵切。TUI
   不建立私有 blob store；Thread history 与 command receipt 不持久化 data URL；
 - status line 已按固定顺序显示可独立开关的权限模式、模型、Git 分支和 Git 变更；workspace 路径只在空会话 Welcome Banner 显示，Turn 运行状态不进入该行，usage 也不从 transcript 推导；
-- Config surface 包含 Config、Providers 与 Language servers 三个标签页。Mouse interactions 是 Config 标签页中的 item，由 `<profile>/zeta-code/terminal.json` 保存，不进入 App Server 配置。Providers 通过 `provider/list` 展示后端注册表中的完整供应商目录；隐藏输入框通过 `provider/apiKey/set` 把 API key 写入 profile SecretStore，列表只显示是否已配置，不返回密钥。MCP、Skill、Plugin 和 Hook 不再作为 Config tab 重复展示，已有 `/mcp` 与 `/skills` 页面继续拥有各自能力。
+- Config surface 包含 Config、Providers 与 Language servers 三个标签页。Mouse interactions 是 Config 标签页中的 item，由 `<profile>/zeta-code/terminal.json` 保存，不进入 App Server 配置。Providers 通过 `provider/list` 展示后端注册表中的完整供应商目录，列表仅显示供应商名称；隐藏输入框通过 `provider/apiKey/set` 把 API key 写入 profile SecretStore，密钥不在列表中展示。MCP、Skill、Plugin 和 Hook 不再作为 Config tab 重复展示，已有 `/mcp` 与 `/skills` 页面继续拥有各自能力。
 
 新增能力必须先证明是 `zeta code` 产品要求，再按 canonical contract 和垂直 feature 接入；不能
 因为 Native 已有 richer component，或某能力技术上可实现，就把它复制成 TUI backlog。

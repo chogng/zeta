@@ -533,7 +533,7 @@ fn config_mouse_selection_emits_a_revision_bound_edit() {
 }
 
 #[test]
-fn config_provider_selection_opens_a_masked_api_key_input_and_emits_a_secret_edit() {
+fn config_provider_api_key_enter_saves_and_returns_to_config() {
     let config = empty_config_snapshot();
     let providers = ProviderListResult {
         providers: vec![ProviderCatalogEntryDto {
@@ -558,13 +558,20 @@ fn config_provider_selection_opens_a_masked_api_key_input_and_emits_a_secret_edi
     );
     app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
-    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL));
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     let Some(AppCommand::SetProviderApiKey(edit)) = action else {
         panic!("provider API key input must emit a typed secret edit");
     };
     assert!(!format!("{edit:?}").contains("api_key: \"sk\""));
     assert_eq!(edit.into_parts(), ("openai".into(), "sk".into()));
+
+    app.update(AppEvent::ConfigApiKeySaved {
+        provider: "openai".into(),
+        view: config_view(&config, &providers, TerminalSettings::default(), 7),
+    });
+
+    assert_eq!(app.selection_view().unwrap().title(), "Config");
 }
 
 #[test]

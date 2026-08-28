@@ -102,7 +102,7 @@ pub(crate) fn config_view(
             ),
     ];
     config_items.extend(overview(config));
-    let provider_items = provider_items(config, providers, &mut actions);
+    let provider_items = provider_items(providers, &mut actions);
 
     ConfigSelectionView {
         model: PaneViewModel::new(
@@ -141,8 +141,8 @@ pub(crate) fn provider_api_key_view(provider: String, display_name: String) -> C
             )
             .without_tab_bar()
             .without_selection()
-            .with_secret_free_form("Enter API key", submit_id),
-            "Ctrl+Enter save  ·  Esc back",
+            .with_secret_input("Enter API key", submit_id),
+            "Enter to save",
         ),
         actions,
     }
@@ -169,39 +169,21 @@ fn overview(config: &ConfigReadResult) -> Vec<SelectionItem> {
 }
 
 fn provider_items(
-    config: &ConfigReadResult,
     catalog: &ProviderListResult,
     actions: &mut BTreeMap<SelectionItemId, ConfigSelectionAction>,
 ) -> Vec<SelectionItem> {
     catalog
         .providers
         .iter()
-        .map(|provider| provider_item(config, provider, actions))
+        .map(|provider| provider_item(provider, actions))
         .collect()
 }
 
 fn provider_item(
-    config: &ConfigReadResult,
     provider: &ProviderCatalogEntryDto,
     actions: &mut BTreeMap<SelectionItemId, ConfigSelectionAction>,
 ) -> SelectionItem {
-    let endpoint = config
-        .providers
-        .get(&provider.provider)
-        .and_then(|configured| configured.base_url.as_deref())
-        .unwrap_or("default endpoint");
-    let api_key = match provider.api_key_policy {
-        ProviderApiKeyPolicyDto::Unsupported => "No API key",
-        ProviderApiKeyPolicyDto::Optional if provider.api_key_configured => "API key saved",
-        ProviderApiKeyPolicyDto::Optional => "API key optional",
-        ProviderApiKeyPolicyDto::Required if provider.api_key_configured => "API key saved",
-        ProviderApiKeyPolicyDto::Required => "API key required",
-    };
-    let item = SelectionItem::new(&provider.display_name).with_columns(
-        &provider.display_name,
-        format!("{}  ·  {endpoint}", provider.provider),
-        api_key,
-    );
+    let item = SelectionItem::new(&provider.display_name);
     if provider.api_key_policy == ProviderApiKeyPolicyDto::Unsupported {
         return item;
     }

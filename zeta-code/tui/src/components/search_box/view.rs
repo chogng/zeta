@@ -8,8 +8,11 @@ use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
+use ratatui::widgets::Padding;
 use ratatui::widgets::Paragraph;
 use unicode_width::UnicodeWidthStr;
+
+const SEARCH_BOX_LEFT_PADDING: u16 = 1;
 
 pub(crate) fn draw(
     frame: &mut Frame<'_>,
@@ -34,7 +37,8 @@ pub(crate) fn draw(
         Paragraph::new(Line::from(text)).block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(border_color)),
+                .border_style(Style::default().fg(border_color))
+                .padding(Padding::left(SEARCH_BOX_LEFT_PADDING)),
         ),
         area,
     );
@@ -43,8 +47,16 @@ pub(crate) fn draw(
             .as_deref()
             .unwrap_or(search.query())
             .width()
-            .min(area.width.saturating_sub(3) as usize) as u16;
-        frame.set_cursor_position((area.x + 1 + cursor_width, area.y + 1));
+            .min(usize::from(
+                area.width
+                    .saturating_sub(2)
+                    .saturating_sub(SEARCH_BOX_LEFT_PADDING)
+                    .saturating_sub(1),
+            )) as u16;
+        frame.set_cursor_position((
+            area.x + 1 + SEARCH_BOX_LEFT_PADDING + cursor_width,
+            area.y + 1,
+        ));
     }
 }
 

@@ -194,6 +194,13 @@ impl InteractionPane {
         }
     }
 
+    pub(crate) fn select_tab(&mut self, index: usize) -> bool {
+        match self.views.last_mut() {
+            Some(InteractionView::Selection(view)) => view.body_mut().select_tab(index),
+            None => false,
+        }
+    }
+
     pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<InteractionPaneOutcome> {
         let Some(InteractionView::Selection(view)) = self.views.last_mut() else {
             return None;

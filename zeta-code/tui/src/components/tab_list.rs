@@ -56,6 +56,19 @@ impl<T> TabListState<T> {
         &self.tabs[self.active]
     }
 
+    pub(crate) fn select(&mut self, index: usize) -> TabListInputOutcome {
+        if index >= self.tabs.len() {
+            return TabListInputOutcome::Unhandled;
+        }
+        let previous = self.active;
+        self.active = index;
+        if self.active == previous {
+            TabListInputOutcome::Consumed
+        } else {
+            TabListInputOutcome::ActiveChanged
+        }
+    }
+
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> TabListInputOutcome {
         if key
             .modifiers
@@ -78,6 +91,41 @@ impl<T> TabListState<T> {
         } else {
             TabListInputOutcome::ActiveChanged
         }
+    }
+}
+
+impl<T: TabListItem> TabListState<T> {
+    pub(crate) fn index_at(&self, area: Rect, column: u16, row: u16) -> Option<usize> {
+        if area.width == 0
+            || area.height == 0
+            || column < area.x
+            || column >= area.right()
+            || row < area.y
+            || row >= area.bottom()
+        {
+            return None;
+        }
+        let row = usize::from(row - area.y);
+        let column = usize::from(column - area.x);
+        tab_positions(&self.tabs, area.width)
+            .into_iter()
+            .enumerate()
+            .find_map(|(index, position)| {
+                (position.row == row
+                    && column >= position.start
+                    && column < position.start.saturating_add(position.width))
+                .then_some(index)
+            })
+    }
+
+    pub(crate) fn handle_mouse(
+        &mut self,
+        area: Rect,
+        column: u16,
+        row: u16,
+    ) -> TabListInputOutcome {
+        self.index_at(area, column, row)
+            .map_or(TabListInputOutcome::Unhandled, |index| self.select(index))
     }
 }
 
@@ -113,29 +161,27 @@ fn tab_lines<T: TabListItem>(
     if tabs.is_empty() {
         return Vec::new();
     }
-    let available_width = usize::from(width.max(1));
-    let mut lines = Vec::new();
-    let mut spans = Vec::new();
-    let mut row_width = 0usize;
+    let positions = tab_positions(tabs, width);
+    let row_count = positions
+        .last()
+        .map(|position| position.row.saturating_add(1))
+        .unwrap_or_default();
+    let mut lines = (0..row_count)
+        .map(|_| Vec::new())
+        .collect::<Vec<Vec<Span<'static>>>>();
+    let mut row_widths = vec![0usize; row_count];
 
     for (index, tab) in tabs.iter().enumerate() {
-        let label = tab.tab_label();
-        let tab_width = label.width().saturating_add(2);
-        let gap = usize::from(!spans.is_empty()) * TAB_GAP;
-        if !spans.is_empty()
-            && row_width.saturating_add(gap).saturating_add(tab_width) > available_width
-        {
-            lines.push(Line::from(spans));
-            spans = Vec::new();
-            row_width = 0;
-        }
-        if !spans.is_empty() {
-            spans.push(Span::raw("  "));
-            row_width = row_width.saturating_add(TAB_GAP);
+        let position = positions[index];
+        let spans = &mut lines[position.row];
+        let row_width = &mut row_widths[position.row];
+        if *row_width < position.start {
+            spans.push(Span::raw(" ".repeat(position.start - *row_width)));
+            *row_width = position.start;
         }
         if index == active {
             spans.push(Span::styled(
-                format!(" {label} "),
+                format!(" {} ", tab.tab_label()),
                 Style::default()
                     .fg(Color::Black)
                     .bg(highlight)
@@ -143,16 +189,46 @@ fn tab_lines<T: TabListItem>(
             ));
         } else {
             spans.push(Span::styled(
-                format!(" {label} "),
+                format!(" {} ", tab.tab_label()),
                 Style::default().fg(muted()),
             ));
         }
-        row_width = row_width.saturating_add(tab_width);
+        *row_width = position.start.saturating_add(position.width);
     }
-    if !spans.is_empty() {
-        lines.push(Line::from(spans));
+    lines.into_iter().map(Line::from).collect()
+}
+
+#[derive(Clone, Copy)]
+struct TabPosition {
+    row: usize,
+    start: usize,
+    width: usize,
+}
+
+fn tab_positions<T: TabListItem>(tabs: &[T], width: u16) -> Vec<TabPosition> {
+    let available_width = usize::from(width.max(1));
+    let mut positions = Vec::with_capacity(tabs.len());
+    let mut row = 0usize;
+    let mut row_width = 0usize;
+
+    for tab in tabs {
+        let tab_width = tab.tab_label().width().saturating_add(2);
+        let gap = usize::from(row_width > 0) * TAB_GAP;
+        if row_width > 0
+            && row_width.saturating_add(gap).saturating_add(tab_width) > available_width
+        {
+            row = row.saturating_add(1);
+            row_width = 0;
+        }
+        let start = row_width.saturating_add(usize::from(row_width > 0) * TAB_GAP);
+        positions.push(TabPosition {
+            row,
+            start,
+            width: tab_width,
+        });
+        row_width = start.saturating_add(tab_width);
     }
-    lines
+    positions
 }
 
 #[cfg(test)]

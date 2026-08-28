@@ -65,6 +65,12 @@ fn config_pane_organizes_the_snapshot_into_searchable_tabs() {
     assert_eq!(state.visible_items().len(), 2);
     assert_eq!(state.visible_items()[0].label(), "OpenAI");
     assert_eq!(state.visible_items()[1].label(), "Ollama");
+    assert!(
+        state
+            .visible_items()
+            .iter()
+            .all(|item| item.description().is_none())
+    );
     assert!(matches!(
         view.actions
             .get(state.visible_items()[0].id().unwrap())
@@ -75,15 +81,22 @@ fn config_pane_organizes_the_snapshot_into_searchable_tabs() {
 }
 
 #[test]
-fn provider_api_key_input_is_masked_and_submits_a_provider_bound_action() {
+fn provider_api_key_input_is_masked_keeps_its_explanation_and_submits_with_enter() {
     let view = provider_api_key_view("openai".into(), "OpenAI".into());
-    let mut state = SelectionViewState::new(view.model.into_body());
+    let (model, key_hints) = view.model.into_parts();
+    let mut state = SelectionViewState::new(model);
 
     state.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
     state.handle_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
-    let outcome = state.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL));
+    let outcome = state.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     assert!(state.search().unwrap().masked());
+    assert_eq!(key_hints, "Enter to save");
+    assert_eq!(state.visible_items().len(), 1);
+    assert_eq!(
+        state.visible_items()[0].label(),
+        "The key is hidden and stored in the profile secret store"
+    );
     assert!(matches!(
         outcome,
         crate::components::selection::SelectionInputOutcome::ActivateFreeForm { item_id, value }

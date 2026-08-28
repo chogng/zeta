@@ -91,6 +91,18 @@ fn read_only_rows_leave_drag_selection_to_the_terminal() {
 }
 
 #[test]
+fn mouse_click_switches_tabs_and_enables_pointer_mode() {
+    let mut state = state();
+    let area = Rect::new(0, 0, 80, 10);
+
+    assert_eq!(state.mouse_mode(), MouseMode::UiClick);
+    assert_eq!(state.tab_index_at(area, 14, 2), Some(1));
+    assert!(state.select_tab(1));
+    assert_eq!(active_tab_label(&state), "Keys");
+    assert_eq!(state.selected_visible_index(), Some(0));
+}
+
+#[test]
 fn arrow_keys_switch_tabs_and_wrap() {
     let mut state = state();
 
