@@ -82,15 +82,8 @@ capability semantics 变化会影响全部 executable Workspace runtime。
 
 ## 当前限制与扩展点
 
-当前 crate 有意只建模一个 root，不拥有附加目录访问作用域。主工作目录与附加目录的角色、
-directory source lifetime、canonical deduplication 和 contribution policy 已由
-[`zeta-add-dir`](../add-dir/README.md) 独立拥有；这些规则不能回流到 `WorkspaceRoot` 或 trust
-token。
+当前 crate 有意只建模一个 root，不拥有附加目录访问作用域。主工作目录与附加目录的角色、directory source lifetime、canonical deduplication 和 contribution policy 已由 [`zeta-workspace-access`](../workspace-access/README.md) 独立拥有；这些规则不能回流到 `WorkspaceRoot` 或 trust token。
 
-App Server 负责为 `zeta-add-dir` scope 中的每个 root 解析 capability，并只重建 authorized
-consumer。`/cd` 是独立 authority-switch 路径，负责替换主工作目录并重新加载完整项目配置。
+App Server 负责为 `zeta-workspace-access` authority 中的每个 root 解析 capability，并只重建 authorized consumer。`/cd` 是独立 authority-switch 路径，负责替换主工作目录并重新加载完整项目配置。
 
-`zeta-agent-import` 可以为 `zeta-add-dir` adapter 提供安全的 source-specific inspection，但
-Import workflow 与 directory
-authorization 必须保持分离。一次性 user import root 不能隐式变成 persistent additional root；
-反过来，持久 file-access-only root 也不能因为可访问就触发 Agent import。
+`zeta-agent-import` 可以为 `zeta-workspace-access` adapter 提供安全的 source-specific inspection，但 Import workflow 与 directory authorization 必须保持分离。一次性 user import root 不能隐式变成 persistent additional root；反过来，持久 file-access-only root 也不能因为可访问就触发 Agent import。

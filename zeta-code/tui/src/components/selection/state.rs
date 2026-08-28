@@ -35,9 +35,16 @@ pub(crate) struct SelectionItem {
     id: Option<SelectionItemId>,
     label: String,
     description: Option<String>,
+    description_presentation: SelectionItemDescriptionPresentation,
     columns: Option<SelectionItemColumns>,
     selection_foreground: Option<Color>,
     preview: Option<SelectionPreview>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum SelectionItemDescriptionPresentation {
+    Muted,
+    Detail,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -53,9 +60,18 @@ impl SelectionItem {
             id: None,
             label: label.into(),
             description: None,
+            description_presentation: SelectionItemDescriptionPresentation::Muted,
             columns: None,
             selection_foreground: None,
             preview: None,
+        }
+    }
+
+    pub(crate) fn detail(label: impl Into<String>, description: impl Into<String>) -> Self {
+        Self {
+            description: Some(description.into()),
+            description_presentation: SelectionItemDescriptionPresentation::Detail,
+            ..Self::new(label)
         }
     }
 
@@ -101,6 +117,10 @@ impl SelectionItem {
 
     pub(crate) fn description(&self) -> Option<&str> {
         self.description.as_deref()
+    }
+
+    pub(super) const fn description_presentation(&self) -> SelectionItemDescriptionPresentation {
+        self.description_presentation
     }
 
     pub(super) fn columns(&self) -> Option<&SelectionItemColumns> {

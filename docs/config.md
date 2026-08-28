@@ -524,9 +524,7 @@ Config 子批次不提交。
 Instructions 与 Agents 等非 Config artifact 必须交给各自 authority；canonical target 尚未完成
 前，Import 必须将其标记为 unsupported，而不是强塞进 Config transaction。
 
-Config 保存 normalized desired state 与必要 provenance reference，不保存外部原始文件、secret、
-preview content 或目录访问 grant。Import source 的文件访问由一次性 host authorization 或
-`zeta-add-dir` 分别拥有，不能通过 Config mutation 反向扩大。
+Config 保存 normalized desired state 与必要 provenance reference，不保存外部原始文件、secret、preview content 或目录访问 grant。Import source 的文件访问由一次性 host authorization 或 `zeta-workspace-access` 分别拥有，不能通过 Config mutation 反向扩大。
 
 ## 11. 运行时快照与安全点
 

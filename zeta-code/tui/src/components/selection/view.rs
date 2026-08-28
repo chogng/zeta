@@ -1,5 +1,6 @@
 use super::SelectionViewState;
 use super::state::SelectionItem;
+use super::state::SelectionItemDescriptionPresentation;
 use crate::components::search_box;
 use crate::components::search_box::SEARCH_BOX_HEIGHT;
 use crate::components::tab_list;
@@ -278,14 +279,7 @@ fn draw_item(
     };
     let marker = if selected { "❯ " } else { "  " };
     let Some(columns) = item.columns() else {
-        let mut spans = vec![
-            Span::styled(marker, label_style),
-            Span::styled(item.label(), label_style),
-        ];
-        if let Some(description) = item.description() {
-            spans.push(Span::styled("  ·  ", Style::default().fg(muted())));
-            spans.push(Span::styled(description, Style::default().fg(muted())));
-        }
+        let spans = item_spans(item, marker, label_style);
         frame.render_widget(Paragraph::new(Line::from(spans)), area);
         return;
     };
@@ -323,6 +317,37 @@ fn draw_item(
         Paragraph::new(Span::styled(columns.trailing.as_str(), detail_style)),
         Rect::new(trailing_x, area.y, column_layout.trailing_width, 1),
     );
+}
+
+fn item_spans<'a>(
+    item: &'a SelectionItem,
+    marker: &'static str,
+    label_style: Style,
+) -> Vec<Span<'a>> {
+    let Some(description) = item.description() else {
+        return vec![
+            Span::styled(marker, label_style),
+            Span::styled(item.label(), label_style),
+        ];
+    };
+    match item.description_presentation() {
+        SelectionItemDescriptionPresentation::Muted => vec![
+            Span::styled(marker, label_style),
+            Span::styled(item.label(), label_style),
+            Span::styled("  ·  ", Style::default().fg(muted())),
+            Span::styled(description, Style::default().fg(muted())),
+        ],
+        SelectionItemDescriptionPresentation::Detail => {
+            let detail_label_style = label_style.add_modifier(Modifier::BOLD);
+            vec![
+                Span::styled(marker, Style::default()),
+                Span::styled(item.label(), detail_label_style),
+                Span::styled(":", detail_label_style),
+                Span::raw(" "),
+                Span::raw(description),
+            ]
+        }
+    }
 }
 
 fn dashed_rule(width: u16, title: Option<&str>, color: Color) -> Line<'static> {

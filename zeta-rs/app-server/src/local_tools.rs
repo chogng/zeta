@@ -42,7 +42,7 @@ use zeta_shell_command::{
 use zeta_tools::{ToolPayload, to_protocol_tool_definition};
 use zeta_workspace::{TrustedWorkspace, WorkspaceCapability, WorkspaceRoot};
 
-use crate::session_workspace_roots::SessionWorkspaceRoots;
+use crate::session_workspace_access::SessionWorkspaceAccess;
 use crate::tool_composition::ToolCompositionError;
 use crate::tool_composition::ToolPort;
 use crate::tool_executor_adapter::PreparedToolExecution;
@@ -107,7 +107,7 @@ struct LocalExecutorContribution {
 pub(crate) fn compose_local_tools_with_config(
     workspace: TrustedWorkspace,
     policy_config: &LocalExecPolicyConfig,
-    session_workspace_roots: Arc<SessionWorkspaceRoots>,
+    session_workspace_access: Arc<SessionWorkspaceAccess>,
 ) -> Result<LocalToolComposition, LocalToolError> {
     if workspace.capability() != WorkspaceCapability::ExecuteProcess {
         return Err(LocalToolError::trust(
@@ -160,7 +160,7 @@ pub(crate) fn compose_local_tools_with_config(
         native_sandbox(&install_context)?,
         action_policy_revision.clone(),
     )?;
-    let service = LocalToolSuite::new(shell, ripgrep.clone(), session_workspace_roots);
+    let service = LocalToolSuite::new(shell, ripgrep.clone(), session_workspace_access);
     Ok(LocalToolComposition {
         tools: Arc::new(service),
         policy: Arc::new(policy),

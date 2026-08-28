@@ -1,6 +1,6 @@
 use super::fs_watcher::WorkspaceFileChangeSink;
 use super::workspace_environment::WorkspaceEnvironment;
-use crate::session_workspace_roots::SessionWorkspaceRoots;
+use crate::session_workspace_access::SessionWorkspaceAccess;
 use sha2::Digest;
 use sha2::Sha256;
 use std::path::Path;
@@ -26,13 +26,13 @@ pub(super) struct WorkspaceCustomizations {
     instructions: Mutex<InstructionCatalog>,
     agents: Mutex<AgentDefinitionCatalog>,
     harness_instructions: RwLock<Arc<HarnessInstructions>>,
-    session_workspace_roots: Arc<SessionWorkspaceRoots>,
+    session_workspace_access: Arc<SessionWorkspaceAccess>,
 }
 
 impl WorkspaceCustomizations {
     pub(super) fn discover(
         workspace_root: impl AsRef<Path>,
-        session_workspace_roots: Arc<SessionWorkspaceRoots>,
+        session_workspace_access: Arc<SessionWorkspaceAccess>,
     ) -> Result<Arc<Self>, zeta_agent_environment::AgentEnvironmentError> {
         let workspace_root = workspace_root.as_ref().to_path_buf();
         let instructions = InstructionCatalog::discover(&workspace_root);
@@ -52,7 +52,7 @@ impl WorkspaceCustomizations {
             instructions: Mutex::new(instructions),
             agents: Mutex::new(agents),
             harness_instructions: RwLock::new(harness_instructions),
-            session_workspace_roots,
+            session_workspace_access,
         }))
     }
 
@@ -107,11 +107,21 @@ impl HarnessContextProvider for WorkspaceCustomizations {
                 .unwrap_or_else(std::sync::PoisonError::into_inner),
         );
         let roots = self
-            .session_workspace_roots
-            .additional_roots(request.session_id)
+            .session_workspace_access
+            .snapshot_for(
+                request.session_id,
+                zeta_workspace::WorkspaceCapability::MutateRepository,
+            )
+            .map_err(|error| CoreError::Context(error.to_string()))?
             .into_iter()
-            .filter(|root| root.is_active())
-            .map(|root| root.root().canonical_path().to_path_buf())
+            .flat_map(|snapshot| {
+                snapshot
+                    .additional_roots()
+                    .iter()
+                    .filter(|root| root.is_active())
+                    .map(|root| root.root().canonical_path().to_path_buf())
+                    .collect::<Vec<_>>()
+            })
             .collect::<Vec<_>>();
         let environment = self
             .environment

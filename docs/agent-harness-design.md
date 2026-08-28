@@ -133,10 +133,7 @@ loop:
 user-role context 放在 durable Thread history 之后，因此目录变化只改请求尾部，不改 system instructions，
 也不制造持久用户消息。
 
-职责边界：`zeta-agent-environment` 只拥有不可变值、根目录不变量和确定性渲染；App Server 的
-`workspace_environment` 执行平台与 Git 采集，`session_workspace_roots` 保存每个 Session 的已授权附加根；
-Core 的 `HarnessContextProvider` 在每次模型调用边界冻结两者，并由 Context Planner 负责预算与位置。
-环境 crate 不执行命令、不保存 Session、不签发权限，也不参与工具路径判定。
+职责边界：`zeta-agent-environment` 只拥有不可变值、根目录不变量和确定性渲染；App Server 的 `workspace_environment` 执行平台与 Git 采集，`SessionWorkspaceAccess` 保存每个 Session 的 `WorkspaceAccessAuthority`；Core 的 `HarnessContextProvider` 在每次模型调用边界冻结两者，并由 Context Planner 负责预算与位置。环境 crate 不执行命令、不保存 Session、不签发权限，也不参与工具路径判定。
 
 ### 4.3 Workspace Instruction 发现与注入
 

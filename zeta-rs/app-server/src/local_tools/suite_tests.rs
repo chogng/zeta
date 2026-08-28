@@ -39,19 +39,19 @@ fn additional_root_resolution_is_bound_to_the_exact_session_and_lease() {
     std::fs::write(&additional_file, "extra").unwrap();
     let primary_authorization = authorization(primary.path());
     let additional_authorization = authorization(additional.path());
+    let additional_root = additional_authorization.root().clone();
     let primary_workspace = primary_authorization
         .require(WorkspaceCapability::ExecuteProcess)
         .unwrap();
-    let access = Arc::new(crate::session_workspace_roots::SessionWorkspaceRoots::default());
+    let access = Arc::new(crate::session_workspace_access::SessionWorkspaceAccess::default());
     let session_id = SessionId::new("session-with-extra").unwrap();
-    access.replace_additional(
-        session_id.clone(),
-        vec![
-            additional_authorization
-                .require(WorkspaceCapability::MutateRepository)
-                .unwrap(),
-        ],
-    );
+    access
+        .add_directory(
+            session_id.clone(),
+            primary_authorization.root().clone(),
+            additional_authorization,
+        )
+        .unwrap();
     let ripgrep = RipgrepExecutable::from_path(std::env::current_exe().unwrap()).unwrap();
     let shell = LocalShellToolService::new_with_action_policy_revision(
         primary_workspace,
@@ -111,7 +111,10 @@ fn additional_root_resolution_is_bound_to_the_exact_session_and_lease() {
             .is_err()
     );
 
-    additional_authorization.revoke();
+    assert_eq!(
+        access.remove_directory(&session_id, additional_root.canonical_path()),
+        zeta_workspace_access::WorkspaceAccessMutation::RemovedDirectory
+    );
     assert!(
         suite
             .resolve(

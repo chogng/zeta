@@ -15,8 +15,14 @@ pub(crate) struct StatusViewData<'a> {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum RemainingContextWindow {
-    Exact(u64),
-    Estimated(u64),
+    Exact {
+        remaining_tokens: u64,
+        available_tokens: u64,
+    },
+    Estimated {
+        remaining_tokens: u64,
+        available_tokens: u64,
+    },
     Unknown,
 }
 
@@ -42,7 +48,7 @@ pub(crate) fn status_view(data: StatusViewData<'_>) -> PaneViewModel<SelectionVi
                     ),
                     detail("Session ID", data.session_id),
                     detail("Thread ID", data.thread_id),
-                    detail("Thread sequence", data.thread_sequence.to_string()),
+                    detail("Thread version", data.thread_sequence.to_string()),
                 ],
             )],
         )
@@ -53,7 +59,7 @@ pub(crate) fn status_view(data: StatusViewData<'_>) -> PaneViewModel<SelectionVi
 }
 
 fn detail(label: &str, value: impl Into<String>) -> SelectionItem {
-    SelectionItem::new(label).with_description(value)
+    SelectionItem::detail(label, value)
 }
 
 fn format_optional_tokens(tokens: Option<u64>) -> String {
@@ -62,10 +68,33 @@ fn format_optional_tokens(tokens: Option<u64>) -> String {
 
 fn format_remaining_context(remaining: RemainingContextWindow) -> String {
     match remaining {
-        RemainingContextWindow::Exact(tokens) => format_tokens(tokens),
-        RemainingContextWindow::Estimated(tokens) => format!("~{}", format_tokens(tokens)),
+        RemainingContextWindow::Exact {
+            remaining_tokens,
+            available_tokens,
+        } => format_remaining_tokens(remaining_tokens, available_tokens),
+        RemainingContextWindow::Estimated {
+            remaining_tokens,
+            available_tokens,
+        } => format!(
+            "~{}",
+            format_remaining_tokens(remaining_tokens, available_tokens)
+        ),
         RemainingContextWindow::Unknown => "unknown".into(),
     }
+}
+
+fn format_remaining_tokens(remaining_tokens: u64, available_tokens: u64) -> String {
+    let percentage_tenths = if available_tokens == 0 {
+        0
+    } else {
+        (u128::from(remaining_tokens) * 1_000 / u128::from(available_tokens)).min(1_000) as u64
+    };
+    format!(
+        "{} ({}.{:01}%)",
+        format_tokens(remaining_tokens),
+        percentage_tenths / 10,
+        percentage_tenths % 10
+    )
 }
 
 fn format_tokens(tokens: u64) -> String {

@@ -34,7 +34,7 @@ Desktop Search contrib 只拥有查询表单、取消时机、增量结果投影
 | 结果分组、高亮、状态和重新搜索取消 | Renderer | ✅ |
 | IPC sender、exact shape 与输入上限的快速校验 | Electron Main | ✅ |
 | workspace root 授权与 `rg` executable 冻结 | Rust / App Server composition | ✅ |
-| 主工作目录与附加目录的 Search scope | `zeta-add-dir` + App Server | 领域模型已实现，runtime 尚未接入 |
+| 主工作目录与附加目录的 Search scope | `zeta-workspace-access` + App Server | 权限 authority 已接入，Search runtime 尚未消费附加根 |
 | 查询校验、`rg` 进程、结果解析、分页与取消 | `zeta-search` | ✅ |
 | connection ID → `SearchOwner`、DTO 转换与稳定 RPC error | App Server | ✅ |
 | wire DTO、method registry、schema 与 TypeScript bindings | `zeta-app-server-protocol` | ✅ |
@@ -103,11 +103,7 @@ SearchViewPane
 近期只在现有 contract 内完善可用性：空结果/错误呈现、查询历史和搜索中再次提交。结果点击必须
 等待受信 file-content API 与 editor opening contract，不由 Search 绕过。
 
-当前只有一个主工作目录；`zeta-add-dir` 已实现纯 scope contract，但 App Server/Search runtime
-尚未接入。未来 Search scope 由主工作目录和全部具备文件读取权限的附加目录组成，不把附加目录
-提升为独立项目，也不触发项目配置加载。无论目录来自启动参数、会话命令还是持久
-`additionalDirectories`，只要其 file-access grant 有效，Search 都可以消费它；Agent Import 的
-一次性来源则不能自动进入 Search。
+当前 Search runtime 只消费主工作目录；`zeta-workspace-access` 已实现并接入 Session 权限 authority，但 Search 尚未冻结它的 capability snapshot。未来 Search scope 由主工作目录和全部具备文件读取权限的附加目录组成，不把附加目录提升为独立项目，也不触发项目配置加载。无论目录来自启动参数、会话命令还是持久 `additionalDirectories`，只要其 file-access grant 有效，Search 都可以消费它；Agent Import 的一次性来源则不能自动进入 Search。
 
 多 root Search 不能继续只返回裸 relative path。协议必须增加稳定 root identity 或 root alias，
 使 `src/lib.rs` 能明确归属于主目录或某个附加目录，并避免不同 root 的同名 path 碰撞。Glob、

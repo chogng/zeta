@@ -1,5 +1,5 @@
 [package]
-name = "zeta-add-dir"
+name = "zeta-workspace-access"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -8,7 +8,7 @@ readme = "README.md"
 
 [lib]
 doctest = false
-name = "zeta_add_dir"
+name = "zeta_workspace_access"
 path = "src/lib.rs"
 
 [dependencies]

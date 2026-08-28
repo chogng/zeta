@@ -7,7 +7,6 @@ use super::decode;
 use super::result;
 use super::workspace_runtime::WorkspaceRuntimeError;
 use serde_json::Value;
-use zeta_add_dir::DirectoryScopeMutation;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryAddParams;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryDto;
@@ -37,6 +36,7 @@ use zeta_config::WorkspaceTrustSetting;
 use zeta_workspace::WorkspaceRoot;
 use zeta_workspace::WorkspaceTrustDecision;
 use zeta_workspace::WorkspaceTrustSource;
+use zeta_workspace_access::WorkspaceAccessMutation;
 
 impl AppServer {
     pub(super) fn workspace_additional_directory_list(
@@ -356,19 +356,19 @@ fn additional_directory_dtos(
 }
 
 fn additional_directory_mutation(
-    mutation: DirectoryScopeMutation,
+    mutation: WorkspaceAccessMutation,
 ) -> WorkspaceAdditionalDirectoryMutationDto {
     match mutation {
-        DirectoryScopeMutation::AddedDirectory | DirectoryScopeMutation::AddedSource => {
+        WorkspaceAccessMutation::AddedDirectory | WorkspaceAccessMutation::AddedSource => {
             WorkspaceAdditionalDirectoryMutationDto::Added
         }
-        DirectoryScopeMutation::AlreadyPresent => {
+        WorkspaceAccessMutation::AlreadyPresent => {
             WorkspaceAdditionalDirectoryMutationDto::AlreadyPresent
         }
-        DirectoryScopeMutation::RemovedDirectory | DirectoryScopeMutation::RemovedSource => {
+        WorkspaceAccessMutation::RemovedDirectory | WorkspaceAccessMutation::RemovedSource => {
             WorkspaceAdditionalDirectoryMutationDto::Removed
         }
-        DirectoryScopeMutation::NotPresent => WorkspaceAdditionalDirectoryMutationDto::NotPresent,
+        WorkspaceAccessMutation::NotPresent => WorkspaceAdditionalDirectoryMutationDto::NotPresent,
     }
 }
 

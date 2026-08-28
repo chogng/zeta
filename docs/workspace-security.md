@@ -1,10 +1,6 @@
 # 工作区安全边界
 
-> 本文拥有跨 crate 的工作区身份、目录作用域和信任语义。Rust 精确契约由
-> [`zeta-rs/workspace/README.md`](../zeta-rs/workspace/README.md) 与
-> [`zeta-rs/add-dir/README.md`](../zeta-rs/add-dir/README.md) 分别维护。Agent 自定义 artifact 与
-> 外部 Import/source registration 的生命周期由
-> [`agent-customizations.md`](agent-customizations.md) 维护。
+> 本文拥有跨 crate 的工作区身份、目录作用域和信任语义。Rust 精确契约由 [`zeta-rs/workspace/README.md`](../zeta-rs/workspace/README.md) 与 [`zeta-rs/workspace-access/README.md`](../zeta-rs/workspace-access/README.md) 分别维护。Agent 自定义 artifact 与外部 Import/source registration 的生命周期由 [`agent-customizations.md`](agent-customizations.md) 维护。
 
 ## 快速理解
 
@@ -92,10 +88,7 @@ Restricted root 的安全 Files 与 watcher 会继续保留。
 - **附加目录**：额外文件访问 root；它不成为第二个项目，也不改变主工作目录。
 - **`/cd`**：替换主工作目录，并重新建立项目配置与 session discovery 作用域。
 
-因此 `add-dir` 不只是 App Server 命令，而是独立领域边界。`zeta-add-dir` 拥有“一个主工作目录
-+ 若干显式附加目录”的访问作用域、directory source lifetime、canonical deduplication 与
-contribution policy；`zeta-workspace` 继续只拥有单 root identity、containment 与 trust token。
-App Server 负责在 safe point 解析每个 root 的 capability 与 trust、协调 consumer 和 revocation。
+`/add-dir` 只是 Session 用户修改访问权限的入口，不是领域 owner。`zeta-workspace-access` 拥有“一个主工作目录 + 若干显式附加目录”的权限 authority、directory source lifetime、canonical deduplication、revision、revocation 与 capability snapshot；`zeta-workspace` 继续只拥有单 root identity、containment 与 trust token。App Server 负责按 Session 保存 authority、解析每个 root 的 capability 与 trust，并协调 consumer。
 
 | 操作 | 改变当前项目 | 本地文件工具可访问 | 自动加载配置 | 生命周期 |
 | --- | --- | --- | --- | --- |
@@ -107,13 +100,11 @@ App Server 负责在 safe point 解析每个 root 的 capability 与 trust、协
 
 配置激活必须与文件访问授权分离。当前 Session 命令只扩展本地 `read_file`、`write_file`、`edit`、`grep` 与 `glob`：相对路径仍解析到主 Workspace，附加目录必须使用绝对路径。Shell、Terminal、`apply_patch`、Workspace Files/Search service、watcher 与项目配置发现仍只使用既有 Workspace owner。领域策略已经能表达未来允许的 Skills、Agent definitions、`enabledPlugins`、`extraKnownMarketplaces` 与 instruction allowlist，但产品 runtime 尚未激活这些贡献。
 
-Rust API 不使用 `bool` 表达这些差异。当前 `zeta-add-dir` 已用
-`AdditionalDirectorySource` 保留 directory origin，并解析
-`AdditionalDirectoryContributionPolicy`；不能把“目录已授权”直接解释为“目录配置已激活”。
+Rust API 不使用 `bool` 表达这些差异。`zeta-workspace-access` 用 `AdditionalDirectorySource` 保留 directory origin，并解析 `AdditionalDirectoryContributionPolicy`；不能把“目录已授权”直接解释为“目录配置已激活”。
 
-`/add-dir` 本身是用户对该精确目录的会话级授权动作。App Server canonicalize 后签发 `ExplicitUserDecision` lease，但不写入 User Config；移除目录、归档 Session 或切换主 Workspace 都会 revoke lease。三个附加目录 RPC 只接受声明 `workspaceTrustHost` 的产品连接；不同 Session 的附加目录表互不可见，活动 Turn 期间拒绝 mutation。
+`/add-dir` 本身是用户对该精确目录的会话级授权动作。App Server canonicalize 后签发 `ExplicitUserDecision` lease，但不写入 User Config；移除目录、归档 Session 或切换主 Workspace 都会 revoke lease。三个附加目录 RPC 只接受声明 `workspaceTrustHost` 的产品连接；不同 Session 的 authority 互不可见。活动 Turn 可以修改权限集合：确认添加后，下一次文件工具路径解析冻结最新 revision，因此同一 Turn 的后续 tool call 可以访问；移除后旧 snapshot 的 token 立即失效。已经发给模型的单次请求保持不变，下一次模型调用才会看到更新后的 environment roots。
 
-Core 在每次模型调用边界把 Session identity 交给 `HarnessContextProvider`。App Server 的 `SessionWorkspaceRoots` 据此从文件工具使用的同一授权状态取出附加根，再交给 `zeta-agent-environment` 生成强类型快照和 `<filesystem><workspace_roots>`：主 Workspace 是第一项，仍有效的附加目录随后列出，cwd 不变，相对路径仍属于主 Workspace。Core 把完整 environment snapshot 放在 durable Thread history 之后的请求尾部；它不制造持久用户消息，目录变化也不会改动 system instructions 前缀。Turn 结束后执行 `/add-dir`，下一 Turn 即可使用，移除后下一 Turn 不再出现。
+Core 在每次模型调用边界把 Session identity 交给 `HarnessContextProvider`。App Server 的 `SessionWorkspaceAccess` 从文件工具使用的同一 `WorkspaceAccessAuthority` 冻结 capability snapshot，再交给 `zeta-agent-environment` 生成强类型环境和 `<filesystem><workspace_roots>`：主 Workspace 是第一项，仍有效的附加目录随后列出，cwd 不变，相对路径仍属于主 Workspace。Core 把完整 environment snapshot 放在 durable Thread history 之后的请求尾部；它不制造持久用户消息，目录变化也不会改动 system instructions 前缀。
 
 ## 与外部 Agent 导入的关系
 
@@ -123,12 +114,10 @@ Core 在每次模型调用边界把 Session identity 交给 `HarnessContextProvi
 
 | 路径 | 目的 | 是否写入 Zeta Config | 是否授予持续文件访问 |
 | --- | --- | --- | --- |
-| `add-dir` contribution discovery | 在目录授权有效期间投影允许的贡献 | ❌ | ✅，由 `add-dir` authority 授予 |
+| `add-dir` contribution discovery | 在目录授权有效期间投影允许的贡献 | ❌ | ✅，由 Workspace access authority 授予 |
 | `import-agent` | 预览、选择并迁移外部配置 | 用户确认后由目标领域决定 | ❌ |
 
-Import source 不是 `add-dir`。`zeta-agent-import` 不能添加 root、持久化 Workspace 布局或授予持续
-文件访问。两条流程只共享 host directory picker、path containment primitive 和安全的
-source-specific parser；从用户 home 导入配置不能把 home 隐式变成 Workspace 或附加目录。
+Import source 不是 Workspace access authority。`zeta-agent-import` 不能添加 root、持久化 Workspace 布局或授予持续文件访问。两条流程只共享 host directory picker、path containment primitive 和安全的 source-specific parser；从用户 home 导入配置不能把 home 隐式变成 Workspace 或附加目录。
 
 ## 必需的产品流程
 

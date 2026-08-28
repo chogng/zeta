@@ -1,6 +1,5 @@
 [workspace]
 members = [
-    "zeta-rs/add-dir",
     "zeta-rs/agent-environment",
     "zeta-rs/agent-import",
     "zeta-rs/agents",
@@ -114,6 +113,7 @@ members = [
     "zeta-rs/utils/typst",
     "zeta-rs/windows-sandbox-rs",
     "zeta-rs/workspace",
+    "zeta-rs/workspace-access",
     "zeta-rs/search",
     "zeta-rs/server-host",
     "zeta-rs/zeta-api",
@@ -268,7 +268,6 @@ windows-sys = "0.59"
 x11rb = "0.13.2"
 zeroize = "1"
 zip = { version = "4.6.1", default-features = false, features = ["deflate-flate2"] }
-zeta-add-dir = { path = "zeta-rs/add-dir" }
 zeta-agent-environment = { path = "zeta-rs/agent-environment" }
 zeta-agent-import = { path = "zeta-rs/agent-import" }
 zeta-agents = { path = "zeta-rs/agents" }
@@ -401,6 +400,7 @@ zeta-typst = { path = "zeta-rs/utils/typst" }
 zeta-utils-pty = { path = "zeta-rs/utils/pty" }
 zeta-windows-sandbox = { path = "zeta-rs/windows-sandbox-rs" }
 zeta-workspace = { path = "zeta-rs/workspace" }
+zeta-workspace-access = { path = "zeta-rs/workspace-access" }
 zui = { path = "app/zui", default-features = false }
 
 [profile.dev]

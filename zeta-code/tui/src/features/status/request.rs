@@ -67,7 +67,10 @@ fn remaining_context_window(
         return RemainingContextWindow::Unknown;
     };
     let Some(latest_turn) = thread.turns.last() else {
-        return RemainingContextWindow::Exact(available);
+        return RemainingContextWindow::Exact {
+            remaining_tokens: available,
+            available_tokens: available,
+        };
     };
     if latest_turn.model.as_ref() != model {
         return RemainingContextWindow::Unknown;
@@ -77,8 +80,14 @@ fn remaining_context_window(
     };
     let remaining = available.saturating_sub(usage.used_tokens);
     match usage.source {
-        ModelContextUsageSource::ProviderReported => RemainingContextWindow::Exact(remaining),
-        ModelContextUsageSource::Estimated => RemainingContextWindow::Estimated(remaining),
+        ModelContextUsageSource::ProviderReported => RemainingContextWindow::Exact {
+            remaining_tokens: remaining,
+            available_tokens: available,
+        },
+        ModelContextUsageSource::Estimated => RemainingContextWindow::Estimated {
+            remaining_tokens: remaining,
+            available_tokens: available,
+        },
     }
 }
 

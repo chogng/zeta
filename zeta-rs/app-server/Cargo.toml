@@ -26,7 +26,6 @@ zeroize = { workspace = true }
 url = { workspace = true }
 zeta-app-server-protocol = { workspace = true }
 zeta-app-server-transport = { workspace = true }
-zeta-add-dir = { workspace = true }
 zeta-agent-environment = { workspace = true }
 zeta-apply-patch = { workspace = true }
 zeta-agents = { workspace = true }
@@ -78,6 +77,7 @@ zeta-rollout = { workspace = true }
 zeta-rmcp-client = { workspace = true }
 zeta-sandboxing = { workspace = true }
 zeta-workspace = { workspace = true }
+zeta-workspace-access = { workspace = true }
 zeta-search = { workspace = true }
 zeta-secrets = { workspace = true }
 zeta-shell-command = { workspace = true }

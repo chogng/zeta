@@ -1,6 +1,6 @@
 # `zeta-agent-environment`
 
-> 本 README 拥有 Agent 环境快照、文件系统根目录集合和模型环境文本的实现契约。Session 授权与撤销由 [`zeta-add-dir`](../add-dir/README.md) 和 App Server 管理；模型上下文的选择、预算与请求位置见 [`agent-harness-design.md`](../../docs/agent-harness-design.md)。
+> 本 README 拥有 Agent 环境快照、文件系统根目录集合和模型环境文本的实现契约。Session 授权与撤销由 [`zeta-workspace-access`](../workspace-access/README.md) 和 App Server 管理；模型上下文的选择、预算与请求位置见 [`agent-harness-design.md`](../../docs/agent-harness-design.md)。
 
 ## 快速理解
 

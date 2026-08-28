@@ -307,7 +307,7 @@ fn additional_directories_are_session_scoped_and_removable() {
         .add_session_additional_directory(&first.session_id, additional.path.clone())
         .unwrap();
 
-    assert_eq!(mutation, DirectoryScopeMutation::AddedDirectory);
+    assert_eq!(mutation, WorkspaceAccessMutation::AddedDirectory);
     assert_eq!(directories.len(), 1);
     assert_eq!(directories[0].root, additional.root().canonical_path());
     assert_eq!(
@@ -320,7 +320,7 @@ fn additional_directories_are_session_scoped_and_removable() {
     let (mutation, directories) = server
         .remove_session_additional_directory(&first.session_id, &additional.path)
         .unwrap();
-    assert_eq!(mutation, DirectoryScopeMutation::RemovedDirectory);
+    assert_eq!(mutation, WorkspaceAccessMutation::RemovedDirectory);
     assert!(directories.is_empty());
 }
 
@@ -1325,6 +1325,89 @@ fn active_turn_blocks_workspace_switch_without_changing_authority() {
             .read_file(Path::new("second.txt"), 1024)
             .is_err()
     );
+}
+
+#[test]
+fn active_turn_accepts_session_access_changes_and_revokes_old_snapshots() {
+    let primary = TestWorkspace::new("active-turn-add-dir-primary", "primary.txt");
+    let additional = TestWorkspace::new("active-turn-add-dir-extra", "extra.txt");
+    let server = server()
+        .with_local_workspace_host(None, host_trust())
+        .unwrap();
+    let host = server.local_workspace_host.as_ref().unwrap();
+    server
+        .commit_trusted_workspace_runtime(primary.authorization(), test_local_tools(), host)
+        .unwrap();
+    let session = server
+        .sessions
+        .create_session(CreateSessionRequest {
+            command_id: CommandId::new("create-active-add-dir-session").unwrap(),
+            title: "session".into(),
+            model: None,
+            workspace: None,
+        })
+        .unwrap();
+    let thread = server
+        .sessions
+        .create_thread(CreateSessionThreadRequest {
+            command_id: CommandId::new("create-active-add-dir-thread").unwrap(),
+            session_id: session.session_id.clone(),
+            expected_sequence: SequenceExpectation::Exact(session.sequence),
+            title: "thread".into(),
+        })
+        .unwrap();
+    server
+        .sessions
+        .threads()
+        .start_turn(
+            &thread.thread_id,
+            StartTurnRequest {
+                command_id: CommandId::new("start-active-add-dir-turn").unwrap(),
+                expected_sequence: SequenceExpectation::Exact(1),
+                model: None,
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                tool_mode: zeta_protocol::ToolMode::Direct,
+                tool_profile: None,
+                activated_skills: Vec::new(),
+                input: vec![UserInput::Text {
+                    text: "continue after the access scope changes".into(),
+                }],
+            },
+        )
+        .unwrap();
+
+    let (mutation, _) = server
+        .add_session_additional_directory(&session.session_id, additional.path.clone())
+        .unwrap();
+    assert_eq!(mutation, WorkspaceAccessMutation::AddedDirectory);
+    let access = {
+        let runtime = server
+            .workspace_runtime
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        Arc::clone(&runtime.session_workspace_access)
+    };
+    let snapshot = access
+        .snapshot_for(&session.session_id, WorkspaceCapability::MutateRepository)
+        .unwrap()
+        .unwrap();
+    assert_eq!(snapshot.revision().get(), 1);
+    assert_eq!(snapshot.additional_roots().len(), 1);
+    let frozen_token = snapshot.additional_roots()[0].clone();
+
+    let (mutation, directories) = server
+        .remove_session_additional_directory(&session.session_id, &additional.path)
+        .unwrap();
+    assert_eq!(mutation, WorkspaceAccessMutation::RemovedDirectory);
+    assert!(directories.is_empty());
+    assert!(frozen_token.ensure_active().is_err());
+    let empty_snapshot = access
+        .snapshot_for(&session.session_id, WorkspaceCapability::MutateRepository)
+        .unwrap()
+        .unwrap();
+    assert_eq!(empty_snapshot.revision().get(), 2);
+    assert!(empty_snapshot.additional_roots().is_empty());
 }
 
 fn server() -> AppServer {

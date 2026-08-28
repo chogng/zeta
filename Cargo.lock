@@ -10805,14 +10805,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-add-dir"
-version = "0.1.0"
-dependencies = [
- "tempfile",
- "zeta-workspace",
-]
-
-[[package]]
 name = "zeta-agent-environment"
 version = "0.1.0"
 
@@ -10873,7 +10865,6 @@ dependencies = [
  "url",
  "zeroize",
  "zeta-action-policy",
- "zeta-add-dir",
  "zeta-agent-environment",
  "zeta-agents",
  "zeta-app-server-protocol",
@@ -10942,6 +10933,7 @@ dependencies = [
  "zeta-web-search-extension",
  "zeta-windows-sandbox",
  "zeta-workspace",
+ "zeta-workspace-access",
 ]
 
 [[package]]
@@ -12430,6 +12422,14 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "ts-rs",
+]
+
+[[package]]
+name = "zeta-workspace-access"
+version = "0.1.0"
+dependencies = [
+ "tempfile",
+ "zeta-workspace",
 ]
 
 [[package]]

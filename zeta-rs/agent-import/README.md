@@ -208,13 +208,7 @@ authority 可以 prepare/publish 前，它们必须保持 unsupported，不能�
 当前 Config 只有逐 command mutation；atomic import batch、跨 authority prepare/publish、import
 receipt、provenance 与 remove/rollback contract 尚未实现。
 
-`zeta-add-dir` 与 Import workflow 是两条不同的 host path。前者授予附加目录的持续文件访问，并可能
-按 directory origin 临时投影 allowlisted Skills、Agent definitions 或 Plugin declaration；后者让用户
-预览、选择并迁移外部 Agent 配置，不授予持续文件访问。未来两条路径可以复用本 crate 的
-source-specific inspection/parser，但不能复用 authority、lifecycle 或 apply decision。持久
-`additionalDirectories` 是 file-access-only，不能仅因目录可访问就调用本 crate 自动发现配置。
-本 crate 不依赖 `zeta-add-dir`；App Server adapter 负责把 allowlisted inspection projection
-映射到对应的 contribution policy。
+`zeta-workspace-access` 与 Import workflow 是两条不同的 host path。前者授予附加目录的持续文件访问，并可能按 directory origin 临时投影 allowlisted Skills、Agent definitions 或 Plugin declaration；后者让用户预览、选择并迁移外部 Agent 配置，不授予持续文件访问。未来两条路径可以复用本 crate 的 source-specific inspection/parser，但不能复用 authority、lifecycle 或 apply decision。持久 `additionalDirectories` 是 file-access-only，不能仅因目录可访问就调用本 crate 自动发现配置。本 crate 不依赖 `zeta-workspace-access`；App Server adapter 负责把 allowlisted inspection projection 映射到对应的 contribution policy。
 
 原生加载是第四条独立路径：Workspace `.zeta/{instructions,skills,agents}`、Zeta user root、
 built-in resources 和 Plugin contribution 由各目标 authority 直接发现，不经过本 crate。若

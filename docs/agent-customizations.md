@@ -184,8 +184,7 @@ fragment。上图除 inspection 之外的 import apply 路径均为 Proposed。
 - Import 不授予来源目录的持续文件访问；apply 前必须重读并校验 identity/digest。
 - Source registration 只保存窄 root 与 provenance，不复制整个外部配置目录。
 - 注册 Skill source 不允许顺便激活其中的 Instructions、Agents、Hooks、MCP 或执行规则。
-- `zeta-add-dir` 是第三条独立路径：它管理目录访问生命周期，不等于 Import 或持久 source
-  registration。
+- `zeta-workspace-access` 是第三条独立路径：它管理目录访问生命周期，不等于 Import 或持久 source registration。
 
 首个完整 apply 可以只支持 Config 内部的原子 batch，但不能假装同时原子提交尚不存在的
 Instruction/Agent authority。在跨 authority prepare/publish 可用前，对应条目必须保持 unsupported。

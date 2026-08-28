@@ -9,7 +9,6 @@ use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
 use zeta_protocol::TurnId;
 use zeta_workspace::WorkspaceAuthorization;
-use zeta_workspace::WorkspaceCapability;
 use zeta_workspace::WorkspaceRoot;
 use zeta_workspace::WorkspaceTrustDecision;
 use zeta_workspace::WorkspaceTrustSource;
@@ -93,21 +92,20 @@ fn projected_changes_refresh_instruction_and_agent_snapshots() {
 fn workspace_roots_are_rendered_only_for_the_matching_session() {
     let workspace = TempDir::new().unwrap();
     let additional = TempDir::new().unwrap();
-    let access = Arc::new(crate::session_workspace_roots::SessionWorkspaceRoots::default());
+    let access = Arc::new(crate::session_workspace_access::SessionWorkspaceAccess::default());
     let first = SessionId::new("session-with-additional-directory").unwrap();
     let second = SessionId::new("session-without-additional-directory").unwrap();
     let authorization = WorkspaceAuthorization::new(
         WorkspaceRoot::open(additional.path()).unwrap(),
         WorkspaceTrustDecision::Trusted(WorkspaceTrustSource::ExplicitUserDecision),
     );
-    access.replace_additional(
-        first.clone(),
-        vec![
-            authorization
-                .require(WorkspaceCapability::MutateRepository)
-                .unwrap(),
-        ],
-    );
+    access
+        .add_directory(
+            first.clone(),
+            WorkspaceRoot::open(workspace.path()).unwrap(),
+            authorization,
+        )
+        .unwrap();
     let customizations =
         WorkspaceCustomizations::discover(workspace.path(), Arc::clone(&access)).unwrap();
 
@@ -155,7 +153,7 @@ fn workspace_roots_are_rendered_only_for_the_matching_session() {
         )
     );
 
-    access.replace_additional(first.clone(), Vec::new());
+    access.clear_session(&first);
     assert!(
         !instruction_snapshot(customizations.as_ref(), first.as_str())
             .environment()
@@ -175,7 +173,7 @@ fn workspace_roots_are_rendered_only_for_the_matching_session() {
 fn customizations(workspace: &Path) -> Arc<WorkspaceCustomizations> {
     WorkspaceCustomizations::discover(
         workspace,
-        Arc::new(crate::session_workspace_roots::SessionWorkspaceRoots::default()),
+        Arc::new(crate::session_workspace_access::SessionWorkspaceAccess::default()),
     )
     .unwrap()
 }

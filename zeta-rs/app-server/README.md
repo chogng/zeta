@@ -568,7 +568,7 @@ Workspace activation
    ├─ InstructionCatalog(.zeta/instructions)
    │  └─ Global content → HarnessContextProvider
    ├─ WorkspaceEnvironment → zeta-agent-environment snapshot
-   ├─ SessionWorkspaceRoots → current Session additional roots
+   ├─ SessionWorkspaceAccess → per-Session WorkspaceAccessAuthority
    ├─ AgentDefinitionCatalog(.zeta/agents)
    └─ FileSystemWatcher invalidation → bounded catalog refresh
 

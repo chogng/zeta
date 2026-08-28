@@ -684,6 +684,7 @@ impl AppServer {
                 expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
             })
             .map_err(core_error)?;
+        self.clear_session_additional_directories(&mutation.session_id);
         for (thread_id, _) in &thread_sequences {
             self.multi_agent
                 .cancel_descendants(thread_id)

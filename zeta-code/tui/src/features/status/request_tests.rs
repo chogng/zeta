@@ -22,7 +22,10 @@ fn remaining_context_uses_only_the_latest_matching_turn_window() {
 
     assert_eq!(
         remaining_context_window(Some(90_000), Some(&selected_model), &thread),
-        RemainingContextWindow::Exact(65_000)
+        RemainingContextWindow::Exact {
+            remaining_tokens: 65_000,
+            available_tokens: 90_000,
+        }
     );
 
     thread.turns[0].context_usage = Some(ModelContextUsage {
@@ -31,7 +34,10 @@ fn remaining_context_uses_only_the_latest_matching_turn_window() {
     });
     assert_eq!(
         remaining_context_window(Some(90_000), Some(&selected_model), &thread),
-        RemainingContextWindow::Estimated(60_000)
+        RemainingContextWindow::Estimated {
+            remaining_tokens: 60_000,
+            available_tokens: 90_000,
+        }
     );
 
     thread.turns[0].model = Some(model("another-model"));
