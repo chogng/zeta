@@ -203,6 +203,7 @@ import { projectExtensionTokenTheme } from "../services/textMate/common/textMate
 import { BrowserWorkspaceEditService } from "../services/language/browser/browserWorkspaceEditService.js";
 import { IWorkspaceEditService } from "../services/language/common/workspaceEditService.js";
 import { ITextModelService } from "../../editor/common/services/resolverService.js";
+import { registerTreeViewsDnDService } from '../../editor/common/services/treeViewsDndService.js';
 import { BrowserBulkEditService } from "../contrib/bulkEdit/browser/bulkEditService.js";
 import { IBulkEditService } from "../contrib/bulkEdit/common/bulkEdit.js";
 import { getBrowserTextModelService } from "../services/textmodelResolver/browser/browserTextModelService.js";
@@ -334,6 +335,7 @@ export class Workbench extends Disposable {
 		super();
 		const mode = WorkbenchModeRegistry.get(modeId);
 		const services = this._register(new ServiceContainer());
+		registerTreeViewsDnDService(services);
 		const instantiationService = services;
 		const logService = this._register(new LogService({ sinks: [new ConsoleLogSink()] }));
 		this.logService = logService;
