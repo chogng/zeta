@@ -42,7 +42,7 @@ Tool、approval policy 或 persistence。
 - `/connectors` 通过 typed `connector/list` 打开 Connector Pane；已连接项可以执行
   generation-checked disconnect，`connector/changed` 只在该 Pane 打开时触发 catalog refresh；
   API token/OAuth 连接仍由 Desktop Settings 完成；
-- `/add-dir <path>` 通过 typed App Server RPC 把 canonical 目录加入当前 Session 的访问作用域，默认打开读取与修改文件；本地 `read_file`、`write_file`、`edit`、`grep` 与 `glob` 随即按各自能力接受该目录中的绝对路径，下一 Turn 的 environment snapshot 只列出仍允许读取的目录。不带参数时打开可搜索列表，Enter 撤销所选目录；快照放在模型请求尾部且不写入对话历史，主 Workspace、cwd、相对路径和项目配置均不改变；
+- `/add-dir <path>` 通过 typed App Server RPC 把 canonical 目录加入当前 Session 的访问作用域，默认打开读取与修改文件；本地 `read_file`、`write_file`、`edit`、`grep` 与 `glob` 随即按各自能力接受该目录中的绝对路径，下一 Turn 的 environment snapshot 只列出仍允许读取的目录。不带参数时打开可搜索列表，Enter 撤销所选目录；快照放在模型请求尾部且不写入对话历史，主 Workspace、cwd 与相对路径均不改变；
 - 同一 profile 中的 `marketplace/changed` 与 `plugin/changed` 会触发 Skill catalog 重读，并在
   Connector Pane 已打开时重读 Connector projection；TUI 当前不提供独立 Marketplace 浏览/安装界面；
 - `/rewind` 或主界面 500 ms 内连续按两次 Esc 打开可搜索的历史消息 checkpoint Pane；Enter
@@ -113,7 +113,7 @@ transport retry。workspace mention 当前插入 workspace-relative 原子文本
 
 图片 bytes 的持久化由共享 `zeta-attachments` content-addressed store 拥有；TUI 只在草稿期间保留
 本地 data URL，并在 `StartTurn` 前通过 App Server 分块上传或安全导入远程 URL，最终只提交 typed
-`ImageAttachmentRef`。`/status` 只消费 typed model capacity 与 Turn `contextUsage`，不从 transcript 推导上下文占用。缺少 typed backend contract 的 login、compact、service tier 等命令不会进入 registry。`/statusline` 使用 `<profile>/zeta-code/statusline.json` 保存权限、模型、Git 分支和 Git 变更四个显示开关；Config 页面展示 Config、Directory permissions、Providers 与 Language servers，其中 Mouse interactions 保存在 `<profile>/zeta-code/terminal.json`，关闭后 `App::mouse_mode` 始终把拖选留给终端。Directory permissions 是当前 Session 的 Workspace access authority，不写入 terminal 设置或 User Config；执行、监听和项目配置加载目前只保存权限，相关 consumer 尚未接入附加目录。Providers 来自后端注册表，API key 只通过 `provider/apiKey/set` 写入 SecretStore，不进入普通配置或展示状态。MCP、Skill、Plugin 和 Hook 不在 Config 中重复展示。
+`ImageAttachmentRef`。`/status` 只消费 typed model capacity 与 Turn `contextUsage`，不从 transcript 推导上下文占用。缺少 typed backend contract 的 login、compact、service tier 等命令不会进入 registry。`/statusline` 使用 `<profile>/zeta-code/statusline.json` 保存权限、模型、Git 分支和 Git 变更四个显示开关；Config 页面展示 Config、Directory permissions、Providers 与 Language servers，其中 Mouse interactions 保存在 `<profile>/zeta-code/terminal.json`，关闭后 `App::mouse_mode` 始终把拖选留给终端。Directory permissions 是当前 Session 的 Workspace access authority，不写入 terminal 设置或 User Config；执行开关控制 `shell-command` 与 Session Terminal，项目配置开关加载 `.zeta/instructions` 与 `.zeta/agents`，监听开关负责在文件变化后刷新这些配置。Providers 来自后端注册表，API key 只通过 `provider/apiKey/set` 写入 SecretStore，不进入普通配置或展示状态。MCP、Skill、Plugin 和 Hook 不在 Config 中重复展示。
 
 从 repository root 启动当前 TUI：
 

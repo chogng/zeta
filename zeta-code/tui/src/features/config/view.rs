@@ -269,13 +269,13 @@ fn permission_description(permission: &WorkspaceAdditionalDirectoryPermissionDto
             "Allow file-writing tools; requires Read files"
         }
         WorkspaceAdditionalDirectoryPermissionDto::ExecuteCommands => {
-            "Permission gate; process tools are not connected yet"
+            "Allow shell-command and Session terminals; requires Read files"
         }
         WorkspaceAdditionalDirectoryPermissionDto::WatchFileChanges => {
-            "Permission gate; directory watcher is not connected yet"
+            "Refresh authorized project configuration after file changes; requires Read files"
         }
         WorkspaceAdditionalDirectoryPermissionDto::LoadProjectConfiguration => {
-            "Permission gate; project config loading is not connected yet"
+            "Load .zeta/instructions and .zeta/agents for this Session; requires Read files"
         }
     }
 }

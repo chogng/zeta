@@ -87,7 +87,12 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
         authority: CommandExecutionAuthority,
         cancellation: &CancellationToken,
     ) -> Result<CommandExecutionOutcome, ExecutionError> {
-        self.executor.execute(
+        let workspace = request
+            .workspace_root()
+            .map(WorkspaceRoot::open)
+            .transpose()
+            .map_err(|error| ExecutionError::Spawn(error.to_string()))?;
+        self.executor.execute_in_workspace(
             CommandRequest {
                 program: request.program,
                 arguments: request.arguments,
@@ -96,6 +101,7 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
             },
             authority,
             cancellation,
+            workspace.as_ref(),
         )
     }
 
@@ -166,6 +172,8 @@ pub struct ShellCommandRequest {
     program: String,
     arguments: Vec<String>,
     working_directory: PathBuf,
+    #[serde(default)]
+    workspace_root: Option<PathBuf>,
 }
 
 impl ShellCommandRequest {
@@ -185,6 +193,7 @@ impl ShellCommandRequest {
             program,
             arguments: arguments.into_iter().map(Into::into).collect(),
             working_directory: working_directory.into(),
+            workspace_root: None,
         })
     }
 
@@ -198,11 +207,13 @@ impl ShellCommandRequest {
         let decoded: Self = serde_json::from_value(arguments.clone()).map_err(|error| {
             ShellCommandToolError::InvalidArguments(format!("invalid tool arguments: {error}"))
         })?;
-        Self::new(
+        let mut request = Self::new(
             decoded.program,
             decoded.arguments,
             decoded.working_directory,
-        )
+        )?;
+        request.workspace_root = decoded.workspace_root;
+        Ok(request)
     }
 
     pub fn program(&self) -> &str {
@@ -217,6 +228,20 @@ impl ShellCommandRequest {
         &self.working_directory
     }
 
+    pub fn workspace_root(&self) -> Option<&std::path::Path> {
+        self.workspace_root.as_deref()
+    }
+
+    pub fn with_workspace_root(mut self, workspace_root: impl Into<PathBuf>) -> Self {
+        self.workspace_root = Some(workspace_root.into());
+        self
+    }
+
+    pub fn with_working_directory(mut self, working_directory: impl Into<PathBuf>) -> Self {
+        self.working_directory = working_directory.into();
+        self
+    }
+
     pub(crate) fn replace_program_and_arguments(
         self,
         program: String,
@@ -226,6 +251,7 @@ impl ShellCommandRequest {
             program,
             arguments,
             working_directory: self.working_directory,
+            workspace_root: self.workspace_root,
         }
     }
 }
@@ -240,7 +266,7 @@ pub fn shell_command_definition() -> Result<ToolDefinition, ShellCommandToolErro
             "properties": {
                 "program": { "type": "string", "description": "Program to execute." },
                 "arguments": { "type": "array", "items": { "type": "string" }, "description": "Arguments passed to the program in order." },
-                "working_directory": { "type": "string", "description": "Relative workspace directory used as the process working directory." }
+                "working_directory": { "type": "string", "description": "Directory used as the process working directory. Use an absolute path for an authorized additional directory." }
             },
             "required": ["program", "arguments", "working_directory"],
             "additionalProperties": false

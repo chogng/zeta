@@ -6,7 +6,7 @@
 
 `zeta-workspace-access` 把一个主工作目录与零个附加授权目录组合成带版本的访问权限集合。每个目录来源携带独立的读取、修改、执行、监听和配置加载权限；新增目录不改变 cwd 或项目身份，模型和工具必须按所需能力从同一权限集合冻结快照。
 
-crate 使用能力名而不是命令名：`/add-dir` 只是 Session 用户修改权限集合的一个入口，启动参数、持久配置和将来的宿主授权也会修改同一集合。模型环境和本地文件工具已经消费这份 Workspace 访问权限；Agent 进程工具与沙箱接入附加根时也必须冻结同一个 authority，不能依赖 slash command。Workspace Files 与 Workspace Search 继续绑定产品级 Workspace，不消费 Session authority。命令解析继续属于产品入口，把这层命名为 `add-dir` 会让一个入口错误拥有所有 consumer 的执行状态。
+crate 使用能力名而不是命令名：`/add-dir` 只是 Session 用户修改权限集合的一个入口，启动参数、持久配置和将来的宿主授权也会修改同一集合。模型环境、本地文件工具、进程工具、Terminal、配置 watcher 和配置加载分别按所需能力冻结同一个 authority，不能依赖 slash command。Workspace Files 与 Workspace Search 继续绑定产品级 Workspace，不消费 Session authority。命令解析继续属于产品入口，把这层命名为 `add-dir` 会让一个入口错误拥有所有 consumer 的执行状态。
 
 | 操作 | 权限集合变化 | 已冻结快照 | 新快照 |
 | --- | --- | --- | --- |

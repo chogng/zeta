@@ -5,9 +5,11 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use zeta_async_utils::CancellationSource;
+use zeta_protocol::SessionId;
 use zeta_protocol::{ToolCallId, ToolName};
 use zeta_sandboxing::{PreparedCommand, SandboxCommand, SandboxError, SandboxKind};
-use zeta_workspace::{WorkspaceTrustDecision, WorkspaceTrustSource};
+use zeta_workspace::{WorkspaceAuthorization, WorkspaceTrustDecision, WorkspaceTrustSource};
+use zeta_workspace_access::{AdditionalDirectoryPermission, AdditionalDirectoryPermissions};
 
 struct PassThroughBackend;
 
@@ -120,6 +122,92 @@ fn local_registry_accepts_shell_processes_but_rejects_ripgrep_workspace_escape_a
             })))
             .is_err()
     );
+}
+
+#[test]
+fn shell_executor_runs_in_the_session_authorized_additional_directory() {
+    let primary = TestWorkspace::new();
+    let additional = TestWorkspace::new();
+    let access = Arc::new(crate::session_workspace_access::SessionWorkspaceAccess::default());
+    let session_id = SessionId::new("shell-additional-directory").unwrap();
+    access
+        .add_directory(
+            session_id.clone(),
+            primary.root(),
+            WorkspaceAuthorization::new(
+                additional.root(),
+                WorkspaceTrustDecision::Trusted(WorkspaceTrustSource::ExplicitUserDecision),
+            ),
+            AdditionalDirectoryPermissions::new([
+                AdditionalDirectoryPermission::ReadFiles,
+                AdditionalDirectoryPermission::ExecuteCommands,
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+    let reviewer = LocalExecutorReviewer {
+        workspace: primary.trusted(),
+        ripgrep: RipgrepExecutable::from_path(primary.ripgrep()).unwrap(),
+        action_policy_revision: local_policy_revision(),
+        session_workspace_access: Arc::clone(&access),
+    };
+    let call = tool_call(json!({
+        "program": "/bin/sh",
+        "arguments": ["-lc", "pwd"],
+        "working_directory": additional.path(),
+    }));
+    let (_, request, frozen_workspace) = reviewer.prepare_shell(&call, Some(&session_id)).unwrap();
+    assert_eq!(
+        frozen_workspace.root().canonical_path(),
+        additional.root().canonical_path()
+    );
+    reviewer
+        .prepare_shell(
+            &tool_call(json!({
+                "program": "rg",
+                "arguments": ["needle", "."],
+                "working_directory": additional.path(),
+            })),
+            Some(&session_id),
+        )
+        .expect("ripgrep should use the selected additional directory boundary");
+
+    let executor = ShellCommandTool::new(
+        zeta_tools::ToolEnvironmentId::new("additional-directory-shell").unwrap(),
+        primary.root(),
+        PassThroughBackend,
+        CoreAuthorized,
+        ShellCommandLimits {
+            timeout: DEFAULT_TIMEOUT,
+            max_output_bytes: DEFAULT_OUTPUT_BYTES,
+        },
+    )
+    .unwrap();
+    let outcome = executor
+        .execute_authorized(
+            request,
+            CommandExecutionAuthority::Sandboxed(shell_sandbox()),
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+    let CommandExecutionOutcome::Completed(output) = outcome else {
+        panic!("additional-directory shell command should complete");
+    };
+    assert_eq!(
+        PathBuf::from(output.stdout.trim()).canonicalize().unwrap(),
+        additional.root().canonical_path()
+    );
+
+    access
+        .set_permissions(
+            &session_id,
+            additional.path(),
+            1,
+            AdditionalDirectoryPermissions::new([AdditionalDirectoryPermission::ReadFiles])
+                .unwrap(),
+        )
+        .unwrap();
+    assert!(frozen_workspace.ensure_active().is_err());
 }
 
 #[test]
@@ -257,6 +345,9 @@ fn apply_patch_reviewer_materializes_workspace_paths_before_policy() {
         workspace: workspace.trusted(),
         ripgrep: RipgrepExecutable::from_path(workspace.ripgrep()).unwrap(),
         action_policy_revision: local_policy_revision(),
+        session_workspace_access: Arc::new(
+            crate::session_workspace_access::SessionWorkspaceAccess::default(),
+        ),
     };
     let patch = ToolCall {
         id: ToolCallId::new("apply-patch").unwrap(),
@@ -293,6 +384,9 @@ fn local_tool_port_exposes_one_canonical_coding_tool_surface() {
         workspace: trusted.clone(),
         ripgrep: ripgrep.clone(),
         action_policy_revision: local_policy_revision(),
+        session_workspace_access: Arc::new(
+            crate::session_workspace_access::SessionWorkspaceAccess::default(),
+        ),
     });
     let shell =
         LocalShellToolService::new(trusted.clone(), ripgrep.clone(), PassThroughBackend).unwrap();

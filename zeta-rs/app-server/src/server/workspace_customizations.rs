@@ -1,9 +1,12 @@
+use super::fs_watcher::SessionDirectoryFileChangeSink;
 use super::fs_watcher::WorkspaceFileChangeSink;
 use super::workspace_environment::WorkspaceEnvironment;
 use crate::session_workspace_access::SessionWorkspaceAccess;
 use sha2::Digest;
 use sha2::Sha256;
+use std::collections::BTreeMap;
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
@@ -18,6 +21,14 @@ use zeta_core::HarnessInstructions;
 use zeta_instructions::InstructionCatalog;
 use zeta_instructions::InstructionCatalogSnapshot;
 use zeta_prompts::SYSTEM_PROMPT;
+use zeta_protocol::SessionId;
+use zeta_workspace::TrustedWorkspace;
+
+struct AdditionalCustomizationCatalog {
+    workspace: TrustedWorkspace,
+    instructions: InstructionCatalog,
+    agents: AgentDefinitionCatalog,
+}
 
 pub(super) struct WorkspaceCustomizations {
     system_body: String,
@@ -27,6 +38,7 @@ pub(super) struct WorkspaceCustomizations {
     agents: Mutex<AgentDefinitionCatalog>,
     harness_instructions: RwLock<Arc<HarnessInstructions>>,
     session_workspace_access: Arc<SessionWorkspaceAccess>,
+    additional: Mutex<BTreeMap<SessionId, BTreeMap<PathBuf, AdditionalCustomizationCatalog>>>,
 }
 
 impl WorkspaceCustomizations {
@@ -53,6 +65,7 @@ impl WorkspaceCustomizations {
             agents: Mutex::new(agents),
             harness_instructions: RwLock::new(harness_instructions),
             session_workspace_access,
+            additional: Mutex::new(BTreeMap::new()),
         }))
     }
 
@@ -68,6 +81,120 @@ impl WorkspaceCustomizations {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .snapshot()
+    }
+
+    pub(super) fn agent_snapshots_for(
+        &self,
+        session_id: &SessionId,
+    ) -> Vec<Arc<AgentDefinitionCatalogSnapshot>> {
+        let mut snapshots = vec![self.agent_snapshot()];
+        let additional = self
+            .additional
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(catalogs) = additional.get(session_id) {
+            snapshots.extend(
+                catalogs
+                    .values()
+                    .filter(|catalog| catalog.workspace.ensure_active().is_ok())
+                    .map(|catalog| catalog.agents.snapshot()),
+            );
+        }
+        snapshots
+    }
+
+    pub(super) fn instruction_snapshots_for(
+        &self,
+        session_id: &SessionId,
+    ) -> Vec<Arc<InstructionCatalogSnapshot>> {
+        let mut snapshots = vec![self.instruction_snapshot()];
+        let additional = self
+            .additional
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(catalogs) = additional.get(session_id) {
+            snapshots.extend(
+                catalogs
+                    .values()
+                    .filter(|catalog| catalog.workspace.ensure_active().is_ok())
+                    .map(|catalog| catalog.instructions.snapshot()),
+            );
+        }
+        snapshots
+    }
+
+    pub(super) fn reconcile_session(
+        &self,
+        session_id: &SessionId,
+        workspaces: Vec<TrustedWorkspace>,
+    ) {
+        let mut additional = self
+            .additional
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut previous = additional.remove(session_id).unwrap_or_default();
+        let catalogs = workspaces
+            .into_iter()
+            .map(|workspace| {
+                let root = workspace.root().canonical_path().to_path_buf();
+                let catalog = if let Some(mut catalog) = previous.remove(&root) {
+                    catalog.workspace = workspace;
+                    catalog
+                } else {
+                    AdditionalCustomizationCatalog {
+                        instructions: InstructionCatalog::discover(&root),
+                        agents: AgentDefinitionCatalog::discover(&root),
+                        workspace,
+                    }
+                };
+                (root, catalog)
+            })
+            .collect::<BTreeMap<_, _>>();
+        if !catalogs.is_empty() {
+            additional.insert(session_id.clone(), catalogs);
+        }
+    }
+
+    pub(super) fn remove_session(&self, session_id: &SessionId) {
+        self.additional
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(session_id);
+    }
+
+    pub(super) fn additional_files_changed(
+        &self,
+        session_id: &SessionId,
+        root: &Path,
+        changed: &FsChanged,
+    ) {
+        let mut additional = self
+            .additional
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let Some(catalog) = additional
+            .get_mut(session_id)
+            .and_then(|catalogs| catalogs.get_mut(root))
+        else {
+            return;
+        };
+        if catalog.workspace.ensure_active().is_err() {
+            return;
+        }
+        match changed {
+            FsChanged::RescanRequired { .. } => {
+                catalog.instructions.refresh();
+                catalog.agents.refresh();
+            }
+            FsChanged::PathsChanged { paths, .. } => {
+                if paths.iter().any(|path| affects(path, ".zeta/instructions")) {
+                    catalog.instructions.refresh();
+                }
+                if paths.iter().any(|path| affects(path, ".zeta/agents")) {
+                    catalog.agents.refresh();
+                }
+            }
+        }
     }
 
     fn refresh_instructions(&self) {
@@ -100,7 +227,7 @@ impl HarnessContextProvider for WorkspaceCustomizations {
         &self,
         request: &HarnessContextRequest<'_>,
     ) -> Result<Arc<HarnessContext>, CoreError> {
-        let instructions = Arc::clone(
+        let base_instructions = Arc::clone(
             &self
                 .harness_instructions
                 .read()
@@ -127,6 +254,36 @@ impl HarnessContextProvider for WorkspaceCustomizations {
             .environment
             .snapshot(roots)
             .map_err(|error| CoreError::Context(error.to_string()))?;
+        let additional_content = {
+            let additional = self
+                .additional
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            additional
+                .get(request.session_id)
+                .into_iter()
+                .flat_map(BTreeMap::iter)
+                .filter(|(_, catalog)| catalog.workspace.ensure_active().is_ok())
+                .filter_map(|(root, catalog)| {
+                    catalog
+                        .instructions
+                        .snapshot()
+                        .global_content()
+                        .map(|content| (root.clone(), content))
+                })
+                .collect::<Vec<_>>()
+        };
+        let instructions = if additional_content.is_empty() {
+            base_instructions
+        } else {
+            let primary = self.instruction_snapshot();
+            Arc::new(render_harness_instructions_with_additional(
+                &self.system_body,
+                &self.system_revision,
+                primary.as_ref(),
+                &additional_content,
+            ))
+        };
         Ok(Arc::new(
             HarnessContext::new(instructions.as_ref().clone()).with_environment(environment),
         ))
@@ -152,6 +309,12 @@ impl WorkspaceFileChangeSink for WorkspaceCustomizations {
     }
 }
 
+impl SessionDirectoryFileChangeSink for WorkspaceCustomizations {
+    fn session_files_changed(&self, session_id: &SessionId, root: &Path, changed: &FsChanged) {
+        self.additional_files_changed(session_id, root, changed);
+    }
+}
+
 fn affects(path: &Path, customization_root: &str) -> bool {
     path == Path::new(".zeta")
         || path.starts_with(customization_root)
@@ -171,6 +334,38 @@ fn render_harness_instructions(
     HarnessInstructions::new(system_body, workspace_content)
         .with_system_revision(system_revision)
         .with_workspace_revision(workspace_revision)
+}
+
+fn render_harness_instructions_with_additional(
+    system_body: &str,
+    system_revision: &str,
+    instructions: &InstructionCatalogSnapshot,
+    additional: &[(PathBuf, String)],
+) -> HarnessInstructions {
+    let mut sections = Vec::new();
+    if let Some(primary) = instructions.global_content() {
+        sections.push(primary);
+    }
+    sections.extend(additional.iter().map(|(root, content)| {
+        format!(
+            "<additional-directory root=\"{}\">\n{}\n</additional-directory>",
+            escape_xml(&root.display().to_string()),
+            content
+        )
+    }));
+    let content = sections.join("\n\n");
+    let workspace_revision = content_revision("workspace-instructions", &content);
+    HarnessInstructions::new(system_body, (!content.is_empty()).then_some(content))
+        .with_system_revision(system_revision)
+        .with_workspace_revision(workspace_revision)
+}
+
+fn escape_xml(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
 }
 
 fn content_revision(kind: &str, content: &str) -> String {

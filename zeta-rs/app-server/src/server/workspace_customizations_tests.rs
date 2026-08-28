@@ -171,6 +171,107 @@ fn workspace_roots_are_rendered_only_for_the_matching_session() {
     );
 }
 
+#[test]
+fn authorized_additional_customizations_are_session_scoped_refreshable_and_revocable() {
+    let workspace = TempDir::new().unwrap();
+    let additional = TempDir::new().unwrap();
+    write_instruction(additional.path(), "extra", "global", "Additional guidance.");
+    write_agent(
+        additional.path(),
+        "extra-reviewer",
+        "Reviews additional files",
+        "Review the additional directory.",
+    );
+    let access = Arc::new(crate::session_workspace_access::SessionWorkspaceAccess::default());
+    let first = SessionId::new("session-with-additional-customizations").unwrap();
+    let second = SessionId::new("session-without-additional-customizations").unwrap();
+    let root = WorkspaceRoot::open(additional.path()).unwrap();
+    access
+        .add_directory(
+            first.clone(),
+            WorkspaceRoot::open(workspace.path()).unwrap(),
+            WorkspaceAuthorization::new(
+                root.clone(),
+                WorkspaceTrustDecision::Trusted(WorkspaceTrustSource::ExplicitUserDecision),
+            ),
+            zeta_workspace_access::AdditionalDirectoryPermissions::new([
+                zeta_workspace_access::AdditionalDirectoryPermission::ReadFiles,
+                zeta_workspace_access::AdditionalDirectoryPermission::LoadProjectConfiguration,
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+    let customizations =
+        WorkspaceCustomizations::discover(workspace.path(), Arc::clone(&access)).unwrap();
+    let workspaces = access
+        .snapshot_for(
+            &first,
+            zeta_workspace::WorkspaceCapability::LoadExecutableConfiguration,
+        )
+        .unwrap()
+        .unwrap()
+        .additional_roots()
+        .to_vec();
+    customizations.reconcile_session(&first, workspaces);
+
+    assert!(
+        instruction_snapshot(customizations.as_ref(), first.as_str())
+            .instructions()
+            .workspace_instructions()
+            .unwrap()
+            .contains("Additional guidance.")
+    );
+    assert!(
+        instruction_snapshot(customizations.as_ref(), second.as_str())
+            .instructions()
+            .workspace_instructions()
+            .is_none()
+    );
+    assert_eq!(customizations.agent_snapshots_for(&first).len(), 2);
+    assert_eq!(customizations.agent_snapshots_for(&second).len(), 1);
+
+    write_instruction(
+        additional.path(),
+        "extra",
+        "global",
+        "Refreshed additional guidance.",
+    );
+    customizations.additional_files_changed(
+        &first,
+        root.canonical_path(),
+        &FsChanged::PathsChanged {
+            workspace_folder_id: None,
+            paths: vec![PathBuf::from(".zeta/instructions/extra.md")],
+        },
+    );
+    assert!(
+        instruction_snapshot(customizations.as_ref(), first.as_str())
+            .instructions()
+            .workspace_instructions()
+            .unwrap()
+            .contains("Refreshed additional guidance.")
+    );
+
+    access
+        .set_permissions(
+            &first,
+            root.canonical_path(),
+            1,
+            zeta_workspace_access::AdditionalDirectoryPermissions::new([
+                zeta_workspace_access::AdditionalDirectoryPermission::ReadFiles,
+            ])
+            .unwrap(),
+        )
+        .unwrap();
+    customizations.reconcile_session(&first, Vec::new());
+    assert!(
+        instruction_snapshot(customizations.as_ref(), first.as_str())
+            .instructions()
+            .workspace_instructions()
+            .is_none()
+    );
+}
+
 fn customizations(workspace: &Path) -> Arc<WorkspaceCustomizations> {
     WorkspaceCustomizations::discover(
         workspace,

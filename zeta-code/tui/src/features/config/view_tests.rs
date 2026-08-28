@@ -168,6 +168,22 @@ fn directory_permission_items_emit_revision_bound_complete_permission_sets() {
         Some("Allow read_file, grep and glob [ ✔ ]")
     );
     let execute = &state.visible_items()[2];
+    assert_eq!(
+        execute.description(),
+        Some("Allow shell-command and Session terminals; requires Read files [   ]")
+    );
+    assert_eq!(
+        state.visible_items()[3].description(),
+        Some(
+            "Refresh authorized project configuration after file changes; requires Read files [   ]"
+        )
+    );
+    assert_eq!(
+        state.visible_items()[4].description(),
+        Some(
+            "Load .zeta/instructions and .zeta/agents for this Session; requires Read files [   ]"
+        )
+    );
     assert!(matches!(
         view.actions.get(execute.id().unwrap()).unwrap(),
         ConfigSelectionAction::SetAdditionalDirectoryPermissions(edit)

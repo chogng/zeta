@@ -511,7 +511,7 @@ fn additional_directory_permissions_are_revision_bound_and_filter_capability_sna
             .is_empty()
     );
 
-    let stale: serde_json::Value = serde_json::from_str(
+    let activated: serde_json::Value = serde_json::from_str(
         &server.handle_json(
             &mut connection,
             &serde_json::json!({
@@ -521,7 +521,115 @@ fn additional_directory_permissions_are_revision_bound_and_filter_capability_sna
                 "params": {
                     "sessionId": session.session_id,
                     "root": additional.path,
-                    "expectedRevision": 1,
+                    "expectedRevision": 2,
+                    "permissions": ["readFiles", "executeCommands", "watchFileChanges", "loadProjectConfiguration"]
+                }
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    assert_eq!(activated["result"]["revision"], 3);
+    {
+        let runtime = server
+            .workspace_runtime
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        assert_eq!(runtime.session_additional_directory_watchers.len(), 1);
+        assert_eq!(
+            runtime
+                .session_workspace_access
+                .snapshot_for(&session.session_id, WorkspaceCapability::ExecuteProcess)
+                .unwrap()
+                .unwrap()
+                .additional_roots()
+                .len(),
+            1
+        );
+    }
+    let terminal: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 5,
+                "method": "terminal/createInSessionDirectory",
+                "params": {
+                    "sessionId": session.session_id,
+                    "root": additional.path,
+                    "rows": 24,
+                    "cols": 80,
+                    "profile": {"type": "default"},
+                    "lifecycle": {"type": "connectionOwned"}
+                }
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    let terminal_id = terminal["result"]["terminalId"]
+        .as_str()
+        .expect("authorized additional-directory terminal should start")
+        .to_owned();
+
+    let deactivated: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 6,
+                "method": "workspace/additionalDirectories/permissions/set",
+                "params": {
+                    "sessionId": session.session_id,
+                    "root": additional.path,
+                    "expectedRevision": 3,
+                    "permissions": ["readFiles"]
+                }
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    assert_eq!(deactivated["result"]["revision"], 4);
+    assert!(
+        server
+            .workspace_runtime
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .session_additional_directory_watchers
+            .is_empty()
+    );
+    let revoked_terminal: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 7,
+                "method": "terminal/read",
+                "params": {
+                    "terminalId": terminal_id,
+                    "afterSequence": 0,
+                    "afterCommandSequence": 0,
+                    "maxChunks": 1
+                }
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    assert_eq!(revoked_terminal["error"]["message"], "TerminalNotFound");
+
+    let stale: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 8,
+                "method": "workspace/additionalDirectories/permissions/set",
+                "params": {
+                    "sessionId": session.session_id,
+                    "root": additional.path,
+                    "expectedRevision": 3,
                     "permissions": ["readFiles", "writeFiles"]
                 }
             })

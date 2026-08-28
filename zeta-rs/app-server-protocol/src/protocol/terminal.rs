@@ -4,6 +4,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use ts_rs::TS;
+use zeta_protocol::SessionId;
 
 /// One server-owned shell profile available to interactive terminal clients.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -48,6 +49,20 @@ pub struct TerminalCreateParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub workspace_folder_id: Option<String>,
+    #[schemars(range(min = 1, max = 512))]
+    pub rows: u16,
+    #[schemars(range(min = 1, max = 512))]
+    pub cols: u16,
+    pub profile: TerminalProfileSelection,
+    pub lifecycle: TerminalLifecycle,
+}
+
+/// Starts one interactive terminal in a session-authorized additional directory.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TerminalCreateInSessionDirectoryParams {
+    pub session_id: SessionId,
+    pub root: std::path::PathBuf,
     #[schemars(range(min = 1, max = 512))]
     pub rows: u16,
     #[schemars(range(min = 1, max = 512))]

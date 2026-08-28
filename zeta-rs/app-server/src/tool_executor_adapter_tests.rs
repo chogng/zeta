@@ -39,6 +39,11 @@ use zeta_tools::ToolPayload;
 use zeta_tools::ToolRegistryGeneration;
 use zeta_tools::ToolRuntimeKey;
 use zeta_tools::ToolSchemaMode;
+use zeta_workspace::WorkspaceAuthorization;
+use zeta_workspace::WorkspaceCapability;
+use zeta_workspace::WorkspaceRoot;
+use zeta_workspace::WorkspaceTrustDecision;
+use zeta_workspace::WorkspaceTrustSource;
 
 use super::PreparedToolExecution;
 use super::ToolExecutorReviewer;
@@ -88,6 +93,16 @@ impl ToolExecutorReviewer for UnusedReviewer {
             ),
             ToolPayload::FunctionArguments(call.arguments.clone()),
         ))
+    }
+}
+
+struct WorkspaceGuardReviewer(zeta_workspace::TrustedWorkspace);
+
+impl ToolExecutorReviewer for WorkspaceGuardReviewer {
+    fn prepare(&self, call: &ToolCall) -> Result<PreparedToolExecution, CoreError> {
+        UnusedReviewer
+            .prepare(call)
+            .map(|prepared| prepared.with_workspace_guard(self.0.clone()))
     }
 }
 
@@ -166,6 +181,72 @@ fn executor_runtime_preserves_registry_binding_environment_and_output() {
     assert_eq!(
         sink.values,
         vec![(ToolOutputStream::Stdout, "executor-result".into())]
+    );
+}
+
+#[test]
+fn executor_runtime_rechecks_and_retires_a_revoked_workspace_guard() {
+    let definition = ToolDefinition::function(
+        ToolName::new("guarded-executor").unwrap(),
+        "guarded executor",
+        ToolInputSchema::parse(serde_json::json!({"type": "object"})).unwrap(),
+        ToolOutputSchema::Unspecified,
+        ToolSchemaMode::ProviderDefault,
+        ToolLoading::Eager,
+    )
+    .unwrap();
+    let binding = ToolBinding::new(
+        ToolRegistryGeneration::new(7),
+        ToolBindingId::new("binding-7").unwrap(),
+        definition.name().clone(),
+        definition.digest(),
+        ToolRuntimeKey::new("executor:9").unwrap(),
+    );
+    let workspace = tempfile::tempdir().unwrap();
+    let authorization = WorkspaceAuthorization::new(
+        WorkspaceRoot::open(workspace.path()).unwrap(),
+        WorkspaceTrustDecision::Trusted(WorkspaceTrustSource::ExplicitUserDecision),
+    );
+    let guard = authorization
+        .require(WorkspaceCapability::ExecuteProcess)
+        .unwrap();
+    let executed = Arc::new(AtomicBool::new(false));
+    let runtime = ToolExecutorRuntime::new(
+        Arc::new(RecordingExecutor {
+            definition,
+            saw_frozen_binding: Arc::clone(&executed),
+            content: Vec::new(),
+        }),
+        ToolEnvironmentId::new("workspace-7").unwrap(),
+        Arc::new(WorkspaceGuardReviewer(guard)),
+    );
+    let call = ToolCall {
+        id: ToolCallId::new("call-9").unwrap(),
+        name: ToolName::new("guarded-executor").unwrap(),
+        arguments: serde_json::json!({}),
+    };
+    runtime.prepare(&call).unwrap();
+    authorization.revoke();
+
+    let result = runtime.execute_for_turn(
+        &binding,
+        &call,
+        &ToolAuthorization::UnsandboxedGrant {
+            grant_id: GrantId::new("test"),
+        },
+        &CancellationSource::new().token(),
+        &TurnId::new("turn-9").unwrap(),
+        &mut RecordingSink::default(),
+    );
+
+    assert!(matches!(result, Err(CoreError::Execution(_))));
+    assert!(!executed.load(Ordering::SeqCst));
+    assert!(
+        runtime
+            .prepared
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_empty()
     );
 }
 

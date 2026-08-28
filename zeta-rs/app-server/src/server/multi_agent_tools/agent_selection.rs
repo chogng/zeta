@@ -29,37 +29,54 @@ pub(super) fn resolve_agent_selection(
     current_model: Option<&ModelRef>,
     available_tools: Vec<ToolName>,
     active_skills: &[FrozenSkillActivation],
-    agents: Option<&AgentDefinitionCatalogSnapshot>,
-    instructions: Option<&InstructionCatalogSnapshot>,
+    agents: &[std::sync::Arc<AgentDefinitionCatalogSnapshot>],
+    instructions: &[std::sync::Arc<InstructionCatalogSnapshot>],
 ) -> Result<ResolvedAgentSelection, CoreError> {
     let selected = match requested {
-        Some(name) => Some((
-            agents
-                .and_then(|snapshot| {
+        Some(name) => {
+            let matches = agents
+                .iter()
+                .flat_map(|snapshot| {
                     snapshot
                         .entries()
                         .iter()
-                        .find(|definition| definition.name() == name)
+                        .filter(move |definition| definition.name() == name)
+                        .map(|definition| (definition, snapshot.generation()))
                 })
-                .ok_or_else(|| {
-                    CoreError::InvalidInput(format!(
+                .collect::<Vec<_>>();
+            match matches.as_slice() {
+                [(definition, generation)] => Some((
+                    *definition,
+                    AgentDefinitionSelectionReason::Explicit,
+                    *generation,
+                )),
+                [] => {
+                    return Err(CoreError::InvalidInput(format!(
                         "Workspace Agent definition '{name}' is not available"
-                    ))
-                })?,
-            AgentDefinitionSelectionReason::Explicit,
-        )),
-        None => agents
-            .and_then(|snapshot| select_automatic(snapshot, task))
-            .map(|definition| (definition, AgentDefinitionSelectionReason::Automatic)),
+                    )));
+                }
+                _ => {
+                    return Err(CoreError::InvalidInput(format!(
+                        "Workspace Agent definition '{name}' is ambiguous across authorized directories"
+                    )));
+                }
+            }
+        }
+        None => select_automatic(agents, task).map(|(definition, generation)| {
+            (
+                definition,
+                AgentDefinitionSelectionReason::Automatic,
+                generation,
+            )
+        }),
     };
-    let Some((definition, selection_reason)) = selected else {
+    let Some((definition, selection_reason, catalog_generation)) = selected else {
         return Ok(general_selection(
             current_model,
             available_tools,
             active_skills,
         ));
     };
-    let agents = agents.expect("a selected definition has a catalog snapshot");
     let tools = resolve_tools(definition, available_tools)?;
     let skills = resolve_skills(definition, active_skills)?;
     let role_instructions = resolve_role_instructions(definition, instructions)?;
@@ -72,7 +89,7 @@ pub(super) fn resolve_agent_selection(
         .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
     let frozen = FrozenAgentDefinitionRef {
         name: definition.name().into(),
-        catalog_generation: agents.generation(),
+        catalog_generation,
         content_digest,
         selection_reason,
     };
@@ -175,23 +192,34 @@ fn as_automatic(mut activation: FrozenSkillActivation) -> FrozenSkillActivation 
 
 fn resolve_role_instructions(
     definition: &AgentDefinition,
-    instructions: Option<&InstructionCatalogSnapshot>,
+    instructions: &[std::sync::Arc<InstructionCatalogSnapshot>],
 ) -> Result<String, CoreError> {
     let mut body = definition.role_instructions().to_owned();
     for reference in definition.instructions() {
-        let artifact = instructions
-            .and_then(|snapshot| {
+        let matches = instructions
+            .iter()
+            .flat_map(|snapshot| {
                 snapshot
                     .entries()
                     .iter()
-                    .find(|artifact| artifact.name() == reference)
+                    .filter(|artifact| artifact.name() == reference)
             })
-            .ok_or_else(|| {
-                CoreError::InvalidInput(format!(
+            .collect::<Vec<_>>();
+        let artifact = match matches.as_slice() {
+            [artifact] => *artifact,
+            [] => {
+                return Err(CoreError::InvalidInput(format!(
                     "Agent definition '{}' requires unavailable Instruction '{reference}'",
                     definition.name()
-                ))
-            })?;
+                )));
+            }
+            _ => {
+                return Err(CoreError::InvalidInput(format!(
+                    "Agent definition '{}' has ambiguous Instruction reference '{reference}'",
+                    definition.name()
+                )));
+            }
+        };
         body.push_str(&format!(
             "\n\n<agent-instruction name=\"{}\">\n{}\n</agent-instruction>",
             artifact.name(),
@@ -214,32 +242,33 @@ fn parse_model_ref(reference: &str) -> Result<ModelRef, CoreError> {
 }
 
 fn select_automatic<'a>(
-    snapshot: &'a AgentDefinitionCatalogSnapshot,
+    snapshots: &'a [std::sync::Arc<AgentDefinitionCatalogSnapshot>],
     task: &str,
-) -> Option<&'a AgentDefinition> {
+) -> Option<(&'a AgentDefinition, u64)> {
     let task = normalize(task);
     let task_tokens = tokens(&task);
-    let mut candidates = snapshot
-        .entries()
+    let mut candidates = snapshots
         .iter()
-        .filter_map(|definition| {
-            let score = selection_score(definition, &task, &task_tokens);
-            (score >= MIN_AUTOMATIC_SCORE).then_some((score, definition))
+        .flat_map(|snapshot| {
+            snapshot.entries().iter().filter_map(|definition| {
+                let score = selection_score(definition, &task, &task_tokens);
+                (score >= MIN_AUTOMATIC_SCORE).then_some((score, definition, snapshot.generation()))
+            })
         })
         .collect::<Vec<_>>();
-    candidates.sort_by(|(left_score, left), (right_score, right)| {
+    candidates.sort_by(|(left_score, left, _), (right_score, right, _)| {
         right_score
             .cmp(left_score)
             .then_with(|| left.name().cmp(right.name()))
     });
-    let (best_score, best) = candidates.first()?;
+    let (best_score, best, generation) = candidates.first()?;
     if candidates
         .get(1)
-        .is_some_and(|(runner_up, _)| runner_up == best_score)
+        .is_some_and(|(runner_up, _, _)| runner_up == best_score)
     {
         return None;
     }
-    Some(best)
+    Some((best, *generation))
 }
 
 fn selection_score(

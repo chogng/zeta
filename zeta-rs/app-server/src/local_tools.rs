@@ -128,6 +128,7 @@ pub(crate) fn compose_local_tools_with_config(
         workspace: workspace.clone(),
         ripgrep: ripgrep.clone(),
         action_policy_revision: action_policy_revision.clone(),
+        session_workspace_access: Arc::clone(&session_workspace_access),
     });
     let shell_executor: Arc<dyn zeta_tools::ToolExecutor> = Arc::new(
         ShellCommandTool::new(
@@ -639,23 +640,50 @@ struct LocalExecutorReviewer {
     workspace: TrustedWorkspace,
     ripgrep: RipgrepExecutable,
     action_policy_revision: ActionPolicyRevision,
+    session_workspace_access: Arc<SessionWorkspaceAccess>,
 }
 
 impl ToolExecutorReviewer for LocalExecutorReviewer {
     fn prepare(&self, call: &ToolCall) -> Result<PreparedToolExecution, CoreError> {
+        self.prepare_for_session(call, None)
+    }
+
+    fn prepare_with_facts(
+        &self,
+        call: &ToolCall,
+        facts: &ToolExecutionFacts,
+    ) -> Result<PreparedToolExecution, CoreError> {
+        let session_id = facts
+            .execution_identity()
+            .map(|identity| identity.session_id())
+            .ok_or_else(|| {
+                CoreError::Policy("local executors require durable caller identity".into())
+            })?;
+        self.prepare_for_session(call, Some(session_id))
+    }
+}
+
+impl LocalExecutorReviewer {
+    fn prepare_for_session(
+        &self,
+        call: &ToolCall,
+        session_id: Option<&zeta_protocol::SessionId>,
+    ) -> Result<PreparedToolExecution, CoreError> {
         self.workspace
             .ensure_active()
             .map_err(|error| CoreError::Policy(error.to_string()))?;
         if call.name.as_str() == "shell-command" {
-            let (review, request) = self.prepare_shell(call)?;
+            let (review, request, workspace) = self.prepare_shell(call, session_id)?;
             return Ok(PreparedToolExecution::new(
                 review,
                 ToolPayload::FunctionArguments(json!({
                     "program": request.program(),
                     "arguments": request.arguments(),
                     "working_directory": request.working_directory(),
+                    "workspace_root": request.workspace_root(),
                 })),
-            ));
+            )
+            .with_workspace_guard(workspace));
         }
         let review = match call.name.as_str() {
             "apply_patch" => self.prepare_apply_patch(call),
@@ -667,27 +695,32 @@ impl ToolExecutorReviewer for LocalExecutorReviewer {
         Ok(PreparedToolExecution::new(
             review,
             ToolPayload::FunctionArguments(call.arguments.clone()),
-        ))
+        )
+        .with_workspace_guard(self.workspace.clone()))
     }
-}
 
-impl LocalExecutorReviewer {
     fn prepare_shell(
         &self,
         call: &ToolCall,
-    ) -> Result<(ActionReviewRequest, ShellCommandRequest), CoreError> {
+        session_id: Option<&zeta_protocol::SessionId>,
+    ) -> Result<(ActionReviewRequest, ShellCommandRequest, TrustedWorkspace), CoreError> {
+        if call.arguments.get("workspace_root").is_some() {
+            return Err(CoreError::Policy(
+                "shell-command workspace_root is host-owned".into(),
+            ));
+        }
         let mut request = ShellCommandRequest::from_arguments(&ToolPayload::FunctionArguments(
             call.arguments.clone(),
         ))
         .map_err(|error| CoreError::Policy(error.to_string()))?;
+        let (workspace, relative_working_directory, working_directory) =
+            self.resolve_execution_workspace(request.working_directory(), session_id)?;
+        request = request
+            .with_working_directory(relative_working_directory)
+            .with_workspace_root(workspace.root().canonical_path());
         if request.program() == "rg" {
-            validate_workspace_arguments(self.workspace.root(), &request)?;
+            validate_workspace_arguments(workspace.root(), &request)?;
         }
-        let working_directory = self
-            .workspace
-            .root()
-            .resolve_existing(request.working_directory())
-            .map_err(|error| CoreError::Policy(error.to_string()))?;
         if !working_directory.is_dir() {
             return Err(CoreError::Policy(
                 "shell-command working directory must be a directory".into(),
@@ -707,7 +740,7 @@ impl LocalExecutorReviewer {
         .map_err(|error| CoreError::Policy(error.to_string()))?;
         let is_ripgrep = request.program() == self.ripgrep.path().to_string_lossy();
         let capabilities = if is_ripgrep {
-            local_capabilities(self.workspace.root(), &self.ripgrep)
+            local_capabilities(workspace.root(), &self.ripgrep)
         } else {
             shell_capabilities()
         };
@@ -736,7 +769,57 @@ impl LocalExecutorReviewer {
             SandboxCompatibility::Supported(sandbox),
             self.action_policy_revision.clone(),
         );
-        Ok((review, request))
+        Ok((review, request, workspace))
+    }
+
+    fn resolve_execution_workspace(
+        &self,
+        requested: &Path,
+        session_id: Option<&zeta_protocol::SessionId>,
+    ) -> Result<(TrustedWorkspace, std::path::PathBuf, std::path::PathBuf), CoreError> {
+        if requested.is_relative() {
+            let absolute = self
+                .workspace
+                .root()
+                .resolve_existing(requested)
+                .map_err(|error| CoreError::Policy(error.to_string()))?;
+            return Ok((self.workspace.clone(), requested.to_path_buf(), absolute));
+        }
+        let mut workspaces = vec![self.workspace.clone()];
+        if let Some(session_id) = session_id
+            && let Some(snapshot) = self
+                .session_workspace_access
+                .snapshot_for(session_id, WorkspaceCapability::ExecuteProcess)
+                .map_err(|error| CoreError::Policy(error.to_string()))?
+        {
+            workspaces.extend(snapshot.additional_roots().iter().cloned());
+        }
+        let (workspace, relative) = workspaces
+            .into_iter()
+            .filter_map(|workspace| {
+                requested
+                    .strip_prefix(workspace.root().canonical_path())
+                    .or_else(|_| requested.strip_prefix(workspace.root().requested_path()))
+                    .ok()
+                    .map(|relative| (workspace, relative.to_path_buf()))
+            })
+            .max_by_key(|(workspace, _)| workspace.root().canonical_path().components().count())
+            .ok_or_else(|| {
+                CoreError::Policy(format!(
+                    "shell-command working directory is not authorized: {}",
+                    requested.display()
+                ))
+            })?;
+        let relative = if relative.as_os_str().is_empty() {
+            std::path::PathBuf::from(".")
+        } else {
+            relative
+        };
+        let absolute = workspace
+            .root()
+            .resolve_existing(&relative)
+            .map_err(|error| CoreError::Policy(error.to_string()))?;
+        Ok((workspace, relative, absolute))
     }
 
     fn prepare_apply_patch(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {

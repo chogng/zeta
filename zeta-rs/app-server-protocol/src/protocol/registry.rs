@@ -351,6 +351,7 @@ use crate::protocol::terminal::TerminalAttachResult;
 use crate::protocol::terminal::TerminalCloseParams;
 use crate::protocol::terminal::TerminalCommandStatus;
 use crate::protocol::terminal::TerminalCommandStatusEvent;
+use crate::protocol::terminal::TerminalCreateInSessionDirectoryParams;
 use crate::protocol::terminal::TerminalCreateParams;
 use crate::protocol::terminal::TerminalCreateResult;
 use crate::protocol::terminal::TerminalLifecycle;
@@ -1633,6 +1634,11 @@ client_methods! {
         response: TerminalCreateResult,
         serialization: None,
     },
+    TerminalCreateInSessionDirectory => "terminal/createInSessionDirectory" {
+        params: TerminalCreateInSessionDirectoryParams,
+        response: TerminalCreateResult,
+        serialization: SessionExclusive,
+    },
     TerminalAttach => "terminal/attach" {
         params: TerminalAttachParams,
         response: TerminalAttachResult,
@@ -2625,6 +2631,7 @@ typescript_bindings! {
     TerminalProfileSelection,
     TerminalLifecycle,
     TerminalCreateParams,
+    TerminalCreateInSessionDirectoryParams,
     TerminalCreateResult,
     TerminalReconnectLease,
     TerminalAttachParams,

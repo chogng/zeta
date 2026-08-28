@@ -28,6 +28,7 @@ use zeta_tools::ToolOutputStatus;
 use zeta_tools::ToolOutputTruncationPolicy;
 use zeta_tools::ToolPayload;
 use zeta_tools::ToolRuntimeAuthority;
+use zeta_workspace::TrustedWorkspace;
 
 /// Materializes the security review owned by one executable tool contribution.
 ///
@@ -36,6 +37,14 @@ use zeta_tools::ToolRuntimeAuthority;
 /// returned action.
 pub(crate) trait ToolExecutorReviewer: Send + Sync {
     fn prepare(&self, call: &ToolCall) -> Result<PreparedToolExecution, CoreError>;
+
+    fn prepare_with_facts(
+        &self,
+        call: &ToolCall,
+        _: &ToolExecutionFacts,
+    ) -> Result<PreparedToolExecution, CoreError> {
+        self.prepare(call)
+    }
 
     fn evidence(&self, _: &ToolCall) -> Result<Vec<ReviewEvidence>, CoreError> {
         Ok(Vec::new())
@@ -46,19 +55,34 @@ pub(crate) trait ToolExecutorReviewer: Send + Sync {
 pub(crate) struct PreparedToolExecution {
     review: ActionReviewRequest,
     payload: ToolPayload,
+    workspace_guards: Vec<TrustedWorkspace>,
 }
 
 impl PreparedToolExecution {
     pub(crate) fn new(review: ActionReviewRequest, payload: ToolPayload) -> Self {
-        Self { review, payload }
+        Self {
+            review,
+            payload,
+            workspace_guards: Vec::new(),
+        }
     }
+
+    pub(crate) fn with_workspace_guard(mut self, workspace: TrustedWorkspace) -> Self {
+        self.workspace_guards.push(workspace);
+        self
+    }
+}
+
+struct PreparedToolInvocation {
+    payload: ToolPayload,
+    workspace_guards: Vec<TrustedWorkspace>,
 }
 
 pub(crate) struct ToolExecutorRuntime {
     executor: Arc<dyn ToolExecutor>,
     environment_id: ToolEnvironmentId,
     reviewer: Arc<dyn ToolExecutorReviewer>,
-    prepared: Mutex<BTreeMap<ToolCallId, ToolPayload>>,
+    prepared: Mutex<BTreeMap<ToolCallId, PreparedToolInvocation>>,
 }
 
 impl ToolExecutorRuntime {
@@ -81,10 +105,33 @@ impl ToolExecutorRuntime {
 
     pub(crate) fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
         let prepared = self.reviewer.prepare(call)?;
+        self.store_prepared(call, prepared)
+    }
+
+    pub(crate) fn prepare_with_facts(
+        &self,
+        call: &ToolCall,
+        facts: &ToolExecutionFacts,
+    ) -> Result<ActionReviewRequest, CoreError> {
+        let prepared = self.reviewer.prepare_with_facts(call, facts)?;
+        self.store_prepared(call, prepared)
+    }
+
+    fn store_prepared(
+        &self,
+        call: &ToolCall,
+        prepared: PreparedToolExecution,
+    ) -> Result<ActionReviewRequest, CoreError> {
         self.prepared
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(call.id.clone(), prepared.payload);
+            .insert(
+                call.id.clone(),
+                PreparedToolInvocation {
+                    payload: prepared.payload,
+                    workspace_guards: prepared.workspace_guards,
+                },
+            );
         Ok(prepared.review)
     }
 
@@ -127,18 +174,28 @@ impl ToolExecutorRuntime {
     ) -> Result<ToolExecutionOutput, CoreError> {
         let operation_id = ToolOperationId::new(format!("{turn_id}:{}", call.id))
             .map_err(|error| CoreError::Execution(error.to_string()))?;
-        let payload = self
-            .prepared
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(&call.id)
-            .cloned()
-            .ok_or_else(|| {
+        let (payload, workspace_guards) = {
+            let prepared = self
+                .prepared
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let prepared = prepared.get(&call.id).ok_or_else(|| {
                 CoreError::Execution(format!(
                     "ToolExecutor call {} has no frozen prepared payload",
                     call.id
                 ))
             })?;
+            (prepared.payload.clone(), prepared.workspace_guards.clone())
+        };
+        for workspace in &workspace_guards {
+            if let Err(error) = workspace.ensure_active() {
+                self.prepared
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .remove(&call.id);
+                return Err(CoreError::Execution(error.to_string()));
+            }
+        }
         let authority = match authorization {
             ToolAuthorization::Sandboxed(policy) => ToolRuntimeAuthority::Sandboxed(*policy),
             ToolAuthorization::UnsandboxedGrant { .. }

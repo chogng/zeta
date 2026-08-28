@@ -54,11 +54,18 @@ impl<B: SandboxBackend> SandboxManager<B> {
         command: &SandboxCommand,
         policy: SandboxPolicy,
     ) -> Result<PreparedCommand, SandboxError> {
-        let working_directory = self
-            .workspace
-            .resolve_existing(command.working_directory())?;
+        self.prepare_in_workspace(command, policy, &self.workspace)
+    }
+
+    pub fn prepare_in_workspace(
+        &self,
+        command: &SandboxCommand,
+        policy: SandboxPolicy,
+        workspace: &WorkspaceRoot,
+    ) -> Result<PreparedCommand, SandboxError> {
+        let working_directory = workspace.resolve_existing(command.working_directory())?;
         let command = command.with_working_directory(working_directory);
-        self.backend.prepare(&command, policy, &self.workspace)
+        self.backend.prepare(&command, policy, workspace)
     }
 
     pub fn classify_denial(

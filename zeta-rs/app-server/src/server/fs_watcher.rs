@@ -16,6 +16,7 @@ use zeta_file_watcher::FileWatcher;
 use zeta_file_watcher::FileWatcherBackend;
 use zeta_file_watcher::FileWatcherEvent;
 use zeta_file_watcher::WatchPath;
+use zeta_protocol::SessionId;
 use zeta_workspace::WorkspaceRoot;
 
 const FILE_SYSTEM_WATCH_DEBOUNCE: Duration = Duration::from_millis(75);
@@ -29,6 +30,15 @@ pub(crate) trait WorkspaceFileChangeSink: Send + Sync {
     fn files_changed(&self, changed: &FsChanged);
 }
 
+pub(crate) trait SessionDirectoryFileChangeSink: Send + Sync {
+    fn session_files_changed(
+        &self,
+        session_id: &SessionId,
+        root: &std::path::Path,
+        changed: &FsChanged,
+    );
+}
+
 enum FileSystemWatcherObservers {
     None,
     WorkspaceRuntime {
@@ -36,6 +46,11 @@ enum FileSystemWatcherObservers {
         symbol_index: Arc<SymbolIndexRuntime>,
         code_index_semantic: Option<Arc<SemanticIndexJobController>>,
         changes: Arc<dyn WorkspaceFileChangeSink>,
+    },
+    SessionDirectory {
+        session_id: SessionId,
+        root: PathBuf,
+        changes: Arc<dyn SessionDirectoryFileChangeSink>,
     },
 }
 
@@ -208,6 +223,25 @@ impl FileSystemWatcher {
         )
     }
 
+    pub(super) fn start_for_session_directory(
+        workspace: WorkspaceRoot,
+        updates: Arc<UpdateBroker>,
+        session_id: SessionId,
+        changes: Arc<dyn SessionDirectoryFileChangeSink>,
+    ) -> Result<Self, FileSystemWatcherError> {
+        let root = workspace.canonical_path().to_path_buf();
+        Self::start_inner(
+            workspace,
+            updates,
+            None,
+            FileSystemWatcherObservers::SessionDirectory {
+                session_id,
+                root,
+                changes,
+            },
+        )
+    }
+
     fn start_inner(
         workspace: WorkspaceRoot,
         updates: Arc<UpdateBroker>,
@@ -281,8 +315,9 @@ fn watch_workspace(
     mut shutdown: tokio::sync::oneshot::Receiver<()>,
     startup: std::sync::mpsc::SyncSender<Result<(), String>>,
 ) {
-    let (code_index, symbol_index, code_index_semantic, changes) = match observers {
-        FileSystemWatcherObservers::None => (None, None, None, None),
+    let (code_index, symbol_index, code_index_semantic, changes, session_changes) = match observers
+    {
+        FileSystemWatcherObservers::None => (None, None, None, None, None),
         FileSystemWatcherObservers::WorkspaceRuntime {
             code_index,
             symbol_index,
@@ -293,7 +328,13 @@ fn watch_workspace(
             Some(symbol_index),
             code_index_semantic,
             Some(changes),
+            None,
         ),
+        FileSystemWatcherObservers::SessionDirectory {
+            session_id,
+            root,
+            changes,
+        } => (None, None, None, None, Some((session_id, root, changes))),
     };
     let Ok(tokio_runtime) = tokio::runtime::Builder::new_current_thread()
         .enable_time()
@@ -360,6 +401,15 @@ fn watch_workspace(
                 workspace_folder_id: workspace_folder_id.clone(),
             });
         }
+        if let Some((session_id, root, changes)) = &session_changes {
+            changes.session_files_changed(
+                session_id,
+                root,
+                &FsChanged::RescanRequired {
+                    workspace_folder_id: None,
+                },
+            );
+        }
         if let Some(code_index_worker) = &code_index_worker {
             code_index_worker.schedule(FileWatcherEvent::RescanRequired {
                 watched_paths: vec![workspace.canonical_path().to_path_buf()],
@@ -380,7 +430,11 @@ fn watch_workspace(
                         if let Some(changes) = &changes {
                             changes.files_changed(&changed);
                         }
-                        updates.publish_fs_changed(changed);
+                        if let Some((session_id, root, changes)) = &session_changes {
+                            changes.session_files_changed(session_id, root, &changed);
+                        } else {
+                            updates.publish_fs_changed(changed);
+                        }
                     }
                 }
             }

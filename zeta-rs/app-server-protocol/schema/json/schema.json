@@ -5059,6 +5059,22 @@
         {
           "properties": {
             "method": {
+              "const": "terminal/createInSessionDirectory",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TerminalCreateInSessionDirectoryParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "terminal/attach",
               "type": "string"
             },
@@ -8216,6 +8232,22 @@
           "properties": {
             "method": {
               "const": "terminal/create",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TerminalCreateResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "terminal/createInSessionDirectory",
               "type": "string"
             },
             "result": {
@@ -21606,6 +21638,45 @@
         "commandId",
         "status",
         "afterOutputSequence"
+      ],
+      "type": "object"
+    },
+    "TerminalCreateInSessionDirectoryParams": {
+      "additionalProperties": false,
+      "description": "Starts one interactive terminal in a session-authorized additional directory.",
+      "properties": {
+        "cols": {
+          "format": "uint16",
+          "maximum": 512,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "lifecycle": {
+          "$ref": "#/$defs/TerminalLifecycle"
+        },
+        "profile": {
+          "$ref": "#/$defs/TerminalProfileSelection"
+        },
+        "root": {
+          "type": "string"
+        },
+        "rows": {
+          "format": "uint16",
+          "maximum": 512,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "root",
+        "rows",
+        "cols",
+        "profile",
+        "lifecycle"
       ],
       "type": "object"
     },

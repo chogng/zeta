@@ -192,22 +192,24 @@ impl MultiAgentToolService {
         let identity = facts.execution_identity().ok_or_else(|| {
             CoreError::Execution("Agent coordination tool requires durable caller identity".into())
         })?;
-        let agent_snapshot = self
+        let agent_snapshots = self
             .customizations
             .as_ref()
-            .map(|customizations| customizations.agent_snapshot());
-        let instruction_snapshot = self
+            .map(|customizations| customizations.agent_snapshots_for(identity.session_id()))
+            .unwrap_or_default();
+        let instruction_snapshots = self
             .customizations
             .as_ref()
-            .map(|customizations| customizations.instruction_snapshot());
+            .map(|customizations| customizations.instruction_snapshots_for(identity.session_id()))
+            .unwrap_or_default();
         resolve_agent_selection(
             arguments.agent.as_deref(),
             &arguments.task,
             identity.model(),
             facts.available_tools().cloned().collect(),
             facts.activated_skills(),
-            agent_snapshot.as_deref(),
-            instruction_snapshot.as_deref(),
+            &agent_snapshots,
+            &instruction_snapshots,
         )
     }
 

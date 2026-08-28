@@ -1333,7 +1333,7 @@ impl ToolService for CompositeToolService {
         let (_, runtime) = self.runtime(call)?;
         match runtime {
             ToolContributionRuntime::Service(service) => service.prepare_with_facts(call, facts),
-            ToolContributionRuntime::Executor(executor) => executor.prepare(call),
+            ToolContributionRuntime::Executor(executor) => executor.prepare_with_facts(call, facts),
         }
     }
 

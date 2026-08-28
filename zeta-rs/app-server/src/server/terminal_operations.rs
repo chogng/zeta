@@ -4,6 +4,7 @@ use zeta_app_server_protocol::protocol::common::EmptyParams;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_app_server_protocol::protocol::terminal::TerminalAttachParams;
 use zeta_app_server_protocol::protocol::terminal::TerminalCloseParams;
+use zeta_app_server_protocol::protocol::terminal::TerminalCreateInSessionDirectoryParams;
 use zeta_app_server_protocol::protocol::terminal::TerminalCreateParams;
 use zeta_app_server_protocol::protocol::terminal::TerminalProfileListResult;
 use zeta_app_server_protocol::protocol::terminal::TerminalReadParams;
@@ -27,6 +28,34 @@ impl AppServer {
         let created = self
             .terminal_service_for(params.workspace_folder_id.as_deref())?
             .create(connection.connection_id, params)
+            .map_err(terminal_error)?;
+        result(&created)
+    }
+
+    pub(super) fn terminal_create_in_session_directory(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: TerminalCreateInSessionDirectoryParams = decode(params)?;
+        let workspace = self.session_additional_directory_workspace(
+            &params.session_id,
+            &params.root,
+            zeta_workspace::WorkspaceCapability::ExecuteProcess,
+        )?;
+        let created = self
+            .terminal_service()?
+            .create_in_workspace(
+                connection.connection_id,
+                TerminalCreateParams {
+                    workspace_folder_id: None,
+                    rows: params.rows,
+                    cols: params.cols,
+                    profile: params.profile,
+                    lifecycle: params.lifecycle,
+                },
+                workspace,
+            )
             .map_err(terminal_error)?;
         result(&created)
     }

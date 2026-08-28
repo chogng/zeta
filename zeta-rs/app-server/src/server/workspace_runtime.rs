@@ -78,6 +78,8 @@ pub(super) struct WorkspaceRuntime {
     pub(super) folder_file_systems: BTreeMap<String, Arc<dyn WorkspaceFileSystem>>,
     pub(super) _file_system_watcher: Option<FileSystemWatcher>,
     pub(super) _folder_file_system_watchers: Vec<FileSystemWatcher>,
+    pub(super) session_additional_directory_watchers:
+        BTreeMap<(SessionId, PathBuf), SessionAdditionalDirectoryWatcher>,
     pub(super) _git_watcher: Option<GitWatcher>,
     pub(super) git: Option<Arc<GitRuntime>>,
     pub(super) workspace_search: Option<Arc<SearchService>>,
@@ -96,6 +98,11 @@ pub(super) struct WorkspaceRuntime {
         BTreeMap<String, Arc<crate::debug_service::DebugAdapterService>>,
     session_workspace_access: Arc<SessionWorkspaceAccess>,
     pub(super) turn_executor: TurnExecutor,
+}
+
+pub(super) struct SessionAdditionalDirectoryWatcher {
+    workspace: zeta_workspace::TrustedWorkspace,
+    _watcher: FileSystemWatcher,
 }
 
 pub(super) struct SessionAdditionalDirectorySnapshot {
@@ -118,6 +125,7 @@ impl WorkspaceRuntime {
             folder_file_systems: BTreeMap::new(),
             _file_system_watcher: None,
             _folder_file_system_watchers: Vec::new(),
+            session_additional_directory_watchers: BTreeMap::new(),
             _git_watcher: None,
             git: None,
             workspace_search: None,
@@ -1467,6 +1475,7 @@ impl AppServer {
         let mutation = session_workspace_access
             .add_directory(session_id.clone(), primary, authorization, permissions)
             .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
+        self.reconcile_session_additional_directory_consumers(session_id)?;
         let snapshots =
             session_additional_directory_snapshots(&session_workspace_access, session_id);
         Ok((mutation, snapshots))
@@ -1500,6 +1509,8 @@ impl AppServer {
             Arc::clone(&runtime.session_workspace_access)
         };
         let mutation = session_workspace_access.remove_directory(session_id, root);
+        self.reconcile_session_additional_directory_consumers(session_id)?;
+        self.terminate_revoked_terminal_sessions();
         let snapshots =
             session_additional_directory_snapshots(&session_workspace_access, session_id);
         Ok((mutation, snapshots))
@@ -1542,9 +1553,82 @@ impl AppServer {
                 }
                 other => WorkspaceRuntimeError::Failed(other.to_string()),
             })?;
+        self.reconcile_session_additional_directory_consumers(session_id)?;
+        self.terminate_revoked_terminal_sessions();
         let snapshots =
             session_additional_directory_snapshots(&session_workspace_access, session_id);
         Ok((mutation, snapshots))
+    }
+
+    fn reconcile_session_additional_directory_consumers(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<(), WorkspaceRuntimeError> {
+        let (access, customizations) = {
+            let runtime = self
+                .workspace_runtime
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            (
+                Arc::clone(&runtime.session_workspace_access),
+                runtime._customizations.clone(),
+            )
+        };
+        let load_workspaces = access
+            .snapshot_for(session_id, WorkspaceCapability::LoadExecutableConfiguration)
+            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?
+            .map(|snapshot| snapshot.additional_roots().to_vec())
+            .unwrap_or_default();
+        let watch_workspaces = access
+            .snapshot_for(session_id, WorkspaceCapability::ObserveFileChanges)
+            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?
+            .map(|snapshot| snapshot.additional_roots().to_vec())
+            .unwrap_or_default();
+        if let Some(customizations) = &customizations {
+            customizations.reconcile_session(session_id, load_workspaces);
+        }
+        let desired = watch_workspaces
+            .into_iter()
+            .map(|workspace| (workspace.root().canonical_path().to_path_buf(), workspace))
+            .collect::<BTreeMap<_, _>>();
+        let mut runtime = self
+            .workspace_runtime
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        runtime
+            .session_additional_directory_watchers
+            .retain(|(candidate_session, root), _| {
+                candidate_session != session_id || desired.contains_key(root)
+            });
+        let Some(customizations) = customizations else {
+            return Ok(());
+        };
+        for (root, workspace) in desired {
+            let key = (session_id.clone(), root);
+            if let Some(existing) = runtime.session_additional_directory_watchers.get_mut(&key) {
+                existing.workspace = workspace;
+                continue;
+            }
+            let watcher = FileSystemWatcher::start_for_session_directory(
+                workspace.root().clone(),
+                Arc::clone(&self.updates),
+                session_id.clone(),
+                customizations.clone(),
+            )
+            .map_err(|error| {
+                WorkspaceRuntimeError::Failed(format!(
+                    "failed to initialize additional-directory watcher: {error}"
+                ))
+            })?;
+            runtime.session_additional_directory_watchers.insert(
+                key,
+                SessionAdditionalDirectoryWatcher {
+                    workspace,
+                    _watcher: watcher,
+                },
+            );
+        }
+        Ok(())
     }
 
     pub(super) fn clear_session_additional_directories(&self, session_id: &SessionId) {
@@ -1552,11 +1636,19 @@ impl AppServer {
             .workspace_authority_gate
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let runtime = self
+        let mut runtime = self
             .workspace_runtime
-            .read()
+            .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         runtime.session_workspace_access.clear_session(session_id);
+        runtime
+            .session_additional_directory_watchers
+            .retain(|(candidate, _), _| candidate != session_id);
+        if let Some(customizations) = &runtime._customizations {
+            customizations.remove_session(session_id);
+        }
+        drop(runtime);
+        self.terminate_revoked_terminal_sessions();
     }
 
     pub(crate) fn active_workspace_is_trusted(&self) -> bool {
@@ -1678,6 +1770,7 @@ impl AppServer {
             folder_file_systems: BTreeMap::new(),
             _file_system_watcher: Some(file_system_watcher),
             _folder_file_system_watchers: Vec::new(),
+            session_additional_directory_watchers: BTreeMap::new(),
             _git_watcher: None,
             git: Some(Arc::clone(&git)),
             workspace_search: None,
@@ -1868,6 +1961,7 @@ impl AppServer {
             folder_file_systems: BTreeMap::new(),
             _file_system_watcher: Some(file_system_watcher),
             _folder_file_system_watchers: Vec::new(),
+            session_additional_directory_watchers: BTreeMap::new(),
             _git_watcher: None,
             git: Some(Arc::clone(&git)),
             workspace_search: Some(Arc::clone(&workspace_search)),
@@ -2237,6 +2331,32 @@ impl AppServer {
         &self,
     ) -> Result<Arc<crate::terminal_service::TerminalService>, RpcError> {
         self.terminal_service_for(None)
+    }
+
+    pub(super) fn session_additional_directory_workspace(
+        &self,
+        session_id: &SessionId,
+        root: &std::path::Path,
+        capability: WorkspaceCapability,
+    ) -> Result<zeta_workspace::TrustedWorkspace, RpcError> {
+        self.sessions
+            .read_session(session_id)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let runtime = self
+            .workspace_runtime
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        runtime
+            .session_workspace_access
+            .workspace_for(session_id, root, capability)
+            .map_err(|_| RpcError::new(-32064, AppServerErrorName::TerminalOperationFailed))?
+            .ok_or_else(|| RpcError::new(-32064, AppServerErrorName::TerminalOperationFailed))
+    }
+
+    fn terminate_revoked_terminal_sessions(&self) {
+        for terminals in self.configured_terminal_services() {
+            terminals.terminate_revoked_workspaces();
+        }
     }
 
     pub(super) fn terminal_service_for(

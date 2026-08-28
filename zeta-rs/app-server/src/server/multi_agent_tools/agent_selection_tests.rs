@@ -36,8 +36,8 @@ fn automatic_selection_freezes_definition_and_resolves_capability_references() {
             ToolName::new("shell").unwrap(),
         ],
         &[],
-        Some(&agents),
-        Some(&instructions),
+        &[agents],
+        &[instructions],
     )
     .unwrap();
 
@@ -76,8 +76,8 @@ fn selected_definition_cannot_expand_the_parent_tool_ceiling() {
         None,
         vec![ToolName::new("read_file").unwrap()],
         &[],
-        Some(&agents),
-        None,
+        &[agents],
+        &[],
     )
     .err()
     .expect("definition must not add a parent tool");

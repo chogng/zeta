@@ -1977,6 +1977,9 @@ impl AppServer {
             }
             Some(ClientMethod::TerminalProfileList) => self.terminal_profile_list(&request.params),
             Some(ClientMethod::TerminalCreate) => self.terminal_create(connection, &request.params),
+            Some(ClientMethod::TerminalCreateInSessionDirectory) => {
+                self.terminal_create_in_session_directory(connection, &request.params)
+            }
             Some(ClientMethod::TerminalAttach) => self.terminal_attach(connection, &request.params),
             Some(ClientMethod::TerminalWrite) => self.terminal_write(connection, &request.params),
             Some(ClientMethod::TerminalResize) => self.terminal_resize(connection, &request.params),

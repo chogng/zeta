@@ -94,7 +94,7 @@ Restricted root 的安全 Files 与 watcher 会继续保留。
 | --- | --- | --- | --- | --- |
 | 启动时的主目录 | ✅ | 主目录 | 完整项目配置 | 直到 `/cd` 或进程结束 |
 | 启动参数 `--add-dir` | ❌ | 尚未实现 | 尚未实现 | 本次启动 |
-| 会话命令 `/add-dir` | ❌ | 主目录 + 获得对应能力的附加目录 | 由“加载项目配置”开关决定；当前加载功能尚未接入 | 当前会话 |
+| 会话命令 `/add-dir` | ❌ | 主目录 + 获得对应能力的附加目录 | 打开“加载项目配置”后，为当前 Session 加载 `.zeta/instructions` 与 `.zeta/agents` | 当前会话 |
 | 持久 `additionalDirectories` | ❌ | 尚未实现 | ❌ | 配置有效期间 |
 | `/cd` | ✅ | 以新主目录重新解析 | 加载新主目录的完整项目配置 | 直到再次切换 |
 
@@ -104,13 +104,13 @@ Restricted root 的安全 Files 与 watcher 会继续保留。
 | --- | --- | --- |
 | Read files | `read_file`、`grep`、`glob` 读取或搜索该目录 | 已生效，默认打开 |
 | Modify files | `write_file`、`edit` 修改该目录 | 已生效，默认打开 |
-| Run commands | 允许进程工具把该目录作为执行范围 | 权限已可设置；Shell 与 Terminal 尚未接入 |
-| Watch file changes | 允许后台监听该目录变化 | 权限已可设置；watcher 尚未接入 |
-| Load project configuration | 允许发现白名单内的 instructions、Skills、Agent 和插件配置 | 权限已可设置；配置发现与激活尚未接入 |
+| Run commands | 允许 `shell-command` 和 Session Terminal 在该目录启动进程 | 已生效；执行前再次检查目录凭证，关闭后终止该目录中仍活动的 Terminal |
+| Watch file changes | 允许后台监听该目录变化 | 已生效；用于刷新该 Session 已授权的项目配置，不发布为产品级 Workspace 文件事件 |
+| Load project configuration | 允许加载 `.zeta/instructions` 与 `.zeta/agents` | 已生效；只投影到授权它的 Session，关闭后立即移除 |
 
 除“读取文件”外的能力都依赖读取权限。关闭 Read files 会同时关闭该目录的其它开关；后端也拒绝“未允许读取却允许修改、执行、监听或加载配置”的无效权限组合。相对路径仍解析到主 Workspace，访问附加目录必须使用绝对路径。`apply_patch`、Workspace Files 和 Workspace Search 仍只使用产品打开的主 Workspace。
 
-Rust API 不使用一个 `bool` 表示目录是否“全权可用”。`AdditionalDirectoryPermissions` 保存完整能力集合，`AdditionalDirectorySource` 保存目录来源，`AdditionalDirectoryContributionPolicy` 只在“加载项目配置”已授权时解析允许发现的配置类型。目录已加入不能被解释成所有 Tool 都已获权，也不能被解释成目录配置已经生效。
+Rust API 不使用一个 `bool` 表示目录是否“全权可用”。`AdditionalDirectoryPermissions` 保存完整能力集合，`AdditionalDirectorySource` 保存目录来源。目录已加入不能被解释成所有 Tool 都已获权；只有打开对应开关，消费方才会取得相应能力的目录凭证。当前项目配置开关只加载 `.zeta/instructions` 与 `.zeta/agents`，不授权 Skill、Plugin、MCP、LSP、Hook 或 Workspace Search。
 
 `/add-dir` 本身是用户对该精确目录的会话级授权动作。App Server 规范化路径后签发 `ExplicitUserDecision` lease，但不写入 User Config；移除目录、归档 Session 或切换主 Workspace 都会撤销 lease。`workspace/additionalDirectories/list|add|remove|permissions/set` 只接受声明 `workspaceTrustHost` 的产品连接；不同 Session 的权限互不可见。权限更新携带期望版本，过期页面不能覆盖较新的选择。添加、移除或关闭能力都会推进版本并撤销旧凭证；同一 Turn 的后续文件 Tool 调用会取得最新能力快照。已经发给模型的单次请求保持不变，下一次模型调用才会看到更新后的可读目录。
 
@@ -154,18 +154,18 @@ authority。活动 Turn 会阻止 authority switch，直到旧 runtime 能一致
   内容替换不会自动失效信任。
 - Path validation 与后续 I/O 不是 atomic；在 hostile concurrent mutation 的 threat model 下，
   仍需 handle-relative filesystem API。
-- `/add-dir` 当前只让 `zeta code` 当前 Session 的模型环境和本地文件工具识别附加目录。Workspace Files 与 Workspace Search 继续只展示和搜索产品打开的 Workspace。`--add-dir` 启动参数、用户设置中的持久附加目录、watcher、Shell、Terminal、`apply_patch` 和项目配置加载尚未接入；Config 中相应能力开关只记录授权，不代表这些功能已经可用。
+- `/add-dir` 当前让 `zeta code` 当前 Session 的模型环境、本地读写工具、`shell-command`、Session Terminal、项目配置加载和配置 watcher 识别附加目录。Workspace Files 与 Workspace Search 继续只展示和搜索产品打开的 Workspace。`--add-dir` 启动参数、用户设置中的持久附加目录、`apply_patch`、Skill、Plugin、MCP、LSP 与 Hook 尚未接入附加目录。
 
 ## 后续计划
 
 1. 把 Session 之外的 `LaunchArgument` 与 `PersistentConfiguration` source 接入各自 host owner。
-2. 让 Agent 进程工具、watcher、`apply_patch` 和白名单配置加载使用各自的附加目录能力快照，同时保留 Session 隔离和精确撤销。
+2. 让 `apply_patch` 使用附加目录的修改能力快照；Skills、Plugin、MCP、LSP 与 Hook 若要接入，必须分别增加明确的能力和 Session 隔离。
 3. 增加 `/cd` authority switch；它替换项目 identity 并重新加载主目录配置，而不是复用
    `add-dir` mutation。
 4. 在 host trust resolver 中增加 filesystem identity change invalidation。
 5. 继续把 App Server 已提交的 capability availability 投影到更多 Workbench surface；当前
 Workspace Trust editor 与 language/diagnostics gate 已投影 Restricted/Trusted 状态。
-6. Terminal、Workspace MCP/LSP/extension activation、Hook 和 repository mutation 全部使用
+6. Workspace MCP/LSP/extension activation、Hook 和 repository mutation 全部使用
    root-bound capability。
 7. 增加 restricted-safe content Search backend，或 narrow sandboxed host-owned Search
    capability。

@@ -91,6 +91,21 @@ impl TerminalService {
         params: TerminalCreateParams,
     ) -> Result<TerminalCreateResult, TerminalError> {
         self.ensure_trusted()?;
+        let workspace = self
+            .workspace
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+        self.create_in_workspace(owner_connection_id, params, workspace)
+    }
+
+    pub(crate) fn create_in_workspace(
+        &self,
+        owner_connection_id: u64,
+        params: TerminalCreateParams,
+        workspace: TrustedWorkspace,
+    ) -> Result<TerminalCreateResult, TerminalError> {
+        validate_workspace_capability(&workspace)?;
         validate_size(params.rows, params.cols)?;
         let reconnect = match params.lifecycle {
             TerminalLifecycle::ConnectionOwned => None,
@@ -104,13 +119,7 @@ impl TerminalService {
         if sessions.len() >= MAX_ACTIVE_TERMINALS {
             return Err(TerminalError::Busy);
         }
-        let workspace_root = self
-            .workspace
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .root()
-            .canonical_path()
-            .to_path_buf();
+        let workspace_root = workspace.root().canonical_path().to_path_buf();
         let spawned = self
             .runtime
             .block_on(spawn_pty_process(
@@ -143,6 +152,7 @@ impl TerminalService {
                     .map(|lease| lease.reconnect_token.clone()),
                 process,
                 state,
+                workspace,
             },
         );
         Ok(TerminalCreateResult {
@@ -323,6 +333,20 @@ impl TerminalService {
         }
     }
 
+    pub(crate) fn terminate_revoked_workspaces(&self) {
+        let Ok(mut sessions) = self.sessions.lock() else {
+            return;
+        };
+        sessions.retain(|_, session| {
+            if session.workspace.ensure_active().is_ok() {
+                true
+            } else {
+                session.process.request_terminate();
+                false
+            }
+        });
+    }
+
     fn ensure_trusted(&self) -> Result<(), TerminalError> {
         self.workspace
             .read()
@@ -340,6 +364,9 @@ impl TerminalService {
         let session = sessions.get(terminal_id).ok_or(TerminalError::NotFound)?;
         if session.owner != TerminalOwner::Attached(owner_connection_id) {
             return Err(TerminalError::NotOwner);
+        }
+        if session.workspace.ensure_active().is_err() {
+            return Err(TerminalError::OperationFailed);
         }
         Ok(sessions)
     }
@@ -360,6 +387,7 @@ struct TerminalSession {
     reconnect_token: Option<String>,
     process: Arc<ProcessHandle>,
     state: Arc<Mutex<TerminalState>>,
+    workspace: TrustedWorkspace,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

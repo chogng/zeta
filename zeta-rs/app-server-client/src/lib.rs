@@ -112,6 +112,7 @@ use zeta_app_server_protocol::protocol::syntax::SyntaxAnalyzeResult;
 use zeta_app_server_protocol::protocol::terminal::TerminalAttachParams;
 use zeta_app_server_protocol::protocol::terminal::TerminalAttachResult;
 use zeta_app_server_protocol::protocol::terminal::TerminalCloseParams;
+use zeta_app_server_protocol::protocol::terminal::TerminalCreateInSessionDirectoryParams;
 use zeta_app_server_protocol::protocol::terminal::TerminalCreateParams;
 use zeta_app_server_protocol::protocol::terminal::TerminalCreateResult;
 use zeta_app_server_protocol::protocol::terminal::TerminalProfileListResult;
@@ -483,6 +484,14 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: TerminalCreateParams,
     ) -> Result<TerminalCreateResult, ClientError> {
         self.call(ClientMethod::TerminalCreate, params)
+    }
+
+    /// Creates an interactive terminal at one session-authorized additional directory.
+    pub fn terminal_create_in_session_directory(
+        &mut self,
+        params: TerminalCreateInSessionDirectoryParams,
+    ) -> Result<TerminalCreateResult, ClientError> {
+        self.call(ClientMethod::TerminalCreateInSessionDirectory, params)
     }
 
     /// Reattaches a reconnectable terminal and returns its rotated recovery lease.

@@ -178,4 +178,23 @@ impl SessionWorkspaceAccess {
             .map(|authority| authority.snapshot_for(capability))
             .transpose()
     }
+
+    pub(crate) fn workspace_for(
+        &self,
+        session_id: &SessionId,
+        path: &Path,
+        capability: WorkspaceCapability,
+    ) -> Result<Option<zeta_workspace::TrustedWorkspace>, WorkspaceAccessError> {
+        let Some(snapshot) = self.snapshot_for(session_id, capability)? else {
+            return Ok(None);
+        };
+        Ok(snapshot
+            .additional_roots()
+            .iter()
+            .find(|workspace| {
+                workspace.root().canonical_path() == path
+                    || workspace.root().requested_path() == path
+            })
+            .cloned())
+    }
 }

@@ -135,6 +135,16 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
         authority: CommandExecutionAuthority,
         cancellation: &CancellationToken,
     ) -> Result<CommandExecutionOutcome, ExecutionError> {
+        self.execute_in_workspace(request, authority, cancellation, None)
+    }
+
+    pub fn execute_in_workspace(
+        &self,
+        request: CommandRequest,
+        authority: CommandExecutionAuthority,
+        cancellation: &CancellationToken,
+        workspace: Option<&WorkspaceRoot>,
+    ) -> Result<CommandExecutionOutcome, ExecutionError> {
         check_cancellation_before_start(cancellation)?;
         let action_digest = format!("{}:{}", request.program, request.arguments.join("\u{1f}"));
         match self.approval_policy.requirement_for(&action_digest) {
@@ -149,7 +159,13 @@ impl<P: ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
             input,
         } = request;
         let command = SandboxCommand::new(program, arguments, working_directory);
-        let prepared = match self.sandbox.prepare(&command, authority.sandbox_policy()) {
+        let prepared = match workspace.map_or_else(
+            || self.sandbox.prepare(&command, authority.sandbox_policy()),
+            |workspace| {
+                self.sandbox
+                    .prepare_in_workspace(&command, authority.sandbox_policy(), workspace)
+            },
+        ) {
             Ok(prepared) => prepared,
             Err(error @ SandboxError::BackendUnavailable { .. })
                 if matches!(authority, CommandExecutionAuthority::Sandboxed(_)) =>
