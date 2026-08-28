@@ -42,6 +42,7 @@ export class Button extends Disposable {
 	private readonly hover = this._register(new MutableDisposable<IManagedHover>());
 	private readonly hoverGroupId: string | undefined;
 	private readonly hoverAnchorPosition: AnchorPosition | undefined;
+	private currentIcon: Icon | undefined;
 	readonly onDidClick: Event<DOMEventMap["click"]>;
 
 	constructor(container: HTMLElement, options: ButtonOptions) {
@@ -49,6 +50,7 @@ export class Button extends Disposable {
 		const ownerDocument = container.ownerDocument;
 		this.hoverGroupId = options.hoverGroupId;
 		this.hoverAnchorPosition = options.hoverAnchorPosition;
+		this.currentIcon = options.icon;
 		const domNode = h(ownerDocument, "button", {
 			properties: {
 				type: options.type ?? "button",
@@ -94,8 +96,14 @@ export class Button extends Disposable {
 
 	hasFocus(): boolean { return this.domNode.ownerDocument.activeElement === this.domNode; }
 
-	set label(value: string) { this.content.setLabel(value); }
+	set label(value: string) { this.content.setLabel(value, undefined, { icon: this.currentIcon }); }
 	get label(): string { return this.content.labelElement.textContent ?? ""; }
+
+	set icon(value: Icon | undefined) {
+		this.currentIcon = value;
+		this.content.setIcon(value);
+	}
+	get icon(): Icon | undefined { return this.currentIcon; }
 
 	toggleClassName(className: string, shouldHaveIt?: boolean): void {
 		this.root.toggleClassName(className, shouldHaveIt);
@@ -108,8 +116,8 @@ export class Button extends Disposable {
 
 	get hidden(): boolean { return this.domNode.classList.contains("hidden"); }
 
-	set checked(value: boolean) {
-		this.root.toggleClassName("checked", value);
+	set checked(value: boolean | undefined) {
+		this.root.toggleClassName("checked", value === true);
 		setAriaAttribute(this.domNode, "pressed", value);
 	}
 

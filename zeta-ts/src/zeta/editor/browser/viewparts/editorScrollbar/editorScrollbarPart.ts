@@ -4,6 +4,7 @@ import { isFiniteNumber } from "../../../../base/common/numbers.js";
 import { HorizontalScrollbar } from "../../../../base/browser/ui/scrollbar/horizontalScrollbar.js";
 import { VerticalScrollbar } from "../../../../base/browser/ui/scrollbar/verticalScrollbar.js";
 import { createScrollbarAxisMetrics, type ScrollbarAxisMetrics } from "../../../../base/browser/ui/scrollbar/scrollbarState.js";
+import { EditorOptions } from "../../../common/config/editorOptions.js";
 import { type EditorScrollPosition } from "../../../common/viewModel.js";
 import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
 
@@ -13,7 +14,8 @@ export interface EditorScrollbarPartOptions {
 	readonly container: HTMLElement;
 	readonly viewport: HTMLElement;
 	readonly scrollTo: (position: EditorScrollPosition) => void;
-	readonly scrollbarSize?: number;
+	readonly horizontalScrollbarSize?: number;
+	readonly verticalScrollbarSize?: number;
 	readonly minimumThumbSize?: number;
 	readonly horizontal?: EditorScrollbarVisibility;
 	readonly vertical?: EditorScrollbarVisibility;
@@ -29,7 +31,8 @@ export class EditorScrollbarPart extends EditorViewPart {
 	private readonly container: HTMLElement;
 	private readonly horizontal: HorizontalScrollbar;
 	private readonly vertical: VerticalScrollbar;
-	private readonly scrollbarSize: number;
+	private readonly horizontalScrollbarSize: number;
+	private readonly verticalScrollbarSize: number;
 	private readonly minimumThumbSize: number;
 	private readonly horizontalVisibility: EditorScrollbarVisibility;
 	private readonly verticalVisibility: EditorScrollbarVisibility;
@@ -47,14 +50,16 @@ export class EditorScrollbarPart extends EditorViewPart {
 			throw new TypeError("Editor scrollbar part requires a scroll callback");
 		}
 		this.container = options.container;
-		this.scrollbarSize = positiveFinite(options.scrollbarSize ?? 10, "scrollbarSize");
+		this.horizontalScrollbarSize = positiveFinite(options.horizontalScrollbarSize ?? EditorOptions.scrollbar.defaultValue.horizontalScrollbarSize, "horizontalScrollbarSize");
+		this.verticalScrollbarSize = positiveFinite(options.verticalScrollbarSize ?? EditorOptions.scrollbar.defaultValue.verticalScrollbarSize, "verticalScrollbarSize");
 		this.minimumThumbSize = positiveFinite(options.minimumThumbSize ?? 20, "minimumThumbSize");
 		this.horizontalVisibility = options.horizontal ?? "auto";
 		this.verticalVisibility = options.vertical ?? "auto";
 		if (!options.viewport.id) {
 			options.viewport.id = `stanza-editor-scroll-viewport-${EditorScrollbarPart.nextViewportId++}`;
 		}
-		options.container.style.setProperty("--stanza-editor-scrollbar-size", `${this.scrollbarSize}px`);
+		options.container.style.setProperty("--stanza-editor-horizontal-scrollbar-size", `${this.horizontalScrollbarSize}px`);
+		options.container.style.setProperty("--stanza-editor-vertical-scrollbar-size", `${this.verticalScrollbarSize}px`);
 		this.horizontalMetrics = createScrollbarAxisMetrics(0, 0, 0, 0, 0);
 		this.verticalMetrics = createScrollbarAxisMetrics(0, 0, 0, 0, 0);
 		this.horizontal = this._register(new HorizontalScrollbar(options.container, {
@@ -103,14 +108,14 @@ export class EditorScrollbarPart extends EditorViewPart {
 		);
 		const horizontalTrackSize = Math.max(
 			0,
-			layout.viewportSize.width - (verticalRendered ? this.scrollbarSize : 0),
+			layout.viewportSize.width - (verticalRendered ? this.verticalScrollbarSize : 0),
 		);
 		const verticalTrackSize = Math.max(
 			0,
-			layout.viewportSize.height - (horizontalRendered ? this.scrollbarSize : 0),
+			layout.viewportSize.height - (horizontalRendered ? this.horizontalScrollbarSize : 0),
 		);
-		this.horizontal.trackNode.setRight(verticalRendered ? this.scrollbarSize : 0);
-		this.vertical.trackNode.setBottom(horizontalRendered ? this.scrollbarSize : 0);
+		this.horizontal.trackNode.setRight(verticalRendered ? this.verticalScrollbarSize : 0);
+		this.vertical.trackNode.setBottom(horizontalRendered ? this.horizontalScrollbarSize : 0);
 		const scrollTransform = `translate3d(${layout.scrollPosition.left}px, ${layout.scrollPosition.top}px, 0)`;
 		this.horizontal.trackNode.setTransform(scrollTransform);
 		this.vertical.trackNode.setTransform(scrollTransform);

@@ -13,7 +13,7 @@ import { TextPosition, type TextRange } from '../common/core/text.js';
 import { type TextModel } from '../common/model/textModel.js';
 import { type EditorVisualLineProjection } from '../common/viewModel/modelLineProjection.js';
 import { type EditorScrollPosition } from '../common/viewModel.js';
-import { EditorLineWrapping, type IEditorOptions, isWrappingIndent, WrappingIndent } from '../common/config/editorOptions.js';
+import { EditorLineWrapping, EditorOptions, type IEditorOptions, isWrappingIndent, WrappingIndent } from '../common/config/editorOptions.js';
 import { type EditorLineVisibilitySource, ViewModelLines } from '../common/viewModel/viewModelLines.js';
 import { type EditorViewportChange, type EditorViewportLayout, ViewLayout } from '../common/viewLayout/viewLayout.js';
 import { CompositionController } from './controller/compositionController.js';
@@ -39,6 +39,7 @@ import { RulersPart, type EditorRuler } from './viewparts/rulers/rulersPart.js';
 import { EditorScrollbarPart } from './viewparts/editorScrollbar/editorScrollbarPart.js';
 import { LineNumbersPart } from './viewparts/lineNumbers/lineNumbersPart.js';
 import { MinimapPart } from './viewparts/minimap/minimapPart.js';
+import { MINIMAP_MINIMUM_EDITOR_WIDTH, MINIMAP_WIDTH } from './viewparts/minimap/minimapPresentation.js';
 import { OverviewRulerPart } from './viewparts/overviewRuler/overviewRulerPart.js';
 import { ScrollDecorationPart } from './viewparts/scrollDecoration/scrollDecorationPart.js';
 import { EditorViewContext, EditorViewPartCollection } from './view/viewPart.js';
@@ -51,6 +52,8 @@ import { createEditorRenderingContext, createEditorViewportData, type EditorRend
 import { ViewUserInputEvents } from './view/viewUserInputEvents.js';
 import { DOMLineBreaksComputer } from './view/domLineBreaksComputer.js';
 import './media/editorViewport.css';
+
+const DEFAULT_EDITOR_SCROLLBAR = EditorOptions.scrollbar.defaultValue;
 
 export type EditorViewViewportOptions = Omit<EditorViewportOptions, 'container' | 'model' | 'lineHeight' | 'ariaLabel' | 'selectionController'>;
 
@@ -626,6 +629,8 @@ export class View extends Disposable {
 			container: this.element,
 			viewport: this.element,
 			scrollTo: position => this.scrollTo(position),
+			horizontalScrollbarSize: DEFAULT_EDITOR_SCROLLBAR.horizontalScrollbarSize,
+			verticalScrollbarSize: DEFAULT_EDITOR_SCROLLBAR.verticalScrollbarSize,
 		}));
 		const minimapPart = this.viewParts.register(new MinimapPart({
 			host: this.element,
@@ -636,10 +641,11 @@ export class View extends Disposable {
 			readMarkers: () => this.viewOverlays.decorationsPart.minimapMarkers(),
 			readMarkersRevision: () => this.viewOverlays.decorationsPart.markersRevision,
 			enabled: this.minimap === EditorMinimap.On,
+			verticalScrollbarWidth: DEFAULT_EDITOR_SCROLLBAR.verticalScrollbarSize,
 		}));
 		const overviewRulerPart = this.viewParts.register(new OverviewRulerPart({
 			host: this.element,
-			minimapEnabled: this.minimap === EditorMinimap.On,
+			verticalScrollbarWidth: DEFAULT_EDITOR_SCROLLBAR.verticalScrollbarSize,
 			readLineCount: () => this.model.lineCount,
 			readMarkers: () => this.viewOverlays.decorationsPart.overviewMarkers(),
 			readMarkersRevision: () => this.viewOverlays.decorationsPart.markersRevision,
@@ -990,9 +996,12 @@ export class View extends Disposable {
 	}
 
 	private updateWrapWidth(viewportWidth: number): void {
+		const rightControlWidth = this.minimap === EditorMinimap.On && viewportWidth >= MINIMAP_MINIMUM_EDITOR_WIDTH
+			? MINIMAP_WIDTH + DEFAULT_EDITOR_SCROLLBAR.verticalScrollbarSize
+			: 0;
 		this.viewModelLines.setWrapWidth(Math.max(
 			0,
-			viewportWidth - this.gutterWidth - this.textMeasurer.horizontalPadding,
+			viewportWidth - this.gutterWidth - this.textMeasurer.horizontalPadding - rightControlWidth,
 		));
 	}
 

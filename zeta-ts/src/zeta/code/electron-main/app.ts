@@ -1,5 +1,5 @@
 import { shell } from "electron";
-import { app, BrowserWindow, dialog, ipcMain, Menu, screen, type Event as ElectronEvent } from "electron/main";
+import { app, BrowserWindow, dialog, ipcMain, Menu, screen, type Event as ElectronEvent, type MenuItemConstructorOptions } from "electron/main";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { isCancellationError } from "../../base/common/errors.js";
@@ -145,6 +145,7 @@ export class ZetaApplication extends Disposable {
 	private readonly tracking: Disposable | undefined;
 	private readonly trustedIpcRouter: TrustedIpcRouter;
 	private readonly nativeKeyboardLayout: NativeKeyboardLayoutMainService;
+	private readonly nativeMenubar: NativeMenubarMainService | undefined;
 	private readonly profileRoot: string;
 
 	private readonly workbenchWindows = new WorkbenchWindowRegistry<WorkbenchWindowRecord>();
@@ -170,6 +171,14 @@ export class ZetaApplication extends Disposable {
 		this.tracking = tracking;
 		this.trustedIpcRouter = this._register(new TrustedIpcRouter(ipcMain));
 		this.nativeKeyboardLayout = this._register(new NativeKeyboardLayoutMainService());
+		this.nativeMenubar = process.platform === "darwin"
+			? this._register(new NativeMenubarMainService({
+				applicationName: app.name,
+				setApplicationMenu: (template) => Menu.setApplicationMenu(
+					template ? Menu.buildFromTemplate([...template] as MenuItemConstructorOptions[]) : null,
+				),
+			}))
+			: undefined;
 		this.profileRoot = localProfileRoot();
 
 		app.on("before-quit", this.onBeforeQuit);
@@ -745,15 +754,13 @@ export class ZetaApplication extends Disposable {
 			returnToWorkbench: () => record.focus(),
 			openWorkspace: (root) => record.openWorkspace?.(root) ?? Promise.reject(new Error("Workspace routing is unavailable")),
 		}));
-		if (process.platform === "darwin") {
+		if (this.nativeMenubar) {
 			const nativeContextMenu = windowDisposables.add(
 				new ElectronContextMenu(window),
 			);
-			const nativeMenubar = windowDisposables.add(
-				new NativeMenubarMainService(window),
-			);
+			windowDisposables.add(this.nativeMenubar.registerWindow(window));
 			ipcRoutes.push(...nativeContextMenuIpcRoutes(nativeContextMenu));
-			ipcRoutes.push(...nativeMenubarIpcRoutes(nativeMenubar));
+			ipcRoutes.push(...nativeMenubarIpcRoutes(this.nativeMenubar, window));
 		}
 		windowDisposables.add(this.trustedIpcRouter.register(
 			{

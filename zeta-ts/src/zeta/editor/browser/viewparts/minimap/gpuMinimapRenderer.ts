@@ -29,7 +29,7 @@ export class GpuMinimapRenderer {
 	private readonly colorLocation: WebGLUniformLocation;
 	private readonly vertexBuffer: WebGLBuffer;
 	private rows: readonly MinimapRow[] = [];
-	private lineCount = 1;
+	private lineScale = MINIMAP_LINE_HEIGHT;
 	private width = 0;
 	private height = 0;
 	private available = true;
@@ -82,12 +82,12 @@ export class GpuMinimapRenderer {
 	}
 
 	/** Replaces the current bounded density data and redraws the current surface. */
-	setRows(rows: readonly MinimapRow[], lineCount: number): void {
-		if (!Number.isSafeInteger(lineCount) || lineCount < 1) {
-			throw new RangeError("Stanza GPU minimap line count must be a positive safe integer");
+	setRows(rows: readonly MinimapRow[], lineScale: number): void {
+		if (!Number.isFinite(lineScale) || lineScale <= 0) {
+			throw new RangeError("Stanza GPU minimap line scale must be positive and finite");
 		}
 		this.rows = rows;
-		this.lineCount = lineCount;
+		this.lineScale = lineScale;
 		this.draw();
 	}
 
@@ -121,7 +121,7 @@ export class GpuMinimapRenderer {
 
 		this.context.useProgram(this.program);
 		this.context.bindBuffer(this.context.ARRAY_BUFFER, this.vertexBuffer);
-		this.context.bufferData(this.context.ARRAY_BUFFER, minimapVertices(this.rows, this.lineCount, this.width, this.height), this.context.DYNAMIC_DRAW);
+		this.context.bufferData(this.context.ARRAY_BUFFER, minimapVertices(this.rows, this.lineScale, this.width, this.height), this.context.DYNAMIC_DRAW);
 		this.context.enableVertexAttribArray(this.positionLocation);
 		this.context.vertexAttribPointer(this.positionLocation, 2, this.context.FLOAT, false, 0, 0);
 		this.context.uniform4fv(this.colorLocation, minimapForegroundColor(this.canvas));
@@ -156,14 +156,15 @@ function compileShader(context: WebGLRenderingContext, kind: number, source: str
 	throw new Error("Stanza GPU minimap could not compile a WebGL shader");
 }
 
-function minimapVertices(rows: readonly MinimapRow[], lineCount: number, width: number, height: number): Float32Array {
+function minimapVertices(rows: readonly MinimapRow[], lineScale: number, width: number, height: number): Float32Array {
 	const vertices = new Float32Array(rows.length * 12);
 	for (let index = 0; index < rows.length; index += 1) {
 		const row = rows[index]!;
 		const right = 1 - 2 * MINIMAP_CONTENT_RIGHT / width;
 		const left = right - 2 * minimapContentWidth(row.density, width) / width;
-		const top = 1 - 2 * row.startLineIndex / lineCount;
-		const bottom = Math.max(-1, top - 2 * MINIMAP_LINE_HEIGHT / height);
+		const top = 1 - 2 * row.startLineIndex * lineScale / height;
+		const rowHeight = Math.max(1, (row.endLineIndexExclusive - row.startLineIndex) * lineScale);
+		const bottom = Math.max(-1, top - 2 * rowHeight / height);
 		vertices.set([left, top, right, top, left, bottom, left, bottom, right, top, right, bottom], index * 12);
 	}
 	return vertices;

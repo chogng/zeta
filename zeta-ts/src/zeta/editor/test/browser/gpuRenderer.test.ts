@@ -15,7 +15,7 @@ test("GPU minimap renders bounded density rows at device resolution and can yiel
 	renderer.setRows([
 		{ startLineIndex: 0, endLineIndexExclusive: 1, density: 0.5 },
 		{ startLineIndex: 50, endLineIndexExclusive: 55, density: 1 },
-	], 100);
+	], 2);
 
 	assert.equal(canvas.width, 112);
 	assert.equal(canvas.height, 200);
@@ -23,13 +23,13 @@ test("GPU minimap renders bounded density rows at device resolution and can yiel
 	assert.ok(vertices);
 	assertClose((1 - vertices[2]!) * 56 / 2, 4);
 	assertClose((vertices[2]! - vertices[0]!) * 56 / 2, 22);
-	assertClose((vertices[1]! - vertices[5]!) * 100 / 2, 1);
+	assertClose((vertices[1]! - vertices[5]!) * 100 / 2, 2);
 	assert.ok(foreground);
 	assertClose(foreground[3]!, 0.42);
 	assert.equal(renderer.isAvailable, true);
 
 	renderer.disable();
-	renderer.setRows([], 100);
+	renderer.setRows([], 2);
 	assert.equal(renderer.isAvailable, false);
 	assert.deepEqual(calls.filter(call => call.startsWith("draw:")), ["draw:12"]);
 	renderer.dispose();

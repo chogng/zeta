@@ -1,5 +1,5 @@
 .stanza-editor {
-  --zeta-scrollbar-size: var(--stanza-editor-scrollbar-size);
+  --zeta-scrollbar-size: var(--stanza-editor-vertical-scrollbar-size);
   scrollbar-width: none;
 }
 
@@ -13,7 +13,6 @@
   position: absolute;
   z-index: 8;
   box-sizing: border-box;
-  border-radius: calc(var(--stanza-editor-scrollbar-size) / 2);
   opacity: 1;
   outline: none;
   touch-action: none;
@@ -23,13 +22,15 @@
 .stanza-editor-scrollbar-track-horizontal {
   bottom: 0;
   left: 0;
-  height: var(--stanza-editor-scrollbar-size);
+  height: var(--stanza-editor-horizontal-scrollbar-size);
+  border-radius: calc(var(--stanza-editor-horizontal-scrollbar-size) / 2);
 }
 
 .stanza-editor-scrollbar-track-vertical {
   top: 0;
   right: 0;
-  width: var(--stanza-editor-scrollbar-size);
+  width: var(--stanza-editor-vertical-scrollbar-size);
+  border-radius: calc(var(--stanza-editor-vertical-scrollbar-size) / 2);
 }
 
 .stanza-editor-scrollbar-track[data-visibility="auto"] {
@@ -53,7 +54,6 @@
   position: absolute;
   box-sizing: border-box;
   border: 2px solid transparent;
-  border-radius: calc(var(--stanza-editor-scrollbar-size) / 2);
   background: var(--zeta-scrollbar-slider-background) padding-box;
   cursor: default;
   forced-color-adjust: none;
@@ -64,6 +64,7 @@
   top: 0;
   bottom: 0;
   left: 0;
+  border-radius: calc(var(--stanza-editor-horizontal-scrollbar-size) / 2);
 }
 
 .stanza-editor-scrollbar-track-vertical > .zeta-scrollbar-thumb {
@@ -71,6 +72,7 @@
   right: 0;
   bottom: auto;
   left: 0;
+  border-radius: calc(var(--stanza-editor-vertical-scrollbar-size) / 2);
 }
 
 .stanza-editor-scrollbar-track:hover > .zeta-scrollbar-thumb {

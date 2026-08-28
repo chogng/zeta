@@ -9,6 +9,7 @@ import {
 } from "../../../../base/common/lifecycle.js";
 import {
 	MenuId,
+	MenuItemAction,
 } from "../../../../platform/actions/common/actions.js";
 import type {
 	IMenu,
@@ -69,12 +70,14 @@ export class NativeMenubarControl extends Disposable
 				this.actionsByRevision.set(revision, serialized.actions);
 				try {
 					await this.api.update(serialized.data);
-				} finally {
-					while (this.actionsByRevision.size > 2) {
-						const oldest = this.actionsByRevision.keys().next().value;
-						if (oldest === undefined) break;
-						this.actionsByRevision.delete(oldest);
-					}
+				} catch (error) {
+					this.actionsByRevision.delete(revision);
+					throw error;
+				}
+				while (this.actionsByRevision.size > 2) {
+					const oldest = this.actionsByRevision.keys().next().value;
+					if (oldest === undefined) break;
+					this.actionsByRevision.delete(oldest);
 				}
 			})
 			.catch((error: unknown) => {
@@ -126,9 +129,17 @@ function serializeMenubar(
 
 			const id = `action-${nextId++}`;
 			actionMap.set(id, action);
+			const alternate = action instanceof MenuItemAction && action.alt?.enabled
+				? action.alt
+				: undefined;
+			const altId = alternate
+				? `action-${nextId++}`
+				: undefined;
+			if (altId && alternate) actionMap.set(altId, alternate);
 			items.push({
 				type: "action",
 				id,
+				...(altId ? { altId } : {}),
 				label: action.label,
 				enabled: action.enabled,
 				...(action.checked === undefined

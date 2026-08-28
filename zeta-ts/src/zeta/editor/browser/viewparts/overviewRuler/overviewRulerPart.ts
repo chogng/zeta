@@ -4,7 +4,6 @@ import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
 import { type DiagnosticOverviewMarker } from "./diagnosticOverviewMarkers.js";
 import { type DiffOverviewMarker } from "./diffOverviewMarkers.js";
-import { MINIMAP_WIDTH } from "../minimap/minimapPresentation.js";
 import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
 
 const OVERVIEW_RULER_WIDTH = 6;
@@ -13,7 +12,7 @@ export type OverviewRulerMarker = DiagnosticOverviewMarker | DiffOverviewMarker;
 
 export interface OverviewRulerPartOptions {
 	readonly host: HTMLElement;
-	readonly minimapEnabled: boolean;
+	readonly verticalScrollbarWidth: number;
 	readonly readLineCount: () => number;
 	readonly readMarkers: () => readonly OverviewRulerMarker[];
 	readonly readMarkersRevision: () => number;
@@ -23,7 +22,7 @@ export interface OverviewRulerPartOptions {
 export class OverviewRulerPart extends EditorViewPart {
 	readonly domNode: HTMLDivElement;
 	private readonly root: FastDomNode<HTMLDivElement>;
-	private readonly minimapEnabled: boolean;
+	private readonly verticalScrollbarWidth: number;
 	private readonly readLineCount: () => number;
 	private readonly readMarkers: () => readonly OverviewRulerMarker[];
 	private readonly readMarkersRevision: () => number;
@@ -31,7 +30,7 @@ export class OverviewRulerPart extends EditorViewPart {
 
 	constructor(options: OverviewRulerPartOptions) {
 		super();
-		this.minimapEnabled = options.minimapEnabled;
+		this.verticalScrollbarWidth = options.verticalScrollbarWidth;
 		this.readLineCount = options.readLineCount;
 		this.readMarkers = options.readMarkers;
 		this.readMarkersRevision = options.readMarkersRevision;
@@ -45,9 +44,8 @@ export class OverviewRulerPart extends EditorViewPart {
 
 	render(context: EditorRenderingContext): void {
 		const layout = context.layout;
-		const rightOffset = this.minimapEnabled ? MINIMAP_WIDTH + 4 : 0;
 		this.root.setLeft(
-			layout.scrollPosition.left + Math.max(0, layout.viewportSize.width - OVERVIEW_RULER_WIDTH - rightOffset),
+			layout.scrollPosition.left + Math.max(0, layout.viewportSize.width - this.verticalScrollbarWidth + (this.verticalScrollbarWidth - OVERVIEW_RULER_WIDTH) / 2),
 		);
 		this.root.setTop(layout.scrollPosition.top);
 		this.root.setHeight(layout.viewportSize.height);

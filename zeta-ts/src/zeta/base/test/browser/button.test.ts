@@ -3,6 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { Button } from "../../browser/ui/button/button.js";
 import { setHoverDelegate, type IManagedHover } from "../../browser/ui/hover/hoverDelegate.js";
+import { lxiconsLibrary } from "../../common/lxiconsLibrary.js";
 
 test("Button only installs a Hover for an explicit title", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
@@ -38,6 +39,13 @@ test("Button only installs a Hover for an explicit title", () => {
 	assert.equal(labelCenteredButton.domNode.classList.contains("label-centered"), true);
 	labelCenteredButton.label = "Commit changes";
 	assert.equal(labelCenteredButton.label, "Commit changes");
+
+	using iconButton = new Button(dom.window.document.body, {
+		label: "Menu",
+		icon: lxiconsLibrary.menu,
+	});
+	iconButton.label = "Application menu";
+	assert.ok(iconButton.domNode.querySelector("svg.zeta-icon"));
 
 	using submitButton = new Button(dom.window.document.body, {
 		label: "Submit",

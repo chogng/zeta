@@ -72,7 +72,7 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
 		textMeasurer: new FixedTextMeasurer(),
 		decorationSources: [matchSource, diagnosticSource],
 	});
-	viewport.layout({ width: 200, height: 60 });
+	viewport.layout({ width: 300, height: 60 });
 	viewport.scrollTo({ left: 0, top: 0 });
 	assert.equal(matchResolutionCount, 1);
 
@@ -111,7 +111,7 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
 	assert.equal(errorOverview.classList.contains(DecorationPresentation.ErrorUnderline), true);
 	const errorMinimap = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-minimap-diagnostic-marker");
 	assert.equal(errorMinimap.classList.contains(DecorationPresentation.ErrorUnderline), true);
-	assert.equal(errorMinimap.style.top, "66.66666666666666%");
+	assert.equal(errorMinimap.style.top, "4px");
 
 	diagnostics.update(diagnosticId, {
 		range: TextRange.from(TextPosition.at(1, 1), TextPosition.at(1, 3)),
@@ -139,7 +139,7 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
 	assert.equal(warningOverview.classList.contains(DecorationPresentation.WarningUnderline), true);
 	const warningMinimap = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-minimap-diagnostic-marker");
 	assert.equal(warningMinimap.classList.contains(DecorationPresentation.WarningUnderline), true);
-	assert.equal(warningMinimap.style.top, "33.33333333333333%");
+	assert.equal(warningMinimap.style.top, "2px");
 	assert.equal(matchResolutionCount, 1);
 
 	model.applyEdits([{
@@ -256,7 +256,7 @@ test("Quick Diff decorations project into the overview ruler and minimap gutter"
 			minimap: decoration.metadata !== DecorationPresentation.DiffModified,
 		}))],
 	});
-	viewport.layout({ width: 200, height: 80 });
+	viewport.layout({ width: 300, height: 80 });
 
 	assert.deepEqual([...viewport.element.querySelectorAll<HTMLElement>(".stanza-editor-overview-marker")].map(marker => marker.classList[1]), [
 		DecorationPresentation.DiffModified,

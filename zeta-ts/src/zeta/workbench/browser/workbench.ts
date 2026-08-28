@@ -20,6 +20,7 @@ import { BrowserLifecycleService } from "../../platform/lifecycle/browser/browse
 import { ILifecycleService, type ShutdownReason } from "../../platform/lifecycle/common/lifecycleService.js";
 import { IDebugAdapterProcessService } from "../../platform/debug/common/debugAdapterProcessService.js";
 import { IExtensionHostApi } from "../../platform/extensionHost/common/extensionHostApi.js";
+import { ISyntaxApi } from "../../platform/syntax/common/syntaxApi.js";
 import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
 import { IRemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
 import { UnavailableRemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
@@ -209,7 +210,6 @@ import { IBulkEditService } from "../contrib/bulkEdit/common/bulkEdit.js";
 import { getBrowserTextModelService } from "../services/textmodelResolver/browser/browserTextModelService.js";
 import { getBrowserTextResourceStore } from "../contrib/codeEditor/browser/browserTextResourceStore.js";
 import { AppServerLanguageProviders } from "../services/language/browser/appServerLanguageProviders.js";
-import { AppServerSyntaxProviders } from "../services/language/browser/appServerSyntaxProviders.js";
 import { AppServerDiffService } from "../services/diff/browser/appServerDiffService.js";
 import { IDiffService } from "../services/diff/common/diffService.js";
 import { AppServerLanguageDiagnosticsService } from "../services/language/browser/appServerLanguageDiagnosticsService.js";
@@ -343,6 +343,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(ILogService, logService);
 		services.registerInstance(IExtensionHostApi, api.extensionHost);
 		services.registerInstance(ISymbolIndexApi, api.symbolIndex);
+		services.registerInstance(ISyntaxApi, api.syntax);
 		if (api.debugAdapter) services.registerInstance(IDebugAdapterProcessService, api.debugAdapter);
 		const remoteAgentService = this._register(new AppServerRemoteAgentService({ api: api.appServer, remoteApi: api.remote }));
 		services.registerInstance(IRemoteAgentService, remoteAgentService);
@@ -405,7 +406,6 @@ export class Workbench extends Disposable {
 		services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
 		this._register(new WorkbenchLanguageFeatures(languageService, languageConfigurationService, languageFeaturesService));
 		this._register(new AppServerLanguageProviders(languageFeaturesService, api.language, workspaceContext, { workspaceTrust: workspaceTrustService, events: api.events }));
-		this._register(new AppServerSyntaxProviders(languageFeaturesService, api.syntax));
 		const diffService = new AppServerDiffService(api.diff);
 		services.registerInstance(IDiffService, diffService);
 		const codeIntelligenceDocuments = new AppServerCodeIntelligenceDocumentService(api.symbolIndex);

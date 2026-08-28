@@ -1,3 +1,5 @@
+import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+
 export type SyntaxLanguage = "javascript" | "javascriptreact" | "json" | "jsonc" | "rust" | "shell" | "typescript" | "typescriptreact";
 
 export interface SyntaxPosition {
@@ -68,3 +70,5 @@ export interface ISyntaxApi {
 	analyze(params: SyntaxAnalyzeParams): Promise<SyntaxAnalyzeResult>;
 	selectionRanges(params: SyntaxSelectionRangesParams): Promise<SyntaxSelectionRangesResult>;
 }
+
+export const ISyntaxApi = createServiceIdentifier<ISyntaxApi>("syntaxApi");

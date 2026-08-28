@@ -69,6 +69,10 @@ test("Stanza viewport enables scrollbars only for model-backed overflow", () => 
 	assert.equal(verticalScrollbar.hidden, false);
 	assert.equal(horizontalScrollbar.getAttribute("role"), "scrollbar");
 	assert.equal(verticalScrollbar.getAttribute("aria-controls"), viewport.element.id);
+	assert.equal(viewport.element.style.getPropertyValue("--stanza-editor-horizontal-scrollbar-size"), "12px");
+	assert.equal(viewport.element.style.getPropertyValue("--stanza-editor-vertical-scrollbar-size"), "14px");
+	assert.equal(horizontalScrollbar.style.right, "14px");
+	assert.equal(verticalScrollbar.style.bottom, "12px");
 	dom.window.close();
 });
 

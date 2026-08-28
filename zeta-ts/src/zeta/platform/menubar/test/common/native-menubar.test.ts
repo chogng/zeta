@@ -13,6 +13,7 @@ test("native menubar validation accepts a versioned nested snapshot", () => {
 				{
 					type: "action",
 					id: "action-1",
+					altId: "action-1-alt",
 					label: "New conversation",
 					enabled: true,
 				},
@@ -77,5 +78,15 @@ test("native menubar validation rejects unsafe snapshots", () => {
 			}],
 		}),
 		/exactly/,
+	);
+	assert.throws(
+		() => validateNativeMenubarData({
+			revision: 1,
+			menus: [{
+				label: "File",
+				items: [{ ...action, altId: action.id }],
+			}],
+		}),
+		/duplicate/,
 	);
 });

@@ -347,6 +347,9 @@ test("Tree-sitter runtime stays behind App Server syntax facts", () => {
 	const syntaxCrate = readFileSync(resolve(desktopRoot, "../zeta-rs/syntax/src/lib.rs"), "utf8");
 	const syntaxOperations = readFileSync(resolve(desktopRoot, "../zeta-rs/app-server/src/server/syntax_operations.rs"), "utf8");
 	const syntaxAdapter = readFileSync(join(workbenchRoot, "services/language/browser/appServerSyntaxProviders.ts"), "utf8");
+	const sharedWorkbench = readFileSync(join(workbenchRoot, "browser/workbench.ts"), "utf8");
+	const codeContribution = readFileSync(resolve(editorRoot, "../code/browser/workbench/modes/code.contribution.ts"), "utf8");
+	const academicContribution = readFileSync(resolve(editorRoot, "../code/browser/workbench/modes/academic.contribution.ts"), "utf8");
 	const styling = readFileSync(join(editorRoot, "common/services/semanticTokensStylingService.ts"), "utf8");
 	assert.doesNotMatch(packageManifest, /tree-sitter/u);
 	assert.equal(existsSync(join(editorRoot, "common/services/treeSitter")), false);
@@ -354,6 +357,9 @@ test("Tree-sitter runtime stays behind App Server syntax facts", () => {
 	assert.match(syntaxOperations, /SyntaxDocument::open/u);
 	assert.match(syntaxAdapter, /ISyntaxApi/u);
 	assert.match(syntaxAdapter, /LanguageTokenResult/u);
+	assert.doesNotMatch(sharedWorkbench, /new AppServerSyntaxProviders/u);
+	assert.match(codeContribution, /new AppServerSyntaxProviders/u);
+	assert.doesNotMatch(academicContribution, /AppServerSyntaxProviders/u);
 	assert.match(styling, /LanguageToken/u);
 	for (const file of collectFiles(editorRoot)) {
 		if (!file.endsWith(".ts")) continue;

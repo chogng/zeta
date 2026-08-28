@@ -65,6 +65,69 @@ test("toolbar submenu items retain toolbar button semantics", async () => {
 	Reflect.deleteProperty(globalThis, "window");
 });
 
+test("menu entry actions switch to their alternative while Alt is held", async () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const [
+		{ ModifierKeyEmitter },
+		{ MenuItemAction },
+		{ ContextKeyService },
+		{ createMenuEntryActionViewItem },
+		{ resolveContextMenuActions },
+	] = await Promise.all([
+		import("../../../../base/browser/dom.js"),
+		import("../../../../platform/actions/common/actions.js"),
+		import("../../../../platform/contextkey/common/contextkey.js"),
+		import("../../../../platform/actions/browser/menuEntryActionViewItem.js"),
+		import("../../../../platform/contextview/browser/contextMenu.js"),
+	]);
+	const runs: string[] = [];
+	const commandService = {
+		executeCommand: async (id: string) => {
+			runs.push(id);
+		},
+	} as unknown as import("../../../../platform/commands/common/commands.js").ICommandService;
+	using contexts = new ContextKeyService();
+	const alternate = new MenuItemAction(
+		{ id: "test.toolbar.alternative", title: "Alternative" },
+		undefined,
+		undefined,
+		contexts,
+		commandService,
+	);
+	const primary = new MenuItemAction(
+		{ id: "test.toolbar.primary", title: "Primary" },
+		alternate,
+		undefined,
+		contexts,
+		commandService,
+	);
+	const item = createMenuEntryActionViewItem(primary, { showContextMenu() {} });
+	assert.ok(item);
+	const container = dom.window.document.createElement("div");
+	dom.window.document.body.append(container);
+	item.render(container);
+	const button = container.querySelector("button");
+	assert.ok(button instanceof dom.window.HTMLButtonElement);
+
+	container.dispatchEvent(new dom.window.MouseEvent("mouseenter"));
+	dom.window.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Alt", altKey: true }));
+	assert.equal(button.textContent, "Alternative");
+	button.click();
+	await new Promise(resolve => setTimeout(resolve, 0));
+	assert.deepEqual(runs, ["test.toolbar.alternative"]);
+	assert.equal(resolveContextMenuActions({ anchor: button, actions: [primary] }, {} as import("../../../../platform/actions/common/menuService.js").IMenuService)[0]?.id, "test.toolbar.alternative");
+
+	dom.window.dispatchEvent(new dom.window.KeyboardEvent("keyup", { key: "Alt" }));
+	assert.equal(button.textContent, "Primary");
+	button.click();
+	await new Promise(resolve => setTimeout(resolve, 0));
+	assert.deepEqual(runs, ["test.toolbar.alternative", "test.toolbar.primary"]);
+
+	item.dispose();
+	ModifierKeyEmitter.disposeInstance(dom.window as unknown as Window);
+	dom.window.close();
+});
+
 test("DropdownWithPrimaryActionViewItem presents one split toolbar item", async () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const [

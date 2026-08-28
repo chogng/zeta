@@ -8,6 +8,7 @@ export interface INativeMenubarSeparator {
 export interface INativeMenubarAction {
 	readonly type: "action";
 	readonly id: string;
+	readonly altId?: string;
 	readonly label: string;
 	readonly enabled: boolean;
 	readonly checked?: boolean;
@@ -123,24 +124,21 @@ function validateItems(
 				requireExactKeys(item, ["type"]);
 				return { type: "separator" };
 			case "action": {
+				const keys = ["enabled", "id", "label", "type"];
+				if (item.altId !== undefined) keys.push("altId");
+				if (item.checked !== undefined) keys.push("checked");
 				requireExactKeys(
 					item,
-					item.checked === undefined
-						? ["enabled", "id", "label", "type"]
-						: ["checked", "enabled", "id", "label", "type"],
+					keys,
 				);
-				const id = boundedString(
-					item.id,
-					`items[${index}].id`,
-					MAX_ID_LENGTH,
-				);
-				if (state.ids.has(id)) {
-					throw new Error(`duplicate menubar action id: ${id}`);
-				}
-				state.ids.add(id);
+				const id = uniqueActionId(item.id, `items[${index}].id`, state);
+				const altId = item.altId === undefined
+					? undefined
+					: uniqueActionId(item.altId, `items[${index}].altId`, state);
 				const action: INativeMenubarAction = {
 					type: "action",
 					id,
+					...(altId ? { altId } : {}),
 					label: boundedString(
 						item.label,
 						`items[${index}].label`,
@@ -176,6 +174,19 @@ function validateItems(
 				throw new Error(`items[${index}].type is invalid`);
 		}
 	});
+}
+
+function uniqueActionId(
+	value: unknown,
+	field: string,
+	state: IValidationState,
+): string {
+	const id = boundedString(value, field, MAX_ID_LENGTH);
+	if (state.ids.has(id)) {
+		throw new Error(`duplicate menubar action id: ${id}`);
+	}
+	state.ids.add(id);
+	return id;
 }
 
 function exactRecord(

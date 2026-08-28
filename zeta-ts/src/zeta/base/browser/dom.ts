@@ -1,4 +1,5 @@
-import { type IDisposable, toDisposable } from "../common/lifecycle.js";
+import { Emitter, type Event as BaseEvent } from "../common/event.js";
+import { Disposable, type IDisposable, toDisposable } from "../common/lifecycle.js";
 
 type DomListenerOptions = boolean | AddEventListenerOptions;
 type DomChild = Node | string;
@@ -14,6 +15,81 @@ type DomTreeChild =
 const DOCUMENT_NODE_TYPE = 9;
 const ELEMENT_NODE_TYPE = 1;
 const HTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
+
+export interface IModifierKeyStatus {
+	readonly altKey: boolean;
+	readonly shiftKey: boolean;
+	readonly ctrlKey: boolean;
+	readonly metaKey: boolean;
+}
+
+/** Tracks modifier keys for one browser window. */
+export class ModifierKeyEmitter extends Disposable {
+	private static readonly instances = new WeakMap<Window, ModifierKeyEmitter>();
+	private readonly _onDidChange = this._register(new Emitter<IModifierKeyStatus>());
+	private status: IModifierKeyStatus = emptyModifierKeyStatus();
+
+	readonly event: BaseEvent<IModifierKeyStatus> = this._onDidChange.event;
+
+	private constructor(targetWindow: Window) {
+		super();
+		this._register(addDisposableListener(targetWindow, "keydown", (event: KeyboardEvent) => this.update(event), true));
+		this._register(addDisposableListener(targetWindow, "keyup", (event: KeyboardEvent) => this.update(event), true));
+		this._register(addDisposableListener(targetWindow, "mousedown", (event: MouseEvent) => this.update(event), true));
+		this._register(addDisposableListener(targetWindow, "mouseup", (event: MouseEvent) => this.update(event), true));
+		this._register(addDisposableListener(targetWindow, "blur", () => this.reset()));
+	}
+
+	static getInstance(targetWindow: Window): ModifierKeyEmitter {
+		let instance = this.instances.get(targetWindow);
+		if (!instance) {
+			instance = new ModifierKeyEmitter(targetWindow);
+			this.instances.set(targetWindow, instance);
+		}
+		return instance;
+	}
+
+	static disposeInstance(targetWindow: Window): void {
+		const instance = this.instances.get(targetWindow);
+		if (!instance) return;
+		this.instances.delete(targetWindow);
+		instance.dispose();
+	}
+
+	get keyStatus(): IModifierKeyStatus {
+		return this.status;
+	}
+
+	private update(event: KeyboardEvent | MouseEvent): void {
+		const status: IModifierKeyStatus = {
+			altKey: event.altKey,
+			shiftKey: event.shiftKey,
+			ctrlKey: event.ctrlKey,
+			metaKey: event.metaKey,
+		};
+		if (sameModifierKeyStatus(this.status, status)) return;
+		this.status = status;
+		this._onDidChange.fire(status);
+	}
+
+	private reset(): void {
+		const status = emptyModifierKeyStatus();
+		if (sameModifierKeyStatus(this.status, status)) return;
+		this.status = status;
+		this._onDidChange.fire(status);
+	}
+}
+
+function emptyModifierKeyStatus(): IModifierKeyStatus {
+	return { altKey: false, shiftKey: false, ctrlKey: false, metaKey: false };
+}
+
+function sameModifierKeyStatus(left: IModifierKeyStatus, right: IModifierKeyStatus): boolean {
+	return left.altKey === right.altKey &&
+		left.shiftKey === right.shiftKey &&
+		left.ctrlKey === right.ctrlKey &&
+		left.metaKey === right.metaKey;
+}
 
 /**
  * Registers a DOM event listener whose removal participates in disposable
