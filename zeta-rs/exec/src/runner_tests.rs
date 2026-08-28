@@ -310,6 +310,7 @@ fn turn(ids: &TestIds, status: TurnStatus, items: Vec<ThreadItem>) -> Turn {
         tool_mode: zeta_protocol::ToolMode::Direct,
         approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
         usage: zeta_protocol::ModelUsageSummary::default(),
+        context_usage: None,
         items,
         plan: None,
         pending_interaction: None,

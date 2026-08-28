@@ -627,6 +627,18 @@ pub trait ToolService: Send + Sync {
     /// capabilities, and sandbox compatibility without causing the requested side effect.
     fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError>;
 
+    /// Materializes a call using the durable Session and Turn identity that will execute it.
+    ///
+    /// Session-scoped services use this hook when their authorized resource set cannot be selected
+    /// safely from the Tool Call alone. Other services retain the ordinary preparation path.
+    fn prepare_with_facts(
+        &self,
+        call: &ToolCall,
+        _: &ToolExecutionFacts,
+    ) -> Result<ActionReviewRequest, CoreError> {
+        self.prepare(call)
+    }
+
     /// Collects bounded, secret-free evidence needed to interpret an otherwise opaque action.
     ///
     /// Implementations may inspect local state but must not perform the proposed action, use
@@ -706,7 +718,7 @@ pub trait ToolService: Send + Sync {
     }
 }
 
-/// Read-before-write evidence reconstructed from successful durable `read_file` results.
+/// Durable execution identity and transcript-derived facts supplied to Tool services.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ToolExecutionFacts {
     execution: Option<ToolExecutionIdentity>,

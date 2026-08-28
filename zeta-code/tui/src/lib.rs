@@ -20,6 +20,7 @@ use zeta_app_server_client::ShutdownError;
 use zeta_app_server_client::TakeEventsError;
 use zeta_app_server_protocol::protocol::common::AgentInteractionCapability;
 use zeta_app_server_protocol::protocol::common::ClientCapabilities;
+use zeta_app_server_protocol::protocol::common::WorkspaceTrustHostCapability;
 use zeta_protocol::AgentInteractionKind;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
@@ -27,7 +28,8 @@ use zeta_protocol::ThreadId;
 /// Declares the connection-local App Server capabilities required by the TUI.
 ///
 /// The CLI host passes this value during `initialize` so App Server can select this connection as
-/// the ephemeral owner for approval and structured user-input requests on subscribed Threads.
+/// the ephemeral owner for approval and structured user-input requests on subscribed Threads, and
+/// accept explicit `/add-dir` consent as a session-scoped Workspace trust decision.
 pub fn client_capabilities() -> ClientCapabilities {
     ClientCapabilities {
         notifications: Some(true),
@@ -40,7 +42,7 @@ pub fn client_capabilities() -> ClientCapabilities {
             dynamic_tools: None,
         }),
         browser: None,
-        workspace_trust_host: None,
+        workspace_trust_host: Some(WorkspaceTrustHostCapability { version: 1 }),
     }
 }
 

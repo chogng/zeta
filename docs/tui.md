@@ -608,6 +608,7 @@ owner 的公开 typed interface，`view.rs` 组装 component。没有请求的 f
 | `interactions` | owner-directed approval 与 structured user-input view/response mapping |
 | `config` | typed config read/update UI |
 | `skills` | typed catalog、enablement intent 和 selection row model |
+| `additional_directories` | 当前 Session 的附加目录列表、添加与移除意图 |
 | `workspace_files` | `zeta-file-search` mention completion |
 | `status_line` | 汇集既有接口结果并执行 item 排列、降级与渲染 |
 
@@ -630,12 +631,14 @@ request/response/notification、顺序、取消、错误与恢复语义，然后
 TUI 不能靠检查 ToolCall 名称或 arguments JSON 自行弹窗并决定策略。
 
 外部 Agent 配置导入是明确的 Desktop-only 产品边界，不属于上述“等待 canonical contract
-后再进入 TUI”的潜在功能。TUI 不提供 `/add-dir`、`/import-agent`、目录选择器或等价的
+后再进入 TUI”的潜在功能。TUI 不提供 `/import-agent`、导入目录选择器或等价的
 配置 mutation，也不主动扫描 `~/.codex`、`~/.claude` 等目录。Desktop 已经导入的外部 Skill
 仍可通过 App Server 统一 catalog 出现在 TUI `/skills` 中；这只是消费既有来源，不使 TUI
 成为导入或文件访问授权 owner。Desktop 工作流见
 [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md#22-外部-agent-配置导入仅限-desktop)，
 Skill 来源边界见 [`skills.md`](skills.md#151-外部-agent-skill-导入仅限-desktop)。
+
+`/add-dir <path>` 是另一条 Session 级文件访问流程。TUI 只发送 typed `workspace/additionalDirectories/add`；App Server canonicalize 目录、建立仅对当前 Session 有效的授权，并让本地 `read_file`、`write_file`、`edit`、`grep` 与 `glob` 接受该目录下的绝对路径。不带参数的 `/add-dir` 打开可搜索列表，Enter 通过 typed remove RPC 撤销目录。该流程不改变主 Workspace，不扫描外部 Agent 配置，也不让附加目录贡献项目配置。
 
 Feature 之间不能依赖彼此的私有模块。跨功能结果由 `app/` 协调，交互复用通过
 `components/`，纯布局复用通过 `ui/`；只有重复已经出现且语义一致时才提取公开的小型 value
@@ -1025,6 +1028,7 @@ lib_tests.rs
 - `TerminalModeGuard` 在任一 mode 获取失败时按逆序恢复已经获取的 terminal mode，显式
   restore 和 Drop 共享幂等清理路径；
 - `StatusLineModel` 直接映射 typed config/Git result 与 App 显式提供的权限模式，`StatusLineResource` 保存四个本地显示开关，`features/status_line/view.rs` 在 footer 区域内按固定顺序渲染并按可用宽度降级到短值或从右侧省略；`WelcomeModel` 在 App 构造阶段把 `TuiOptions::workspace_root` 缩写为 home-relative 文案，draw 不读取环境；
+- `/status` 使用 Session snapshot 的实际模型、`model/list` 的完整/可用 context capacity 与最新 Turn typed `contextUsage` 展示模型、上下文窗口和 Session/Thread identity；剩余窗口不从 transcript 或累计 Thread usage 推导；
 - `ChatComposer` 协调提交、popup keys、range completion application 与 structured local
   command dispatch；`zeta-slash-commands` 拥有 slash grammar、catalog、matches、selection 与
   dismiss，Ratatui popup renderer 根据自身 viewport 投影可见范围，`TextArea` 只拥有 UTF-8

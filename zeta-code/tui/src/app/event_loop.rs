@@ -22,6 +22,7 @@ use crate::TuiExit;
 use crate::TuiOptions;
 use crate::client;
 use crate::components::pane;
+use crate::features::additional_directories;
 use crate::features::config;
 use crate::features::config::ConfigResource;
 use crate::features::interactions;
@@ -474,6 +475,31 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                             &thread_id,
                                         )
                                         .map(AppEvent::RewindViewOpened)
+                                        .map_err(|error| error.to_string()),
+                                    )
+                                },
+                                &mut app,
+                            );
+                        }
+                    }
+                    AppCommand::RemoveAdditionalDirectory { root } => {
+                        if pending_request.is_none() {
+                            let mut request_client = client.clone();
+                            let session_id = conversation.session_id().clone();
+                            let event_root = root.clone();
+                            pending_request = spawn_request(
+                                "zeta-tui-remove-additional-directory",
+                                move || {
+                                    RequestCompletion::Presentation(
+                                        additional_directories::remove(
+                                            &mut request_client,
+                                            &session_id,
+                                            root,
+                                        )
+                                        .map(|view| AppEvent::AdditionalDirectoryRemoved {
+                                            root: event_root,
+                                            view,
+                                        })
                                         .map_err(|error| error.to_string()),
                                     )
                                 },

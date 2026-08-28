@@ -10869,6 +10869,7 @@ dependencies = [
  "url",
  "zeroize",
  "zeta-action-policy",
+ "zeta-add-dir",
  "zeta-agents",
  "zeta-app-server-protocol",
  "zeta-app-server-transport",

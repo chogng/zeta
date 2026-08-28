@@ -18,6 +18,7 @@ use zeta_app_server_client::{
 use zeta_app_server_protocol::protocol::common::ClientInfo;
 use zeta_app_server_protocol::protocol::config::{ProviderConfigDto, ProviderConfigureParams};
 use zeta_app_server_protocol::protocol::skills::SkillEnablementDto;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryListParams;
 use zeta_client::ClientError;
 use zeta_client::ClientRequest;
 use zeta_client::ClientResponse;
@@ -37,6 +38,7 @@ fn help_lists_only_builtins_with_execution_paths() {
     assert!(help.contains(&"/status"));
     assert!(help.contains(&"/resume"));
     assert!(help.contains(&"/rewind"));
+    assert!(help.contains(&"/add-dir"));
     assert!(help.contains(&"/model"));
     assert!(help.contains(&"/theme"));
     assert!(!help.contains(&"/login"));
@@ -307,6 +309,75 @@ fn rewind_without_arguments_opens_the_checkpoint_pane() {
     assert_eq!(app.selection_view().unwrap().title(), "Rewind");
     assert!(app.selection_view().unwrap().search().is_some());
     assert!(app.selection_view().unwrap().visible_items().is_empty());
+
+    drop(client);
+    let _ = fs::remove_dir_all(state_root);
+}
+
+#[test]
+fn add_dir_adds_lists_and_removes_the_exact_session_directory() {
+    let state_root = std::env::temp_dir().join(format!(
+        "zeta-tui-add-dir-{}-{}",
+        std::process::id(),
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    let workspace = state_root.join("workspace");
+    let additional = state_root.join("additional");
+    fs::create_dir_all(&workspace).unwrap();
+    fs::create_dir_all(&additional).unwrap();
+    let mut client = start_in_process_client(
+        InProcessClientOptions::new(
+            &state_root,
+            ClientInfo {
+                name: "zeta-tui-add-dir-test".into(),
+                version: "1".into(),
+            },
+        )
+        .with_capabilities(crate::client_capabilities())
+        .with_workspace_root(&workspace)
+        .with_model_operation_client(Arc::new(OfflineOperationClient)),
+    )
+    .unwrap();
+    let mut conversation = ActiveConversation::start(&mut client, "add dir".into()).unwrap();
+    let mut app = App::new();
+
+    conversation.execute(
+        &mut client,
+        invocation(
+            TuiSlashCommandAction::AddDir,
+            &additional.display().to_string(),
+        ),
+        &mut app,
+    );
+
+    let listed = client
+        .list_workspace_additional_directories(WorkspaceAdditionalDirectoryListParams {
+            session_id: conversation.session_id().clone(),
+        })
+        .unwrap();
+    assert_eq!(listed.directories.len(), 1);
+    assert_eq!(
+        listed.directories[0].root,
+        additional.canonicalize().unwrap()
+    );
+    conversation.execute(
+        &mut client,
+        invocation(TuiSlashCommandAction::AddDir, ""),
+        &mut app,
+    );
+    assert_eq!(
+        app.selection_view().unwrap().title(),
+        "Additional directories"
+    );
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::RemoveAdditionalDirectory {
+            root: additional.canonicalize().unwrap(),
+        })
+    );
 
     drop(client);
     let _ = fs::remove_dir_all(state_root);

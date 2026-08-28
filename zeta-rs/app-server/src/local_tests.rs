@@ -509,7 +509,7 @@ fn configured_model_context_enables_core_managed_compaction() {
         },
     )]);
     let config = ResolvedConfig {
-        preferred_model: Some(ModelRef::new(provider.clone(), model)),
+        preferred_model: Some(ModelRef::new(provider.clone(), model.clone())),
         providers: BTreeMap::from([(provider, provider_config)]),
         ..ResolvedConfig::default()
     };
@@ -523,6 +523,17 @@ fn configured_model_context_enables_core_managed_compaction() {
             ContextCompactionLimit::Tokens(ContextTokenCount::new(15_000)),
         )
     );
+    let entry = runtime_catalog_entry(
+        zeta_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
+            config.preferred_model.clone().unwrap(),
+            &zeta_protocol::ModelInfo::new(model, "GPT 5.6"),
+            zeta_protocol::ModelOutputTransport::Unary,
+        ),
+        &config,
+    )
+    .unwrap();
+    assert_eq!(entry.context_window, Some(20_000));
+    assert_eq!(entry.available_context_window, Some(11_928));
 }
 
 #[test]

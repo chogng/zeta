@@ -29,7 +29,11 @@ use zeta_protocol::DelegationId;
 use zeta_protocol::DelegationResult;
 use zeta_protocol::FrozenSkillActivation;
 use zeta_protocol::ItemId;
+use zeta_protocol::ModelContextUsage;
+use zeta_protocol::ModelContextUsageSource;
+use zeta_protocol::ModelInputEstimate;
 use zeta_protocol::ModelRef;
+use zeta_protocol::ModelUsage;
 use zeta_protocol::ModelUsageSummary;
 use zeta_protocol::PlanUpdate;
 use zeta_protocol::RequestId;
@@ -145,6 +149,7 @@ impl ThreadSnapshot {
                     tool_mode: turn.tool_mode,
                     approval_mode: turn.approval_mode,
                     usage: turn.usage.clone(),
+                    context_usage: turn.context_usage.clone(),
                     items: self
                         .items
                         .iter()
@@ -206,6 +211,7 @@ pub struct TurnSnapshot {
     pub tool_profile: Option<ToolProfileSnapshot>,
     pub plan: Option<PlanUpdate>,
     pub usage: ModelUsageSummary,
+    pub context_usage: Option<ModelContextUsage>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -470,6 +476,7 @@ pub fn reduce_thread_event(
             let next_turn_usage = turn.usage.checked_record(usage.as_ref()).ok_or_else(|| {
                 CoreError::Journal("Turn model usage aggregate overflowed".into())
             })?;
+            let context_usage = model_context_usage(usage.as_ref(), input_estimate.as_ref())?;
             let next_calibrations = match input_estimate {
                 Some(estimate) => {
                     let model = turn.model.as_ref().ok_or_else(|| {
@@ -490,6 +497,7 @@ pub fn reduce_thread_event(
                 None => None,
             };
             snapshot.turns[turn_index].usage = next_turn_usage;
+            snapshot.turns[turn_index].context_usage = context_usage;
             snapshot.usage = next_thread_usage;
             if let Some(goal) = snapshot.goal.as_mut() {
                 let account_usage = goal.status.allows_usage_accounting()
@@ -625,6 +633,7 @@ pub fn reduce_thread_event(
                     tool_profile: tool_profile.clone(),
                     plan: None,
                     usage: ModelUsageSummary::default(),
+                    context_usage: None,
                 },
             )?;
             let receipt = envelope.command.clone().ok_or_else(|| {
@@ -1813,6 +1822,7 @@ fn import_history(
             tool_profile: turn.tool_profile.clone(),
             plan: turn.plan.clone(),
             usage: ModelUsageSummary::default(),
+            context_usage: None,
         })
         .collect();
     snapshot.items = turns
@@ -2018,6 +2028,31 @@ fn goal_token_delta(usage: Option<&zeta_protocol::ModelUsage>) -> u64 {
         _ => 0,
     };
     uncached_input.saturating_add(usage.output_tokens.unwrap_or_default())
+}
+
+fn model_context_usage(
+    usage: Option<&ModelUsage>,
+    input_estimate: Option<&ModelInputEstimate>,
+) -> Result<Option<ModelContextUsage>, CoreError> {
+    let reported_input = usage.and_then(|usage| usage.input_tokens);
+    let Some(input_tokens) =
+        reported_input.or_else(|| input_estimate.map(|estimate| estimate.estimated_input_tokens))
+    else {
+        return Ok(None);
+    };
+    let reported_output = usage.and_then(|usage| usage.output_tokens);
+    let used_tokens = input_tokens
+        .checked_add(reported_output.unwrap_or_default())
+        .ok_or_else(|| CoreError::Journal("model context usage overflowed".into()))?;
+    let source = if reported_input.is_some() && reported_output.is_some() {
+        ModelContextUsageSource::ProviderReported
+    } else {
+        ModelContextUsageSource::Estimated
+    };
+    Ok(Some(ModelContextUsage {
+        used_tokens,
+        source,
+    }))
 }
 
 fn require_no_command(envelope: &StoredEvent) -> Result<(), CoreError> {

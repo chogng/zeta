@@ -1,5 +1,6 @@
 use crate::components::pane::PaneViewModel;
 use crate::components::selection::SelectionViewModel;
+use crate::features::additional_directories::AdditionalDirectorySelectionView;
 use crate::features::config::ConfigSelectionView;
 use crate::features::config::TerminalSettings;
 use crate::features::connectors::ConnectorSelectionView;
@@ -23,6 +24,11 @@ use zeta_file_search::PathSearchSnapshot;
 
 /// A fact delivered to the single writer of TUI presentation state.
 pub(crate) enum AppEvent {
+    AdditionalDirectoriesViewOpened(AdditionalDirectorySelectionView),
+    AdditionalDirectoryRemoved {
+        root: std::path::PathBuf,
+        view: AdditionalDirectorySelectionView,
+    },
     ClipboardImageRead(Result<Vec<u8>, String>),
     CommandStarted(String),
     CommandCompleted {

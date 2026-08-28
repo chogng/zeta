@@ -61,6 +61,7 @@ fn thread(messages: &[&str]) -> Thread {
                     tool_mode: zeta_protocol::ToolMode::Direct,
                     approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                     usage: zeta_protocol::ModelUsageSummary::default(),
+                    context_usage: None,
                     items: vec![ThreadItem::UserMessage {
                         item_id: ItemId::new(format!("item-{ordinal}")).unwrap(),
                         turn_id,

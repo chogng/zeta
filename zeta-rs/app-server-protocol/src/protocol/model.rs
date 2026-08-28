@@ -19,6 +19,9 @@ pub struct ModelCatalogEntry {
     pub output_transport: ModelOutputTransport,
     pub context_window: Option<u32>,
     pub auto_compact_token_limit: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub available_context_window: Option<u32>,
     pub capabilities: ModelCapabilities,
     pub supported_reasoning_efforts: Vec<ReasoningEffort>,
     pub default_reasoning_effort: Option<ReasoningEffort>,
@@ -43,6 +46,7 @@ impl ModelCatalogEntry {
                 ContextWindow::Unknown => None,
             },
             auto_compact_token_limit: info.auto_compact_token_limit,
+            available_context_window: None,
             capabilities: info.capabilities,
             supported_reasoning_efforts: info.supported_reasoning_efforts.clone(),
             default_reasoning_effort: info.default_reasoning_effort,
@@ -94,6 +98,7 @@ mod tests {
         );
         assert_eq!(entry.context_window, Some(1_000_000));
         assert_eq!(entry.auto_compact_token_limit, Some(900_000));
+        assert_eq!(entry.available_context_window, None);
         assert_eq!(entry.capabilities.reasoning, CapabilitySupport::Supported);
         assert_eq!(
             entry.supported_reasoning_efforts,

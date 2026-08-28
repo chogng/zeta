@@ -297,7 +297,11 @@ fn local_tool_port_exposes_one_canonical_coding_tool_surface() {
     let shell =
         LocalShellToolService::new(trusted.clone(), ripgrep.clone(), PassThroughBackend).unwrap();
     let composition = LocalToolComposition {
-        tools: Arc::new(LocalToolSuite::new(shell, ripgrep.clone())),
+        tools: Arc::new(LocalToolSuite::new(
+            shell,
+            ripgrep.clone(),
+            Arc::new(super::SessionAdditionalDirectoryAccess::default()),
+        )),
         policy: Arc::new(LocalShellPolicy::default()),
         ripgrep,
         action_policy_revision: local_policy_revision(),
@@ -367,7 +371,11 @@ fn local_suite_reads_and_edits_with_spec_errors() {
     let shell =
         LocalShellToolService::new(workspace.trusted(), ripgrep.clone(), PassThroughBackend)
             .unwrap();
-    let suite = LocalToolSuite::new(shell, ripgrep);
+    let suite = LocalToolSuite::new(
+        shell,
+        ripgrep,
+        Arc::new(super::SessionAdditionalDirectoryAccess::default()),
+    );
     let path = workspace.path().join("src/main.rs");
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     fs::write(&path, "fn main() {\n    println!(\"old\");\n}\n").unwrap();

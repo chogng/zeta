@@ -14,9 +14,9 @@
 | 用户操作 | 项目身份如何变化 | 文件访问如何变化 | 当前状态 |
 | --- | --- | --- | --- |
 | 打开工作区 | 建立主工作目录和当前项目 | 默认允许访问主目录 | 已实现 |
-| `add-dir` | 不变 | 增加附加目录 | 尚未实现 |
+| `/add-dir` | 不变 | 为当前 Session 的本地文件工具增加附加目录 | TUI 与 App Server 已实现 |
 | `/cd` | 切换主工作目录和当前项目 | 重新建立默认访问与项目配置作用域 | 尚未实现 |
-| 搜索内容 | 不变 | 默认搜索主目录；未来也搜索附加目录 | 已实现单 root |
+| 搜索内容 | 不变 | 默认搜索主目录；`grep`/`glob` 可显式搜索 Session 附加目录 | 部分具备 |
 | 导入外部 Agent 配置 | 不变 | 使用一次性导入来源，不产生持续目录授权 | 只读检查已实现 |
 
 ## 两道安全门
@@ -86,8 +86,7 @@ Restricted root 的安全 Files 与 watcher 会继续保留。
 
 ## 工作目录、附加目录与 `/cd`
 
-当前 App Server 只支持一个活动 Workspace root；`add-dir`、附加目录授权和 multi-root Workspace
-均尚未实现。目标模型必须区分三种操作：
+当前 App Server 保留一个活动主 Workspace identity；`workspace/folders/set` 的产品多目录路由与 Session 级附加目录授权是两条不同流程。`/add-dir` 已接入 TUI 和本地文件工具，但不会把附加目录变成 Workspace folder。实现继续区分三种操作：
 
 - **主工作目录**：当前项目、默认相对路径、项目配置和 session discovery 的根。
 - **附加目录**：额外文件访问 root；它不成为第二个项目，也不改变主工作目录。
@@ -98,23 +97,21 @@ Restricted root 的安全 Files 与 watcher 会继续保留。
 contribution policy；`zeta-workspace` 继续只拥有单 root identity、containment 与 trust token。
 App Server 负责在 safe point 解析每个 root 的 capability 与 trust、协调 consumer 和 revocation。
 
-| 操作 | 改变当前项目 | Files / Search 可访问 | 自动加载配置 | 生命周期 |
+| 操作 | 改变当前项目 | 本地文件工具可访问 | 自动加载配置 | 生命周期 |
 | --- | --- | --- | --- | --- |
 | 启动时的主目录 | ✅ | 主目录 | 完整项目配置 | 直到 `/cd` 或进程结束 |
-| 启动参数 `--add-dir` | ❌ | 主目录 + 附加目录 | 只允许明确列出的贡献 | 本次启动 |
-| 会话命令 `/add-dir` | ❌ | 主目录 + 附加目录 | 只允许明确列出的贡献 | 当前会话 |
-| 持久 `additionalDirectories` | ❌ | 主目录 + 附加目录 | ❌，只提供文件访问 | 配置有效期间 |
+| 启动参数 `--add-dir` | ❌ | 尚未实现 | 尚未实现 | 本次启动 |
+| 会话命令 `/add-dir` | ❌ | 主目录 + 附加目录 | ❌ | 当前会话 |
+| 持久 `additionalDirectories` | ❌ | 尚未实现 | ❌ | 配置有效期间 |
 | `/cd` | ✅ | 以新主目录重新解析 | 加载新主目录的完整项目配置 | 直到再次切换 |
 
-目标配置激活必须与文件访问授权分离。命令行或会话添加的目录可以按 allowlist 贡献 Skills、
-Agent definitions、`enabledPlugins` 和 `extraKnownMarketplaces`；Hook、大部分 permission、output style、
-command、`CLAUDE.md`、`.claude/rules/` 与 `CLAUDE.local.md` 默认不生效。Host compatibility
-switch 可以允许最后三类 instruction，但它不能扩大 Files 权限。持久 `additionalDirectories`
-始终是 file-access-only，不执行任何附加目录配置发现。
+配置激活必须与文件访问授权分离。当前 Session 命令只扩展本地 `read_file`、`write_file`、`edit`、`grep` 与 `glob`：相对路径仍解析到主 Workspace，附加目录必须使用绝对路径。Shell、Terminal、`apply_patch`、Workspace Files/Search service、watcher 与项目配置发现仍只使用既有 Workspace owner。领域策略已经能表达未来允许的 Skills、Agent definitions、`enabledPlugins`、`extraKnownMarketplaces` 与 instruction allowlist，但产品 runtime 尚未激活这些贡献。
 
 Rust API 不使用 `bool` 表达这些差异。当前 `zeta-add-dir` 已用
 `AdditionalDirectorySource` 保留 directory origin，并解析
 `AdditionalDirectoryContributionPolicy`；不能把“目录已授权”直接解释为“目录配置已激活”。
+
+`/add-dir` 本身是用户对该精确目录的会话级授权动作。App Server canonicalize 后签发 `ExplicitUserDecision` lease，但不写入 User Config；移除目录、归档 Session 或切换主 Workspace 都会 revoke lease。三个附加目录 RPC 只接受声明 `workspaceTrustHost` 的产品连接；不同 Session 的附加目录表互不可见，活动 Turn 期间拒绝 mutation。
 
 ## 与外部 Agent 导入的关系
 
@@ -156,13 +153,12 @@ authority。活动 Turn 会阻止 authority switch，直到旧 runtime 能一致
   内容替换不会自动失效信任。
 - Path validation 与后续 I/O 不是 atomic；在 hostile concurrent mutation 的 threat model 下，
   仍需 handle-relative filesystem API。
+- `/add-dir` 当前只服务 `zeta code` 的 Session 命令和本地文件工具；启动参数、持久配置、Workspace Files/Search service、watcher、Shell、Terminal、`apply_patch` 与配置贡献尚未接入。
 
 ## 后续计划
 
-1. 把 `zeta-add-dir` 的纯 directory scope 接入 App Server，明确区分主工作目录、附加目录和
-   directory source。
-2. 为每个附加 root 单独解析 capability、trust 与 contribution policy，只原子重建允许看到该
-   root 的 runtime。
+1. 把 Session 之外的 `LaunchArgument` 与 `PersistentConfiguration` source 接入各自 host owner。
+2. 为附加 root 接入 Files/Search/watch 与 allowlisted contribution runtime，同时保留 Session 隔离和精确 revocation。
 3. 增加 `/cd` authority switch；它替换项目 identity 并重新加载主目录配置，而不是复用
    `add-dir` mutation。
 4. 在 host trust resolver 中增加 filesystem identity change invalidation。

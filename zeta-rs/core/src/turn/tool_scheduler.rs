@@ -10,7 +10,7 @@ use crate::{
     BeforeToolHookRequest, CoreError, ExecPolicyToolGrant, HookOutcome, HookService, NoHooks,
     NoThreadUpdates, OneTimeToolGrant, PermissionBypassToolGrant, RecordToolResultRequest,
     RequestTurnInteraction, ThreadController, ThreadSnapshot, ThreadUpdateSink, ToolAuthorization,
-    ToolCallOutput, ToolService, durable_approval_request,
+    ToolCallOutput, ToolExecutionFacts, ToolService, durable_approval_request,
 };
 use std::sync::Arc;
 use zeta_action_policy::ExecutionDecision;
@@ -429,7 +429,20 @@ impl ToolScheduler {
             .filter(|broker| broker.owns_control_binding(call, call_binding(snapshot, item_id)));
         let (request, evidence) = match control_broker {
             Some(broker) => (broker.prepare_control(call)?, Vec::new()),
-            None => (self.tools.prepare(call)?, self.tools.review_evidence(call)?),
+            None => {
+                let facts = ToolExecutionFacts::for_turn(
+                    snapshot,
+                    turn_id,
+                    self.tools
+                        .definitions()
+                        .into_iter()
+                        .map(|definition| definition.name),
+                )?;
+                (
+                    self.tools.prepare_with_facts(call, &facts)?,
+                    self.tools.review_evidence(call)?,
+                )
+            }
         };
         Ok(attach_review_context(
             request,

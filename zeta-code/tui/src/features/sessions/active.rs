@@ -13,6 +13,7 @@ use zeta_app_server_protocol::protocol::session::SessionRequestResult;
 use zeta_app_server_protocol::protocol::session::SessionThreadReadParams;
 use zeta_app_server_protocol::protocol::session::SessionThreadResult;
 use zeta_protocol::ApprovalMode;
+use zeta_protocol::ModelRef;
 use zeta_protocol::Session;
 use zeta_protocol::SessionEvent;
 use zeta_protocol::SessionId;
@@ -111,6 +112,10 @@ impl ActiveConversation {
 
     pub(crate) fn session_id(&self) -> &SessionId {
         &self.session.session_id
+    }
+
+    pub(crate) fn model(&self) -> Option<&ModelRef> {
+        self.session.model.as_ref()
     }
 
     pub(crate) fn thread_id(&self) -> &ThreadId {

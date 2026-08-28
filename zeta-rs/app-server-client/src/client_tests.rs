@@ -1,6 +1,7 @@
 use super::*;
 use std::collections::VecDeque;
 use std::fs;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -42,12 +43,17 @@ use zeta_app_server_protocol::protocol::terminal::TerminalReadParams;
 use zeta_app_server_protocol::protocol::terminal::TerminalResizeParams;
 use zeta_app_server_protocol::protocol::terminal::TerminalWriteParams;
 use zeta_app_server_protocol::protocol::turn::InputItem;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryAddParams;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryListParams;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryMutationDto;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryRemoveParams;
 use zeta_app_server_protocol::schema_hash;
 use zeta_async_utils::CancellationToken;
 use zeta_core::{
     CoreError, InMemorySessionStore, InMemoryThreadStore, ModelService, SessionCoordinator,
     ThreadController,
 };
+use zeta_protocol::SessionId;
 use zeta_protocol::{
     CommandId, ContentPart, InputItem as ModelInputItem, ModelRequest, ModelResponse, ResponseItem,
     StopReason, ThreadEvent, ThreadItem, ThreadUpdate, TurnStatus,
@@ -135,6 +141,48 @@ fn client_reads_workspace_directories_through_the_typed_contract() {
     assert_eq!(result.entries.len(), 1);
     assert_eq!(result.entries[0].name, "src");
     assert_eq!(result.entries[0].file_type, FsFileType::Directory);
+}
+
+#[test]
+fn client_manages_session_additional_directories_through_typed_contracts() {
+    let mut client = AppServerClient::new(MockTransport(VecDeque::from([
+        r#"{"jsonrpc":"2.0","id":1,"result":{"directories":[]}}"#.into(),
+        r#"{"jsonrpc":"2.0","id":2,"result":{"mutation":"added","directories":[{"root":"/tmp/extra","trust":"trusted"}]}}"#.into(),
+        r#"{"jsonrpc":"2.0","id":3,"result":{"mutation":"removed","directories":[]}}"#.into(),
+    ])));
+    let session_id = SessionId::new("additional-directory-session").unwrap();
+
+    assert!(
+        client
+            .list_workspace_additional_directories(WorkspaceAdditionalDirectoryListParams {
+                session_id: session_id.clone(),
+            })
+            .unwrap()
+            .directories
+            .is_empty()
+    );
+    let added = client
+        .add_workspace_additional_directory(WorkspaceAdditionalDirectoryAddParams {
+            session_id: session_id.clone(),
+            root: "/tmp/extra".into(),
+        })
+        .unwrap();
+    assert_eq!(
+        added.mutation,
+        WorkspaceAdditionalDirectoryMutationDto::Added
+    );
+    assert_eq!(added.directories[0].root, PathBuf::from("/tmp/extra"));
+    let removed = client
+        .remove_workspace_additional_directory(WorkspaceAdditionalDirectoryRemoveParams {
+            session_id,
+            root: "/tmp/extra".into(),
+        })
+        .unwrap();
+    assert_eq!(
+        removed.mutation,
+        WorkspaceAdditionalDirectoryMutationDto::Removed
+    );
+    assert!(removed.directories.is_empty());
 }
 
 #[test]

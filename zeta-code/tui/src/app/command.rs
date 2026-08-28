@@ -41,6 +41,9 @@ pub(crate) enum AppCommand {
     ReadClipboardImage,
     OpenCustomThemePane,
     OpenRewindPane,
+    RemoveAdditionalDirectory {
+        root: PathBuf,
+    },
     RewindToCheckpoint {
         before_turn_id: TurnId,
         checkpoint_label: String,

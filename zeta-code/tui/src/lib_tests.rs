@@ -33,6 +33,16 @@ use zeta_protocol::TurnId;
 use zeta_protocol::TurnStatus;
 
 #[test]
+fn tui_declares_the_host_authority_required_by_add_dir() {
+    assert_eq!(
+        crate::client_capabilities()
+            .workspace_trust_host
+            .map(|capability| capability.version),
+        Some(1)
+    );
+}
+
+#[test]
 fn remote_workspace_is_displayed_without_enabling_local_path_search() {
     let local_root = PathBuf::from("/local/export-root");
     let remote_root = PathBuf::from("/srv/project");
@@ -77,6 +87,7 @@ fn completed_active_turn_only_updates_lifecycle_after_snapshot_mapping() {
         tool_mode: zeta_protocol::ToolMode::Direct,
         approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
         usage: zeta_protocol::ModelUsageSummary::default(),
+        context_usage: None,
         items: vec![
             ThreadItem::UserMessage {
                 item_id: ItemId::new("item_1").unwrap(),
@@ -133,6 +144,7 @@ fn completed_turn_advances_to_the_next_queued_turn() {
             tool_mode: zeta_protocol::ToolMode::Direct,
             approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
             usage: zeta_protocol::ModelUsageSummary::default(),
+            context_usage: None,
             items: vec![ThreadItem::AgentMessage {
                 item_id: ItemId::new("item_first").unwrap(),
                 turn_id: first_id,
@@ -150,6 +162,7 @@ fn completed_turn_advances_to_the_next_queued_turn() {
             tool_mode: zeta_protocol::ToolMode::Direct,
             approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
             usage: zeta_protocol::ModelUsageSummary::default(),
+            context_usage: None,
             items: Vec::new(),
             plan: None,
             pending_interaction: None,
@@ -176,6 +189,7 @@ fn waiting_active_turn_remains_interruptible() {
         tool_mode: zeta_protocol::ToolMode::Direct,
         approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
         usage: zeta_protocol::ModelUsageSummary::default(),
+        context_usage: None,
         items: Vec::new(),
         plan: None,
         pending_interaction: None,
@@ -205,6 +219,7 @@ fn resumed_active_turn_returns_from_waiting_to_working() {
         tool_mode: zeta_protocol::ToolMode::Direct,
         approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
         usage: zeta_protocol::ModelUsageSummary::default(),
+        context_usage: None,
         items: Vec::new(),
         plan: None,
         pending_interaction: None,
@@ -220,6 +235,7 @@ fn resumed_active_turn_returns_from_waiting_to_working() {
         tool_mode: zeta_protocol::ToolMode::Direct,
         approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
         usage: zeta_protocol::ModelUsageSummary::default(),
+        context_usage: None,
         items: Vec::new(),
         plan: None,
         pending_interaction: None,
@@ -243,6 +259,7 @@ fn failed_turn_uses_a_friendly_error_instead_of_debug_output() {
         tool_mode: zeta_protocol::ToolMode::Direct,
         approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
         usage: zeta_protocol::ModelUsageSummary::default(),
+        context_usage: None,
         items: Vec::new(),
         plan: None,
         pending_interaction: None,

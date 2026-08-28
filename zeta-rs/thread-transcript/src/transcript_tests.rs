@@ -34,6 +34,7 @@ fn snapshot_preserves_items_and_turn_plans_in_order() {
             tool_mode: zeta_protocol::ToolMode::Direct,
             approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
             usage: ModelUsageSummary::default(),
+            context_usage: None,
             items: vec![agent_item("item-1", "done")],
             plan: Some(zeta_protocol::PlanUpdate {
                 explanation: Some("why".into()),

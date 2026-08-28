@@ -421,6 +421,26 @@ pub struct ModelInputEstimate {
     pub calibration_revision: String,
 }
 
+/// Latest model-visible context size retained for one Turn.
+///
+/// Provider-reported token counts are preferred. When a provider omits input or output usage,
+/// Core may retain its deterministic request estimate so clients can distinguish an estimate from
+/// an exact provider measurement.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelContextUsage {
+    #[ts(type = "number")]
+    pub used_tokens: u64,
+    pub source: ModelContextUsageSource,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ModelContextUsageSource {
+    ProviderReported,
+    Estimated,
+}
+
 /// One aggregate token metric built only from values explicitly reported by providers.
 ///
 /// `reported` remains useful as a lower bound when one or more invocations omitted this metric;

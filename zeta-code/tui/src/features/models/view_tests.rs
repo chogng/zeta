@@ -24,6 +24,7 @@ fn model_pane_marks_the_preference_and_maps_selection_to_slash_arguments() {
             output_transport: ModelOutputTransport::Unary,
             context_window: None,
             auto_compact_token_limit: None,
+            available_context_window: None,
             capabilities: ModelCapabilities::UNKNOWN,
             supported_reasoning_efforts: Vec::new(),
             default_reasoning_effort: None,

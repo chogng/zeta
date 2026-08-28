@@ -45,3 +45,4 @@ pub use zeta_context_engine::ContextCompactionLimit;
 pub use zeta_context_engine::ContextTokenCount;
 pub use zeta_context_engine::ContextTokenMeasurementCapability;
 pub use zeta_context_engine::ContextTokenMeasurementOutcome;
+pub use zeta_context_engine::ResolvedContextBudget;

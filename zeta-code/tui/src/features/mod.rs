@@ -1,3 +1,4 @@
+pub(crate) mod additional_directories;
 pub(crate) mod config;
 pub(crate) mod connectors;
 pub(crate) mod interactions;

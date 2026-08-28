@@ -120,8 +120,10 @@ use zeta_app_server_protocol::protocol::terminal::TerminalReadResult;
 use zeta_app_server_protocol::protocol::terminal::TerminalResizeParams;
 use zeta_app_server_protocol::protocol::terminal::TerminalWriteParams;
 use zeta_app_server_protocol::protocol::workspace::{
-    WorkspaceFoldersSetParams, WorkspaceFoldersSetResult, WorkspaceSwitchParams,
-    WorkspaceSwitchResult,
+    WorkspaceAdditionalDirectoryAddParams, WorkspaceAdditionalDirectoryListParams,
+    WorkspaceAdditionalDirectoryListResult, WorkspaceAdditionalDirectoryMutationResult,
+    WorkspaceAdditionalDirectoryRemoveParams, WorkspaceFoldersSetParams, WorkspaceFoldersSetResult,
+    WorkspaceSwitchParams, WorkspaceSwitchResult,
 };
 use zeta_app_server_protocol::rpc::{JsonRpcId, JsonRpcRequest, JsonRpcResponse};
 
@@ -364,6 +366,27 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: WorkspaceFoldersSetParams,
     ) -> Result<WorkspaceFoldersSetResult, ClientError> {
         self.call(ClientMethod::WorkspaceFoldersSet, params)
+    }
+
+    pub fn list_workspace_additional_directories(
+        &mut self,
+        params: WorkspaceAdditionalDirectoryListParams,
+    ) -> Result<WorkspaceAdditionalDirectoryListResult, ClientError> {
+        self.call(ClientMethod::WorkspaceAdditionalDirectoryList, params)
+    }
+
+    pub fn add_workspace_additional_directory(
+        &mut self,
+        params: WorkspaceAdditionalDirectoryAddParams,
+    ) -> Result<WorkspaceAdditionalDirectoryMutationResult, ClientError> {
+        self.call(ClientMethod::WorkspaceAdditionalDirectoryAdd, params)
+    }
+
+    pub fn remove_workspace_additional_directory(
+        &mut self,
+        params: WorkspaceAdditionalDirectoryRemoveParams,
+    ) -> Result<WorkspaceAdditionalDirectoryMutationResult, ClientError> {
+        self.call(ClientMethod::WorkspaceAdditionalDirectoryRemove, params)
     }
 
     /// Synchronizes one authoritative editor snapshot with the App Server language runtime.

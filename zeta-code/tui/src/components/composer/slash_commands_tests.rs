@@ -18,6 +18,7 @@ fn builtins_follow_enum_presentation_order() {
             ("rewind", TuiSlashCommandAction::Rewind),
             ("clear", TuiSlashCommandAction::Clear),
             ("config", TuiSlashCommandAction::Config),
+            ("add-dir", TuiSlashCommandAction::AddDir),
             ("fork", TuiSlashCommandAction::Fork),
             ("help", TuiSlashCommandAction::Help),
             ("shortcuts", TuiSlashCommandAction::Shortcuts),
@@ -27,7 +28,6 @@ fn builtins_follow_enum_presentation_order() {
             ("theme", TuiSlashCommandAction::Theme),
             ("new", TuiSlashCommandAction::New),
             ("quit", TuiSlashCommandAction::Quit),
-            ("exit", TuiSlashCommandAction::Exit),
         ]
     );
     assert_eq!(built_in_slash_command_definitions().len(), 22);
@@ -49,6 +49,10 @@ fn builtins_declare_argument_support() {
     );
     assert_eq!(
         TuiSlashCommandAction::Thread.argument_mode(),
+        SlashCommandArgumentMode::Optional
+    );
+    assert_eq!(
+        TuiSlashCommandAction::AddDir.argument_mode(),
         SlashCommandArgumentMode::Optional
     );
     assert_eq!(

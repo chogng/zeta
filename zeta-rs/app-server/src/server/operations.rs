@@ -655,7 +655,10 @@ impl AppServer {
         &self,
         mutation: SessionMutation,
     ) -> Result<SessionResult, RpcError> {
-        self.lifecycle_request(mutation, SessionLifecycleAction::Archive)
+        let session_id = mutation.session_id.clone();
+        let result = self.lifecycle_request(mutation, SessionLifecycleAction::Archive)?;
+        self.clear_session_additional_directories(&session_id);
+        Ok(result)
     }
 
     fn stop_session_request(&self, mutation: SessionMutation) -> Result<SessionResult, RpcError> {

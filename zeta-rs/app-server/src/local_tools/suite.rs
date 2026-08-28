@@ -1,4 +1,5 @@
 use super::LocalShellToolService;
+use super::SessionAdditionalDirectoryAccess;
 use super::read_only_sandbox;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -6,6 +7,7 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
+use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use zeta_action_policy::{
@@ -15,9 +17,11 @@ use zeta_action_policy::{
 use zeta_async_utils::CancellationToken;
 use zeta_core::{CoreError, ToolAuthorization, ToolExecutionFacts, ToolOutputSink, ToolService};
 use zeta_file_system::{FileWriteCondition, LocalFileSystem, WorkspaceFileSystem};
+use zeta_protocol::SessionId;
 use zeta_protocol::{ToolCall, ToolDefinition, ToolExecutionOutput, ToolName, ToolOutputStream};
 use zeta_shell_command::RipgrepExecutable;
 use zeta_workspace::TrustedWorkspace;
+use zeta_workspace::WorkspaceRoot;
 
 const READ_DESCRIPTION: &str = r#"Reads a file from the workspace and returns its content with line numbers.
 
@@ -91,14 +95,24 @@ pub(crate) struct LocalToolSuite<B> {
     shell: LocalShellToolService<B>,
     ripgrep: RipgrepExecutable,
     workspace: TrustedWorkspace,
-    file_system: LocalFileSystem,
+    additional_directories: Arc<SessionAdditionalDirectoryAccess>,
     read_paths: Mutex<BTreeSet<(String, PathBuf)>>,
     read_fingerprints: Mutex<std::collections::BTreeMap<(String, PathBuf), String>>,
     definitions: Vec<ToolDefinition>,
 }
 
+struct ResolvedFilePath {
+    root: WorkspaceRoot,
+    relative: PathBuf,
+    absolute: PathBuf,
+}
+
 impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
-    pub(super) fn new(shell: LocalShellToolService<B>, ripgrep: RipgrepExecutable) -> Self {
+    pub(super) fn new(
+        shell: LocalShellToolService<B>,
+        ripgrep: RipgrepExecutable,
+        additional_directories: Arc<SessionAdditionalDirectoryAccess>,
+    ) -> Self {
         let workspace = shell.workspace.clone();
         let definitions = vec![
             shell.definition.clone(),
@@ -111,40 +125,71 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         Self {
             shell,
             ripgrep,
-            file_system: LocalFileSystem::new(workspace.root().clone()),
             workspace,
+            additional_directories,
             read_paths: Mutex::new(BTreeSet::new()),
             read_fingerprints: Mutex::new(std::collections::BTreeMap::new()),
             definitions,
         }
     }
 
-    fn resolve(&self, value: &str, existing: bool) -> Result<(PathBuf, PathBuf), String> {
+    fn resolve(
+        &self,
+        value: &str,
+        existing: bool,
+        session_id: Option<&SessionId>,
+    ) -> Result<ResolvedFilePath, String> {
+        self.workspace
+            .ensure_active()
+            .map_err(|error| error.to_string())?;
         let path = PathBuf::from(value);
-        let relative = if path.is_absolute() {
-            path.strip_prefix(self.workspace.root().canonical_path())
-                .or_else(|_| path.strip_prefix(self.workspace.root().requested_path()))
-                .map_err(|_| format!("path is outside the workspace: {value}"))?
-                .to_path_buf()
-        } else {
-            path
-        };
-        if relative.as_os_str().is_empty() {
-            return Ok((
-                relative,
-                self.workspace.root().canonical_path().to_path_buf(),
-            ));
+        let mut roots = vec![self.workspace.root().clone()];
+        if let Some(session_id) = session_id {
+            roots.extend(
+                self.additional_directories
+                    .roots(session_id)
+                    .into_iter()
+                    .filter(|workspace| workspace.ensure_active().is_ok())
+                    .map(|workspace| workspace.root().clone()),
+            );
         }
-        let resolved = if existing {
-            self.workspace.root().resolve_existing(&relative)
+        let (root, relative) = if path.is_absolute() {
+            roots
+                .into_iter()
+                .filter_map(|root| {
+                    path.strip_prefix(root.canonical_path())
+                        .or_else(|_| path.strip_prefix(root.requested_path()))
+                        .ok()
+                        .map(|relative| (root, relative.to_path_buf()))
+                })
+                .max_by_key(|(root, _)| root.canonical_path().components().count())
+                .ok_or_else(|| {
+                    format!("path is outside the workspace and added directories: {value}")
+                })?
         } else {
-            self.workspace.root().resolve_for_write(&relative)
+            (self.workspace.root().clone(), path)
+        };
+        let absolute = if relative.as_os_str().is_empty() {
+            Ok(root.canonical_path().to_path_buf())
+        } else if existing {
+            root.resolve_existing(&relative)
+        } else {
+            root.resolve_for_write(&relative)
         }
         .map_err(|_| format!("path is outside the workspace: {value}"))?;
-        Ok((relative, resolved))
+        Ok(ResolvedFilePath {
+            root,
+            relative,
+            absolute,
+        })
     }
 
-    fn review(&self, call: &ToolCall, write: bool) -> Result<ActionReviewRequest, CoreError> {
+    fn review(
+        &self,
+        call: &ToolCall,
+        write: bool,
+        session_id: Option<&SessionId>,
+    ) -> Result<ActionReviewRequest, CoreError> {
         let path = call
             .arguments
             .get("path")
@@ -156,19 +201,24 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
                     .to_str()
                     .unwrap_or(".")
             });
-        let (_, resolved) = self.resolve(path, false).map_err(CoreError::Policy)?;
+        let resolved = self
+            .resolve(path, false, session_id)
+            .map_err(CoreError::Policy)?;
         let source_id = call.name.as_str();
         let canonical = serde_json::to_vec(
-            &json!({"tool": source_id, "path": resolved, "arguments": call.arguments}),
+            &json!({"tool": source_id, "path": resolved.absolute, "arguments": call.arguments}),
         )
         .map_err(|error| CoreError::Policy(error.to_string()))?;
         let capabilities = CapabilitySet::new([
             Capability::new(
                 CapabilityKind::FileRead,
-                self.workspace.root().canonical_path().display().to_string(),
+                resolved.root.canonical_path().display().to_string(),
             ),
             if write {
-                Capability::new(CapabilityKind::FileWrite, resolved.display().to_string())
+                Capability::new(
+                    CapabilityKind::FileWrite,
+                    resolved.absolute.display().to_string(),
+                )
             } else {
                 Capability::new(
                     CapabilityKind::ProcessSpawn,
@@ -184,7 +234,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 } else {
                     ActionKind::LocalProcess(ProcessInvocationKind::Direct)
                 },
-                format!("{} {}", source_id, resolved.display()),
+                format!("{} {}", source_id, resolved.absolute.display()),
                 capabilities,
             ),
             ActionProvenance::new(ActionSource::BuiltInTool, source_id),
@@ -199,10 +249,17 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         ))
     }
 
-    fn read_file(&self, call: &ToolCall, scope: &str) -> Result<ToolExecutionOutput, CoreError> {
+    fn read_file(
+        &self,
+        call: &ToolCall,
+        scope: &str,
+        session_id: Option<&SessionId>,
+    ) -> Result<ToolExecutionOutput, CoreError> {
         let path = string_arg(&call.arguments, "path")?;
-        let (relative, resolved) = self.resolve(&path, false).map_err(CoreError::Execution)?;
-        let metadata = fs::metadata(&resolved)
+        let resolved = self
+            .resolve(&path, false, session_id)
+            .map_err(CoreError::Execution)?;
+        let metadata = fs::metadata(&resolved.absolute)
             .map_err(|_| CoreError::Execution(format!("file not found: {path}")))?;
         if metadata.is_dir() {
             return Ok(ToolExecutionOutput::Failure(format!(
@@ -214,7 +271,8 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 "file too large to read: {path} exceeds 10485760 bytes"
             )));
         }
-        let bytes = fs::read(&resolved).map_err(|error| CoreError::Execution(error.to_string()))?;
+        let bytes = fs::read(&resolved.absolute)
+            .map_err(|error| CoreError::Execution(error.to_string()))?;
         let text = match String::from_utf8(bytes) {
             Ok(text) if !text.as_bytes().contains(&0) => text,
             _ => {
@@ -226,12 +284,12 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         self.read_paths
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert((scope.into(), relative.clone()));
+            .insert((scope.into(), resolved.absolute.clone()));
         self.read_fingerprints
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(
-                (scope.into(), relative.clone()),
+                (scope.into(), resolved.absolute.clone()),
                 format!("{:x}", Sha256::digest(text.as_bytes())),
             );
         if text.is_empty() {
@@ -262,68 +320,80 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         Ok(ToolExecutionOutput::Success(output.join("\n")))
     }
 
-    fn write_file(&self, call: &ToolCall, scope: &str) -> Result<ToolExecutionOutput, CoreError> {
+    fn write_file(
+        &self,
+        call: &ToolCall,
+        scope: &str,
+        session_id: Option<&SessionId>,
+    ) -> Result<ToolExecutionOutput, CoreError> {
         let path = string_arg(&call.arguments, "path")?;
         let content = string_arg(&call.arguments, "content")?;
-        let (relative, resolved) = self.resolve(&path, false).map_err(CoreError::Execution)?;
-        if resolved.is_dir() {
+        let resolved = self
+            .resolve(&path, false, session_id)
+            .map_err(CoreError::Execution)?;
+        if resolved.absolute.is_dir() {
             return Ok(ToolExecutionOutput::Failure(format!(
                 "{path} is a directory"
             )));
         }
-        if resolved.exists()
+        if resolved.absolute.exists()
             && !self
                 .read_paths
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .contains(&(scope.into(), relative.clone()))
+                .contains(&(scope.into(), resolved.absolute.clone()))
         {
             return Ok(ToolExecutionOutput::Failure(format!(
                 "{path} exists but has not been read in this conversation. Read it first, or choose a new path"
             )));
         }
-        if let Some(parent) = resolved.parent() {
+        if let Some(parent) = resolved.absolute.parent() {
             fs::create_dir_all(parent).map_err(|error| CoreError::Execution(error.to_string()))?;
         }
         let expected_revision = self
             .read_fingerprints
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(&(scope.into(), relative.clone()))
+            .get(&(scope.into(), resolved.absolute.clone()))
             .cloned();
-        if resolved.exists() && expected_revision.is_none() {
+        if resolved.absolute.exists() && expected_revision.is_none() {
             return Ok(ToolExecutionOutput::Failure(format!(
                 "{path} must be read again after reconnecting before it can be overwritten"
             )));
         }
+        let file_system = LocalFileSystem::new(resolved.root.clone());
         let write = match expected_revision {
-            Some(revision) => self.file_system.write_file_with_condition(
-                &relative,
+            Some(revision) => file_system.write_file_with_condition(
+                &resolved.relative,
                 content.as_bytes(),
                 MAX_WRITE_FILE_BYTES,
                 &FileWriteCondition::ExpectedRevision(revision),
             ),
             None => {
-                self.file_system
-                    .write_file(&relative, content.as_bytes(), MAX_WRITE_FILE_BYTES)
+                file_system.write_file(&resolved.relative, content.as_bytes(), MAX_WRITE_FILE_BYTES)
             }
         };
         write.map_err(|error| CoreError::Execution(error.to_string()))?;
         self.read_paths
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert((scope.into(), relative.clone()));
+            .insert((scope.into(), resolved.absolute.clone()));
         self.read_fingerprints
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(
-                (scope.into(), relative),
+                (scope.into(), resolved.absolute),
                 format!("{:x}", Sha256::digest(content.as_bytes())),
             );
         Ok(ToolExecutionOutput::Success(format!("wrote {path}")))
     }
 
-    fn edit(&self, call: &ToolCall, scope: &str) -> Result<ToolExecutionOutput, CoreError> {
+    fn edit(
+        &self,
+        call: &ToolCall,
+        scope: &str,
+        session_id: Option<&SessionId>,
+    ) -> Result<ToolExecutionOutput, CoreError> {
         let path = string_arg(&call.arguments, "path")?;
         let old = string_arg(&call.arguments, "old_string")?;
         let new = string_arg(&call.arguments, "new_string")?;
@@ -333,24 +403,26 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 "new_string must differ from old_string".into(),
             ));
         }
-        let (relative, resolved) = self.resolve(&path, false).map_err(CoreError::Execution)?;
+        let resolved = self
+            .resolve(&path, false, session_id)
+            .map_err(CoreError::Execution)?;
         if !self
             .read_paths
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .contains(&(scope.into(), relative.clone()))
+            .contains(&(scope.into(), resolved.absolute.clone()))
         {
             return Ok(ToolExecutionOutput::Failure(format!(
                 "{path} has not been read in this conversation. Read it first"
             )));
         }
-        let text = fs::read_to_string(&resolved)
+        let text = fs::read_to_string(&resolved.absolute)
             .map_err(|error| CoreError::Execution(error.to_string()))?;
         if let Some(expected) = self
             .read_fingerprints
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(&(scope.into(), relative.clone()))
+            .get(&(scope.into(), resolved.absolute.clone()))
             && expected != &format!("{:x}", Sha256::digest(text.as_bytes()))
         {
             return Ok(ToolExecutionOutput::Failure(format!(
@@ -381,16 +453,16 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
             .read_fingerprints
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(&(scope.into(), relative.clone()))
+            .get(&(scope.into(), resolved.absolute.clone()))
             .cloned()
         else {
             return Ok(ToolExecutionOutput::Failure(format!(
                 "{path} must be read again after reconnecting before it can be edited"
             )));
         };
-        self.file_system
+        LocalFileSystem::new(resolved.root.clone())
             .write_file_with_condition(
-                &relative,
+                &resolved.relative,
                 replaced.as_bytes(),
                 MAX_WRITE_FILE_BYTES,
                 &FileWriteCondition::ExpectedRevision(expected_revision),
@@ -400,7 +472,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(
-                (scope.into(), relative),
+                (scope.into(), resolved.absolute),
                 format!("{:x}", Sha256::digest(replaced.as_bytes())),
             );
         let lines = replaced.lines().collect::<Vec<_>>();
@@ -419,11 +491,14 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         &self,
         call: &ToolCall,
         cancellation: &CancellationToken,
+        session_id: Option<&SessionId>,
     ) -> Result<ToolExecutionOutput, CoreError> {
         let pattern = string_arg(&call.arguments, "pattern")?;
         let path = nullable_string(&call.arguments, "path")?
             .unwrap_or_else(|| self.workspace.root().canonical_path().display().to_string());
-        let (_, resolved) = self.resolve(&path, false).map_err(CoreError::Execution)?;
+        let resolved = self
+            .resolve(&path, false, session_id)
+            .map_err(CoreError::Execution)?;
         let glob = nullable_string(&call.arguments, "glob")?;
         let insensitive = nullable_bool(&call.arguments, "case_insensitive")?.unwrap_or(false);
         let mut command = Command::new(self.ripgrep.path());
@@ -434,7 +509,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         if let Some(glob) = glob {
             command.args(["--glob", &glob]);
         }
-        command.arg("--").arg(pattern).arg(resolved);
+        command.arg("--").arg(pattern).arg(resolved.absolute);
         let output = match run_search(command, cancellation) {
             Ok(output) => output,
             Err(SearchError::Cancelled(error)) => return Err(error),
@@ -459,15 +534,18 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         &self,
         call: &ToolCall,
         cancellation: &CancellationToken,
+        session_id: Option<&SessionId>,
     ) -> Result<ToolExecutionOutput, CoreError> {
         let pattern = string_arg(&call.arguments, "pattern")?;
         let path = nullable_string(&call.arguments, "path")?
             .unwrap_or_else(|| self.workspace.root().canonical_path().display().to_string());
-        let (_, resolved) = self.resolve(&path, false).map_err(CoreError::Execution)?;
+        let resolved = self
+            .resolve(&path, false, session_id)
+            .map_err(CoreError::Execution)?;
         let mut command = Command::new(self.ripgrep.path());
         command
             .args(["--no-config", "--files", "--glob", &pattern])
-            .arg(resolved);
+            .arg(resolved.absolute);
         let output = match run_search(command, cancellation) {
             Ok(output) => output,
             Err(SearchError::Cancelled(error)) => return Err(error),
@@ -522,8 +600,32 @@ impl<B: zeta_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
             return self.shell.prepare(call);
         }
         match call.name.as_str() {
-            "read_file" | "grep" | "glob" => self.review(call, false),
-            "write_file" | "edit" => self.review(call, true),
+            "read_file" | "grep" | "glob" => self.review(call, false, None),
+            "write_file" | "edit" => self.review(call, true, None),
+            _ => Err(CoreError::Policy(format!(
+                "tool is not available: {}",
+                call.name
+            ))),
+        }
+    }
+
+    fn prepare_with_facts(
+        &self,
+        call: &ToolCall,
+        facts: &ToolExecutionFacts,
+    ) -> Result<ActionReviewRequest, CoreError> {
+        if call.name.as_str() == "shell-command" {
+            return self.shell.prepare(call);
+        }
+        let session_id = facts
+            .execution_identity()
+            .map(|identity| identity.session_id())
+            .ok_or_else(|| {
+                CoreError::Policy("local tools require durable caller identity".into())
+            })?;
+        match call.name.as_str() {
+            "read_file" | "grep" | "glob" => self.review(call, false, Some(session_id)),
+            "write_file" | "edit" => self.review(call, true, Some(session_id)),
             _ => Err(CoreError::Policy(format!(
                 "tool is not available: {}",
                 call.name
@@ -537,7 +639,7 @@ impl<B: zeta_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
         authorization: &ToolAuthorization,
         cancellation: &CancellationToken,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        self.execute_scoped(call, authorization, cancellation, "direct")
+        self.execute_scoped(call, authorization, cancellation, "direct", None)
     }
 
     fn execute_with_facts(
@@ -564,21 +666,22 @@ impl<B: zeta_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
         facts: &ToolExecutionFacts,
         sink: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        let scope = facts
-            .execution_identity()
-            .map(|identity| identity.thread_id().to_string())
-            .ok_or_else(|| {
-                CoreError::Execution("local tools require durable caller identity".into())
-            })?;
+        let identity = facts.execution_identity().ok_or_else(|| {
+            CoreError::Execution("local tools require durable caller identity".into())
+        })?;
+        let scope = identity.thread_id().to_string();
+        let session_id = identity.session_id();
         for path in facts.read_paths() {
-            if let Ok((relative, _)) = self.resolve(&path.display().to_string(), true) {
+            if let Ok(resolved) = self.resolve(&path.display().to_string(), true, Some(session_id))
+            {
                 self.read_paths
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .insert((scope.clone(), relative));
+                    .insert((scope.clone(), resolved.absolute));
             }
         }
-        let output = self.execute_scoped(call, authorization, cancellation, &scope)?;
+        let output =
+            self.execute_scoped(call, authorization, cancellation, &scope, Some(session_id))?;
         if let ToolExecutionOutput::Success(text) = &output {
             sink.emit(ToolOutputStream::Stdout, text.clone())?;
         }
@@ -592,7 +695,7 @@ impl<B: zeta_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
         cancellation: &CancellationToken,
         sink: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        let output = self.execute_scoped(call, authorization, cancellation, "direct")?;
+        let output = self.execute_scoped(call, authorization, cancellation, "direct", None)?;
         if let ToolExecutionOutput::Success(text) = &output {
             sink.emit(ToolOutputStream::Stdout, text.clone())?;
         }
@@ -607,6 +710,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         authorization: &ToolAuthorization,
         cancellation: &CancellationToken,
         scope: &str,
+        session_id: Option<&SessionId>,
     ) -> Result<ToolExecutionOutput, CoreError> {
         if call.name.as_str() == "shell-command" {
             return self.shell.execute(call, authorization, cancellation);
@@ -615,11 +719,11 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
             .check()
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
         match call.name.as_str() {
-            "read_file" => self.read_file(call, scope),
-            "write_file" => self.write_file(call, scope),
-            "edit" => self.edit(call, scope),
-            "grep" => self.grep(call, cancellation),
-            "glob" => self.glob(call, cancellation),
+            "read_file" => self.read_file(call, scope, session_id),
+            "write_file" => self.write_file(call, scope, session_id),
+            "edit" => self.edit(call, scope, session_id),
+            "grep" => self.grep(call, cancellation, session_id),
+            "glob" => self.glob(call, cancellation, session_id),
             _ => Ok(ToolExecutionOutput::Failure(format!(
                 "tool is not available: {}",
                 call.name
@@ -640,6 +744,10 @@ enum SearchError {
     Cancelled(CoreError),
     Failed(String),
 }
+
+#[cfg(test)]
+#[path = "suite_tests.rs"]
+mod tests;
 
 fn run_search(
     mut command: Command,

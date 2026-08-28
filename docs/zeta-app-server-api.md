@@ -249,7 +249,7 @@ Desktop 当前实现和 Playwright 后续边界见
 | `session/request` | Session | canonical typed mutation request；覆盖 Session、child Thread 与 Turn 操作 |
 | `session/unsubscribe` | connection | 删除订阅 |
 | `session/request` | Session | 通过 tagged request 完成 Session、child Thread 和 Turn mutation |
-| `model/list` | global model catalog | 返回 Zeta 静态模型 identity、display name、access、context、capabilities 与 defaults；不探测 provider 或 ChatGPT 账户 |
+| `model/list` | global model catalog | 返回 Zeta 模型 identity、display name、access、完整/可用 context capacity、capabilities 与 defaults；不探测 provider 或 ChatGPT 账户 |
 | `session/thread/read` | Session + Thread | 读取 canonical Thread snapshot |
 | `session/thread/subscribe` | Session + Thread + connection | snapshot + `afterSequence` 之后的 durable gap |
 | `session/thread/unsubscribe` | Session + Thread + connection | 删除 child Thread 订阅 |
@@ -621,7 +621,7 @@ spawn 前执行 `env_clear`，所以 PTY 看不到最终 map 之外的 App Serve
 `ModelRef`。选择结果写入 Session event stream，只影响该 Session。`session/request::StartTurn` 将 Session
 当前模型复制到新 Turn；后续 Session 或全局配置变化不会改变已经启动的 Turn。
 
-`model/list` 的 direct provider seed、ChatGPT 订阅条目和 Kimi Code 订阅条目都派生自 `zeta-model-provider-config::STATIC_MODEL_CATALOG`。每个条目统一返回 provider-scoped identity、display name、`access`、context window、automatic compaction threshold、capabilities、reasoning efforts 和默认 personality；列目录不会调用 provider、`account/read` 或 upstream `model/list` 做健康检查。
+`model/list` 的 direct provider seed、ChatGPT 订阅条目和 Kimi Code 订阅条目都派生自 `zeta-model-provider-config::STATIC_MODEL_CATALOG`。每个条目统一返回 provider-scoped identity、display name、`access`、完整 context window、automatic compaction threshold、`availableContextWindow`、capabilities、reasoning efforts 和默认 personality。`availableContextWindow` 使用与 Turn 执行相同的当前配置和预算规则，已经扣除 output reservation、safety margin 与 ordinary auto-compaction 边界；列目录不会调用 provider、`account/read` 或 upstream `model/list` 做健康检查。
 `session/request::SetModel` 只校验精确 identity 属于产品目录，然后把选择持久化到 Session。Provider
 配置、认证、账户 entitlement、rate limit、传输和模型端拒绝都由本地 `TurnExecutor` 调用的模型服务
 验证，并以该 Turn 的稳定错误出现在对话中；它们不回写模型列表，也不阻止用户预先选择。`access = subscription` 只表示接入方式；静态 row 的 `runtime` 选择 provider-specific authenticated target。OpenAI 与 Kimi subscription rows 都使用本地 `TurnExecutor`。登录账户适配器内部的 `openai-chatgpt` identity 不进入 ModelRef，Kimi account/model provider identity 都是 `kimi`。登录状态不会隐式改变 Session model。
@@ -641,9 +641,7 @@ Thread {
 }
 ```
 
-每个 Turn 始终包含完整的 `items: ThreadItem[]`、可选 `pendingInteraction` metadata 与可选稳定
-错误。`pendingInteraction` 不含 interaction payload；完整请求只能通过 owner-directed delivery
-获得。客户端不得从日志文本或瞬态 delta 推断权威终态。
+每个 Turn 始终包含完整的 `items: ThreadItem[]`、累计 `usage`、可选 `contextUsage`、可选 `pendingInteraction` metadata 与可选稳定错误。`contextUsage` 是最近一次模型调用完成后的当前 model-visible context token 数；优先使用 provider-reported input + output，缺字段时使用 Core 的 deterministic input estimate 并以 `source = estimated` 标识。`pendingInteraction` 不含 interaction payload；完整请求只能通过 owner-directed delivery 获得。客户端不得从日志文本或瞬态 delta 推断权威终态或当前上下文占用。
 
 `session/request` 的 `StartTurn` 参数：
 

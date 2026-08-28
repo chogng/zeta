@@ -7,7 +7,15 @@ use super::decode;
 use super::result;
 use super::workspace_runtime::WorkspaceRuntimeError;
 use serde_json::Value;
+use zeta_add_dir::DirectoryScopeMutation;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryAddParams;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryDto;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryListParams;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryListResult;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryMutationDto;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryMutationResult;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryRemoveParams;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceFolderDto;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceFoldersSetParams;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceFoldersSetResult;
@@ -31,6 +39,59 @@ use zeta_workspace::WorkspaceTrustDecision;
 use zeta_workspace::WorkspaceTrustSource;
 
 impl AppServer {
+    pub(super) fn workspace_additional_directory_list(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        require_workspace_trust_host(connection)?;
+        let params: WorkspaceAdditionalDirectoryListParams = decode(params)?;
+        let directories = self
+            .list_session_additional_directories(&params.session_id)
+            .map_err(workspace_runtime_error)?;
+        result(&WorkspaceAdditionalDirectoryListResult {
+            directories: additional_directory_dtos(directories),
+        })
+    }
+
+    pub(super) fn workspace_additional_directory_add(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        require_workspace_trust_host(connection)?;
+        let params: WorkspaceAdditionalDirectoryAddParams = decode(params)?;
+        if params.root.as_os_str().is_empty() {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let (mutation, directories) = self
+            .add_session_additional_directory(&params.session_id, params.root)
+            .map_err(workspace_runtime_error)?;
+        result(&WorkspaceAdditionalDirectoryMutationResult {
+            mutation: additional_directory_mutation(mutation),
+            directories: additional_directory_dtos(directories),
+        })
+    }
+
+    pub(super) fn workspace_additional_directory_remove(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        require_workspace_trust_host(connection)?;
+        let params: WorkspaceAdditionalDirectoryRemoveParams = decode(params)?;
+        if params.root.as_os_str().is_empty() {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let (mutation, directories) = self
+            .remove_session_additional_directory(&params.session_id, &params.root)
+            .map_err(workspace_runtime_error)?;
+        result(&WorkspaceAdditionalDirectoryMutationResult {
+            mutation: additional_directory_mutation(mutation),
+            directories: additional_directory_dtos(directories),
+        })
+    }
+
     pub(super) fn workspace_trust_read(
         &self,
         connection: &ConnectionState,
@@ -279,6 +340,35 @@ impl AppServer {
                 Some(setting.into_decision())
             }
         })
+    }
+}
+
+fn additional_directory_dtos(
+    directories: Vec<super::workspace_runtime::SessionAdditionalDirectorySnapshot>,
+) -> Vec<WorkspaceAdditionalDirectoryDto> {
+    directories
+        .into_iter()
+        .map(|directory| WorkspaceAdditionalDirectoryDto {
+            root: directory.root,
+            trust: workspace_trust_state(directory.decision),
+        })
+        .collect()
+}
+
+fn additional_directory_mutation(
+    mutation: DirectoryScopeMutation,
+) -> WorkspaceAdditionalDirectoryMutationDto {
+    match mutation {
+        DirectoryScopeMutation::AddedDirectory | DirectoryScopeMutation::AddedSource => {
+            WorkspaceAdditionalDirectoryMutationDto::Added
+        }
+        DirectoryScopeMutation::AlreadyPresent => {
+            WorkspaceAdditionalDirectoryMutationDto::AlreadyPresent
+        }
+        DirectoryScopeMutation::RemovedDirectory | DirectoryScopeMutation::RemovedSource => {
+            WorkspaceAdditionalDirectoryMutationDto::Removed
+        }
+        DirectoryScopeMutation::NotPresent => WorkspaceAdditionalDirectoryMutationDto::NotPresent,
     }
 }
 

@@ -168,6 +168,7 @@ fn selected_rewind_checkpoint_emits_a_typed_rewind_action() {
             tool_mode: zeta_protocol::ToolMode::Direct,
             approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
             usage: zeta_protocol::ModelUsageSummary::default(),
+            context_usage: None,
             items: vec![ThreadItem::UserMessage {
                 item_id: ItemId::new("item-1").unwrap(),
                 turn_id: turn_id.clone(),
@@ -457,7 +458,7 @@ fn active_turn_accepts_clipboard_images_for_a_follow_up() {
 }
 
 #[test]
-fn control_c_requests_exit() {
+fn control_c_requests_quit() {
     let mut app = App::new();
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
@@ -466,7 +467,7 @@ fn control_c_requests_exit() {
 }
 
 #[test]
-fn quit_slash_command_requests_exit_without_starting_a_turn() {
+fn quit_slash_command_requests_quit_without_starting_a_turn() {
     let mut app = App::new();
     app.insert_text("/quit");
 

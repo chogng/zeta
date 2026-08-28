@@ -6,6 +6,7 @@ use crate::app::help_selection_view;
 use crate::components::composer::ComposerInput;
 use crate::components::composer::SlashCommandInvocation;
 use crate::components::composer::TuiSlashCommandAction;
+use crate::features::additional_directories;
 use crate::features::config;
 use crate::features::mcp;
 use crate::features::models;
@@ -17,7 +18,7 @@ use crate::features::sessions::NewConversationKind;
 use crate::features::sessions::ResumeOutcome;
 use crate::features::sessions::ThreadSelectionPurpose;
 use crate::features::skills::load_selection;
-use crate::features::status::status_view;
+use crate::features::status;
 use crate::features::theme::theme_selection_view;
 use crate::ui;
 use std::fmt;
@@ -25,6 +26,7 @@ use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
 use zeta_app_server_protocol::protocol::skills::SkillCatalogReloadDto;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryMutationDto;
 use zeta_protocol::TurnId;
 
 #[cfg(test)]
@@ -109,15 +111,16 @@ impl ActiveConversation {
 
         match command {
             TuiSlashCommandAction::Status => {
-                let config = client.read_config()?;
                 output
                     .events
-                    .push(AppEvent::SelectionViewOpened(status_view(
-                        self.session_id().as_str(),
-                        self.thread_id().as_str(),
-                        self.thread_sequence(),
-                        &config::preferred_model(config.preferred_model.as_ref()),
-                    )));
+                    .push(AppEvent::SelectionViewOpened(status::load_status_view(
+                        client,
+                        status::StatusRequestScope {
+                            session_id: self.session_id(),
+                            thread_id: self.thread_id(),
+                            model: self.model(),
+                        },
+                    )?));
             }
             TuiSlashCommandAction::Skills => {
                 output
@@ -240,6 +243,42 @@ impl ActiveConversation {
                         .map_err(session_error)?,
                 );
             }
+            TuiSlashCommandAction::AddDir => {
+                if arguments.is_empty() {
+                    output
+                        .events
+                        .push(AppEvent::AdditionalDirectoriesViewOpened(
+                            additional_directories::load_selection(client, self.session_id())?,
+                        ));
+                } else {
+                    let command = format!("/add-dir {arguments}");
+                    let update = additional_directories::add(
+                        client,
+                        self.session_id(),
+                        std::path::PathBuf::from(&arguments),
+                    )?;
+                    let result = match update.mutation {
+                        WorkspaceAdditionalDirectoryMutationDto::Added => {
+                            format!("Added directory {arguments}")
+                        }
+                        WorkspaceAdditionalDirectoryMutationDto::AlreadyPresent => {
+                            format!("Directory already added: {arguments}")
+                        }
+                        WorkspaceAdditionalDirectoryMutationDto::Removed
+                        | WorkspaceAdditionalDirectoryMutationDto::NotPresent => {
+                            return Err(CommandExecutionError(
+                                "add-dir returned an invalid mutation result".into(),
+                            ));
+                        }
+                    };
+                    output
+                        .events
+                        .push(AppEvent::CommandStarted(command.clone()));
+                    output
+                        .events
+                        .push(AppEvent::CommandCompleted { command, result });
+                }
+            }
             TuiSlashCommandAction::Fork => {
                 output.conversation_change = Some(
                     self.fork_active_thread(client, &arguments)
@@ -292,9 +331,9 @@ impl ActiveConversation {
                     });
                 }
             }
-            TuiSlashCommandAction::Quit | TuiSlashCommandAction::Exit => {
+            TuiSlashCommandAction::Quit => {
                 return Err(CommandExecutionError(
-                    "exit command reached the product dispatcher".into(),
+                    "quit command reached the product dispatcher".into(),
                 ));
             }
         }

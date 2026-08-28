@@ -38,6 +38,7 @@ use zeta_core::ModelImageInputPolicy;
 use zeta_core::ModelSelection;
 use zeta_core::ModelService;
 use zeta_core::ModelStreamSink as CoreModelStreamSink;
+use zeta_core::ResolvedContextBudget;
 use zeta_core::SessionCoordinator;
 use zeta_core::ThreadController;
 use zeta_extensions::ExtensionRoot;
@@ -1776,17 +1777,20 @@ impl ModelCatalog for ConfigBackedModelService {
             .map_err(|error| CoreError::Model(error.to_string()))?
             .into_iter()
             .map(|entry| {
-                zeta_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
-                    entry.model().clone(),
-                    entry.info(),
-                    self.provider_configs
-                        .get(&entry.model().provider)
-                        .expect("listed model provider came from the same registry")
-                        .output_transport,
+                runtime_catalog_entry(
+                    zeta_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
+                        entry.model().clone(),
+                        entry.info(),
+                        self.provider_configs
+                            .get(&entry.model().provider)
+                            .expect("listed model provider came from the same registry")
+                            .output_transport,
+                    ),
+                    &config,
                 )
             })
-            .collect::<Vec<_>>();
-        if let Some(preferred) = config.preferred_model
+            .collect::<Result<Vec<_>, CoreError>>()?;
+        if let Some(preferred) = config.preferred_model.clone()
             && !models.iter().any(|entry| entry.model == preferred)
         {
             let output_transport = self
@@ -1798,13 +1802,14 @@ impl ModelCatalog for ConfigBackedModelService {
                 .models_manager
                 .resolve_static(&preferred, &ModelRequirements::agent())
                 .map_err(|error| CoreError::Model(error.to_string()))?;
-            models.push(
+            models.push(runtime_catalog_entry(
                 zeta_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
                     preferred,
                     resolved.entry().info(),
                     output_transport,
                 ),
-            );
+                &config,
+            )?);
         }
         models.sort_by(|left, right| {
             left.model
@@ -1943,6 +1948,25 @@ fn context_budget_for_config(config: &ResolvedConfig) -> Result<ContextBudget, C
         ContextTokenCount::new(MODEL_CONTEXT_SAFETY_MARGIN_TOKENS),
         compaction_limit,
     ))
+}
+
+fn runtime_catalog_entry(
+    mut entry: zeta_app_server_protocol::protocol::model::ModelCatalogEntry,
+    config: &ResolvedConfig,
+) -> Result<zeta_app_server_protocol::protocol::model::ModelCatalogEntry, CoreError> {
+    let mut selected = config.clone();
+    selected.preferred_model = Some(entry.model.clone());
+    match context_budget_for_config(&selected)?
+        .resolve()
+        .map_err(|error| CoreError::Context(error.to_string()))?
+    {
+        ResolvedContextBudget::ProviderManaged => {}
+        ResolvedContextBudget::CoreManaged(limits) => {
+            entry.context_window = Some(limits.context_window().get());
+            entry.available_context_window = Some(limits.maximum_input().get());
+        }
+    }
+    Ok(entry)
 }
 
 fn image_input_policy_for_config(

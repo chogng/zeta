@@ -47,8 +47,11 @@ use crate::tool_composition::ToolPort;
 use crate::tool_executor_adapter::PreparedToolExecution;
 use crate::tool_executor_adapter::ToolExecutorReviewer;
 
+#[path = "local_tools/additional_directories.rs"]
+mod additional_directories;
 mod suite;
 
+pub(crate) use additional_directories::SessionAdditionalDirectoryAccess;
 pub(crate) use suite::LocalToolSuite;
 
 const LOCAL_GRANT_SNAPSHOT_REVISION: &str = "local-static-grants-v1";
@@ -106,6 +109,7 @@ struct LocalExecutorContribution {
 pub(crate) fn compose_local_tools_with_config(
     workspace: TrustedWorkspace,
     policy_config: &LocalExecPolicyConfig,
+    additional_directories: Arc<SessionAdditionalDirectoryAccess>,
 ) -> Result<LocalToolComposition, LocalToolError> {
     if workspace.capability() != WorkspaceCapability::ExecuteProcess {
         return Err(LocalToolError::trust(
@@ -158,7 +162,7 @@ pub(crate) fn compose_local_tools_with_config(
         native_sandbox(&install_context)?,
         action_policy_revision.clone(),
     )?;
-    let service = LocalToolSuite::new(shell, ripgrep.clone());
+    let service = LocalToolSuite::new(shell, ripgrep.clone(), additional_directories);
     Ok(LocalToolComposition {
         tools: Arc::new(service),
         policy: Arc::new(policy),
@@ -259,6 +263,23 @@ impl ToolService for ExtendedLocalTools {
             self.extension.prepare(call)
         } else {
             self.primary.prepare(call)
+        }
+    }
+
+    fn prepare_with_facts(
+        &self,
+        call: &ToolCall,
+        facts: &ToolExecutionFacts,
+    ) -> Result<ActionReviewRequest, CoreError> {
+        if self
+            .extension
+            .definitions()
+            .iter()
+            .any(|definition| definition.name == call.name)
+        {
+            self.extension.prepare_with_facts(call, facts)
+        } else {
+            self.primary.prepare_with_facts(call, facts)
         }
     }
 

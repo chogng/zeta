@@ -13,6 +13,8 @@ use crate::components::selection::SelectionViewState;
 use crate::components::transcript::Message;
 use crate::components::transcript::TranscriptScroll;
 use crate::components::welcome::WelcomeModel;
+use crate::features::additional_directories::AdditionalDirectorySelectionAction;
+use crate::features::additional_directories::AdditionalDirectorySelectionView;
 use crate::features::config::ConfigSelectionAction;
 use crate::features::config::TerminalSettings;
 use crate::features::connectors::ConnectorSelectionAction;
@@ -94,6 +96,7 @@ pub(crate) struct App {
 #[derive(Debug)]
 enum SelectionActions {
     ReadOnly,
+    AdditionalDirectories(BTreeMap<SelectionItemId, AdditionalDirectorySelectionAction>),
     Config(BTreeMap<SelectionItemId, ConfigSelectionAction>),
     Interaction(InteractionSelectionState),
     Connectors(BTreeMap<SelectionItemId, ConnectorSelectionAction>),
@@ -249,6 +252,11 @@ impl App {
         }
         match self.selection_actions.last()? {
             SelectionActions::ReadOnly => None,
+            SelectionActions::AdditionalDirectories(actions) => match actions.get(item_id)? {
+                AdditionalDirectorySelectionAction::Remove { root } => {
+                    Some(AppCommand::RemoveAdditionalDirectory { root: root.clone() })
+                }
+            },
             SelectionActions::Config(actions) => match actions.get(item_id)?.clone() {
                 ConfigSelectionAction::SetMouseInteractions(edit) => {
                     Some(AppCommand::EditConfig(edit))
@@ -502,6 +510,20 @@ impl App {
         self.push_selection_view(model, SelectionActions::ReadOnly);
     }
 
+    fn show_additional_directories_view(&mut self, view: AdditionalDirectorySelectionView) {
+        self.push_selection_view(
+            view.model,
+            SelectionActions::AdditionalDirectories(view.actions),
+        );
+    }
+
+    fn replace_additional_directories_view(&mut self, view: AdditionalDirectorySelectionView) {
+        self.replace_selection_view(
+            view.model,
+            SelectionActions::AdditionalDirectories(view.actions),
+        );
+    }
+
     fn show_interaction_view(&mut self, view: InteractionSelectionView) {
         self.push_selection_view(view.model, SelectionActions::Interaction(view.state));
     }
@@ -717,6 +739,18 @@ impl App {
 
     pub(crate) fn update(&mut self, event: AppEvent) {
         match event {
+            AppEvent::AdditionalDirectoriesViewOpened(view) => {
+                self.show_additional_directories_view(view)
+            }
+            AppEvent::AdditionalDirectoryRemoved { root, view } => {
+                self.replace_additional_directories_view(view);
+                self.thread
+                    .update(ThreadPresentationEvent::NoticeReceived(format!(
+                        "Removed additional directory {}",
+                        root.display()
+                    )));
+                self.status = Status::Ready;
+            }
             AppEvent::ClipboardImageRead(Ok(bytes)) => self.attach_image_bytes(bytes),
             AppEvent::ClipboardImageRead(Err(error)) => self.record_clipboard_error(error),
             AppEvent::ConfigSettingsReceived(settings) => self.terminal_settings = settings,
@@ -921,10 +955,11 @@ impl App {
             return None;
         }
         match (invocation.origin, local) {
-            (
-                SlashCommandOrigin::Local,
-                Some(TuiSlashCommandAction::Quit | TuiSlashCommandAction::Exit),
-            ) if invocation.arguments.is_empty() => Some(AppCommand::Quit),
+            (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Quit))
+                if invocation.arguments.is_empty() =>
+            {
+                Some(AppCommand::Quit)
+            }
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Copy))
                 if invocation.arguments.is_empty() =>
             {

@@ -274,6 +274,141 @@ fn workspace_folders_set_routes_services_by_stable_folder_id() {
 }
 
 #[test]
+fn additional_directories_are_session_scoped_and_removable() {
+    let primary = TestWorkspace::new("add-dir-primary", "primary.txt");
+    let additional = TestWorkspace::new("add-dir-extra", "extra.txt");
+    let server = server()
+        .with_local_workspace_host(None, host_trust())
+        .unwrap();
+    let host = server.local_workspace_host.as_ref().unwrap();
+    server
+        .commit_trusted_workspace_runtime(primary.authorization(), test_local_tools(), host)
+        .unwrap();
+    let first = server
+        .sessions
+        .create_session(CreateSessionRequest {
+            command_id: CommandId::new("create-add-dir-session").unwrap(),
+            title: "first".into(),
+            model: None,
+            workspace: None,
+        })
+        .unwrap();
+    let second = server
+        .sessions
+        .create_session(CreateSessionRequest {
+            command_id: CommandId::new("create-other-add-dir-session").unwrap(),
+            title: "second".into(),
+            model: None,
+            workspace: None,
+        })
+        .unwrap();
+
+    let (mutation, directories) = server
+        .add_session_additional_directory(&first.session_id, additional.path.clone())
+        .unwrap();
+
+    assert_eq!(mutation, DirectoryScopeMutation::AddedDirectory);
+    assert_eq!(directories.len(), 1);
+    assert_eq!(directories[0].root, additional.root().canonical_path());
+    assert_eq!(
+        server
+            .list_session_additional_directories(&second.session_id)
+            .unwrap()
+            .len(),
+        0
+    );
+    let (mutation, directories) = server
+        .remove_session_additional_directory(&first.session_id, &additional.path)
+        .unwrap();
+    assert_eq!(mutation, DirectoryScopeMutation::RemovedDirectory);
+    assert!(directories.is_empty());
+}
+
+#[test]
+fn primary_workspace_cannot_be_added_as_an_additional_directory() {
+    let primary = TestWorkspace::new("add-dir-duplicate-primary", "primary.txt");
+    let server = server()
+        .with_local_workspace_host(None, host_trust())
+        .unwrap();
+    let host = server.local_workspace_host.as_ref().unwrap();
+    server
+        .commit_trusted_workspace_runtime(primary.authorization(), test_local_tools(), host)
+        .unwrap();
+    let session = server
+        .sessions
+        .create_session(CreateSessionRequest {
+            command_id: CommandId::new("create-primary-add-dir-session").unwrap(),
+            title: "session".into(),
+            model: None,
+            workspace: None,
+        })
+        .unwrap();
+
+    let Err(error) =
+        server.add_session_additional_directory(&session.session_id, primary.path.clone())
+    else {
+        panic!("primary Workspace should be rejected as an additional directory");
+    };
+
+    assert!(error.to_string().contains("working directory"));
+}
+
+#[test]
+fn additional_directory_mutation_requires_a_workspace_trust_host_connection() {
+    let primary = TestWorkspace::new("add-dir-capability-primary", "primary.txt");
+    let additional = TestWorkspace::new("add-dir-capability-extra", "extra.txt");
+    let server = server()
+        .with_local_workspace_host(None, host_trust())
+        .unwrap();
+    let host = server.local_workspace_host.as_ref().unwrap();
+    server
+        .commit_trusted_workspace_runtime(primary.authorization(), test_local_tools(), host)
+        .unwrap();
+    let session = server
+        .sessions
+        .create_session(CreateSessionRequest {
+            command_id: CommandId::new("create-capability-add-dir-session").unwrap(),
+            title: "session".into(),
+            model: None,
+            workspace: None,
+        })
+        .unwrap();
+    let mut connection = server.connection();
+    server.handle_json(
+        &mut connection,
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "clientInfo": {"name": "renderer", "version": "1"},
+                "capabilities": {}
+            }
+        })
+        .to_string(),
+    );
+
+    let response: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "workspace/additionalDirectories/add",
+                "params": {
+                    "sessionId": session.session_id,
+                    "root": additional.path,
+                }
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+
+    assert_eq!(response["error"]["message"], "WorkspaceTrustRequired");
+}
+
+#[test]
 fn workspace_switch_rpc_requires_host_capability_for_session_trust() {
     let workspace = TestWorkspace::new("rpc-session-trust", "readable.txt");
     let config = Arc::new(ConfigStore::open(workspace.path.join("trust.sqlite3")).unwrap());

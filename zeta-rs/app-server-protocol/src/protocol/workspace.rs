@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use ts_rs::TS;
 use zeta_protocol::CommandId;
+use zeta_protocol::SessionId;
 use zeta_protocol::WorkspaceTrustId;
 
 /// Trust state collected by a product host.
@@ -157,4 +158,58 @@ pub struct WorkspaceFolderDto {
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceFoldersSetResult {
     pub folders: Vec<WorkspaceFolderDto>,
+}
+
+/// One session-scoped directory that extends file access without changing the primary Workspace.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceAdditionalDirectoryDto {
+    pub root: PathBuf,
+    pub trust: WorkspaceTrustStateDto,
+}
+
+/// Reads the additional directories retained by one product Session.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceAdditionalDirectoryListParams {
+    pub session_id: SessionId,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceAdditionalDirectoryListResult {
+    pub directories: Vec<WorkspaceAdditionalDirectoryDto>,
+}
+
+/// Adds one App Server-hosted path for the lifetime of a product Session.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceAdditionalDirectoryAddParams {
+    pub session_id: SessionId,
+    pub root: PathBuf,
+}
+
+/// Removes one session command source without revoking another source retaining the same root.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceAdditionalDirectoryRemoveParams {
+    pub session_id: SessionId,
+    pub root: PathBuf,
+}
+
+/// Observable result of an idempotent additional-directory mutation.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum WorkspaceAdditionalDirectoryMutationDto {
+    Added,
+    AlreadyPresent,
+    Removed,
+    NotPresent,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceAdditionalDirectoryMutationResult {
+    pub mutation: WorkspaceAdditionalDirectoryMutationDto,
+    pub directories: Vec<WorkspaceAdditionalDirectoryDto>,
 }

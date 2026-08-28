@@ -24,6 +24,7 @@ pub(crate) enum TuiSlashCommandAction {
     Rewind,
     Clear,
     Config,
+    AddDir,
     Fork,
     Help,
     Shortcuts,
@@ -33,7 +34,6 @@ pub(crate) enum TuiSlashCommandAction {
     Theme,
     New,
     Quit,
-    Exit,
 }
 
 impl TuiSlashCommandAction {
@@ -55,6 +55,7 @@ impl TuiSlashCommandAction {
             Self::Rewind => "return to an earlier message checkpoint",
             Self::Clear => "clear the terminal and start a new chat",
             Self::Config => "show the current configuration",
+            Self::AddDir => "add or manage a session directory",
             Self::Fork => "fork the current chat",
             Self::Help => "show executable slash commands",
             Self::Shortcuts => "browse and customize terminal shortcuts",
@@ -63,7 +64,7 @@ impl TuiSlashCommandAction {
             Self::Model => "show or set the preferred provider/model",
             Self::Theme => "show or set the terminal color theme",
             Self::New => "start a new chat",
-            Self::Quit | Self::Exit => "exit Zeta",
+            Self::Quit => "quit Zeta",
         }
     }
 
@@ -74,6 +75,7 @@ impl TuiSlashCommandAction {
             | Self::ArchiveThread
             | Self::Rewind
             | Self::Clear
+            | Self::AddDir
             | Self::Fork
             | Self::Export
             | Self::Model

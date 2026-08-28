@@ -1602,6 +1602,15 @@ impl AppServer {
             Some(ClientMethod::WorkspaceFoldersSet) => {
                 self.workspace_folders_set(connection, &request.params)
             }
+            Some(ClientMethod::WorkspaceAdditionalDirectoryList) => {
+                self.workspace_additional_directory_list(connection, &request.params)
+            }
+            Some(ClientMethod::WorkspaceAdditionalDirectoryAdd) => {
+                self.workspace_additional_directory_add(connection, &request.params)
+            }
+            Some(ClientMethod::WorkspaceAdditionalDirectoryRemove) => {
+                self.workspace_additional_directory_remove(connection, &request.params)
+            }
             Some(ClientMethod::WorkspaceTrustRead) => {
                 self.workspace_trust_read(connection, &request.params)
             }

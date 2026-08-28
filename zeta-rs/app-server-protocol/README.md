@@ -108,6 +108,7 @@ zeta-rs/app-server-protocol/
 digest-pinned `skill/resource/open`、
 Turn 与 Resource metadata/read/release、filesystem metadata/read/write、workspace search start/read/cancel、
 workspace code-index status/search/rebuild，以及 cloud code-index status/preview/authorize/sync/revoke。
+Workspace registry 还包含 Session-scoped `workspace/additionalDirectories/list|add|remove`；三个 DTO 都携带 `sessionId`，mutation method 使用 Session-exclusive serialization，主 Workspace identity 不进入 mutation result。三个 method 都由 App Server 要求 connection 声明 `workspaceTrustHost`；DTO 本身不是授权。
 Notification 包含 `session/update`、Session-owned child 的 `session/thread/update`、owner-directed
 `agent/request`、`connector/changed`、`skills/changed`、`git/statusChanged` 与 `fs/changed`；Terminal 当前使用
 profile/list 与 create/write/resize/read/close 的有界 pull

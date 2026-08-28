@@ -369,6 +369,13 @@ use crate::protocol::transcript::{
 use crate::protocol::turn::{
     InputItem, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult,
 };
+use crate::protocol::workspace::WorkspaceAdditionalDirectoryAddParams;
+use crate::protocol::workspace::WorkspaceAdditionalDirectoryDto;
+use crate::protocol::workspace::WorkspaceAdditionalDirectoryListParams;
+use crate::protocol::workspace::WorkspaceAdditionalDirectoryListResult;
+use crate::protocol::workspace::WorkspaceAdditionalDirectoryMutationDto;
+use crate::protocol::workspace::WorkspaceAdditionalDirectoryMutationResult;
+use crate::protocol::workspace::WorkspaceAdditionalDirectoryRemoveParams;
 use crate::protocol::workspace::WorkspaceFolderDto;
 use crate::protocol::workspace::WorkspaceFolderSetEntry;
 use crate::protocol::workspace::WorkspaceFoldersSetParams;
@@ -417,16 +424,16 @@ use zeta_protocol::{
     DelegationArtifactRef, DelegationId, DelegationResult, DelegationResultDigest,
     DelegationResultStatus, DynamicToolCall, DynamicToolOutput, DynamicToolResponse,
     ForkedAgentContext, FrozenAgentDefinitionRef, FrozenSkillActivation, InteractionCancelReason,
-    InteractionDeadline, ItemDelta, ModelInputEstimate, ModelUsage, ModelUsageSummary,
-    ModelUsageTotal, PendingInteraction, PlanStep, PlanStepStatus, PlanUpdate,
-    ProcessExecutionOutput, ProcessExitStatus, RequestUserInput, RequestUserInputResponse,
-    SandboxDenialOutput, Session, SessionEvent, SessionStatus, SessionThread, SessionThreadStatus,
-    SessionUpdate, SkillActivationReason, SkillId, SkillName, SkillRef, SkillSourceId,
-    SkillVersionSelector, StableTurnError, StableTurnErrorCode, StreamCursor, Thread, ThreadEvent,
-    ThreadGoal, ThreadGoalStatus, ThreadItem, ThreadOrigin, ThreadSequenceRange, ThreadStatus,
-    ThreadUpdate, ToolExecutionAuthority, ToolOutputStream, ToolProfileSnapshot, ToolReplaySafety,
-    Turn, TurnExecutionBinding, TurnInteraction, TurnStatus, UserInputAnswer, UserInputOption,
-    UserInputQuestion,
+    InteractionDeadline, ItemDelta, ModelContextUsage, ModelContextUsageSource, ModelInputEstimate,
+    ModelUsage, ModelUsageSummary, ModelUsageTotal, PendingInteraction, PlanStep, PlanStepStatus,
+    PlanUpdate, ProcessExecutionOutput, ProcessExitStatus, RequestUserInput,
+    RequestUserInputResponse, SandboxDenialOutput, Session, SessionEvent, SessionStatus,
+    SessionThread, SessionThreadStatus, SessionUpdate, SkillActivationReason, SkillId, SkillName,
+    SkillRef, SkillSourceId, SkillVersionSelector, StableTurnError, StableTurnErrorCode,
+    StreamCursor, Thread, ThreadEvent, ThreadGoal, ThreadGoalStatus, ThreadItem, ThreadOrigin,
+    ThreadSequenceRange, ThreadStatus, ThreadUpdate, ToolExecutionAuthority, ToolOutputStream,
+    ToolProfileSnapshot, ToolReplaySafety, Turn, TurnExecutionBinding, TurnInteraction, TurnStatus,
+    UserInputAnswer, UserInputOption, UserInputQuestion,
 };
 
 /// Selects whether equal scheduling keys exclude or share execution.
@@ -693,6 +700,21 @@ client_methods! {
         params: WorkspaceFoldersSetParams,
         response: WorkspaceFoldersSetResult,
         serialization: GlobalExclusive,
+    },
+    WorkspaceAdditionalDirectoryList => "workspace/additionalDirectories/list" {
+        params: WorkspaceAdditionalDirectoryListParams,
+        response: WorkspaceAdditionalDirectoryListResult,
+        serialization: SessionSharedRead,
+    },
+    WorkspaceAdditionalDirectoryAdd => "workspace/additionalDirectories/add" {
+        params: WorkspaceAdditionalDirectoryAddParams,
+        response: WorkspaceAdditionalDirectoryMutationResult,
+        serialization: SessionExclusive,
+    },
+    WorkspaceAdditionalDirectoryRemove => "workspace/additionalDirectories/remove" {
+        params: WorkspaceAdditionalDirectoryRemoveParams,
+        response: WorkspaceAdditionalDirectoryMutationResult,
+        serialization: SessionExclusive,
     },
     WorkspaceTrustRead => "workspace/trust/read" {
         params: WorkspaceTrustReadParams,
@@ -2222,6 +2244,13 @@ typescript_bindings! {
     WorkspaceFolderSetEntry,
     WorkspaceFoldersSetParams,
     WorkspaceFoldersSetResult,
+    WorkspaceAdditionalDirectoryDto,
+    WorkspaceAdditionalDirectoryListParams,
+    WorkspaceAdditionalDirectoryListResult,
+    WorkspaceAdditionalDirectoryAddParams,
+    WorkspaceAdditionalDirectoryRemoveParams,
+    WorkspaceAdditionalDirectoryMutationDto,
+    WorkspaceAdditionalDirectoryMutationResult,
     WorkspaceTrustReadParams,
     WorkspaceTrustReadResult,
     WorkspaceTrustEntryDto,
@@ -2315,6 +2344,8 @@ typescript_bindings! {
     ImageAttachmentRef,
     ImageMediaType,
     ImageDetail,
+    ModelContextUsageSource,
+    ModelContextUsage,
     ModelInputEstimate,
     ModelUsage,
     ModelUsageTotal,

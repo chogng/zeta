@@ -2082,6 +2082,54 @@
         {
           "properties": {
             "method": {
+              "const": "workspace/additionalDirectories/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkspaceAdditionalDirectoryListParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workspace/additionalDirectories/add",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkspaceAdditionalDirectoryAddParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workspace/additionalDirectories/remove",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkspaceAdditionalDirectoryRemoveParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "workspace/trust/read",
               "type": "string"
             },
@@ -5179,6 +5227,54 @@
             },
             "result": {
               "$ref": "#/$defs/WorkspaceFoldersSetResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workspace/additionalDirectories/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/WorkspaceAdditionalDirectoryListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workspace/additionalDirectories/add",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/WorkspaceAdditionalDirectoryMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workspace/additionalDirectories/remove",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/WorkspaceAdditionalDirectoryMutationResult"
             }
           },
           "required": [
@@ -17595,6 +17691,14 @@
             "null"
           ]
         },
+        "availableContextWindow": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "capabilities": {
           "$ref": "#/$defs/ModelCapabilities"
         },
@@ -17673,6 +17777,31 @@
         "contextWindow"
       ],
       "type": "object"
+    },
+    "ModelContextUsage": {
+      "description": "Latest model-visible context size retained for one Turn.\n\nProvider-reported token counts are preferred. When a provider omits input or output usage,\nCore may retain its deterministic request estimate so clients can distinguish an estimate from\nan exact provider measurement.",
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/ModelContextUsageSource"
+        },
+        "usedTokens": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "usedTokens",
+        "source"
+      ],
+      "type": "object"
+    },
+    "ModelContextUsageSource": {
+      "enum": [
+        "providerReported",
+        "estimated"
+      ],
+      "type": "string"
     },
     "ModelId": {
       "type": "string"
@@ -24309,6 +24438,16 @@
           "$ref": "#/$defs/ApprovalMode",
           "default": "askPermissions"
         },
+        "contextUsage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelContextUsage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "error": {
           "anyOf": [
             {
@@ -24708,6 +24847,108 @@
         "id",
         "header",
         "question"
+      ],
+      "type": "object"
+    },
+    "WorkspaceAdditionalDirectoryAddParams": {
+      "description": "Adds one App Server-hosted path for the lifetime of a product Session.",
+      "properties": {
+        "root": {
+          "type": "string"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "root"
+      ],
+      "type": "object"
+    },
+    "WorkspaceAdditionalDirectoryDto": {
+      "description": "One session-scoped directory that extends file access without changing the primary Workspace.",
+      "properties": {
+        "root": {
+          "type": "string"
+        },
+        "trust": {
+          "$ref": "#/$defs/WorkspaceTrustStateDto"
+        }
+      },
+      "required": [
+        "root",
+        "trust"
+      ],
+      "type": "object"
+    },
+    "WorkspaceAdditionalDirectoryListParams": {
+      "description": "Reads the additional directories retained by one product Session.",
+      "properties": {
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "type": "object"
+    },
+    "WorkspaceAdditionalDirectoryListResult": {
+      "properties": {
+        "directories": {
+          "items": {
+            "$ref": "#/$defs/WorkspaceAdditionalDirectoryDto"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "directories"
+      ],
+      "type": "object"
+    },
+    "WorkspaceAdditionalDirectoryMutationDto": {
+      "description": "Observable result of an idempotent additional-directory mutation.",
+      "enum": [
+        "added",
+        "alreadyPresent",
+        "removed",
+        "notPresent"
+      ],
+      "type": "string"
+    },
+    "WorkspaceAdditionalDirectoryMutationResult": {
+      "properties": {
+        "directories": {
+          "items": {
+            "$ref": "#/$defs/WorkspaceAdditionalDirectoryDto"
+          },
+          "type": "array"
+        },
+        "mutation": {
+          "$ref": "#/$defs/WorkspaceAdditionalDirectoryMutationDto"
+        }
+      },
+      "required": [
+        "mutation",
+        "directories"
+      ],
+      "type": "object"
+    },
+    "WorkspaceAdditionalDirectoryRemoveParams": {
+      "description": "Removes one session command source without revoking another source retaining the same root.",
+      "properties": {
+        "root": {
+          "type": "string"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "root"
       ],
       "type": "object"
     },

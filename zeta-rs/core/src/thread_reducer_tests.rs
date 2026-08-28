@@ -260,6 +260,13 @@ fn reducer_rebuilds_model_calibration_and_rejects_unknown_algorithm_revisions() 
     let rebuilt = reduce_thread_event(Some(snapshot), &envelope(4, valid)).unwrap();
 
     assert_eq!(rebuilt.usage.model_invocations, 1);
+    assert_eq!(
+        rebuilt.turns[0].context_usage,
+        Some(zeta_protocol::ModelContextUsage {
+            used_tokens: 128,
+            source: zeta_protocol::ModelContextUsageSource::ProviderReported,
+        })
+    );
     let calibration = rebuilt
         .context_calibration(&model, crate::context::CONTEXT_ESTIMATOR_REVISION)
         .unwrap();

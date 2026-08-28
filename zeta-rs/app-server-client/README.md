@@ -57,6 +57,7 @@ Session/Thread coordinator 的存储，不改变 Config、Workspace、Tool 或 p
 | `discovered_product_services_path` | `ZETA_PRODUCT_SERVICES_PATH` 优先于 packaged resource 的统一发现规则；不读取 User Config |
 | `route_session_workspace` | 使用 `zeta-workspace` canonical identity 判断 durable Session 属于当前 authority、需要宿主重连，还是缺少绑定的 legacy read-only Session |
 | `AppServerClient::request_session` | Session aggregate 的 canonical typed mutation request；所有 Session mutation 统一由此进入 |
+| `AppServerClient::{list_workspace_additional_directories,add_workspace_additional_directory,remove_workspace_additional_directory}` | 当前 Session 附加目录的 typed list/mutation surface；client 不签发 trust 或自行 canonicalize path |
 | `AppServerClient::{synchronize_language_document,close_language_document,language_hover,language_completions,language_locations}` | CLI/native consumer 通过同一 request handle 调用 App Server-owned language authority；不在 client crate 启动 LSP 或转换产品坐标 |
 | `AppServerClient::open_skill_resource` | 以 exact Skill digest 打开 package resource；bytes 仍由 connection-owned Resource API 分块读取 |
 | `AppServerClient::{search_marketplace,get_marketplace_package,download_marketplace_package,install_marketplace_package,update_marketplace_package,uninstall_marketplace_package,list_installed_marketplace_packages,acquire_marketplace_capability,release_marketplace_capability,open_marketplace_resource}` | 三端共用的 typed Marketplace request surface；不读取 Manager store 或 cache path |

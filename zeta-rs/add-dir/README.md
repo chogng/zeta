@@ -117,7 +117,4 @@ result、Agent Import adapter 与未来 Config/RPC schema。
 
 ## 当前限制
 
-当前 crate 只有纯领域模型，尚未接入 App Server、Config、Files、Search、CLI 或 Desktop。
-`add-dir`、`/cd` 与 `additionalDirectories` 都不是当前可用产品功能。OS privacy denial、
-root-qualified URI、跨启动 restoration 和 runtime rollback contract 仍需在各 authority owner
-中实现。
+App Server 与 `zeta code` 已接入 `SessionCommand`：`/add-dir <path>` 添加当前 Session 的目录，无参数列表页可以撤销；本地 `read_file`、`write_file`、`edit`、`grep` 与 `glob` 使用同一 Session scope。当前尚未接入启动参数、持久 `additionalDirectories`、Workspace Files/Search service、watcher 或配置贡献发现；Shell、Terminal 与 `apply_patch` 仍只绑定主 Workspace。`/cd`、OS privacy denial、跨启动 restoration 和 runtime rollback contract 仍未实现。

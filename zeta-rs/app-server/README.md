@@ -539,6 +539,11 @@ Workspace Trust management (workspaceTrustHost)
 ├─ workspace/trust/set → canonicalize root, persist the decision, and reconcile the active root when it matches
 └─ workspace/trust/forget → remove one decision by opaque WorkspaceTrustId
 
+Session additional-directory authority
+├─ workspace/additionalDirectories/list → current Session roots
+├─ workspace/additionalDirectories/add → canonicalize + explicit session lease + publish file-tool access
+└─ workspace/additionalDirectories/remove → revoke exact root lease + refresh the Session scope
+
 ConfigChange trust revocation
 ├─ revoke shared capability lease
 ├─ persist cloud Revoking + request idempotent provider deletion + remove cloud controller

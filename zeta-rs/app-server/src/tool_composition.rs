@@ -674,39 +674,15 @@ impl ToolService for ReloadableToolService {
     }
 
     fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
-        let generation = self.ports.generation();
-        let (tools, policy) = self
-            .ports
-            .calls
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .get(&call.id)
-            .map(|binding| (Arc::clone(&binding.tools), Arc::clone(&binding.policy)))
-            .unwrap_or_else(|| {
-                (
-                    Arc::clone(&generation.tools),
-                    Arc::clone(&generation.policy),
-                )
-            });
-        let request = tools.prepare(call)?;
-        let digest = request.action().digest().clone();
-        self.ports
-            .policies
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .insert(digest.clone(), Arc::clone(&policy));
-        self.ports
-            .calls
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .entry(call.id.clone())
-            .and_modify(|binding| binding.action_digest = Some(digest.clone()))
-            .or_insert(BoundToolCall {
-                tools,
-                policy,
-                action_digest: Some(digest),
-            });
-        Ok(request)
+        self.prepare_bound(call, None)
+    }
+
+    fn prepare_with_facts(
+        &self,
+        call: &ToolCall,
+        facts: &ToolExecutionFacts,
+    ) -> Result<ActionReviewRequest, CoreError> {
+        self.prepare_bound(call, Some(facts))
     }
 
     fn review_evidence(&self, call: &ToolCall) -> Result<Vec<ReviewEvidence>, CoreError> {
@@ -790,6 +766,49 @@ impl ToolService for ReloadableToolService {
 }
 
 impl ReloadableToolService {
+    fn prepare_bound(
+        &self,
+        call: &ToolCall,
+        facts: Option<&ToolExecutionFacts>,
+    ) -> Result<ActionReviewRequest, CoreError> {
+        let generation = self.ports.generation();
+        let (tools, policy) = self
+            .ports
+            .calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&call.id)
+            .map(|binding| (Arc::clone(&binding.tools), Arc::clone(&binding.policy)))
+            .unwrap_or_else(|| {
+                (
+                    Arc::clone(&generation.tools),
+                    Arc::clone(&generation.policy),
+                )
+            });
+        let request = match facts {
+            Some(facts) => tools.prepare_with_facts(call, facts)?,
+            None => tools.prepare(call)?,
+        };
+        let digest = request.action().digest().clone();
+        self.ports
+            .policies
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(digest.clone(), Arc::clone(&policy));
+        self.ports
+            .calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .entry(call.id.clone())
+            .and_modify(|binding| binding.action_digest = Some(digest.clone()))
+            .or_insert(BoundToolCall {
+                tools,
+                policy,
+                action_digest: Some(digest),
+            });
+        Ok(request)
+    }
+
     fn bound_tools(&self, call: &ToolCall) -> Arc<dyn ToolService> {
         self.ports
             .calls
@@ -1297,6 +1316,23 @@ impl ToolService for CompositeToolService {
         let (_, runtime) = self.runtime(call)?;
         match runtime {
             ToolContributionRuntime::Service(service) => service.prepare(call),
+            ToolContributionRuntime::Executor(executor) => executor.prepare(call),
+        }
+    }
+
+    fn prepare_with_facts(
+        &self,
+        call: &ToolCall,
+        facts: &ToolExecutionFacts,
+    ) -> Result<ActionReviewRequest, CoreError> {
+        if let Some(search) = &self.search
+            && call.name == search.definition().name
+        {
+            return search.prepare(call);
+        }
+        let (_, runtime) = self.runtime(call)?;
+        match runtime {
+            ToolContributionRuntime::Service(service) => service.prepare_with_facts(call, facts),
             ToolContributionRuntime::Executor(executor) => executor.prepare(call),
         }
     }

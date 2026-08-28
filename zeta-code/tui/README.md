@@ -31,11 +31,12 @@ Tool、approval policy 或 persistence。
 - enabled、compatible、名称无歧义且不与已有命令冲突的 Skill 直接显示为 `/name`；提交时保留
   `/name …` 用户文本并附加 exact pinned `SkillRef`，完整 `SKILL.md` 只在 App Server 接受 Turn
   后按需加载；`skills/changed` 会刷新这部分动态命令；
-- `/resume`、`/thread`、`/archive-thread`、`/rewind`、`/clear`、`/fork`、`/model`、`/theme` 与 `/new` 可解析 inline arguments，并在执行前展开
+- `/resume`、`/thread`、`/archive-thread`、`/rewind`、`/clear`、`/add-dir`、`/fork`、`/model`、`/theme` 与 `/new` 可解析 inline arguments，并在执行前展开
   large-paste placeholder；product command 明确拒绝 image arguments；
 - command popup 只注册已有真实执行流的 built-ins：`/status`、`/statusline`、`/skills`、`/mcp`、`/connectors`、`/resume`、
-  `/thread`、`/archive-thread`、`/archive-session`、`/rewind`、`/clear`、`/config`、
-  `/fork`、`/help`、`/shortcuts`、`/copy`、`/export`、`/model`、`/theme`、`/new`、`/quit` 与 `/exit`；
+  `/thread`、`/archive-thread`、`/archive-session`、`/rewind`、`/clear`、`/config`、`/add-dir`、
+  `/fork`、`/help`、`/shortcuts`、`/copy`、`/export`、`/model`、`/theme`、`/new` 与 `/quit`；
+- `/status` 展示当前 Session 实际模型、完整上下文窗口、扣除 output reservation、safety margin 与 auto-compaction 边界后的可用窗口、最近一次同模型调用后的剩余窗口，以及 Session ID、Thread ID 和 Thread sequence；provider usage 不完整时剩余值标记为估算，尚无可信值时显示 unknown；
 - `/help` 使用保留 composer 的 interaction view stack 打开可搜索的命令列表；Space 进入搜索模式，上下键循环选择，Esc/Ctrl-C 返回 composer；快捷键只由 `/shortcuts` 展示；
 - `/skills` 通过 typed `skills/list` 打开同一 interaction surface，提供
   All/Enabled/Disabled/Manage/Errors tabs、数量、搜索和 source-qualified metadata；只有 Manage
@@ -44,6 +45,7 @@ Tool、approval policy 或 persistence。
 - `/connectors` 通过 typed `connector/list` 打开 Connector Pane；已连接项可以执行
   generation-checked disconnect，`connector/changed` 只在该 Pane 打开时触发 catalog refresh；
   API token/OAuth 连接仍由 Desktop Settings 完成；
+- `/add-dir <path>` 通过 typed App Server RPC 把 canonical 目录加入当前 Session 的文件访问作用域；本地 `read_file`、`write_file`、`edit`、`grep` 与 `glob` 随即接受该目录中的绝对路径。不带参数时打开可搜索列表，Enter 撤销所选目录；主 Workspace、相对路径和项目配置均不改变；
 - 同一 profile 中的 `marketplace/changed` 与 `plugin/changed` 会触发 Skill catalog 重读，并在
   Connector Pane 已打开时重读 Connector projection；TUI 当前不提供独立 Marketplace 浏览/安装界面；
 - `/rewind` 或主界面 500 ms 内连续按两次 Esc 打开可搜索的历史消息 checkpoint Pane；Enter
@@ -117,7 +119,7 @@ transport retry。workspace mention 当前插入 workspace-relative 原子文本
 
 图片 bytes 的持久化由共享 `zeta-attachments` content-addressed store 拥有；TUI 只在草稿期间保留
 本地 data URL，并在 `StartTurn` 前通过 App Server 分块上传或安全导入远程 URL，最终只提交 typed
-`ImageAttachmentRef`。usage 必须等待已接受的 typed snapshot contract，不能从 transcript 推导。缺少 typed backend contract 的 login、compact、service tier 等命令不会进入 registry。`/statusline` 使用 `<profile>/zeta-code/statusline.json` 保存权限、模型、Git 分支和 Git 变更四个显示开关；Config 页面展示 Config、Providers 与 Language servers，其中 Mouse interactions 保存在 `<profile>/zeta-code/terminal.json`，关闭后 `App::mouse_mode` 始终把拖选留给终端。Providers 来自后端注册表，API key 只通过 `provider/apiKey/set` 写入 SecretStore，不进入普通配置或展示状态。MCP、Skill、Plugin 和 Hook 不在 Config 中重复展示。
+`ImageAttachmentRef`。`/status` 只消费 typed model capacity 与 Turn `contextUsage`，不从 transcript 推导上下文占用。缺少 typed backend contract 的 login、compact、service tier 等命令不会进入 registry。`/statusline` 使用 `<profile>/zeta-code/statusline.json` 保存权限、模型、Git 分支和 Git 变更四个显示开关；Config 页面展示 Config、Providers 与 Language servers，其中 Mouse interactions 保存在 `<profile>/zeta-code/terminal.json`，关闭后 `App::mouse_mode` 始终把拖选留给终端。Providers 来自后端注册表，API key 只通过 `provider/apiKey/set` 写入 SecretStore，不进入普通配置或展示状态。MCP、Skill、Plugin 和 Hook 不在 Config 中重复展示。
 
 从 repository root 启动当前 TUI：
 
@@ -438,7 +440,7 @@ Ready / Error
 ├─ Enter(non-empty) → Submit → Working
 ├─ Shift-Tab → cycle next-Turn approval mode
 ├─ Shift/Alt-Enter 或 Ctrl-J → insert newline
-├─ Enter(/quit or /exit) → Quit
+├─ Enter(/quit) → Quit
 ├─ Enter(其他 built-in command) → structured invocation → typed command dispatcher
 ├─ Enter(server dynamic command) → preserve /name + ordered arguments → Submit
 ├─ /query → cursor-aware popup；↑/↓ select；Tab range completion；Esc dismiss

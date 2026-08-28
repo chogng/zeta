@@ -33,6 +33,7 @@ pub use context::ContextTokenMeasurementCapability;
 pub use context::ContextTokenMeasurementOutcome;
 pub use context::HarnessInstructions;
 pub use context::HarnessInstructionsProvider;
+pub use context::ResolvedContextBudget;
 pub use error::CoreError;
 pub use hooks::AfterToolHookRequest;
 pub use hooks::BeforeToolHookDecision;

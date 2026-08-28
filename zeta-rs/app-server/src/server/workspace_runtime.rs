@@ -15,6 +15,7 @@ use crate::code_retrieval_tool::CodeRetrievalTool;
 use crate::dynamic_tools::DynamicToolCompositionError;
 use crate::dynamic_tools::compose_dynamic_tools;
 use crate::local_tools::LocalExecPolicyConfig;
+use crate::local_tools::SessionAdditionalDirectoryAccess;
 use crate::local_tools::append_local_tool;
 use crate::local_tools::compose_local_tools_with_config;
 use crate::review::ApprovalModeActionPolicyService;
@@ -30,6 +31,9 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, RwLock};
+use zeta_add_dir::AdditionalDirectorySource;
+use zeta_add_dir::DirectoryAccessScope;
+use zeta_add_dir::DirectoryScopeMutation;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_code_index::CodeIndexStorage;
 use zeta_code_index_cloud::CloudCodeIndexController;
@@ -60,7 +64,7 @@ use zeta_model_provider::RerankRuntimeRequest;
 use zeta_model_provider::SemanticModelProvider;
 use zeta_model_provider_config::ModelProviderConfig;
 use zeta_protocol::ProviderId;
-use zeta_protocol::{CommandId, TurnStatus};
+use zeta_protocol::{CommandId, SessionId, TurnStatus};
 use zeta_search::SearchService;
 use zeta_shell_command::RipgrepExecutable;
 use zeta_symbol_index::SymbolIndexStorage;
@@ -92,7 +96,19 @@ pub(super) struct WorkspaceRuntime {
     pub(super) debug_adapters: Option<Arc<crate::debug_service::DebugAdapterService>>,
     pub(super) folder_debug_adapters:
         BTreeMap<String, Arc<crate::debug_service::DebugAdapterService>>,
+    additional_directories: BTreeMap<SessionId, SessionAdditionalDirectories>,
+    additional_directory_access: Arc<SessionAdditionalDirectoryAccess>,
     pub(super) turn_executor: TurnExecutor,
+}
+
+struct SessionAdditionalDirectories {
+    scope: DirectoryAccessScope,
+    authorizations: BTreeMap<PathBuf, WorkspaceAuthorization>,
+}
+
+pub(super) struct SessionAdditionalDirectorySnapshot {
+    pub(super) root: PathBuf,
+    pub(super) decision: WorkspaceTrustDecision,
 }
 
 impl WorkspaceRuntime {
@@ -119,6 +135,8 @@ impl WorkspaceRuntime {
             folder_terminals: BTreeMap::new(),
             debug_adapters: None,
             folder_debug_adapters: BTreeMap::new(),
+            additional_directories: BTreeMap::new(),
+            additional_directory_access: Arc::new(SessionAdditionalDirectoryAccess::default()),
             turn_executor,
         }
     }
@@ -172,7 +190,15 @@ impl WorkspaceRuntimeControl {
             WorkspaceRuntimeError::Failed("Workspace authority gate poisoned".into())
         })?;
         let policy_config = LocalExecPolicyConfig::from_resolved(config);
-        let (authorization, code_index, symbol_index, semantic, cloud, customizations) = {
+        let (
+            authorization,
+            code_index,
+            symbol_index,
+            semantic,
+            cloud,
+            customizations,
+            additional_directory_access,
+        ) = {
             let runtime = self
                 .runtime
                 .read()
@@ -184,6 +210,7 @@ impl WorkspaceRuntimeControl {
                 runtime.code_index_semantic.clone(),
                 runtime.cloud_code_index.clone(),
                 runtime._customizations.clone(),
+                Arc::clone(&runtime.additional_directory_access),
             )
         };
         let Some(authorization) = authorization else {
@@ -203,8 +230,12 @@ impl WorkspaceRuntimeControl {
         let execution = authorization
             .require(WorkspaceCapability::ExecuteProcess)
             .map_err(|_| WorkspaceRuntimeError::TrustRequired)?;
-        let mut local = compose_local_tools_with_config(execution.clone(), &policy_config)
-            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
+        let mut local = compose_local_tools_with_config(
+            execution.clone(),
+            &policy_config,
+            additional_directory_access,
+        )
+        .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
         if let Some(code_index) = code_index {
             let action_policy_revision = local.action_policy_revision().clone();
             local = append_local_tool(
@@ -352,8 +383,18 @@ impl WorkspaceRuntimeControl {
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clone();
-        let local = compose_local_tools_with_config(execution.clone(), &policy_config)
-            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
+        let additional_directory_access = self
+            .runtime
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .additional_directory_access
+            .clone();
+        let local = compose_local_tools_with_config(
+            execution.clone(),
+            &policy_config,
+            additional_directory_access,
+        )
+        .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
         let action_policy_revision = local.action_policy_revision().clone();
         let local = append_local_tool(
             local,
@@ -1358,6 +1399,177 @@ impl AppServer {
             .collect())
     }
 
+    pub(super) fn list_session_additional_directories(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Vec<SessionAdditionalDirectorySnapshot>, WorkspaceRuntimeError> {
+        self.sessions
+            .read_session(session_id)
+            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
+        let runtime = self
+            .workspace_runtime
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if runtime.authorization.is_none() {
+            return Err(WorkspaceRuntimeError::Unavailable);
+        }
+        Ok(runtime
+            .additional_directories
+            .get(session_id)
+            .map(additional_directory_snapshots)
+            .unwrap_or_default())
+    }
+
+    pub(super) fn add_session_additional_directory(
+        &self,
+        session_id: &SessionId,
+        root: PathBuf,
+    ) -> Result<
+        (
+            DirectoryScopeMutation,
+            Vec<SessionAdditionalDirectorySnapshot>,
+        ),
+        WorkspaceRuntimeError,
+    > {
+        self.sessions
+            .read_session(session_id)
+            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
+        let _workspace_authority = self.workspace_authority_gate.lock().map_err(|_| {
+            WorkspaceRuntimeError::Failed("Workspace authority gate poisoned".into())
+        })?;
+        self.ensure_workspace_switch_is_idle()?;
+        let primary = self
+            .workspace_runtime
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .authorization
+            .as_ref()
+            .map(|authorization| authorization.root().clone())
+            .ok_or(WorkspaceRuntimeError::Unavailable)?;
+        let requested = if root.is_absolute() {
+            root
+        } else {
+            primary.canonical_path().join(root)
+        };
+        let authorization = self.authorize_local_workspace_root(
+            requested,
+            Some(WorkspaceTrustDecision::Trusted(
+                zeta_workspace::WorkspaceTrustSource::ExplicitUserDecision,
+            )),
+        )?;
+        authorization
+            .require(WorkspaceCapability::MutateRepository)
+            .map_err(|_| WorkspaceRuntimeError::TrustRequired)?;
+        let canonical = authorization.root().canonical_path().to_path_buf();
+        let mut runtime = self
+            .workspace_runtime
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let directories = runtime
+            .additional_directories
+            .entry(session_id.clone())
+            .or_insert_with(|| SessionAdditionalDirectories {
+                scope: DirectoryAccessScope::new(primary),
+                authorizations: BTreeMap::new(),
+            });
+        let mutation = directories
+            .scope
+            .add_directory(
+                authorization.root().clone(),
+                AdditionalDirectorySource::SessionCommand,
+            )
+            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
+        if mutation == DirectoryScopeMutation::AddedDirectory {
+            directories.authorizations.insert(canonical, authorization);
+        }
+        let access = additional_directory_access_roots(directories)?;
+        let snapshots = additional_directory_snapshots(directories);
+        runtime
+            .additional_directory_access
+            .replace(session_id.clone(), access);
+        Ok((mutation, snapshots))
+    }
+
+    pub(super) fn remove_session_additional_directory(
+        &self,
+        session_id: &SessionId,
+        root: &std::path::Path,
+    ) -> Result<
+        (
+            DirectoryScopeMutation,
+            Vec<SessionAdditionalDirectorySnapshot>,
+        ),
+        WorkspaceRuntimeError,
+    > {
+        self.sessions
+            .read_session(session_id)
+            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
+        let _workspace_authority = self.workspace_authority_gate.lock().map_err(|_| {
+            WorkspaceRuntimeError::Failed("Workspace authority gate poisoned".into())
+        })?;
+        self.ensure_workspace_switch_is_idle()?;
+        let mut runtime = self
+            .workspace_runtime
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if runtime.authorization.is_none() {
+            return Err(WorkspaceRuntimeError::Unavailable);
+        }
+        let Some(directories) = runtime.additional_directories.get_mut(session_id) else {
+            return Ok((DirectoryScopeMutation::NotPresent, Vec::new()));
+        };
+        let Some((canonical, authorization)) = directories
+            .authorizations
+            .iter()
+            .find(|(canonical, authorization)| {
+                canonical.as_path() == root || authorization.root().requested_path() == root
+            })
+            .map(|(canonical, authorization)| (canonical.clone(), authorization.clone()))
+        else {
+            return Ok((
+                DirectoryScopeMutation::NotPresent,
+                additional_directory_snapshots(directories),
+            ));
+        };
+        let mutation = directories.scope.remove_directory(
+            authorization.root(),
+            AdditionalDirectorySource::SessionCommand,
+        );
+        if mutation == DirectoryScopeMutation::RemovedDirectory {
+            authorization.revoke();
+            directories.authorizations.remove(&canonical);
+        }
+        let snapshots = additional_directory_snapshots(directories);
+        let access = additional_directory_access_roots(directories)?;
+        let empty = directories.authorizations.is_empty();
+        if empty {
+            runtime.additional_directories.remove(session_id);
+        }
+        runtime
+            .additional_directory_access
+            .replace(session_id.clone(), access);
+        Ok((mutation, snapshots))
+    }
+
+    pub(super) fn clear_session_additional_directories(&self, session_id: &SessionId) {
+        let _workspace_authority = self
+            .workspace_authority_gate
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut runtime = self
+            .workspace_runtime
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(directories) = runtime.additional_directories.remove(session_id) {
+            for authorization in directories.authorizations.values() {
+                authorization.revoke();
+            }
+        }
+        runtime
+            .additional_directory_access
+            .replace(session_id.clone(), Vec::new());
+    }
+
     pub(crate) fn active_workspace_is_trusted(&self) -> bool {
         self.workspace_runtime
             .read()
@@ -1388,8 +1600,18 @@ impl AppServer {
                 .read()
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .clone();
-            let local = compose_local_tools_with_config(execution, &policy_config)
-                .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
+            let additional_directory_access = self
+                .workspace_runtime
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .additional_directory_access
+                .clone();
+            let local = compose_local_tools_with_config(
+                execution,
+                &policy_config,
+                additional_directory_access,
+            )
+            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
             self.commit_trusted_workspace_runtime(authorization, local, host)
         };
         if result.is_ok() {
@@ -1451,6 +1673,7 @@ impl AppServer {
             .workspace_runtime
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
+        current.additional_directory_access.clear();
         let next = WorkspaceRuntime {
             authorization: Some(authorization),
             file_system: Some(file_system),
@@ -1473,6 +1696,8 @@ impl AppServer {
             folder_terminals: BTreeMap::new(),
             debug_adapters: None,
             folder_debug_adapters: BTreeMap::new(),
+            additional_directories: BTreeMap::new(),
+            additional_directory_access: Arc::clone(&current.additional_directory_access),
             turn_executor: current
                 .turn_executor
                 .clone()
@@ -1631,6 +1856,7 @@ impl AppServer {
             .workspace_runtime
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
+        current.additional_directory_access.clear();
         let next = WorkspaceRuntime {
             authorization: Some(authorization),
             file_system: Some(file_system),
@@ -1653,6 +1879,8 @@ impl AppServer {
             folder_terminals: BTreeMap::new(),
             debug_adapters: Some(Arc::clone(&debug_adapters)),
             folder_debug_adapters: BTreeMap::new(),
+            additional_directories: BTreeMap::new(),
+            additional_directory_access: Arc::clone(&current.additional_directory_access),
             turn_executor: current
                 .turn_executor
                 .clone()
@@ -2124,6 +2352,39 @@ impl AppServer {
         }
         Ok(())
     }
+}
+
+fn additional_directory_snapshots(
+    directories: &SessionAdditionalDirectories,
+) -> Vec<SessionAdditionalDirectorySnapshot> {
+    directories
+        .scope
+        .additional_directories()
+        .iter()
+        .filter_map(|directory| {
+            let root = directory.root().canonical_path().to_path_buf();
+            directories.authorizations.get(&root).map(|authorization| {
+                SessionAdditionalDirectorySnapshot {
+                    root,
+                    decision: authorization.decision(),
+                }
+            })
+        })
+        .collect()
+}
+
+fn additional_directory_access_roots(
+    directories: &SessionAdditionalDirectories,
+) -> Result<Vec<zeta_workspace::TrustedWorkspace>, WorkspaceRuntimeError> {
+    directories
+        .authorizations
+        .values()
+        .map(|authorization| {
+            authorization
+                .require(WorkspaceCapability::MutateRepository)
+                .map_err(|_| WorkspaceRuntimeError::TrustRequired)
+        })
+        .collect()
 }
 
 fn append_multi_agent_tools(
