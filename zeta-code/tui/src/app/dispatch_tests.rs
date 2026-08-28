@@ -128,10 +128,7 @@ fn status_mcp_connectors_skills_and_help_return_real_surfaces() {
     assert_eq!(app.status(), &Status::Ready);
     let selection = app.selection_view().unwrap();
     assert_eq!(selection.title(), "Skills");
-    assert_eq!(
-        selection.tabs()[selection.active_tab_index()].label(),
-        "All (1)"
-    );
+    assert_eq!(selection.active_tab().label(), "All (1)");
     assert_eq!(selection.visible_items()[0].label(), "skill-creator");
 
     conversation.execute(
@@ -141,10 +138,7 @@ fn status_mcp_connectors_skills_and_help_return_real_surfaces() {
     );
     assert_eq!(app.status(), &Status::Ready);
     let selection = app.selection_view().unwrap();
-    assert_eq!(
-        selection.tabs()[selection.active_tab_index()].label(),
-        "Commands"
-    );
+    assert_eq!(selection.active_tab().label(), "Commands");
     assert_eq!(selection.tabs().len(), 1);
 
     drop(client);
@@ -164,7 +158,7 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
     );
 
     let all = app.selection_view().unwrap();
-    assert_eq!(all.tabs()[all.active_tab_index()].label(), "All (1)");
+    assert_eq!(all.active_tab().label(), "All (1)");
     assert_eq!(
         all.visible_items()
             .iter()
@@ -181,10 +175,7 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
 
     app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
     let enabled = app.selection_view().unwrap();
-    assert_eq!(
-        enabled.tabs()[enabled.active_tab_index()].label(),
-        "Enabled (1)"
-    );
+    assert_eq!(enabled.active_tab().label(), "Enabled (1)");
     assert_eq!(enabled.visible_items()[0].label(), "skill-creator");
 
     app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
@@ -206,10 +197,7 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
     app.update(AppEvent::SkillsViewReplaced(view));
     app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
     let disabled = app.selection_view().unwrap();
-    assert_eq!(
-        disabled.tabs()[disabled.active_tab_index()].label(),
-        "Disabled (1)"
-    );
+    assert_eq!(disabled.active_tab().label(), "Disabled (1)");
     assert_eq!(disabled.visible_items()[0].label(), "skill-creator");
 
     drop(client);

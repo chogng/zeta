@@ -42,7 +42,7 @@ fn key(code: KeyCode) -> KeyEvent {
 }
 
 fn active_tab_label(state: &SelectionViewState) -> &str {
-    state.tabs()[state.active_tab_index()].label()
+    state.active_tab().label()
 }
 
 #[test]

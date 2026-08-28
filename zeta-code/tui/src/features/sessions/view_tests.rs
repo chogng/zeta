@@ -88,7 +88,7 @@ fn resume_pane_groups_statuses_and_activates_the_selected_session() {
         state.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)),
         SelectionInputOutcome::Consumed
     );
-    assert_eq!(state.tabs()[state.active_tab_index()].label(), "Active (1)");
+    assert_eq!(state.active_tab().label(), "Active (1)");
     let SelectionInputOutcome::Activate(item_id) =
         state.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
     else {

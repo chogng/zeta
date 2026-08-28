@@ -349,10 +349,6 @@ impl SelectionViewState {
         self.tabs.tabs()
     }
 
-    pub(crate) fn active_tab_index(&self) -> usize {
-        self.tabs.active_index()
-    }
-
     pub(crate) fn select_tab(&mut self, index: usize) -> bool {
         match self.tabs.select(index) {
             TabListInputOutcome::ActiveChanged => {
@@ -546,7 +542,7 @@ impl SelectionViewState {
         }
     }
 
-    fn active_tab(&self) -> &SelectionTab {
+    pub(crate) fn active_tab(&self) -> &SelectionTab {
         self.tabs.active_tab()
     }
 

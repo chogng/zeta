@@ -117,16 +117,6 @@ impl<T: TabListItem> TabListState<T> {
                 .then_some(index)
             })
     }
-
-    pub(crate) fn handle_mouse(
-        &mut self,
-        area: Rect,
-        column: u16,
-        row: u16,
-    ) -> TabListInputOutcome {
-        self.index_at(area, column, row)
-            .map_or(TabListInputOutcome::Unhandled, |index| self.select(index))
-    }
 }
 
 pub(crate) fn desired_height<T: TabListItem>(tabs: &[T], width: u16) -> u16 {

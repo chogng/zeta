@@ -51,15 +51,10 @@ fn mouse_hit_testing_selects_tabs_and_ignores_the_gap() {
 
     assert_eq!(tabs.index_at(area, 4, 7), Some(0));
     assert_eq!(tabs.index_at(area, 9, 7), None);
-    assert_eq!(
-        tabs.handle_mouse(area, 11, 7),
-        TabListInputOutcome::ActiveChanged
-    );
+    let second = tabs.index_at(area, 11, 7).unwrap();
+    assert_eq!(tabs.select(second), TabListInputOutcome::ActiveChanged);
     assert_eq!(tabs.active_index(), 1);
-    assert_eq!(
-        tabs.handle_mouse(area, 11, 7),
-        TabListInputOutcome::Consumed
-    );
+    assert_eq!(tabs.select(second), TabListInputOutcome::Consumed);
 }
 
 #[test]

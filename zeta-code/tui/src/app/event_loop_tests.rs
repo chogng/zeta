@@ -129,5 +129,5 @@ fn pointer_click_switches_a_selection_tab() {
     let (column, row) = target.expect("second selection tab should be clickable");
 
     assert_eq!(activate_pointer_item(&mut app, area, column, row), None);
-    assert_eq!(app.selection_view().unwrap().active_tab_index(), 1);
+    assert_eq!(app.selection_view().unwrap().active_tab().label(), "Second");
 }
