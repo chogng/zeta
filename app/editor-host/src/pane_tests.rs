@@ -7,13 +7,16 @@ use zui::ui::{
 };
 
 use super::*;
-use crate::shell_interaction::{
+use crate::interaction::{
     FILE_EDITOR_DOCUMENT, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_NOTICE, FILE_EDITOR_PANE,
-    FILE_EDITOR_REPLACE_INPUT, FILE_EDITOR_TAB_LIST, FileEditorAction, MAIN_SURFACE, WINDOW,
-    file_editor_close_id, file_editor_tab_id,
+    FILE_EDITOR_REPLACE_INPUT, FILE_EDITOR_TAB_LIST, FileEditorAction, file_editor_close_id,
+    file_editor_tab_id,
 };
 use zeta_ui_theme::DEFAULT_UI_THEME;
 use zui::ui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame, UiNode};
+
+const WINDOW: zui::ui::ElementId = zui::ui::ElementId::scoped(90, 1);
+const MAIN_SURFACE: zui::ui::ElementId = zui::ui::ElementId::scoped(90, 2);
 
 fn open(host: &mut FileEditorHost, path: &str, content: &str) {
     host.open(TextFileSnapshot::new(
@@ -351,7 +354,7 @@ fn file_pane_soft_wrap_drives_visual_viewport_and_caret_reveal() {
 fn find_replace_bar_projects_desktop_inputs_and_editor_owned_match_count() {
     let mut host = FileEditorHost::default();
     open(&mut host, "notes.txt", "one fish two fish");
-    let mut search = zeta_editor_host::FileEditorSearchState::default();
+    let mut search = FileEditorSearchState::default();
     search.show_replace();
     search.apply_query(TextInputCommand::Insert("fish".to_owned()));
     let mut text_layout = TextInputLayoutEngine::new();

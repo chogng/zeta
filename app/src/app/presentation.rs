@@ -4,7 +4,7 @@ pub(super) fn with_shell_presentation_model<R>(
     app: &mut ProductApp,
     window_control_insets: WindowControlInsets,
     operation: impl FnOnce(
-        ShellPresentationModel<'_>,
+        WorkbenchPresentationModel<'_>,
         &mut TextInputLayoutEngine,
         &mut dyn zui::ui::AnimationBinding,
     ) -> R,
@@ -50,6 +50,7 @@ pub(super) fn with_shell_presentation_model<R>(
     let file_editor_diagnostics = language_service.active_editor_diagnostics(file_editor_host);
     let language_hover = language_service.active_hover(file_editor_host);
     let language_completions = language_service.active_completions(file_editor_host);
+    let workspace_diff_summary = workspace_context.diff_summary_label();
     let active_tab_input = workbench_model.tab_part().active_tab_key();
     let pane_group = active_tab_input.and_then(|key| workbench_model.pane_part(key));
     let active_pane = active_tab_input.and_then(|tab_key| {
@@ -88,7 +89,7 @@ pub(super) fn with_shell_presentation_model<R>(
                         } else {
                             (0, Default::default(), None)
                         };
-                    Some(shell_scene::PaneView {
+                    Some(zeta_workbench::PaneView {
                         pane_id: Some(pane_id),
                         kind,
                         core: terminal_key.and_then(|key| {
@@ -106,7 +107,8 @@ pub(super) fn with_shell_presentation_model<R>(
         .and_then(|mount| mount.binding().terminal_key())
         .or_else(|| terminal_workspace.active_key());
     operation(
-        ShellPresentationModel {
+        WorkbenchPresentationModel {
+            product_name: PRODUCT_DISPLAY_NAME,
             palette: *palette,
             terminal: terminal_key
                 .and_then(|key| terminal_workspace.terminal(key))
@@ -128,7 +130,13 @@ pub(super) fn with_shell_presentation_model<R>(
             completion_selection: file_editor_input.completion_selection(),
             code_editor_style,
             session_pane,
-            workspace_context,
+            workspace_context: zeta_workbench::WorkspaceContextView {
+                location: workspace_context.location_label(),
+                working_directory: workspace_context.working_directory_label(),
+                git_branch: workspace_context.git_branch_label(),
+                diff_summary: workspace_diff_summary,
+                upstream_distance: workspace_context.upstream_distance(),
+            },
             session_search,
             tab_part: workbench_model.tab_part(),
             active_tab_input,

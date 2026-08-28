@@ -5,12 +5,11 @@ use zeta_ui_components::{
 };
 use zui::ui::{Point, Rect, Size, UiScene};
 
-use crate::terminal_history::block_view_range;
 use zeta_ui_theme::UiTheme;
 
 /// Product adapter from bottom-relative terminal history to a top-relative ScrollView.
 #[derive(Clone, Copy)]
-pub(crate) struct TerminalOutputScrollView {
+pub struct TerminalOutputScrollView {
     bounds: Rect,
     line_count: usize,
     line_capacity: usize,
@@ -21,7 +20,7 @@ pub(crate) struct TerminalOutputScrollView {
 }
 
 impl TerminalOutputScrollView {
-    pub(crate) fn new(
+    pub fn new(
         bounds: Rect,
         line_count: usize,
         line_height: f32,
@@ -45,11 +44,11 @@ impl TerminalOutputScrollView {
         }
     }
 
-    pub(crate) fn visible_line_range(self) -> Range<usize> {
+    pub fn visible_line_range(self) -> Range<usize> {
         block_view_range(self.line_count, self.line_capacity, self.scroll_offset)
     }
 
-    pub(crate) fn scroll_view(self) -> ScrollView {
+    pub fn scroll_view(self) -> ScrollView {
         let mut state = ScrollState::default();
         let first_visible_line = self.visible_line_range().start;
         state.apply(
@@ -70,7 +69,7 @@ impl TerminalOutputScrollView {
         .with_scrollbar_presentation(self.scrollbar_presentation)
     }
 
-    pub(crate) fn draw<R>(
+    pub fn draw<R>(
         self,
         scene: &mut UiScene,
         draw_content: impl FnOnce(&mut UiScene, ScrollViewport, Range<usize>) -> R,
@@ -96,6 +95,12 @@ impl TerminalOutputScrollView {
     }
 }
 
+fn block_view_range(line_count: usize, capacity: usize, scroll_offset: usize) -> Range<usize> {
+    let scroll_offset = scroll_offset.min(line_count.saturating_sub(capacity));
+    let first = line_count.saturating_sub(capacity.saturating_add(scroll_offset));
+    first..(first + capacity).min(line_count)
+}
+
 #[cfg(test)]
-#[path = "terminal_output_scroll_view_tests.rs"]
+#[path = "output_scroll_view_tests.rs"]
 mod tests;

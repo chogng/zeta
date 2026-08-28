@@ -49,6 +49,7 @@ fn thread_snapshot_preserves_prompt_and_direct_shell_history_order() {
                 tool_mode: Default::default(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 usage: Default::default(),
+                context_usage: None,
                 items: vec![ThreadItem::UserMessage {
                     item_id: ItemId::new("item-user").unwrap(),
                     turn_id: agent_turn_id,
@@ -66,6 +67,7 @@ fn thread_snapshot_preserves_prompt_and_direct_shell_history_order() {
                 tool_mode: Default::default(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 usage: Default::default(),
+                context_usage: None,
                 items: vec![ThreadItem::ToolCall {
                     item_id: ItemId::new("item-shell").unwrap(),
                     turn_id: shell_turn_id,

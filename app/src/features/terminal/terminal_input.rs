@@ -18,15 +18,15 @@ use crate::ProductApp;
 use crate::keybindings::{
     ProductKeybindingContext, ProductKeybindingFacts, ProductKeybindingResolution,
 };
-use crate::shell_interaction::{
-    COMPOSER, COMPOSER_INTERACTION, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT,
-    FILE_SEARCH_INPUT, SESSION_SEARCH_INPUT,
-};
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
+use zeta_editor_host::{FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT};
+use zeta_files::FILE_SEARCH_INPUT;
 use zeta_files::FilesAction;
+use zeta_session::interaction::{COMPOSER, COMPOSER_INTERACTION};
 use zeta_session::{ComposerInteractionActivation, SelectionDirection};
 use zeta_session::{ComposerRoute, ComposerSubmission};
 use zeta_settings::SETTINGS_SEARCH_INPUT;
+use zeta_workbench::SESSION_SEARCH_INPUT;
 use zui::ui::{FocusDirection, NavigationAxis};
 
 impl ProductApp {

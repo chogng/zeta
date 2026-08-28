@@ -1,5 +1,7 @@
 //! Mapping from orientation-neutral Workbench tabs into one UI identity scope.
 
+use std::path::PathBuf;
+
 use crate::TabListOrientation;
 use zui::ui::ElementId;
 use zui::ui::NavigationAxis;
@@ -119,6 +121,7 @@ pub struct WorkbenchTab<'a> {
     pub(super) kind: WorkbenchTabKind,
     pub(super) name: &'a str,
     pub(super) workspace: &'a str,
+    pub(super) workspace_roots: &'a [PathBuf],
     pub(super) status: TabStatus,
     pub(super) pinned: bool,
 }
@@ -307,6 +310,7 @@ impl<'a> WorkbenchTab<'a> {
                 input.status().clone(),
                 tab_part.is_tab_pinned(input.key()),
             )
+            .with_workspace_roots(input.workspace_roots())
         }
     }
 
@@ -326,9 +330,15 @@ impl<'a> WorkbenchTab<'a> {
             kind: WorkbenchTabKind::Session,
             name,
             workspace,
+            workspace_roots: &[],
             status,
             pinned,
         }
+    }
+
+    pub fn with_workspace_roots(mut self, workspace_roots: &'a [PathBuf]) -> Self {
+        self.workspace_roots = workspace_roots;
+        self
     }
 
     pub fn settings(
@@ -344,6 +354,7 @@ impl<'a> WorkbenchTab<'a> {
             kind: WorkbenchTabKind::Settings,
             name,
             workspace: "Application",
+            workspace_roots: &[],
             status: TabStatus::idle("Settings"),
             pinned: false,
         }

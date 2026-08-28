@@ -1,0 +1,11 @@
+load("//app:defs.bzl", "app_rust_library")
+
+app_rust_library(
+    name = "workbench_model",
+    crate_name = "zeta_workbench_model",
+    crate_root = "lib.rs",
+    package_name = "app/workbench-model",
+    source_files = ["README.md"],
+    source_globs = ["**/*.rs"],
+    unit_tests = True,
+)

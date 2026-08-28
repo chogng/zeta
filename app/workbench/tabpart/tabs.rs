@@ -19,6 +19,12 @@ use zui::ui::UiDispatch;
 use zui::ui::UiNode;
 
 use super::WorkbenchUiStyle;
+use super::tab_workspace_preview::TabWorkspacePreview;
+#[cfg(test)]
+use super::tab_workspace_preview::{
+    workspace_preview_disclosure_id, workspace_preview_scroll_forward_id,
+    workspace_preview_scroll_id,
+};
 use crate::TabInputKey;
 use crate::TabPart;
 use crate::TabStatusKind;
@@ -61,6 +67,7 @@ struct GroupLayout<'a> {
 /// Product-owned container that projects browser-style Tab Groups at one UI mount.
 pub struct TabContainer<'a> {
     bounds: Rect,
+    viewport: Rect,
     content_bounds: Rect,
     groups: Vec<WorkbenchTabGroup<'a>>,
     selected_id: ElementId,
@@ -103,6 +110,7 @@ impl<'a> TabContainer<'a> {
         }
         Self {
             bounds,
+            viewport: bounds,
             content_bounds,
             groups,
             selected_id,
@@ -111,6 +119,12 @@ impl<'a> TabContainer<'a> {
             style,
             dispatch,
         }
+    }
+
+    /// Supplies the window viewport used to place overlays outside the Tab Container bounds.
+    pub fn with_viewport(mut self, viewport: Rect) -> Self {
+        self.viewport = viewport;
+        self
     }
 
     /// Keeps one mounted tab's action bar visible independently of pointer and focus state.
@@ -294,6 +308,42 @@ impl<'a> TabContainer<'a> {
                 self.paint_group(scene, &layout)
             });
         }
+        self.compose_workspace_preview(context);
+    }
+
+    fn compose_workspace_preview(&self, context: &mut ComponentContext<'_, '_>) {
+        if self.placement != TabContainerPlacement::Body {
+            return;
+        }
+        let hovered = self.group_layouts().into_iter().find_map(|layout| {
+            layout
+                .group
+                .tabs
+                .iter()
+                .enumerate()
+                .find_map(|(index, tab)| {
+                    (tab.kind == WorkbenchTabKind::Session && self.dispatch.is_hovered(tab.id))
+                        .then(|| {
+                            (
+                                tab,
+                                layout
+                                    .tab_list
+                                    .tab_bounds(index)
+                                    .expect("hovered tab has layout bounds"),
+                            )
+                        })
+                })
+        });
+        let Some((tab, tab_bounds)) = hovered else {
+            return;
+        };
+        context.draw_component(&TabWorkspacePreview::new(
+            self.viewport,
+            tab_bounds,
+            tab,
+            self.style.clone(),
+            self.dispatch,
+        ));
     }
 
     fn tab_region(

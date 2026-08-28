@@ -134,6 +134,7 @@ members = [
     "app/theme",
     "app/ui-components",
     "app/workbench",
+    "app/workbench-model",
     "app/zui",
     "app/zui-demo",
 ]
@@ -390,6 +391,7 @@ zeta-tui = { path = "zeta-code/tui" }
 zeta-uds = { path = "zeta-rs/uds" }
 zeta-ui-components = { path = "app/ui-components" }
 zeta-workbench = { path = "app/workbench" }
+zeta-workbench-model = { path = "app/workbench-model" }
 zeta-utils-image = { path = "zeta-rs/utils/image" }
 zeta-utils-output-truncation = { path = "zeta-rs/utils/output-truncation" }
 zeta-utils-path = { path = "zeta-rs/utils/path-utils" }

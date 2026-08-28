@@ -12,14 +12,28 @@ path = "lib.rs"
 
 [dependencies]
 zeta-commands = { workspace = true }
+zeta-editor = { workspace = true }
+zeta-editor-host = { workspace = true }
 zeta-files = { workspace = true }
 zeta-icons = { workspace = true }
 zeta-keybinding = { workspace = true }
+zeta-keybindings-host = { workspace = true }
+zeta-lsp-manager = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-session = { workspace = true }
+zeta-settings = { workspace = true }
+zeta-scm = { workspace = true }
+zeta-terminal = { workspace = true }
+zeta-terminal-workspace = { workspace = true }
+zeta-theme = { workspace = true }
 zeta-ui-components = { workspace = true }
 zeta-ui-theme = { workspace = true }
+zeta-workbench-model = { workspace = true }
 zui = { workspace = true, default-features = false }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+zeta-diff = { workspace = true }
+zeta-text-file = { workspace = true }

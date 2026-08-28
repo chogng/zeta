@@ -10,12 +10,12 @@ use zui::ui::TextInputCompositionEvent;
 
 use crate::ProductApp;
 use crate::file_editor_pane::{FileEditorPane, FileEditorPrompt};
-use crate::shell_interaction::{
+use crate::terminal_input::{code_editor_command, text_input_command};
+use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
+use zeta_editor_host::{
     FILE_EDITOR_DOCUMENT, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_PANE, FILE_EDITOR_REPLACE_INPUT,
     FileEditorAction, file_editor_close_index, file_editor_fold_index, file_editor_tab_index,
 };
-use crate::terminal_input::{code_editor_command, text_input_command};
-use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
 
 const ROWS_PER_WHEEL_STEP: f64 = 3.0;
 
@@ -627,7 +627,7 @@ impl ProductApp {
             self.pending_focus = Some(FILE_EDITOR_DOCUMENT);
         } else {
             self.workspace_surface.show_agent();
-            self.pending_focus = Some(crate::shell_interaction::COMPOSER);
+            self.pending_focus = Some(zeta_session::interaction::COMPOSER);
         }
         self.rebuild_presentation_on_next_redraw();
         self.request_redraw();

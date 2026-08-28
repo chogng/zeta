@@ -26,6 +26,9 @@ const SECOND: ElementId = ElementId::scoped(1, 5);
 const MENU: ElementId = ElementId::scoped(1, 6);
 const MENU_ITEM: ElementId = ElementId::scoped(1, 7);
 const FRAGMENT_BUTTON: ElementId = ElementId::scoped(1, 8);
+const DISCLOSURE: ElementId = ElementId::scoped(1, 9);
+const VALUE: ElementId = ElementId::scoped(1, 10);
+const VALUE_INCREMENT: ElementId = ElementId::scoped(1, 11);
 
 fn frame() -> InteractionFrame {
     let mut frame = InteractionFrame::default();
@@ -329,6 +332,74 @@ fn keyboard_activation_and_accessibility_use_the_focused_node_identity() {
     assert!(button.focusable);
     assert!(button.focused);
     assert_eq!(button.bounds, Rect::from_xywh(20.0, 80.0, 60.0, 24.0));
+}
+
+#[test]
+fn disclosure_activation_toggles_view_state_and_unmounted_controls_reset_it() {
+    let mut disclosure_frame = frame();
+    disclosure_frame.register(
+        UiNode::new(
+            DISCLOSURE,
+            Rect::from_xywh(160.0, 80.0, 100.0, 24.0),
+            AccessibilityRole::Button,
+            "Show all",
+        )
+        .with_parent(TOOLBAR)
+        .with_focus(FocusBehavior::TabStop)
+        .with_action(NodeAction::ToggleExpansion)
+        .with_expansion(AccessibilityExpansion::Collapsed),
+    );
+    let mut dispatch = UiDispatch::default();
+    dispatch.pointer_moved(Point::new(170.0, 85.0), &disclosure_frame);
+    dispatch.press_primary(&disclosure_frame);
+
+    let outcome = dispatch.release_primary(Point::new(170.0, 85.0), &disclosure_frame);
+
+    assert_eq!(outcome.intent, None);
+    assert!(dispatch.is_expanded(DISCLOSURE));
+    assert_eq!(
+        dispatch.reconcile_focus(&frame(), INPUT).invalidation,
+        DispatchInvalidation::Paint
+    );
+    assert!(!dispatch.is_expanded(DISCLOSURE));
+}
+
+#[test]
+fn value_adjustment_clamps_and_resets_when_its_target_unmounts() {
+    let mut value_frame = frame();
+    value_frame.register(UiNode::new(
+        VALUE,
+        Rect::from_xywh(160.0, 110.0, 100.0, 24.0),
+        AccessibilityRole::Group,
+        "Scroll position",
+    ));
+    value_frame.register(
+        UiNode::new(
+            VALUE_INCREMENT,
+            Rect::from_xywh(160.0, 140.0, 100.0, 24.0),
+            AccessibilityRole::Button,
+            "Scroll down",
+        )
+        .with_action(NodeAction::AdjustValue {
+            target: VALUE,
+            delta: 3,
+            minimum: 0,
+            maximum: 5,
+        }),
+    );
+    let mut dispatch = UiDispatch::default();
+    for _ in 0..2 {
+        dispatch.pointer_moved(Point::new(170.0, 145.0), &value_frame);
+        dispatch.press_primary(&value_frame);
+        dispatch.release_primary(Point::new(170.0, 145.0), &value_frame);
+    }
+
+    assert_eq!(dispatch.value(VALUE), 5);
+    assert_eq!(
+        dispatch.reconcile_focus(&frame(), INPUT).invalidation,
+        DispatchInvalidation::Paint
+    );
+    assert_eq!(dispatch.value(VALUE), 0);
 }
 
 #[test]

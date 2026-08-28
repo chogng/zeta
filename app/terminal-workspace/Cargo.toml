@@ -16,7 +16,8 @@ unicode-width = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-terminal = { workspace = true }
 zeta-ui-components = { workspace = true }
-zeta-workbench = { workspace = true }
+zeta-ui-theme = { workspace = true }
+zeta-workbench-model = { workspace = true }
 zui = { workspace = true, features = ["native"] }
 
 [lints]

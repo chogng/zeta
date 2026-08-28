@@ -5,28 +5,12 @@ mod session_input;
 mod session_search;
 mod style;
 mod tab_context_menu;
-mod tab_group;
-mod tab_input;
 mod tab_mount;
-mod tab_part;
-mod tab_status;
+mod tab_workspace_preview;
 mod tabs;
 mod tabs_state;
 mod titlebar;
 mod toolbar;
-
-pub use session_input::session_tab_input;
-pub use session_search::SessionSearchState;
-pub use tab_context_menu::{
-    TAB_CONTEXT_MENU, TAB_CONTEXT_MENU_GROUPS, TAB_CONTEXT_MENU_MOVE_TO_NEW_GROUP,
-    TAB_RENAME_INPUT, TabContextMenu, TabContextMenuAction, TabContextMenuActivation,
-    TabContextMenuState, TabContextMenuStyle, tab_group_for_menu_element,
-    tab_group_menu_element_id, update_tab_context_menu_pointer,
-};
-pub use tab_group::{TabGroup, TabGroupId};
-pub use tab_input::{TabInput, TabInputChange, TabInputKey, TabInputMetadata};
-pub use tab_part::{TabId, TabPart};
-pub use tab_status::{TabStatus, TabStatusKind};
 
 pub use identity::{
     ADD_SESSION, FIRST_TAB_CONTAINER_SESSION_ACTION, FIRST_TAB_CONTAINER_SESSION_CLOSE,
@@ -40,8 +24,16 @@ pub use identity::{
     titlebar_session_tab_action_id, titlebar_session_tab_close_id, titlebar_session_tab_id,
     titlebar_tab_group_list_id,
 };
+pub use session_input::session_tab_input;
+pub use session_search::SessionSearchState;
 pub use style::WorkbenchColors;
 pub use style::WorkbenchUiStyle;
+pub use tab_context_menu::{
+    TAB_CONTEXT_MENU, TAB_CONTEXT_MENU_GROUPS, TAB_CONTEXT_MENU_MOVE_TO_NEW_GROUP,
+    TAB_RENAME_INPUT, TabContextMenu, TabContextMenuAction, TabContextMenuActivation,
+    TabContextMenuState, TabContextMenuStyle, tab_group_for_menu_element,
+    tab_group_menu_element_id, update_tab_context_menu_pointer,
+};
 pub use tab_mount::TabIntent;
 pub use tabs::{
     TabContainer, TabContainerPlacement, WorkbenchTab, WorkbenchTabGroup, mounted_tab_element_id,

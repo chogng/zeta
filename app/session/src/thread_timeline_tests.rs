@@ -25,6 +25,7 @@ fn timeline_groups_shell_result_under_its_tool_call() {
             tool_mode: Default::default(),
             approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
             usage: Default::default(),
+            context_usage: None,
             items: vec![
                 ThreadItem::UserMessage {
                     item_id: ItemId::new("user").unwrap(),

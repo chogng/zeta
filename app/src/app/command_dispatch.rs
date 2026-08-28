@@ -3,7 +3,6 @@ use zeta_commands::CommandRegistry;
 use zeta_commands::CommandRequest;
 
 use crate::ProductApp;
-use crate::shell_interaction;
 use zeta_workbench::PaneSplitDirection;
 
 pub(crate) type ProductCommandRegistry = CommandRegistry<ProductApp>;
@@ -162,11 +161,11 @@ fn execute_toggle_terminal_surface(app: &mut ProductApp, _request: &CommandReque
         app.restore_workspace_pane_after_terminal();
     }
     app.pending_focus = if app.workspace_surface.is_editor() {
-        Some(shell_interaction::FILE_EDITOR_DOCUMENT)
+        Some(zeta_editor_host::FILE_EDITOR_DOCUMENT)
     } else if app.workspace_surface.is_terminal() {
         None
     } else {
-        Some(shell_interaction::COMPOSER)
+        Some(zeta_session::interaction::COMPOSER)
     };
     app.terminal_view_mut().selection.clear();
     app.terminal_view_mut().scroll.reset();
@@ -199,7 +198,7 @@ fn execute_toggle_workspace_pane(app: &mut ProductApp, _request: &CommandRequest
     if app.workspace_surface.is_editor() {
         app.show_agent_pane();
         app.workbench.collapse_inspector();
-        app.pending_focus = Some(shell_interaction::COMPOSER);
+        app.pending_focus = Some(zeta_session::interaction::COMPOSER);
         return;
     }
     match app.active_workspace_pane_kind() {
@@ -237,7 +236,7 @@ fn execute_toggle_agent_file_search(app: &mut ProductApp, _request: &CommandRequ
         if let Some(presentation) = app.presentation.as_ref() {
             let _ = app.ui_dispatch.focus_element(
                 presentation.interaction_frame(),
-                shell_interaction::FILE_SEARCH_INPUT,
+                zeta_files::FILE_SEARCH_INPUT,
             );
         }
     }

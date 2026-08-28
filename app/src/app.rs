@@ -15,23 +15,19 @@ use crate::product_event::ProductEvent;
 use crate::remote_connection_cli::AppInvocation;
 use crate::remote_tunnel_process::ProductRemoteTunnelHost;
 use crate::session_host::SessionRuntime;
-use crate::shell_interaction::{COMPOSER, FILE_EDITOR_DOCUMENT};
-use crate::shell_scene::{
-    ShellPresentation, ShellPresentationModel, build_shell_presentation_with_animation_bindings,
-    rebuild_shell_overlays, terminal_grid_size_for_bounds, terminal_grid_size_for_viewport,
-    terminal_pane_bounds_for_viewport, terminal_pane_sash_for_viewport,
-};
 use crate::terminal_session::{TerminalSession, TerminalSessionEvent, TerminalSessionKey};
 use crate::workspace_context::WorkspaceContext;
 use crate::workspace_path_picker::WorkspacePathPickerState;
 use crate::workspace_surface::WorkspaceSurface;
 use zeta_editor::CodeEditorStyle;
+use zeta_editor_host::FILE_EDITOR_DOCUMENT;
 use zeta_editor_host::FileEditorHost;
 use zeta_editor_host::FileEditorSearchState;
 use zeta_files::{FilesAction, FilesState};
 use zeta_protocol::SessionId;
 use zeta_scm::{ScmDiff, ScmState};
 use zeta_session::SessionPaneState;
+use zeta_session::interaction::COMPOSER;
 use zeta_settings::RemoteConnectionManagerState;
 use zeta_settings::RemoteConnectionPickerState;
 use zeta_settings::RemoteTunnelManagerState;
@@ -47,6 +43,12 @@ use zeta_workbench::SessionSearchState;
 use zeta_workbench::{
     LogicalViewport, PaneGroupId as PaneId, PaneInput, PaneInputKind, PaneKey, PaneSplitDirection,
     PaneSplitId, TabInputKey, WorkbenchHost,
+};
+use zeta_workbench::{
+    WorkbenchPresentation, WorkbenchPresentationModel,
+    build_workbench_presentation_with_animation_bindings, rebuild_workbench_overlays,
+    terminal_grid_size_for_bounds, terminal_grid_size_for_viewport,
+    terminal_pane_bounds_for_viewport, terminal_pane_sash_for_viewport,
 };
 use zui::ui::{CaretBlinkAdvance, CaretBlinkController, Point, TextInputLayoutEngine};
 use zui::ui::{SplitViewOrientation, SplitViewResizeSnapshot};
@@ -96,12 +98,10 @@ pub(crate) mod command_dispatch;
 mod events;
 #[path = "features/editor/file_editor_input.rs"]
 pub(crate) mod file_editor_input;
-#[path = "features/editor/file_editor_pane.rs"]
-pub(crate) mod file_editor_pane;
+pub(crate) use zeta_editor_host as file_editor_pane;
 #[path = "app/frame.rs"]
 mod frame;
-#[path = "features/workspace/git_branch_context_menu.rs"]
-pub(crate) mod git_branch_context_menu;
+pub(crate) use zeta_scm as git_branch_context_menu;
 #[path = "features/workspace/git_branch_context_menu_input.rs"]
 pub(crate) mod git_branch_context_menu_input;
 #[path = "platform/input_method.rs"]
@@ -166,22 +166,16 @@ mod runtime;
 pub(crate) mod session_catalog;
 #[path = "features/agent/session_host.rs"]
 pub(crate) mod session_host;
-#[path = "presentation/shell_interaction.rs"]
-pub(crate) mod shell_interaction;
-#[path = "presentation/shell_scene.rs"]
-pub(crate) mod shell_scene;
 #[path = "app/state.rs"]
 mod state;
-#[path = "presentation/tab_context_menu.rs"]
+#[path = "app/tab_context_menu.rs"]
 pub(crate) mod tab_context_menu;
-#[path = "features/terminal/terminal_blocks.rs"]
-pub(crate) mod terminal_blocks;
+pub(crate) use zeta_terminal_workspace as terminal_blocks;
 #[path = "features/terminal/terminal_history.rs"]
 pub(crate) mod terminal_history;
 #[path = "features/terminal/terminal_input.rs"]
 pub(crate) mod terminal_input;
-#[path = "features/terminal/terminal_output_scroll_view.rs"]
-pub(crate) mod terminal_output_scroll_view;
+pub(crate) use zeta_terminal_workspace as terminal_output_scroll_view;
 #[path = "features/terminal/terminal_pointer.rs"]
 pub(crate) mod terminal_pointer;
 #[path = "features/terminal/terminal_selection.rs"]
@@ -195,12 +189,10 @@ mod workbench_resize;
 mod workbench_tabs_resize;
 #[path = "features/workspace/workspace_context.rs"]
 pub(crate) mod workspace_context;
-#[path = "features/workspace/workspace_path_picker.rs"]
-pub(crate) mod workspace_path_picker;
+pub(crate) use zeta_files as workspace_path_picker;
 #[path = "features/workspace/workspace_path_picker_input.rs"]
 pub(crate) mod workspace_path_picker_input;
-#[path = "features/workspace/workspace_surface.rs"]
-pub(crate) mod workspace_surface;
+pub(crate) use zeta_workbench as workspace_surface;
 
 pub use run::run;
 pub(crate) use state::ProductApp;

@@ -1,11 +1,12 @@
 use super::{
     GitBranchContextMenu, GitBranchContextMenuState, GitBranchMenuAction, GitBranchMenuActivation,
 };
-use crate::shell_interaction::COMPOSER;
 use zeta_app_server_protocol::protocol::git::GitBranchDto;
 use zeta_ui_theme::DEFAULT_UI_THEME;
 use zui::ui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
 use zui::ui::{CaretVisibility, Rect, TextInputCommand, TextInputLayoutEngine};
+
+const COMPOSER: zui::ui::ElementId = zui::ui::ElementId::scoped(91, 1);
 
 #[test]
 fn branch_menu_places_the_current_branch_first_and_marks_it() {

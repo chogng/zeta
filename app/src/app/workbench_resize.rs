@@ -1,8 +1,8 @@
 use std::time::Instant;
 
 use crate::ProductApp;
-use crate::shell_interaction::INSPECTOR_RESIZE_HANDLE;
-use crate::shell_scene::inspector_resize_snapshot_for_viewport;
+use zeta_workbench::INSPECTOR_RESIZE_HANDLE;
+use zeta_workbench::inspector_resize_snapshot_for_viewport;
 use zui::input::ElementState;
 use zui::ui::DispatchInvalidation;
 use zui::ui::Point;

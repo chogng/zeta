@@ -5,11 +5,12 @@ use super::{
     WorkspacePathPicker, WorkspacePathPickerAction, WorkspacePathPickerActivation,
     WorkspacePathPickerState, workspace_path_item_id,
 };
-use crate::shell_interaction::COMPOSER;
 use zeta_ui_components::{ScrollAxis, ScrollCommand};
 use zeta_ui_theme::DEFAULT_UI_THEME;
 use zui::ui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
 use zui::ui::{CaretVisibility, Point, Rect, TextInputCommand, TextInputLayoutEngine};
+
+const COMPOSER: zui::ui::ElementId = zui::ui::ElementId::scoped(91, 1);
 
 static NEXT_PICKER_ID: AtomicU64 = AtomicU64::new(0);
 

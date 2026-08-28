@@ -1,5 +1,6 @@
 //! Files Pane state, layout, interaction, and UI.
 
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::TryRecvError;
@@ -42,6 +43,7 @@ mod pane;
 mod toolbar;
 #[path = "files/tree_view.rs"]
 mod tree_view;
+mod workspace_picker;
 
 pub use file_tree::FilesEntry;
 use file_tree::FilesTree;
@@ -50,6 +52,22 @@ pub use layout::FilesLayout;
 pub use pane::FilesPane;
 pub use pane::FilesPaneStyle;
 pub use toolbar::FilesToolbar;
+pub use workspace_picker::{
+    PICKER_ITEM_HEIGHT, WORKSPACE_PATH_SEARCH_INPUT, WorkspacePathPicker,
+    WorkspacePathPickerActivation, WorkspacePathPickerState, workspace_path_item_id,
+};
+
+pub fn display_working_directory(working_directory: &Path, home: Option<&Path>) -> String {
+    if let Some(home) = home {
+        if working_directory == home {
+            return "~".to_string();
+        }
+        if let Ok(relative) = working_directory.strip_prefix(home) {
+            return format!("~/{}", relative.display());
+        }
+    }
+    working_directory.display().to_string()
+}
 
 pub const FILE_LIST_ROW_HEIGHT: f32 = 24.0;
 pub const FILES_PANE: ElementId = ElementId::scoped(1, 28);

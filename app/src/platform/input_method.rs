@@ -10,13 +10,13 @@ use zui::window::ImeCursorArea;
 
 use crate::ProductApp;
 use crate::git_branch_context_menu::GIT_BRANCH_SEARCH_INPUT;
-use crate::shell_interaction::{
-    COMPOSER, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT, FILE_SEARCH_INPUT,
-    SESSION_SEARCH_INPUT,
-};
 use crate::workspace_path_picker::WORKSPACE_PATH_SEARCH_INPUT;
 use crate::workspace_surface::WorkspaceSurfaceKind;
+use zeta_editor_host::{FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT};
+use zeta_files::FILE_SEARCH_INPUT;
+use zeta_session::interaction::COMPOSER;
 use zeta_settings::SETTINGS_SEARCH_INPUT;
+use zeta_workbench::SESSION_SEARCH_INPUT;
 use zeta_workbench::TAB_RENAME_INPUT;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -357,7 +357,7 @@ impl ProductApp {
             composer_focused: self.ui_dispatch.is_focused(COMPOSER),
             file_editor_focused: self
                 .ui_dispatch
-                .is_focused(crate::shell_interaction::FILE_EDITOR_DOCUMENT),
+                .is_focused(zeta_editor_host::FILE_EDITOR_DOCUMENT),
             file_editor_find_focused: self.ui_dispatch.is_focused(FILE_EDITOR_FIND_INPUT),
             file_editor_replace_focused: self.ui_dispatch.is_focused(FILE_EDITOR_REPLACE_INPUT),
             session_search_focused: self.ui_dispatch.is_focused(SESSION_SEARCH_INPUT),

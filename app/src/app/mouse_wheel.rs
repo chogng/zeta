@@ -4,10 +4,11 @@ use zeta_ui_components::{ScrollCommand, ScrollDelta};
 use zui::input::MouseScrollDelta;
 
 use crate::ProductApp;
-use crate::shell_interaction::{FILES_PANE, MULTI_DIFF_EDITOR};
 use crate::terminal_history::scroll_limit;
 use crate::terminal_pointer::TerminalPointerRouting;
 use zeta_files::FILE_LIST_ROW_HEIGHT;
+use zeta_files::FILES_PANE;
+use zeta_scm::MULTI_DIFF_EDITOR;
 
 const LINES_PER_WHEEL_STEP: f32 = 3.0;
 const MULTI_DIFF_PIXELS_PER_LINE: f32 = 18.0;
@@ -121,12 +122,12 @@ impl ProductApp {
         if !presentation
             .interaction_frame()
             .ancestry(target)
-            .contains(&crate::shell_interaction::COMPOSER_INTERACTION)
+            .contains(&zeta_session::interaction::COMPOSER_INTERACTION)
         {
             return false;
         }
         let Some(interaction_bounds) =
-            presentation.element_bounds(crate::shell_interaction::COMPOSER_INTERACTION)
+            presentation.element_bounds(zeta_session::interaction::COMPOSER_INTERACTION)
         else {
             return true;
         };

@@ -2,7 +2,7 @@ use super::*;
 
 pub(crate) struct ProductApp {
     pub(super) window: Option<WindowHandle>,
-    pub(super) presentation: Option<ShellPresentation>,
+    pub(super) presentation: Option<WorkbenchPresentation>,
     pub(super) frame_scheduler: FrameScheduler,
     pub(super) retained_runtime: RetainedRuntime,
     pub(super) files: FilesState,

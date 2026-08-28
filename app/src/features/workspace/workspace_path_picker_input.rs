@@ -10,13 +10,13 @@ use zui::ui::{
 
 use crate::ProductApp;
 use crate::session_host::WorkspaceSwitchResult;
-use crate::shell_interaction::CONTEXT_WORKING_DIRECTORY;
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
 use crate::workspace_path_picker::{
     PICKER_ITEM_HEIGHT, WORKSPACE_PATH_SEARCH_INPUT, WorkspacePathPickerActivation,
     WorkspacePathPickerState, workspace_path_item_id,
 };
 use zeta_editor_host::FileEditorCloseRequest;
+use zeta_session::interaction::CONTEXT_WORKING_DIRECTORY;
 
 const PICKER_ROWS_PER_WHEEL_STEP: f32 = 3.0;
 
@@ -121,7 +121,7 @@ impl ProductApp {
         ) {
             let _ = self.bind_agent_pane();
         }
-        self.pending_focus = Some(crate::shell_interaction::COMPOSER);
+        self.pending_focus = Some(zeta_session::interaction::COMPOSER);
         self.session_pane
             .set_working_directory(self.workspace_context.working_directory());
         true

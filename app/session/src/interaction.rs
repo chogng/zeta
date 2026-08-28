@@ -73,6 +73,14 @@ pub fn composer_interaction_item_id(index: usize) -> ElementId {
     ElementId::scoped(16, local)
 }
 
+pub fn composer_interaction_item_index(
+    id: ElementId,
+    mut visible_range: Range<usize>,
+) -> Option<usize> {
+    visible_range.find(|index| composer_interaction_item_id(*index) == id)
+}
+
 #[cfg(test)]
 #[path = "interaction_tests.rs"]
 mod tests;
+use std::ops::Range;

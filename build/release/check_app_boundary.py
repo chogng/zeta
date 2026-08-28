@@ -17,6 +17,7 @@ EXPECTED_APP_MEMBERS = {
     "app/settings",
     "app/terminal-workspace",
     "app/workbench",
+    "app/workbench-model",
     "app/zui",
     "app/zui-demo",
 }

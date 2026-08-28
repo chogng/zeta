@@ -1,28 +1,34 @@
-use super::{
-    LogicalViewport, ShellLayout, ShellPresentation, ShellPresentationModel,
-    build_shell_presentation, rebuild_shell_overlays, terminal_grid_size_for_viewport,
-    terminal_mouse_position_for_viewport, terminal_pane_sash_for_viewport,
+use std::path::{Path, PathBuf};
+
+use crate::{
+    ADD_SESSION, INSPECTOR_RESIZE_HANDLE, InspectorPartState, LogicalViewport, PaneGroupId,
+    PaneInput, PanePart, PaneSplitDirection, SESSION_SEARCH_INPUT, SessionSearchState,
+    TAB_CONTAINER_RESIZE_HANDLE, TAB_CONTAINER_SETTINGS_ACTION, TAB_CONTAINER_SETTINGS_CLOSE,
+    TAB_CONTAINER_SETTINGS_TAB, TAB_CONTEXT_MENU, TITLEBAR, TabContainerState, TabInput,
+    TabInputKey, TabInputMetadata, TabPart, WINDOW, WorkbenchHost, WorkbenchPresentation,
+    WorkbenchPresentationModel, WorkbenchSceneLayout, WorkspaceContextView,
+    build_workbench_presentation, pane_group_element_id, rebuild_workbench_overlays,
+    terminal_grid_size_for_viewport, terminal_mouse_position_for_viewport,
+    terminal_pane_sash_for_viewport,
 };
-use crate::PRODUCT_DISPLAY_NAME;
-use crate::git_branch_context_menu::GitBranchContextMenuState;
-use crate::keybindings::ProductKeybindings;
-use crate::shell_interaction::{
-    CHANGES_PANE, COMPOSER, COMPOSER_INFO_BAR, COMPOSER_PANEL, FILE_EDITOR_DOCUMENT,
-    FILE_EDITOR_PANE, FILE_EDITOR_TAB_LIST, FILES_PANE, FILES_REFRESH, FILES_SEARCH, FILES_TOOLBAR,
-    INSPECTOR_RESIZE_HANDLE, MULTI_DIFF_EDITOR, SESSION_HEADER, SESSION_SEARCH_INPUT,
-    TAB_CONTAINER_RESIZE_HANDLE, TAB_CONTAINER_SETTINGS_CLOSE, TAB_CONTAINER_SETTINGS_TAB,
-    TAB_CONTEXT_MENU, THREAD_TIMELINE, TITLEBAR, WINDOW,
+use crate::{TabContextMenuState, WorkbenchKeybindings, WorkspaceSurfaceKind};
+use zeta_commands::AppCommandId;
+use zeta_diff::DiffDocument;
+use zeta_editor::{CodeEditorLanguage, CodeEditorStyle, DiffEditorDocument};
+use zeta_editor_host::{
+    FILE_EDITOR_DOCUMENT, FILE_EDITOR_PANE, FILE_EDITOR_TAB_LIST, FileEditorHost,
 };
-use crate::tab_context_menu::TabContextMenuState;
-use crate::workspace_context::WorkspaceContext;
-use crate::workspace_path_picker::WorkspacePathPickerState;
-use crate::workspace_surface::WorkspaceSurfaceKind;
-use zeta_editor::CodeEditorStyle;
-use zeta_editor_host::FileEditorHost;
-use zeta_files::{DirectoryEntry, FilesState};
-use zeta_scm::{ScmDiff, ScmState};
+use zeta_files::WorkspacePathPickerState;
+use zeta_files::{
+    DirectoryEntry, FILES_PANE, FILES_REFRESH, FILES_SEARCH, FILES_TOOLBAR, FilesState,
+};
+use zeta_keybinding::{HostPlatform, KeySequence};
+use zeta_scm::GitBranchContextMenuState;
+use zeta_scm::{CHANGES_PANE, MULTI_DIFF_EDITOR, ScmDiff, ScmState};
 use zeta_session::SessionPaneState;
-use zeta_session::interaction::ContextAction;
+use zeta_session::interaction::{
+    COMPOSER, COMPOSER_INFO_BAR, COMPOSER_PANEL, ContextAction, SESSION_HEADER, THREAD_TIMELINE,
+};
 use zeta_settings::RemoteConnectionManagerState;
 use zeta_settings::RemoteConnectionPickerState;
 use zeta_settings::RemoteTunnelManagerState;
@@ -31,21 +37,76 @@ use zeta_terminal::{GridSize, ScreenBuffer, TerminalCore};
 use zeta_terminal_workspace::PaneBinding;
 use zeta_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSnapshot};
 use zeta_ui_components::ScrollbarPresentation;
-use zeta_workbench::ADD_SESSION;
-use zeta_workbench::SessionSearchState;
-use zeta_workbench::TAB_CONTAINER_SETTINGS_ACTION;
-use zeta_workbench::TITLEBAR_SETTINGS_ACTION;
-use zeta_workbench::TabContainerState;
-use zeta_workbench::{
-    InspectorPartState, PaneGroupId, PaneInput, PanePart, PaneSplitDirection, TabInput,
-    TabInputKey, TabInputMetadata, TabPart, WorkbenchHost, pane_group_element_id,
-};
 use zui::runtime::AccessibilityNode;
 use zui::ui::{AccessibilityRole, CursorFeedback, DispatchInvalidation, UiDispatch, UiIntent};
 use zui::ui::{
     CaretVisibility, Color, Edges, Point, Rect, TextInputCommand, TextInputLayoutEngine, UiScene,
 };
 use zui::window::WindowControlInsets;
+
+const PRODUCT_DISPLAY_NAME: &str = "app";
+
+struct TestKeybindings;
+
+impl WorkbenchKeybindings for TestKeybindings {
+    fn pending_keybinding(&self) -> Option<(&KeySequence, usize)> {
+        None
+    }
+
+    fn platform(&self) -> HostPlatform {
+        HostPlatform::current()
+    }
+
+    fn binding_for_command(&self, _command: AppCommandId) -> Option<&KeySequence> {
+        None
+    }
+}
+
+struct TestWorkspaceContext {
+    working_directory: PathBuf,
+    working_directory_label: String,
+    git_branch: Option<String>,
+    diffs: Vec<ScmDiff>,
+}
+
+impl TestWorkspaceContext {
+    fn fixture(
+        working_directory_label: impl Into<String>,
+        git_branch: Option<&str>,
+        diff_count: Option<usize>,
+    ) -> Self {
+        let diffs = (0..diff_count.unwrap_or(0))
+            .filter_map(|index| {
+                DiffDocument::from_text("", &format!("fixture {index}\n"))
+                    .ok()
+                    .map(|document| {
+                        ScmDiff::new(
+                            format!("fixture-{index}.txt"),
+                            DiffEditorDocument::new(document, CodeEditorLanguage::PlainText),
+                        )
+                    })
+            })
+            .collect();
+        Self {
+            working_directory: PathBuf::from("/fixture"),
+            working_directory_label: working_directory_label.into(),
+            git_branch: git_branch.map(str::to_owned),
+            diffs,
+        }
+    }
+
+    fn working_directory(&self) -> &Path {
+        &self.working_directory
+    }
+
+    fn working_directory_label(&self) -> &str {
+        &self.working_directory_label
+    }
+
+    fn diffs(&self) -> &[ScmDiff] {
+        &self.diffs
+    }
+}
 
 fn viewport() -> LogicalViewport {
     LogicalViewport {
@@ -54,12 +115,31 @@ fn viewport() -> LogicalViewport {
     }
 }
 
+fn workspace_context_view(context: &TestWorkspaceContext) -> WorkspaceContextView<'_> {
+    WorkspaceContextView {
+        location: "Local",
+        working_directory: context.working_directory_label(),
+        git_branch: context.git_branch.as_deref().unwrap_or("No Git"),
+        diff_summary: context.git_branch.as_ref().map_or_else(
+            || "Changes —".to_string(),
+            |_| {
+                format!(
+                    "Changes {} • +{} -0",
+                    context.diffs.len(),
+                    context.diffs.len()
+                )
+            },
+        ),
+        upstream_distance: context.git_branch.as_ref().map(|_| (0, 0)),
+    }
+}
+
 #[test]
-fn inspector_part_outer_border_is_owned_by_desktop_shell() {
+fn inspector_part_outer_border_is_owned_by_workbench() {
     let bounds = Rect::from_xywh(680.0, 40.0, 320.0, 660.0);
     let mut scene = UiScene::new(zeta_ui_theme::DEFAULT_UI_THEME.workbench_background);
 
-    super::draw_inspector_border(&mut scene, bounds, zeta_ui_theme::DEFAULT_UI_THEME);
+    crate::draw_inspector_border(&mut scene, bounds, zeta_ui_theme::DEFAULT_UI_THEME);
 
     let frame = scene.rects().first().copied().expect("Inspector frame");
     assert_eq!(frame.bounds(), bounds);
@@ -71,14 +151,14 @@ fn inspector_part_outer_border_is_owned_by_desktop_shell() {
     );
 }
 
-fn presentation(terminal: Option<&TerminalCore>, scroll_offset: usize) -> ShellPresentation {
+fn presentation(terminal: Option<&TerminalCore>, scroll_offset: usize) -> WorkbenchPresentation {
     presentation_with_dispatch(terminal, scroll_offset).0
 }
 
 fn presentation_with_dispatch(
     terminal: Option<&TerminalCore>,
     scroll_offset: usize,
-) -> (ShellPresentation, UiDispatch) {
+) -> (WorkbenchPresentation, UiDispatch) {
     let files = FilesState::default();
     let scm = ScmState::default();
     let mut dispatch = UiDispatch::default();
@@ -96,7 +176,7 @@ fn presentation_with_dispatch(
 }
 
 fn accessibility_nodes(
-    presentation: &ShellPresentation,
+    presentation: &WorkbenchPresentation,
     dispatch: &UiDispatch,
 ) -> Vec<AccessibilityNode> {
     presentation
@@ -108,7 +188,7 @@ fn presentation_with_tab_container(
     terminal: Option<&TerminalCore>,
     scroll_offset: usize,
     tab_container: TabContainerState,
-) -> ShellPresentation {
+) -> WorkbenchPresentation {
     presentation_with_tab_container_and_menu(
         terminal,
         scroll_offset,
@@ -122,7 +202,7 @@ fn presentation_with_tab_container_and_menu(
     scroll_offset: usize,
     tab_container: TabContainerState,
     tab_context_menu: TabContextMenuState,
-) -> ShellPresentation {
+) -> WorkbenchPresentation {
     presentation_with_parts_and_menu(
         terminal,
         scroll_offset,
@@ -138,7 +218,7 @@ fn presentation_with_parts_and_menu(
     tab_container: TabContainerState,
     inspector_part: InspectorPartState,
     tab_context_menu: TabContextMenuState,
-) -> ShellPresentation {
+) -> WorkbenchPresentation {
     let files = FilesState::default();
     let scm = ScmState::default();
     let mut dispatch = UiDispatch::default();
@@ -163,7 +243,7 @@ fn presentation_with_capabilities(
     files: &FilesState,
     scm: &ScmState,
     dispatch: &mut UiDispatch,
-) -> ShellPresentation {
+) -> WorkbenchPresentation {
     presentation_with_active_tab_input(
         terminal,
         scroll_offset,
@@ -187,10 +267,10 @@ fn presentation_with_active_tab_input(
     scm: &ScmState,
     dispatch: &mut UiDispatch,
     active_tab_input: Option<TabInputKey>,
-) -> ShellPresentation {
+) -> WorkbenchPresentation {
     let session_pane = SessionPaneState::default();
     let session_search = SessionSearchState::default();
-    let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
+    let workspace_context = TestWorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
     let mut text_layout = TextInputLayoutEngine::new();
     let file_editor_host = FileEditorHost::default();
     let code_editor_style = CodeEditorStyle::light();
@@ -227,9 +307,10 @@ fn presentation_with_active_tab_input(
         .or(files_input_enabled.then_some(&workspace_tab_key));
     let pane_group = files_input_enabled.then_some(files_pane_part);
     let tab_part = TabPart::default();
-    let initial = build_shell_presentation(
+    let initial = build_workbench_presentation(
         viewport(),
-        ShellPresentationModel {
+        WorkbenchPresentationModel {
+            product_name: PRODUCT_DISPLAY_NAME,
             palette: zeta_ui_theme::DEFAULT_UI_THEME,
             terminal,
             terminal_panes: &[],
@@ -247,7 +328,7 @@ fn presentation_with_active_tab_input(
                 WorkspaceSurfaceKind::Agent
             },
             file_editor_host: &file_editor_host,
-            file_editor_prompt: crate::file_editor_pane::FileEditorPrompt::None,
+            file_editor_prompt: zeta_editor_host::FileEditorPrompt::None,
             file_editor_search: &zeta_editor_host::FileEditorSearchState::default(),
             file_editor_diagnostics: &[],
             language_hover: None,
@@ -255,7 +336,7 @@ fn presentation_with_active_tab_input(
             completion_selection: 0,
             code_editor_style: &code_editor_style,
             session_pane: &session_pane,
-            workspace_context: &workspace_context,
+            workspace_context: workspace_context_view(&workspace_context),
             session_search: &session_search,
             tab_part: &tab_part,
             active_tab_input,
@@ -271,7 +352,7 @@ fn presentation_with_active_tab_input(
             remote_connection_picker: &RemoteConnectionPickerState::default(),
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
-            keybindings: &ProductKeybindings::default(),
+            keybindings: &TestKeybindings,
             settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
             theme_scheme: zeta_theme::ColorScheme::Light,
@@ -282,9 +363,10 @@ fn presentation_with_active_tab_input(
         &mut text_layout,
     );
     dispatch.reconcile_focus(&initial.interaction_frame(), COMPOSER);
-    build_shell_presentation(
+    build_workbench_presentation(
         viewport(),
-        ShellPresentationModel {
+        WorkbenchPresentationModel {
+            product_name: PRODUCT_DISPLAY_NAME,
             palette: zeta_ui_theme::DEFAULT_UI_THEME,
             terminal,
             terminal_panes: &[],
@@ -302,7 +384,7 @@ fn presentation_with_active_tab_input(
                 WorkspaceSurfaceKind::Agent
             },
             file_editor_host: &file_editor_host,
-            file_editor_prompt: crate::file_editor_pane::FileEditorPrompt::None,
+            file_editor_prompt: zeta_editor_host::FileEditorPrompt::None,
             file_editor_search: &zeta_editor_host::FileEditorSearchState::default(),
             file_editor_diagnostics: &[],
             language_hover: None,
@@ -310,7 +392,7 @@ fn presentation_with_active_tab_input(
             completion_selection: 0,
             code_editor_style: &code_editor_style,
             session_pane: &session_pane,
-            workspace_context: &workspace_context,
+            workspace_context: workspace_context_view(&workspace_context),
             session_search: &session_search,
             tab_part: &tab_part,
             active_tab_input,
@@ -326,7 +408,7 @@ fn presentation_with_active_tab_input(
             remote_connection_picker: &RemoteConnectionPickerState::default(),
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
-            keybindings: &ProductKeybindings::default(),
+            keybindings: &TestKeybindings,
             settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
             theme_scheme: zeta_theme::ColorScheme::Light,
@@ -410,7 +492,7 @@ fn expanded_inspector_part_file_row_hover_rebuilds_with_the_hover_background() {
         let row = accessibility_nodes
             .iter()
             .find(|node| node.label == "beta.txt")
-            .expect("file row should be registered in the shell frame");
+            .expect("file row should be registered in the Workbench frame");
         (row.id, row.bounds)
     };
     let point = Point::new(
@@ -442,7 +524,7 @@ fn expanded_inspector_part_file_row_hover_rebuilds_with_the_hover_background() {
 
 #[test]
 fn primary_layout_keeps_output_above_a_bottom_composer() {
-    let layout = ShellLayout::for_viewport(
+    let layout = WorkbenchSceneLayout::for_viewport(
         viewport(),
         TabContainerState::collapsed(),
         InspectorPartState::default(),
@@ -466,7 +548,7 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
     let session_pane = SessionPaneState::default();
     let session_search = SessionSearchState::default();
     let tab_part = TabPart::default();
-    let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
+    let workspace_context = TestWorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
     let files = FilesState::default();
     let scm = ScmState::default();
     let mut file_editor_host = FileEditorHost::default();
@@ -483,9 +565,10 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
     let dispatch = UiDispatch::default();
     let mut text_layout = TextInputLayoutEngine::new();
 
-    let presentation = build_shell_presentation(
+    let presentation = build_workbench_presentation(
         viewport(),
-        ShellPresentationModel {
+        WorkbenchPresentationModel {
+            product_name: PRODUCT_DISPLAY_NAME,
             palette: zeta_ui_theme::DEFAULT_UI_THEME,
             terminal: None,
             terminal_panes: &[],
@@ -497,7 +580,7 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
             terminal_selection: None,
             workspace_surface: WorkspaceSurfaceKind::Editor,
             file_editor_host: &file_editor_host,
-            file_editor_prompt: crate::file_editor_pane::FileEditorPrompt::None,
+            file_editor_prompt: zeta_editor_host::FileEditorPrompt::None,
             file_editor_search: &zeta_editor_host::FileEditorSearchState::default(),
             file_editor_diagnostics: &[],
             language_hover: None,
@@ -505,7 +588,7 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
             completion_selection: 0,
             code_editor_style: &code_editor_style,
             session_pane: &session_pane,
-            workspace_context: &workspace_context,
+            workspace_context: workspace_context_view(&workspace_context),
             session_search: &session_search,
             tab_part: &tab_part,
             active_tab_input: None,
@@ -521,7 +604,7 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
             remote_connection_picker: &RemoteConnectionPickerState::default(),
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
-            keybindings: &ProductKeybindings::default(),
+            keybindings: &TestKeybindings,
             settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
             theme_scheme: zeta_theme::ColorScheme::Light,
@@ -564,7 +647,7 @@ fn editor_surface_mounts_the_active_file_beside_the_session_canvas() {
 
 #[test]
 fn multiline_composer_grows_upward_between_info_bar_and_bottom_toolbar() {
-    let layout = ShellLayout::for_viewport_with_composer_height(
+    let layout = WorkbenchSceneLayout::for_viewport_with_composer_height(
         viewport(),
         TabContainerState::collapsed(),
         InspectorPartState::default(),
@@ -587,7 +670,7 @@ fn multiline_composer_grows_upward_between_info_bar_and_bottom_toolbar() {
 
 #[test]
 fn primary_presentation_uses_a_flat_light_surface() {
-    let layout = ShellLayout::for_viewport(
+    let layout = WorkbenchSceneLayout::for_viewport(
         viewport(),
         TabContainerState::collapsed(),
         InspectorPartState::default(),
@@ -658,7 +741,7 @@ fn primary_presentation_has_an_agent_timeline_and_fixed_composer() {
 
 #[test]
 fn expanded_tab_container_reflow_the_terminal_and_publish_a_selected_session_tab() {
-    let layout = ShellLayout::for_viewport(
+    let layout = WorkbenchSceneLayout::for_viewport(
         viewport(),
         TabContainerState::expanded(),
         InspectorPartState::default(),
@@ -675,7 +758,7 @@ fn expanded_tab_container_reflow_the_terminal_and_publish_a_selected_session_tab
         .collect::<Vec<_>>();
     let session_tab = accessibility_nodes
         .iter()
-        .find(|node| node.id == crate::shell_interaction::FIRST_TAB_CONTAINER_SESSION_TAB)
+        .find(|node| node.id == crate::FIRST_TAB_CONTAINER_SESSION_TAB)
         .unwrap();
     let resize_handle = accessibility_nodes
         .iter()
@@ -762,7 +845,7 @@ fn session_search_filters_tabs_by_session_name() {
     let mut session_search = SessionSearchState::default();
     let tab_part = TabPart::default();
     session_search.apply(TextInputCommand::Insert("missing session".to_owned()));
-    let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
+    let workspace_context = TestWorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
     let files = FilesState::default();
@@ -770,9 +853,10 @@ fn session_search_filters_tabs_by_session_name() {
     let file_editor_host = FileEditorHost::default();
     let code_editor_style = CodeEditorStyle::light();
 
-    let presentation = build_shell_presentation(
+    let presentation = build_workbench_presentation(
         viewport(),
-        ShellPresentationModel {
+        WorkbenchPresentationModel {
+            product_name: PRODUCT_DISPLAY_NAME,
             palette: zeta_ui_theme::DEFAULT_UI_THEME,
             terminal: None,
             terminal_panes: &[],
@@ -784,7 +868,7 @@ fn session_search_filters_tabs_by_session_name() {
             terminal_selection: None,
             workspace_surface: WorkspaceSurfaceKind::Agent,
             file_editor_host: &file_editor_host,
-            file_editor_prompt: crate::file_editor_pane::FileEditorPrompt::None,
+            file_editor_prompt: zeta_editor_host::FileEditorPrompt::None,
             file_editor_search: &zeta_editor_host::FileEditorSearchState::default(),
             file_editor_diagnostics: &[],
             language_hover: None,
@@ -792,7 +876,7 @@ fn session_search_filters_tabs_by_session_name() {
             completion_selection: 0,
             code_editor_style: &code_editor_style,
             session_pane: &session_pane,
-            workspace_context: &workspace_context,
+            workspace_context: workspace_context_view(&workspace_context),
             session_search: &session_search,
             tab_part: &tab_part,
             active_tab_input: None,
@@ -808,7 +892,7 @@ fn session_search_filters_tabs_by_session_name() {
             remote_connection_picker: &RemoteConnectionPickerState::default(),
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
-            keybindings: &ProductKeybindings::default(),
+            keybindings: &TestKeybindings,
             settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
             theme_scheme: zeta_theme::ColorScheme::Light,
@@ -823,7 +907,7 @@ fn session_search_filters_tabs_by_session_name() {
     assert!(
         accessibility_nodes
             .iter()
-            .all(|node| node.id != crate::shell_interaction::FIRST_TAB_CONTAINER_SESSION_TAB)
+            .all(|node| node.id != crate::FIRST_TAB_CONTAINER_SESSION_TAB)
     );
     assert!(
         presentation
@@ -910,7 +994,7 @@ fn active_files_input_mounts_directly_in_its_pane_group_with_files_actions() {
     assert_eq!(
         accessibility_nodes
             .iter()
-            .filter(|node| node.parent == Some(crate::shell_interaction::FILES_ACTION_BAR))
+            .filter(|node| node.parent == Some(zeta_files::FILES_ACTION_BAR))
             .count(),
         2
     );
@@ -931,7 +1015,7 @@ fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
     let session_pane = SessionPaneState::default();
     let session_search = SessionSearchState::default();
     let tab_part = TabPart::default();
-    let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(2));
+    let workspace_context = TestWorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(2));
     let files = FilesState::default();
     let mut scm = ScmState::default();
     scm.replace_diffs(
@@ -964,9 +1048,10 @@ fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
     let dispatch = UiDispatch::default();
     let file_editor_host = FileEditorHost::default();
     let code_editor_style = CodeEditorStyle::light();
-    let presentation = build_shell_presentation(
+    let presentation = build_workbench_presentation(
         viewport(),
-        ShellPresentationModel {
+        WorkbenchPresentationModel {
+            product_name: PRODUCT_DISPLAY_NAME,
             palette: zeta_ui_theme::DEFAULT_UI_THEME,
             terminal: None,
             terminal_panes: &[],
@@ -978,7 +1063,7 @@ fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
             terminal_selection: None,
             workspace_surface: WorkspaceSurfaceKind::Agent,
             file_editor_host: &file_editor_host,
-            file_editor_prompt: crate::file_editor_pane::FileEditorPrompt::None,
+            file_editor_prompt: zeta_editor_host::FileEditorPrompt::None,
             file_editor_search: &zeta_editor_host::FileEditorSearchState::default(),
             file_editor_diagnostics: &[],
             language_hover: None,
@@ -986,7 +1071,7 @@ fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
             completion_selection: 0,
             code_editor_style: &code_editor_style,
             session_pane: &session_pane,
-            workspace_context: &workspace_context,
+            workspace_context: workspace_context_view(&workspace_context),
             session_search: &session_search,
             tab_part: &tab_part,
             active_tab_input: Some(&tab_key),
@@ -1002,7 +1087,7 @@ fn active_diff_input_mounts_multi_diff_editor_without_files_actions() {
             remote_connection_picker: &RemoteConnectionPickerState::default(),
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
-            keybindings: &ProductKeybindings::default(),
+            keybindings: &TestKeybindings,
             settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
             theme_scheme: zeta_theme::ColorScheme::Light,
@@ -1070,14 +1155,12 @@ fn open_tab_context_menu_is_topmost_and_exposes_generic_actions() {
     let accessibility_nodes = accessibility_nodes(&presentation, &UiDispatch::default());
     let labels = accessibility_nodes
         .iter()
-        .filter(|node| node.parent == Some(crate::shell_interaction::TAB_CONTEXT_MENU))
+        .filter(|node| node.parent == Some(crate::TAB_CONTEXT_MENU))
         .map(|node| node.label.as_str())
         .collect::<Vec<_>>();
     let first_item = accessibility_nodes
         .iter()
-        .find(|node| {
-            node.id == crate::shell_interaction::TabContextMenuAction::TogglePin.element_id()
-        })
+        .find(|node| node.id == crate::TabContextMenuAction::TogglePin.element_id())
         .unwrap();
 
     assert_eq!(
@@ -1089,7 +1172,7 @@ fn open_tab_context_menu_is_topmost_and_exposes_generic_actions() {
             first_item.bounds.origin.x + 2.0,
             first_item.bounds.origin.y + 2.0
         )),
-        Some(crate::shell_interaction::TabContextMenuAction::TogglePin.element_id())
+        Some(crate::TabContextMenuAction::TogglePin.element_id())
     );
     assert!(
         presentation
@@ -1102,19 +1185,23 @@ fn open_tab_context_menu_is_topmost_and_exposes_generic_actions() {
 }
 
 #[test]
-fn open_tab_context_menu_keeps_target_action_bar_visible_in_each_mount() {
-    for (tab_container, action) in [
-        (TabContainerState::expanded(), TAB_CONTAINER_SETTINGS_ACTION),
-        (TabContainerState::collapsed(), TITLEBAR_SETTINGS_ACTION),
-    ] {
-        let mut menu_state = TabContextMenuState::default();
-        menu_state.open_unpinned(TabInputKey::Settings, Point::new(80.0, 120.0), None);
+fn open_tab_context_menu_keeps_target_action_bar_visible_in_the_tab_container() {
+    let mut menu_state = TabContextMenuState::default();
+    menu_state.open_unpinned(TabInputKey::Settings, Point::new(80.0, 120.0), None);
 
-        let presentation =
-            presentation_with_tab_container_and_menu(None, 0, tab_container, menu_state);
+    let presentation = presentation_with_tab_container_and_menu(
+        None,
+        0,
+        TabContainerState::expanded(),
+        menu_state,
+    );
 
-        assert!(presentation.interaction_frame().node(action).is_some());
-    }
+    assert!(
+        presentation
+            .interaction_frame()
+            .node(TAB_CONTAINER_SETTINGS_ACTION)
+            .is_some()
+    );
 }
 
 #[test]
@@ -1195,20 +1282,21 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
     let session_pane = SessionPaneState::default();
     let session_search = SessionSearchState::default();
     let tab_part = TabPart::default();
-    let workspace_context = WorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
+    let workspace_context = TestWorkspaceContext::fixture("~/Desktop/zeta", Some("main"), Some(0));
     let files = FilesState::default();
     let scm = ScmState::default();
     let git_branch_context_menu = GitBranchContextMenuState::default();
     let workspace_path_picker = WorkspacePathPickerState::default();
     let remote_connection_picker = RemoteConnectionPickerState::default();
     let remote_connection_manager = RemoteConnectionManagerState::default();
-    let keybindings = ProductKeybindings::default();
+    let keybindings = TestKeybindings;
     let settings = SettingsState::default();
     let file_editor_host = FileEditorHost::default();
     let code_editor_style = CodeEditorStyle::light();
     let dispatch = UiDispatch::default();
     let mut text_layout = TextInputLayoutEngine::new();
-    let closed_model = ShellPresentationModel {
+    let closed_model = WorkbenchPresentationModel {
+        product_name: PRODUCT_DISPLAY_NAME,
         palette: zeta_ui_theme::DEFAULT_UI_THEME,
         terminal: None,
         terminal_panes: &[],
@@ -1220,7 +1308,7 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         terminal_selection: None,
         workspace_surface: WorkspaceSurfaceKind::Agent,
         file_editor_host: &file_editor_host,
-        file_editor_prompt: crate::file_editor_pane::FileEditorPrompt::None,
+        file_editor_prompt: zeta_editor_host::FileEditorPrompt::None,
         file_editor_search: &zeta_editor_host::FileEditorSearchState::default(),
         file_editor_diagnostics: &[],
         language_hover: None,
@@ -1228,7 +1316,7 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         completion_selection: 0,
         code_editor_style: &code_editor_style,
         session_pane: &session_pane,
-        workspace_context: &workspace_context,
+        workspace_context: workspace_context_view(&workspace_context),
         session_search: &session_search,
         tab_part: &tab_part,
         active_tab_input: None,
@@ -1253,7 +1341,7 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         pointer_position: None,
     };
     let mut presentation =
-        build_shell_presentation(viewport(), closed_model.clone(), &mut text_layout);
+        build_workbench_presentation(viewport(), closed_model.clone(), &mut text_layout);
     let base_scene = presentation.frame().scene().clone();
     let base_interactions = presentation.interaction_frame().clone();
     let base_accessibility = accessibility_nodes(&presentation, &dispatch);
@@ -1267,10 +1355,11 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
         None,
     );
 
-    assert!(rebuild_shell_overlays(
+    assert!(rebuild_workbench_overlays(
         &mut presentation,
         viewport(),
-        ShellPresentationModel {
+        WorkbenchPresentationModel {
+            product_name: PRODUCT_DISPLAY_NAME,
             tab_context_menu: menu,
             ..closed_model.clone()
         },
@@ -1284,7 +1373,7 @@ fn overlay_rebuild_restores_the_retained_base_scene_and_interactions() {
     );
     assert_ne!(*presentation.frame().scene(), base_scene);
 
-    assert!(rebuild_shell_overlays(
+    assert!(rebuild_workbench_overlays(
         &mut presentation,
         viewport(),
         closed_model,
@@ -1374,19 +1463,20 @@ fn compact_viewport_uses_bounded_fallback_scene() {
     let session_pane = SessionPaneState::default();
     let session_search = SessionSearchState::default();
     let tab_part = TabPart::default();
-    let workspace_context = WorkspaceContext::fixture("/tmp/project", None, None);
+    let workspace_context = TestWorkspaceContext::fixture("/tmp/project", None, None);
     let mut text_layout = TextInputLayoutEngine::new();
     let dispatch = UiDispatch::default();
     let files = FilesState::default();
     let scm = ScmState::default();
     let file_editor_host = FileEditorHost::default();
     let code_editor_style = CodeEditorStyle::light();
-    let presentation = build_shell_presentation(
+    let presentation = build_workbench_presentation(
         LogicalViewport {
             width: 220.0,
             height: 100.0,
         },
-        ShellPresentationModel {
+        WorkbenchPresentationModel {
+            product_name: PRODUCT_DISPLAY_NAME,
             palette: zeta_ui_theme::DEFAULT_UI_THEME,
             terminal: None,
             terminal_panes: &[],
@@ -1398,7 +1488,7 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             terminal_selection: None,
             workspace_surface: WorkspaceSurfaceKind::Agent,
             file_editor_host: &file_editor_host,
-            file_editor_prompt: crate::file_editor_pane::FileEditorPrompt::None,
+            file_editor_prompt: zeta_editor_host::FileEditorPrompt::None,
             file_editor_search: &zeta_editor_host::FileEditorSearchState::default(),
             file_editor_diagnostics: &[],
             language_hover: None,
@@ -1406,7 +1496,7 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             completion_selection: 0,
             code_editor_style: &code_editor_style,
             session_pane: &session_pane,
-            workspace_context: &workspace_context,
+            workspace_context: workspace_context_view(&workspace_context),
             session_search: &session_search,
             tab_part: &tab_part,
             active_tab_input: None,
@@ -1422,7 +1512,7 @@ fn compact_viewport_uses_bounded_fallback_scene() {
             remote_connection_picker: &RemoteConnectionPickerState::default(),
             remote_connection_manager: &RemoteConnectionManagerState::default(),
             remote_tunnel_manager: &RemoteTunnelManagerState::default(),
-            keybindings: &ProductKeybindings::default(),
+            keybindings: &TestKeybindings,
             settings: &SettingsState::default(),
             keybinding_diagnostics: &[],
             theme_scheme: zeta_theme::ColorScheme::Light,
@@ -1544,7 +1634,7 @@ fn primary_terminal_scrollback_does_not_change_the_agent_timeline() {
 #[test]
 fn primary_ime_candidate_position_comes_from_the_bottom_composer() {
     let terminal = TerminalCore::new(GridSize::new(29, 119));
-    let layout = ShellLayout::for_viewport(
+    let layout = WorkbenchSceneLayout::for_viewport(
         viewport(),
         TabContainerState::collapsed(),
         InspectorPartState::default(),

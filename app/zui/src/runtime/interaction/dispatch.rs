@@ -1,3 +1,6 @@
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+
 use crate::ui::foundation::Point;
 
 use super::CursorFeedback;
@@ -8,6 +11,11 @@ use super::InteractionFrame;
 use super::NavigationAxis;
 use super::NodeAction;
 use super::UiIntent;
+
+#[path = "dispatch_activation.rs"]
+mod activation;
+#[path = "dispatch_expansion.rs"]
+mod expansion;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct DispatchOutcome {
@@ -79,6 +87,8 @@ pub struct UiDispatch {
     pressed_invalidation: DispatchInvalidation,
     captured: Option<ElementId>,
     focused: Option<ElementId>,
+    expanded: BTreeSet<ElementId>,
+    values: BTreeMap<ElementId, i32>,
     window_active: bool,
 }
 
@@ -92,6 +102,8 @@ impl Default for UiDispatch {
             pressed_invalidation: DispatchInvalidation::None,
             captured: None,
             focused: None,
+            expanded: BTreeSet::new(),
+            values: BTreeMap::new(),
             window_active: true,
         }
     }
@@ -209,7 +221,7 @@ impl UiDispatch {
                     node.invalidation()
                 },
             ),
-            NodeAction::Activate => {
+            NodeAction::Activate | NodeAction::ToggleExpansion | NodeAction::AdjustValue { .. } => {
                 self.pressed = Some(target);
                 self.pressed_invalidation = node.invalidation();
                 self.captured = Some(target);
@@ -254,12 +266,29 @@ impl UiDispatch {
         } else {
             (captured_invalidation.merge(self.hovered_invalidation), None)
         };
-        let intent = captured
+        let action = captured
             .filter(|captured| frame.target_at(point) == Some(*captured))
-            .and_then(|target| {
-                (frame.node(target)?.action() == NodeAction::Activate)
-                    .then_some(UiIntent::Activate(target))
-            });
+            .and_then(|target| frame.node(target).map(|node| (target, node.action())));
+        if let Some((target, NodeAction::ToggleExpansion)) = action {
+            self.toggle_expansion(target);
+            return DispatchOutcome::for_fragment(invalidation, fragment);
+        }
+        if let Some((
+            _,
+            NodeAction::AdjustValue {
+                target,
+                delta,
+                minimum,
+                maximum,
+            },
+        )) = action
+        {
+            self.adjust_value(target, delta, minimum, maximum);
+            return DispatchOutcome::for_fragment(invalidation, fragment);
+        }
+        let intent = action.and_then(|(target, action)| {
+            (action == NodeAction::Activate).then_some(UiIntent::Activate(target))
+        });
         match (pressed, intent) {
             (Some(_), Some(intent)) => DispatchOutcome::with_intent(intent, invalidation),
             (Some(_), None) => DispatchOutcome::for_fragment(invalidation, fragment),
@@ -273,6 +302,7 @@ impl UiDispatch {
         frame: &InteractionFrame,
         preferred: ElementId,
     ) -> DispatchOutcome {
+        let view_state_changed = self.retain_mounted_view_state(frame);
         let focused_is_valid = self.focused.is_some_and(|focused| {
             frame.is_in_active_scope(focused)
                 && frame
@@ -280,7 +310,11 @@ impl UiDispatch {
                     .is_some_and(|node| node.focus_behavior() == FocusBehavior::TabStop)
         });
         if focused_is_valid {
-            return DispatchOutcome::default();
+            return if view_state_changed {
+                DispatchOutcome::paint()
+            } else {
+                DispatchOutcome::default()
+            };
         }
         let next = frame
             .node(preferred)
@@ -291,7 +325,11 @@ impl UiDispatch {
             .map(|node| node.id())
             .or_else(|| frame.focus_order().next());
         if self.focused == next {
-            return DispatchOutcome::default();
+            return if view_state_changed {
+                DispatchOutcome::paint()
+            } else {
+                DispatchOutcome::default()
+            };
         }
         self.focused = next;
         DispatchOutcome::paint()
@@ -368,34 +406,6 @@ impl UiDispatch {
             FocusDirection::Next => (index + 1) % order.len(),
         };
         self.set_focus(order[next])
-    }
-
-    pub fn activate_focused(&self, frame: &InteractionFrame) -> DispatchOutcome {
-        let Some(target) = self.focused else {
-            return DispatchOutcome::default();
-        };
-        if !frame.is_in_active_scope(target) {
-            return DispatchOutcome::default();
-        }
-        match frame.node(target) {
-            Some(node) if node.action() == NodeAction::Activate => {
-                DispatchOutcome::with_intent(UiIntent::Activate(target), node.invalidation())
-            }
-            Some(_) | None => DispatchOutcome::default(),
-        }
-    }
-
-    /// Activates one accessible element when it remains actionable in the current frame.
-    pub fn activate_element(&self, frame: &InteractionFrame, id: ElementId) -> DispatchOutcome {
-        if !frame.is_in_active_scope(id) {
-            return DispatchOutcome::default();
-        }
-        match frame.node(id) {
-            Some(node) if node.action() == NodeAction::Activate => {
-                DispatchOutcome::with_intent(UiIntent::Activate(id), node.invalidation())
-            }
-            Some(_) | None => DispatchOutcome::default(),
-        }
     }
 
     pub fn window_focused(&mut self) -> DispatchOutcome {

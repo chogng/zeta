@@ -1,5 +1,7 @@
 //! Workbench tabs tests.
 
+use std::path::PathBuf;
+
 use super::TabContainer;
 use super::TabContainerPlacement;
 use super::mounted_tab_element_id;
@@ -27,6 +29,7 @@ use crate::tabpart::test_style;
 use zeta_protocol::Session;
 use zeta_protocol::SessionId;
 use zeta_protocol::SessionStatus;
+use zui::ui::AccessibilityExpansion;
 use zui::ui::AccessibilityRole;
 use zui::ui::AccessibilitySelection;
 use zui::ui::InteractionFrame;
@@ -696,4 +699,163 @@ fn browser_style_groups_project_as_separate_tab_lists_with_group_labels() {
             .iter()
             .any(|node| node.id == TAB_CONTAINER_SETTINGS_TAB)
     );
+}
+
+#[test]
+fn workspace_preview_expands_all_roots_and_resets_after_hover_ends() {
+    let session = session("session-roots", "Workspace session");
+    let key = TabInputKey::session(session.session_id.clone());
+    let roots = (1..=12)
+        .map(|index| PathBuf::from(format!("/workspace/root-{index}")))
+        .collect::<Vec<_>>();
+    let mut part = TabPart::default();
+    part.upsert_session_input(TabInput::session(
+        session.session_id,
+        TabInputMetadata::new(session.title, "root-1")
+            .with_workspace_roots(roots.clone())
+            .with_status(TabStatus::busy("Active")),
+    ));
+    let tab_id = part.tab_id(&key).unwrap();
+    let tab_element = session_tab_id(tab_id);
+    let disclosure = super::workspace_preview_disclosure_id(tab_element);
+    let bounds = Rect::from_xywh(0.0, 36.0, 220.0, 664.0);
+    let viewport = Rect::from_xywh(0.0, 0.0, 900.0, 700.0);
+    let mut dispatch = UiDispatch::default();
+    let initial_container = TabContainer::from_tab_part(
+        bounds,
+        bounds,
+        &part,
+        Some(&key),
+        TabContainerPlacement::Body,
+        test_style(),
+        &dispatch,
+    )
+    .with_viewport(viewport);
+    let mut initial = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
+    initial.draw_component(&initial_container);
+    let tab_bounds = initial.interaction().node(tab_element).unwrap().bounds();
+    drop(initial_container);
+    dispatch.pointer_moved(
+        Point::new(tab_bounds.origin.x + 2.0, tab_bounds.origin.y + 2.0),
+        initial.interaction(),
+    );
+    let collapsed_container = TabContainer::from_tab_part(
+        bounds,
+        bounds,
+        &part,
+        Some(&key),
+        TabContainerPlacement::Body,
+        test_style(),
+        &dispatch,
+    )
+    .with_viewport(viewport);
+    let mut collapsed = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
+    collapsed.draw_component(&collapsed_container);
+    let collapsed_text = collapsed
+        .scene()
+        .text_blocks()
+        .iter()
+        .map(|text| text.text())
+        .collect::<Vec<_>>();
+    assert!(collapsed_text.contains(&"/workspace/root-1"));
+    assert!(collapsed_text.contains(&"/workspace/root-3"));
+    assert!(!collapsed_text.contains(&"/workspace/root-4"));
+    let disclosure_node = collapsed.interaction().node(disclosure).unwrap();
+    assert_eq!(
+        disclosure_node.expansion(),
+        AccessibilityExpansion::Collapsed
+    );
+    let disclosure_bounds = disclosure_node.bounds();
+    drop(collapsed_container);
+    dispatch.pointer_moved(
+        Point::new(
+            disclosure_bounds.origin.x + 2.0,
+            disclosure_bounds.origin.y + 2.0,
+        ),
+        collapsed.interaction(),
+    );
+    dispatch.press_primary(collapsed.interaction());
+    dispatch.release_primary(
+        Point::new(
+            disclosure_bounds.origin.x + 2.0,
+            disclosure_bounds.origin.y + 2.0,
+        ),
+        collapsed.interaction(),
+    );
+    let expanded_container = TabContainer::from_tab_part(
+        bounds,
+        bounds,
+        &part,
+        Some(&key),
+        TabContainerPlacement::Body,
+        test_style(),
+        &dispatch,
+    )
+    .with_viewport(viewport);
+    let mut expanded = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
+    expanded.draw_component(&expanded_container);
+    assert!(
+        expanded
+            .scene()
+            .text_blocks()
+            .iter()
+            .any(|text| text.text() == "/workspace/root-5")
+    );
+    assert_eq!(
+        expanded.interaction().node(disclosure).unwrap().expansion(),
+        AccessibilityExpansion::Expanded
+    );
+    let scroll_id = super::workspace_preview_scroll_id(tab_element);
+    let forward = super::workspace_preview_scroll_forward_id(tab_element);
+    let forward_bounds = expanded.interaction().node(forward).unwrap().bounds();
+    drop(expanded_container);
+    dispatch.pointer_moved(
+        Point::new(forward_bounds.origin.x + 2.0, forward_bounds.origin.y + 2.0),
+        expanded.interaction(),
+    );
+    dispatch.press_primary(expanded.interaction());
+    dispatch.release_primary(
+        Point::new(forward_bounds.origin.x + 2.0, forward_bounds.origin.y + 2.0),
+        expanded.interaction(),
+    );
+    assert_eq!(dispatch.value(scroll_id), 24);
+
+    let scrolled_container = TabContainer::from_tab_part(
+        bounds,
+        bounds,
+        &part,
+        Some(&key),
+        TabContainerPlacement::Body,
+        test_style(),
+        &dispatch,
+    )
+    .with_viewport(viewport);
+    let mut scrolled = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
+    scrolled.draw_component(&scrolled_container);
+    let scrolled_text = scrolled
+        .scene()
+        .text_blocks()
+        .iter()
+        .map(|text| text.text())
+        .collect::<Vec<_>>();
+    assert!(!scrolled_text.contains(&"/workspace/root-1"));
+    assert!(scrolled_text.contains(&"/workspace/root-9"));
+    drop(scrolled_container);
+    dispatch.pointer_moved(Point::new(850.0, 650.0), scrolled.interaction());
+    let closed_container = TabContainer::from_tab_part(
+        bounds,
+        bounds,
+        &part,
+        Some(&key),
+        TabContainerPlacement::Body,
+        test_style(),
+        &dispatch,
+    )
+    .with_viewport(viewport);
+    let mut closed = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
+    closed.draw_component(&closed_container);
+    assert!(closed.interaction().node(disclosure).is_none());
+    dispatch.reconcile_focus(closed.interaction(), tab_element);
+    assert!(!dispatch.is_expanded(disclosure));
+    assert_eq!(dispatch.value(scroll_id), 0);
 }

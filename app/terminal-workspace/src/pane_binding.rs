@@ -1,5 +1,5 @@
 use crate::TerminalSessionKey;
-use zeta_workbench::{PaneInput, PaneInputKind};
+use zeta_workbench_model::{PaneInput, PaneInputKind};
 
 /// Terminal runtime currently attached to a Workbench pane.
 ///
@@ -12,7 +12,7 @@ enum PaneRuntime {
 
 /// Binding between one workbench group and its feature runtime, if one has been mounted.
 ///
-/// The logical [`PaneInput`] is owned by `zeta_workbench::PaneGroup`. This type deliberately keeps
+/// The logical [`PaneInput`] is owned by `zeta_workbench_model::PaneGroup`. This type deliberately keeps
 /// only the product-local runtime handle so there is no second logical-input owner in the host.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaneBinding {

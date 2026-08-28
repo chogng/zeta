@@ -1,9 +1,11 @@
-use super::{
-    FILE_SEARCH_INPUT, FIRST_TAB_CONTAINER_SESSION_TAB, FIRST_TITLEBAR_SESSION_TAB, SESSION_HEADER,
-    SESSION_SEARCH_INPUT, TAB_CONTAINER_ACTION_BAR, TAB_CONTAINER_LIST, TAB_CONTAINER_TOOLBAR,
-    TAB_CONTEXT_MENU, TITLEBAR_TAB_LIST, TabContextMenuAction,
+use crate::ADD_SESSION;
+use crate::{
+    FIRST_TAB_CONTAINER_SESSION_TAB, FIRST_TITLEBAR_SESSION_TAB, SESSION_SEARCH_INPUT,
+    TAB_CONTAINER_ACTION_BAR, TAB_CONTAINER_LIST, TAB_CONTAINER_TOOLBAR, TAB_CONTEXT_MENU,
+    TITLEBAR_TAB_LIST, TabContextMenuAction,
 };
-use zeta_workbench::ADD_SESSION;
+use zeta_files::{FILE_SEARCH_INPUT, FILES_TOOLBAR};
+use zeta_session::interaction::SESSION_HEADER;
 
 #[test]
 fn sessions_toolbar_elements_have_stable_unique_identities() {
@@ -31,7 +33,7 @@ fn session_identity_namespace_does_not_overlap_capability_elements() {
         FIRST_TITLEBAR_SESSION_TAB,
         SESSION_HEADER,
     ];
-    let capability_ids = [FILE_SEARCH_INPUT, super::FILES_TOOLBAR];
+    let capability_ids = [FILE_SEARCH_INPUT, FILES_TOOLBAR];
 
     assert!(
         session_ids

@@ -9,17 +9,26 @@ use anyhow::Result;
 use zeta_protocol::SessionId;
 use zeta_terminal::GridSize;
 
+mod blocks;
+mod output_scroll_view;
 mod pane_binding;
 mod pane_view;
 mod pane_views;
 mod pointer;
+mod presentation;
 mod scroll;
 mod selection;
 
+pub use blocks::{TerminalBlockLine, TerminalBlockLineKind, project_block_lines};
+pub use output_scroll_view::TerminalOutputScrollView;
 pub use pane_binding::PaneBinding;
 pub use pane_view::TerminalPaneViewState;
 pub use pane_views::TerminalPaneViews;
 pub use pointer::{PointerInput, TerminalPointer};
+pub use presentation::{
+    TERMINAL_CELL_WIDTH, TERMINAL_LINE_HEIGHT, TERMINAL_PADDING, TerminalPaneView, content_bounds,
+    cursor_area, draw_terminal, grid_size, mouse_position,
+};
 pub use scroll::TerminalScroll;
 pub use selection::{
     TerminalSelection, TerminalSelectionRange, paint_terminal_selection, selected_text,

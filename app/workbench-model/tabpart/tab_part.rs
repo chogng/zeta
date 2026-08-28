@@ -15,14 +15,15 @@ use crate::TabStatus;
 pub struct TabId(u32);
 
 impl TabId {
-    pub(crate) const FIRST: Self = Self(1);
+    /// First allocated tab identity.
+    pub const FIRST: Self = Self(1);
 
     pub const fn value(self) -> u32 {
         self.0
     }
 }
 
-/// Workbench-owned Tab Part shared by every horizontal or vertical tab projection.
+/// Workbench-owned Tab Part shared by every horizontal or vertical tab view.
 ///
 /// The Part owns browser-style groups and one global active input. It contains no orientation,
 /// bounds, UI element identity, renderer node, or host runtime state.
@@ -61,7 +62,7 @@ impl TabPart {
         Self::default()
     }
 
-    /// Returns browser-style groups in projection order.
+    /// Returns browser-style groups in display order.
     pub fn groups(&self) -> &[TabGroup] {
         &self.groups
     }
@@ -182,7 +183,7 @@ impl TabPart {
         self.inputs().filter(|input| input.is_session()).count()
     }
 
-    /// Returns a Session input by its flattened projection index.
+    /// Returns a Session input by its flattened display index.
     pub fn session_input_at(&self, index: usize) -> Option<&TabInput> {
         self.inputs().filter(|input| input.is_session()).nth(index)
     }
@@ -197,7 +198,7 @@ impl TabPart {
         matches!(self.active, Some(TabInputKey::Settings))
     }
 
-    /// Activates a known logical input without depending on a projection identity.
+    /// Activates a known logical input without depending on a mounted element identity.
     pub fn activate_tab(&mut self, key: TabInputKey) -> bool {
         if self.input(&key).is_none() {
             return false;

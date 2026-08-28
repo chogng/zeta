@@ -2,8 +2,6 @@ use zeta_terminal::TerminalMousePosition;
 use zui::input::ElementState;
 use zui::services::{ClipboardError, ClipboardHandle};
 
-pub(crate) use zeta_terminal_workspace::{TerminalSelectionRange, paint_terminal_selection};
-
 use crate::ProductApp;
 use crate::terminal_history::visible_text_lines;
 

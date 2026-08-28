@@ -2,16 +2,17 @@
 
 > 本文只说明纯 Rust Desktop 产品宿主的源码边界、启动路径和验证入口。产品布局由 [`LAYOUT.md`](LAYOUT.md) 维护，其他产品行为与跨 crate 架构由 [`app/docs`](docs/README.md) 维护，各能力 crate 的实现契约由各自的 README 维护。
 
-`app` 是纯 Rust Desktop 产品的 Cargo package 和发布边界。它负责组装窗口、产品状态、事件、App Server 连接和最终界面；可复用能力必须留在对应 crate 中。
+`app` 是纯 Rust Desktop 产品的 Cargo package 和发布边界。它负责进程、窗口生命周期、平台事件、App Server 连接和能力接线；最终工作台界面由 `zeta-workbench` 负责。
 
 ## 职责边界
 
 | 位置 | 负责 | 不负责 |
 | --- | --- | --- |
-| `app` crate | 进程入口、启动参数、窗口生命周期、产品事件含义、能力接线、界面组装 | 通用 UI 框架、可复用组件、后端领域状态机 |
+| `app` crate | 进程入口、启动参数、窗口生命周期、产品事件含义、能力接线和效果执行 | Workbench 场景、能力内部 UI、通用组件、后端领域状态机 |
 | [`zui`](zui/README.md) | 应用与窗口生命周期、输入、布局、绘制、渲染和平台能力 | 产品状态和业务交互 |
 | [`zeta-ui-components`](ui-components/README.md) | 可复用 UI 组件 | 产品窗口结构和领域状态 |
-| [`zeta-workbench`](workbench/README.md) | Workbench Tab/Pane 状态、布局、外壳 UI、binding 和生命周期边界 | Session、Terminal、Settings、Editor 等具体内容状态与 UI |
+| [`zeta-workbench`](workbench/README.md) | 完整产品工作台、窗口布局、能力挂载、浮层顺序和跨能力生命周期 | 各能力内部状态、绘制和平台效果 |
+| [`zeta-workbench-model`](workbench-model/README.md) | 无界面依赖的 Tab/Pane 结构状态与确定性变化 | 窗口、渲染和具体能力 |
 | 能力 crate | 编辑器、会话、工作区、远程连接、终端和 Workbench 等独立能力 | 产品级组合 |
 | `zeta-rs` | App Server、协议、存储、终端语义、远程执行等共享后端能力 | `app` 的窗口和界面实现 |
 
@@ -37,7 +38,6 @@ src/app/
 src/app_server.rs       App Server 适配入口
 src/features/           Agent、Editor、Remote、Terminal、Workspace 产品适配
 src/platform/           键盘、IME 和窗口事件适配
-src/presentation/       Shell 界面、Workbench Tab 菜单适配、交互标识和主题适配
 ```
 
 `ProductApp` 是唯一产品组合根，但不能继续吸收能力实现。跨功能协调应先确定长期负责的能力 crate，产品宿主只做必要调用。若某个改动让能力 crate 反向读取 `ProductApp` 字段，说明依赖方向已经错误。
@@ -99,7 +99,7 @@ bazel test //app:app_ci
 
 - 改动启动参数、远程连接准备或退出语义时，同步检查 `src/app/run.rs`、对应 CLI 测试和 [`远程开发`](../docs/remote-development.md)。
 - 改动窗口生命周期、事件或帧调度时，同步检查 `src/app/lifecycle.rs`、`src/app/frame.rs` 和 [`zui`](zui/README.md) 的宿主约束。
-- 改动产品布局或交互时，同步检查 `src/app/presentation.rs`、`src/app/interaction.rs`、`src/presentation/` 及对应 Workbench/UI crate 测试。
+- 改动产品布局或交互时，同步检查 `src/app/presentation.rs`、`src/app/interaction.rs` 及对应 Workbench/能力 crate 测试。
 - 改动 App Server 接线时，保持 `AppServerHost` 为窄适配层，并检查本地与远程两条连接路径。
 - 改动 package、Bazel 输入或发布参数时，同步更新 [`app release graph`](docs/app-release-graph.md) 和 `//app:app_ci`。
 

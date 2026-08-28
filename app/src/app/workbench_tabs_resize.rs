@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use crate::ProductApp;
-use crate::shell_interaction::TAB_CONTAINER_RESIZE_HANDLE;
+use zeta_workbench::TAB_CONTAINER_RESIZE_HANDLE;
 use zui::input::ElementState;
 use zui::ui::DispatchInvalidation;
 use zui::ui::Point;

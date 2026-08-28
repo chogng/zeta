@@ -16,11 +16,12 @@ use zui::ui::{
     TextInputLayoutEngine, TextStyle, UiScene,
 };
 
-use crate::shell_interaction::WINDOW;
-use crate::workspace_context::display_working_directory;
+use crate::display_working_directory;
 use zeta_ui_theme::UiTheme;
 
-#[path = "workspace_path_picker_path.rs"]
+const WINDOW: ElementId = ElementId::scoped(1, 1);
+
+#[path = "workspace_picker_path.rs"]
 mod path_support;
 use path_support::{
     canonical_directory, directory_name, home_directory, read_child_directories,
@@ -29,11 +30,11 @@ use path_support::{
 
 const PATH_PICKER_SCOPE: u32 = 2;
 const WORKSPACE_PATH_PICKER: ElementId = ElementId::scoped(PATH_PICKER_SCOPE, 1);
-pub(crate) const WORKSPACE_PATH_SEARCH_INPUT: ElementId = ElementId::scoped(PATH_PICKER_SCOPE, 2);
+pub const WORKSPACE_PATH_SEARCH_INPUT: ElementId = ElementId::scoped(PATH_PICKER_SCOPE, 2);
 const FIRST_WORKSPACE_PATH_ITEM: u32 = 3;
 const PICKER_VISIBLE_ITEM_COUNT: usize = 8;
 const PICKER_CONTENT_WIDTH: f32 = 320.0;
-pub(crate) const PICKER_ITEM_HEIGHT: f32 = 30.0;
+pub const PICKER_ITEM_HEIGHT: f32 = 30.0;
 const PICKER_SEARCH_ROW_HEIGHT: f32 = 36.0;
 const PICKER_SEARCH_INSET: f32 = 4.0;
 const PICKER_VIEWPORT_MARGIN: f32 = 6.0;
@@ -62,20 +63,20 @@ struct OpenWorkspacePathPicker {
 
 /// Product-owned directory browsing state for the workspace path picker.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub(crate) struct WorkspacePathPickerState {
+pub struct WorkspacePathPickerState {
     open: Option<OpenWorkspacePathPicker>,
     search_input: TextInput,
     scroll: ScrollState,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum WorkspacePathPickerActivation {
+pub enum WorkspacePathPickerActivation {
     BrowseChanged,
     SelectWorkspace(PathBuf),
 }
 
 impl WorkspacePathPickerState {
-    pub(crate) fn open(
+    pub fn open(
         &mut self,
         anchor: Rect,
         directory: &Path,
@@ -99,45 +100,45 @@ impl WorkspacePathPickerState {
         Ok(())
     }
 
-    pub(crate) const fn is_open(&self) -> bool {
+    pub const fn is_open(&self) -> bool {
         self.open.is_some()
     }
 
-    pub(crate) fn dismiss(&mut self) -> Option<ElementId> {
+    pub fn dismiss(&mut self) -> Option<ElementId> {
         self.open.take().and_then(|open| open.restore_focus)
     }
 
-    pub(crate) const fn search_input(&self) -> &TextInput {
+    pub const fn search_input(&self) -> &TextInput {
         &self.search_input
     }
 
-    pub(crate) fn apply_search(&mut self, command: TextInputCommand) {
+    pub fn apply_search(&mut self, command: TextInputCommand) {
         self.search_input.apply(command);
         self.search_changed();
     }
 
-    pub(crate) fn apply_search_composition(&mut self, event: TextInputCompositionEvent) {
+    pub fn apply_search_composition(&mut self, event: TextInputCompositionEvent) {
         self.search_input.apply_composition(event);
         self.search_changed();
     }
 
-    pub(crate) fn cancel_search_composition(&mut self) {
+    pub fn cancel_search_composition(&mut self) {
         self.search_input.cancel_composition();
     }
 
-    pub(crate) fn selected_search_text(&self) -> Option<&str> {
+    pub fn selected_search_text(&self) -> Option<&str> {
         self.search_input.selected_text()
     }
 
-    pub(crate) const fn scroll_state(&self) -> ScrollState {
+    pub const fn scroll_state(&self) -> ScrollState {
         self.scroll
     }
 
-    pub(crate) fn apply_scroll(&mut self, command: ScrollCommand, metrics: ScrollMetrics) -> bool {
+    pub fn apply_scroll(&mut self, command: ScrollCommand, metrics: ScrollMetrics) -> bool {
         self.scroll.apply(command, metrics, ScrollAxis::Vertical)
     }
 
-    pub(crate) fn ensure_item_visible(&mut self, index: usize, metrics: ScrollMetrics) -> bool {
+    pub fn ensure_item_visible(&mut self, index: usize, metrics: ScrollMetrics) -> bool {
         self.apply_scroll(
             ScrollCommand::EnsureVisible(Rect::from_xywh(
                 0.0,
@@ -149,14 +150,14 @@ impl WorkspacePathPickerState {
         )
     }
 
-    pub(crate) fn first_action_id(&self) -> Option<ElementId> {
+    pub fn first_action_id(&self) -> Option<ElementId> {
         self.items()
             .iter()
             .enumerate()
             .find_map(|(index, item)| item.action.as_ref().map(|_| workspace_path_item_id(index)))
     }
 
-    pub(crate) fn is_picker_element(&self, id: ElementId) -> bool {
+    pub fn is_picker_element(&self, id: ElementId) -> bool {
         id == WORKSPACE_PATH_PICKER
             || id == WORKSPACE_PATH_SEARCH_INPUT
             || self
@@ -166,14 +167,14 @@ impl WorkspacePathPickerState {
                 .any(|(index, _)| workspace_path_item_id(index) == id)
     }
 
-    pub(crate) fn item_index(&self, id: ElementId) -> Option<usize> {
+    pub fn item_index(&self, id: ElementId) -> Option<usize> {
         self.items()
             .iter()
             .enumerate()
             .find_map(|(index, _)| (workspace_path_item_id(index) == id).then_some(index))
     }
 
-    pub(crate) fn activate(
+    pub fn activate(
         &mut self,
         index: usize,
     ) -> std::io::Result<Option<WorkspacePathPickerActivation>> {
@@ -277,7 +278,7 @@ impl WorkspacePathPickerState {
     }
 }
 
-pub(crate) struct WorkspacePathPicker {
+pub struct WorkspacePathPicker {
     dropdown: Dropdown,
     search_box: SearchBox,
     search_value: String,
@@ -285,7 +286,7 @@ pub(crate) struct WorkspacePathPicker {
 }
 
 impl WorkspacePathPicker {
-    pub(crate) fn new(
+    pub fn new(
         viewport: Rect,
         state: &WorkspacePathPickerState,
         caret_visibility: CaretVisibility,
@@ -434,19 +435,19 @@ impl WorkspacePathPicker {
     }
 
     #[cfg(test)]
-    pub(crate) const fn bounds(&self) -> Rect {
+    pub const fn bounds(&self) -> Rect {
         self.dropdown.bounds()
     }
 
-    pub(crate) const fn search_caret_bounds(&self) -> Option<Rect> {
+    pub const fn search_caret_bounds(&self) -> Option<Rect> {
         self.search_box.caret_bounds()
     }
 
-    pub(crate) const fn item_viewport_bounds(&self) -> Rect {
+    pub const fn item_viewport_bounds(&self) -> Rect {
         self.dropdown.item_viewport_bounds()
     }
 
-    pub(crate) fn scroll_metrics(&self) -> Option<ScrollMetrics> {
+    pub fn scroll_metrics(&self) -> Option<ScrollMetrics> {
         self.dropdown.scroll_metrics()
     }
 }
@@ -488,7 +489,7 @@ impl Component for WorkspacePathPicker {
     }
 }
 
-pub(crate) fn workspace_path_item_id(index: usize) -> ElementId {
+pub fn workspace_path_item_id(index: usize) -> ElementId {
     ElementId::scoped(
         PATH_PICKER_SCOPE,
         FIRST_WORKSPACE_PATH_ITEM.saturating_add(index as u32),
@@ -503,5 +504,5 @@ fn directory_item(directory: &PathBuf) -> WorkspacePathPickerItem {
 }
 
 #[cfg(test)]
-#[path = "workspace_path_picker_tests.rs"]
+#[path = "workspace_picker_tests.rs"]
 mod tests;

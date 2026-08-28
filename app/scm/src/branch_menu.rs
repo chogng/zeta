@@ -14,12 +14,13 @@ use zui::ui::{
     TextInputLayoutEngine, TextStyle, UiScene,
 };
 
-use crate::shell_interaction::WINDOW;
 use zeta_ui_theme::UiTheme;
+
+const WINDOW: ElementId = ElementId::scoped(1, 1);
 
 const BRANCH_MENU_SCOPE: u32 = 3;
 const GIT_BRANCH_CONTEXT_MENU: ElementId = ElementId::scoped(BRANCH_MENU_SCOPE, 1);
-pub(crate) const GIT_BRANCH_SEARCH_INPUT: ElementId = ElementId::scoped(BRANCH_MENU_SCOPE, 2);
+pub const GIT_BRANCH_SEARCH_INPUT: ElementId = ElementId::scoped(BRANCH_MENU_SCOPE, 2);
 const FIRST_GIT_BRANCH_ITEM: u32 = 3;
 const BRANCH_PAGE_SIZE: usize = 10;
 const MENU_CONTENT_WIDTH: f32 = 260.0;
@@ -54,19 +55,19 @@ struct OpenGitBranchContextMenu {
 
 /// Product-owned branch list and transient error state for the Git branch menu.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub(crate) struct GitBranchContextMenuState {
+pub struct GitBranchContextMenuState {
     open: Option<OpenGitBranchContextMenu>,
     search_input: TextInput,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum GitBranchMenuActivation {
+pub enum GitBranchMenuActivation {
     PageChanged,
     SelectBranch(GitBranch),
 }
 
 impl GitBranchContextMenuState {
-    pub(crate) fn open(
+    pub fn open(
         &mut self,
         anchor: Rect,
         mut branches: Vec<GitBranch>,
@@ -89,61 +90,61 @@ impl GitBranchContextMenuState {
         });
     }
 
-    pub(crate) const fn is_open(&self) -> bool {
+    pub const fn is_open(&self) -> bool {
         self.open.is_some()
     }
 
-    pub(crate) fn dismiss(&mut self) -> Option<ElementId> {
+    pub fn dismiss(&mut self) -> Option<ElementId> {
         self.open.take().and_then(|open| open.restore_focus)
     }
 
-    pub(crate) fn set_switch_error(&mut self) {
+    pub fn set_switch_error(&mut self) {
         if let Some(open) = self.open.as_mut() {
             open.error = Some("Switch failed · working tree unchanged".to_string());
         }
     }
 
-    pub(crate) const fn search_input(&self) -> &TextInput {
+    pub const fn search_input(&self) -> &TextInput {
         &self.search_input
     }
 
-    pub(crate) fn apply_search(&mut self, command: TextInputCommand) {
+    pub fn apply_search(&mut self, command: TextInputCommand) {
         self.search_input.apply(command);
         self.search_changed();
     }
 
-    pub(crate) fn apply_search_composition(&mut self, event: TextInputCompositionEvent) {
+    pub fn apply_search_composition(&mut self, event: TextInputCompositionEvent) {
         self.search_input.apply_composition(event);
         self.search_changed();
     }
 
-    pub(crate) fn cancel_search_composition(&mut self) {
+    pub fn cancel_search_composition(&mut self) {
         self.search_input.cancel_composition();
     }
 
-    pub(crate) fn selected_search_text(&self) -> Option<&str> {
+    pub fn selected_search_text(&self) -> Option<&str> {
         self.search_input.selected_text()
     }
 
-    pub(crate) fn first_action_id(&self) -> Option<ElementId> {
+    pub fn first_action_id(&self) -> Option<ElementId> {
         self.items()
             .iter()
             .enumerate()
             .find_map(|(index, item)| item.action.as_ref().map(|_| git_branch_menu_item_id(index)))
     }
 
-    pub(crate) fn is_menu_element(&self, id: ElementId) -> bool {
+    pub fn is_menu_element(&self, id: ElementId) -> bool {
         id == GIT_BRANCH_CONTEXT_MENU || self.item_index(id).is_some()
     }
 
-    pub(crate) fn item_index(&self, id: ElementId) -> Option<usize> {
+    pub fn item_index(&self, id: ElementId) -> Option<usize> {
         self.items()
             .iter()
             .enumerate()
             .find_map(|(index, _)| (git_branch_menu_item_id(index) == id).then_some(index))
     }
 
-    pub(crate) fn activate(&mut self, index: usize) -> Option<GitBranchMenuActivation> {
+    pub fn activate(&mut self, index: usize) -> Option<GitBranchMenuActivation> {
         let action = self.items().get(index)?.action.clone()?;
         match action {
             GitBranchMenuAction::Select(branch) => {
@@ -241,7 +242,7 @@ impl GitBranchContextMenuState {
     }
 }
 
-pub(crate) struct GitBranchContextMenu {
+pub struct GitBranchContextMenu {
     context_menu: ContextMenu,
     search_box: SearchBox,
     search_value: String,
@@ -249,7 +250,7 @@ pub(crate) struct GitBranchContextMenu {
 }
 
 impl GitBranchContextMenu {
-    pub(crate) fn new(
+    pub fn new(
         viewport: Rect,
         state: &GitBranchContextMenuState,
         caret_visibility: CaretVisibility,
@@ -404,11 +405,11 @@ impl GitBranchContextMenu {
     }
 
     #[cfg(test)]
-    pub(crate) const fn bounds(&self) -> Rect {
+    pub const fn bounds(&self) -> Rect {
         self.context_menu.bounds()
     }
 
-    pub(crate) const fn search_caret_bounds(&self) -> Option<Rect> {
+    pub const fn search_caret_bounds(&self) -> Option<Rect> {
         self.search_box.caret_bounds()
     }
 }
@@ -459,5 +460,5 @@ fn git_branch_menu_item_id(index: usize) -> ElementId {
 }
 
 #[cfg(test)]
-#[path = "git_branch_context_menu_tests.rs"]
+#[path = "branch_menu_tests.rs"]
 mod tests;

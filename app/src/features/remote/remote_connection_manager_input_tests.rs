@@ -1,7 +1,7 @@
 use zui::ui::ElementId;
 
 use super::is_remote_connection_manager_element;
-use crate::shell_interaction::COMPOSER;
+use zeta_session::interaction::COMPOSER;
 use zeta_settings::REMOTE_CONNECTION_MANAGER_NAME;
 use zeta_settings::remote_connection_manager_item_id;
 

@@ -66,6 +66,15 @@ pub enum NodeAction {
     #[default]
     None,
     Activate,
+    /// Toggles view-local disclosure state retained by [`crate::ui::UiDispatch`].
+    ToggleExpansion,
+    /// Adjusts an integer view-local value retained by [`crate::ui::UiDispatch`].
+    AdjustValue {
+        target: ElementId,
+        delta: i32,
+        minimum: i32,
+        maximum: i32,
+    },
     StartWindowDrag,
 }
 

@@ -351,7 +351,7 @@ impl PanePart {
         self.active
     }
 
-    /// Returns the immutable logical topology used by the layout projection.
+    /// Returns the immutable logical topology used by layout.
     pub const fn tree(&self) -> &PaneNode {
         &self.root
     }

@@ -59,7 +59,7 @@ impl ProductApp {
                 Some(TabInputKey::Settings) => self.activate_settings_tab(),
                 None => {
                     self.workspace_surface.show_agent();
-                    self.pending_focus = Some(crate::shell_interaction::COMPOSER);
+                    self.pending_focus = Some(zeta_session::interaction::COMPOSER);
                 }
             }
         }
@@ -412,9 +412,9 @@ impl ProductApp {
         }
         self.settings.close();
         self.pending_focus = Some(if self.workspace_surface.is_editor() {
-            crate::shell_interaction::FILE_EDITOR_DOCUMENT
+            zeta_editor_host::FILE_EDITOR_DOCUMENT
         } else {
-            crate::shell_interaction::COMPOSER
+            zeta_session::interaction::COMPOSER
         });
     }
 

@@ -22,7 +22,7 @@ impl ProductApp {
             self,
             window_control_insets,
             |model, text_layout, animation_bindings| {
-                build_shell_presentation_with_animation_bindings(
+                build_workbench_presentation_with_animation_bindings(
                     viewport,
                     model,
                     text_layout,
@@ -52,7 +52,7 @@ impl ProductApp {
                 self,
                 window_control_insets,
                 |model, text_layout, animation_bindings| {
-                    build_shell_presentation_with_animation_bindings(
+                    build_workbench_presentation_with_animation_bindings(
                         viewport,
                         model,
                         text_layout,
@@ -75,7 +75,7 @@ impl ProductApp {
                 self,
                 window_control_insets,
                 |model, text_layout, animation_bindings| {
-                    build_shell_presentation_with_animation_bindings(
+                    build_workbench_presentation_with_animation_bindings(
                         viewport,
                         model,
                         text_layout,
@@ -153,7 +153,7 @@ impl ProductApp {
             self,
             window_control_insets,
             |model, text_layout, _animation_bindings| {
-                rebuild_shell_overlays(&mut presentation, viewport, model, text_layout)
+                rebuild_workbench_overlays(&mut presentation, viewport, model, text_layout)
             },
         );
         if !rebuilt {

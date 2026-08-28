@@ -71,11 +71,11 @@ impl ProductApp {
         let session_hovered = window_active
             && self
                 .ui_dispatch
-                .is_hovered(shell_interaction::TAB_CONTAINER_RESIZE_HANDLE);
+                .is_hovered(zeta_workbench::TAB_CONTAINER_RESIZE_HANDLE);
         let agent_hovered = window_active
             && self
                 .ui_dispatch
-                .is_hovered(shell_interaction::INSPECTOR_RESIZE_HANDLE);
+                .is_hovered(zeta_workbench::INSPECTOR_RESIZE_HANDLE);
         let session_presence = if session_hovered {
             SashPointerPresence::Over
         } else {
@@ -142,9 +142,10 @@ impl ProductApp {
             .composer_interaction_view()
             .map(|view| view.items().len())
             .unwrap_or(0);
-        if let Some(index) =
-            shell_interaction::composer_interaction_item_index(id, 0..interaction_item_count)
-        {
+        if let Some(index) = zeta_session::interaction::composer_interaction_item_index(
+            id,
+            0..interaction_item_count,
+        ) {
             self.activate_composer_interaction_item(index);
             return;
         }
@@ -417,7 +418,7 @@ impl ProductApp {
     pub(super) fn multi_diff_bounds(&self) -> Option<zui::ui::Rect> {
         self.presentation
             .as_ref()?
-            .element_bounds(shell_interaction::MULTI_DIFF_EDITOR)
+            .element_bounds(zeta_scm::MULTI_DIFF_EDITOR)
     }
 
     pub(super) fn settings_keybindings_viewport(

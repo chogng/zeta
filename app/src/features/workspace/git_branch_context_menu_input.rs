@@ -11,8 +11,8 @@ use crate::ProductApp;
 use crate::git_branch_context_menu::{
     GIT_BRANCH_SEARCH_INPUT, GitBranchContextMenuState, GitBranchMenuActivation,
 };
-use crate::shell_interaction::CONTEXT_GIT_BRANCH;
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
+use zeta_session::interaction::CONTEXT_GIT_BRANCH;
 
 impl ProductApp {
     pub(super) fn toggle_git_branch_context_menu(&mut self) {

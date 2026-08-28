@@ -25,9 +25,9 @@ use zui::ui::UiDispatch;
 
 use crate::ProductApp;
 use crate::app_server::local_profile_root;
-use crate::shell_interaction::CONTEXT_LOCATION;
 use crate::terminal_selection::read_clipboard_text;
 use crate::terminal_selection::write_clipboard_text;
+use zeta_session::interaction::CONTEXT_LOCATION;
 
 const PICKER_ROWS_PER_WHEEL_STEP: f32 = 3.0;
 

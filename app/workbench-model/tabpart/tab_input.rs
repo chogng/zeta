@@ -40,7 +40,7 @@ impl TabInputKey {
 
 /// Product-owned logical input behind one Workbench tab.
 ///
-/// This record contains the stable input identity and the labels needed by the shell projection.
+/// This record contains the stable input identity and the labels needed by the Workbench view.
 /// Session lifecycle and Thread state remain owned by the App Server session adapter.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TabInput {
@@ -56,7 +56,7 @@ pub struct TabInput {
 pub struct TabInputMetadata {
     title: String,
     workspace: String,
-    workspace_root: Option<PathBuf>,
+    workspace_roots: Vec<PathBuf>,
     status: TabStatus,
 }
 
@@ -65,13 +65,27 @@ impl TabInputMetadata {
         Self {
             title: title.into(),
             workspace: workspace.into(),
-            workspace_root: None,
+            workspace_roots: Vec::new(),
             status: TabStatus::default(),
         }
     }
 
     pub fn with_workspace_root(mut self, workspace_root: PathBuf) -> Self {
-        self.workspace_root = Some(workspace_root);
+        self.workspace_roots = vec![workspace_root];
+        self
+    }
+
+    /// Supplies the primary Workspace root followed by any additional roots shown for this tab.
+    pub fn with_workspace_roots(
+        mut self,
+        workspace_roots: impl IntoIterator<Item = PathBuf>,
+    ) -> Self {
+        self.workspace_roots.clear();
+        for root in workspace_roots {
+            if !self.workspace_roots.contains(&root) {
+                self.workspace_roots.push(root);
+            }
+        }
         self
     }
 
@@ -121,7 +135,12 @@ impl TabInput {
     }
 
     pub fn workspace_root(&self) -> Option<&Path> {
-        self.metadata.workspace_root.as_deref()
+        self.metadata.workspace_roots.first().map(PathBuf::as_path)
+    }
+
+    /// Returns the primary Workspace root followed by additional roots in display order.
+    pub fn workspace_roots(&self) -> &[PathBuf] {
+        &self.metadata.workspace_roots
     }
 
     pub const fn status(&self) -> &TabStatus {
@@ -144,3 +163,7 @@ pub enum TabInputChange {
     Added(TabInputKey),
     Updated(TabInputKey),
 }
+
+#[cfg(test)]
+#[path = "tab_input_tests.rs"]
+mod tests;

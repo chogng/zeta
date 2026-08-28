@@ -1,19 +1,19 @@
 use zeta_terminal::{BlockStatus, TerminalCore};
 
 #[derive(Clone, Copy)]
-pub(crate) enum TerminalBlockLineKind {
+pub enum TerminalBlockLineKind {
     Preamble,
     Command,
     Output,
     Status,
 }
 
-pub(crate) struct TerminalBlockLine {
-    pub(crate) text: String,
-    pub(crate) kind: TerminalBlockLineKind,
+pub struct TerminalBlockLine {
+    pub text: String,
+    pub kind: TerminalBlockLineKind,
 }
 
-pub(crate) fn project_block_lines(terminal: &TerminalCore) -> Vec<TerminalBlockLine> {
+pub fn project_block_lines(terminal: &TerminalCore) -> Vec<TerminalBlockLine> {
     let mut lines = Vec::new();
     push_display_text(
         &mut lines,

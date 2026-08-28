@@ -1,5 +1,9 @@
-use zeta_editor_host::FileEditorHost;
-use zeta_editor_host::FileEditorSearchState;
+use zeta_commands::AppCommandId;
+use zeta_editor_host::{
+    FILE_EDITOR_DOCUMENT, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT, FileEditorHost,
+    FileEditorPane, FileEditorPrompt, FileEditorSearchState,
+};
+use zeta_keybinding::{HostPlatform, KeySequence};
 use zeta_settings::REMOTE_CONNECTION_SEARCH_INPUT;
 use zeta_settings::REMOTE_TUNNEL_REMOTE_PORT;
 use zeta_settings::RemoteConnectionManager;
@@ -9,57 +13,54 @@ use zeta_settings::RemoteConnectionPicker;
 use zeta_settings::RemoteConnectionPickerState;
 use zeta_settings::RemoteTunnelManager;
 use zeta_settings::RemoteTunnelManagerState;
-use zeta_terminal::{GridSize, ScreenBuffer, TerminalColor, TerminalCore, TerminalMousePosition};
+use zeta_terminal::{GridSize, ScreenBuffer, TerminalCore, TerminalMousePosition};
 use zeta_ui_components::{
     InteractionRegion, Sash, SashOrientation, SashState, SashStyle, ScrollMetrics,
     ScrollbarPresentation,
 };
-use zeta_workbench::paint_chord_hint;
 use zui::ui::{
-    Border, CaretVisibility, Color, CornerRadii, FontFamily, FontWeight, PaintRect, Rect,
-    SceneCheckpoint, SplitViewOrientation, SplitViewResizeSnapshot, TextBlock,
-    TextInputLayoutEngine, TextStyle, UiScene,
+    Border, CaretVisibility, Color, CornerRadii, FontWeight, PaintRect, Rect, SceneCheckpoint,
+    SplitViewOrientation, SplitViewResizeSnapshot, TextBlock, TextInputLayoutEngine, TextStyle,
+    UiScene,
 };
 
-use crate::PRODUCT_DISPLAY_NAME;
-use crate::file_editor_pane::{FileEditorPane, FileEditorPrompt};
-use crate::git_branch_context_menu::{GitBranchContextMenu, GitBranchContextMenuState};
-use crate::keybindings::ProductKeybindings;
-use crate::shell_interaction::{
-    FILE_EDITOR_DOCUMENT, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT, FILE_SEARCH_INPUT,
-    FIRST_TAB_CONTAINER_SESSION_TAB, INSPECTOR_RESIZE_HANDLE, MAIN_SURFACE, SESSION_SEARCH_INPUT,
-    TAB_CONTAINER_RESIZE_HANDLE, TERMINAL_OUTPUT, WINDOW,
+use crate::SessionSearchState;
+use crate::{
+    FIRST_TAB_CONTAINER_SESSION_TAB, SESSION_SEARCH_INPUT, TabContextMenu, TabContextMenuState,
+    WINDOW, WorkspaceSurfaceKind, paint_chord_hint,
 };
-use crate::tab_context_menu::{TabContextMenu, TabContextMenuState};
-use crate::terminal_blocks::{TerminalBlockLineKind, project_block_lines};
-use crate::terminal_output_scroll_view::TerminalOutputScrollView;
-use crate::terminal_selection::{TerminalSelectionRange, paint_terminal_selection};
-use crate::workspace_context::WorkspaceContext;
-use crate::workspace_path_picker::{WorkspacePathPicker, WorkspacePathPickerState};
-use crate::workspace_surface::WorkspaceSurfaceKind;
-use zeta_files::FilesLayout;
-use zeta_files::FilesPane;
-use zeta_files::FilesState;
-use zeta_files::FilesToolbar;
-use zeta_scm::EditorPane;
-use zeta_scm::ScmState;
-use zeta_session::SessionPaneContext;
-use zeta_session::SessionPaneLayout;
-use zeta_session::SessionPaneState;
-use zeta_session::SessionPaneView;
-use zeta_session::draw_session_pane;
-use zeta_terminal_workspace::PaneBinding;
-use zeta_ui_theme::UiTheme;
-use zeta_workbench::SessionSearchState;
-use zeta_workbench::{
+use crate::{
     InspectorPartState, PaneGroupId as PaneId, PaneInputKind, PaneMount, PanePart, PanePartSashes,
     PaneSplitId, TITLEBAR_HEIGHT, TabContainer, TabContainerPlacement, TabContainerState,
     TabContainerToolbar, TabGroupId, TabInput, TabInputKey, TabPart, Titlebar, TitlebarInsets,
     WorkbenchTab, WorkbenchTabGroup, mounted_tab_element_id, pane_group_element_id,
     tab_input_element_id, workbench_tab_groups,
 };
+use zeta_files::FilesLayout;
+use zeta_files::FilesPane;
+use zeta_files::FilesState;
+use zeta_files::FilesToolbar;
+use zeta_files::{
+    FILE_SEARCH_INPUT, WORKSPACE_PATH_SEARCH_INPUT, WorkspacePathPicker, WorkspacePathPickerState,
+};
+use zeta_scm::EditorPane;
+use zeta_scm::ScmState;
+use zeta_scm::{GIT_BRANCH_SEARCH_INPUT, GitBranchContextMenu, GitBranchContextMenuState};
+use zeta_session::SessionPaneContext;
+use zeta_session::SessionPaneLayout;
+use zeta_session::SessionPaneState;
+use zeta_session::SessionPaneView;
+use zeta_session::draw_session_pane;
+use zeta_terminal_workspace::PaneBinding;
+use zeta_terminal_workspace::TerminalSelectionRange;
+use zeta_ui_theme::UiTheme;
 
 type PaneViewMount<'a> = PaneMount<'a, PaneBinding>;
+use crate::InspectorLayoutSpec;
+use crate::PaneGroupLayout;
+use crate::PartVisibility;
+use crate::WorkbenchLayout;
+use crate::WorkbenchLayoutSpec;
 use zeta_editor::CodeEditorStyle;
 use zeta_settings::AppearanceSettingsSnapshot;
 use zeta_settings::GeneralSettingsSnapshot;
@@ -69,43 +70,72 @@ use zeta_settings::SettingsFeatureSnapshot;
 use zeta_settings::SettingsPaneStyle;
 use zeta_settings::SettingsPaneView;
 use zeta_settings::SettingsState;
-use zeta_workbench::InspectorLayoutSpec;
-use zeta_workbench::PaneGroupLayout;
-use zeta_workbench::PartVisibility;
-use zeta_workbench::WorkbenchLayout;
-use zeta_workbench::WorkbenchLayoutSpec;
 use zui::ui::{
     AccessibilityRole, ComponentContext, CursorFeedback, ElementId, InteractionFrame,
     InteractionFrameCheckpoint, UiDispatch, UiFrame,
 };
 use zui::window::WindowControlInsets;
 
-const TERMINAL_CELL_WIDTH: f32 = 8.0;
-const TERMINAL_LINE_HEIGHT: f32 = 18.0;
-const TERMINAL_PADDING: f32 = 24.0;
 const COMPOSER_HEIGHT: f32 = 44.0;
 
-pub(crate) use zeta_workbench::LogicalViewport;
+pub const MAIN_SURFACE: ElementId = ElementId::scoped(1, 3);
+pub const TERMINAL_OUTPUT: ElementId = ElementId::scoped(1, 4);
+pub const TAB_CONTAINER_RESIZE_HANDLE: ElementId = ElementId::scoped(1, 16);
+pub const INSPECTOR_RESIZE_HANDLE: ElementId = ElementId::scoped(1, 51);
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct ShellLayout {
-    workbench: WorkbenchLayout,
-    output: Rect,
-    session_header: Rect,
-    thread_timeline: Rect,
-    session_pane_layout: SessionPaneLayout,
-    composer_panel: Rect,
-    composer_info_bar: Rect,
-    composer_toolbar: Rect,
-    composer: Rect,
+pub use crate::LogicalViewport;
+
+pub trait WorkbenchKeybindings {
+    fn pending_keybinding(&self) -> Option<(&KeySequence, usize)>;
+    fn platform(&self) -> HostPlatform;
+    fn binding_for_command(&self, command: AppCommandId) -> Option<&KeySequence>;
 }
 
-impl ShellLayout {
-    fn titlebar(self) -> Rect {
+impl<C> WorkbenchKeybindings for zeta_keybindings_host::Keybindings<C>
+where
+    C: zeta_keybindings_host::KeybindingCatalog<Command = AppCommandId>,
+{
+    fn pending_keybinding(&self) -> Option<(&KeySequence, usize)> {
+        self.pending_keybinding()
+    }
+
+    fn platform(&self) -> HostPlatform {
+        self.platform()
+    }
+
+    fn binding_for_command(&self, command: AppCommandId) -> Option<&KeySequence> {
+        self.binding_for_command(command)
+    }
+}
+
+#[derive(Clone)]
+pub struct WorkspaceContextView<'a> {
+    pub location: &'a str,
+    pub working_directory: &'a str,
+    pub git_branch: &'a str,
+    pub diff_summary: String,
+    pub upstream_distance: Option<(usize, usize)>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct WorkbenchSceneLayout {
+    pub workbench: WorkbenchLayout,
+    pub output: Rect,
+    pub session_header: Rect,
+    pub thread_timeline: Rect,
+    pub session_pane_layout: SessionPaneLayout,
+    pub composer_panel: Rect,
+    pub composer_info_bar: Rect,
+    pub composer_toolbar: Rect,
+    pub composer: Rect,
+}
+
+impl WorkbenchSceneLayout {
+    pub fn titlebar(self) -> Rect {
         self.workbench.titlebar()
     }
 
-    fn tab_container(self) -> Option<Rect> {
+    pub fn tab_container(self) -> Option<Rect> {
         self.workbench.tab_container()
     }
 
@@ -125,11 +155,11 @@ impl ShellLayout {
         self.workbench.inspector_resize_snapshot()
     }
 
-    fn main(self) -> Rect {
+    pub fn main(self) -> Rect {
         self.workbench.main()
     }
 
-    fn for_viewport(
+    pub fn for_viewport(
         viewport: LogicalViewport,
         tab_container: TabContainerState,
         inspector_part: InspectorPartState,
@@ -143,8 +173,7 @@ impl ShellLayout {
         )
     }
 
-    #[cfg(test)]
-    fn for_viewport_with_composer_height(
+    pub fn for_viewport_with_composer_height(
         viewport: LogicalViewport,
         tab_container: TabContainerState,
         inspector_part: InspectorPartState,
@@ -204,53 +233,53 @@ impl ShellLayout {
     }
 }
 
-pub(crate) fn inspector_resize_snapshot_for_viewport(
+pub fn inspector_resize_snapshot_for_viewport(
     viewport: LogicalViewport,
     tab_container: TabContainerState,
     inspector_part: InspectorPartState,
 ) -> Option<SplitViewResizeSnapshot> {
-    ShellLayout::for_viewport(viewport, tab_container, inspector_part)
-        .and_then(ShellLayout::inspector_resize_snapshot)
+    WorkbenchSceneLayout::for_viewport(viewport, tab_container, inspector_part)
+        .and_then(WorkbenchSceneLayout::inspector_resize_snapshot)
 }
 
-pub(crate) struct ShellPresentation {
-    pub(crate) frame: UiFrame<InteractionFrame>,
-    pub(crate) ime_cursor_area: Option<Rect>,
-    pub(crate) workspace_path_picker_scroll_metrics: Option<ScrollMetrics>,
-    pub(crate) workspace_path_picker_item_viewport: Option<Rect>,
-    pub(crate) remote_connection_picker_scroll_metrics: Option<ScrollMetrics>,
-    pub(crate) remote_connection_picker_item_viewport: Option<Rect>,
-    pub(crate) remote_connection_manager_scroll_metrics: Option<ScrollMetrics>,
-    pub(crate) remote_connection_manager_list_viewport: Option<Rect>,
-    pub(crate) remote_tunnel_manager_scroll_metrics: Option<ScrollMetrics>,
-    pub(crate) remote_tunnel_manager_list_viewport: Option<Rect>,
-    base_checkpoint: Option<ShellBaseCheckpoint>,
+pub struct WorkbenchPresentation {
+    pub frame: UiFrame<InteractionFrame>,
+    pub ime_cursor_area: Option<Rect>,
+    pub workspace_path_picker_scroll_metrics: Option<ScrollMetrics>,
+    pub workspace_path_picker_item_viewport: Option<Rect>,
+    pub remote_connection_picker_scroll_metrics: Option<ScrollMetrics>,
+    pub remote_connection_picker_item_viewport: Option<Rect>,
+    pub remote_connection_manager_scroll_metrics: Option<ScrollMetrics>,
+    pub remote_connection_manager_list_viewport: Option<Rect>,
+    pub remote_tunnel_manager_scroll_metrics: Option<ScrollMetrics>,
+    pub remote_tunnel_manager_list_viewport: Option<Rect>,
+    base_checkpoint: Option<WorkbenchBaseCheckpoint>,
 }
 
-impl ShellPresentation {
-    pub(crate) fn frame(&self) -> &UiFrame<InteractionFrame> {
+impl WorkbenchPresentation {
+    pub fn frame(&self) -> &UiFrame<InteractionFrame> {
         &self.frame
     }
 
-    pub(crate) fn scene_mut(&mut self) -> &mut UiScene {
+    pub fn scene_mut(&mut self) -> &mut UiScene {
         self.frame.scene_mut()
     }
 
-    pub(crate) fn interaction_frame(&self) -> &InteractionFrame {
+    pub fn interaction_frame(&self) -> &InteractionFrame {
         self.frame.interaction()
     }
 
-    pub(crate) fn interaction_frame_mut(&mut self) -> &mut InteractionFrame {
+    pub fn interaction_frame_mut(&mut self) -> &mut InteractionFrame {
         self.frame.interaction_mut()
     }
 
-    pub(crate) fn element_bounds(&self, id: ElementId) -> Option<Rect> {
+    pub fn element_bounds(&self, id: ElementId) -> Option<Rect> {
         self.interaction_frame().node(id).map(|node| node.bounds())
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
-struct ShellBaseCheckpoint {
+struct WorkbenchBaseCheckpoint {
     scene: SceneCheckpoint,
     interaction: InteractionFrameCheckpoint,
     ime_cursor_area: Option<Rect>,
@@ -258,7 +287,7 @@ struct ShellBaseCheckpoint {
     remote_connection_manager_list_viewport: Option<Rect>,
 }
 
-struct ShellOverlayPresentation {
+struct WorkbenchOverlayPresentation {
     ime_cursor_area: Option<Rect>,
     workspace_path_picker_scroll_metrics: Option<ScrollMetrics>,
     workspace_path_picker_item_viewport: Option<Rect>,
@@ -271,65 +300,66 @@ struct ShellOverlayPresentation {
 }
 
 #[derive(Clone, Copy)]
-pub(crate) struct PaneView<'a> {
-    pub(crate) pane_id: Option<PaneId>,
-    pub(crate) kind: PaneInputKind,
-    pub(crate) core: Option<&'a TerminalCore>,
-    pub(crate) scroll_offset: usize,
-    pub(crate) scrollbar_presentation: ScrollbarPresentation,
-    pub(crate) selection: Option<TerminalSelectionRange>,
+pub struct PaneView<'a> {
+    pub pane_id: Option<PaneId>,
+    pub kind: PaneInputKind,
+    pub core: Option<&'a TerminalCore>,
+    pub scroll_offset: usize,
+    pub scrollbar_presentation: ScrollbarPresentation,
+    pub selection: Option<TerminalSelectionRange>,
 }
 
 #[derive(Clone)]
-pub(crate) struct ShellPresentationModel<'a> {
-    pub(crate) palette: UiTheme,
-    pub(crate) terminal: Option<&'a TerminalCore>,
-    pub(crate) terminal_panes: &'a [PaneView<'a>],
-    pub(crate) pane_group: Option<&'a PanePart>,
-    pub(crate) active_pane: Option<PaneViewMount<'a>>,
-    pub(crate) terminal_pane_resize_split: Option<PaneSplitId>,
-    pub(crate) terminal_scroll_offset: usize,
-    pub(crate) terminal_scrollbar_presentation: ScrollbarPresentation,
-    pub(crate) terminal_selection: Option<TerminalSelectionRange>,
-    pub(crate) workspace_surface: WorkspaceSurfaceKind,
-    pub(crate) file_editor_host: &'a FileEditorHost,
-    pub(crate) file_editor_prompt: FileEditorPrompt,
-    pub(crate) file_editor_search: &'a FileEditorSearchState,
-    pub(crate) file_editor_diagnostics: &'a [zeta_editor::CodeEditorDiagnostic],
-    pub(crate) language_hover: Option<&'a zeta_language_service::LanguageHover>,
-    pub(crate) language_completions: Option<&'a zeta_language_service::LanguageCompletions>,
-    pub(crate) completion_selection: usize,
-    pub(crate) code_editor_style: &'a CodeEditorStyle,
-    pub(crate) session_pane: &'a SessionPaneState,
-    pub(crate) workspace_context: &'a WorkspaceContext,
-    pub(crate) session_search: &'a SessionSearchState,
-    pub(crate) tab_part: &'a TabPart,
-    pub(crate) active_tab_input: Option<&'a TabInputKey>,
-    pub(crate) caret_visibility: CaretVisibility,
-    pub(crate) dispatch: &'a UiDispatch,
-    pub(crate) tab_container: TabContainerState,
-    pub(crate) inspector_part: InspectorPartState,
-    pub(crate) files: &'a FilesState,
-    pub(crate) scm: &'a ScmState,
-    pub(crate) tab_context_menu: TabContextMenuState,
-    pub(crate) git_branch_context_menu: &'a GitBranchContextMenuState,
-    pub(crate) workspace_path_picker: &'a WorkspacePathPickerState,
-    pub(crate) remote_connection_picker: &'a RemoteConnectionPickerState,
-    pub(crate) remote_connection_manager: &'a RemoteConnectionManagerState,
-    pub(crate) remote_tunnel_manager: &'a RemoteTunnelManagerState,
-    pub(crate) keybindings: &'a ProductKeybindings,
-    pub(crate) settings: &'a SettingsState,
-    pub(crate) keybinding_diagnostics: &'a [String],
-    pub(crate) theme_scheme: zeta_theme::ColorScheme,
-    pub(crate) theme_follows_system: bool,
-    pub(crate) window_control_insets: WindowControlInsets,
-    pub(crate) pointer_position: Option<zui::ui::Point>,
+pub struct WorkbenchPresentationModel<'a> {
+    pub product_name: &'a str,
+    pub palette: UiTheme,
+    pub terminal: Option<&'a TerminalCore>,
+    pub terminal_panes: &'a [PaneView<'a>],
+    pub pane_group: Option<&'a PanePart>,
+    pub active_pane: Option<PaneViewMount<'a>>,
+    pub terminal_pane_resize_split: Option<PaneSplitId>,
+    pub terminal_scroll_offset: usize,
+    pub terminal_scrollbar_presentation: ScrollbarPresentation,
+    pub terminal_selection: Option<TerminalSelectionRange>,
+    pub workspace_surface: WorkspaceSurfaceKind,
+    pub file_editor_host: &'a FileEditorHost,
+    pub file_editor_prompt: FileEditorPrompt,
+    pub file_editor_search: &'a FileEditorSearchState,
+    pub file_editor_diagnostics: &'a [zeta_editor::CodeEditorDiagnostic],
+    pub language_hover: Option<&'a zeta_lsp_manager::LanguageHover>,
+    pub language_completions: Option<&'a zeta_lsp_manager::LanguageCompletions>,
+    pub completion_selection: usize,
+    pub code_editor_style: &'a CodeEditorStyle,
+    pub session_pane: &'a SessionPaneState,
+    pub workspace_context: WorkspaceContextView<'a>,
+    pub session_search: &'a SessionSearchState,
+    pub tab_part: &'a TabPart,
+    pub active_tab_input: Option<&'a TabInputKey>,
+    pub caret_visibility: CaretVisibility,
+    pub dispatch: &'a UiDispatch,
+    pub tab_container: TabContainerState,
+    pub inspector_part: InspectorPartState,
+    pub files: &'a FilesState,
+    pub scm: &'a ScmState,
+    pub tab_context_menu: TabContextMenuState,
+    pub git_branch_context_menu: &'a GitBranchContextMenuState,
+    pub workspace_path_picker: &'a WorkspacePathPickerState,
+    pub remote_connection_picker: &'a RemoteConnectionPickerState,
+    pub remote_connection_manager: &'a RemoteConnectionManagerState,
+    pub remote_tunnel_manager: &'a RemoteTunnelManagerState,
+    pub keybindings: &'a dyn WorkbenchKeybindings,
+    pub settings: &'a SettingsState,
+    pub keybinding_diagnostics: &'a [String],
+    pub theme_scheme: zeta_theme::ColorScheme,
+    pub theme_follows_system: bool,
+    pub window_control_insets: WindowControlInsets,
+    pub pointer_position: Option<zui::ui::Point>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct TabContainerView<'a> {
     title: &'a str,
-    context: &'a WorkspaceContext,
+    context: WorkspaceContextView<'a>,
     search: &'a SessionSearchState,
     tab_part: &'a TabPart,
     selected_id: ElementId,
@@ -344,8 +374,8 @@ struct FileEditorPresentationView<'a> {
     prompt: FileEditorPrompt,
     search: &'a FileEditorSearchState,
     diagnostics: &'a [zeta_editor::CodeEditorDiagnostic],
-    language_hover: Option<&'a zeta_language_service::LanguageHover>,
-    language_completions: Option<&'a zeta_language_service::LanguageCompletions>,
+    language_hover: Option<&'a zeta_lsp_manager::LanguageHover>,
+    language_completions: Option<&'a zeta_lsp_manager::LanguageCompletions>,
     completion_selection: usize,
     style: &'a CodeEditorStyle,
     caret_visibility: CaretVisibility,
@@ -353,7 +383,7 @@ struct FileEditorPresentationView<'a> {
     pointer_position: Option<zui::ui::Point>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct MainPresentationView<'a> {
     terminal: PaneView<'a>,
     terminal_panes: &'a [PaneView<'a>],
@@ -369,8 +399,8 @@ struct MainPresentationView<'a> {
     session_pane_context: &'a SessionPaneContext,
     files: &'a FilesState,
     scm: &'a ScmState,
-    workspace_context: &'a WorkspaceContext,
-    keybindings: &'a ProductKeybindings,
+    workspace_context: WorkspaceContextView<'a>,
+    keybindings: &'a dyn WorkbenchKeybindings,
     keybinding_diagnostics: &'a [String],
     theme_scheme: zeta_theme::ColorScheme,
     theme_follows_system: bool,
@@ -385,23 +415,28 @@ struct MainDrawResult {
     remote_connection_manager_list_viewport: Option<Rect>,
 }
 
-#[cfg(test)]
-pub(crate) fn build_shell_presentation(
+pub fn build_workbench_presentation(
     viewport: LogicalViewport,
-    model: ShellPresentationModel<'_>,
+    model: WorkbenchPresentationModel<'_>,
     text_layout: &mut TextInputLayoutEngine,
-) -> ShellPresentation {
-    build_shell_presentation_with_bindings(viewport, model, text_layout, SashState::Resting, None)
+) -> WorkbenchPresentation {
+    build_workbench_presentation_with_bindings(
+        viewport,
+        model,
+        text_layout,
+        SashState::Resting,
+        None,
+    )
 }
 
-pub(crate) fn build_shell_presentation_with_animation_bindings(
+pub fn build_workbench_presentation_with_animation_bindings(
     viewport: LogicalViewport,
-    model: ShellPresentationModel<'_>,
+    model: WorkbenchPresentationModel<'_>,
     text_layout: &mut TextInputLayoutEngine,
     inspector_sash_state: SashState,
     animation_bindings: &mut dyn zui::ui::AnimationBinding,
-) -> ShellPresentation {
-    build_shell_presentation_with_bindings(
+) -> WorkbenchPresentation {
+    build_workbench_presentation_with_bindings(
         viewport,
         model,
         text_layout,
@@ -410,13 +445,13 @@ pub(crate) fn build_shell_presentation_with_animation_bindings(
     )
 }
 
-fn build_shell_presentation_with_bindings(
+fn build_workbench_presentation_with_bindings(
     viewport: LogicalViewport,
-    model: ShellPresentationModel<'_>,
+    model: WorkbenchPresentationModel<'_>,
     text_layout: &mut TextInputLayoutEngine,
     inspector_sash_state: SashState,
     mut animation_bindings: Option<&mut dyn zui::ui::AnimationBinding>,
-) -> ShellPresentation {
+) -> WorkbenchPresentation {
     let palette = model.palette;
     let mut frame = UiFrame::<InteractionFrame>::new(palette.workbench_background);
     frame.draw_component(&InteractionRegion::new(
@@ -424,9 +459,9 @@ fn build_shell_presentation_with_bindings(
         WINDOW,
         Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
         AccessibilityRole::Window,
-        PRODUCT_DISPLAY_NAME,
+        model.product_name,
     ));
-    let Some(layout) = ShellLayout::for_viewport_with_composer_and_interaction_height(
+    let Some(layout) = WorkbenchSceneLayout::for_viewport_with_composer_and_interaction_height(
         viewport,
         model.tab_container,
         model.inspector_part,
@@ -438,8 +473,8 @@ fn build_shell_presentation_with_bindings(
                 zeta_session::interaction_preferred_height(view.items().len())
             }),
     ) else {
-        draw_compact_scene(frame.scene_mut(), viewport, palette);
-        return ShellPresentation {
+        draw_compact_scene(frame.scene_mut(), viewport, model.product_name, palette);
+        return WorkbenchPresentation {
             frame,
             ime_cursor_area: None,
             workspace_path_picker_scroll_metrics: None,
@@ -464,7 +499,7 @@ fn build_shell_presentation_with_bindings(
             .session_pane
             .thread()
             .map(|thread| thread.title.as_str())
-            .unwrap_or(PRODUCT_DISPLAY_NAME)
+            .unwrap_or(model.product_name)
     };
     let session_title = model
         .active_tab_input
@@ -472,10 +507,10 @@ fn build_shell_presentation_with_bindings(
         .map(TabInput::title)
         .unwrap_or("New session");
     let session_pane_context = SessionPaneContext::new(
-        model.workspace_context.location_label(),
-        model.workspace_context.working_directory_label(),
-        model.workspace_context.git_branch_label(),
-        model.workspace_context.diff_summary_label(),
+        model.workspace_context.location,
+        model.workspace_context.working_directory,
+        model.workspace_context.git_branch,
+        &model.workspace_context.diff_summary,
     );
     let selected_id = tab_input_element_id(
         model.tab_part,
@@ -484,7 +519,7 @@ fn build_shell_presentation_with_bindings(
     );
     let mut titlebar = Titlebar::new(
         layout.titlebar(),
-        zeta_workbench::WorkbenchUiStyle::from_theme(palette),
+        crate::WorkbenchUiStyle::from_theme(palette),
         model.tab_part,
         model.active_tab_input,
         model.tab_container.is_expanded(),
@@ -506,9 +541,10 @@ fn build_shell_presentation_with_bindings(
             draw_tab_container(
                 context,
                 bounds,
+                Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
                 TabContainerView {
                     title,
-                    context: model.workspace_context,
+                    context: model.workspace_context.clone(),
                     search: model.session_search,
                     tab_part: model.tab_part,
                     selected_id,
@@ -578,7 +614,7 @@ fn build_shell_presentation_with_bindings(
                 session_pane_context: &session_pane_context,
                 files: model.files,
                 scm: model.scm,
-                workspace_context: model.workspace_context,
+                workspace_context: model.workspace_context.clone(),
                 keybindings: model.keybindings,
                 keybinding_diagnostics: model.keybinding_diagnostics,
                 theme_scheme: model.theme_scheme,
@@ -635,7 +671,7 @@ fn build_shell_presentation_with_bindings(
             )
         });
     }
-    let base_checkpoint = ShellBaseCheckpoint {
+    let base_checkpoint = WorkbenchBaseCheckpoint {
         scene: frame.scene().checkpoint(),
         interaction: frame.interaction().checkpoint(),
         ime_cursor_area,
@@ -643,8 +679,9 @@ fn build_shell_presentation_with_bindings(
             .remote_connection_manager_scroll_metrics,
         remote_connection_manager_list_viewport: main_draw.remote_connection_manager_list_viewport,
     };
-    let overlay = draw_shell_overlays(&mut frame, viewport, &model, text_layout, ime_cursor_area);
-    ShellPresentation {
+    let overlay =
+        draw_workbench_overlays(&mut frame, viewport, &model, text_layout, ime_cursor_area);
+    WorkbenchPresentation {
         frame,
         ime_cursor_area: overlay.ime_cursor_area,
         workspace_path_picker_scroll_metrics: overlay.workspace_path_picker_scroll_metrics,
@@ -663,11 +700,11 @@ fn build_shell_presentation_with_bindings(
     }
 }
 
-/// Replaces only volatile shell overlays while retaining base layout, paint, and interaction data.
-pub(crate) fn rebuild_shell_overlays(
-    presentation: &mut ShellPresentation,
+/// Replaces only volatile Workbench overlays while retaining base layout, paint, and interaction data.
+pub fn rebuild_workbench_overlays(
+    presentation: &mut WorkbenchPresentation,
     viewport: LogicalViewport,
-    model: ShellPresentationModel<'_>,
+    model: WorkbenchPresentationModel<'_>,
     text_layout: &mut TextInputLayoutEngine,
 ) -> bool {
     let Some(base) = presentation.base_checkpoint.clone() else {
@@ -677,7 +714,7 @@ pub(crate) fn rebuild_shell_overlays(
     presentation
         .interaction_frame_mut()
         .restore(base.interaction);
-    let overlay = draw_shell_overlays(
+    let overlay = draw_workbench_overlays(
         &mut presentation.frame,
         viewport,
         &model,
@@ -704,13 +741,13 @@ pub(crate) fn rebuild_shell_overlays(
     true
 }
 
-fn draw_shell_overlays(
+fn draw_workbench_overlays(
     frame: &mut UiFrame<InteractionFrame>,
     viewport: LogicalViewport,
-    model: &ShellPresentationModel<'_>,
+    model: &WorkbenchPresentationModel<'_>,
     text_layout: &mut TextInputLayoutEngine,
     mut ime_cursor_area: Option<Rect>,
-) -> ShellOverlayPresentation {
+) -> WorkbenchOverlayPresentation {
     let palette = model.palette;
     let mut workspace_path_picker_scroll_metrics = None;
     let mut workspace_path_picker_item_viewport = None;
@@ -725,7 +762,8 @@ fn draw_shell_overlays(
         model.tab_part,
         &model.tab_context_menu,
         model.caret_visibility,
-        palette,
+        crate::TabContextMenuStyle::from_theme(palette),
+        WINDOW,
         text_layout,
         model.dispatch,
     ) {
@@ -741,10 +779,7 @@ fn draw_shell_overlays(
     ) {
         workspace_path_picker_scroll_metrics = path_picker.scroll_metrics();
         workspace_path_picker_item_viewport = Some(path_picker.item_viewport_bounds());
-        if model
-            .dispatch
-            .is_focused(crate::workspace_path_picker::WORKSPACE_PATH_SEARCH_INPUT)
-        {
+        if model.dispatch.is_focused(WORKSPACE_PATH_SEARCH_INPUT) {
             ime_cursor_area = path_picker.search_caret_bounds();
         }
         frame.draw_component(&path_picker);
@@ -811,10 +846,7 @@ fn draw_shell_overlays(
         text_layout,
         model.dispatch,
     ) {
-        if model
-            .dispatch
-            .is_focused(crate::git_branch_context_menu::GIT_BRANCH_SEARCH_INPUT)
-        {
+        if model.dispatch.is_focused(GIT_BRANCH_SEARCH_INPUT) {
             ime_cursor_area = branch_menu.search_caret_bounds();
         }
         frame.draw_component(&branch_menu);
@@ -842,7 +874,7 @@ fn draw_shell_overlays(
         model.keybindings.platform(),
         model.dispatch,
     );
-    ShellOverlayPresentation {
+    WorkbenchOverlayPresentation {
         ime_cursor_area,
         workspace_path_picker_scroll_metrics,
         workspace_path_picker_item_viewport,
@@ -855,45 +887,33 @@ fn draw_shell_overlays(
     }
 }
 
-pub(crate) fn terminal_grid_size_for_viewport(
+pub fn terminal_grid_size_for_viewport(
     viewport: LogicalViewport,
     active_screen: ScreenBuffer,
     tab_container: TabContainerState,
     inspector_part: InspectorPartState,
 ) -> GridSize {
-    let Some(layout) = ShellLayout::for_viewport(viewport, tab_container, inspector_part) else {
+    let Some(layout) = WorkbenchSceneLayout::for_viewport(viewport, tab_container, inspector_part)
+    else {
         return GridSize::default();
     };
     let bounds = terminal_content_bounds(layout, active_screen);
-    GridSize::new(
-        (bounds.size.height / TERMINAL_LINE_HEIGHT)
-            .floor()
-            .clamp(1.0, u16::MAX as f32) as u16,
-        (bounds.size.width / TERMINAL_CELL_WIDTH)
-            .floor()
-            .clamp(1.0, u16::MAX as f32) as u16,
-    )
+    zeta_terminal_workspace::grid_size(bounds)
 }
 
-pub(crate) fn terminal_grid_size_for_bounds(bounds: Rect) -> GridSize {
-    GridSize::new(
-        (bounds.size.height / TERMINAL_LINE_HEIGHT)
-            .floor()
-            .clamp(1.0, u16::MAX as f32) as u16,
-        (bounds.size.width / TERMINAL_CELL_WIDTH)
-            .floor()
-            .clamp(1.0, u16::MAX as f32) as u16,
-    )
+pub fn terminal_grid_size_for_bounds(bounds: Rect) -> GridSize {
+    zeta_terminal_workspace::grid_size(bounds)
 }
 
-pub(crate) fn terminal_pane_bounds_for_viewport(
+pub fn terminal_pane_bounds_for_viewport(
     viewport: LogicalViewport,
     active_screen: ScreenBuffer,
     tab_container: TabContainerState,
     inspector_part: InspectorPartState,
     group: &PanePart,
 ) -> Vec<(PaneId, Rect)> {
-    let Some(layout) = ShellLayout::for_viewport(viewport, tab_container, inspector_part) else {
+    let Some(layout) = WorkbenchSceneLayout::for_viewport(viewport, tab_container, inspector_part)
+    else {
         return Vec::new();
     };
     let bounds = terminal_content_bounds(layout, active_screen);
@@ -904,26 +924,22 @@ pub(crate) fn terminal_pane_bounds_for_viewport(
         .collect()
 }
 
-pub(crate) fn terminal_mouse_position_for_viewport(
+pub fn terminal_mouse_position_for_viewport(
     viewport: LogicalViewport,
     active_screen: ScreenBuffer,
     tab_container: TabContainerState,
     inspector_part: InspectorPartState,
     point: zui::ui::Point,
 ) -> Option<TerminalMousePosition> {
-    let layout = ShellLayout::for_viewport(viewport, tab_container, inspector_part)?;
+    let layout = WorkbenchSceneLayout::for_viewport(viewport, tab_container, inspector_part)?;
     let bounds = terminal_content_bounds(layout, active_screen);
     if !bounds.contains(point) {
         return None;
     }
-    let row = ((point.y - bounds.origin.y) / TERMINAL_LINE_HEIGHT).floor() as u16;
-    let col = ((point.x - bounds.origin.x) / TERMINAL_CELL_WIDTH).floor() as u16;
-    let size =
-        terminal_grid_size_for_viewport(viewport, active_screen, tab_container, inspector_part);
-    (row < size.rows() && col < size.cols()).then(|| TerminalMousePosition::new(row, col))
+    zeta_terminal_workspace::mouse_position(bounds, point)
 }
 
-pub(crate) fn terminal_pane_mouse_position_for_viewport(
+pub fn terminal_pane_mouse_position_for_viewport(
     viewport: LogicalViewport,
     active_screen: ScreenBuffer,
     tab_container: TabContainerState,
@@ -931,7 +947,8 @@ pub(crate) fn terminal_pane_mouse_position_for_viewport(
     group: &PanePart,
     point: zui::ui::Point,
 ) -> Option<(PaneId, TerminalMousePosition)> {
-    let Some(layout) = ShellLayout::for_viewport(viewport, tab_container, inspector_part) else {
+    let Some(layout) = WorkbenchSceneLayout::for_viewport(viewport, tab_container, inspector_part)
+    else {
         return None;
     };
     let content_bounds = terminal_content_bounds(layout, active_screen);
@@ -941,18 +958,14 @@ pub(crate) fn terminal_pane_mouse_position_for_viewport(
         .iter()
         .find(|leaf| leaf.bounds().contains(point))?;
     let bounds = leaf.bounds();
-    let row = ((point.y - bounds.origin.y) / TERMINAL_LINE_HEIGHT).floor() as u16;
-    let col = ((point.x - bounds.origin.x) / TERMINAL_CELL_WIDTH).floor() as u16;
-    let size = terminal_grid_size_for_bounds(bounds);
-    (row < size.rows() && col < size.cols())
-        .then(|| (leaf.id(), TerminalMousePosition::new(row, col)))
+    zeta_terminal_workspace::mouse_position(bounds, point).map(|position| (leaf.id(), position))
 }
 
 fn draw_files_pane(
     context: &mut ComponentContext<'_, '_>,
     bounds: Rect,
     files: &FilesState,
-    workspace_context: &WorkspaceContext,
+    workspace_context: &WorkspaceContextView<'_>,
     parent: ElementId,
     caret_visibility: CaretVisibility,
     dispatch: &UiDispatch,
@@ -963,7 +976,7 @@ fn draw_files_pane(
     let files_toolbar = FilesToolbar::new(
         layout.toolbar(),
         files,
-        workspace_context.upstream_distance(),
+        workspace_context.upstream_distance,
         caret_visibility,
         zeta_files::FilesToolbarStyle::from_theme(palette),
         parent,
@@ -1053,7 +1066,7 @@ fn draw_workspace_surface(scene: &mut UiScene, bounds: Rect, palette: UiTheme) {
 /// This boundary separates the right Inspector slot from the main
 /// workspace. Files and SCM components own only their internal geometry and
 /// must not redraw this edge.
-fn draw_inspector_border(scene: &mut UiScene, bounds: Rect, palette: UiTheme) {
+pub fn draw_inspector_border(scene: &mut UiScene, bounds: Rect, palette: UiTheme) {
     scene.draw_rect(
         PaintRect::new(bounds, Color::TRANSPARENT).with_border(Border::new(
             zui::ui::Edges::new(0.0, 0.0, 0.0, 1.0),
@@ -1065,6 +1078,7 @@ fn draw_inspector_border(scene: &mut UiScene, bounds: Rect, palette: UiTheme) {
 fn draw_tab_container(
     context: &mut ComponentContext<'_, '_>,
     bounds: Rect,
+    viewport: Rect,
     view: TabContainerView<'_>,
     text_layout: &mut TextInputLayoutEngine,
     palette: UiTheme,
@@ -1079,7 +1093,7 @@ fn draw_tab_container(
         bounds,
         view.search.input(),
         view.caret_visibility,
-        zeta_workbench::WorkbenchUiStyle::from_theme(palette),
+        crate::WorkbenchUiStyle::from_theme(palette),
         text_layout,
         view.dispatch,
     );
@@ -1092,11 +1106,11 @@ fn draw_tab_container(
     if !has_session_input && view.search.matches_session_name(view.title) {
         let fallback = WorkbenchTab::new(
             FIRST_TAB_CONTAINER_SESSION_TAB,
-            zeta_workbench::FIRST_TAB_CONTAINER_SESSION_ACTION,
-            zeta_workbench::FIRST_TAB_CONTAINER_SESSION_CLOSE,
+            crate::FIRST_TAB_CONTAINER_SESSION_ACTION,
+            crate::FIRST_TAB_CONTAINER_SESSION_CLOSE,
             view.title,
-            view.context.working_directory_label(),
-            zeta_workbench::TabStatus::idle("Ready"),
+            view.context.working_directory,
+            crate::TabStatus::idle("Ready"),
             false,
         );
         if let Some(group) = groups
@@ -1119,9 +1133,10 @@ fn draw_tab_container(
         groups,
         view.selected_id,
         TabContainerPlacement::Body,
-        zeta_workbench::WorkbenchUiStyle::from_theme(palette),
+        crate::WorkbenchUiStyle::from_theme(palette),
         view.dispatch,
-    );
+    )
+    .with_viewport(viewport);
     if let Some(tab) = view
         .visible_action_bar_tab
         .and_then(|tab| mounted_tab_element_id(view.tab_part, tab, TabContainerPlacement::Body))
@@ -1163,7 +1178,7 @@ fn draw_sash(
 
 fn draw_main(
     context: &mut ComponentContext<'_, '_>,
-    layout: ShellLayout,
+    layout: WorkbenchSceneLayout,
     view: MainPresentationView<'_>,
     palette: UiTheme,
     text_layout: &mut TextInputLayoutEngine,
@@ -1231,8 +1246,8 @@ fn draw_main(
                         state: view.settings,
                         features: SettingsFeatureSnapshot {
                             general: GeneralSettingsSnapshot {
-                                workspace_label: view.workspace_context.working_directory_label(),
-                                connection_label: view.workspace_context.location_label(),
+                                workspace_label: view.workspace_context.working_directory,
+                                connection_label: view.workspace_context.location,
                                 surface_label,
                             },
                             appearance: AppearanceSettingsSnapshot {
@@ -1285,7 +1300,7 @@ fn draw_main(
                                 context,
                                 layout.main(),
                                 view.files,
-                                view.workspace_context,
+                                &view.workspace_context,
                                 pane_group_id,
                                 view.caret_visibility,
                                 view.dispatch,
@@ -1432,28 +1447,20 @@ fn draw_main(
     })
 }
 
-fn terminal_content_bounds(layout: ShellLayout, active_screen: ScreenBuffer) -> Rect {
+fn terminal_content_bounds(layout: WorkbenchSceneLayout, active_screen: ScreenBuffer) -> Rect {
     let viewport = if active_screen == ScreenBuffer::Alternate {
         layout.main()
     } else {
         layout.output
     };
-    Rect::from_xywh(
-        viewport.origin.x + TERMINAL_PADDING,
-        viewport.origin.y + TERMINAL_PADDING,
-        (viewport.size.width - TERMINAL_PADDING * 2.0).max(1.0),
-        (viewport.size.height - TERMINAL_PADDING * 2.0).max(1.0),
-    )
+    zeta_terminal_workspace::content_bounds(viewport)
 }
 
 fn terminal_cursor_area(
-    layout: ShellLayout,
+    layout: WorkbenchSceneLayout,
     terminal: &TerminalCore,
     scroll_offset: usize,
 ) -> Option<Rect> {
-    if scroll_offset != 0 || !terminal.modes().cursor_visible() {
-        return None;
-    }
     let bounds = terminal_content_bounds(layout, ScreenBuffer::Alternate);
     terminal_cursor_area_for_bounds(bounds, terminal, scroll_offset)
 }
@@ -1463,16 +1470,7 @@ fn terminal_cursor_area_for_bounds(
     terminal: &TerminalCore,
     scroll_offset: usize,
 ) -> Option<Rect> {
-    if scroll_offset != 0 || !terminal.modes().cursor_visible() {
-        return None;
-    }
-    let (row, col) = terminal.grid().cursor();
-    Some(Rect::from_xywh(
-        bounds.origin.x + col as f32 * TERMINAL_CELL_WIDTH,
-        bounds.origin.y + row as f32 * TERMINAL_LINE_HEIGHT,
-        TERMINAL_CELL_WIDTH,
-        TERMINAL_LINE_HEIGHT,
-    ))
+    zeta_terminal_workspace::cursor_area(bounds, terminal, scroll_offset)
 }
 
 fn terminal_bounds_for_pane(
@@ -1486,7 +1484,7 @@ fn terminal_bounds_for_pane(
         .map(|leaf| leaf.bounds())
 }
 
-pub(crate) fn terminal_pane_sash_for_viewport(
+pub fn terminal_pane_sash_for_viewport(
     viewport: LogicalViewport,
     active_screen: ScreenBuffer,
     tab_container: TabContainerState,
@@ -1494,7 +1492,7 @@ pub(crate) fn terminal_pane_sash_for_viewport(
     group: &PanePart,
     point: zui::ui::Point,
 ) -> Option<(PaneSplitId, SplitViewOrientation, SplitViewResizeSnapshot)> {
-    let layout = ShellLayout::for_viewport(viewport, tab_container, inspector_part)?;
+    let layout = WorkbenchSceneLayout::for_viewport(viewport, tab_container, inspector_part)?;
     let pane_geometry =
         PaneGroupLayout::for_tree(terminal_content_bounds(layout, active_screen), group.tree());
     pane_geometry.sashes().iter().find_map(|sash| {
@@ -1518,7 +1516,7 @@ pub(crate) fn terminal_pane_sash_for_viewport(
 
 fn draw_terminal(
     scene: &mut UiScene,
-    layout: ShellLayout,
+    layout: WorkbenchSceneLayout,
     view: PaneView<'_>,
     active_screen: ScreenBuffer,
     palette: UiTheme,
@@ -1534,158 +1532,25 @@ fn draw_terminal_in_bounds(
     active_screen: ScreenBuffer,
     palette: UiTheme,
 ) {
-    let Some(terminal) = view.core else {
-        draw_terminal_text(scene, "Starting shell…", bounds, palette.muted_foreground);
-        return;
-    };
-    if active_screen == ScreenBuffer::Alternate {
-        draw_grid(scene, terminal, bounds, view.scroll_offset, palette);
-    } else {
-        draw_block_list(
-            scene,
-            terminal,
-            bounds,
+    zeta_terminal_workspace::draw_terminal(
+        scene,
+        bounds,
+        zeta_terminal_workspace::TerminalPaneView::new(view.core).with_view_state(
             view.scroll_offset,
             view.scrollbar_presentation,
             view.selection,
-            palette,
-        );
-    }
-}
-
-fn draw_grid(
-    scene: &mut UiScene,
-    terminal: &TerminalCore,
-    bounds: Rect,
-    scroll_offset: usize,
-    palette: UiTheme,
-) {
-    let cursor = terminal.grid().cursor();
-    let cursor_visible = terminal.modes().cursor_visible() && scroll_offset == 0;
-    for (row, line) in terminal.grid().viewport_lines(scroll_offset).enumerate() {
-        let y = bounds.origin.y + row as f32 * TERMINAL_LINE_HEIGHT;
-        if y + TERMINAL_LINE_HEIGHT > bounds.bottom() {
-            break;
-        }
-        for (col, cell) in line.cells().iter().enumerate() {
-            if cell.is_continuation() {
-                continue;
-            }
-            let x = bounds.origin.x + col as f32 * TERMINAL_CELL_WIDTH;
-            if x + TERMINAL_CELL_WIDTH > bounds.right() {
-                break;
-            }
-            let style = cell.style();
-            let (foreground, background) = terminal_cell_colors(style, palette);
-            if background != Color::TRANSPARENT {
-                scene.draw_rect(PaintRect::new(
-                    Rect::from_xywh(x, y, TERMINAL_CELL_WIDTH, TERMINAL_LINE_HEIGHT),
-                    background,
-                ));
-            }
-            if cursor_visible && cursor == (row, col) {
-                scene.draw_rect(PaintRect::new(
-                    Rect::from_xywh(x, y + TERMINAL_LINE_HEIGHT - 2.0, TERMINAL_CELL_WIDTH, 2.0),
-                    palette.accent,
-                ));
-            }
-            if !cell.text().is_empty() {
-                let mut text_style = terminal_text_style(foreground);
-                if style.bold {
-                    text_style = text_style.with_weight(FontWeight::Bold);
-                }
-                draw_text(
-                    scene,
-                    cell.text(),
-                    Rect::from_xywh(x, y, TERMINAL_CELL_WIDTH * 2.0, TERMINAL_LINE_HEIGHT),
-                    text_style,
-                );
-            }
-        }
-    }
-}
-
-fn draw_block_list(
-    scene: &mut UiScene,
-    terminal: &TerminalCore,
-    bounds: Rect,
-    scroll_offset: usize,
-    scrollbar_presentation: ScrollbarPresentation,
-    selection: Option<TerminalSelectionRange>,
-    palette: UiTheme,
-) {
-    let lines = project_block_lines(terminal);
-    TerminalOutputScrollView::new(
-        bounds,
-        lines.len(),
-        TERMINAL_LINE_HEIGHT,
-        scroll_offset,
-        scrollbar_presentation,
+        ),
+        active_screen,
         palette,
-    )
-    .draw(scene, |scene, viewport, range| {
-        for absolute_index in range {
-            let line = &lines[absolute_index];
-            let color = match line.kind {
-                TerminalBlockLineKind::Preamble => palette.muted_foreground,
-                TerminalBlockLineKind::Command => palette.accent,
-                TerminalBlockLineKind::Output => palette.foreground,
-                TerminalBlockLineKind::Status => palette.muted_foreground,
-            };
-            draw_terminal_text(
-                scene,
-                &line.text,
-                Rect::from_xywh(
-                    viewport.content_origin().x,
-                    viewport.content_origin().y + absolute_index as f32 * TERMINAL_LINE_HEIGHT,
-                    viewport.bounds().size.width,
-                    TERMINAL_LINE_HEIGHT,
-                ),
-                color,
-            );
-        }
-        if let Some(selection) = selection {
-            paint_terminal_selection(
-                scene,
-                viewport.bounds(),
-                terminal.grid().size().cols() as usize,
-                selection,
-                TERMINAL_CELL_WIDTH,
-                TERMINAL_LINE_HEIGHT,
-                palette.text_selection_background,
-            );
-        }
-    });
+    );
 }
 
-fn terminal_cell_colors(style: zeta_terminal::CellStyle, palette: UiTheme) -> (Color, Color) {
-    let mut foreground = terminal_color(style.foreground, palette.foreground, palette);
-    let mut background = terminal_color(style.background, Color::TRANSPARENT, palette);
-    if style.inverse {
-        std::mem::swap(&mut foreground, &mut background);
-    }
-    (foreground, background)
-}
-
-fn terminal_color(color: TerminalColor, default: Color, palette: UiTheme) -> Color {
-    match color {
-        TerminalColor::Default => default,
-        TerminalColor::Indexed(index) => palette.terminal_indexed_color(index),
-        TerminalColor::Rgb(red, green, blue) => Color::rgb(red, green, blue),
-    }
-}
-
-fn terminal_text_style(color: Color) -> TextStyle {
-    TextStyle::new(13.0, color)
-        .with_family(FontFamily::Monospace)
-        .with_line_height(TERMINAL_LINE_HEIGHT)
-}
-
-fn draw_terminal_text(scene: &mut UiScene, text: &str, bounds: Rect, color: Color) {
-    draw_text(scene, text, bounds, terminal_text_style(color));
-}
-
-fn draw_compact_scene(scene: &mut UiScene, viewport: LogicalViewport, palette: UiTheme) {
+fn draw_compact_scene(
+    scene: &mut UiScene,
+    viewport: LogicalViewport,
+    product_name: &str,
+    palette: UiTheme,
+) {
     let bounds = Rect::from_xywh(
         12.0,
         12.0,
@@ -1699,7 +1564,7 @@ fn draw_compact_scene(scene: &mut UiScene, viewport: LogicalViewport, palette: U
     );
     draw_text(
         scene,
-        PRODUCT_DISPLAY_NAME,
+        product_name,
         Rect::from_xywh(
             bounds.origin.x + 18.0,
             bounds.origin.y + 18.0,
@@ -1716,7 +1581,3 @@ fn draw_text(scene: &mut UiScene, text: &str, bounds: Rect, style: TextStyle) {
     }
     scene.draw_text(TextBlock::new(text, bounds.origin, bounds.size, style));
 }
-
-#[cfg(test)]
-#[path = "shell_scene_tests.rs"]
-mod tests;

@@ -2,8 +2,8 @@ use super::{
     FILE_EDITOR_DOCUMENT, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_NOTICE, FILE_EDITOR_REPLACE_INPUT,
     FILE_EDITOR_SEARCH_BAR, FILE_EDITOR_TAB_LIST, FileEditorPane,
 };
-use crate::shell_interaction::{file_editor_close_id, file_editor_fold_id, file_editor_tab_id};
-use zeta_editor_host::FileEditorSearchMode;
+use crate::FileEditorSearchMode;
+use crate::interaction::{file_editor_close_id, file_editor_fold_id, file_editor_tab_id};
 use zeta_ui_components::InteractionRegion;
 use zui::ui::Rect;
 use zui::ui::{

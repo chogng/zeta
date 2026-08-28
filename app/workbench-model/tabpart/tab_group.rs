@@ -55,7 +55,7 @@ impl TabGroup {
         self.label = label;
     }
 
-    /// Returns whether projections should collapse this group's tab members.
+    /// Returns whether mounted views should collapse this group's tab members.
     pub const fn is_collapsed(&self) -> bool {
         self.collapsed
     }

@@ -85,7 +85,7 @@ fn session_upsert_updates_an_existing_input_without_replacing_its_identity() {
 }
 
 #[test]
-fn tab_rename_is_a_shell_label_override_and_survives_session_refresh() {
+fn tab_rename_is_a_workbench_label_override_and_survives_session_refresh() {
     let original = session("session-1", "Original title");
     let key = TabInputKey::session(original.session_id.clone());
     let mut part = TabPart::default();

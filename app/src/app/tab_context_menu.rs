@@ -1,20 +1,13 @@
 //! Desktop input adapter for the Workbench-owned tab context menu.
 
 use crate::ProductApp;
-use crate::shell_interaction::TabContextMenuAction;
-use crate::shell_interaction::WINDOW;
 use crate::terminal_input::text_input_command;
-use zeta_ui_theme::UiTheme;
+use zeta_workbench::TabContextMenuAction;
 use zui::input::ElementState;
 use zui::input::Key;
 use zui::input::KeyEvent;
 use zui::input::MouseButton;
 use zui::input::NamedKey;
-use zui::ui::CaretVisibility;
-use zui::ui::Component;
-use zui::ui::ComponentContext;
-use zui::ui::ComponentElement;
-use zui::ui::ComputedElement;
 use zui::ui::DispatchInvalidation;
 use zui::ui::DispatchOutcome;
 use zui::ui::ElementId;
@@ -22,58 +15,7 @@ use zui::ui::FocusDirection;
 use zui::ui::InteractionFrame;
 use zui::ui::NavigationAxis;
 use zui::ui::Point;
-use zui::ui::Rect;
-use zui::ui::TextInputLayoutEngine;
 use zui::ui::UiDispatch;
-use zui::ui::UiNode;
-
-pub(crate) use zeta_workbench::TabContextMenuState;
-
-/// Adapts product colors and desktop text layout to the Workbench tab menu.
-pub(crate) struct TabContextMenu {
-    inner: zeta_workbench::TabContextMenu,
-}
-
-impl TabContextMenu {
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn new(
-        viewport: Rect,
-        tab_part: &zeta_workbench::TabPart,
-        state: &TabContextMenuState,
-        caret_visibility: CaretVisibility,
-        palette: UiTheme,
-        text_layout: &mut TextInputLayoutEngine,
-        dispatch: &UiDispatch,
-    ) -> Option<Self> {
-        let style = zeta_workbench::TabContextMenuStyle::from_theme(palette);
-        Some(Self {
-            inner: zeta_workbench::TabContextMenu::new(
-                viewport,
-                tab_part,
-                state,
-                caret_visibility,
-                style,
-                WINDOW,
-                text_layout,
-                dispatch,
-            )?,
-        })
-    }
-}
-
-impl Component for TabContextMenu {
-    fn element(&self) -> ComponentElement {
-        self.inner.element()
-    }
-
-    fn interaction_node(&self, element: &ComputedElement) -> Option<UiNode> {
-        self.inner.interaction_node(element)
-    }
-
-    fn compose(&self, context: &mut ComponentContext<'_, '_>, element: &ComputedElement) {
-        self.inner.compose(context, element)
-    }
-}
 
 impl ProductApp {
     pub(crate) fn route_tab_context_menu_pointer_move(&mut self, point: Point) -> bool {

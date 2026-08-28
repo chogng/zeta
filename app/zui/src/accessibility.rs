@@ -182,7 +182,10 @@ impl AccessibilitySnapshot {
             if source.focusable {
                 node.add_action(Action::Focus);
             }
-            if source.action == NodeAction::Activate {
+            if matches!(
+                source.action,
+                NodeAction::Activate | NodeAction::ToggleExpansion | NodeAction::AdjustValue { .. }
+            ) {
                 node.add_action(Action::Click);
             }
             match source.selection {
@@ -232,7 +235,14 @@ fn requested_action(
         .find(|node| node.id.into_raw() == request.target_node.0)?;
     let kind = match request.action {
         Action::Focus if node.focusable => AccessibilityActionKind::Focus,
-        Action::Click if node.action == NodeAction::Activate => AccessibilityActionKind::Activate,
+        Action::Click
+            if matches!(
+                node.action,
+                NodeAction::Activate | NodeAction::ToggleExpansion | NodeAction::AdjustValue { .. }
+            ) =>
+        {
+            AccessibilityActionKind::Activate
+        }
         _ => return None,
     };
     Some(AccessibilityAction {

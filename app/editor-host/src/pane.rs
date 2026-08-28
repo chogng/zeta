@@ -1,13 +1,13 @@
+use crate::FileEditorDiagnosticTooltip;
+use crate::FileEditorHost;
+use crate::FileEditorSearchMode;
+use crate::FileEditorSearchState;
+use crate::LanguageCompletionPopover;
+use crate::LanguageHoverPopover;
 use zeta_editor::{
     CodeEditor, CodeEditorDiagnostic, CodeEditorFoldControl, CodeEditorHeader,
     CodeEditorLineWrapping, CodeEditorNavigation, CodeEditorPosition, CodeEditorStyle,
 };
-use zeta_editor_host::FileEditorDiagnosticTooltip;
-use zeta_editor_host::FileEditorHost;
-use zeta_editor_host::FileEditorSearchMode;
-use zeta_editor_host::FileEditorSearchState;
-use zeta_editor_host::LanguageCompletionPopover;
-use zeta_editor_host::LanguageHoverPopover;
 use zeta_text_file::TextFileStatus;
 use zeta_ui_components::{InputBoxState, SearchBox};
 use zui::ui::{
@@ -15,15 +15,14 @@ use zui::ui::{
     TextInputLayoutEngine, TextStyle, UiScene,
 };
 
-use crate::shell_interaction::{
+use crate::interaction::{
     FILE_EDITOR_DOCUMENT, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_NOTICE, FILE_EDITOR_PANE,
     FILE_EDITOR_REPLACE_INPUT, FILE_EDITOR_SEARCH_BAR, FILE_EDITOR_TAB_LIST, FileEditorAction,
-    MAIN_SURFACE,
 };
 use zeta_ui_theme::UiTheme;
 use zui::ui::{AccessibilityRole, UiNode};
 
-#[path = "file_editor_pane_interaction.rs"]
+#[path = "pane_interaction.rs"]
 mod interaction;
 
 const TAB_BAR_HEIGHT: f32 = 32.0;
@@ -60,7 +59,7 @@ const REPLACE_ACTIONS: [FileEditorAction; 2] = [
 
 /// Transient file-editor decision currently presented by the Desktop shell.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub(crate) enum FileEditorPrompt {
+pub enum FileEditorPrompt {
     #[default]
     None,
     ConfirmClose,
@@ -73,7 +72,7 @@ struct FileEditorNotice<'a> {
 }
 
 /// Desktop file-tab and document presentation over a retained [`FileEditorHost`].
-pub(crate) struct FileEditorPane<'a> {
+pub struct FileEditorPane<'a> {
     bounds: Rect,
     parent: zui::ui::ElementId,
     host: &'a FileEditorHost,
@@ -86,14 +85,14 @@ pub(crate) struct FileEditorPane<'a> {
     search_replacement: Option<SearchBox>,
     search_match_count: usize,
     diagnostics: &'a [CodeEditorDiagnostic],
-    language_hover: Option<&'a zeta_language_service::LanguageHover>,
-    language_completions: Option<&'a zeta_language_service::LanguageCompletions>,
+    language_hover: Option<&'a zeta_lsp_manager::LanguageHover>,
+    language_completions: Option<&'a zeta_lsp_manager::LanguageCompletions>,
     completion_selection: usize,
     pointer_position: Option<zui::ui::Point>,
 }
 
 impl<'a> FileEditorPane<'a> {
-    pub(crate) const fn new(
+    pub const fn new(
         bounds: Rect,
         host: &'a FileEditorHost,
         editor_style: CodeEditorStyle,
@@ -102,7 +101,7 @@ impl<'a> FileEditorPane<'a> {
     ) -> Self {
         Self {
             bounds,
-            parent: MAIN_SURFACE,
+            parent: FILE_EDITOR_PANE,
             host,
             editor_style,
             palette,
@@ -120,62 +119,53 @@ impl<'a> FileEditorPane<'a> {
         }
     }
 
-    pub(crate) const fn with_parent(mut self, parent: zui::ui::ElementId) -> Self {
+    pub const fn with_parent(mut self, parent: zui::ui::ElementId) -> Self {
         self.parent = parent;
         self
     }
 
-    pub(crate) const fn with_prompt(mut self, prompt: FileEditorPrompt) -> Self {
+    pub const fn with_prompt(mut self, prompt: FileEditorPrompt) -> Self {
         self.prompt = prompt;
         self
     }
 
-    pub(crate) const fn with_search_mode(mut self, mode: FileEditorSearchMode) -> Self {
+    pub const fn with_search_mode(mut self, mode: FileEditorSearchMode) -> Self {
         self.search_mode = mode;
         self
     }
 
-    pub(crate) const fn with_diagnostics(
-        mut self,
-        diagnostics: &'a [CodeEditorDiagnostic],
-    ) -> Self {
+    pub const fn with_diagnostics(mut self, diagnostics: &'a [CodeEditorDiagnostic]) -> Self {
         self.diagnostics = diagnostics;
         self
     }
 
-    pub(crate) const fn with_pointer_position(
-        mut self,
-        pointer_position: Option<zui::ui::Point>,
-    ) -> Self {
+    pub const fn with_pointer_position(mut self, pointer_position: Option<zui::ui::Point>) -> Self {
         self.pointer_position = pointer_position;
         self
     }
 
-    pub(crate) const fn with_language_features(
+    pub const fn with_language_features(
         mut self,
-        hover: Option<&'a zeta_language_service::LanguageHover>,
-        completions: Option<&'a zeta_language_service::LanguageCompletions>,
+        hover: Option<&'a zeta_lsp_manager::LanguageHover>,
+        completions: Option<&'a zeta_lsp_manager::LanguageCompletions>,
     ) -> Self {
         self.language_hover = hover;
         self.language_completions = completions;
         self
     }
 
-    pub(crate) const fn with_completion_selection(mut self, selected: usize) -> Self {
+    pub const fn with_completion_selection(mut self, selected: usize) -> Self {
         self.completion_selection = selected;
         self
     }
 
-    pub(crate) fn diagnostic_range_at(
-        &self,
-        point: zui::ui::Point,
-    ) -> Option<std::ops::Range<usize>> {
+    pub fn diagnostic_range_at(&self, point: zui::ui::Point) -> Option<std::ops::Range<usize>> {
         self.editor()?
             .diagnostic_at(point)
             .map(CodeEditorDiagnostic::range)
     }
 
-    pub(crate) fn with_search(
+    pub fn with_search(
         mut self,
         search: &FileEditorSearchState,
         text_layout: &mut TextInputLayoutEngine,
@@ -211,7 +201,7 @@ impl<'a> FileEditorPane<'a> {
         self
     }
 
-    pub(crate) fn editor_bounds(&self) -> Rect {
+    pub fn editor_bounds(&self) -> Rect {
         Rect::from_xywh(
             self.bounds.origin.x,
             self.bounds.origin.y + TAB_BAR_HEIGHT + self.search_height() + self.notice_height(),
@@ -224,7 +214,7 @@ impl<'a> FileEditorPane<'a> {
         )
     }
 
-    pub(crate) fn search_caret_bounds(&self, focused: zui::ui::ElementId) -> Option<Rect> {
+    pub fn search_caret_bounds(&self, focused: zui::ui::ElementId) -> Option<Rect> {
         match focused {
             FILE_EDITOR_FIND_INPUT => self.search_query.as_ref()?.caret_bounds(),
             FILE_EDITOR_REPLACE_INPUT => self.search_replacement.as_ref()?.caret_bounds(),
@@ -232,37 +222,37 @@ impl<'a> FileEditorPane<'a> {
         }
     }
 
-    pub(crate) fn caret_bounds(&self) -> Option<Rect> {
+    pub fn caret_bounds(&self) -> Option<Rect> {
         self.editor()?.caret_bounds()
     }
 
-    pub(crate) fn text_position_at(&self, point: zui::ui::Point) -> Option<CodeEditorPosition> {
+    pub fn text_position_at(&self, point: zui::ui::Point) -> Option<CodeEditorPosition> {
         self.editor()?.text_position_at(point)
     }
 
-    pub(crate) fn fold_control(&self, index: usize) -> Option<CodeEditorFoldControl> {
+    pub fn fold_control(&self, index: usize) -> Option<CodeEditorFoldControl> {
         self.editor()?.fold_controls().get(index).copied()
     }
 
-    pub(crate) fn fold_control_count(&self) -> usize {
+    pub fn fold_control_count(&self) -> usize {
         self.editor()
             .map_or(0, |editor| editor.fold_controls().len())
     }
 
-    pub(crate) fn visible_row_capacity(&self) -> usize {
+    pub fn visible_row_capacity(&self) -> usize {
         self.editor()
             .map_or(0, |editor| editor.visible_row_capacity())
     }
 
-    pub(crate) fn visual_row_count(&self) -> usize {
+    pub fn visual_row_count(&self) -> usize {
         self.editor().map_or(0, |editor| editor.visual_row_count())
     }
 
-    pub(crate) fn caret_visual_row(&self) -> Option<usize> {
+    pub fn caret_visual_row(&self) -> Option<usize> {
         self.editor()?.caret_visual_row()
     }
 
-    pub(crate) fn navigation(&self) -> CodeEditorNavigation {
+    pub fn navigation(&self) -> CodeEditorNavigation {
         self.editor()
             .map_or_else(CodeEditorNavigation::default, |editor| editor.navigation())
     }
@@ -656,7 +646,7 @@ impl Component for FileEditorPane<'_> {
                         self.editor_bounds(),
                         point,
                         diagnostic,
-                        zeta_editor_host::EditorOverlayStyle::from_theme(self.palette),
+                        crate::EditorOverlayStyle::from_theme(self.palette),
                     ));
                 } else if let (Some(point), Some(hover)) =
                     (self.pointer_position, self.language_hover)
@@ -665,7 +655,7 @@ impl Component for FileEditorPane<'_> {
                         self.editor_bounds(),
                         point,
                         hover,
-                        zeta_editor_host::EditorOverlayStyle::from_theme(self.palette),
+                        crate::EditorOverlayStyle::from_theme(self.palette),
                     ));
                 }
                 if let (Some(caret), Some(completions)) =
@@ -676,7 +666,7 @@ impl Component for FileEditorPane<'_> {
                         zui::ui::Point::new(caret.origin.x, caret.bottom()),
                         completions,
                         self.completion_selection,
-                        zeta_editor_host::EditorOverlayStyle::from_theme(self.palette),
+                        crate::EditorOverlayStyle::from_theme(self.palette),
                     ));
                 }
             },
@@ -699,5 +689,5 @@ fn input_state(
 }
 
 #[cfg(test)]
-#[path = "file_editor_pane_tests.rs"]
+#[path = "pane_tests.rs"]
 mod tests;

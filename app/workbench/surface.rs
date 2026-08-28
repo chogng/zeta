@@ -1,6 +1,6 @@
 /// Product surface currently projected into the central workspace.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub(crate) enum WorkspaceSurfaceKind {
+pub enum WorkspaceSurfaceKind {
     #[default]
     Agent,
     Editor,
@@ -9,7 +9,7 @@ pub(crate) enum WorkspaceSurfaceKind {
 
 /// Central workspace selection with a reversible terminal overlay transition.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct WorkspaceSurface {
+pub struct WorkspaceSurface {
     active: WorkspaceSurfaceKind,
     terminal_return: WorkspaceSurfaceKind,
 }
@@ -24,29 +24,29 @@ impl Default for WorkspaceSurface {
 }
 
 impl WorkspaceSurface {
-    pub(crate) const fn active(self) -> WorkspaceSurfaceKind {
+    pub const fn active(self) -> WorkspaceSurfaceKind {
         self.active
     }
 
-    pub(crate) const fn is_editor(self) -> bool {
+    pub const fn is_editor(self) -> bool {
         matches!(self.active, WorkspaceSurfaceKind::Editor)
     }
 
-    pub(crate) const fn is_terminal(self) -> bool {
+    pub const fn is_terminal(self) -> bool {
         matches!(self.active, WorkspaceSurfaceKind::Terminal)
     }
 
-    pub(crate) fn show_agent(&mut self) {
+    pub fn show_agent(&mut self) {
         self.active = WorkspaceSurfaceKind::Agent;
         self.terminal_return = WorkspaceSurfaceKind::Agent;
     }
 
-    pub(crate) fn show_editor(&mut self) {
+    pub fn show_editor(&mut self) {
         self.active = WorkspaceSurfaceKind::Editor;
         self.terminal_return = WorkspaceSurfaceKind::Editor;
     }
 
-    pub(crate) fn toggle_terminal(&mut self) {
+    pub fn toggle_terminal(&mut self) {
         if self.is_terminal() {
             self.active = self.terminal_return;
         } else {
@@ -57,5 +57,5 @@ impl WorkspaceSurface {
 }
 
 #[cfg(test)]
-#[path = "workspace_surface_tests.rs"]
+#[path = "surface_tests.rs"]
 mod tests;

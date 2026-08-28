@@ -304,7 +304,7 @@ impl ProductApp {
                 self.show_agent_pane();
                 self.workbench.expand_inspector();
                 self.workspace_surface.show_editor();
-                self.pending_focus = Some(crate::shell_interaction::FILE_EDITOR_DOCUMENT);
+                self.pending_focus = Some(zeta_editor_host::FILE_EDITOR_DOCUMENT);
                 self.rebuild_presentation();
                 self.request_redraw();
             }
@@ -340,7 +340,7 @@ impl ProductApp {
                 self.show_agent_pane();
                 self.workbench.expand_inspector();
                 self.workspace_surface.show_editor();
-                self.pending_focus = Some(crate::shell_interaction::FILE_EDITOR_DOCUMENT);
+                self.pending_focus = Some(zeta_editor_host::FILE_EDITOR_DOCUMENT);
                 self.rebuild_presentation();
                 self.request_redraw();
             }

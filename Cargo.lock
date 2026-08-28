@@ -11936,6 +11936,7 @@ dependencies = [
 name = "zeta-scm"
 version = "0.1.0"
 dependencies = [
+ "zeta-app-server-protocol",
  "zeta-diff",
  "zeta-editor",
  "zeta-ui-components",
@@ -12156,7 +12157,8 @@ dependencies = [
  "zeta-protocol",
  "zeta-terminal",
  "zeta-ui-components",
- "zeta-workbench",
+ "zeta-ui-theme",
+ "zeta-workbench-model",
  "zui",
 ]
 
@@ -12401,14 +12403,33 @@ name = "zeta-workbench"
 version = "0.1.0"
 dependencies = [
  "zeta-commands",
+ "zeta-diff",
+ "zeta-editor",
+ "zeta-editor-host",
  "zeta-files",
  "zeta-icons",
  "zeta-keybinding",
+ "zeta-keybindings-host",
+ "zeta-lsp-manager",
  "zeta-protocol",
+ "zeta-scm",
  "zeta-session",
+ "zeta-settings",
+ "zeta-terminal",
+ "zeta-terminal-workspace",
+ "zeta-text-file",
+ "zeta-theme",
  "zeta-ui-components",
  "zeta-ui-theme",
+ "zeta-workbench-model",
  "zui",
+]
+
+[[package]]
+name = "zeta-workbench-model"
+version = "0.1.0"
+dependencies = [
+ "zeta-protocol",
 ]
 
 [[package]]
