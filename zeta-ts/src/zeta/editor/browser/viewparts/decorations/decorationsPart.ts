@@ -6,7 +6,7 @@ import { createStanzaDiagnosticOverviewMarkers } from "../overviewRuler/diagnost
 import { type DiffOverviewMarker } from "../overviewRuler/diffOverviewMarkers.js";
 import { createStanzaDiffOverviewMarkers } from "../overviewRuler/diffOverviewMarkers.js";
 import { type DecorationSource, type ResolvedDecoration } from "../decorations/decorationPresentation.js";
-import { type ViewportOverlayContext } from "../viewportOverlay/viewportOverlayPresentation.js";
+import { type EditorOverlayContext } from "../../view/renderingContext.js";
 import { projectStanzaDecorationOverlays } from "./decorationProjection.js";
 import { DecorationLineIndex } from "./decorationLineIndex.js";
 import { DynamicViewOverlay } from "../../view/dynamicViewOverlay.js";
@@ -60,7 +60,7 @@ export class DecorationsPart extends DynamicViewOverlay {
 		projectStanzaDecorationOverlays(overlay, this.resolveVisibleDecorations(overlay), this.rows.render(context));
 	}
 
-	public visibleDecorations(context: ViewportOverlayContext): readonly ResolvedDecoration[] {
+	public visibleDecorations(context: EditorOverlayContext): readonly ResolvedDecoration[] {
 		return this.resolveVisibleDecorations(context);
 	}
 
@@ -83,7 +83,7 @@ export class DecorationsPart extends DynamicViewOverlay {
 		this.markerRevision += 1;
 	}
 
-	private resolveVisibleDecorations(context: ViewportOverlayContext): readonly ResolvedDecoration[] {
+	private resolveVisibleDecorations(context: EditorOverlayContext): readonly ResolvedDecoration[] {
 		const renderLines = context.renderLines;
 		let minimumLogicalLineIndex = Number.POSITIVE_INFINITY;
 		let maximumLogicalLineIndex = -1;

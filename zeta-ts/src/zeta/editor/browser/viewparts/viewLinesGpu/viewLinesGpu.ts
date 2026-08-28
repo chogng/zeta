@@ -8,6 +8,7 @@ import { type TextModel } from '../../../common/model/textModel.js';
 import { type BracketColorizationSource, type SemanticTokenSource } from '../semanticTokens/semanticTokenPresentation.js';
 import { type ViewLine } from '../viewLines/viewLine.js';
 import { type ViewLineOptions } from '../viewLines/viewLineOptions.js';
+import { type ViewLines } from '../viewLines/viewLines.js';
 import { BindingId, type GpuRenderFrame, type IGpuRenderStrategy } from '../../gpu/gpu.js';
 import { FullFileRenderStrategy } from '../../gpu/renderStrategy/fullFileRenderStrategy.js';
 import { ViewportRenderStrategy } from '../../gpu/renderStrategy/viewportRenderStrategy.js';
@@ -20,6 +21,7 @@ export interface ViewLinesGpuOptions {
 	readonly bracketColorizationSource: BracketColorizationSource | undefined;
 	readonly paddingTop: number;
 	readonly viewLineOptions: ViewLineOptions;
+	readonly viewLines: ViewLines;
 }
 
 interface PreparedGpuFrame {
@@ -80,12 +82,12 @@ export class ViewLinesGpu extends Disposable {
 		this.context.layout(layout.viewportSize.width, layout.viewportSize.height, layout.scrollPosition.left, layout.scrollPosition.top);
 		const overlay = context.overlay;
 		if (this.context.status !== 'ready' || this.isForcedColors() || !overlay || !this.isRenderingContextCurrent(context, overlay.visualLineProjection)) {
-			this.showDomText(overlay?.renderedLines);
+			this.showDomText();
 			this.context.hideCanvas();
 			return;
 		}
 		const visualLines = overlay.visualLineProjection;
-		this.validateRenderedLines(visualLines, overlay.renderedLines);
+		this.validateRenderedLines(visualLines, this.options.viewLines.renderedLines);
 		this.ensureResources(visualLines);
 		const prepared = this.createFrame(context, visualLines);
 		this.uploadAtlas();
@@ -179,7 +181,7 @@ export class ViewLinesGpu extends Disposable {
 		if (!overlay) throw new Error('WebGPU frame requires a version-bound overlay snapshot');
 		const rootStyle = this.context.canvas.ownerDocument.defaultView!.getComputedStyle(this.options.host);
 		this.ensureRenderStrategy(visualLines);
-		const renderedLines = new Map(overlay.renderedLines);
+		const renderedLines = new Map(this.options.viewLines.renderedLines);
 		const frame = this.renderStrategy.value!.update({
 			layout: context.layout,
 			model: this.options.model,
@@ -258,8 +260,8 @@ export class ViewLinesGpu extends Disposable {
 		for (const [visualLineIndex, line] of renderedLines) line.domNode.domNode.classList.toggle('gpu-rendered', gpuLineIndexes.has(visualLineIndex));
 	}
 
-	private showDomText(renderedLines = this.lastRenderingContext?.overlay?.renderedLines): void {
-		for (const line of renderedLines?.values() ?? []) line.domNode.domNode.classList.remove('gpu-rendered');
+	private showDomText(): void {
+		for (const line of this.options.viewLines.renderedLines.values()) line.domNode.domNode.classList.remove('gpu-rendered');
 	}
 
 	private isForcedColors(): boolean {

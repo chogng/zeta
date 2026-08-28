@@ -1,7 +1,7 @@
 import { type ResolvedDecoration } from "../decorations/decorationPresentation.js";
 import { type EditorVisualLineProjection } from "../../../common/viewModel/modelLineProjection.js";
 import { type EditorViewportLayout } from "../../../common/viewLayout/viewLayout.js";
-import { type ViewportOverlayContext } from "../viewportOverlay/viewportOverlayPresentation.js";
+import { type EditorOverlayContext } from "../../view/renderingContext.js";
 
 export interface BlockDecorationGeometry {
 	readonly top: number;
@@ -13,7 +13,7 @@ export interface BlockDecorationGeometry {
 
 /** Resolves one block decoration into content-coordinate geometry. */
 export function resolveStanzaBlockDecorationGeometry(
-	context: ViewportOverlayContext,
+	context: EditorOverlayContext,
 	layout: EditorViewportLayout,
 	decoration: ResolvedDecoration,
 ): BlockDecorationGeometry | undefined {

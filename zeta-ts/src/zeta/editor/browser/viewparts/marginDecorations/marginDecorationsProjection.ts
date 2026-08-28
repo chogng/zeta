@@ -1,5 +1,5 @@
 import { type ResolvedDecoration, DecorationPresentation } from "../decorations/decorationPresentation.js";
-import { type ViewportOverlayContext } from "../viewportOverlay/viewportOverlayPresentation.js";
+import { type EditorOverlayContext } from "../../view/renderingContext.js";
 
 const DIAGNOSTIC_PRESENTATION_PRIORITY = new Map<ResolvedDecoration["presentation"], number>([
 	[DecorationPresentation.ErrorUnderline, 4],
@@ -10,7 +10,7 @@ const DIAGNOSTIC_PRESENTATION_PRIORITY = new Map<ResolvedDecoration["presentatio
 
 /** Projects the highest-severity diagnostic marker for each visible logical line. */
 export function projectStanzaDiagnosticMarginDecorations(
-	context: ViewportOverlayContext,
+	context: EditorOverlayContext,
 	decorations: readonly ResolvedDecoration[],
 	rows: ReadonlyMap<number, HTMLElement>,
 ): void {

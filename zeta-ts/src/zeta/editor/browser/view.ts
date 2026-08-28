@@ -31,7 +31,6 @@ import { DomTextMeasurer, type TextMeasurer } from './config/fontMeasurements.js
 import { LineWidthIndex } from './measurement/lineWidthIndex.js';
 import { type DecorationSource } from './viewparts/decorations/decorationPresentation.js';
 import { type BracketColorizationSource, type SemanticTokenSource } from './viewparts/semanticTokens/semanticTokenPresentation.js';
-import { type ActiveLineHighlight, type ViewportOverlayContext } from './viewparts/viewportOverlay/viewportOverlayPresentation.js';
 import { getTextGraphemeBoundaries } from '../common/core/textSegmentation.js';
 import { MarginPart } from './viewparts/margin/marginPart.js';
 import { GlyphMarginPart, resolveGlyphMarginLanes } from './viewparts/glyphMargin/glyphMarginPart.js';
@@ -47,7 +46,7 @@ import { ViewLines } from './viewparts/viewLines/viewLines.js';
 import { ViewLineOptions, ViewLineTextDirection as EditorTextDirection } from './viewparts/viewLines/viewLineOptions.js';
 import { ViewLinesGpu } from './viewparts/viewLinesGpu/viewLinesGpu.js';
 import { linesDecorationsWidth } from './viewparts/linesDecorations/linesDecorationsPart.js';
-import { createEditorRenderingContext, createEditorViewportData, type EditorRenderingContext } from './view/renderingContext.js';
+import { createEditorRenderingContext, createEditorViewportData, type ActiveLineHighlight, type EditorOverlayContext, type EditorRenderingContext } from './view/renderingContext.js';
 import { ViewUserInputEvents } from './view/viewUserInputEvents.js';
 import { DOMLineBreaksComputer } from './view/domLineBreaksComputer.js';
 import './media/editorViewport.css';
@@ -567,6 +566,7 @@ export class View extends Disposable {
 			semanticTokenSource: options.semanticTokenSource,
 			bracketColorizationSource: options.bracketColorizationSource,
 			viewLineOptions: this.viewLineOptions,
+			typicalHalfwidthCharacterWidth: Math.max(1, this.textMeasurer.measureLineWidth(' ')),
 		}));
 		this.viewLinesGpu = this.viewLineOptions.useGpu
 			? this._register(new ViewLinesGpu({
@@ -576,6 +576,7 @@ export class View extends Disposable {
 				bracketColorizationSource: options.bracketColorizationSource,
 				paddingTop: this.padding.top,
 				viewLineOptions: this.viewLineOptions,
+				viewLines: this.viewLines,
 			}))
 			: undefined;
 		const decorationSources = Object.freeze([...(options.decorationSources ?? [])]);
@@ -1088,16 +1089,21 @@ export class View extends Disposable {
 	}
 
 	private createRenderingContext(layout: EditorViewportLayout, viewportData = createEditorViewportData(layout)): EditorRenderingContext {
-		const overlay: ViewportOverlayContext = {
+		const useDomTextGeometry = this.viewLineOptions.textDirection !== EditorTextDirection.LeftToRight;
+		const overlay: EditorOverlayContext = {
 			ownerDocument: this.element.ownerDocument,
 			model: this.model,
 			visualLineProjection: this.visualProjection,
-			renderedLines: this.viewLines.renderedLines,
 			renderLines: layout.renderLines,
 			textLeft: this.textLeft,
 			textMeasurer: this.textMeasurer,
-			useDomTextGeometry: this.viewLineOptions.textDirection !== EditorTextDirection.LeftToRight,
 			activeLineHighlight: this.activeLineHighlight,
+			linesVisibleRangesForRange: (range, includeNewLines) => useDomTextGeometry
+				? this.viewLines.linesVisibleRangesForRange(range, includeNewLines)
+				: undefined,
+			visibleRangeForPosition: position => useDomTextGeometry
+				? this.viewLines.visibleRangeForPosition(position)
+				: undefined,
 		};
 		return createEditorRenderingContext(layout, overlay, viewportData);
 	}

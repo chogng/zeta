@@ -1,13 +1,13 @@
 import { h, reset } from "../../../../base/browser/dom.js";
 import { type TextRange } from "../../../common/core/text.js";
 import { createStanzaVisualRangeRectangles } from "../../../common/viewModel/visualRangeGeometry.js";
-import { createStanzaDomRangeRectangles, type ViewportOverlayContext } from "../viewportOverlay/viewportOverlayPresentation.js";
+import { type EditorOverlayContext } from "../../view/renderingContext.js";
 
 /** Projects the current IME range into the reusable row composition layers. */
-export function projectStanzaCompositionOverlay(context: ViewportOverlayContext, range: TextRange | undefined, rows: ReadonlyMap<number, HTMLElement>): void {
+export function projectStanzaCompositionOverlay(context: EditorOverlayContext, range: TextRange | undefined, rows: ReadonlyMap<number, HTMLElement>): void {
 	for (const row of rows.values()) reset(row);
 	if (!range) return;
-	const domRectangles = context.useDomTextGeometry ? createStanzaDomRangeRectangles(context, range) : undefined;
+	const domRectangles = context.linesVisibleRangesForRange(range, false);
 	const rectangles = domRectangles ?? createStanzaVisualRangeRectangles(context.model, [{ range, value: undefined }], context.visualLineProjection, context.renderLines, context.textLeft, context.textMeasurer);
 	const ownerDocument = context.ownerDocument;
 	for (const rectangle of rectangles) {

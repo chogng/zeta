@@ -2,7 +2,7 @@ import { h } from "../../../../base/browser/dom.js";
 import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { DomReadingContext } from './domReadingContext.js';
 import { RangeUtil } from './rangeUtil.js';
-import { type ViewLineOptions } from './viewLineOptions.js';
+import { ViewLineTextDirection, type ViewLineOptions } from './viewLineOptions.js';
 import { DomPosition, type CharacterMapping } from '../../../common/viewLayout/viewLineRenderer.js';
 import { type FloatHorizontalRange } from '../../view/renderingContext.js';
 import { projectStanzaSemanticTokenLine, type BracketColorizationSpan, type ResolvedSemanticToken } from '../semanticTokens/semanticTokenPresentation.js';
@@ -67,6 +67,12 @@ export class ViewLine {
 
 	public getCaretLeft(offset: number): number | undefined {
 		return this.getHorizontalRanges(offset, offset)?.[0]?.left;
+	}
+
+	public isRightToLeft(): boolean {
+		if (this.options.textDirection === ViewLineTextDirection.RightToLeft) return true;
+		if (this.options.textDirection === ViewLineTextDirection.LeftToRight) return false;
+		return this.textElement.ownerDocument.defaultView?.getComputedStyle(this.textElement).direction === 'rtl';
 	}
 
 	public getOffsetAtClientPoint(clientX: number, clientY: number): number | undefined {

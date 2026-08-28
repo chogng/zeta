@@ -1,12 +1,12 @@
 import { h, reset } from "../../../../base/browser/dom.js";
 import { appendIcon } from "../../../../base/browser/ui/icon/icon.js";
 import { type ResolvedDecoration } from "../decorations/decorationPresentation.js";
-import { type ViewportOverlayContext } from "../viewportOverlay/viewportOverlayPresentation.js";
+import { type EditorOverlayContext } from "../../view/renderingContext.js";
 import { type LinesDecorationLaneLayout } from "./linesDecorationsPart.js";
 
 /** Projects line-side decoration classes into the currently rendered rows. */
 export function projectStanzaLinesDecorations(
-	context: ViewportOverlayContext,
+	context: EditorOverlayContext,
 	decorations: readonly ResolvedDecoration[],
 	lanes: ReadonlyMap<string, LinesDecorationLaneLayout>,
 	scrollLeft: number,

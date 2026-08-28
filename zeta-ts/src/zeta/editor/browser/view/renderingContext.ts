@@ -1,6 +1,35 @@
+import { type TextPosition, type TextRange } from '../../common/core/text.js';
+import { type TextModel } from '../../common/model/textModel.js';
+import { type EditorVisualLineProjection } from '../../common/viewModel/modelLineProjection.js';
+import { type TextMeasurer } from '../../common/viewModel/textMeasurer.js';
 import { type EditorViewportLayout } from '../../common/viewLayout/viewLayout.js';
 import { ViewportData } from '../../common/viewLayout/viewLinesViewportData.js';
-import { type ViewportOverlayContext } from '../viewparts/viewportOverlay/viewportOverlayPresentation.js';
+
+/** Selects whether selection projection marks the cursor's logical line as active. */
+export type ActiveLineHighlight = 'on' | 'off';
+
+export interface EditorLineVisibleRange {
+	readonly visualLineIndex: number;
+	readonly left: number;
+	readonly width: number;
+}
+
+export interface EditorVisiblePosition {
+	readonly visualLineIndex: number;
+	readonly left: number;
+}
+
+export interface EditorOverlayContext {
+	readonly ownerDocument: Document;
+	readonly model: TextModel;
+	readonly visualLineProjection: EditorVisualLineProjection;
+	readonly renderLines: EditorViewportLayout['renderLines'];
+	readonly textLeft: number;
+	readonly textMeasurer: TextMeasurer;
+	readonly activeLineHighlight: ActiveLineHighlight;
+	linesVisibleRangesForRange(range: TextRange, includeNewLines: boolean): readonly EditorLineVisibleRange[] | undefined;
+	visibleRangeForPosition(position: TextPosition): EditorVisiblePosition | undefined;
+}
 
 /**
  * Immutable state shared by every Part during one synchronous render pass.
@@ -12,7 +41,7 @@ import { type ViewportOverlayContext } from '../viewparts/viewportOverlay/viewpo
 export interface EditorRenderingContext {
 	readonly layout: EditorViewportLayout;
 	readonly viewportData: ViewportData;
-	readonly overlay: ViewportOverlayContext | undefined;
+	readonly overlay: EditorOverlayContext | undefined;
 }
 
 export class FloatHorizontalRange {
@@ -27,7 +56,7 @@ export class FloatHorizontalRange {
 }
 
 /** Creates the version-bound context used by one render pass. */
-export function createEditorRenderingContext(layout: EditorViewportLayout, overlay: ViewportOverlayContext, viewportData = createEditorViewportData(layout)): EditorRenderingContext {
+export function createEditorRenderingContext(layout: EditorViewportLayout, overlay: EditorOverlayContext, viewportData = createEditorViewportData(layout)): EditorRenderingContext {
 	return Object.freeze({
 		layout,
 		viewportData,

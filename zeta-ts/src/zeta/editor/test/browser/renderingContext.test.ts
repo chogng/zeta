@@ -2,8 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { type EditorViewportLayout } from '../../common/viewLayout/viewLayout.js';
 import { type ViewportData } from '../../common/viewLayout/viewLinesViewportData.js';
-import { type ViewportOverlayContext } from '../../browser/viewparts/viewportOverlay/viewportOverlayPresentation.js';
-import { createEditorRenderingContext, type EditorRenderingContext } from '../../browser/view/renderingContext.js';
+import { createEditorRenderingContext, type EditorOverlayContext, type EditorRenderingContext } from '../../browser/view/renderingContext.js';
 import { EditorViewContext, EditorViewPart, EditorViewPartCollection } from '../../browser/view/viewPart.js';
 
 test('EditorViewPartCollection prepares every part before rendering with one context', () => {
@@ -68,11 +67,11 @@ test('createEditorRenderingContext omits stale overlay geometry', () => {
 	const matchingOverlay = {
 		model: { version: 4 },
 		visualLineProjection: { modelVersion: 4 },
-	} as unknown as ViewportOverlayContext;
+	} as unknown as EditorOverlayContext;
 	const staleOverlay = {
 		model: { version: 5 },
 		visualLineProjection: { modelVersion: 4 },
-	} as unknown as ViewportOverlayContext;
+	} as unknown as EditorOverlayContext;
 	const staleLayout = { modelVersion: 3 } as EditorViewportLayout;
 
 	const current = createEditorRenderingContext(layout, matchingOverlay, viewportData);

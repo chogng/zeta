@@ -179,6 +179,59 @@ test("EditorViewport uses browser range geometry for RTL selections and carets",
 	dom.window.close();
 });
 
+test("EditorViewport selection geometry includes selected newlines on empty lines", () => {
+	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	const container = requiredElement(dom.window.document, "main");
+	const createRange = dom.window.document.createRange.bind(dom.window.document);
+	Object.defineProperty(dom.window.document, "createRange", {
+		configurable: true,
+		value: () => {
+			const range = createRange();
+			Object.defineProperty(range, "getClientRects", {
+				configurable: true,
+				value: () => range.collapsed
+					? [testRectangle(130, 0, 0)]
+					: [testRectangle(130, 0, 50)],
+			});
+			return range;
+		},
+	});
+	using model = new TextModel("alpha\n\nomega");
+	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using viewport = new EditorViewport({
+		container,
+		model,
+		lineHeight: 20,
+		textMeasurer: fixedTextMeasurer(10, 24),
+		selectionController: selections,
+	});
+	viewport.layout({ width: 300, height: 60 });
+	for (const line of lineElements(viewport.element)) {
+		Object.defineProperty(line, "getBoundingClientRect", {
+			configurable: true,
+			value: () => testRectangle(100, 0, 300),
+		});
+	}
+	const emptyLineSpan = lineText(requiredLine(viewport.element, 1)).firstElementChild;
+	assert.ok(emptyLineSpan);
+	Object.defineProperty(emptyLineSpan, "getClientRects", {
+		configurable: true,
+		value: () => [testRectangle(130, 0, 0)],
+	});
+
+	selections.setSelections(TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 0), TextPosition.at(2, 0))));
+
+	assert.deepEqual([...viewport.element.querySelectorAll<HTMLElement>(".stanza-editor-selection")].map(element => ({
+		lineIndex: element.parentElement?.dataset.lineIndex,
+		left: element.style.left,
+		width: element.style.width,
+	})), [
+		{ lineIndex: "0", left: "30px", width: "60px" },
+		{ lineIndex: "1", left: "30px", width: "10px" },
+	]);
+	dom.window.close();
+});
+
 test("EditorViewport resolves RTL pointer hits from the browser caret position", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
