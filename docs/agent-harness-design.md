@@ -98,7 +98,7 @@ loop:
 | --- | --- | --- | --- |
 | 身份与策略 | 身份、指令优先级、注入防护、工作行为 | 随产品版本 | `zeta-prompts` `SYSTEM_PROMPT`（已存在） |
 | 工具指导 + 输出风格 | 工具组合惯例、验证纪律、简洁度、路径引用格式 | 随 tool profile | `zeta-prompts` 新模板；正文已写好，见 [`agent-tools-spec.md` 附录 A](agent-tools-spec.md#附录-a系统提示词扩写正文) |
-| 环境快照 | 见 §4.2 | Thread 首 Turn 冻结；压缩边界刷新 | host 提供 `AgentEnvironmentSnapshot`，Core 渲染 |
+| 环境快照 | 见 §4.2 | 静态字段在 Workspace 启动时冻结；workspace roots 在每次模型调用时读取 | `zeta-agent-environment` 定义值和渲染，App Server 采集，Core 放在请求尾部 |
 | 工作区指令 | Global `.zeta/instructions` | model invocation 内冻结；文件变化影响后续调用 | `input[0]` 独立 message |
 
 外部产品如何组织项目指令只是参照系；Zeta 的原生 artifact、目录和加载策略由
@@ -108,24 +108,35 @@ loop:
 ### 4.2 环境快照：精确字段
 
 ```text
-<environment>
-working_directory: /abs/path
-is_git_repo: true
-platform: darwin | linux | windows
-os_version: <uname/ver 摘要>
-shell: zsh
-today: 2026-08-03            ← 天级，不含时间
-git_branch: main
-git_main_branch: main
-git_status: <porcelain 摘要，最多 40 行，超出标注截断>
-git_recent_commits: <最近 5 条 oneline>
-</environment>
-This snapshot was taken at session start and does not update. Run commands
-(e.g. `git status`) when you need current state.
+<environment_context>
+  <cwd>/abs/path</cwd>
+  <is_git_repo>true</is_git_repo>
+  <platform>darwin | linux | windows</platform>
+  <os_version>uname/ver 摘要</os_version>
+  <shell>zsh</shell>
+  <current_date>2026-08-03</current_date>
+  <git_branch>main</git_branch>
+  <git_main_branch>main</git_main_branch>
+  <git_status>porcelain 摘要，最多 40 行，超出标注截断</git_status>
+  <git_recent_commits>最近 5 条 oneline</git_recent_commits>
+  <filesystem>
+    <workspace_roots>
+      <root>/abs/path</root>
+      <root>/通过 add-dir 授权的目录</root>
+    </workspace_roots>
+  </filesystem>
+</environment_context>
 ```
 
-冻结纪律：Thread 首 Turn 采集一次写死；压缩重建窗口是唯一例行刷新点；需要新鲜状态时模型
-自己调工具。**不逐 Turn 刷新**——那会击穿全部缓存。
+冻结纪律：git、platform、shell 等字段在 Workspace 启动时采集一次；需要新鲜状态时模型自己调工具。
+`workspace_roots` 来自当前 Session 的运行时授权，每次模型调用读取一次。Core 把完整快照作为最后一条
+user-role context 放在 durable Thread history 之后，因此目录变化只改请求尾部，不改 system instructions，
+也不制造持久用户消息。
+
+职责边界：`zeta-agent-environment` 只拥有不可变值、根目录不变量和确定性渲染；App Server 的
+`workspace_environment` 执行平台与 Git 采集，`session_workspace_roots` 保存每个 Session 的已授权附加根；
+Core 的 `HarnessContextProvider` 在每次模型调用边界冻结两者，并由 Context Planner 负责预算与位置。
+环境 crate 不执行命令、不保存 Session、不签发权限，也不参与工具路径判定。
 
 ### 4.3 Workspace Instruction 发现与注入
 
@@ -137,7 +148,7 @@ This snapshot was taken at session start and does not update. Run commands
 - `load: contextual` / `on-demand`：catalog 已保留类型化策略，但资源匹配和显式选择尚未实现；
 - 目录不存在或没有合法 Global 条目：省略 `input[0]`，不放占位符；
 - 文件变化：Workspace watcher 触发 catalog refresh；已经组装的 model request 不变，后续
-  model invocation 从 `HarnessInstructionsProvider` 读取新 snapshot。
+  model invocation 从 `HarnessContextProvider` 读取新 snapshot。
 
 ### 4.4 动态注入：append-only reminder
 

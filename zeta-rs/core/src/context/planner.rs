@@ -75,7 +75,8 @@ impl ContextPlanner {
                     input.current_turn_id()
                 )));
             }
-        };
+        }
+        .saturating_add(estimate_environment(input.environment()));
         let history_groups = groups
             .iter()
             .filter(|group| &group.turn_id != input.current_turn_id())
@@ -111,6 +112,7 @@ impl ContextPlanner {
                         source_thread_sequence: input.source_thread_sequence(),
                         current_turn_id: input.current_turn_id().clone(),
                         instructions,
+                        environment: input.environment().to_owned(),
                         omitted_instructions: Vec::new(),
                         checkpoint,
                         selected_items,
@@ -275,6 +277,7 @@ impl ContextPlanner {
                 source_thread_sequence: input.source_thread_sequence(),
                 current_turn_id: input.current_turn_id().clone(),
                 instructions: selected_instructions,
+                environment: input.environment().to_owned(),
                 omitted_instructions,
                 checkpoint,
                 selected_items,
@@ -759,6 +762,14 @@ fn estimate_instructions(instructions: &[InstructionFragment]) -> ContextTokenCo
 
 fn estimate_instruction(fragment: &InstructionFragment) -> ContextTokenCount {
     estimate_bytes(fragment.body().len(), TEXT_ITEM_OVERHEAD)
+}
+
+fn estimate_environment(environment: &str) -> ContextTokenCount {
+    if environment.trim().is_empty() {
+        ContextTokenCount::ZERO
+    } else {
+        estimate_bytes(environment.len(), TEXT_ITEM_OVERHEAD)
+    }
 }
 
 fn estimate_evidence(evidence: &[crate::ContextEvidence]) -> ContextTokenCount {

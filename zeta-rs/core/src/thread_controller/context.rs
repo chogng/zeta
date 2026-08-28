@@ -247,7 +247,8 @@ impl ThreadController {
                 Some(model) => FrozenModelSelection::Selected(model.clone()),
                 None => FrozenModelSelection::ConfiguredDefault,
             };
-            let mut instruction_fragments = request.instructions.context_fragments();
+            let mut instruction_fragments =
+                request.harness_context.instructions().context_fragments();
             if let Some(goal) = loaded
                 .snapshot
                 .goal
@@ -286,14 +287,17 @@ impl ThreadController {
                     .collect::<Result<Vec<_>, _>>()?,
             );
             let tools = crate::multi_agent::scope_agent_tools(&loaded.snapshot, request.tools);
-            let input = ContextInput::new(
+            let mut input = ContextInput::new(
                 &loaded.snapshot,
                 request.turn_id.clone(),
                 instruction_fragments,
                 tools,
                 request.budget,
-            )
-            .with_evidence(request.evidence);
+            );
+            if let Some(environment) = request.harness_context.environment() {
+                input = input.with_rendered_environment(environment.render());
+            }
+            input = input.with_evidence(request.evidence);
             match loaded
                 .context
                 .prepare(&input)

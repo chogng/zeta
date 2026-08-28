@@ -20,6 +20,7 @@ mod product_services;
 mod resource_store;
 mod review;
 mod server;
+mod session_workspace_roots;
 mod terminal_command_status;
 mod terminal_environment;
 mod terminal_profiles;

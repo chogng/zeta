@@ -51,9 +51,6 @@ pub(crate) enum AppCommand {
     ResumeSession {
         session_id: String,
     },
-    SwitchThread {
-        thread_id: ThreadId,
-    },
     ArchiveThread {
         thread_id: ThreadId,
     },

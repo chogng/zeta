@@ -11,7 +11,6 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -86,101 +85,8 @@ use zeta_skills_extension::SkillConfigSnapshotProvider;
 use zeta_workspace::WorkspaceRoot;
 use zeta_workspace::WorkspaceTrustDecision;
 
-const MAX_GIT_STATUS_LINES: usize = 40;
 const DEFAULT_MODEL_OUTPUT_RESERVATION_TOKENS: u32 = 4_096;
 const MODEL_CONTEXT_SAFETY_MARGIN_TOKENS: u32 = 1_024;
-
-pub(crate) fn render_environment(workspace_root: &Path) -> String {
-    let is_git_repo = command_output(
-        workspace_root,
-        "git",
-        &["rev-parse", "--is-inside-work-tree"],
-    )
-    .is_some_and(|output| output.trim() == "true");
-    let branch = if is_git_repo {
-        command_output(workspace_root, "git", &["branch", "--show-current"])
-            .filter(|value| !value.trim().is_empty())
-    } else {
-        None
-    };
-    let main_branch = if is_git_repo {
-        command_output(
-            workspace_root,
-            "git",
-            &["symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
-        )
-        .map(|value| value.trim_start_matches("origin/").trim().to_owned())
-        .filter(|value| !value.is_empty())
-        .or_else(|| branch.clone())
-    } else {
-        None
-    };
-    let status = if is_git_repo {
-        command_output(workspace_root, "git", &["status", "--porcelain"])
-            .map(|value| truncate_lines(&value, MAX_GIT_STATUS_LINES))
-    } else {
-        None
-    };
-    let commits = if is_git_repo {
-        command_output(workspace_root, "git", &["log", "--oneline", "-5"])
-    } else {
-        None
-    };
-    format!(
-        "<environment>\nworking_directory: {}\nis_git_repo: {}\nplatform: {}\nos_version: {}\nshell: {}\ntoday: {}\ngit_branch: {}\ngit_main_branch: {}\ngit_status: {}\ngit_recent_commits: {}\n</environment>\nThis snapshot was taken at session start and does not update. Run commands\n(e.g. `git status`) when you need current state.",
-        workspace_root.display(),
-        is_git_repo,
-        platform_name(),
-        command_output(workspace_root, "uname", &["-sr"]).unwrap_or_else(|| "unknown".into()),
-        std::env::var("SHELL").unwrap_or_else(|_| "unknown".into()),
-        command_output(workspace_root, "date", &["+%Y-%m-%d"]).unwrap_or_else(|| "unknown".into()),
-        branch.unwrap_or_else(|| "(none)".into()),
-        main_branch.unwrap_or_else(|| "(none)".into()),
-        status.unwrap_or_else(|| "(none)".into()),
-        commits.unwrap_or_else(|| "(none)".into()),
-    )
-}
-
-fn truncate_lines(text: &str, maximum_lines: usize) -> String {
-    let mut lines = text.lines().take(maximum_lines).collect::<Vec<_>>();
-    if text.lines().count() > maximum_lines {
-        lines.push("[... git status truncated ...]");
-    }
-    if lines.is_empty() {
-        "(clean)".into()
-    } else {
-        lines.join("\n")
-    }
-}
-
-fn command_output(workspace_root: &Path, program: &str, arguments: &[&str]) -> Option<String> {
-    let output = if program == "git" {
-        Command::new(program)
-            .args(["-C", &workspace_root.to_string_lossy()])
-            .args(arguments)
-            .output()
-    } else {
-        Command::new(program)
-            .args(arguments)
-            .current_dir(workspace_root)
-            .output()
-    }
-    .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    Some(String::from_utf8_lossy(&output.stdout).trim().to_owned())
-}
-
-fn platform_name() -> &'static str {
-    if cfg!(target_os = "macos") {
-        "darwin"
-    } else if cfg!(target_os = "windows") {
-        "windows"
-    } else {
-        "linux"
-    }
-}
 
 /// Filesystem and runtime inputs needed to open one local App Server.
 #[derive(Clone)]

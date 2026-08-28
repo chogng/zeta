@@ -70,6 +70,6 @@ cargo clippy -p zeta-instructions --all-targets --no-deps -- -D warnings
 
 当前已实现原生 Workspace 发现、格式校验、不可变 snapshot 与 Global 内容渲染；App Server 的
 `WorkspaceCustomizations` 在 Workspace 激活时发现 catalog，由 filesystem invalidation refresh，并在
-下一次 model invocation 通过 `HarnessInstructionsProvider` 提供 Global 内容。
+下一次 model invocation 通过 `HarnessContextProvider` 提供 Global 内容。
 当前限制是 contextual pattern matching、显式 on-demand selection、user/built-in/Plugin source
 composition，以及 catalog/diagnostic list API 尚未实现。

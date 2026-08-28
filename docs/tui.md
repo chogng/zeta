@@ -638,7 +638,7 @@ TUI 不能靠检查 ToolCall 名称或 arguments JSON 自行弹窗并决定策�
 [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md#22-外部-agent-配置导入仅限-desktop)，
 Skill 来源边界见 [`skills.md`](skills.md#151-外部-agent-skill-导入仅限-desktop)。
 
-`/add-dir <path>` 是另一条 Session 级文件访问流程。TUI 只发送 typed `workspace/additionalDirectories/add`；App Server canonicalize 目录、建立仅对当前 Session 有效的授权，并让本地 `read_file`、`write_file`、`edit`、`grep` 与 `glob` 接受该目录下的绝对路径。不带参数的 `/add-dir` 打开可搜索列表，Enter 通过 typed remove RPC 撤销目录。该流程不改变主 Workspace，不扫描外部 Agent 配置，也不让附加目录贡献项目配置。
+`/add-dir <path>` 是另一条 Session 级文件访问流程。TUI 只发送 typed `workspace/additionalDirectories/add`；App Server canonicalize 目录、建立仅对当前 Session 有效的授权，并让本地 `read_file`、`write_file`、`edit`、`grep` 与 `glob` 接受该目录下的绝对路径。不带参数的 `/add-dir` 打开可搜索列表，Enter 通过 typed remove RPC 撤销目录。后续每次模型调用都从同一授权状态生成 `<filesystem><workspace_roots>`，并把完整 environment snapshot 放在请求尾部；新增目录在下一 Turn 可见，移除后下一 Turn 不再出现。该流程不写入对话历史、不改变主 Workspace 或 cwd、不扫描外部 Agent 配置，也不让附加目录贡献项目配置。
 
 Feature 之间不能依赖彼此的私有模块。跨功能结果由 `app/` 协调，交互复用通过
 `components/`，纯布局复用通过 `ui/`；只有重复已经出现且语义一致时才提取公开的小型 value

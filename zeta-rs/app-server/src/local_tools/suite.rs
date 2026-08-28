@@ -1,6 +1,6 @@
 use super::LocalShellToolService;
-use super::SessionAdditionalDirectoryAccess;
 use super::read_only_sandbox;
+use crate::session_workspace_roots::SessionWorkspaceRoots;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
@@ -95,7 +95,7 @@ pub(crate) struct LocalToolSuite<B> {
     shell: LocalShellToolService<B>,
     ripgrep: RipgrepExecutable,
     workspace: TrustedWorkspace,
-    additional_directories: Arc<SessionAdditionalDirectoryAccess>,
+    session_workspace_roots: Arc<SessionWorkspaceRoots>,
     read_paths: Mutex<BTreeSet<(String, PathBuf)>>,
     read_fingerprints: Mutex<std::collections::BTreeMap<(String, PathBuf), String>>,
     definitions: Vec<ToolDefinition>,
@@ -111,7 +111,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
     pub(super) fn new(
         shell: LocalShellToolService<B>,
         ripgrep: RipgrepExecutable,
-        additional_directories: Arc<SessionAdditionalDirectoryAccess>,
+        session_workspace_roots: Arc<SessionWorkspaceRoots>,
     ) -> Self {
         let workspace = shell.workspace.clone();
         let definitions = vec![
@@ -126,7 +126,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
             shell,
             ripgrep,
             workspace,
-            additional_directories,
+            session_workspace_roots,
             read_paths: Mutex::new(BTreeSet::new()),
             read_fingerprints: Mutex::new(std::collections::BTreeMap::new()),
             definitions,
@@ -146,8 +146,8 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         let mut roots = vec![self.workspace.root().clone()];
         if let Some(session_id) = session_id {
             roots.extend(
-                self.additional_directories
-                    .roots(session_id)
+                self.session_workspace_roots
+                    .additional_roots(session_id)
                     .into_iter()
                     .filter(|workspace| workspace.ensure_active().is_ok())
                     .map(|workspace| workspace.root().clone()),

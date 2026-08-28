@@ -585,33 +585,6 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::SwitchThread { thread_id } => {
-                        let command = format!("/thread {thread_id}");
-                        app.update(AppEvent::CommandStarted(command.clone()));
-                        if pending_request.is_none() {
-                            let mut request_client = client.clone();
-                            let mut next_conversation = conversation.clone();
-                            let next_subscription = thread_subscription.clone();
-                            pending_request = spawn_request(
-                                "zeta-tui-switch-thread",
-                                move || RequestCompletion::ConversationChanged {
-                                    command,
-                                    result: next_conversation
-                                        .switch_thread(&mut request_client, thread_id)
-                                        .map_err(|error| error.to_string())
-                                        .and_then(|change| {
-                                            finish_conversation_request(
-                                                &mut request_client,
-                                                next_conversation,
-                                                next_subscription,
-                                                change,
-                                            )
-                                        }),
-                                },
-                                &mut app,
-                            );
-                        }
-                    }
                     AppCommand::ArchiveThread { thread_id } => {
                         let command = format!("/archive-thread {thread_id}");
                         app.update(AppEvent::CommandStarted(command.clone()));

@@ -150,6 +150,12 @@ impl ContextAssembler {
                 "cannot invoke a model without durable Thread input".into(),
             ));
         }
+        if !plan.environment().trim().is_empty() {
+            input.push(InputItem::Message(Message::text(
+                MessageRole::User,
+                plan.environment().to_owned(),
+            )));
+        }
 
         let tool_choice = if plan.tools().is_empty() {
             ToolChoice::None

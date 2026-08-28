@@ -3,26 +3,27 @@ use std::sync::RwLock;
 use zeta_protocol::SessionId;
 use zeta_workspace::TrustedWorkspace;
 
-/// Publishes the exact additional roots that local file tools may use for each Session.
+/// Publishes the exact additional Workspace roots authorized for each Session.
 ///
-/// Workspace authority updates this registry only after trust and scope validation. Tool
-/// preparation reads a snapshot and still checks the root-bound lease before using it.
+/// Workspace authority updates this registry only after trust and scope validation. File tools
+/// and model-environment capture read the same snapshot, so access and model-visible roots cannot
+/// drift apart.
 #[derive(Default)]
-pub(crate) struct SessionAdditionalDirectoryAccess {
-    roots: RwLock<BTreeMap<SessionId, Vec<TrustedWorkspace>>>,
+pub(crate) struct SessionWorkspaceRoots {
+    additional_roots: RwLock<BTreeMap<SessionId, Vec<TrustedWorkspace>>>,
 }
 
-impl SessionAdditionalDirectoryAccess {
+impl SessionWorkspaceRoots {
     pub(crate) fn clear(&self) {
-        self.roots
+        self.additional_roots
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clear();
     }
 
-    pub(crate) fn replace(&self, session_id: SessionId, roots: Vec<TrustedWorkspace>) {
+    pub(crate) fn replace_additional(&self, session_id: SessionId, roots: Vec<TrustedWorkspace>) {
         let mut current = self
-            .roots
+            .additional_roots
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         if roots.is_empty() {
@@ -32,8 +33,8 @@ impl SessionAdditionalDirectoryAccess {
         }
     }
 
-    pub(crate) fn roots(&self, session_id: &SessionId) -> Vec<TrustedWorkspace> {
-        self.roots
+    pub(crate) fn additional_roots(&self, session_id: &SessionId) -> Vec<TrustedWorkspace> {
+        self.additional_roots
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .get(session_id)

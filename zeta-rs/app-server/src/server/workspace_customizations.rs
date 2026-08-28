@@ -1,5 +1,6 @@
 use super::fs_watcher::WorkspaceFileChangeSink;
-use crate::local::render_environment;
+use super::workspace_environment::WorkspaceEnvironment;
+use crate::session_workspace_roots::SessionWorkspaceRoots;
 use sha2::Digest;
 use sha2::Sha256;
 use std::path::Path;
@@ -9,8 +10,11 @@ use std::sync::RwLock;
 use zeta_agents::AgentDefinitionCatalog;
 use zeta_agents::AgentDefinitionCatalogSnapshot;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
+use zeta_core::CoreError;
+use zeta_core::HarnessContext;
+use zeta_core::HarnessContextProvider;
+use zeta_core::HarnessContextRequest;
 use zeta_core::HarnessInstructions;
-use zeta_core::HarnessInstructionsProvider;
 use zeta_instructions::InstructionCatalog;
 use zeta_instructions::InstructionCatalogSnapshot;
 use zeta_prompts::SYSTEM_PROMPT;
@@ -18,34 +22,38 @@ use zeta_prompts::SYSTEM_PROMPT;
 pub(super) struct WorkspaceCustomizations {
     system_body: String,
     system_revision: String,
-    environment: String,
+    environment: WorkspaceEnvironment,
     instructions: Mutex<InstructionCatalog>,
     agents: Mutex<AgentDefinitionCatalog>,
-    harness: RwLock<Arc<HarnessInstructions>>,
+    harness_instructions: RwLock<Arc<HarnessInstructions>>,
+    session_workspace_roots: Arc<SessionWorkspaceRoots>,
 }
 
 impl WorkspaceCustomizations {
-    pub(super) fn discover(workspace_root: impl AsRef<Path>) -> Arc<Self> {
+    pub(super) fn discover(
+        workspace_root: impl AsRef<Path>,
+        session_workspace_roots: Arc<SessionWorkspaceRoots>,
+    ) -> Result<Arc<Self>, zeta_agent_environment::AgentEnvironmentError> {
         let workspace_root = workspace_root.as_ref().to_path_buf();
         let instructions = InstructionCatalog::discover(&workspace_root);
         let agents = AgentDefinitionCatalog::discover(&workspace_root);
         let system_body = SYSTEM_PROMPT.body().to_owned();
         let system_revision = SYSTEM_PROMPT.revision().to_owned();
-        let environment = render_environment(&workspace_root);
-        let harness = Arc::new(render_harness(
+        let environment = WorkspaceEnvironment::capture(&workspace_root)?;
+        let harness_instructions = Arc::new(render_harness_instructions(
             &system_body,
             &system_revision,
-            &environment,
             instructions.snapshot().as_ref(),
         ));
-        Arc::new(Self {
+        Ok(Arc::new(Self {
             system_body,
             system_revision,
             environment,
             instructions: Mutex::new(instructions),
             agents: Mutex::new(agents),
-            harness: RwLock::new(harness),
-        })
+            harness_instructions: RwLock::new(harness_instructions),
+            session_workspace_roots,
+        }))
     }
 
     pub(super) fn instruction_snapshot(&self) -> Arc<InstructionCatalogSnapshot> {
@@ -68,16 +76,15 @@ impl WorkspaceCustomizations {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .refresh();
-        let harness = Arc::new(render_harness(
+        let harness_instructions = Arc::new(render_harness_instructions(
             &self.system_body,
             &self.system_revision,
-            &self.environment,
             snapshot.as_ref(),
         ));
         *self
-            .harness
+            .harness_instructions
             .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = harness;
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = harness_instructions;
     }
 
     fn refresh_agents(&self) {
@@ -88,14 +95,31 @@ impl WorkspaceCustomizations {
     }
 }
 
-impl HarnessInstructionsProvider for WorkspaceCustomizations {
-    fn snapshot(&self) -> Arc<HarnessInstructions> {
-        Arc::clone(
+impl HarnessContextProvider for WorkspaceCustomizations {
+    fn snapshot(
+        &self,
+        request: &HarnessContextRequest<'_>,
+    ) -> Result<Arc<HarnessContext>, CoreError> {
+        let instructions = Arc::clone(
             &self
-                .harness
+                .harness_instructions
                 .read()
                 .unwrap_or_else(std::sync::PoisonError::into_inner),
-        )
+        );
+        let roots = self
+            .session_workspace_roots
+            .additional_roots(request.session_id)
+            .into_iter()
+            .filter(|root| root.is_active())
+            .map(|root| root.root().canonical_path().to_path_buf())
+            .collect::<Vec<_>>();
+        let environment = self
+            .environment
+            .snapshot(roots)
+            .map_err(|error| CoreError::Context(error.to_string()))?;
+        Ok(Arc::new(
+            HarnessContext::new(instructions.as_ref().clone()).with_environment(environment),
+        ))
     }
 }
 
@@ -124,10 +148,9 @@ fn affects(path: &Path, customization_root: &str) -> bool {
         || Path::new(customization_root).starts_with(path)
 }
 
-fn render_harness(
+fn render_harness_instructions(
     system_body: &str,
     system_revision: &str,
-    environment: &str,
     instructions: &InstructionCatalogSnapshot,
 ) -> HarnessInstructions {
     let workspace_content = instructions.global_content();
@@ -135,9 +158,8 @@ fn render_harness(
         "workspace-instructions",
         workspace_content.as_deref().unwrap_or_default(),
     );
-    HarnessInstructions::new(system_body, environment, workspace_content)
+    HarnessInstructions::new(system_body, workspace_content)
         .with_system_revision(system_revision)
-        .with_environment_revision(content_revision("workspace-environment", environment))
         .with_workspace_revision(workspace_revision)
 }
 

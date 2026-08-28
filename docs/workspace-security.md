@@ -113,6 +113,8 @@ Rust API 不使用 `bool` 表达这些差异。当前 `zeta-add-dir` 已用
 
 `/add-dir` 本身是用户对该精确目录的会话级授权动作。App Server canonicalize 后签发 `ExplicitUserDecision` lease，但不写入 User Config；移除目录、归档 Session 或切换主 Workspace 都会 revoke lease。三个附加目录 RPC 只接受声明 `workspaceTrustHost` 的产品连接；不同 Session 的附加目录表互不可见，活动 Turn 期间拒绝 mutation。
 
+Core 在每次模型调用边界把 Session identity 交给 `HarnessContextProvider`。App Server 的 `SessionWorkspaceRoots` 据此从文件工具使用的同一授权状态取出附加根，再交给 `zeta-agent-environment` 生成强类型快照和 `<filesystem><workspace_roots>`：主 Workspace 是第一项，仍有效的附加目录随后列出，cwd 不变，相对路径仍属于主 Workspace。Core 把完整 environment snapshot 放在 durable Thread history 之后的请求尾部；它不制造持久用户消息，目录变化也不会改动 system instructions 前缀。Turn 结束后执行 `/add-dir`，下一 Turn 即可使用，移除后下一 Turn 不再出现。
+
 ## 与外部 Agent 导入的关系
 
 `zeta-agent-import` 继续拥有 Codex/Claude 的已知布局、candidate classification 和敏感路径排除。

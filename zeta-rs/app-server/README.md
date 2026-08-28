@@ -541,8 +541,8 @@ Workspace Trust management (workspaceTrustHost)
 
 Session additional-directory authority
 ├─ workspace/additionalDirectories/list → current Session roots
-├─ workspace/additionalDirectories/add → canonicalize + explicit session lease + publish file-tool access
-└─ workspace/additionalDirectories/remove → revoke exact root lease + refresh the Session scope
+├─ workspace/additionalDirectories/add → canonicalize + explicit session lease + publish file-tool and model workspace roots
+└─ workspace/additionalDirectories/remove → revoke exact root lease + refresh the Session workspace roots
 
 ConfigChange trust revocation
 ├─ revoke shared capability lease
@@ -566,7 +566,9 @@ ConfigBackedModelService
 Workspace activation
 └─ WorkspaceCustomizations::discover
    ├─ InstructionCatalog(.zeta/instructions)
-   │  └─ Global content → HarnessInstructionsProvider
+   │  └─ Global content → HarnessContextProvider
+   ├─ WorkspaceEnvironment → zeta-agent-environment snapshot
+   ├─ SessionWorkspaceRoots → current Session additional roots
    ├─ AgentDefinitionCatalog(.zeta/agents)
    └─ FileSystemWatcher invalidation → bounded catalog refresh
 

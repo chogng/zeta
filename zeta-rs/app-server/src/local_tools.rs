@@ -42,16 +42,14 @@ use zeta_shell_command::{
 use zeta_tools::{ToolPayload, to_protocol_tool_definition};
 use zeta_workspace::{TrustedWorkspace, WorkspaceCapability, WorkspaceRoot};
 
+use crate::session_workspace_roots::SessionWorkspaceRoots;
 use crate::tool_composition::ToolCompositionError;
 use crate::tool_composition::ToolPort;
 use crate::tool_executor_adapter::PreparedToolExecution;
 use crate::tool_executor_adapter::ToolExecutorReviewer;
 
-#[path = "local_tools/additional_directories.rs"]
-mod additional_directories;
 mod suite;
 
-pub(crate) use additional_directories::SessionAdditionalDirectoryAccess;
 pub(crate) use suite::LocalToolSuite;
 
 const LOCAL_GRANT_SNAPSHOT_REVISION: &str = "local-static-grants-v1";
@@ -109,7 +107,7 @@ struct LocalExecutorContribution {
 pub(crate) fn compose_local_tools_with_config(
     workspace: TrustedWorkspace,
     policy_config: &LocalExecPolicyConfig,
-    additional_directories: Arc<SessionAdditionalDirectoryAccess>,
+    session_workspace_roots: Arc<SessionWorkspaceRoots>,
 ) -> Result<LocalToolComposition, LocalToolError> {
     if workspace.capability() != WorkspaceCapability::ExecuteProcess {
         return Err(LocalToolError::trust(
@@ -162,7 +160,7 @@ pub(crate) fn compose_local_tools_with_config(
         native_sandbox(&install_context)?,
         action_policy_revision.clone(),
     )?;
-    let service = LocalToolSuite::new(shell, ripgrep.clone(), additional_directories);
+    let service = LocalToolSuite::new(shell, ripgrep.clone(), session_workspace_roots);
     Ok(LocalToolComposition {
         tools: Arc::new(service),
         policy: Arc::new(policy),

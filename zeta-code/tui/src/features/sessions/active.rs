@@ -173,45 +173,6 @@ impl ActiveConversation {
         }
     }
 
-    pub(crate) fn switch_thread<T>(
-        &mut self,
-        client: &mut AppServerClient<T>,
-        thread_id: ThreadId,
-    ) -> Result<ConversationChange, SessionsError>
-    where
-        T: JsonRpcTransport,
-    {
-        let session = client
-            .read_session(SessionReadParams {
-                session_id: self.session.session_id.clone(),
-            })?
-            .session;
-        if !session
-            .threads
-            .iter()
-            .any(|thread| thread.thread_id == thread_id)
-        {
-            return Err(SessionsError(format!(
-                "thread {thread_id} does not belong to session {}",
-                session.session_id
-            )));
-        }
-        let snapshot = client
-            .read_session_thread(SessionThreadReadParams {
-                session_id: session.session_id.clone(),
-                thread_id: thread_id.clone(),
-                history: None,
-            })?
-            .thread;
-        self.session = session;
-        self.thread_id = thread_id;
-        self.thread_sequence = snapshot.sequence;
-        Ok(ConversationChange {
-            notice: format!("Opened thread {}.", self.thread_id),
-            transcript: ConversationTranscript::Replace,
-        })
-    }
-
     pub(crate) fn archive_thread<T>(
         &mut self,
         client: &mut AppServerClient<T>,

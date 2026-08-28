@@ -42,9 +42,9 @@ fn additional_root_resolution_is_bound_to_the_exact_session_and_lease() {
     let primary_workspace = primary_authorization
         .require(WorkspaceCapability::ExecuteProcess)
         .unwrap();
-    let access = Arc::new(SessionAdditionalDirectoryAccess::default());
+    let access = Arc::new(crate::session_workspace_roots::SessionWorkspaceRoots::default());
     let session_id = SessionId::new("session-with-extra").unwrap();
-    access.replace(
+    access.replace_additional(
         session_id.clone(),
         vec![
             additional_authorization

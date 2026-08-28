@@ -109,6 +109,7 @@ mod turn_backend_router;
 pub(crate) mod update_broker;
 pub(crate) mod update_plan_tool;
 mod workspace_customizations;
+mod workspace_environment;
 mod workspace_operations;
 mod workspace_runtime;
 

@@ -10813,6 +10813,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-agent-environment"
+version = "0.1.0"
+
+[[package]]
 name = "zeta-agent-import"
 version = "0.1.0"
 dependencies = [
@@ -10870,6 +10874,7 @@ dependencies = [
  "zeroize",
  "zeta-action-policy",
  "zeta-add-dir",
+ "zeta-agent-environment",
  "zeta-agents",
  "zeta-app-server-protocol",
  "zeta-app-server-transport",
@@ -11276,6 +11281,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "zeta-action-policy",
+ "zeta-agent-environment",
  "zeta-async-utils",
  "zeta-attachments",
  "zeta-code-mode",

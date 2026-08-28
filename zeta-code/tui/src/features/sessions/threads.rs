@@ -11,16 +11,9 @@ use zeta_protocol::SessionThreadStatus;
 use zeta_protocol::ThreadId;
 use zeta_protocol::ThreadOrigin;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ThreadSelectionPurpose {
-    Archive,
-    Switch,
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ThreadSelectionAction {
     Archive { thread_id: ThreadId },
-    Switch { thread_id: ThreadId },
 }
 
 pub(crate) struct ThreadSelectionView {
@@ -31,36 +24,24 @@ pub(crate) struct ThreadSelectionView {
 pub(crate) fn thread_selection_view(
     session: &Session,
     current_thread_id: &ThreadId,
-    purpose: ThreadSelectionPurpose,
 ) -> ThreadSelectionView {
     let mut actions = BTreeMap::new();
     let threads = session
         .threads
         .iter()
-        .filter(|thread| {
-            purpose == ThreadSelectionPurpose::Switch
-                || thread.status != SessionThreadStatus::Archived
-        })
+        .filter(|thread| thread.status != SessionThreadStatus::Archived)
         .collect::<Vec<_>>();
     let items = threads
         .iter()
         .enumerate()
-        .map(|(index, thread)| thread_item(index, thread, current_thread_id, purpose, &mut actions))
+        .map(|(index, thread)| thread_item(index, thread, current_thread_id, &mut actions))
         .collect::<Vec<_>>();
     let active = filtered_items(&items, &threads, SessionThreadStatus::Active);
     let archived = filtered_items(&items, &threads, SessionThreadStatus::Archived);
-    let title = match purpose {
-        ThreadSelectionPurpose::Archive => "Archive thread",
-        ThreadSelectionPurpose::Switch => "Switch thread",
-    };
-    let action = match purpose {
-        ThreadSelectionPurpose::Archive => "archive",
-        ThreadSelectionPurpose::Switch => "open",
-    };
     ThreadSelectionView {
         model: PaneViewModel::new(
             SelectionViewModel::new(
-                title,
+                "Archive thread",
                 vec![
                     SelectionTab::new(format!("All ({})", items.len()), items),
                     SelectionTab::new(format!("Active ({})", active.len()), active),
@@ -69,7 +50,7 @@ pub(crate) fn thread_selection_view(
             )
             .with_search(SearchBoxModel::new("Search thread IDs"))
             .with_empty_message("No matching threads"),
-            format!("Space search  ·  ←/→ tabs  ·  ↑/↓ select  ·  Enter {action}  ·  Esc back"),
+            "Space search  ·  ←/→ tabs  ·  ↑/↓ select  ·  Enter archive  ·  Esc back",
         ),
         actions,
     }
@@ -79,17 +60,11 @@ fn thread_item(
     index: usize,
     thread: &SessionThread,
     current_thread_id: &ThreadId,
-    purpose: ThreadSelectionPurpose,
     actions: &mut BTreeMap<SelectionItemId, ThreadSelectionAction>,
 ) -> SelectionItem {
     let item_id = SelectionItemId::new(format!("thread-{index}"));
-    let action = match purpose {
-        ThreadSelectionPurpose::Archive => ThreadSelectionAction::Archive {
-            thread_id: thread.thread_id.clone(),
-        },
-        ThreadSelectionPurpose::Switch => ThreadSelectionAction::Switch {
-            thread_id: thread.thread_id.clone(),
-        },
+    let action = ThreadSelectionAction::Archive {
+        thread_id: thread.thread_id.clone(),
     };
     actions.insert(item_id.clone(), action);
     SelectionItem::new(format!(

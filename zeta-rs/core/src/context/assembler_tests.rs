@@ -5,11 +5,17 @@ use super::super::ContextPlanner;
 use super::super::ContextPreparation;
 use super::super::ContextTokenCount;
 use super::*;
+use crate::HarnessContext;
 use crate::HarnessInstructions;
 use crate::ThreadCommandSnapshot;
 use crate::ThreadSnapshot;
 use crate::TurnSnapshot;
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::PathBuf;
+use zeta_agent_environment::AgentEnvironmentSnapshot;
+use zeta_agent_environment::HostEnvironment;
+use zeta_agent_environment::RepositoryEnvironment;
+use zeta_agent_environment::WorkspaceRoots;
 use zeta_protocol::ItemId;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadId;
@@ -50,7 +56,7 @@ fn assembles_messages_and_paired_tool_results_from_durable_items() {
         ],
     );
 
-    let request = assemble(&snapshot, Vec::new(), &HarnessInstructions::default()).unwrap();
+    let request = assemble(&snapshot, Vec::new(), &HarnessContext::default()).unwrap();
 
     assert_eq!(request.input.len(), 3);
     let InputItem::Message(message) = &request.input[1] else {
@@ -92,7 +98,7 @@ fn assembles_a_bounded_shell_result_without_rewriting_the_durable_item() {
         ],
     );
 
-    let request = assemble(&snapshot, Vec::new(), &HarnessInstructions::default()).unwrap();
+    let request = assemble(&snapshot, Vec::new(), &HarnessContext::default()).unwrap();
 
     let Some(InputItem::ToolResult(ToolResult { content, .. })) = request.input.last() else {
         panic!("request must contain a Tool Result");
@@ -140,7 +146,7 @@ fn preserves_structured_tool_result_images_for_the_next_model_request() {
         ],
     );
 
-    let request = assemble(&snapshot, Vec::new(), &HarnessInstructions::default()).unwrap();
+    let request = assemble(&snapshot, Vec::new(), &HarnessContext::default()).unwrap();
 
     assert!(matches!(
         request.input.last(),
@@ -177,7 +183,7 @@ fn groups_ordered_text_and_images_from_one_user_turn() {
         ],
     );
 
-    let request = assemble(&snapshot, Vec::new(), &HarnessInstructions::default()).unwrap();
+    let request = assemble(&snapshot, Vec::new(), &HarnessContext::default()).unwrap();
 
     assert_eq!(request.input.len(), 1);
     let InputItem::Message(message) = &request.input[0] else {
@@ -217,7 +223,7 @@ fn marks_attached_context_as_untrusted_and_escapes_markup_boundaries() {
         ],
     );
 
-    let request = assemble(&snapshot, Vec::new(), &HarnessInstructions::default()).unwrap();
+    let request = assemble(&snapshot, Vec::new(), &HarnessContext::default()).unwrap();
 
     let [InputItem::Message(message)] = request.input.as_slice() else {
         panic!("context and prompt must assemble as one user message");
@@ -250,13 +256,13 @@ fn rejects_invalid_durable_tool_arguments() {
     );
 
     assert!(matches!(
-        assemble(&snapshot, Vec::new(), &HarnessInstructions::default()),
+        assemble(&snapshot, Vec::new(), &HarnessContext::default()),
         Err(CoreError::Context(_))
     ));
 }
 
 #[test]
-fn injects_instructions_and_workspace_message_before_durable_history() {
+fn injects_instructions_before_history_and_environment_at_the_request_tail() {
     let turn_id = id::<TurnId>("turn");
     let snapshot = snapshot(
         turn_id.clone(),
@@ -266,16 +272,17 @@ fn injects_instructions_and_workspace_message_before_durable_history() {
             text: "hello".into(),
         }],
     );
-    let instructions = HarnessInstructions::new(
+    let additional_root = std::env::current_dir().unwrap().join("extra");
+    let harness = HarnessContext::new(HarnessInstructions::new(
         "system body",
-        "<environment>\ntoday: 2026-08-03\n</environment>",
         Some("follow the workspace rules".into()),
-    );
+    ))
+    .with_environment(test_environment(additional_root.clone()));
 
-    let request = assemble(&snapshot, Vec::new(), &instructions).unwrap();
+    let request = assemble(&snapshot, Vec::new(), &harness).unwrap();
 
     let resolved = request.instructions.as_deref().unwrap();
-    assert!(resolved.starts_with("system body\n\n<environment>"));
+    assert_eq!(resolved, "system body");
     assert!(request.parallel_tool_calls);
     let InputItem::Message(message) = &request.input[0] else {
         panic!("Workspace instructions must be the first input message");
@@ -291,6 +298,12 @@ fn injects_instructions_and_workspace_message_before_durable_history() {
         panic!("durable user input must follow Workspace instructions");
     };
     assert!(matches!(&message.content[0], ContentPart::Text(text) if text == "hello"));
+    let InputItem::Message(message) = &request.input[2] else {
+        panic!("runtime environment must be the final input message");
+    };
+    assert!(
+        matches!(&message.content[0], ContentPart::Text(text) if text.contains(&format!("<root>{}</root>", additional_root.display())))
+    );
 }
 
 #[test]
@@ -304,9 +317,11 @@ fn repeated_assembly_is_byte_stable() {
             text: "stable".into(),
         }],
     );
-    let instructions = HarnessInstructions::new("system", "environment", None);
-    let first = assemble(&snapshot, Vec::new(), &instructions).unwrap();
-    let second = assemble(&snapshot, Vec::new(), &instructions).unwrap();
+    let harness = HarnessContext::new(HarnessInstructions::new("system", None)).with_environment(
+        test_environment(std::env::current_dir().unwrap().join("extra")),
+    );
+    let first = assemble(&snapshot, Vec::new(), &harness).unwrap();
+    let second = assemble(&snapshot, Vec::new(), &harness).unwrap();
 
     assert_eq!(
         format!("{first:?}").as_bytes(),
@@ -349,7 +364,7 @@ fn core_managed_budget_freezes_the_request_output_limit() {
 fn assemble(
     snapshot: &ThreadSnapshot,
     tools: Vec<ToolDefinition>,
-    instructions: &HarnessInstructions,
+    harness: &HarnessContext,
 ) -> Result<ModelRequest, CoreError> {
     let current_turn_id = snapshot
         .turns
@@ -360,10 +375,14 @@ fn assemble(
     let input = ContextInput::new(
         snapshot,
         current_turn_id,
-        instructions.context_fragments(),
+        harness.instructions().context_fragments(),
         tools,
         ContextBudget::provider_managed(),
     );
+    let input = match harness.environment() {
+        Some(environment) => input.with_rendered_environment(environment.render()),
+        None => input,
+    };
     let plan = match ContextPlanner::prepare(&input)
         .map_err(|error| CoreError::Context(error.to_string()))?
     {
@@ -375,6 +394,22 @@ fn assemble(
         }
     };
     ContextAssembler::assemble(&plan)
+}
+
+fn test_environment(additional_root: PathBuf) -> AgentEnvironmentSnapshot {
+    let primary_root = std::env::current_dir().unwrap().join("workspace");
+    AgentEnvironmentSnapshot::new(
+        HostEnvironment::new(
+            primary_root.clone(),
+            "test".into(),
+            "test-os".into(),
+            "/bin/sh".into(),
+            "2026-08-27".into(),
+        )
+        .unwrap(),
+        RepositoryEnvironment::NotDetected,
+        WorkspaceRoots::new(primary_root, [additional_root]).unwrap(),
+    )
 }
 
 fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {

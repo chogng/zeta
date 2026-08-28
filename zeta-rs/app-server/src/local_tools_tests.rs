@@ -300,7 +300,7 @@ fn local_tool_port_exposes_one_canonical_coding_tool_surface() {
         tools: Arc::new(LocalToolSuite::new(
             shell,
             ripgrep.clone(),
-            Arc::new(super::SessionAdditionalDirectoryAccess::default()),
+            Arc::new(crate::session_workspace_roots::SessionWorkspaceRoots::default()),
         )),
         policy: Arc::new(LocalShellPolicy::default()),
         ripgrep,
@@ -374,7 +374,7 @@ fn local_suite_reads_and_edits_with_spec_errors() {
     let suite = LocalToolSuite::new(
         shell,
         ripgrep,
-        Arc::new(super::SessionAdditionalDirectoryAccess::default()),
+        Arc::new(crate::session_workspace_roots::SessionWorkspaceRoots::default()),
     );
     let path = workspace.path().join("src/main.rs");
     fs::create_dir_all(path.parent().unwrap()).unwrap();

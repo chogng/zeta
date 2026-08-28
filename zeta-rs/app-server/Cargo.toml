@@ -27,6 +27,7 @@ url = { workspace = true }
 zeta-app-server-protocol = { workspace = true }
 zeta-app-server-transport = { workspace = true }
 zeta-add-dir = { workspace = true }
+zeta-agent-environment = { workspace = true }
 zeta-apply-patch = { workspace = true }
 zeta-agents = { workspace = true }
 zeta-async-utils = { workspace = true }

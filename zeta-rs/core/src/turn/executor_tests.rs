@@ -20,6 +20,10 @@ use zeta_action_policy::{
     ActionSource, Capability, CapabilityKind, CapabilitySet, ExecutionDecision, ResolvedAction,
     SandboxCompatibility,
 };
+use zeta_agent_environment::AgentEnvironmentSnapshot;
+use zeta_agent_environment::HostEnvironment;
+use zeta_agent_environment::RepositoryEnvironment;
+use zeta_agent_environment::WorkspaceRoots;
 use zeta_async_utils::CancellationSource;
 use zeta_context_engine::ContextTokenMeasurement;
 use zeta_context_engine::ContextTokenMeasurementSource;
@@ -1350,7 +1354,7 @@ fn reloadable_instructions_change_only_at_model_invocation_boundaries() {
         Arc::new(WeatherTool),
         Arc::new(SandboxActionPolicyService),
     )
-    .with_instructions_provider(instructions);
+    .with_harness_context_provider(instructions.clone());
 
     executor
         .execute(&thread_id, &turn_id, &CancellationSource::new().token())
@@ -1361,6 +1365,16 @@ fn reloadable_instructions_change_only_at_model_invocation_boundaries() {
     assert!(request_contains(&requests[0], "first instructions"));
     assert!(!request_contains(&requests[0], "second instructions"));
     assert!(request_contains(&requests[1], "second instructions"));
+    assert!(request_contains(&requests[0], "first environment"));
+    assert!(!request_contains(&requests[0], "second environment"));
+    assert!(request_contains(&requests[1], "second environment"));
+    assert_eq!(
+        instructions.request_identities(),
+        vec![
+            ("session".into(), "thread".into(), turn_id.to_string()),
+            ("session".into(), "thread".into(), turn_id.to_string()),
+        ]
+    );
 }
 
 #[test]
@@ -2572,33 +2586,58 @@ struct LongRunningToolModel {
 }
 
 struct MutableInstructions {
-    current: Mutex<Arc<HarnessInstructions>>,
+    current: Mutex<Arc<HarnessContext>>,
+    requests: Mutex<Vec<(String, String, String)>>,
 }
 
 impl MutableInstructions {
     fn new(content: &str) -> Self {
         Self {
-            current: Mutex::new(Arc::new(HarnessInstructions::new(
-                "system",
-                "environment",
-                Some(content.into()),
-            ))),
+            current: Mutex::new(Arc::new(test_harness_context(content, "first environment"))),
+            requests: Mutex::new(Vec::new()),
         }
     }
 
     fn replace(&self, content: &str) {
-        *self.current.lock().unwrap() = Arc::new(HarnessInstructions::new(
-            "system",
-            "environment",
-            Some(content.into()),
-        ));
+        *self.current.lock().unwrap() =
+            Arc::new(test_harness_context(content, "second environment"));
+    }
+
+    fn request_identities(&self) -> Vec<(String, String, String)> {
+        self.requests.lock().unwrap().clone()
     }
 }
 
-impl HarnessInstructionsProvider for MutableInstructions {
-    fn snapshot(&self) -> Arc<HarnessInstructions> {
-        Arc::clone(&self.current.lock().unwrap())
+impl HarnessContextProvider for MutableInstructions {
+    fn snapshot(
+        &self,
+        request: &crate::HarnessContextRequest<'_>,
+    ) -> Result<Arc<HarnessContext>, CoreError> {
+        self.requests.lock().unwrap().push((
+            request.session_id.to_string(),
+            request.thread_id.to_string(),
+            request.turn_id.to_string(),
+        ));
+        Ok(Arc::clone(&self.current.lock().unwrap()))
     }
+}
+
+fn test_harness_context(content: &str, environment_marker: &str) -> HarnessContext {
+    let primary_root = std::env::current_dir().unwrap().join("workspace");
+    let environment = AgentEnvironmentSnapshot::new(
+        HostEnvironment::new(
+            primary_root.clone(),
+            "test".into(),
+            environment_marker.into(),
+            "/bin/sh".into(),
+            "2026-08-27".into(),
+        )
+        .unwrap(),
+        RepositoryEnvironment::NotDetected,
+        WorkspaceRoots::new(primary_root, std::iter::empty()).unwrap(),
+    );
+    HarnessContext::new(HarnessInstructions::new("system", Some(content.into())))
+        .with_environment(environment)
 }
 
 struct InstructionRefreshingModel {

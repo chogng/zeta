@@ -16,7 +16,6 @@ use crate::features::sessions::ActiveConversation;
 use crate::features::sessions::ConversationChange;
 use crate::features::sessions::NewConversationKind;
 use crate::features::sessions::ResumeOutcome;
-use crate::features::sessions::ThreadSelectionPurpose;
 use crate::features::skills::load_selection;
 use crate::features::status;
 use crate::features::theme::theme_selection_view;
@@ -165,26 +164,6 @@ impl ActiveConversation {
                     }
                 }
             }
-            TuiSlashCommandAction::Thread => {
-                if arguments.is_empty() {
-                    output.events.push(AppEvent::ThreadViewOpened(
-                        sessions::load_thread_selection(
-                            client,
-                            self.session_id(),
-                            self.thread_id(),
-                            ThreadSelectionPurpose::Switch,
-                        )?,
-                    ));
-                } else {
-                    let thread_id = zeta_protocol::ThreadId::new(&arguments).map_err(|error| {
-                        CommandExecutionError(format!("invalid thread ID '{arguments}': {error}"))
-                    })?;
-                    output.conversation_change = Some(
-                        self.switch_thread(client, thread_id)
-                            .map_err(session_error)?,
-                    );
-                }
-            }
             TuiSlashCommandAction::ArchiveThread => {
                 if arguments.is_empty() {
                     output.events.push(AppEvent::ThreadViewOpened(
@@ -192,7 +171,6 @@ impl ActiveConversation {
                             client,
                             self.session_id(),
                             self.thread_id(),
-                            ThreadSelectionPurpose::Archive,
                         )?,
                     ));
                 } else {

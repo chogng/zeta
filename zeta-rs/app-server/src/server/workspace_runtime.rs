@@ -15,10 +15,10 @@ use crate::code_retrieval_tool::CodeRetrievalTool;
 use crate::dynamic_tools::DynamicToolCompositionError;
 use crate::dynamic_tools::compose_dynamic_tools;
 use crate::local_tools::LocalExecPolicyConfig;
-use crate::local_tools::SessionAdditionalDirectoryAccess;
 use crate::local_tools::append_local_tool;
 use crate::local_tools::compose_local_tools_with_config;
 use crate::review::ApprovalModeActionPolicyService;
+use crate::session_workspace_roots::SessionWorkspaceRoots;
 use crate::tool_composition::ReloadableToolPorts;
 use crate::tool_composition::ToolPort;
 use crate::tool_composition::ToolSearchOptions;
@@ -97,7 +97,7 @@ pub(super) struct WorkspaceRuntime {
     pub(super) folder_debug_adapters:
         BTreeMap<String, Arc<crate::debug_service::DebugAdapterService>>,
     additional_directories: BTreeMap<SessionId, SessionAdditionalDirectories>,
-    additional_directory_access: Arc<SessionAdditionalDirectoryAccess>,
+    session_workspace_roots: Arc<SessionWorkspaceRoots>,
     pub(super) turn_executor: TurnExecutor,
 }
 
@@ -136,7 +136,7 @@ impl WorkspaceRuntime {
             debug_adapters: None,
             folder_debug_adapters: BTreeMap::new(),
             additional_directories: BTreeMap::new(),
-            additional_directory_access: Arc::new(SessionAdditionalDirectoryAccess::default()),
+            session_workspace_roots: Arc::new(SessionWorkspaceRoots::default()),
             turn_executor,
         }
     }
@@ -197,7 +197,7 @@ impl WorkspaceRuntimeControl {
             semantic,
             cloud,
             customizations,
-            additional_directory_access,
+            session_workspace_roots,
         ) = {
             let runtime = self
                 .runtime
@@ -210,7 +210,7 @@ impl WorkspaceRuntimeControl {
                 runtime.code_index_semantic.clone(),
                 runtime.cloud_code_index.clone(),
                 runtime._customizations.clone(),
-                Arc::clone(&runtime.additional_directory_access),
+                Arc::clone(&runtime.session_workspace_roots),
             )
         };
         let Some(authorization) = authorization else {
@@ -233,7 +233,7 @@ impl WorkspaceRuntimeControl {
         let mut local = compose_local_tools_with_config(
             execution.clone(),
             &policy_config,
-            additional_directory_access,
+            session_workspace_roots,
         )
         .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
         if let Some(code_index) = code_index {
@@ -383,16 +383,16 @@ impl WorkspaceRuntimeControl {
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clone();
-        let additional_directory_access = self
+        let session_workspace_roots = self
             .runtime
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .additional_directory_access
+            .session_workspace_roots
             .clone();
         let local = compose_local_tools_with_config(
             execution.clone(),
             &policy_config,
-            additional_directory_access,
+            session_workspace_roots,
         )
         .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
         let action_policy_revision = local.action_policy_revision().clone();
@@ -1482,11 +1482,11 @@ impl AppServer {
         if mutation == DirectoryScopeMutation::AddedDirectory {
             directories.authorizations.insert(canonical, authorization);
         }
-        let access = additional_directory_access_roots(directories)?;
+        let access = authorized_additional_roots(directories)?;
         let snapshots = additional_directory_snapshots(directories);
         runtime
-            .additional_directory_access
-            .replace(session_id.clone(), access);
+            .session_workspace_roots
+            .replace_additional(session_id.clone(), access);
         Ok((mutation, snapshots))
     }
 
@@ -1540,14 +1540,14 @@ impl AppServer {
             directories.authorizations.remove(&canonical);
         }
         let snapshots = additional_directory_snapshots(directories);
-        let access = additional_directory_access_roots(directories)?;
+        let access = authorized_additional_roots(directories)?;
         let empty = directories.authorizations.is_empty();
         if empty {
             runtime.additional_directories.remove(session_id);
         }
         runtime
-            .additional_directory_access
-            .replace(session_id.clone(), access);
+            .session_workspace_roots
+            .replace_additional(session_id.clone(), access);
         Ok((mutation, snapshots))
     }
 
@@ -1566,8 +1566,8 @@ impl AppServer {
             }
         }
         runtime
-            .additional_directory_access
-            .replace(session_id.clone(), Vec::new());
+            .session_workspace_roots
+            .replace_additional(session_id.clone(), Vec::new());
     }
 
     pub(crate) fn active_workspace_is_trusted(&self) -> bool {
@@ -1600,18 +1600,15 @@ impl AppServer {
                 .read()
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .clone();
-            let additional_directory_access = self
+            let session_workspace_roots = self
                 .workspace_runtime
                 .read()
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .additional_directory_access
+                .session_workspace_roots
                 .clone();
-            let local = compose_local_tools_with_config(
-                execution,
-                &policy_config,
-                additional_directory_access,
-            )
-            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
+            let local =
+                compose_local_tools_with_config(execution, &policy_config, session_workspace_roots)
+                    .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
             self.commit_trusted_workspace_runtime(authorization, local, host)
         };
         if result.is_ok() {
@@ -1648,7 +1645,15 @@ impl AppServer {
             GitRuntime::new(repository_inspection, Arc::clone(&self.updates)).map_err(|_| {
                 WorkspaceRuntimeError::Failed("failed to initialize Git runtime".into())
             })?;
-        let customizations = WorkspaceCustomizations::discover(&canonical_root);
+        let session_workspace_roots = self
+            .workspace_runtime
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .session_workspace_roots
+            .clone();
+        let customizations =
+            WorkspaceCustomizations::discover(&canonical_root, session_workspace_roots)
+                .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
         let file_system_watcher = FileSystemWatcher::start_with_observers(
             workspace,
             Arc::clone(&self.updates),
@@ -1673,7 +1678,7 @@ impl AppServer {
             .workspace_runtime
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        current.additional_directory_access.clear();
+        current.session_workspace_roots.clear();
         let next = WorkspaceRuntime {
             authorization: Some(authorization),
             file_system: Some(file_system),
@@ -1697,11 +1702,11 @@ impl AppServer {
             debug_adapters: None,
             folder_debug_adapters: BTreeMap::new(),
             additional_directories: BTreeMap::new(),
-            additional_directory_access: Arc::clone(&current.additional_directory_access),
+            session_workspace_roots: Arc::clone(&current.session_workspace_roots),
             turn_executor: current
                 .turn_executor
                 .clone()
-                .with_instructions_provider(customizations)
+                .with_harness_context_provider(customizations)
                 .with_context_source(Arc::new(zeta_core::NoContextSource)),
         };
         let previous = std::mem::replace(&mut *current, next);
@@ -1734,7 +1739,15 @@ impl AppServer {
             );
         let cloud_code_index = self.open_cloud_code_index_controller(&code_index);
         let canonical_root = workspace.canonical_path().to_path_buf();
-        let customizations = WorkspaceCustomizations::discover(&canonical_root);
+        let session_workspace_roots = self
+            .workspace_runtime
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .session_workspace_roots
+            .clone();
+        let customizations =
+            WorkspaceCustomizations::discover(&canonical_root, session_workspace_roots)
+                .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
         let repository_mutation = authorization
             .require(WorkspaceCapability::MutateRepository)
             .map_err(|_| WorkspaceRuntimeError::TrustRequired)?;
@@ -1856,7 +1869,7 @@ impl AppServer {
             .workspace_runtime
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        current.additional_directory_access.clear();
+        current.session_workspace_roots.clear();
         let next = WorkspaceRuntime {
             authorization: Some(authorization),
             file_system: Some(file_system),
@@ -1880,11 +1893,11 @@ impl AppServer {
             debug_adapters: Some(Arc::clone(&debug_adapters)),
             folder_debug_adapters: BTreeMap::new(),
             additional_directories: BTreeMap::new(),
-            additional_directory_access: Arc::clone(&current.additional_directory_access),
+            session_workspace_roots: Arc::clone(&current.session_workspace_roots),
             turn_executor: current
                 .turn_executor
                 .clone()
-                .with_instructions_provider(customizations)
+                .with_harness_context_provider(customizations)
                 .with_context_source(context_source),
         };
         let previous = std::mem::replace(&mut *current, next);
@@ -2373,7 +2386,7 @@ fn additional_directory_snapshots(
         .collect()
 }
 
-fn additional_directory_access_roots(
+fn authorized_additional_roots(
     directories: &SessionAdditionalDirectories,
 ) -> Result<Vec<zeta_workspace::TrustedWorkspace>, WorkspaceRuntimeError> {
     directories

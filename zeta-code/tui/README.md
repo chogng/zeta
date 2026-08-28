@@ -31,10 +31,10 @@ Tool、approval policy 或 persistence。
 - enabled、compatible、名称无歧义且不与已有命令冲突的 Skill 直接显示为 `/name`；提交时保留
   `/name …` 用户文本并附加 exact pinned `SkillRef`，完整 `SKILL.md` 只在 App Server 接受 Turn
   后按需加载；`skills/changed` 会刷新这部分动态命令；
-- `/resume`、`/thread`、`/archive-thread`、`/rewind`、`/clear`、`/add-dir`、`/fork`、`/model`、`/theme` 与 `/new` 可解析 inline arguments，并在执行前展开
+- `/resume`、`/archive-thread`、`/rewind`、`/clear`、`/add-dir`、`/fork`、`/model`、`/theme` 与 `/new` 可解析 inline arguments，并在执行前展开
   large-paste placeholder；product command 明确拒绝 image arguments；
 - command popup 只注册已有真实执行流的 built-ins：`/status`、`/statusline`、`/skills`、`/mcp`、`/connectors`、`/resume`、
-  `/thread`、`/archive-thread`、`/archive-session`、`/rewind`、`/clear`、`/config`、`/add-dir`、
+  `/archive-thread`、`/archive-session`、`/rewind`、`/clear`、`/config`、`/add-dir`、
   `/fork`、`/help`、`/shortcuts`、`/copy`、`/export`、`/model`、`/theme`、`/new` 与 `/quit`；
 - `/status` 展示当前 Session 实际模型、完整上下文窗口、扣除 output reservation、safety margin 与 auto-compaction 边界后的可用窗口、最近一次同模型调用后的剩余窗口，以及 Session ID、Thread ID 和 Thread sequence；provider usage 不完整时剩余值标记为估算，尚无可信值时显示 unknown；
 - `/help` 使用保留 composer 的 interaction view stack 打开可搜索的命令列表；Space 进入搜索模式，上下键循环选择，Esc/Ctrl-C 返回 composer；快捷键只由 `/shortcuts` 展示；
@@ -45,14 +45,13 @@ Tool、approval policy 或 persistence。
 - `/connectors` 通过 typed `connector/list` 打开 Connector Pane；已连接项可以执行
   generation-checked disconnect，`connector/changed` 只在该 Pane 打开时触发 catalog refresh；
   API token/OAuth 连接仍由 Desktop Settings 完成；
-- `/add-dir <path>` 通过 typed App Server RPC 把 canonical 目录加入当前 Session 的文件访问作用域；本地 `read_file`、`write_file`、`edit`、`grep` 与 `glob` 随即接受该目录中的绝对路径。不带参数时打开可搜索列表，Enter 撤销所选目录；主 Workspace、相对路径和项目配置均不改变；
+- `/add-dir <path>` 通过 typed App Server RPC 把 canonical 目录加入当前 Session 的文件访问作用域；本地 `read_file`、`write_file`、`edit`、`grep` 与 `glob` 随即接受该目录中的绝对路径，下一 Turn 的 environment snapshot 也会把它列入 `workspace_roots`。不带参数时打开可搜索列表，Enter 撤销所选目录；快照放在模型请求尾部且不写入对话历史，主 Workspace、cwd、相对路径和项目配置均不改变；
 - 同一 profile 中的 `marketplace/changed` 与 `plugin/changed` 会触发 Skill catalog 重读，并在
   Connector Pane 已打开时重读 Connector projection；TUI 当前不提供独立 Marketplace 浏览/安装界面；
 - `/rewind` 或主界面 500 ms 内连续按两次 Esc 打开可搜索的历史消息 checkpoint Pane；Enter
   通过 typed `session/request` 的 `RewindThread` operation，创建具有 Rewind lineage 的子 Thread，只导入所选消息之前的
   terminal Turns。原 Thread 保持不变，TUI 切换订阅并以 `/rewind <turn-id>` 记录结果；
-- `/resume` 提供 Session picker；`/thread` 在 active/archived tabs 中切换当前 Thread；
-  `/archive-thread` 归档目标并在必要时选择或创建 replacement Thread；`/archive-session` 归档当前
+- `/resume` 提供 Session picker；`/archive-thread` 归档目标并在必要时选择或创建 replacement Thread；`/archive-session` 归档当前
   Session 并建立 replacement Session。所有 mutation 都通过 typed `session/request`，随后在后台
   切换 subscription；
 - `/config` 异步调用 `config/read` 与 `provider/list`；Config 标签页包含本地 Mouse interactions 开关，Providers 标签页展示后端注册的完整供应商目录，并通过隐藏输入框把 API key 交给 profile SecretStore；`/model` 使用 expected revision 更新 preferred model；

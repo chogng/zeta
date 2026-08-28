@@ -322,9 +322,6 @@ impl App {
                 ThreadSelectionAction::Archive { thread_id } => Some(AppCommand::ArchiveThread {
                     thread_id: thread_id.clone(),
                 }),
-                ThreadSelectionAction::Switch { thread_id } => Some(AppCommand::SwitchThread {
-                    thread_id: thread_id.clone(),
-                }),
             },
             SelectionActions::Skills(actions) => match actions.get(item_id)?.clone() {
                 SkillSelectionAction::SetEnablement {

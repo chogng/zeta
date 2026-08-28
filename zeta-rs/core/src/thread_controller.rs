@@ -1,6 +1,6 @@
 use crate::ContextBudget;
 use crate::CoreError;
-use crate::HarnessInstructions;
+use crate::HarnessContext;
 use crate::SequenceExpectation;
 use crate::ThreadCommandResult;
 use crate::ThreadEventBatch;
@@ -111,7 +111,7 @@ pub struct UpdatePlanResult {
 /// Named inputs for preparing one immutable model invocation from durable Thread state.
 pub(crate) struct PrepareModelInvocationRequest<'a> {
     pub turn_id: &'a TurnId,
-    pub instructions: &'a HarnessInstructions,
+    pub harness_context: &'a HarnessContext,
     pub extension_fragments: Vec<zeta_extension_api::PromptFragment>,
     pub evidence: Vec<crate::ContextEvidence>,
     pub tools: Vec<ToolDefinition>,

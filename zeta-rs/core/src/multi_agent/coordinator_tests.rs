@@ -9,7 +9,7 @@ use crate::CommandDisposition;
 use crate::ContextBudget;
 use crate::CreateSessionRequest;
 use crate::CreateSessionThreadRequest;
-use crate::HarnessInstructions;
+use crate::HarnessContext;
 use crate::InMemorySessionStore;
 use crate::InMemoryThreadStore;
 use crate::SequenceExpectation;
@@ -116,7 +116,7 @@ fn spawn_creates_seeded_child_thread_and_initial_turn_idempotently() {
             &first.child_thread_id,
             PrepareModelInvocationRequest {
                 turn_id: &first.child_turn_id,
-                instructions: &HarnessInstructions::default(),
+                harness_context: &HarnessContext::default(),
                 extension_fragments: Vec::new(),
                 evidence: Vec::new(),
                 tools: vec![tool_definition("allowed"), tool_definition("blocked")],
@@ -199,7 +199,7 @@ fn selected_and_forked_context_are_materialized_into_the_immutable_child_seed() 
             &forked.child_thread_id,
             PrepareModelInvocationRequest {
                 turn_id: &forked.child_turn_id,
-                instructions: &HarnessInstructions::default(),
+                harness_context: &HarnessContext::default(),
                 extension_fragments: Vec::new(),
                 evidence: Vec::new(),
                 tools: vec![tool_definition("allowed")],
@@ -732,7 +732,7 @@ fn messages_and_results_apply_exactly_once_across_threads() {
             &spawned.child_thread_id,
             PrepareModelInvocationRequest {
                 turn_id: &spawned.child_turn_id,
-                instructions: &HarnessInstructions::default(),
+                harness_context: &HarnessContext::default(),
                 extension_fragments: Vec::new(),
                 evidence: Vec::new(),
                 tools: vec![tool_definition("allowed")],

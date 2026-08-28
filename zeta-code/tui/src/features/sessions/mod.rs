@@ -8,7 +8,6 @@ pub(crate) use active::ConversationTranscript;
 pub(crate) use active::NewConversationKind;
 pub(crate) use active::ResumeOutcome;
 pub(crate) use threads::ThreadSelectionAction;
-pub(crate) use threads::ThreadSelectionPurpose;
 pub(crate) use threads::ThreadSelectionView;
 pub(crate) use threads::thread_selection_view;
 pub(crate) use view::SessionSelectionAction;
@@ -35,7 +34,6 @@ pub(crate) fn load_thread_selection<T>(
     client: &mut AppServerClient<T>,
     session_id: &zeta_protocol::SessionId,
     current_thread_id: &zeta_protocol::ThreadId,
-    purpose: ThreadSelectionPurpose,
 ) -> Result<ThreadSelectionView, ClientError>
 where
     T: JsonRpcTransport,
@@ -46,5 +44,5 @@ where
                 session_id: session_id.clone(),
             },
         )
-        .map(|result| thread_selection_view(&result.session, current_thread_id, purpose))
+        .map(|result| thread_selection_view(&result.session, current_thread_id))
 }

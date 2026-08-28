@@ -97,6 +97,7 @@ pub(crate) struct ContextPlan {
     source_thread_sequence: u64,
     current_turn_id: TurnId,
     instructions: Vec<InstructionFragment>,
+    environment: String,
     omitted_instructions: Vec<OmittedInstruction>,
     checkpoint: Option<ContextCheckpoint>,
     selected_items: Vec<ThreadItem>,
@@ -109,6 +110,7 @@ pub(super) struct ContextPlanInput {
     pub source_thread_sequence: u64,
     pub current_turn_id: TurnId,
     pub instructions: Vec<InstructionFragment>,
+    pub environment: String,
     pub omitted_instructions: Vec<OmittedInstruction>,
     pub checkpoint: Option<ContextCheckpoint>,
     pub selected_items: Vec<ThreadItem>,
@@ -123,6 +125,7 @@ impl ContextPlan {
             source_thread_sequence: input.source_thread_sequence,
             current_turn_id: input.current_turn_id,
             instructions: input.instructions,
+            environment: input.environment,
             omitted_instructions: input.omitted_instructions,
             checkpoint: input.checkpoint,
             selected_items: input.selected_items,
@@ -138,6 +141,10 @@ impl ContextPlan {
 
     pub(crate) fn instructions(&self) -> &[InstructionFragment] {
         &self.instructions
+    }
+
+    pub(crate) fn environment(&self) -> &str {
+        &self.environment
     }
 
     pub(crate) fn omitted_instructions(&self) -> &[OmittedInstruction] {

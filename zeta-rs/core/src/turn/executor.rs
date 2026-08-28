@@ -17,10 +17,10 @@ use crate::thread_controller::PrepareModelInvocationRequest;
 use crate::turn::TurnExecutionBackend;
 use crate::{
     ActionPolicyService, CompletedTurn, ContextAssembler, ContextCompactionRequest,
-    ContextCompactionResult, ContextCompactionService, CoreError, HarnessInstructions,
-    HarnessInstructionsProvider, HookService, ModelSelection, ModelService, ModelStreamSink,
-    NoHooks, NoThreadUpdates, NoTools, StartGoalTurnRequest, ThreadController, ThreadUpdateSink,
-    ToolService, TurnCompletedHookRequest,
+    ContextCompactionResult, ContextCompactionService, CoreError, HarnessContext,
+    HarnessContextProvider, HarnessInstructions, HookService, ModelSelection, ModelService,
+    ModelStreamSink, NoHooks, NoThreadUpdates, NoTools, StartGoalTurnRequest, ThreadController,
+    ThreadUpdateSink, ToolService, TurnCompletedHookRequest,
 };
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -51,20 +51,23 @@ pub struct TurnExecutor {
     policy: Arc<dyn ActionPolicyService>,
     compaction: Arc<dyn ContextCompactionService>,
     updates: Arc<dyn ThreadUpdateSink>,
-    instructions: Arc<dyn HarnessInstructionsProvider>,
+    harness_context: Arc<dyn HarnessContextProvider>,
     context_source: Arc<dyn crate::ContextSource>,
     hooks: Arc<dyn HookService>,
     extensions: Arc<zeta_extension_api::ExtensionRegistry>,
     code_mode: CodeModeBroker,
 }
 
-struct FixedHarnessInstructions {
-    snapshot: Arc<HarnessInstructions>,
+struct FixedHarnessContext {
+    snapshot: Arc<HarnessContext>,
 }
 
-impl HarnessInstructionsProvider for FixedHarnessInstructions {
-    fn snapshot(&self) -> Arc<HarnessInstructions> {
-        Arc::clone(&self.snapshot)
+impl HarnessContextProvider for FixedHarnessContext {
+    fn snapshot(
+        &self,
+        _: &crate::HarnessContextRequest<'_>,
+    ) -> Result<Arc<HarnessContext>, CoreError> {
+        Ok(Arc::clone(&self.snapshot))
     }
 }
 
@@ -168,8 +171,8 @@ impl TurnExecutor {
             policy,
             compaction,
             updates: Arc::new(NoThreadUpdates),
-            instructions: Arc::new(FixedHarnessInstructions {
-                snapshot: Arc::new(HarnessInstructions::default()),
+            harness_context: Arc::new(FixedHarnessContext {
+                snapshot: Arc::new(HarnessContext::default()),
             }),
             context_source: Arc::new(crate::NoContextSource),
             hooks: Arc::new(NoHooks),
@@ -195,18 +198,18 @@ impl TurnExecutor {
 
     /// Uses immutable prompt additions captured by the host for this Workspace runtime.
     pub fn with_instructions(mut self, instructions: Arc<HarnessInstructions>) -> Self {
-        self.instructions = Arc::new(FixedHarnessInstructions {
-            snapshot: instructions,
+        self.harness_context = Arc::new(FixedHarnessContext {
+            snapshot: Arc::new(HarnessContext::new(instructions.as_ref().clone())),
         });
         self
     }
 
-    /// Resolves Instruction snapshots at model-invocation boundaries.
-    pub fn with_instructions_provider(
+    /// Resolves immutable host context at model-invocation boundaries.
+    pub fn with_harness_context_provider(
         mut self,
-        instructions: Arc<dyn HarnessInstructionsProvider>,
+        harness_context: Arc<dyn HarnessContextProvider>,
     ) -> Self {
-        self.instructions = instructions;
+        self.harness_context = harness_context;
         self
     }
 
@@ -598,7 +601,14 @@ impl TurnExecutor {
             let base_budget = calibrated_budget(configured_budget, calibration)
                 .map_err(|error| ExecutionFailure::model(CoreError::Context(error.to_string())))?;
             let budget = measurement_policy.adjusted_budget(base_budget);
-            let instructions = self.instructions.snapshot();
+            let harness_context = self
+                .harness_context
+                .snapshot(&crate::HarnessContextRequest {
+                    session_id: &snapshot.session_id,
+                    thread_id,
+                    turn_id,
+                })
+                .map_err(ExecutionFailure::model)?;
             let evidence = if is_first_model_invocation(&snapshot, turn_id) {
                 if first_invocation_evidence.is_none() {
                     let query = current_turn_query(&snapshot, turn_id);
@@ -641,7 +651,7 @@ impl TurnExecutor {
                     thread_id,
                     PrepareModelInvocationRequest {
                         turn_id,
-                        instructions: &instructions,
+                        harness_context: &harness_context,
                         extension_fragments,
                         evidence,
                         tools: tools.clone(),

@@ -156,6 +156,7 @@ pub(crate) struct ContextInput {
     source_thread_sequence: u64,
     current_turn_id: TurnId,
     instructions: Vec<InstructionFragment>,
+    environment: String,
     evidence: Vec<ContextEvidence>,
     items: Vec<ThreadItem>,
     checkpoints: Vec<ContextCheckpoint>,
@@ -187,6 +188,7 @@ impl ContextInput {
             source_thread_sequence: snapshot.sequence,
             current_turn_id,
             instructions,
+            environment: String::new(),
             evidence: Vec::new(),
             items: snapshot.items.clone(),
             checkpoints: snapshot.context_checkpoints.clone(),
@@ -215,6 +217,11 @@ impl ContextInput {
         self
     }
 
+    pub(crate) fn with_rendered_environment(mut self, environment: impl Into<String>) -> Self {
+        self.environment = environment.into();
+        self
+    }
+
     pub(crate) const fn source_thread_sequence(&self) -> u64 {
         self.source_thread_sequence
     }
@@ -225,6 +232,10 @@ impl ContextInput {
 
     pub(crate) fn instructions(&self) -> &[InstructionFragment] {
         &self.instructions
+    }
+
+    pub(crate) fn environment(&self) -> &str {
+        &self.environment
     }
 
     pub(crate) fn items(&self) -> &[ThreadItem] {

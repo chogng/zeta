@@ -1231,12 +1231,12 @@ fn initialize_advertises_the_server_slash_command_snapshot() {
     );
     assert_eq!(
         response["result"]["protocolVersion"],
-        serde_json::json!({ "major": 1, "revision": 2 })
+        serde_json::json!({ "major": 1, "revision": 3 })
     );
     assert_eq!(response["result"]["capabilities"]["sessions"], true);
     assert_eq!(
         response["result"]["capabilities"]["contracts"]["sessions"]["version"],
-        1
+        2
     );
 }
 
