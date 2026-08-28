@@ -1270,6 +1270,8 @@ fn request_with_original_image() -> ModelRequest {
         reasoning: None,
         max_output_tokens: None,
         temperature: None,
+        prompt_cache_key: None,
+        prompt_cache_prefix_end: Some(0),
     }
 }
 

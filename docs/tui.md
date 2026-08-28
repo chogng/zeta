@@ -994,7 +994,7 @@ lib_tests.rs
 - `features/thread/request.rs` 只构造并执行 typed Thread/Turn request，返回 typed result；
   request module 不引用或更新 `App`。event loop 把结果转换为 `AppEvent`，presentation module
   只把 canonical Turn snapshot 分类为可展示 outcome；
-- `features/sessions/ActiveConversation` 拥有当前 product Session/Thread identity 与 sequence，create/fork/rewind/resume/switch/archive 返回 conversation change/notice，不直接写 `App`；新的 canonical snapshot 由后台 subscription completion 安装。Session picker、Session 归档与 replacement lifecycle 由同一 feature 拥有；
+- `features/sessions/ActiveConversation` 拥有当前 product Session/Thread identity 与 sequence，create/fork/rewind/resume/switch 返回 conversation change，archive 成功后请求退出，不直接写 `App`；新的 canonical snapshot 由后台 subscription completion 安装。Session picker 与 Session 归档由同一 feature 拥有；
 - `features/interactions` 把 owner-directed full request 转成 approval 或多问题 user-input Pane，
   只返回 exact typed response；owner selection、deadline 与 cancellation 留在 App Server；
 - `features/config/request.rs` 与 `features/skills/request.rs` 分别拥有已有 typed config/model 与 Skill catalog/enablement 调用，App 不再内联这些领域 payload；Config 页面从 App Server 读取当前 Session 的附加目录权限，并通过带版本的完整能力集合修改一个目录；`ConfigResource` 有界读取、revision 校验并原子保存 `<profile>/zeta-code/terminal.json`，其鼠标交互设置只约束 TUI 本地 `MouseMode`，不进入 App Server 配置；

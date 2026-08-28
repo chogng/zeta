@@ -393,8 +393,10 @@ fn openai_responses_converts_tools_reasoning_and_tool_calls() {
             "output_tokens_details": {"reasoning_tokens": 2}
         }
     }));
+    let mut model_request = tool_request();
+    model_request.prompt_cache_key = Some("session-cache-key".into());
     let response = ApiEndpoint::OpenAiResponses
-        .complete_with_client(&target(), "gpt-test", &tool_request(), &transport)
+        .complete_with_client(&target(), "gpt-test", &model_request, &transport)
         .unwrap();
 
     let (endpoint, headers, request) = transport.request.lock().unwrap().clone().unwrap();
@@ -403,6 +405,7 @@ fn openai_responses_converts_tools_reasoning_and_tool_calls() {
     assert_eq!(request["input"][0]["content"][0]["type"], "input_text");
     assert_eq!(request["tools"][0]["name"], "weather");
     assert_eq!(request["reasoning"]["effort"], "medium");
+    assert_eq!(request["prompt_cache_key"], "session-cache-key");
     assert_eq!(response.stop_reason, StopReason::ToolUse);
     assert_eq!(
         response.tool_calls().next().unwrap().arguments,
@@ -449,6 +452,7 @@ fn openai_responses_counts_the_frozen_input_payload() {
     let mut request = tool_request();
     request.max_output_tokens = Some(2_048);
     request.temperature = Some(0.25);
+    request.prompt_cache_key = Some("session-cache-key".into());
 
     let count = ApiEndpoint::OpenAiResponses
         .count_input_tokens_with_client(&target(), "gpt-test", &request, &transport)
@@ -465,6 +469,7 @@ fn openai_responses_counts_the_frozen_input_payload() {
     assert!(body.get("stream").is_none());
     assert!(body.get("max_output_tokens").is_none());
     assert!(body.get("temperature").is_none());
+    assert!(body.get("prompt_cache_key").is_none());
 }
 
 #[test]

@@ -468,6 +468,108 @@ fn context_checkpoint_is_durable_before_projection_and_recovers_exactly() {
 }
 
 #[test]
+fn fork_persists_large_history_as_ordered_turn_facts() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let threads = ThreadController::with_store(store.clone());
+    let source_thread_id = create_thread(&threads, "large-fork-source");
+    for index in 0..64 {
+        let turn_id = start_turn(&threads, &source_thread_id, &format!("fork-turn-{index}"));
+        threads
+            .complete_turn(
+                &source_thread_id,
+                &turn_id,
+                format!("answer-{index}-{}", "x".repeat(4_096)),
+            )
+            .unwrap();
+    }
+    let source_sequence = threads.read_thread(&source_thread_id).unwrap().sequence;
+    let child_thread_id = ThreadId::new("large-fork-child").unwrap();
+
+    let child = threads
+        .create_forked_thread(CreateForkedThreadRequest {
+            session_id: SessionId::new("session_1").unwrap(),
+            thread_id: child_thread_id.clone(),
+            title: "large fork child".into(),
+            source_thread_id,
+            source_sequence,
+        })
+        .unwrap();
+
+    assert_eq!(child.turns.len(), 64);
+    let child_events = store
+        .events()
+        .into_iter()
+        .filter(|event| event.thread_id == child_thread_id)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        child_events
+            .iter()
+            .filter(|event| matches!(event.event, ThreadEvent::ForkTurnImported { .. }))
+            .count(),
+        64
+    );
+    assert!(matches!(
+        child_events.last().map(|event| &event.event),
+        Some(ThreadEvent::ForkHistoryImportCompleted {
+            imported_turn_count: 64,
+            ..
+        })
+    ));
+    assert!(
+        !child_events
+            .iter()
+            .any(|event| matches!(event.event, ThreadEvent::ForkHistoryImported { .. }))
+    );
+}
+
+#[test]
+fn forked_thread_can_supersede_an_inherited_checkpoint() {
+    let threads = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
+    let source_thread_id = create_thread(&threads, "checkpoint-source");
+    let source_turn_id = start_turn(&threads, &source_thread_id, "checkpoint-source-turn");
+    threads
+        .complete_turn(&source_thread_id, &source_turn_id, "source answer".into())
+        .unwrap();
+    let source = threads.read_thread(&source_thread_id).unwrap();
+    let inherited = threads
+        .commit_context_checkpoint(
+            &source_thread_id,
+            checkpoint_request(source.sequence, source.sequence),
+        )
+        .unwrap();
+    let source_sequence = threads.read_thread(&source_thread_id).unwrap().sequence;
+    let child_thread_id = ThreadId::new("checkpoint-child").unwrap();
+    threads
+        .create_forked_thread(CreateForkedThreadRequest {
+            session_id: SessionId::new("session_1").unwrap(),
+            thread_id: child_thread_id.clone(),
+            title: "checkpoint child".into(),
+            source_thread_id,
+            source_sequence,
+        })
+        .unwrap();
+    let child_turn_id = start_turn(&threads, &child_thread_id, "checkpoint-child-turn");
+    threads
+        .complete_turn(&child_thread_id, &child_turn_id, "child answer".into())
+        .unwrap();
+    let child = threads.read_thread(&child_thread_id).unwrap();
+
+    let child_checkpoint = threads
+        .commit_context_checkpoint(
+            &child_thread_id,
+            checkpoint_request(child.sequence, child.sequence),
+        )
+        .unwrap();
+
+    let checkpoints = threads
+        .read_thread(&child_thread_id)
+        .unwrap()
+        .context_checkpoints;
+    assert_eq!(checkpoints, vec![inherited, child_checkpoint.clone()]);
+    assert_eq!(child_checkpoint.source_thread_id, child_thread_id);
+}
+
+#[test]
 fn context_overflow_recovery_checkpoint_is_bound_once_to_the_running_turn() {
     let store = Arc::new(InMemoryThreadStore::default());
     let threads = ThreadController::with_store(store.clone());

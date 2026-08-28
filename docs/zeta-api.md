@@ -457,8 +457,8 @@ reasoning 而把“无文本”误判为连接死亡。
 
 Prompt cache 的 wire 语义属于 `requests/`：
 
-- OpenAI prompt cache key/retention/breakpoint；
-- Anthropic `cache_control`、`5m`/`1h` 和 creation/read usage；
+- OpenAI Responses 当前映射 Session 级 prompt cache key；retention 尚未进入 canonical request；
+- Anthropic 当前把 tools、system 和 canonical 可复用输入前缀映射为 ephemeral `cache_control`，并解析 creation/read usage；
 - Gemini implicit cache 和 explicit cached-content reference；
 - xAI Chat header 与 Responses body key 的差异；
 - DeepSeek/Qwen/Z.AI 自动缓存 usage。

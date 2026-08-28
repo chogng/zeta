@@ -103,7 +103,7 @@ S3 已完成；模型行为指标和发布门属于 S7 的后置可选工作，�
 | --- | --- | --- | --- | --- |
 | AL-401 | 已实现 | Anthropic 真流式接线 | Anthropic SSE decoder 已接入 production `ModelProvider` stream path | 文本、reasoning、工具调用、usage、取消和截断已有 adapter 测试；stream fixture 会拒绝 unary fallback |
 | AL-402 | 已实现 | 其余主力 Provider 流式 | OpenAI Responses、OpenAI-compatible Chat、Google 与 Anthropic 显式声明 native streaming；其余内置 Provider 声明 unary | capability 经 model catalog 可查询并由 Desktop 直接消费；Core retry 新建 incarnation，Desktop 对 sequence gap 刷新且拒绝 retired incarnation |
-| AL-403 | 已实现 | Anthropic Prompt Cache | adapter 在 tools/system/最新 user 历史末尾注入三个滚动 `cache_control` 断点，不污染 canonical `ModelRequest` | 稳定序列化、滚动断点、cached usage，以及换模型、换 profile、压缩后的 cache scope 变化均有测试 |
+| AL-403 | 已实现 | Prompt Cache | Core 写入 Session 级 key 和可复用输入前缀；OpenAI Responses 映射 `prompt_cache_key`，Anthropic adapter 在 tools/system/显式历史前缀末尾注入 `cache_control` | fork 前后 key 相同且父历史位于断点内；稳定序列化、cached usage，以及换模型、换 profile、压缩后的 cache scope 变化均有测试 |
 | AL-404 | 已实现 | Provider conformance matrix | OpenAI Responses、OpenAI Chat Completions、Anthropic Messages 与兼容 Chat profile 共用 canonical fixture | instructions、tool call/result、refusal、usage、图片、错误分类和流式终止语义已有覆盖；未物化附件与 unsupported output 明确失败 |
 | AL-405 | 已实现 | 多模态输入收口 | 图片进入 durable attachment authority 后才按模型限制生成 provider-bound clone；所有 provider 路径共用同一约束 | MIME/字节/像素边界在调用前验证；provider 只接收受控内容，不接收或持久化未授权本地路径 |
 

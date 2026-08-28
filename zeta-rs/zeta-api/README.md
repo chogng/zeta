@@ -139,10 +139,7 @@ end of stream
 三种 endpoint 都由 `ApiEndpoint::stream_with_client_and_cancellation` 发起原生 wire stream，经过
 `zeta-client` framing 后边解码边投递 canonical delta，并返回权威 terminal `ModelResponse`。
 
-Anthropic request builder 还在 wire clone 上注入三个 ephemeral prompt-cache breakpoint：最后一个
-tool、system content 末尾和最新 user content 末尾。canonical `ModelRequest` 不被修改；模型、resolved
-profile target 或 compaction history 改变会形成新的 cache scope。`cache_read_input_tokens` 归一化为
-`ModelUsage.cached_input_tokens`。
+Anthropic request builder 在 wire clone 上注入三个 ephemeral prompt-cache breakpoint：最后一个 tool、system content 末尾和 `ModelRequest::prompt_cache_prefix_end` 指定的消息末尾。Core 在有历史时把断点放在当前 Turn 之前，没有历史时放在当前输入末尾；运行环境消息留在断点之后。OpenAI Responses 把 Session 级 `prompt_cache_key` 写入请求，fork 子 Thread 因属于同一 Session 而沿用同一 key。canonical `ModelRequest` 不被 adapter 修改；模型、resolved profile target 或 compaction history 改变仍会形成新的 cache scope。`cache_read_input_tokens` 归一化为 `ModelUsage.cached_input_tokens`。
 
 ## 错误语义
 

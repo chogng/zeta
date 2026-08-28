@@ -101,7 +101,7 @@ Thread event stream
 - `ThreadSnapshot` 是可重建 projection；
 - `ContextManager` 是进程内可重建派生状态；
 - `ContextPlan` 只属于一次 invocation；
-- provider cache 是可丢弃优化；
+- provider prompt cache 使用 Session 级 key 和一次请求内的可复用前缀提示，命中与否仍是可丢弃优化；
 - compaction summary 是带 provenance 的 durable 派生 artifact，不替代原始事件。
 
 ## 4. 数据模型
@@ -495,8 +495,7 @@ wait for safe point
 → create new ModelInvocationSnapshot
 ```
 
-Provider response ID、prompt cache key 和 connection state 可以作为 adapter 优化，但不能成为
-恢复正确性的前提。
+Core 为普通 Turn 请求写入 Session 级 prompt cache key，并在 `ContextPlan` 组装时标出当前 Turn 之前的可复用输入前缀；同一 Session 内的 fork 因而保持 key 和父历史前缀连续。Provider response ID、cache 命中和 connection state 不能成为恢复正确性的前提。
 
 ## 10. 多 Agent 规则
 
@@ -583,6 +582,7 @@ TurnExecutor
 | provider input-token preflight | 部分具备 | OpenAI exact；Anthropic、Google、Kimi、Z.AI estimated；官方接口失败时降级到本地或 Core 估算 |
 | 请求级本地 token 计数 | 部分具备 | HF 公共模型按需发现/下载/缓存；其他 provider 需固定资产清单；多模态 processor 尚未接入 |
 | provider usage 校准 | ✅ 已实现 | estimate 与 usage 仍是独立 durable 字段；按 Thread、冻结模型和 estimator revision 重建只影响未来 Core-managed capacity 的非对称 EMA |
+| provider prompt cache intent | ✅ 已实现 | Session 级 key + 请求内前缀断点；fork 继承检查点和历史前缀，cache miss 不影响正确性 |
 | cache/reference baseline | 推迟 | 只有性能证据证明重复组装是瓶颈后才增加 |
 | Agent seed、跨 Thread 选择与 reference resources | 尚未完成 | 不能读取其他 live `ContextManager` |
 

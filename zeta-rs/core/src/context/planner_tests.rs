@@ -426,7 +426,7 @@ fn best_effort_instructions_are_omitted_before_history_is_compacted() {
 }
 
 #[test]
-fn verified_checkpoint_replaces_covered_items_and_preserves_the_raw_tail() {
+fn inherited_checkpoint_uses_item_provenance_and_preserves_the_raw_tail() {
     let old = id::<TurnId>("old");
     let recent = id::<TurnId>("recent");
     let current = id::<TurnId>("current");
@@ -440,10 +440,10 @@ fn verified_checkpoint_replaces_covered_items_and_preserves_the_raw_tail() {
     );
     snapshot.context_checkpoints.push(ContextCheckpoint {
         checkpoint_id: ContextCheckpointId::new("checkpoint").unwrap(),
-        source_thread_id: snapshot.thread_id.clone(),
+        source_thread_id: ThreadId::new("parent-thread").unwrap(),
         covered: ContextSourceRange {
             start_sequence: 1,
-            end_sequence: 2,
+            end_sequence: 100,
         },
         referenced_items: vec![ItemId::new("old").unwrap()],
         source_digest: ContextSourceDigest::new(format!("sha256:{}", "a".repeat(64))).unwrap(),
@@ -600,6 +600,7 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
         received_delegation_results: BTreeMap::new(),
         sent_agent_messages: BTreeMap::new(),
         received_agent_messages: BTreeMap::new(),
+        fork_import: None,
     }
 }
 

@@ -50,14 +50,14 @@ impl ContextPlanner {
         let checkpoint_end = checkpoint
             .as_ref()
             .map_or(0, |checkpoint| checkpoint.covered.end_sequence);
+        let checkpoint_items = checkpoint
+            .as_ref()
+            .map(|checkpoint| checkpoint.referenced_items.iter().collect::<BTreeSet<_>>())
+            .unwrap_or_default();
         let raw_items = input
             .items()
             .iter()
-            .filter(|item| {
-                input
-                    .item_sequence(item.item_id())
-                    .is_none_or(|sequence| sequence > checkpoint_end)
-            })
+            .filter(|item| !checkpoint_items.contains(item.item_id()))
             .cloned()
             .collect::<Vec<_>>();
         validate_items(&raw_items)?;
@@ -116,6 +116,7 @@ impl ContextPlanner {
                         omitted_instructions: Vec::new(),
                         checkpoint,
                         selected_items,
+                        interrupted_turns: input.interrupted_turns().clone(),
                         evidence: input.evidence().to_vec(),
                         tools: input.tools().to_vec(),
                         budget: ContextBudgetReport::ProviderManaged {
@@ -281,6 +282,7 @@ impl ContextPlanner {
                 omitted_instructions,
                 checkpoint,
                 selected_items,
+                interrupted_turns: input.interrupted_turns().clone(),
                 evidence: selected_evidence,
                 tools: input.tools().to_vec(),
                 budget: final_report,
@@ -296,14 +298,14 @@ impl ContextPlanner {
         let checkpoint_end = checkpoint
             .as_ref()
             .map_or(0, |checkpoint| checkpoint.covered.end_sequence);
+        let checkpoint_items = checkpoint
+            .as_ref()
+            .map(|checkpoint| checkpoint.referenced_items.iter().collect::<BTreeSet<_>>())
+            .unwrap_or_default();
         let raw_items = input
             .items()
             .iter()
-            .filter(|item| {
-                input
-                    .item_sequence(item.item_id())
-                    .is_none_or(|sequence| sequence > checkpoint_end)
-            })
+            .filter(|item| !checkpoint_items.contains(item.item_id()))
             .cloned()
             .collect::<Vec<_>>();
         validate_items(&raw_items)?;
@@ -388,14 +390,14 @@ impl ContextPlanner {
         let checkpoint_end = checkpoint
             .as_ref()
             .map_or(0, |checkpoint| checkpoint.covered.end_sequence);
+        let checkpoint_items = checkpoint
+            .as_ref()
+            .map(|checkpoint| checkpoint.referenced_items.iter().collect::<BTreeSet<_>>())
+            .unwrap_or_default();
         let raw_items = input
             .items()
             .iter()
-            .filter(|item| {
-                input
-                    .item_sequence(item.item_id())
-                    .is_none_or(|sequence| sequence > checkpoint_end)
-            })
+            .filter(|item| !checkpoint_items.contains(item.item_id()))
             .cloned()
             .collect::<Vec<_>>();
         validate_items(&raw_items)?;

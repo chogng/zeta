@@ -20,9 +20,32 @@ impl ContextAssembler {
         let mut tool_names = BTreeMap::new();
         let mut active_user_turn = None;
         let mut evidence_inserted = false;
+        let mut previous_turn = None;
+        let mut prompt_cache_prefix_end = None;
+        let has_reusable_history = plan.checkpoint().is_some()
+            || plan
+                .selected_items()
+                .iter()
+                .any(|item| item.turn_id() != plan.current_turn_id());
 
         for item in plan.selected_items() {
+            if previous_turn.as_ref() != Some(item.turn_id()) {
+                if previous_turn
+                    .as_ref()
+                    .is_some_and(|turn_id| plan.is_interrupted_turn(turn_id))
+                {
+                    append_interrupted_marker(&mut input);
+                    active_user_turn = None;
+                }
+                previous_turn = Some(item.turn_id().clone());
+            }
             if !evidence_inserted && item.turn_id() == plan.current_turn_id() {
+                if has_reusable_history {
+                    prompt_cache_prefix_end = input
+                        .len()
+                        .checked_sub(1)
+                        .and_then(|index| u32::try_from(index).ok());
+                }
                 if let Some(evidence) = evidence_message(plan)? {
                     input.push(evidence);
                     active_user_turn = None;
@@ -144,6 +167,18 @@ impl ContextAssembler {
                 }
             }
         }
+        if previous_turn
+            .as_ref()
+            .is_some_and(|turn_id| plan.is_interrupted_turn(turn_id))
+        {
+            append_interrupted_marker(&mut input);
+        }
+        if prompt_cache_prefix_end.is_none() {
+            prompt_cache_prefix_end = input
+                .len()
+                .checked_sub(1)
+                .and_then(|index| u32::try_from(index).ok());
+        }
 
         if input.is_empty() {
             return Err(CoreError::Context(
@@ -171,8 +206,17 @@ impl ContextAssembler {
             reasoning: None,
             max_output_tokens: plan.budget().max_output_tokens(),
             temperature: None,
+            prompt_cache_key: None,
+            prompt_cache_prefix_end,
         })
     }
+}
+
+fn append_interrupted_marker(input: &mut Vec<InputItem>) {
+    input.push(InputItem::Message(Message::text(
+        MessageRole::User,
+        "<turn_aborted>\nThe user interrupted the previous turn on purpose. If any tools or commands were stopped, they may have partially executed.\n</turn_aborted>",
+    )));
 }
 
 fn escape_attachment_markup(value: &str) -> String {

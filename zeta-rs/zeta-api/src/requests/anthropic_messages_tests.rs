@@ -13,6 +13,7 @@ fn request_builder_injects_three_stable_cache_breakpoints_without_mutating_canon
         1,
         InputItem::Message(Message::text(MessageRole::Assistant, "earlier answer")),
     );
+    request.prompt_cache_prefix_end = Some(2);
     request.tools = vec![
         ToolDefinition {
             name: ToolName::new("first").unwrap(),
@@ -58,7 +59,7 @@ fn request_builder_injects_three_stable_cache_breakpoints_without_mutating_canon
 }
 
 #[test]
-fn rolling_cache_breakpoint_advances_over_completed_tool_results() {
+fn explicit_cache_breakpoint_can_end_at_a_completed_tool_result() {
     let call_id = ToolCallId::new("call-1").unwrap();
     let mut assistant = Message::text(MessageRole::Assistant, "checking");
     assistant.tool_calls.push(ToolCall {
@@ -78,6 +79,7 @@ fn rolling_cache_breakpoint_advances_over_completed_tool_results() {
         }),
         InputItem::Message(Message::text(MessageRole::User, "follow up")),
     ];
+    request.prompt_cache_prefix_end = Some(2);
 
     let built = build_request("claude-test", &request).unwrap();
 
@@ -87,12 +89,12 @@ fn rolling_cache_breakpoint_advances_over_completed_tool_results() {
             .is_none()
     );
     assert!(
-        built["messages"][2]["content"][0]
+        built["messages"][3]["content"][0]
             .get("cache_control")
             .is_none()
     );
     assert_eq!(
-        built["messages"][3]["content"][0]["cache_control"],
+        built["messages"][2]["content"][0]["cache_control"],
         json!({"type": "ephemeral"})
     );
 }
@@ -109,6 +111,7 @@ fn cache_scope_changes_for_a_different_model_or_compacted_history() {
         1,
         InputItem::Message(Message::text(MessageRole::Assistant, "earlier answer")),
     );
+    request.prompt_cache_prefix_end = Some(2);
 
     let first = build_request("claude-primary", &request).unwrap();
     let other_model = build_request("claude-secondary", &request).unwrap();
@@ -127,6 +130,7 @@ fn cache_scope_changes_for_a_different_model_or_compacted_history() {
         )),
         InputItem::Message(Message::text(MessageRole::User, "latest request")),
     ];
+    compacted.prompt_cache_prefix_end = Some(1);
     let compacted = build_request("claude-primary", &compacted).unwrap();
     assert_ne!(first["messages"], compacted["messages"]);
     assert_eq!(

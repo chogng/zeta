@@ -92,6 +92,18 @@ pub struct ThreadSnapshot {
     pub received_delegation_results: BTreeMap<DelegationId, DelegationResult>,
     pub sent_agent_messages: BTreeMap<AgentMessageId, AgentMessage>,
     pub received_agent_messages: BTreeMap<AgentMessageId, AgentMessage>,
+    pub(crate) fork_import: Option<ForkImportSnapshot>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ForkImportSnapshot {
+    source_thread_id: ThreadId,
+    source_sequence: u64,
+    next_turn_index: u64,
+    turn_ids: BTreeSet<TurnId>,
+    item_ids: BTreeSet<ItemId>,
+    tool_calls: BTreeSet<(TurnId, ToolCallId)>,
+    tool_results: BTreeSet<(TurnId, ToolCallId)>,
 }
 
 impl ThreadSnapshot {
@@ -320,6 +332,7 @@ pub fn reduce_thread_event(
                     received_delegation_results: BTreeMap::new(),
                     sent_agent_messages: BTreeMap::new(),
                     received_agent_messages: BTreeMap::new(),
+                    fork_import: None,
                     commands: {
                         require_no_command(envelope)?;
                         Vec::new()
@@ -338,6 +351,16 @@ pub fn reduce_thread_event(
     {
         return Err(CoreError::Journal(
             "invalid Thread rollout identity or sequence".into(),
+        ));
+    }
+    if snapshot.fork_import.is_some()
+        && !matches!(
+            envelope.event,
+            ThreadEvent::ForkTurnImported { .. } | ThreadEvent::ForkHistoryImportCompleted { .. }
+        )
+    {
+        return Err(CoreError::Journal(
+            "fork history import must complete before other Thread facts".into(),
         ));
     }
 
@@ -577,6 +600,101 @@ pub fn reduce_thread_event(
                     .item_sequences
                     .insert(item.item_id().clone(), envelope.sequence);
             }
+        }
+        ThreadEvent::ForkTurnImported {
+            source_thread_id,
+            source_sequence,
+            turn_index,
+            turn,
+            ..
+        } => {
+            require_no_command(envelope)?;
+            if snapshot.fork_import.is_none() {
+                if snapshot.sequence != 1
+                    || !snapshot.turns.is_empty()
+                    || !snapshot.items.is_empty()
+                    || *turn_index != 0
+                    || *source_sequence == 0
+                    || source_thread_id == &snapshot.thread_id
+                {
+                    return Err(CoreError::Journal(
+                        "fork Turn import must start immediately after child creation".into(),
+                    ));
+                }
+                snapshot.fork_import = Some(ForkImportSnapshot {
+                    source_thread_id: source_thread_id.clone(),
+                    source_sequence: *source_sequence,
+                    next_turn_index: 0,
+                    turn_ids: BTreeSet::new(),
+                    item_ids: BTreeSet::new(),
+                    tool_calls: BTreeSet::new(),
+                    tool_results: BTreeSet::new(),
+                });
+            }
+            let import = snapshot
+                .fork_import
+                .as_mut()
+                .expect("fork import was initialized above");
+            if import.source_thread_id != *source_thread_id
+                || import.source_sequence != *source_sequence
+                || import.next_turn_index != *turn_index
+            {
+                return Err(CoreError::Journal(
+                    "fork Turn import identity or ordering changed within one history".into(),
+                ));
+            }
+            append_imported_turn(&mut snapshot.turns, &mut snapshot.items, import, turn)?;
+            for item in &turn.items {
+                snapshot
+                    .item_sequences
+                    .insert(item.item_id().clone(), envelope.sequence);
+            }
+            import.next_turn_index = import.next_turn_index.saturating_add(1);
+        }
+        ThreadEvent::ForkHistoryImportCompleted {
+            source_thread_id,
+            source_sequence,
+            imported_turn_count,
+            context_checkpoint,
+            ..
+        } => {
+            require_no_command(envelope)?;
+            if snapshot
+                .fork_import
+                .as_ref()
+                .is_some_and(|import| import.tool_calls != import.tool_results)
+            {
+                return Err(CoreError::Journal(
+                    "fork history contains an incomplete Tool Call/Result exchange".into(),
+                ));
+            }
+            match snapshot.fork_import.as_ref() {
+                Some(import)
+                    if import.source_thread_id == *source_thread_id
+                        && import.source_sequence == *source_sequence
+                        && import.next_turn_index == *imported_turn_count => {}
+                None if snapshot.sequence == 1
+                    && snapshot.turns.is_empty()
+                    && snapshot.items.is_empty()
+                    && *source_sequence > 0
+                    && *imported_turn_count == 0
+                    && source_thread_id != &snapshot.thread_id => {}
+                _ => {
+                    return Err(CoreError::Journal(
+                        "fork history completion does not match its imported Turns".into(),
+                    ));
+                }
+            }
+            if let Some(checkpoint) = context_checkpoint {
+                validate_inherited_context_checkpoint(
+                    source_thread_id,
+                    *source_sequence,
+                    &snapshot.items,
+                    checkpoint,
+                )?;
+                snapshot.context_checkpoints.push(checkpoint.clone());
+            }
+            snapshot.fork_import = None;
         }
         ThreadEvent::ContextCheckpointCommitted { checkpoint, .. } => {
             require_no_command(envelope)?;
@@ -1874,6 +1992,137 @@ fn import_history(
     Ok(())
 }
 
+fn append_imported_turn(
+    turns: &mut Vec<TurnSnapshot>,
+    items: &mut Vec<ThreadItem>,
+    import: &mut ForkImportSnapshot,
+    turn: &Turn,
+) -> Result<(), CoreError> {
+    if !matches!(
+        turn.status,
+        TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted
+    ) || turn.pending_interaction.is_some()
+    {
+        return Err(CoreError::Journal(
+            "only terminal Turns can be imported into child history".into(),
+        ));
+    }
+    if !import.turn_ids.insert(turn.turn_id.clone()) {
+        return Err(CoreError::Journal(format!(
+            "imported Turn already exists: {}",
+            turn.turn_id
+        )));
+    }
+    if let Some(tool_profile) = &turn.tool_profile {
+        crate::tool_profile::validate_tool_profile_snapshot(tool_profile)
+            .map_err(CoreError::Journal)?;
+    }
+    if let Some(plan) = &turn.plan {
+        crate::turn::validate_plan_update(plan).map_err(CoreError::Journal)?;
+    }
+    for item in &turn.items {
+        if item.turn_id() != &turn.turn_id {
+            return Err(CoreError::Journal(
+                "imported Item Turn identity does not match its Turn".into(),
+            ));
+        }
+        if !import.item_ids.insert(item.item_id().clone()) {
+            return Err(CoreError::Journal(format!(
+                "imported Item already exists: {}",
+                item.item_id()
+            )));
+        }
+        match item {
+            ThreadItem::ToolCall { tool_call_id, .. } => {
+                if !import
+                    .tool_calls
+                    .insert((turn.turn_id.clone(), tool_call_id.clone()))
+                {
+                    return Err(CoreError::Journal(format!(
+                        "imported Tool Call already exists: {tool_call_id}"
+                    )));
+                }
+            }
+            ThreadItem::ToolResult { tool_call_id, .. } => {
+                let identity = (turn.turn_id.clone(), tool_call_id.clone());
+                if !import.tool_calls.contains(&identity) {
+                    return Err(CoreError::Journal(format!(
+                        "imported Tool Result references an unknown Tool Call: {tool_call_id}"
+                    )));
+                }
+                if !import.tool_results.insert(identity) {
+                    return Err(CoreError::Journal(format!(
+                        "imported Tool Result already exists: {tool_call_id}"
+                    )));
+                }
+            }
+            ThreadItem::UserMessage { .. }
+            | ThreadItem::UserContext { .. }
+            | ThreadItem::UserImage { .. }
+            | ThreadItem::UserImageAttachment { .. }
+            | ThreadItem::AgentMessage { .. }
+            | ThreadItem::Reasoning { .. }
+            | ThreadItem::Plan { .. } => {}
+        }
+    }
+
+    turns.push(TurnSnapshot {
+        turn_id: turn.turn_id.clone(),
+        status: turn.status,
+        model: turn.model.clone(),
+        policy_revision: "imported-history-policy".into(),
+        approval_mode: ApprovalMode::AskPermissions,
+        tool_mode: turn.tool_mode,
+        activated_skills: Vec::new(),
+        failure: turn.error.clone(),
+        pending_interaction: None,
+        execution_backend_attempt: None,
+        tool_profile: turn.tool_profile.clone(),
+        plan: turn.plan.clone(),
+        usage: ModelUsageSummary::default(),
+        context_usage: None,
+    });
+    items.extend(turn.items.iter().cloned());
+    Ok(())
+}
+
+fn validate_inherited_context_checkpoint(
+    source_thread_id: &ThreadId,
+    source_sequence: u64,
+    imported_items: &[ThreadItem],
+    checkpoint: &ContextCheckpoint,
+) -> Result<(), CoreError> {
+    if checkpoint.source_thread_id != *source_thread_id
+        || checkpoint.covered.start_sequence != 1
+        || checkpoint.covered.end_sequence < checkpoint.covered.start_sequence
+        || checkpoint.covered.end_sequence > source_sequence
+        || checkpoint.summary.trim().is_empty()
+        || checkpoint.schema_revision.trim().is_empty()
+        || checkpoint.prompt_revision.trim().is_empty()
+        || checkpoint.context_policy_revision.trim().is_empty()
+    {
+        return Err(CoreError::Journal(
+            "inherited context checkpoint does not match the fork source".into(),
+        ));
+    }
+    let imported_item_ids = imported_items
+        .iter()
+        .map(ThreadItem::item_id)
+        .collect::<Vec<_>>();
+    if checkpoint.referenced_items.len() > imported_item_ids.len()
+        || checkpoint
+            .referenced_items
+            .iter()
+            .zip(imported_item_ids)
+            .any(|(referenced, imported)| referenced != imported)
+    {
+        return Err(CoreError::Journal(
+            "inherited context checkpoint Item provenance is not an imported history prefix".into(),
+        ));
+    }
+    Ok(())
+}
+
 fn validate_context_checkpoint(
     snapshot: &ThreadSnapshot,
     checkpoint: &ContextCheckpoint,
@@ -1904,10 +2153,10 @@ fn validate_context_checkpoint(
         .context_checkpoints
         .iter()
         .any(|existing| existing.checkpoint_id == checkpoint.checkpoint_id)
-        || snapshot
-            .context_checkpoints
-            .last()
-            .is_some_and(|existing| existing.covered.end_sequence > checkpoint.covered.end_sequence)
+        || snapshot.context_checkpoints.last().is_some_and(|existing| {
+            existing.source_thread_id == checkpoint.source_thread_id
+                && existing.covered.end_sequence > checkpoint.covered.end_sequence
+        })
     {
         return Err(CoreError::Journal(
             "context checkpoints must have unique identities and not retreat the durable prefix"

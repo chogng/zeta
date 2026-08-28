@@ -111,7 +111,7 @@ Session
 - root/fork lineage；
 - Session 自己的 durable sequence。
 
-Session 不嵌入 Thread 的 Turn/Item 历史。`ThreadOrigin::Fork` 保存 `parentThreadId + parentSequence`，表达不可变的分支历史锚点；子 Thread 使用自己的 `ForkHistoryImported` event 保存该锚点内连续、已结束的 Turn，因此 lineage 与可重放的子历史分别归各自 aggregate 所有。
+Session 不嵌入 Thread 的 Turn/Item 历史。`ThreadOrigin::Fork` 保存 `parentThreadId + parentSequence`，表达不可变的分支历史锚点；子 Thread 使用有序的 `ForkTurnImported` 和 `ForkHistoryImportCompleted` 保存该锚点内的历史。已结束的 Turn 原样继承；正在进行的 Turn 保留已持久化内容并在子 Thread 中标成 `Interrupted`；后续排队 Turn 不继承。Session 拓扑与可重放的子历史分别归各自数据流所有。
 
 当前 canonical `ThreadOrigin` 包含 `Root`、`Fork`、`Rewind` 与 `AgentSpawn`。Agent spawn 使用
 独立 `DelegationId`、不可变 `AgentContextSeed` 和跨 Thread message/result events；不复用
@@ -230,7 +230,7 @@ Command
   → publish committed Update
 ```
 
-Event 不携带 storage sequence、timestamp、schema version、event ID 或 command receipt。Session stored envelope 由 `zeta-session-store` 定义；Thread persisted record 由 `zeta-history` 定义。Core 构造 record，Store 只校验并提交。`ForkHistoryImported` 携带 source Thread、精确 source sequence 和已结束的 Turn 副本，使子 Thread 的上下文可以只靠自己的 event stream 恢复。
+Event 不携带 storage sequence、timestamp、schema version、event ID 或 command receipt。Session stored envelope 由 `zeta-session-store` 定义；Thread persisted record 由 `zeta-history` 定义。Core 构造 record，Store 只校验并提交。Fork 每个 Turn 单独形成 `ForkTurnImported`，最后由 `ForkHistoryImportCompleted` 固定 source Thread、精确 source sequence、导入数量和继承的上下文检查点，使子 Thread 只靠自己的 event stream 就能恢复，并让检查点之后的导入项保留独立 sequence。
 
 普通预算压缩使用 `ContextCheckpointCommitted`；供应商实际窗口拒绝普通请求时使用 `ContextOverflowRecoveryCommitted`，在同一个 durable fact 中携带 checkpoint 与触发恢复的 Turn ID。后者使 reducer 能在重放后继续拒绝同一 Turn 的第二次自动溢出恢复，而不把执行计数藏在进程内。
 

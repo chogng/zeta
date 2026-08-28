@@ -1,6 +1,7 @@
 use super::*;
 use zeta_history::CURRENT_STORED_EVENT_SCHEMA_VERSION;
 use zeta_history::EventId;
+use zeta_history::MINIMUM_SUPPORTED_EVENT_SCHEMA_VERSION;
 use zeta_history::ThreadCommandReceipt;
 use zeta_history::Timestamp;
 use zeta_protocol::CommandId;
@@ -379,17 +380,164 @@ fn reducer_rebuilds_a_steer_receipt_from_its_immediately_preceding_items() {
 }
 
 #[test]
-fn reducer_rejects_history_older_than_current_schema() {
+fn reducer_rejects_history_older_than_minimum_supported_schema() {
     let event = ThreadEvent::ThreadCreated {
         session_id: zeta_protocol::SessionId::new("session_1").unwrap(),
         thread_id: ThreadId::new("thread_1").unwrap(),
         title: "legacy".into(),
     };
     let mut legacy = envelope(1, event);
-    legacy.schema_version = CURRENT_STORED_EVENT_SCHEMA_VERSION.saturating_sub(1);
+    legacy.schema_version = MINIMUM_SUPPORTED_EVENT_SCHEMA_VERSION.saturating_sub(1);
 
     let error = reduce_thread_event(None, &legacy).unwrap_err();
     assert!(matches!(error, CoreError::Journal(message) if message.contains("unsupported")));
+}
+
+#[test]
+fn reducer_requires_an_ordered_fork_import_to_complete_before_other_facts() {
+    let thread_id = ThreadId::new("thread_1").unwrap();
+    let source_thread_id = ThreadId::new("source_thread").unwrap();
+    let created = reduce_thread_event(
+        None,
+        &envelope(
+            1,
+            ThreadEvent::ThreadCreated {
+                session_id: zeta_protocol::SessionId::new("session_1").unwrap(),
+                thread_id: thread_id.clone(),
+                title: "fork child".into(),
+            },
+        ),
+    )
+    .unwrap();
+    let importing = reduce_thread_event(
+        Some(created),
+        &envelope(
+            2,
+            ThreadEvent::ForkTurnImported {
+                thread_id: thread_id.clone(),
+                source_thread_id: source_thread_id.clone(),
+                source_sequence: 7,
+                turn_index: 0,
+                turn: Box::new(imported_turn("imported_turn", Vec::new())),
+            },
+        ),
+    )
+    .unwrap();
+
+    let unrelated = ThreadEvent::ForkHistoryImported {
+        thread_id: thread_id.clone(),
+        source_thread_id: source_thread_id.clone(),
+        source_sequence: 7,
+        turns: Vec::new(),
+    };
+    let error = reduce_thread_event(Some(importing.clone()), &envelope(3, unrelated)).unwrap_err();
+    assert!(matches!(error, CoreError::Journal(message) if message.contains("must complete")));
+
+    let wrong_source = ThreadEvent::ForkTurnImported {
+        thread_id: thread_id.clone(),
+        source_thread_id: ThreadId::new("another_source").unwrap(),
+        source_sequence: 7,
+        turn_index: 1,
+        turn: Box::new(imported_turn("another_turn", Vec::new())),
+    };
+    let error =
+        reduce_thread_event(Some(importing.clone()), &envelope(3, wrong_source)).unwrap_err();
+    assert!(matches!(error, CoreError::Journal(message) if message.contains("ordering changed")));
+
+    let completed = reduce_thread_event(
+        Some(importing),
+        &envelope(
+            3,
+            ThreadEvent::ForkHistoryImportCompleted {
+                thread_id,
+                source_thread_id,
+                source_sequence: 7,
+                imported_turn_count: 1,
+                context_checkpoint: None,
+            },
+        ),
+    )
+    .unwrap();
+    assert_eq!(completed.turns.len(), 1);
+    assert!(completed.fork_import.is_none());
+}
+
+#[test]
+fn reducer_rejects_a_fork_import_with_an_incomplete_tool_exchange() {
+    let thread_id = ThreadId::new("thread_1").unwrap();
+    let source_thread_id = ThreadId::new("source_thread").unwrap();
+    let created = reduce_thread_event(
+        None,
+        &envelope(
+            1,
+            ThreadEvent::ThreadCreated {
+                session_id: zeta_protocol::SessionId::new("session_1").unwrap(),
+                thread_id: thread_id.clone(),
+                title: "fork child".into(),
+            },
+        ),
+    )
+    .unwrap();
+    let turn_id = TurnId::new("imported_turn").unwrap();
+    let importing = reduce_thread_event(
+        Some(created),
+        &envelope(
+            2,
+            ThreadEvent::ForkTurnImported {
+                thread_id: thread_id.clone(),
+                source_thread_id: source_thread_id.clone(),
+                source_sequence: 7,
+                turn_index: 0,
+                turn: Box::new(imported_turn(
+                    "imported_turn",
+                    vec![ThreadItem::ToolCall {
+                        item_id: ItemId::new("tool_call_item").unwrap(),
+                        turn_id,
+                        tool_call_id: ToolCallId::new("tool_call").unwrap(),
+                        name: ToolName::new("shell-command").unwrap(),
+                        arguments_json: "{}".into(),
+                        binding: None,
+                    }],
+                )),
+            },
+        ),
+    )
+    .unwrap();
+
+    let error = reduce_thread_event(
+        Some(importing),
+        &envelope(
+            3,
+            ThreadEvent::ForkHistoryImportCompleted {
+                thread_id,
+                source_thread_id,
+                source_sequence: 7,
+                imported_turn_count: 1,
+                context_checkpoint: None,
+            },
+        ),
+    )
+    .unwrap_err();
+    assert!(
+        matches!(error, CoreError::Journal(message) if message.contains("incomplete Tool Call/Result"))
+    );
+}
+
+fn imported_turn(turn_id: &str, items: Vec<ThreadItem>) -> Turn {
+    Turn {
+        turn_id: TurnId::new(turn_id).unwrap(),
+        status: TurnStatus::Interrupted,
+        model: None,
+        tool_profile: None,
+        tool_mode: zeta_protocol::ToolMode::Direct,
+        approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+        usage: zeta_protocol::ModelUsageSummary::default(),
+        context_usage: None,
+        items,
+        plan: None,
+        pending_interaction: None,
+        error: None,
+    }
 }
 
 #[test]

@@ -26,6 +26,11 @@ pub struct ModelRequest {
     pub reasoning: Option<ReasoningConfig>,
     pub max_output_tokens: Option<u32>,
     pub temperature: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_cache_key: Option<String>,
+    /// Inclusive `input` index ending the reusable prompt prefix.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt_cache_prefix_end: Option<u32>,
 }
 
 impl ModelRequest {
@@ -93,6 +98,8 @@ impl ModelRequest {
             reasoning: None,
             max_output_tokens: None,
             temperature: None,
+            prompt_cache_key: None,
+            prompt_cache_prefix_end: Some(0),
         }
     }
 }

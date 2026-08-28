@@ -114,6 +114,7 @@ fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
         received_delegation_results: BTreeMap::new(),
         sent_agent_messages: BTreeMap::new(),
         received_agent_messages: BTreeMap::new(),
+        fork_import: None,
     }
 }
 

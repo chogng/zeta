@@ -693,6 +693,7 @@ impl TurnExecutor {
             };
             let mut request = ContextAssembler::assemble(invocation.context())
                 .map_err(ExecutionFailure::model)?;
+            request.prompt_cache_key = Some(invocation.session_id().as_str().to_owned());
             if let Some(profile) = &turn.tool_profile {
                 request.parallel_tool_calls = profile.parallel_tool_calls;
             }

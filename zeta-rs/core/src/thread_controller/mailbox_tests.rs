@@ -173,6 +173,7 @@ fn snapshot(thread_id: &ThreadId) -> ThreadSnapshot {
         agent_cancellations_received: BTreeSet::new(),
         agent_joins: BTreeMap::new(),
         produced_delegation_results: BTreeMap::new(),
+        fork_import: None,
         received_delegation_results: BTreeMap::new(),
         sent_agent_messages: BTreeMap::new(),
         received_agent_messages: BTreeMap::new(),

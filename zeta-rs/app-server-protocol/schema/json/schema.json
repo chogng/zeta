@@ -22408,6 +22408,7 @@
           "type": "object"
         },
         {
+          "description": "Legacy read-compatibility fact written by history schema version 13.\nCurrent product code writes one `ForkTurnImported` per Turn followed by\n`ForkHistoryImportCompleted`.",
           "properties": {
             "sourceSequence": {
               "format": "uint64",
@@ -22437,6 +22438,84 @@
             "sourceThreadId",
             "sourceSequence",
             "turns"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "sourceSequence": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "sourceThreadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "turn": {
+              "$ref": "#/$defs/Turn"
+            },
+            "turnIndex": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": {
+              "const": "forkTurnImported",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "sourceThreadId",
+            "sourceSequence",
+            "turnIndex",
+            "turn"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "contextCheckpoint": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ContextCheckpoint"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "importedTurnCount": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "sourceSequence": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "sourceThreadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "const": "forkHistoryImportCompleted",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "sourceThreadId",
+            "sourceSequence",
+            "importedTurnCount"
           ],
           "type": "object"
         },

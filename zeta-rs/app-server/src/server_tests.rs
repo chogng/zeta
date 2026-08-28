@@ -1546,6 +1546,19 @@ fn fork_preserves_parent_context_without_calling_the_model() {
     assert!(model_request_contains_text(&requests[1], "parent prompt"));
     assert!(model_request_contains_text(&requests[1], "done"));
     assert!(model_request_contains_text(&requests[1], "child prompt"));
+    assert_eq!(requests[0].prompt_cache_key.as_deref(), Some(session_id));
+    assert_eq!(requests[1].prompt_cache_key, requests[0].prompt_cache_key);
+    let prefix_end = requests[1].prompt_cache_prefix_end.unwrap() as usize;
+    assert!(prefix_end < requests[1].input.len() - 1);
+    assert!(requests[1].input[..=prefix_end].iter().any(|item| {
+        matches!(
+            item,
+            zeta_protocol::InputItem::Message(message)
+                if message.content.iter().any(|content| {
+                    matches!(content, zeta_protocol::ContentPart::Text(text) if text == "done")
+                })
+        )
+    }));
 }
 
 #[test]

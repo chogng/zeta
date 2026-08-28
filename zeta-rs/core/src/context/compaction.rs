@@ -211,6 +211,8 @@ impl ContextCompactionService for ModelContextCompactionService {
                 reasoning: None,
                 max_output_tokens: Some(request.target_tokens.get()),
                 temperature: None,
+                prompt_cache_key: None,
+                prompt_cache_prefix_end: None,
             },
             cancellation,
         )?;

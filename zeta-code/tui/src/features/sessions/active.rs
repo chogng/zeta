@@ -173,10 +173,10 @@ impl ActiveConversation {
         }
     }
 
-    pub(crate) fn archive_session_and_replace<T>(
+    pub(crate) fn archive_session<T>(
         &mut self,
         client: &mut AppServerClient<T>,
-    ) -> Result<ConversationChange, SessionsError>
+    ) -> Result<SessionId, SessionsError>
     where
         T: JsonRpcTransport,
     {
@@ -186,23 +186,16 @@ impl ActiveConversation {
             })?
             .session;
         let archived_id = self.session.session_id.clone();
-        client
+        self.session = client
             .request_session(SessionRequestParams {
                 command_id: new_command_id("archive"),
                 session_id: archived_id.clone(),
                 expected_sequence: self.session.sequence,
                 request: SessionRequest::Archive,
             })
-            .and_then(expect_session_result)?;
-        let (conversation, _) = create_conversation(client, "TUI conversation".into())?;
-        *self = conversation;
-        Ok(ConversationChange {
-            notice: format!(
-                "Archived session {archived_id}; started session {}.",
-                self.session.session_id
-            ),
-            transcript: ConversationTranscript::Clear,
-        })
+            .and_then(expect_session_result)?
+            .session;
+        Ok(archived_id)
     }
 
     pub(crate) fn replace_with_new<T>(

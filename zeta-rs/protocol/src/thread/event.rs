@@ -102,12 +102,35 @@ pub enum ThreadEvent {
         before_turn_id: TurnId,
         turns: Vec<Turn>,
     },
+    /// Legacy read-compatibility fact written by history schema version 13.
+    /// Current product code writes one `ForkTurnImported` per Turn followed by
+    /// `ForkHistoryImportCompleted`.
     ForkHistoryImported {
         thread_id: ThreadId,
         source_thread_id: ThreadId,
         #[ts(type = "number")]
         source_sequence: u64,
         turns: Vec<Turn>,
+    },
+    ForkTurnImported {
+        thread_id: ThreadId,
+        source_thread_id: ThreadId,
+        #[ts(type = "number")]
+        source_sequence: u64,
+        #[ts(type = "number")]
+        turn_index: u64,
+        turn: Box<Turn>,
+    },
+    ForkHistoryImportCompleted {
+        thread_id: ThreadId,
+        source_thread_id: ThreadId,
+        #[ts(type = "number")]
+        source_sequence: u64,
+        #[ts(type = "number")]
+        imported_turn_count: u64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        context_checkpoint: Option<ContextCheckpoint>,
     },
     ContextCheckpointCommitted {
         thread_id: ThreadId,
@@ -286,6 +309,8 @@ impl ThreadEvent {
             Self::AgentContextSeedCommitted { .. } => "agent.context_seed_committed",
             Self::HistoryImported { .. } => "thread.history_imported",
             Self::ForkHistoryImported { .. } => "thread.fork_history_imported",
+            Self::ForkTurnImported { .. } => "thread.fork_turn_imported",
+            Self::ForkHistoryImportCompleted { .. } => "thread.fork_history_import_completed",
             Self::ContextCheckpointCommitted { .. } => "context.checkpoint_committed",
             Self::ContextOverflowRecoveryCommitted { .. } => "context.overflow_recovery_committed",
             Self::TurnAccepted { .. } => "turn.accepted",
@@ -330,6 +355,8 @@ impl ThreadEvent {
             | Self::AgentContextSeedCommitted { thread_id, .. }
             | Self::HistoryImported { thread_id, .. }
             | Self::ForkHistoryImported { thread_id, .. }
+            | Self::ForkTurnImported { thread_id, .. }
+            | Self::ForkHistoryImportCompleted { thread_id, .. }
             | Self::ContextCheckpointCommitted { thread_id, .. }
             | Self::ContextOverflowRecoveryCommitted { thread_id, .. }
             | Self::TurnAccepted { thread_id, .. }

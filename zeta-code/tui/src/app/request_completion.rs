@@ -233,6 +233,9 @@ pub(super) fn apply_request_completion(
             for event in output.events.drain(..) {
                 app.update(event);
             }
+            if output.exit_requested {
+                return Some(TuiExit::UserRequested);
+            }
             if let Some(change) = output.conversation_change.take() {
                 let Some((subscription, switch)) = switched else {
                     app.update(AppEvent::FailureReported(

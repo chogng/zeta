@@ -361,6 +361,61 @@ fn core_managed_budget_freezes_the_request_output_limit() {
     assert_eq!(request.max_output_tokens, Some(128));
 }
 
+#[test]
+fn interrupted_history_keeps_partial_output_and_marks_the_reusable_prefix() {
+    let interrupted_turn_id = id::<TurnId>("interrupted");
+    let current_turn_id = id::<TurnId>("current");
+    let mut snapshot = snapshot(
+        current_turn_id.clone(),
+        vec![
+            ThreadItem::UserMessage {
+                item_id: id("interrupted-user"),
+                turn_id: interrupted_turn_id.clone(),
+                text: "unfinished prompt".into(),
+            },
+            ThreadItem::AgentMessage {
+                item_id: id("interrupted-agent"),
+                turn_id: interrupted_turn_id.clone(),
+                text: "partial answer".into(),
+            },
+            ThreadItem::UserMessage {
+                item_id: id("current-user"),
+                turn_id: current_turn_id,
+                text: "continue here".into(),
+            },
+        ],
+    );
+    let mut interrupted = snapshot.turns[0].clone();
+    interrupted.turn_id = interrupted_turn_id;
+    interrupted.status = TurnStatus::Interrupted;
+    snapshot.turns.insert(0, interrupted);
+
+    let request = assemble(&snapshot, Vec::new(), &HarnessContext::default()).unwrap();
+
+    assert!(request.input.iter().any(|item| {
+        matches!(
+            item,
+            InputItem::Message(message)
+                if message.content.iter().any(|content| {
+                    matches!(content, ContentPart::Text(text) if text.contains("<turn_aborted>"))
+                })
+        )
+    }));
+    let prefix_end = request.prompt_cache_prefix_end.unwrap();
+    let InputItem::Message(prefix_end_item) = &request.input[prefix_end as usize] else {
+        panic!("prompt cache prefix must end at the interruption marker");
+    };
+    assert!(matches!(
+        prefix_end_item.content.as_slice(),
+        [ContentPart::Text(text)] if text.contains("<turn_aborted>")
+    ));
+    assert!(matches!(
+        &request.input[prefix_end as usize + 1],
+        InputItem::Message(message)
+            if message.content == vec![ContentPart::Text("continue here".into())]
+    ));
+}
+
 fn assemble(
     snapshot: &ThreadSnapshot,
     tools: Vec<ToolDefinition>,
@@ -459,6 +514,7 @@ fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
         received_delegation_results: BTreeMap::new(),
         sent_agent_messages: BTreeMap::new(),
         received_agent_messages: BTreeMap::new(),
+        fork_import: None,
     }
 }
 

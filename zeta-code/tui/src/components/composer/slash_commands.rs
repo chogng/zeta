@@ -47,7 +47,7 @@ impl TuiSlashCommandAction {
             Self::Mcp => "list configured MCP tools",
             Self::Connectors => "show external service connections",
             Self::Resume => "list or resume a saved session",
-            Self::Archive => "archive the current session and start a new one",
+            Self::Archive => "archive the current session and exit",
             Self::Rewind => "return to an earlier message checkpoint",
             Self::Clear => "clear the terminal and start a new chat",
             Self::Config => "show the current configuration",

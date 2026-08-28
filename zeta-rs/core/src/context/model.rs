@@ -161,6 +161,7 @@ pub(crate) struct ContextInput {
     items: Vec<ThreadItem>,
     checkpoints: Vec<ContextCheckpoint>,
     terminal_turns: BTreeSet<TurnId>,
+    interrupted_turns: BTreeSet<TurnId>,
     item_sequences: BTreeMap<ItemId, u64>,
     tools: Vec<ToolDefinition>,
     budget: ContextBudget,
@@ -203,6 +204,12 @@ impl ContextInput {
                             | zeta_protocol::TurnStatus::Interrupted
                     )
                 })
+                .map(|turn| turn.turn_id.clone())
+                .collect(),
+            interrupted_turns: snapshot
+                .turns
+                .iter()
+                .filter(|turn| turn.status == zeta_protocol::TurnStatus::Interrupted)
                 .map(|turn| turn.turn_id.clone())
                 .collect(),
             item_sequences: snapshot.item_sequences.clone(),
@@ -252,6 +259,10 @@ impl ContextInput {
 
     pub(crate) fn is_terminal_turn(&self, turn_id: &TurnId) -> bool {
         self.terminal_turns.contains(turn_id)
+    }
+
+    pub(crate) fn interrupted_turns(&self) -> &BTreeSet<TurnId> {
+        &self.interrupted_turns
     }
 
     pub(crate) fn item_sequence(&self, item_id: &ItemId) -> Option<u64> {

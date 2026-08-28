@@ -1,6 +1,8 @@
 use super::*;
 use crate::InMemoryThreadStore;
 use crate::StartTurnRequest;
+use crate::thread_controller::CommitContextCheckpointRequest;
+use zeta_protocol::ContextSourceRange;
 
 fn coordinator() -> SessionCoordinator {
     SessionCoordinator::with_store(
@@ -235,7 +237,7 @@ fn next_approval_mode_is_durable_and_is_frozen_by_each_new_turn() {
 }
 
 #[test]
-fn fork_imports_the_terminal_parent_prefix_at_the_recorded_sequence() {
+fn fork_imports_the_exact_parent_snapshot_and_inherits_its_checkpoint() {
     let session_store = Arc::new(InMemorySessionStore::default());
     let thread_store = Arc::new(InMemoryThreadStore::default());
     let coordinator = SessionCoordinator::with_store(
@@ -275,13 +277,36 @@ fn fork_imports_the_terminal_parent_prefix_at_the_recorded_sequence() {
         .complete_turn(&root.thread_id, &completed.turn_id, "parent answer".into())
         .unwrap()
         .sequence;
+    let checkpoint = coordinator
+        .threads
+        .commit_context_checkpoint(
+            &root.thread_id,
+            CommitContextCheckpointRequest {
+                source_thread_sequence: completed_sequence,
+                covered: ContextSourceRange {
+                    start_sequence: 1,
+                    end_sequence: completed_sequence,
+                },
+                summary: "parent summary".into(),
+                schema_revision: "context-checkpoint-v1".into(),
+                prompt_revision: "compaction-v2".into(),
+                context_policy_revision: "context-policy-v1".into(),
+                generator_model: None,
+            },
+        )
+        .unwrap();
+    let checkpoint_sequence = coordinator
+        .threads
+        .read_thread(&root.thread_id)
+        .unwrap()
+        .sequence;
     let active = coordinator
         .threads
         .start_turn(
             &root.thread_id,
             StartTurnRequest {
                 command_id: CommandId::new("active-turn").unwrap(),
-                expected_sequence: SequenceExpectation::Exact(completed_sequence),
+                expected_sequence: SequenceExpectation::Exact(checkpoint_sequence),
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
@@ -326,8 +351,13 @@ fn fork_imports_the_terminal_parent_prefix_at_the_recorded_sequence() {
             parent_sequence: sequence,
         } if parent_thread_id == &root.thread_id && *sequence == parent_sequence
     ));
-    assert_eq!(child.turns.len(), 1);
+    assert_eq!(child.turns.len(), 2);
     assert_eq!(child.turns[0].turn_id, completed.turn_id);
+    assert_eq!(child.turns[1].turn_id, active.turn_id);
+    assert_eq!(
+        child.turns[1].status,
+        zeta_protocol::TurnStatus::Interrupted
+    );
     assert_eq!(
         child.turns[0].usage,
         zeta_protocol::ModelUsageSummary::default()
@@ -338,9 +368,17 @@ fn fork_imports_the_terminal_parent_prefix_at_the_recorded_sequence() {
     assert!(child.turns[0].items.iter().any(|item| {
         matches!(item, zeta_protocol::ThreadItem::AgentMessage { text, .. } if text == "parent answer")
     }));
-    assert!(!child.turns[0].items.iter().any(|item| {
+    assert!(child.turns[1].items.iter().any(|item| {
         matches!(item, zeta_protocol::ThreadItem::UserMessage { text, .. } if text == "unfinished prompt")
     }));
+    assert_eq!(
+        coordinator
+            .threads
+            .read_thread(&forked.thread_id)
+            .unwrap()
+            .context_checkpoints,
+        vec![checkpoint.clone()]
+    );
 
     coordinator
         .threads
@@ -357,17 +395,17 @@ fn fork_imports_the_terminal_parent_prefix_at_the_recorded_sequence() {
             .unwrap()
             .turns
             .len(),
-        1
+        2
     );
 
     drop(coordinator);
     let recovered_threads = ThreadController::with_store(thread_store);
-    let recovered = recovered_threads
-        .recover_thread(&forked.thread_id)
-        .unwrap()
-        .public_thread();
-    assert_eq!(recovered.turns.len(), 1);
-    assert_eq!(recovered.turns[0].turn_id, completed.turn_id);
+    let recovered = recovered_threads.recover_thread(&forked.thread_id).unwrap();
+    let recovered_thread = recovered.public_thread();
+    assert_eq!(recovered_thread.turns.len(), 2);
+    assert_eq!(recovered_thread.turns[0].turn_id, completed.turn_id);
+    assert_eq!(recovered_thread.turns[1].turn_id, active.turn_id);
+    assert_eq!(recovered.context_checkpoints, vec![checkpoint]);
 }
 
 #[test]

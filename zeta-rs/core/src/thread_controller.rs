@@ -565,7 +565,7 @@ impl ThreadController {
         })
     }
 
-    /// Creates a child Thread containing the source's terminal history at one exact fork point.
+    /// Creates a child Thread containing the source history at one exact fork point.
     ///
     /// The source prefix is replayed from durable events so Session saga recovery cannot import
     /// parent updates committed after the recorded fork sequence.
@@ -580,15 +580,8 @@ impl ThreadController {
                 "fork source belongs to another Session".into(),
             ));
         }
-        let mut imported_turns = source
-            .public_thread()
-            .turns
-            .into_iter()
-            .take_while(|turn| is_terminal_turn_status(turn.status))
-            .collect::<Vec<_>>();
-        for turn in &mut imported_turns {
-            turn.usage = zeta_protocol::ModelUsageSummary::default();
-        }
+        let imported_turns = fork_snapshot_turns(source.public_thread().turns);
+        let context_checkpoint = inherited_fork_checkpoint(&source, &imported_turns)?;
         let created = self.create_thread(CreateThreadRequest {
             session_id: request.session_id,
             thread_id: request.thread_id.clone(),
@@ -604,15 +597,31 @@ impl ThreadController {
             if snapshot.sequence > 1 {
                 return Ok(snapshot.clone());
             }
-            self.record_batch(
-                snapshot,
-                vec![ThreadEvent::ForkHistoryImported {
-                    thread_id: event_thread_id,
-                    source_thread_id: request.source_thread_id,
-                    source_sequence: request.source_sequence,
-                    turns: imported_turns,
-                }],
-            )?;
+            let imported_turn_count = u64::try_from(imported_turns.len())
+                .map_err(|_| CoreError::Journal("fork Turn count exceeds u64".into()))?;
+            let mut events = imported_turns
+                .into_iter()
+                .enumerate()
+                .map(|(turn_index, turn)| {
+                    Ok(ThreadEvent::ForkTurnImported {
+                        thread_id: event_thread_id.clone(),
+                        source_thread_id: request.source_thread_id.clone(),
+                        source_sequence: request.source_sequence,
+                        turn_index: u64::try_from(turn_index).map_err(|_| {
+                            CoreError::Journal("fork Turn index exceeds u64".into())
+                        })?,
+                        turn: Box::new(turn),
+                    })
+                })
+                .collect::<Result<Vec<_>, CoreError>>()?;
+            events.push(ThreadEvent::ForkHistoryImportCompleted {
+                thread_id: event_thread_id,
+                source_thread_id: request.source_thread_id,
+                source_sequence: request.source_sequence,
+                imported_turn_count,
+                context_checkpoint,
+            });
+            self.record_batch(snapshot, events)?;
             Ok(snapshot.clone())
         })
     }
@@ -2072,6 +2081,69 @@ fn is_terminal_turn_status(status: TurnStatus) -> bool {
         status,
         TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted
     )
+}
+
+fn fork_snapshot_turns(turns: Vec<zeta_protocol::Turn>) -> Vec<zeta_protocol::Turn> {
+    let mut imported = Vec::new();
+    for mut turn in turns {
+        let terminal = is_terminal_turn_status(turn.status);
+        if !terminal {
+            turn.status = TurnStatus::Interrupted;
+            turn.pending_interaction = None;
+            turn.error = None;
+        }
+        turn.usage = zeta_protocol::ModelUsageSummary::default();
+        turn.context_usage = None;
+        retain_complete_tool_exchanges(&mut turn.items);
+        imported.push(turn);
+        if !terminal {
+            break;
+        }
+    }
+    imported
+}
+
+fn retain_complete_tool_exchanges(items: &mut Vec<ThreadItem>) {
+    let completed_calls = items
+        .iter()
+        .filter_map(|item| match item {
+            ThreadItem::ToolResult { tool_call_id, .. } => Some(tool_call_id.clone()),
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>();
+    items.retain(|item| {
+        !matches!(
+            item,
+            ThreadItem::ToolCall { tool_call_id, .. }
+                if !completed_calls.contains(tool_call_id)
+        )
+    });
+}
+
+fn inherited_fork_checkpoint(
+    source: &ThreadSnapshot,
+    imported_turns: &[zeta_protocol::Turn],
+) -> Result<Option<zeta_protocol::ContextCheckpoint>, CoreError> {
+    let Some(checkpoint) = source.context_checkpoints.last().cloned() else {
+        return Ok(None);
+    };
+    let imported_items = imported_turns
+        .iter()
+        .flat_map(|turn| turn.items.iter())
+        .map(ThreadItem::item_id)
+        .collect::<Vec<_>>();
+    if checkpoint.referenced_items.len() > imported_items.len()
+        || checkpoint
+            .referenced_items
+            .iter()
+            .zip(imported_items)
+            .any(|(referenced, imported)| referenced != imported)
+    {
+        return Err(CoreError::Journal(
+            "fork source checkpoint is not a prefix of the imported history".into(),
+        ));
+    }
+    Ok(Some(checkpoint))
 }
 
 fn matching_created_thread(

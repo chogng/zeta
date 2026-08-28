@@ -604,7 +604,7 @@ spawn 前执行 `env_clear`，所以 PTY 看不到最终 map 之外的 App Serve
 
 ### 分叉 Thread
 
-`session/request` 的 `request.type = forkThread` 比 create 多一个 `parentThreadId`。Server 执行命令时读取父 Thread 的当前 sequence，并把它持久化进 `ThreadOrigin::Fork`。Core 随后只重放到这个 sequence，把其中从开头连续出现的 terminal Turns 作为 `ForkHistoryImported` 写入子 Thread；正在执行或排队的 Turn 不导入。子 Thread 拥有独立历史和 sequence，父 Thread 的后续提交不会改变它。
+`session/request` 的 `request.type = forkThread` 比 create 多一个 `parentThreadId`。Server 执行命令时读取父 Thread 的当前 sequence，并把它持久化进 `ThreadOrigin::Fork`。Core 只重放到这个 sequence：已结束的 Turn 逐条写成 `ForkTurnImported`；第一个正在进行的 Turn 保留已持久化内容、移除没有结果的 Tool Call，并在子 Thread 中标成 `Interrupted`；它之后尚未执行的 Turn 不导入。`ForkHistoryImportCompleted` 保存导入数量和父 Thread 的最新已验证上下文检查点。子 Thread 拥有独立历史和 sequence，父 Thread 的后续提交不会改变它。
 
 ### 生命周期
 

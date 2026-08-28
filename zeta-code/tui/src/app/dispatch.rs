@@ -43,6 +43,7 @@ pub(crate) struct ProductCommandOutput {
     pub(crate) events: Vec<AppEvent>,
     pub(crate) conversation_change: Option<ConversationChange>,
     pub(crate) workspace_reconnect: Option<TuiWorkspaceReconnect>,
+    pub(crate) exit_requested: bool,
 }
 
 pub(crate) fn execute_product_command<T>(
@@ -61,6 +62,7 @@ where
             events: output.events,
             conversation_change: output.conversation_change,
             workspace_reconnect: output.workspace_reconnect,
+            exit_requested: output.exit_requested,
         })
         .map_err(|error| error.to_string())
 }
@@ -174,10 +176,11 @@ impl ActiveConversation {
                 }
             }
             TuiSlashCommandAction::Archive => {
-                output.conversation_change = Some(
-                    self.archive_session_and_replace(client)
-                        .map_err(session_error)?,
-                );
+                let archived_id = self.archive_session(client).map_err(session_error)?;
+                output.events.push(AppEvent::ProductNotice(format!(
+                    "Archived session {archived_id}."
+                )));
+                output.exit_requested = true;
             }
             TuiSlashCommandAction::Rewind => {
                 if arguments.is_empty() {
@@ -316,6 +319,7 @@ struct CommandOutput {
     events: Vec<AppEvent>,
     conversation_change: Option<ConversationChange>,
     workspace_reconnect: Option<TuiWorkspaceReconnect>,
+    exit_requested: bool,
 }
 
 #[cfg(test)]

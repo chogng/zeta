@@ -48,7 +48,7 @@ Tool、approval policy 或 persistence。
 - `/rewind` 或主界面 500 ms 内连续按两次 Esc 打开可搜索的历史消息 checkpoint Pane；Enter
   通过 typed `session/request` 的 `RewindThread` operation，创建具有 Rewind lineage 的子 Thread，只导入所选消息之前的
   terminal Turns。原 Thread 保持不变，TUI 切换订阅并以 `/rewind <turn-id>` 记录结果；
-- `/resume` 提供 Session picker；`/archive` 归档当前 Session 并建立 replacement Session。所有 mutation 都通过 typed `session/request`，随后在后台切换 subscription；
+- `/resume` 提供 Session picker；`/archive` 通过 typed `session/request` 归档当前 Session，成功后退出 TUI，不创建新 Session；失败时保留当前会话并显示错误；
 - `/config` 异步读取服务端配置、供应商目录和当前 Session 的附加目录权限；Add-dir 标签页始终提供文件读取/修改/执行/监听、Workspace Files/Search、Instructions & Agents、Skills、MCP、LSP、Hooks 和 Plugins 十二项新增目录默认授权，并在已有目录时追加目录级开关，使用 Workspace access revision 防止旧页面覆盖新选择。Config 标签页包含本地 Mouse interactions 开关，Providers 标签页展示后端注册的完整供应商目录，并通过隐藏输入框把 API key 交给 profile SecretStore；`/model` 使用 expected revision 更新 preferred model；
 - 启动时读取 client 保存的 `initialize.slashCommands` snapshot，通过
   [`zeta-slash-commands`](../../zeta-rs/slash-commands/README.md) 与 built-ins 做防冲突合并；
@@ -56,7 +56,7 @@ Tool、approval policy 或 persistence。
   input 提交；slash popup 不清空或铺设独立背景，透明继承当前 TUI 主题 surface，选中项使用候选 highlight 色粗体且不添加行首标记；
 - Enter 按 composer 顺序提交由 text/image items 组成的 Turn；active Turn 执行期间仍可编辑并提交
   follow-up，Core 的 per-Thread mailbox 按接受顺序串行执行这些 Turn；
-- 启动及 `/new`、`/fork`、`/resume`、`/rewind` 后维护 active Thread subscription；`/fork` 的历史继承由 Core 按持久化的父 Thread sequence 完成，TUI 只切换订阅并安装子 Thread 的权威 snapshot；typed update 按 Session/Thread scope 和 durable sequence 过滤，并通过 `session/thread/read` 触发权威 snapshot resync，不在 TUI 内复制 Thread reducer；
+- 启动及 `/new`、`/fork`、`/resume`、`/rewind` 后维护 active Thread subscription；`/fork` 的历史继承由 Core 按持久化的父 Thread sequence 完成，包括已结束 Turn、首个中断 Turn 的已持久化内容和最新上下文检查点，TUI 只切换订阅并安装子 Thread 的权威 snapshot；typed update 按 Session/Thread scope 和 durable sequence 过滤，并通过 `session/thread/read` 触发权威 snapshot resync，不在 TUI 内复制 Thread reducer；
 - `AppServerEvents` 与 terminal input 由独立、有界 event source 主动唤醒单写者 loop；typed request
   由 `RequestTask` 在后台执行，完成结果回到 event loop，排队的用户 intent 不会静默丢失；active
   Turn 不再使用 25 ms `session/thread/read` polling fallback；

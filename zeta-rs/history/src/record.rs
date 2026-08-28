@@ -6,10 +6,10 @@ use zeta_protocol::ThreadEvent;
 use zeta_protocol::ThreadId;
 
 /// Schema version written for newly persisted Thread history records.
-pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 13;
+pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 14;
 
 /// Oldest Thread history record schema accepted during recovery.
-pub const MINIMUM_SUPPORTED_EVENT_SCHEMA_VERSION: u32 = 13;
+pub const MINIMUM_SUPPORTED_EVENT_SCHEMA_VERSION: u32 = 12;
 
 /// Returns whether a persisted Thread history record can be replayed by this build.
 pub const fn supports_stored_event_schema_version(schema_version: u32) -> bool {

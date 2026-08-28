@@ -7,8 +7,12 @@ use crate::components::composer::{
 use crate::components::transcript::MessageRole;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::fs;
+use std::ops::Deref;
+use std::ops::DerefMut;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::MutexGuard;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -134,17 +138,24 @@ fn fork_persists_lineage_switches_threads_and_does_not_call_the_model() {
 }
 
 #[test]
-fn archive_persists_status_starts_a_replacement_and_does_not_call_the_model() {
+fn archive_persists_status_requests_exit_and_does_not_call_the_model() {
     let (mut client, state_root, model) = client_with_model_probe();
-    let mut conversation = ActiveConversation::start(&mut client, "archive me".into()).unwrap();
+    let conversation = ActiveConversation::start(&mut client, "archive me".into()).unwrap();
     let archived_session_id = conversation.session_id().clone();
     let mut app = App::new();
 
-    conversation.execute(
+    let output = super::execute_product_command(
+        conversation,
         &mut client,
         invocation(TuiSlashCommandAction::Archive, ""),
-        &mut app,
-    );
+        Vec::new(),
+    )
+    .unwrap();
+    assert!(output.exit_requested);
+    let conversation = output.conversation;
+    for event in output.events {
+        app.update(event);
+    }
 
     let archived = client
         .read_session(SessionReadParams {
@@ -153,20 +164,10 @@ fn archive_persists_status_starts_a_replacement_and_does_not_call_the_model() {
         .unwrap()
         .session;
     assert_eq!(archived.status, SessionStatus::Archived);
-    assert_ne!(conversation.session_id(), &archived_session_id);
-    let replacement = client
-        .read_session(SessionReadParams {
-            session_id: conversation.session_id().clone(),
-        })
-        .unwrap()
-        .session;
-    assert_eq!(replacement.status, SessionStatus::Active);
+    assert_eq!(conversation.session_id(), &archived_session_id);
     assert_eq!(
         app.messages().last().unwrap().text,
-        format!(
-            "Archived session {archived_session_id}; started session {}.",
-            conversation.session_id()
-        )
+        format!("Archived session {archived_session_id}.")
     );
     assert_eq!(model.calls(), 0);
 
@@ -406,6 +407,7 @@ fn rewind_without_arguments_opens_the_checkpoint_pane() {
 
 #[test]
 fn add_dir_adds_lists_and_removes_the_exact_session_directory() {
+    let _test_guard = dispatch_test_guard();
     let state_root = std::env::temp_dir().join(format!(
         "zeta-tui-add-dir-{}-{}",
         std::process::id(),
@@ -531,16 +533,13 @@ fn invocation(command: TuiSlashCommandAction, arguments: &str) -> SlashCommandIn
     }
 }
 
-fn client() -> (AppServerClient<InProcessTransport>, PathBuf) {
+fn client() -> (DispatchTestClient, PathBuf) {
     let (client, state_root, _) = client_with_model_probe();
     (client, state_root)
 }
 
-fn client_with_model_probe() -> (
-    AppServerClient<InProcessTransport>,
-    PathBuf,
-    Arc<OfflineOperationClient>,
-) {
+fn client_with_model_probe() -> (DispatchTestClient, PathBuf, Arc<OfflineOperationClient>) {
+    let guard = dispatch_test_guard();
     static NEXT_STATE_ROOT: AtomicU64 = AtomicU64::new(1);
     let state_root = std::env::temp_dir().join(format!(
         "zeta-tui-slash-dispatch-{}-{}-{}",
@@ -563,7 +562,41 @@ fn client_with_model_probe() -> (
         .with_model_operation_client(model.clone()),
     )
     .unwrap();
-    (client, state_root, model)
+    (
+        DispatchTestClient {
+            client,
+            _guard: guard,
+        },
+        state_root,
+        model,
+    )
+}
+
+static DISPATCH_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+fn dispatch_test_guard() -> MutexGuard<'static, ()> {
+    DISPATCH_TEST_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+struct DispatchTestClient {
+    client: AppServerClient<InProcessTransport>,
+    _guard: MutexGuard<'static, ()>,
+}
+
+impl Deref for DispatchTestClient {
+    type Target = AppServerClient<InProcessTransport>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.client
+    }
+}
+
+impl DerefMut for DispatchTestClient {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.client
+    }
 }
 
 #[derive(Default)]

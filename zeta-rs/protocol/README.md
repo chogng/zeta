@@ -98,6 +98,8 @@ Command ID、expected sequence、receipt 和 idempotent replay 是 Core/store ex
 只能紧跟 `ThreadCreated`，只包含 source checkpoint 之前的 terminal Turns，不会截断或改写 source
 Thread。
 
+Fork 子 Thread 在 `ThreadCreated` 后按顺序写入一个或多个 `ThreadEvent::ForkTurnImported`，再用 `ThreadEvent::ForkHistoryImportCompleted` 固定父 Thread、精确 sequence、导入数量和继承的上下文检查点。正在进行的 Turn 会以 `Interrupted` 状态保留已持久化且工具调用配对完整的内容；排在它之后、尚未执行的 Turn 不进入子历史。schema version 13 的 `ForkHistoryImported` 只用于读取既有记录。
+
 `ThreadEvent::ContextOverflowRecoveryCommitted` 将一个已验证 `ContextCheckpoint` 绑定到触发恢复的 Running Turn。Core reducer 用它保证同一 Turn 只做一次供应商溢出恢复；普通预算压缩继续使用不带 Turn 绑定的 `ContextCheckpointCommitted`。
 
 `ThreadEvent::TurnSteered` 把 exact `SteerTurn` receipt 绑定到紧邻、同序的 durable 用户 Item；
@@ -186,7 +188,8 @@ ModelRequest
 ├─ instructions
 ├─ InputItem::{Message,ToolResult}
 ├─ ToolDefinition / ToolChoice
-└─ reasoning / token / temperature settings
+├─ reasoning / token / temperature settings
+└─ prompt cache key / reusable input prefix
 
 ModelResponse
 ├─ ResponseItem::{Text,Refusal,Reasoning,ToolCall}
@@ -195,7 +198,7 @@ ModelResponse
 ```
 
 `ModelStreamEvent` 当前只有 text/reasoning delta；最终 `ModelResponse` 仍是 authoritative outcome。
-Provider endpoint、header、cache-control、JSON shape、SSE event name 和 retry hint 不进入本 crate。
+`prompt_cache_key` 和 `prompt_cache_prefix_end` 表达跨供应商都能理解的最小缓存意图；具体 cache-control、TTL、retention、endpoint、header、JSON shape、SSE event name 和 retry hint 不进入本 crate。
 
 `ToolName` 拒绝 empty 与 provider-specific slash syntax；provider adapter 负责 wire name conversion，
 不应污染 canonical name。

@@ -156,6 +156,7 @@ fn build_count_request(model: &str, request: &ModelRequest) -> Result<Value, Api
         "include",
         "max_output_tokens",
         "temperature",
+        "prompt_cache_key",
     ] {
         body.remove(field);
     }
@@ -204,6 +205,12 @@ fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError>
     }
     if let Some(temperature) = request.temperature {
         body.insert("temperature".into(), json!(temperature));
+    }
+    if let Some(prompt_cache_key) = &request.prompt_cache_key {
+        body.insert(
+            "prompt_cache_key".into(),
+            Value::String(prompt_cache_key.clone()),
+        );
     }
     Ok(Value::Object(body))
 }

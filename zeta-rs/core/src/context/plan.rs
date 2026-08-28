@@ -1,6 +1,7 @@
 use super::ContextTokenCount;
 use super::InstructionFragment;
 use crate::ContextEvidence;
+use std::collections::BTreeSet;
 use std::fmt;
 use zeta_protocol::ContextCheckpoint;
 use zeta_protocol::ContextSourceRange;
@@ -101,6 +102,7 @@ pub(crate) struct ContextPlan {
     omitted_instructions: Vec<OmittedInstruction>,
     checkpoint: Option<ContextCheckpoint>,
     selected_items: Vec<ThreadItem>,
+    interrupted_turns: BTreeSet<TurnId>,
     evidence: Vec<ContextEvidence>,
     tools: Vec<ToolDefinition>,
     budget: ContextBudgetReport,
@@ -114,6 +116,7 @@ pub(super) struct ContextPlanInput {
     pub omitted_instructions: Vec<OmittedInstruction>,
     pub checkpoint: Option<ContextCheckpoint>,
     pub selected_items: Vec<ThreadItem>,
+    pub interrupted_turns: BTreeSet<TurnId>,
     pub evidence: Vec<ContextEvidence>,
     pub tools: Vec<ToolDefinition>,
     pub budget: ContextBudgetReport,
@@ -129,6 +132,7 @@ impl ContextPlan {
             omitted_instructions: input.omitted_instructions,
             checkpoint: input.checkpoint,
             selected_items: input.selected_items,
+            interrupted_turns: input.interrupted_turns,
             evidence: input.evidence,
             tools: input.tools,
             budget: input.budget,
@@ -157,6 +161,10 @@ impl ContextPlan {
 
     pub(crate) fn current_turn_id(&self) -> &TurnId {
         &self.current_turn_id
+    }
+
+    pub(crate) fn is_interrupted_turn(&self, turn_id: &TurnId) -> bool {
+        self.interrupted_turns.contains(turn_id)
     }
 
     pub(crate) fn evidence(&self) -> &[ContextEvidence] {

@@ -190,7 +190,7 @@ fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError>
             })),
         }
     }
-    mark_rolling_message_cache_breakpoint(&mut messages);
+    mark_message_cache_breakpoint(&mut messages, request.prompt_cache_prefix_end)?;
     let mut body = Map::from_iter([
         ("model".into(), Value::String(model.into())),
         ("messages".into(), Value::Array(messages)),
@@ -226,25 +226,30 @@ fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError>
     Ok(Value::Object(body))
 }
 
-fn mark_rolling_message_cache_breakpoint(messages: &mut [Value]) {
-    let Some(message_index) = messages
-        .iter()
-        .enumerate()
-        .rev()
-        .find(|(_, message)| message.get("role").and_then(Value::as_str) == Some("user"))
-        .map(|(index, _)| index)
-    else {
-        return;
+fn mark_message_cache_breakpoint(
+    messages: &mut [Value],
+    prefix_end: Option<u32>,
+) -> Result<(), ApiError> {
+    let Some(prefix_end) = prefix_end else {
+        return Ok(());
     };
-    let Some(content) = messages[message_index]
-        .get_mut("content")
-        .and_then(Value::as_array_mut)
-    else {
-        return;
+    let message_index = usize::try_from(prefix_end)
+        .map_err(|_| ApiError::InvalidRequest("prompt cache prefix index exceeds usize".into()))?;
+    let Some(message) = messages.get_mut(message_index) else {
+        return Err(ApiError::InvalidRequest(format!(
+            "prompt cache prefix index {prefix_end} is outside the model input"
+        )));
     };
-    if let Some(last) = content.last_mut() {
-        mark_cache_control(last);
-    }
+    let Some(content) = message.get_mut("content").and_then(Value::as_array_mut) else {
+        return Err(ApiError::InvalidRequest(
+            "prompt cache prefix must end at a message with content".into(),
+        ));
+    };
+    let Some(last) = content.last_mut() else {
+        return Ok(());
+    };
+    mark_cache_control(last);
+    Ok(())
 }
 
 fn mark_cache_control(value: &mut Value) {
