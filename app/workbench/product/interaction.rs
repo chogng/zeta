@@ -71,11 +71,9 @@ impl ProductApp {
         let session_hovered = window_active
             && self
                 .ui_dispatch
-                .is_hovered(zeta_workbench::TAB_CONTAINER_RESIZE_HANDLE);
-        let agent_hovered = window_active
-            && self
-                .ui_dispatch
-                .is_hovered(zeta_workbench::INSPECTOR_RESIZE_HANDLE);
+                .is_hovered(crate::TAB_CONTAINER_RESIZE_HANDLE);
+        let agent_hovered =
+            window_active && self.ui_dispatch.is_hovered(crate::INSPECTOR_RESIZE_HANDLE);
         let session_presence = if session_hovered {
             SashPointerPresence::Over
         } else {
@@ -181,18 +179,18 @@ impl ProductApp {
             return;
         }
         if let Some(intent) =
-            zeta_workbench::tab_intent_for_element(self.workbench.workbench().tab_part(), id)
+            crate::tab_intent_for_element(self.workbench.workbench().tab_part(), id)
         {
             match intent {
-                zeta_workbench::TabIntent::Activate(TabInputKey::Settings) => {
+                crate::TabIntent::Activate(TabInputKey::Settings) => {
                     self.activate_settings_tab();
                 }
-                zeta_workbench::TabIntent::Activate(tab @ TabInputKey::Session(_)) => {
+                crate::TabIntent::Activate(tab @ TabInputKey::Session(_)) => {
                     if self.workbench.activate_tab(tab.clone()) {
                         self.mount_session_pane(&tab);
                     }
                 }
-                zeta_workbench::TabIntent::OpenActions(tab) => {
+                crate::TabIntent::OpenActions(tab) => {
                     if let Some(bounds) = self
                         .presentation
                         .as_ref()
@@ -202,13 +200,13 @@ impl ProductApp {
                         let _ = self.open_tab_context_menu(tab, point);
                     }
                 }
-                zeta_workbench::TabIntent::Close(tab) => {
+                crate::TabIntent::Close(tab) => {
                     let _ = self.close_workbench_tab(&tab);
                 }
             }
             return;
         }
-        if let Some(request) = zeta_workbench::command_request_for_element(id) {
+        if let Some(request) = crate::command_request_for_element(id) {
             self.dispatch_command(request);
         }
     }

@@ -11309,8 +11309,14 @@ dependencies = [
 name = "zeta-editor-host"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "serde_json",
+ "zeta-app-server-client",
+ "zeta-app-server-protocol",
  "zeta-editor",
+ "zeta-install-context",
  "zeta-lsp-manager",
+ "zeta-lsp-server-provider",
  "zeta-text-file",
  "zeta-ui-components",
  "zeta-ui-theme",
@@ -12118,12 +12124,17 @@ name = "zeta-terminal-workspace"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64 0.22.1",
+ "tokio",
  "unicode-width 0.2.0",
+ "zeta-app-server-client",
+ "zeta-app-server-protocol",
  "zeta-protocol",
+ "zeta-remote-connections",
  "zeta-terminal",
  "zeta-ui-components",
  "zeta-ui-theme",
- "zeta-workbench-model",
+ "zeta-utils-pty",
  "zui",
 ]
 
@@ -12379,14 +12390,12 @@ name = "zeta-workbench"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "base64 0.22.1",
  "flate2",
  "serde_json",
  "sha2 0.10.9",
  "signal-hook",
  "tar",
  "tempfile",
- "tokio",
  "unicode-width 0.2.0",
  "zeta-app-server-client",
  "zeta-app-server-daemon",
@@ -12399,11 +12408,9 @@ dependencies = [
  "zeta-files",
  "zeta-icons",
  "zeta-input-classifier",
- "zeta-install-context",
  "zeta-keybinding",
  "zeta-keybindings-host",
  "zeta-lsp-manager",
- "zeta-lsp-server-provider",
  "zeta-protocol",
  "zeta-remote",
  "zeta-remote-connections",
@@ -12420,17 +12427,8 @@ dependencies = [
  "zeta-ui-components",
  "zeta-ui-theme",
  "zeta-utils-path",
- "zeta-utils-pty",
- "zeta-workbench-model",
  "zeta-workspace",
  "zui",
-]
-
-[[package]]
-name = "zeta-workbench-model"
-version = "0.1.0"
-dependencies = [
- "zeta-protocol",
 ]
 
 [[package]]

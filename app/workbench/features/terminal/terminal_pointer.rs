@@ -4,12 +4,10 @@ use zui::input::{ElementState, ModifiersState, MouseButton, MouseScrollDelta};
 
 pub(crate) use zeta_terminal_workspace::{PointerInput, TerminalPointer};
 
+use crate::PaneGroupId as PaneId;
 use crate::ProductApp;
 use crate::terminal_session::TerminalSession;
-use zeta_workbench::PaneGroupId as PaneId;
-use zeta_workbench::{
-    terminal_mouse_position_for_viewport, terminal_pane_mouse_position_for_viewport,
-};
+use crate::{terminal_mouse_position_for_viewport, terminal_pane_mouse_position_for_viewport};
 
 pub(crate) trait TerminalPointerRouting {
     fn route_moved(

@@ -62,13 +62,8 @@ pub use tab_container::TabContainerLayout;
 pub use tab_container::TabContainerLayoutSpec;
 pub use workbench::WorkbenchLayout;
 pub use workbench::WorkbenchLayoutSpec;
-pub use workbench::WorkbenchPart;
 pub use workspace::InspectorLayoutSpec;
 pub use workspace::WorkspaceLayout;
-
-const INSPECTOR_MINIMUM_WIDTH: f32 = 360.0;
-const INSPECTOR_MAXIMUM_WIDTH: f32 = 800.0;
-const INSPECTOR_MINIMUM_MAIN_WIDTH: f32 = 400.0;
 
 /// Canonical visibility, sizing, and resize-gesture state for Workbench parts.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -99,41 +94,8 @@ impl WorkbenchLayoutState {
         self.inspector
     }
 
-    /// Resolves the complete Workbench geometry from canonical layout state.
-    pub fn for_viewport(
-        self,
-        titlebar_height: f32,
-        viewport: LogicalViewport,
-    ) -> Option<WorkbenchLayout> {
-        WorkbenchLayoutSpec::new(
-            titlebar_height,
-            self.tab_container.layout_spec(),
-            self.inspector_layout_spec(),
-        )
-        .for_viewport(viewport)
-    }
-
-    /// Returns the inspector sizing policy used by every frame.
-    pub fn inspector_layout_spec(self) -> InspectorLayoutSpec {
-        InspectorLayoutSpec::new(
-            if self.inspector.is_expanded() {
-                PartVisibility::Expanded
-            } else {
-                PartVisibility::Collapsed
-            },
-            self.inspector.preferred_width(),
-            INSPECTOR_MINIMUM_WIDTH,
-            INSPECTOR_MAXIMUM_WIDTH,
-            INSPECTOR_MINIMUM_MAIN_WIDTH,
-        )
-    }
-
     pub fn toggle_tab_container(&mut self) {
         self.tab_container.toggle();
-    }
-
-    pub fn toggle_inspector(&mut self) {
-        self.inspector.toggle();
     }
 
     pub fn expand_inspector(&mut self) {
@@ -219,10 +181,6 @@ impl WorkbenchLayoutState {
 
     pub fn advance_sashes(&mut self, now: Instant) -> bool {
         self.tab_container.advance_sash(now) | self.inspector_resize.advance(now)
-    }
-
-    pub const fn tab_sash_state(self) -> SashState {
-        self.tab_container.sash_state()
     }
 
     pub const fn inspector_sash_state(self) -> SashState {

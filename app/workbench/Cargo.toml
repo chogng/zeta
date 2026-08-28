@@ -12,10 +12,8 @@ path = "lib.rs"
 
 [dependencies]
 anyhow = { workspace = true }
-base64 = { workspace = true }
 serde_json = { workspace = true }
 signal-hook = { workspace = true }
-tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
 unicode-width = { workspace = true }
 zeta-app-server-client = { workspace = true }
 zeta-app-server-daemon = { workspace = true }
@@ -28,11 +26,9 @@ zeta-file-search = { workspace = true }
 zeta-files = { workspace = true }
 zeta-icons = { workspace = true }
 zeta-input-classifier = { workspace = true }
-zeta-install-context = { workspace = true }
 zeta-keybinding = { workspace = true }
 zeta-keybindings-host = { workspace = true }
 zeta-lsp-manager = { workspace = true }
-zeta-lsp-server-provider = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-remote = { workspace = true }
 zeta-remote-connections = { workspace = true }
@@ -49,8 +45,6 @@ zeta-theme = { workspace = true }
 zeta-ui-components = { workspace = true }
 zeta-ui-theme = { workspace = true }
 zeta-utils-path = { workspace = true }
-zeta-utils-pty = { workspace = true }
-zeta-workbench-model = { workspace = true }
 zui = { workspace = true, features = ["wgpu"] }
 
 [lints]

@@ -3,7 +3,6 @@
 use std::collections::HashMap;
 
 use crate::ClosedTab;
-use crate::LogicalViewport;
 use crate::Pane;
 use crate::PaneGroupId;
 use crate::PaneInput;
@@ -19,8 +18,6 @@ use crate::TabInput;
 use crate::TabInputChange;
 use crate::TabInputKey;
 use crate::Workbench;
-use crate::WorkbenchLayout;
-use crate::WorkbenchLayoutSpec;
 use crate::WorkbenchLayoutState;
 use std::time::Instant;
 use zeta_commands::AppCommandId;
@@ -57,28 +54,10 @@ impl PaneKey {
     pub const fn pane(&self) -> PaneGroupId {
         self.pane
     }
-
-    /// Returns the group-local input identity.
-    pub const fn input(&self) -> PaneInputId {
-        self.input
-    }
-}
-
-/// Opaque identity for one binding entry.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct PaneBindingId(u64);
-
-impl PaneBindingId {
-    const FIRST: u64 = 1;
-
-    /// Returns the process-local binding number.
-    pub const fn value(self) -> u64 {
-        self.0
-    }
 }
 
 struct BindingEntry<B> {
-    id: PaneBindingId,
+    id: u64,
     binding: B,
 }
 
@@ -91,17 +70,17 @@ impl<B> PaneHost<B> {
     fn new() -> Self {
         Self {
             bindings: HashMap::new(),
-            next_binding_id: PaneBindingId::FIRST,
+            next_binding_id: 1,
         }
     }
 
-    fn insert(&mut self, key: PaneKey, binding: B) -> (PaneBindingId, Option<B>) {
+    fn insert(&mut self, key: PaneKey, binding: B) -> Option<B> {
         let id = self.allocate_binding_id();
         let previous = self
             .bindings
             .insert(key, BindingEntry { id, binding })
             .map(|entry| entry.binding);
-        (id, previous)
+        previous
     }
 
     fn ensure_with(&mut self, key: PaneKey, create: impl FnOnce() -> B) -> &mut B {
@@ -164,13 +143,12 @@ impl<B> PaneHost<B> {
         Some(PaneMount {
             key,
             input,
-            binding_id: entry.id,
             binding: &entry.binding,
         })
     }
 
-    fn allocate_binding_id(&mut self) -> PaneBindingId {
-        let id = PaneBindingId(self.next_binding_id);
+    fn allocate_binding_id(&mut self) -> u64 {
+        let id = self.next_binding_id;
         self.next_binding_id = self
             .next_binding_id
             .checked_add(1)
@@ -183,7 +161,6 @@ impl<B> PaneHost<B> {
 pub struct PaneMount<'a, B> {
     key: &'a PaneKey,
     input: &'a PaneInput,
-    binding_id: PaneBindingId,
     binding: &'a B,
 }
 
@@ -211,16 +188,6 @@ impl<'a, B> PaneMount<'a, B> {
         self.input.kind()
     }
 
-    /// Returns the selected logical content description.
-    pub const fn input(&self) -> &'a PaneInput {
-        self.input
-    }
-
-    /// Returns the opaque binding identity.
-    pub const fn binding_id(&self) -> PaneBindingId {
-        self.binding_id
-    }
-
     /// Returns the capability-owned runtime binding.
     pub const fn binding(&self) -> &'a B {
         self.binding
@@ -230,25 +197,13 @@ impl<'a, B> PaneMount<'a, B> {
 /// Result of selecting or opening content in a pane group.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaneActivation {
-    previous: Option<PaneKey>,
     current: PaneKey,
-    opened: bool,
 }
 
 impl PaneActivation {
-    /// Returns the previously selected content, when selection changed.
-    pub const fn previous(&self) -> Option<&PaneKey> {
-        self.previous.as_ref()
-    }
-
     /// Returns the selected content identity.
     pub const fn current(&self) -> &PaneKey {
         &self.current
-    }
-
-    /// Returns whether a new logical input and binding were created.
-    pub const fn opened(&self) -> bool {
-        self.opened
     }
 }
 
@@ -493,10 +448,6 @@ impl<B> WorkbenchHost<B> {
         self.layout.toggle_tab_container();
     }
 
-    pub fn toggle_inspector(&mut self) {
-        self.layout.toggle_inspector();
-    }
-
     pub fn expand_inspector(&mut self) {
         self.layout.expand_inspector();
     }
@@ -578,10 +529,6 @@ impl<B> WorkbenchHost<B> {
 
     pub fn advance_layout_sashes(&mut self, now: Instant) -> bool {
         self.layout.advance_sashes(now)
-    }
-
-    pub const fn tab_sash_state(&self) -> SashState {
-        self.layout.tab_sash_state()
     }
 
     pub const fn inspector_sash_state(&self) -> SashState {
@@ -716,7 +663,7 @@ impl<B> WorkbenchHost<B> {
         let input = part
             .active_input_id(pane)
             .expect("new tab must own its initial pane input");
-        let (_, previous) = self
+        let previous = self
             .pane_host
             .insert(PaneKey::new(tab.clone(), pane, input), binding);
         assert!(
@@ -752,58 +699,33 @@ impl<B> WorkbenchHost<B> {
     ) -> Option<PaneActivation> {
         let part = self.workbench.pane_part(tab)?;
         let group = part.group(pane)?;
-        let previous = group
-            .active_input_id()
-            .map(|input| PaneKey::new(tab.clone(), pane, input));
         let existing = group
             .input_ids()
             .into_iter()
             .find(|id| group.input(*id) == Some(&input));
 
-        let (input_id, opened) = match existing {
+        let input_id = match existing {
             Some(input_id) => {
                 let activated = self.workbench.activate_input(tab, pane, input_id);
                 assert!(activated, "resolved pane input must activate");
-                (input_id, false)
+                input_id
             }
             None => {
                 let input_id = self.workbench.open_input(tab, pane, input)?;
-                let (_, previous_binding) = self
+                let previous_binding = self
                     .pane_host
                     .insert(PaneKey::new(tab.clone(), pane, input_id), create_binding());
                 assert!(
                     previous_binding.is_none(),
                     "new pane input must not replace a binding"
                 );
-                (input_id, true)
+                input_id
             }
         };
         let activated = self.workbench.activate_pane(tab, pane);
         assert!(activated, "resolved pane must activate");
         let current = PaneKey::new(tab.clone(), pane, input_id);
-        Some(PaneActivation {
-            previous: (previous.as_ref() != Some(&current))
-                .then_some(previous)
-                .flatten(),
-            current,
-            opened,
-        })
-    }
-
-    /// Replaces the selected input and its binding while preserving input identity.
-    pub fn replace_active_input(
-        &mut self,
-        tab: &TabInputKey,
-        pane: PaneGroupId,
-        input: PaneInput,
-        binding: B,
-    ) -> Option<(PaneInput, Option<B>)> {
-        let input_id = self.workbench.pane_part(tab)?.active_input_id(pane)?;
-        let previous_input = self.workbench.mount_input(tab, pane, input)?;
-        let (_, previous_binding) = self
-            .pane_host
-            .insert(PaneKey::new(tab.clone(), pane, input_id), binding);
-        Some((previous_input, previous_binding))
+        Some(PaneActivation { current })
     }
 
     /// Creates a sibling pane with its first content binding as one operation.
@@ -827,7 +749,7 @@ impl<B> WorkbenchHost<B> {
             .and_then(|part| part.active_input_id(pane))
             .expect("new pane must own its initial input");
         let key = PaneKey::new(tab, pane, input);
-        let (_, previous) = self.pane_host.insert(key.clone(), binding);
+        let previous = self.pane_host.insert(key.clone(), binding);
         assert!(
             previous.is_none(),
             "new pane input must not replace a binding"
@@ -893,11 +815,6 @@ impl<B> WorkbenchHost<B> {
         self.workbench.focus_previous_pane(tab)
     }
 
-    /// Updates one split ratio.
-    pub fn resize_split(&mut self, tab: &TabInputKey, split: PaneSplitId, ratio: f32) -> bool {
-        self.workbench.resize_split(tab, split, ratio)
-    }
-
     /// Updates Session tab status metadata.
     pub fn update_session_status(
         &mut self,
@@ -912,16 +829,6 @@ impl<B> WorkbenchHost<B> {
         self.workbench.toggle_tab_pin(key)
     }
 
-    /// Moves one tab to an existing Workbench group.
-    pub fn move_tab_to_group(
-        &mut self,
-        key: &TabInputKey,
-        group: crate::TabGroupId,
-        index: usize,
-    ) -> bool {
-        self.workbench.move_tab_to_group(key, group, index)
-    }
-
     /// Moves one tab into a newly created named group.
     pub fn move_tab_to_new_group(
         &mut self,
@@ -929,14 +836,5 @@ impl<B> WorkbenchHost<B> {
         label: impl Into<String>,
     ) -> Option<crate::TabGroupId> {
         self.workbench.move_tab_to_new_group(key, label)
-    }
-
-    /// Resolves Workbench geometry without mutating model or bindings.
-    pub fn layout(
-        &self,
-        spec: WorkbenchLayoutSpec,
-        viewport: LogicalViewport,
-    ) -> Option<WorkbenchLayout> {
-        spec.for_viewport(viewport)
     }
 }

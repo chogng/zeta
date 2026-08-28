@@ -24,6 +24,7 @@ use zui::ui::{
     UiScene,
 };
 
+use crate::PaneBinding;
 use crate::SessionSearchState;
 use crate::{
     FIRST_TAB_CONTAINER_SESSION_TAB, SESSION_SEARCH_INPUT, TabContextMenu, TabContextMenuState,
@@ -51,7 +52,6 @@ use zeta_session::SessionPaneLayout;
 use zeta_session::SessionPaneState;
 use zeta_session::SessionPaneView;
 use zeta_session::draw_session_pane;
-use zeta_terminal_workspace::PaneBinding;
 use zeta_terminal_workspace::TerminalSelectionRange;
 use zeta_ui_theme::UiTheme;
 
@@ -83,7 +83,7 @@ pub const TERMINAL_OUTPUT: ElementId = ElementId::scoped(1, 4);
 pub const TAB_CONTAINER_RESIZE_HANDLE: ElementId = ElementId::scoped(1, 16);
 pub const INSPECTOR_RESIZE_HANDLE: ElementId = ElementId::scoped(1, 51);
 
-pub use crate::LogicalViewport;
+pub(crate) use crate::LogicalViewport;
 
 pub trait WorkbenchKeybindings {
     fn pending_keybinding(&self) -> Option<(&KeySequence, usize)>;
@@ -173,6 +173,7 @@ impl WorkbenchSceneLayout {
         )
     }
 
+    #[cfg(test)]
     pub fn for_viewport_with_composer_height(
         viewport: LogicalViewport,
         tab_container: TabContainerState,
@@ -415,6 +416,7 @@ struct MainDrawResult {
     remote_connection_manager_list_viewport: Option<Rect>,
 }
 
+#[cfg(test)]
 pub fn build_workbench_presentation(
     viewport: LogicalViewport,
     model: WorkbenchPresentationModel<'_>,

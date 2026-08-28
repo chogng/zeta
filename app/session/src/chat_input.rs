@@ -1,3 +1,4 @@
+mod catalog;
 mod editor;
 mod interaction;
 mod interaction_view;
@@ -9,6 +10,7 @@ mod view;
 use std::path::Path;
 use std::path::PathBuf;
 
+pub use catalog::composer_model_options;
 use editor::ChatInputEditor;
 pub use interaction::ChatInputInteractionItem;
 use interaction::ChatInputInteractionState;

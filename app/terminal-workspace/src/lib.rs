@@ -10,18 +10,19 @@ use zeta_protocol::SessionId;
 use zeta_terminal::GridSize;
 
 mod blocks;
+mod history;
 mod output_scroll_view;
-mod pane_binding;
 mod pane_view;
 mod pane_views;
 mod pointer;
 mod presentation;
 mod scroll;
 mod selection;
+mod session;
 
 pub use blocks::{TerminalBlockLine, TerminalBlockLineKind, project_block_lines};
+pub use history::{block_view_range, scroll_limit, visible_text_lines};
 pub use output_scroll_view::TerminalOutputScrollView;
-pub use pane_binding::PaneBinding;
 pub use pane_view::TerminalPaneViewState;
 pub use pane_views::TerminalPaneViews;
 pub use pointer::{PointerInput, TerminalPointer};
@@ -32,6 +33,10 @@ pub use presentation::{
 pub use scroll::TerminalScroll;
 pub use selection::{
     TerminalSelection, TerminalSelectionRange, paint_terminal_selection, selected_text,
+};
+pub use session::{
+    TerminalEventSink, TerminalRuntimeEvent, TerminalRuntimeTarget, TerminalSession,
+    TerminalSessionEvent, TerminalSessionEventEnvelope, TerminalSessionReady,
 };
 
 /// Process-local identity for one terminal runtime.

@@ -173,6 +173,7 @@ impl TabContextMenuState {
         self.open.as_ref().map(|open| &open.target_tab)
     }
 
+    #[cfg(test)]
     pub fn target_is_pinned(&self) -> bool {
         self.open.as_ref().is_some_and(|open| open.pinned)
     }
@@ -239,13 +240,6 @@ impl TabContextMenuState {
         };
         open.rename.apply_composition(event);
         true
-    }
-
-    pub fn rename_value(&self) -> Option<&str> {
-        self.open
-            .as_ref()
-            .filter(|open| open.view == TabContextMenuView::Rename)
-            .map(|open| open.rename.text())
     }
 
     pub fn take_rename(&self) -> Option<(TabInputKey, String)> {

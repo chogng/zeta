@@ -89,7 +89,7 @@ pub(super) fn with_shell_presentation_model<R>(
                         } else {
                             (0, Default::default(), None)
                         };
-                    Some(zeta_workbench::PaneView {
+                    Some(crate::PaneView {
                         pane_id: Some(pane_id),
                         kind,
                         core: terminal_key.and_then(|key| {
@@ -130,7 +130,7 @@ pub(super) fn with_shell_presentation_model<R>(
             completion_selection: file_editor_input.completion_selection(),
             code_editor_style,
             session_pane,
-            workspace_context: zeta_workbench::WorkspaceContextView {
+            workspace_context: crate::WorkspaceContextView {
                 location: workspace_context.location_label(),
                 working_directory: workspace_context.working_directory_label(),
                 git_branch: workspace_context.git_branch_label(),

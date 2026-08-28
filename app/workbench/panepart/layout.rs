@@ -41,11 +41,6 @@ where
     pub fn leaf(&self, id: LeafId) -> Option<GridLeafLayout<LeafId>> {
         self.grid.leaf(id)
     }
-
-    /// Exposes the underlying generic projection for callers that need split metadata.
-    pub fn grid(&self) -> &GridLayout<LeafId, SplitId> {
-        &self.grid
-    }
 }
 
 impl PaneGroupLayout<PaneGroupId, PaneSplitId> {

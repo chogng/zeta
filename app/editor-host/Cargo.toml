@@ -11,8 +11,14 @@ name = "zeta_editor_host"
 path = "src/lib.rs"
 
 [dependencies]
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+zeta-app-server-client = { workspace = true }
+zeta-app-server-protocol = { workspace = true }
 zeta-editor = { workspace = true }
+zeta-install-context = { workspace = true }
 zeta-lsp-manager = { workspace = true }
+zeta-lsp-server-provider = { workspace = true }
 zeta-text-file = { workspace = true }
 zeta-ui-components = { workspace = true }
 zeta-ui-theme = { workspace = true }

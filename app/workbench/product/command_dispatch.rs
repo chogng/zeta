@@ -2,8 +2,8 @@ use zeta_commands::AppCommandId;
 use zeta_commands::CommandRegistry;
 use zeta_commands::CommandRequest;
 
+use crate::PaneSplitDirection;
 use crate::ProductApp;
-use zeta_workbench::PaneSplitDirection;
 
 pub(crate) type ProductCommandRegistry = CommandRegistry<ProductApp>;
 
@@ -120,9 +120,7 @@ pub(crate) fn builtin_command_registry() -> ProductCommandRegistry {
 
 impl ProductApp {
     pub(super) fn dispatch_command(&mut self, request: CommandRequest) {
-        if self.workbench.dispatch_command(request)
-            == zeta_workbench::WorkbenchCommandDispatch::Handled
-        {
+        if self.workbench.dispatch_command(request) == crate::WorkbenchCommandDispatch::Handled {
             return;
         }
         let command_id = request.command_id();
@@ -202,7 +200,7 @@ fn execute_toggle_workspace_pane(app: &mut ProductApp, _request: &CommandRequest
         return;
     }
     match app.active_workspace_pane_kind() {
-        Some(zeta_workbench::PaneInputKind::Files) | Some(zeta_workbench::PaneInputKind::Diff) => {
+        Some(crate::PaneInputKind::Files) | Some(crate::PaneInputKind::Diff) => {
             app.show_agent_pane()
         }
         _ => app.show_files_pane(),

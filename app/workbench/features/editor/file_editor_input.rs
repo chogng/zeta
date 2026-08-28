@@ -1,9 +1,9 @@
-use std::{ops::Range, time::Instant};
+use std::time::Instant;
 
-use zeta_editor::{CodeEditorCommand, CodeEditorPosition, CodeEditorSelectionMode};
+use zeta_editor::{CodeEditorCommand, CodeEditorSelectionMode};
 use zeta_editor_host::FileEditorAutoScrollDirection;
-use zeta_editor_host::FileEditorAutoScrollState;
 use zeta_editor_host::FileEditorCloseRequest;
+use zeta_editor_host::FileEditorWheelDelta;
 use zeta_lsp_manager::LanguageRequestKind;
 use zui::input::{ElementState, Key, KeyEvent, MouseScrollDelta, NamedKey};
 use zui::ui::TextInputCompositionEvent;
@@ -16,117 +16,6 @@ use zeta_editor_host::{
     FILE_EDITOR_DOCUMENT, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_PANE, FILE_EDITOR_REPLACE_INPUT,
     FileEditorAction, file_editor_close_index, file_editor_fold_index, file_editor_tab_index,
 };
-
-const ROWS_PER_WHEEL_STEP: f64 = 3.0;
-
-/// Ephemeral platform-input state that is not part of an editor document or file lifecycle.
-#[derive(Default)]
-pub(crate) struct FileEditorInputState {
-    dragging_selection: bool,
-    fractional_rows: f64,
-    prompt: FileEditorPrompt,
-    auto_scroll: FileEditorAutoScrollState,
-    hovered_diagnostic: Option<Range<usize>>,
-    hovered_language_position: Option<CodeEditorPosition>,
-    completion_selection: usize,
-}
-
-impl FileEditorInputState {
-    pub(crate) fn cancel_pointer(&mut self) {
-        self.dragging_selection = false;
-        self.auto_scroll.stop();
-        self.hovered_diagnostic = None;
-        self.hovered_language_position = None;
-        self.completion_selection = 0;
-    }
-
-    pub(crate) fn reset_for_document_change(&mut self) {
-        self.dragging_selection = false;
-        self.fractional_rows = 0.0;
-        self.prompt = FileEditorPrompt::None;
-        self.auto_scroll.stop();
-        self.hovered_diagnostic = None;
-        self.hovered_language_position = None;
-        self.completion_selection = 0;
-    }
-
-    pub(crate) const fn prompt(&self) -> FileEditorPrompt {
-        self.prompt
-    }
-
-    fn confirm_close(&mut self) {
-        self.prompt = FileEditorPrompt::ConfirmClose;
-    }
-
-    fn dismiss_prompt(&mut self) {
-        self.prompt = FileEditorPrompt::None;
-    }
-
-    fn begin_selection(&mut self) {
-        self.dragging_selection = true;
-        self.auto_scroll.stop();
-    }
-
-    fn end_selection(&mut self) {
-        self.dragging_selection = false;
-        self.auto_scroll.stop();
-    }
-
-    fn is_selecting(&self) -> bool {
-        self.dragging_selection
-    }
-
-    fn update_hovered_diagnostic(&mut self, range: Option<Range<usize>>) -> bool {
-        if self.hovered_diagnostic == range {
-            return false;
-        }
-        self.hovered_diagnostic = range;
-        true
-    }
-
-    fn update_hovered_language_position(&mut self, position: Option<CodeEditorPosition>) -> bool {
-        if self.hovered_language_position == position {
-            return false;
-        }
-        self.hovered_language_position = position;
-        true
-    }
-
-    fn move_completion_selection(&mut self, delta: isize, item_count: usize) {
-        if item_count == 0 {
-            self.completion_selection = 0;
-            return;
-        }
-        self.completion_selection = self
-            .completion_selection
-            .saturating_add_signed(delta)
-            .min(item_count - 1);
-    }
-
-    pub(crate) const fn auto_scroll_deadline(&self) -> Option<Instant> {
-        self.auto_scroll.deadline()
-    }
-
-    pub(crate) const fn completion_selection(&self) -> usize {
-        self.completion_selection
-    }
-
-    fn wheel_rows(&mut self, delta: MouseScrollDelta) -> isize {
-        let rows = match delta {
-            MouseScrollDelta::LineDelta(_, vertical) => -f64::from(vertical) * ROWS_PER_WHEEL_STEP,
-            MouseScrollDelta::PixelDelta(position) => {
-                -position.y / f64::from(zeta_editor::CodeEditor::row_height())
-            }
-        };
-        if rows.signum() != self.fractional_rows.signum() {
-            self.fractional_rows = 0.0;
-        }
-        self.fractional_rows += rows;
-        let whole_rows = self.fractional_rows.trunc() as isize;
-        self.fractional_rows -= whole_rows as f64;
-        whole_rows
-    }
-}
 
 impl ProductApp {
     pub(super) fn file_editor_keyboard_input(&mut self, event: &KeyEvent) -> bool {
@@ -190,7 +79,7 @@ impl ProductApp {
             if event.logical_key == Key::Named(NamedKey::Enter) {
                 let edit = completions
                     .items
-                    .get(self.file_editor_input.completion_selection)
+                    .get(self.file_editor_input.completion_selection())
                     .and_then(|item| item.edit.clone());
                 self.language_service.dismiss_completions();
                 if let Some(edit) = edit {
@@ -359,7 +248,7 @@ impl ProductApp {
             return true;
         };
         self.file_editor_input
-            .auto_scroll
+            .auto_scroll_mut()
             .update(point, editor_bounds, Instant::now());
         if point.y < editor_bounds.origin.y || point.y >= editor_bounds.bottom() {
             if self.advance_file_editor_auto_scroll(Instant::now()) {
@@ -389,26 +278,26 @@ impl ProductApp {
 
     pub(super) fn advance_file_editor_auto_scroll(&mut self, now: Instant) -> bool {
         if !self.file_editor_input.is_selecting() {
-            self.file_editor_input.auto_scroll.stop();
+            self.file_editor_input.auto_scroll_mut().stop();
             return false;
         }
-        let direction = self.file_editor_input.auto_scroll.advance(now);
+        let direction = self.file_editor_input.auto_scroll_mut().advance(now);
         if direction == FileEditorAutoScrollDirection::Idle {
             return false;
         }
         let Some((row_count, capacity)) = self.file_editor_scroll_metrics() else {
-            self.file_editor_input.auto_scroll.stop();
+            self.file_editor_input.auto_scroll_mut().stop();
             return false;
         };
         if !self
             .file_editor_host
             .scroll_active_rows(direction.row_delta(), row_count, capacity)
         {
-            self.file_editor_input.auto_scroll.stop();
+            self.file_editor_input.auto_scroll_mut().stop();
             return false;
         }
         let Some(bounds) = self.file_editor_pane().map(|pane| pane.editor_bounds()) else {
-            self.file_editor_input.auto_scroll.stop();
+            self.file_editor_input.auto_scroll_mut().stop();
             return false;
         };
         let cursor = self.cursor_position.unwrap_or(bounds.origin);
@@ -492,6 +381,10 @@ impl ProductApp {
         if !in_editor {
             return false;
         }
+        let delta = match delta {
+            MouseScrollDelta::LineDelta(_, vertical) => FileEditorWheelDelta::Lines(vertical),
+            MouseScrollDelta::PixelDelta(position) => FileEditorWheelDelta::Pixels(position.y),
+        };
         let rows = self.file_editor_input.wheel_rows(delta);
         let Some((row_count, capacity)) = self.file_editor_scroll_metrics() else {
             return true;
@@ -529,7 +422,7 @@ impl ProductApp {
             self.file_editor_input.dismiss_prompt();
             self.workbench.expand_inspector();
             self.workspace_surface.show_editor();
-            self.file_editor_input.fractional_rows = 0.0;
+            self.file_editor_input.reset_wheel_accumulator();
             self.pending_focus = Some(FILE_EDITOR_DOCUMENT);
             self.rebuild_presentation_on_next_redraw();
             self.request_redraw();
@@ -557,7 +450,7 @@ impl ProductApp {
         match action {
             FileEditorAction::Reload => {
                 self.file_editor_host.reload_active_external();
-                self.file_editor_input.fractional_rows = 0.0;
+                self.file_editor_input.reset_wheel_accumulator();
                 self.file_editor_input.dismiss_prompt();
                 self.pending_focus = Some(FILE_EDITOR_DOCUMENT);
             }
@@ -622,7 +515,7 @@ impl ProductApp {
             self.language_service.close(&path);
         }
         self.file_editor_input.dismiss_prompt();
-        self.file_editor_input.fractional_rows = 0.0;
+        self.file_editor_input.reset_wheel_accumulator();
         if self.file_editor_host.active().is_some() {
             self.pending_focus = Some(FILE_EDITOR_DOCUMENT);
         } else {
@@ -715,7 +608,3 @@ impl ProductApp {
         )
     }
 }
-
-#[cfg(test)]
-#[path = "file_editor_input_tests.rs"]
-mod tests;

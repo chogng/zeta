@@ -9,15 +9,15 @@ use zui::ui::{TextInputCompositionCursor, TextInputCompositionEvent};
 use zui::window::ImeCursorArea;
 
 use crate::ProductApp;
+use crate::SESSION_SEARCH_INPUT;
+use crate::TAB_RENAME_INPUT;
+use crate::WorkspaceSurfaceKind;
 use crate::git_branch_context_menu::GIT_BRANCH_SEARCH_INPUT;
 use crate::workspace_path_picker::WORKSPACE_PATH_SEARCH_INPUT;
-use crate::workspace_surface::WorkspaceSurfaceKind;
 use zeta_editor_host::{FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT};
 use zeta_files::FILE_SEARCH_INPUT;
 use zeta_session::interaction::COMPOSER;
 use zeta_settings::SETTINGS_SEARCH_INPUT;
-use zeta_workbench::SESSION_SEARCH_INPUT;
-use zeta_workbench::TAB_RENAME_INPUT;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum InputMethodTarget {

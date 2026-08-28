@@ -117,7 +117,7 @@ impl ProductApp {
         self.workspace_surface.show_agent();
         if !matches!(
             self.active_workspace_pane_kind(),
-            Some(zeta_workbench::PaneInputKind::Files | zeta_workbench::PaneInputKind::Diff,)
+            Some(crate::PaneInputKind::Files | crate::PaneInputKind::Diff,)
         ) {
             let _ = self.bind_agent_pane();
         }

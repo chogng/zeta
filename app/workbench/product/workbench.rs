@@ -163,7 +163,7 @@ impl ProductApp {
     pub(super) fn update_terminal_status(
         &mut self,
         key: TerminalSessionKey,
-        status: zeta_workbench::TabStatus,
+        status: crate::TabStatus,
     ) {
         let Some(session_id) = self.terminal_workspace.session_id_for_key(key) else {
             return;
@@ -329,7 +329,7 @@ impl ProductApp {
                 else {
                     return false;
                 };
-                let identity = zeta_workbench::pane_sash_element_id(split_id);
+                let identity = crate::pane_sash_element_id(split_id);
                 let over_sash = self.presentation.as_ref().is_some_and(|presentation| {
                     presentation.interaction_frame().target_at(point) == Some(identity)
                 });
@@ -355,7 +355,7 @@ impl ProductApp {
                 let Some(split) = self.workbench.pane_resize_split() else {
                     return false;
                 };
-                let identity = zeta_workbench::pane_sash_element_id(split);
+                let identity = crate::pane_sash_element_id(split);
                 let presence = self.sash_pointer_presence(identity);
                 let _ = self.workbench.finish_pane_resize(presence, now);
             }

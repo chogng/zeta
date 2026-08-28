@@ -10,7 +10,7 @@ pub(crate) struct ProductApp {
     pub(super) file_editor_host: FileEditorHost,
     pub(super) file_editor_input: FileEditorInputState,
     pub(super) file_editor_search: FileEditorSearchState,
-    pub(super) language_service: language_service_host::ProductLanguageService,
+    pub(super) language_service: FileEditorLanguageService,
     pub(super) session_search: SessionSearchState,
     pub(super) workbench: WorkbenchHost<PaneBinding>,
     pub(super) terminal_workspace: TerminalWorkspace,
@@ -87,16 +87,16 @@ impl ProductApp {
         }
         let session_pane =
             SessionPaneState::for_working_directory(workspace_context.working_directory());
+        let language_events = Arc::new(language_service_adapter::ProductLanguageEventSink::new(
+            event_proxy.clone(),
+        ));
         let language_service = if launch.is_remote() {
-            language_service_host::ProductLanguageService::remote(
+            FileEditorLanguageService::remote(
                 workspace_context.working_directory(),
-                event_proxy.clone(),
+                language_events,
             )
         } else {
-            language_service_host::ProductLanguageService::start(
-                workspace_context.working_directory(),
-                event_proxy.clone(),
-            )
+            FileEditorLanguageService::start(workspace_context.working_directory(), language_events)
         };
         Self {
             window: None,
@@ -113,14 +113,22 @@ impl ProductApp {
             workbench: WorkbenchHost::new(),
             terminal_workspace: {
                 let terminal_event_proxy = event_proxy.clone();
-                let terminal_target = app_server_host.clone();
+                let terminal_target = app_server_host
+                    .remote_connection()
+                    .cloned()
+                    .map(zeta_terminal_workspace::TerminalRuntimeTarget::remote)
+                    .unwrap_or(zeta_terminal_workspace::TerminalRuntimeTarget::Local);
                 TerminalWorkspace::new(
                     move |key, size| {
+                        let event_proxy = terminal_event_proxy.clone();
+                        let event_sink: zeta_terminal_workspace::TerminalEventSink =
+                            Arc::new(move |event| event_proxy.send_event(event.into()).is_ok());
                         TerminalSession::spawn_async(
                             key,
                             size,
-                            terminal_event_proxy.clone(),
+                            event_sink,
                             terminal_target.clone(),
+                            PRODUCT_DISPLAY_NAME.to_owned(),
                         )
                     },
                     TerminalSession::resize,

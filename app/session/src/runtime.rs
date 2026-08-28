@@ -18,15 +18,24 @@ use anyhow::Context;
 use anyhow::Result;
 use anyhow::anyhow;
 use zeta_protocol::ApprovalMode;
+use zeta_protocol::CommandId;
 use zeta_protocol::ModelRef;
 use zeta_protocol::SessionId;
+use zeta_protocol::ThreadId;
+use zeta_protocol::TurnId;
 
-pub use crate::runtime_contract::CommandResult;
-pub use crate::runtime_contract::SESSION_UNAVAILABLE_COMMAND_ERROR;
-use crate::runtime_contract::SessionRuntimeCommand;
-pub use crate::runtime_contract::SessionRuntimeEvent;
-pub use crate::runtime_contract::WorkspaceSwitchResult;
-use crate::runtime_contract::command_channel;
+mod contract;
+mod worker;
+
+pub use contract::CommandResult;
+pub(crate) use contract::RECONNECT_WINDOW;
+pub use contract::SESSION_UNAVAILABLE_COMMAND_ERROR;
+pub(crate) use contract::SessionRuntimeCommand;
+pub use contract::SessionRuntimeEvent;
+pub use contract::WorkspaceSwitchResult;
+use contract::command_channel;
+pub(crate) use contract::reconnect_delay_within_window;
+pub(crate) use contract::reject_disconnected_command;
 
 /// Connection authority supplied by the product host.
 ///
@@ -69,7 +78,7 @@ impl SessionRuntime {
         let worker = thread::Builder::new()
             .name("app-session-runtime".into())
             .spawn(move || {
-                crate::runtime_worker::run_session_runtime(
+                worker::run_session_runtime(
                     event_sink,
                     command_receiver,
                     Box::new(target),
@@ -94,6 +103,28 @@ impl SessionRuntime {
         self.try_send(
             SessionRuntimeCommand::SubmitAgentMessage(text),
             "Session submission queue is unavailable",
+        )
+    }
+
+    /// Rewinds before one historical Turn and submits a replacement user message.
+    ///
+    /// Callers retain and reuse `operation_id` for retries. The shared App Server derives the
+    /// rewind and start-Turn command IDs, so every product client gets the same idempotency rules.
+    pub fn rewrite_agent_message(
+        &self,
+        operation_id: CommandId,
+        source_thread_id: ThreadId,
+        before_turn_id: TurnId,
+        text: String,
+    ) -> Result<()> {
+        self.try_send(
+            SessionRuntimeCommand::RewriteAgentMessage {
+                operation_id,
+                source_thread_id,
+                before_turn_id,
+                text,
+            },
+            "Session rewrite queue is unavailable",
         )
     }
 

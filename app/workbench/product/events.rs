@@ -20,7 +20,7 @@ pub(super) fn handle_terminal_event(
             }
         }
         if terminal_exited {
-            app.update_terminal_status(key, zeta_workbench::TabStatus::warning("Exited"));
+            app.update_terminal_status(key, crate::TabStatus::warning("Exited"));
             app.rebuild_presentation_on_next_redraw();
         }
         return;
@@ -50,7 +50,7 @@ pub(super) fn handle_terminal_event(
         let _ = window.set_title(&title);
     }
     if terminal_exited {
-        app.update_terminal_status(key, zeta_workbench::TabStatus::warning("Exited"));
+        app.update_terminal_status(key, crate::TabStatus::warning("Exited"));
     }
     let current_block_status = app
         .active_terminal()

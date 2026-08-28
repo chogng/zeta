@@ -24,6 +24,7 @@ impl Default for InspectorPartState {
 }
 
 impl InspectorPartState {
+    #[cfg(test)]
     pub const fn expanded() -> Self {
         Self {
             visibility: InspectorPartVisibility::Expanded,
@@ -47,6 +48,7 @@ impl InspectorPartState {
         true
     }
 
+    #[cfg(test)]
     pub fn toggle(&mut self) {
         self.visibility = match self.visibility {
             InspectorPartVisibility::Collapsed => InspectorPartVisibility::Expanded,

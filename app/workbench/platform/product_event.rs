@@ -1,18 +1,17 @@
 //! Product events delivered through the desktop application loop.
 
-use crate::language_service_host::remote::RemoteLanguageEvent;
 use crate::remote_connection_process::RemoteWindowLaunchEvent;
 use crate::remote_tunnel_process::RemoteTunnelEvent;
 use crate::session_host::SessionRuntimeEvent;
 use crate::terminal_session::{TerminalSessionEventEnvelope, TerminalSessionReady};
-use zeta_lsp_manager::LanguageServiceEvent;
+use zeta_editor_host::FileEditorLanguageEvent;
+use zeta_terminal_workspace::TerminalRuntimeEvent;
 
 pub(crate) enum ProductEvent {
     Session(SessionRuntimeEvent),
     Terminal(TerminalSessionEventEnvelope),
     TerminalReady(TerminalSessionReady),
-    LanguageService(LanguageServiceEvent),
-    RemoteLanguage(RemoteLanguageEvent),
+    EditorLanguage(FileEditorLanguageEvent),
     RemoteWindowLaunch(RemoteWindowLaunchEvent),
     RemoteTunnel(RemoteTunnelEvent),
 }
@@ -35,8 +34,11 @@ impl From<TerminalSessionReady> for ProductEvent {
     }
 }
 
-impl From<LanguageServiceEvent> for ProductEvent {
-    fn from(event: LanguageServiceEvent) -> Self {
-        Self::LanguageService(event)
+impl From<TerminalRuntimeEvent> for ProductEvent {
+    fn from(event: TerminalRuntimeEvent) -> Self {
+        match event {
+            TerminalRuntimeEvent::Session(event) => Self::Terminal(event),
+            TerminalRuntimeEvent::Ready(event) => Self::TerminalReady(event),
+        }
     }
 }

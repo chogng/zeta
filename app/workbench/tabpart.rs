@@ -14,25 +14,18 @@ mod toolbar;
 
 pub use identity::{
     ADD_SESSION, FIRST_TAB_CONTAINER_SESSION_ACTION, FIRST_TAB_CONTAINER_SESSION_CLOSE,
-    FIRST_TAB_CONTAINER_SESSION_TAB, FIRST_TITLEBAR_SESSION_ACTION, FIRST_TITLEBAR_SESSION_TAB,
-    SESSION_SEARCH_INPUT, TAB_CONTAINER, TAB_CONTAINER_ACTION_BAR, TAB_CONTAINER_LIST,
-    TAB_CONTAINER_SETTINGS_ACTION, TAB_CONTAINER_SETTINGS_CLOSE, TAB_CONTAINER_SETTINGS_TAB,
-    TAB_CONTAINER_TOGGLE, TAB_CONTAINER_TOOLBAR, TITLEBAR, TITLEBAR_SETTINGS_ACTION,
-    TITLEBAR_SETTINGS_BUTTON, TITLEBAR_SETTINGS_CLOSE, TITLEBAR_SETTINGS_TAB,
-    TITLEBAR_TAB_CONTAINER, TITLEBAR_TAB_LIST, WINDOW, WORKSPACE_PANE_TOGGLE,
-    session_tab_action_id, session_tab_close_id, session_tab_id, tab_group_list_id,
-    titlebar_session_tab_action_id, titlebar_session_tab_close_id, titlebar_session_tab_id,
-    titlebar_tab_group_list_id,
+    FIRST_TAB_CONTAINER_SESSION_TAB, SESSION_SEARCH_INPUT, TAB_CONTAINER_TOGGLE, WINDOW,
+    WORKSPACE_PANE_TOGGLE,
 };
 pub use session_input::session_tab_input;
 pub use session_search::SessionSearchState;
-pub use style::WorkbenchColors;
+#[cfg(test)]
+use style::WorkbenchColors;
 pub use style::WorkbenchUiStyle;
 pub use tab_context_menu::{
-    TAB_CONTEXT_MENU, TAB_CONTEXT_MENU_GROUPS, TAB_CONTEXT_MENU_MOVE_TO_NEW_GROUP,
-    TAB_RENAME_INPUT, TabContextMenu, TabContextMenuAction, TabContextMenuActivation,
-    TabContextMenuState, TabContextMenuStyle, tab_group_for_menu_element,
-    tab_group_menu_element_id, update_tab_context_menu_pointer,
+    TAB_CONTEXT_MENU_MOVE_TO_NEW_GROUP, TAB_RENAME_INPUT, TabContextMenu, TabContextMenuAction,
+    TabContextMenuActivation, TabContextMenuState, TabContextMenuStyle, tab_group_menu_element_id,
+    update_tab_context_menu_pointer,
 };
 pub use tab_mount::TabIntent;
 pub use tabs::{
@@ -42,6 +35,15 @@ pub use tabs::{
 pub use tabs_state::TabContainerState;
 pub use titlebar::{TITLEBAR_HEIGHT, Titlebar, TitlebarInsets};
 pub use toolbar::TabContainerToolbar;
+
+#[cfg(test)]
+pub(crate) use identity::{
+    FIRST_TITLEBAR_SESSION_TAB, TAB_CONTAINER_ACTION_BAR, TAB_CONTAINER_LIST,
+    TAB_CONTAINER_SETTINGS_ACTION, TAB_CONTAINER_SETTINGS_CLOSE, TAB_CONTAINER_SETTINGS_TAB,
+    TAB_CONTAINER_TOOLBAR, TITLEBAR, TITLEBAR_TAB_LIST,
+};
+#[cfg(test)]
+pub(crate) use tab_context_menu::TAB_CONTEXT_MENU;
 
 #[cfg(test)]
 fn test_style() -> WorkbenchUiStyle {

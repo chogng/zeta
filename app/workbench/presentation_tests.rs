@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use crate::PaneBinding;
 use crate::{
     ADD_SESSION, INSPECTOR_RESIZE_HANDLE, InspectorPartState, LogicalViewport, PaneGroupId,
     PaneInput, PanePart, PaneSplitDirection, SESSION_SEARCH_INPUT, SessionSearchState,
@@ -34,7 +35,6 @@ use zeta_settings::RemoteConnectionPickerState;
 use zeta_settings::RemoteTunnelManagerState;
 use zeta_settings::SettingsState;
 use zeta_terminal::{GridSize, ScreenBuffer, TerminalCore};
-use zeta_terminal_workspace::PaneBinding;
 use zeta_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSnapshot};
 use zeta_ui_components::ScrollbarPresentation;
 use zui::runtime::AccessibilityNode;

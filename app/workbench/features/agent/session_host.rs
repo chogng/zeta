@@ -1,6 +1,7 @@
 use std::path::Path;
 use std::path::PathBuf;
 
+use crate::PaneBinding;
 use anyhow::Result;
 use anyhow::anyhow;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
@@ -17,20 +18,18 @@ use zeta_editor_host::FileEditorCloseRequest;
 use zeta_files::DirectoryEntry;
 use zeta_protocol::Session;
 use zeta_scm::ScmDiff;
-use zeta_terminal_workspace::PaneBinding;
 use zeta_text_file::TextFileAccess;
 use zeta_text_file::TextFileDiskVersion;
 use zeta_text_file::TextFileModifiedAt;
 use zeta_text_file::TextFileSaveRequest;
 use zeta_text_file::TextFileSnapshot;
 
+use crate::PaneInput;
 use crate::ProductApp;
+use crate::TabInputKey;
 use crate::app_server::AppServerRequestHandle;
 use crate::app_server::ClientError;
 use crate::app_server::ServerNotification;
-use crate::session_catalog::session_model_options;
-use zeta_workbench::PaneInput;
-use zeta_workbench::TabInputKey;
 
 const FILE_SNAPSHOT_READ_ATTEMPTS: usize = 3;
 
@@ -98,7 +97,7 @@ impl ProductApp {
     fn upsert_session_tab(&mut self, session: &Session) {
         let workspace = self.workspace_context.working_directory_label().to_owned();
         let _ = self.workbench.upsert_session_input_with(
-            zeta_workbench::session_tab_input(session, &workspace),
+            crate::session_tab_input(session, &workspace),
             PaneInput::terminal(session.session_id.clone()),
             PaneBinding::new,
         );
@@ -108,7 +107,7 @@ impl ProductApp {
         let workspace = self.workspace_context.working_directory_label().to_owned();
         for session in sessions {
             self.workbench.upsert_catalog_session_input_with(
-                zeta_workbench::session_tab_input(session, &workspace),
+                crate::session_tab_input(session, &workspace),
                 PaneInput::terminal(session.session_id.clone()),
                 PaneBinding::new,
             );
@@ -134,10 +133,10 @@ impl ProductApp {
                 slash_commands,
                 models,
             } => {
-                if let Err(error) = self
-                    .session_pane
-                    .set_composer_catalog(slash_commands, session_model_options(models))
-                {
+                if let Err(error) = self.session_pane.set_composer_catalog(
+                    slash_commands,
+                    zeta_session::composer_model_options(models),
+                ) {
                     eprintln!("could not install Slash Commands catalog: {error}");
                 }
             }
@@ -230,8 +229,8 @@ impl ProductApp {
         let mut removed = self.scm.replace_diffs([]);
         removed.extend(self.sync_repository_state());
         match pane_kind {
-            Some(zeta_workbench::PaneInputKind::Diff) => self.show_changes_pane(),
-            Some(zeta_workbench::PaneInputKind::Files) => self.show_files_pane(),
+            Some(crate::PaneInputKind::Diff) => self.show_changes_pane(),
+            Some(crate::PaneInputKind::Files) => self.show_files_pane(),
             _ => {}
         }
         self.remove_scm_animation_tracks(removed);

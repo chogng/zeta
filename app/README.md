@@ -12,7 +12,6 @@
 | [`zui`](zui/README.md) | 应用与窗口生命周期、输入、布局、绘制、渲染和平台能力 | 产品状态和业务交互 |
 | [`zeta-ui-components`](ui-components/README.md) | 可复用 UI 组件 | 产品窗口结构和领域状态 |
 | [`zeta-workbench`](workbench/README.md) | 完整产品工作台、窗口布局、能力挂载、浮层顺序和跨能力生命周期 | 各能力内部状态、绘制和平台效果 |
-| [`zeta-workbench-model`](workbench-model/README.md) | 无界面依赖的 Tab/Pane 结构状态与确定性变化 | 窗口、渲染和具体能力 |
 | 能力 crate | 编辑器、会话、工作区、远程连接、终端和 Workbench 等独立能力 | 产品级组合 |
 | `zeta-rs` | App Server、协议、存储、终端语义、远程执行等共享后端能力 | `app` 的窗口和界面实现 |
 
@@ -27,7 +26,7 @@ main.rs                         binary 入口，只调用 zeta_workbench::run()
 workbench/product.rs            产品组合模块入口、产品状态与能力接线
 workbench/product/              生命周期、事件、帧、交互和运行入口
 workbench/app_server.rs         App Server 适配入口
-workbench/features/             Agent、Editor、Remote、Terminal、Workspace 产品适配
+workbench/features/             Agent、Editor、Remote、Terminal、Workspace 的产品事件与效果适配
 workbench/platform/             键盘、IME 和窗口事件适配
 ```
 
@@ -55,7 +54,7 @@ workbench/platform/             键盘、IME 和窗口事件适配
 | Settings 与 Remote UI | [`zeta-settings`](settings/README.md) |
 | Files Pane、目录树与文件搜索 | [`zeta-files`](files/README.md) |
 | Changes Pane 与多文件 Diff | [`zeta-scm`](scm/README.md) |
-| Terminal runtime 与 Pane 绑定 | [`zeta-terminal-workspace`](terminal-workspace/README.md)、[`TERMINAL.md`](TERMINAL.md) |
+| Terminal runtime 与视图状态 | [`zeta-terminal-workspace`](terminal-workspace/README.md)、[`TERMINAL.md`](TERMINAL.md)；产品 Pane 映射由 Workbench 私有拥有 |
 | Workbench | [`zeta-workbench`](workbench/README.md) |
 | 命令与快捷键 | [`zeta-commands`](commands/README.md)、[`zeta-keybindings-host`](keybindings/README.md)；快捷键设置页面由 [`zeta-settings`](settings/README.md) 管 |
 

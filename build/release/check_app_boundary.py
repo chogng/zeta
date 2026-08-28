@@ -17,7 +17,6 @@ EXPECTED_APP_MEMBERS = {
     "app/settings",
     "app/terminal-workspace",
     "app/workbench",
-    "app/workbench-model",
     "app/zui",
     "app/zui-demo",
 }
@@ -27,6 +26,7 @@ RETIRED_PRODUCT_PATHS = {
     "app/src",
     "app/src/workbench_host",
     "app/src/workbench_host.rs",
+    "app/workbench-model",
     "zeta-rs/native",
     "zeta-rs/agent-sidebar",
     "zeta-rs/editor",

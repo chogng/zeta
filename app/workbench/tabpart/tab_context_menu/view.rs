@@ -231,6 +231,7 @@ impl TabContextMenu {
         })
     }
 
+    #[cfg(test)]
     pub fn item_bounds(&self, index: usize) -> Option<Rect> {
         self.root.item_bounds(index)
     }

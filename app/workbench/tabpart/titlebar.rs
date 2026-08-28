@@ -30,6 +30,7 @@ pub struct TitlebarInsets {
 }
 
 impl TitlebarInsets {
+    #[cfg(test)]
     pub const NONE: Self = Self::new(0.0, 0.0);
 
     pub const fn new(left: f32, right: f32) -> Self {

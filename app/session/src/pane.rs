@@ -7,16 +7,34 @@ use zui::ui::Rect;
 use zui::ui::TextInputLayoutEngine;
 use zui::ui::UiDispatch;
 
+mod canvas;
+mod chat_widget;
+mod context;
+pub mod interaction;
+mod state;
+mod style;
+mod timeline;
+mod timeline_scroll;
+mod transcript;
+
+pub use canvas::SessionCanvasLayout;
+pub use canvas::SessionHeader;
+pub use canvas::SessionHeaderStyle;
+pub use context::SessionPaneContext;
+pub use state::SessionPaneState;
+pub use style::SessionPaneStyle;
+pub(crate) use timeline::ThreadTimeline;
+pub(crate) use timeline::ThreadTimelineStyle;
+pub(crate) use timeline::line_capacity;
+pub(crate) use timeline::line_count;
+pub use timeline_scroll::ThreadTimelineScroll;
+pub use timeline_scroll::TimelineScrollDelta;
+pub(crate) use transcript::TranscriptState;
+
 use crate::ComposerPanelLayout;
-use crate::SessionCanvasLayout;
-use crate::SessionHeader;
-use crate::SessionHeaderStyle;
-use crate::SessionPaneContext;
-use crate::SessionPaneState;
-use crate::SessionPaneStyle;
-use crate::chat_widget::ChatWidgetLayout;
-use crate::chat_widget::ChatWidgetView;
-use crate::chat_widget::draw_chat_widget;
+use chat_widget::ChatWidgetLayout;
+use chat_widget::ChatWidgetView;
+use chat_widget::draw_chat_widget;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SessionPaneLayout {

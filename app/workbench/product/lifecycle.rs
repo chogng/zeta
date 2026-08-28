@@ -60,7 +60,7 @@ impl App<ProductEvent> for ProductApp {
         if self.app_server_host.is_remote()
             && let Err(error) = self
                 .language_service
-                .start_remote(self.event_proxy.clone(), self.app_server_host.clone())
+                .start_remote(Arc::new(self.app_server_host.clone()))
         {
             self.fail(error);
             context.exit();
@@ -203,24 +203,9 @@ impl App<ProductEvent> for ProductApp {
                 self.handle_session_runtime_event(event);
                 return;
             }
-            ProductEvent::LanguageService(event) => {
+            ProductEvent::EditorLanguage(event) => {
                 self.language_service
                     .handle_event(event, &self.file_editor_host);
-                if let Some(target) = self
-                    .language_service
-                    .take_definitions()
-                    .and_then(|definitions| definitions.targets.into_iter().next())
-                {
-                    self.open_language_definition(target);
-                    return;
-                }
-                self.rebuild_presentation();
-                self.request_redraw();
-                return;
-            }
-            ProductEvent::RemoteLanguage(event) => {
-                self.language_service
-                    .handle_remote_event(event, &self.file_editor_host);
                 if let Some(target) = self
                     .language_service
                     .take_definitions()

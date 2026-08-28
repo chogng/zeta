@@ -45,6 +45,7 @@ impl Default for TabContainerState {
 }
 
 impl TabContainerState {
+    #[cfg(test)]
     pub const fn expanded() -> Self {
         Self {
             visibility: TabContainerVisibility::Expanded,
@@ -53,6 +54,7 @@ impl TabContainerState {
         }
     }
 
+    #[cfg(test)]
     pub const fn collapsed() -> Self {
         Self {
             visibility: TabContainerVisibility::Collapsed,

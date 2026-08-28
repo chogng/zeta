@@ -15,6 +15,7 @@ use zui::ui::TextInputCommand;
 use zui::ui::TextInputSelectionMode;
 
 use crate::ProductApp;
+use crate::SESSION_SEARCH_INPUT;
 use crate::keybindings::{
     ProductKeybindingContext, ProductKeybindingFacts, ProductKeybindingResolution,
 };
@@ -26,7 +27,6 @@ use zeta_session::interaction::{COMPOSER, COMPOSER_INTERACTION};
 use zeta_session::{ComposerInteractionActivation, SelectionDirection};
 use zeta_session::{ComposerRoute, ComposerSubmission};
 use zeta_settings::SETTINGS_SEARCH_INPUT;
-use zeta_workbench::SESSION_SEARCH_INPUT;
 use zui::ui::{FocusDirection, NavigationAxis};
 
 impl ProductApp {

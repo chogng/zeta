@@ -167,6 +167,16 @@ impl zeta_session::SessionRuntimeTarget for AppServerHost {
     }
 }
 
+impl zeta_editor_host::RemoteLanguageSessionTarget for AppServerHost {
+    fn is_remote(&self) -> bool {
+        AppServerHost::is_remote(self)
+    }
+
+    fn start(&self) -> Result<AppServerSession> {
+        AppServerHost::start(self)
+    }
+}
+
 pub(crate) fn local_app_server_command(
     executable: PathBuf,
     profile_root: PathBuf,

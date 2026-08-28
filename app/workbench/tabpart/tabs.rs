@@ -25,7 +25,9 @@ use super::tab_workspace_preview::{
     workspace_preview_disclosure_id, workspace_preview_scroll_forward_id,
     workspace_preview_scroll_id,
 };
+#[cfg(test)]
 use crate::TabInputKey;
+#[cfg(test)]
 use crate::TabPart;
 use crate::TabStatusKind;
 
@@ -133,6 +135,7 @@ impl<'a> TabContainer<'a> {
         self
     }
 
+    #[cfg(test)]
     pub fn from_tab_part(
         bounds: Rect,
         content_bounds: Rect,
@@ -650,10 +653,7 @@ impl<'a> TabContainer<'a> {
     const fn status_color(&self, kind: TabStatusKind) -> Color {
         match kind {
             TabStatusKind::Idle => self.style.colors.muted_foreground,
-            TabStatusKind::Busy => self.style.colors.accent,
-            TabStatusKind::Attention | TabStatusKind::Warning => self.style.colors.warning,
-            TabStatusKind::Success => self.style.colors.success,
-            TabStatusKind::Error => self.style.colors.error,
+            TabStatusKind::Warning => self.style.colors.warning,
         }
     }
 

@@ -1,8 +1,8 @@
 //! Desktop input adapter for the Workbench-owned tab context menu.
 
 use crate::ProductApp;
+use crate::TabContextMenuAction;
 use crate::terminal_input::text_input_command;
-use zeta_workbench::TabContextMenuAction;
 use zui::input::ElementState;
 use zui::input::Key;
 use zui::input::KeyEvent;
@@ -120,7 +120,7 @@ impl ProductApp {
 
     pub(crate) fn open_tab_context_menu(
         &mut self,
-        tab: zeta_workbench::TabInputKey,
+        tab: crate::TabInputKey,
         position: Point,
     ) -> bool {
         let restore_focus = self.ui_dispatch.focused();
@@ -144,15 +144,15 @@ impl ProductApp {
             return false;
         }
         match self.workbench.activate_tab_context_menu(id) {
-            zeta_workbench::TabContextMenuOutcome::Ignored => {}
-            zeta_workbench::TabContextMenuOutcome::Changed => {
+            crate::TabContextMenuOutcome::Ignored => {}
+            crate::TabContextMenuOutcome::Changed => {
                 self.rebuild_presentation();
                 self.request_redraw();
             }
-            zeta_workbench::TabContextMenuOutcome::Close(tab) => {
+            crate::TabContextMenuOutcome::Close(tab) => {
                 let _ = self.close_workbench_tab(&tab);
             }
-            zeta_workbench::TabContextMenuOutcome::Focus(element) => {
+            crate::TabContextMenuOutcome::Focus(element) => {
                 self.rebuild_presentation();
                 self.focus_tab_context_menu_element(element);
                 self.request_redraw();
@@ -190,7 +190,7 @@ impl ProductApp {
         };
         let target_tab = target
             .and_then(|target| {
-                zeta_workbench::tab_key_for_element(self.workbench.workbench().tab_part(), target)
+                crate::tab_key_for_element(self.workbench.workbench().tab_part(), target)
             })
             .cloned();
         match target_tab {
@@ -219,5 +219,5 @@ fn update_tab_context_menu_pointer(
     point: Point,
     frame: &InteractionFrame,
 ) -> DispatchOutcome {
-    zeta_workbench::update_tab_context_menu_pointer(dispatch, point, frame)
+    crate::update_tab_context_menu_pointer(dispatch, point, frame)
 }

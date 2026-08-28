@@ -12,12 +12,17 @@ path = "src/lib.rs"
 
 [dependencies]
 anyhow = { workspace = true }
+base64 = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
 unicode-width = { workspace = true }
+zeta-app-server-client = { workspace = true }
+zeta-app-server-protocol = { workspace = true }
 zeta-protocol = { workspace = true }
+zeta-remote-connections = { workspace = true }
 zeta-terminal = { workspace = true }
 zeta-ui-components = { workspace = true }
 zeta-ui-theme = { workspace = true }
-zeta-workbench-model = { workspace = true }
+zeta-utils-pty = { workspace = true }
 zui = { workspace = true, features = ["native"] }
 
 [lints]

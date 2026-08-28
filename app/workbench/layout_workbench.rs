@@ -14,6 +14,7 @@ const MINIMUM_VIEWPORT_HEIGHT: f32 = 180.0;
 /// The enum describes layout ownership only. Session, Settings, Terminal, and Inspector content
 /// remain owned by their product hosts and are mounted into these leaves by the caller.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg(test)]
 pub enum WorkbenchPart {
     /// Window titlebar content.
     Titlebar,
@@ -96,6 +97,7 @@ pub struct WorkbenchLayout {
 }
 
 impl WorkbenchLayout {
+    #[cfg(test)]
     /// Returns the bounds for a structural Workbench part.
     pub const fn part_bounds(self, part: WorkbenchPart) -> Option<Rect> {
         match part {

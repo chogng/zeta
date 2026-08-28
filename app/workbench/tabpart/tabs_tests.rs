@@ -60,11 +60,11 @@ fn part_with_two_sessions() -> (TabPart, TabInputKey, TabInputKey) {
     let mut part = TabPart::default();
     part.upsert_session_input(TabInput::session(
         first.session_id,
-        TabInputMetadata::new(first.title, "~/first").with_status(TabStatus::busy("Active")),
+        TabInputMetadata::new(first.title, "~/first").with_status(TabStatus::idle("Active")),
     ));
     part.upsert_session_input(TabInput::session(
         second.session_id,
-        TabInputMetadata::new(second.title, "~/second").with_status(TabStatus::busy("Active")),
+        TabInputMetadata::new(second.title, "~/second").with_status(TabStatus::idle("Active")),
     ));
     (part, first_key, second_key)
 }
@@ -715,7 +715,7 @@ fn workspace_preview_expands_all_roots_and_resets_after_hover_ends() {
         session.session_id,
         TabInputMetadata::new(session.title, "root-1")
             .with_workspace_roots(roots.clone())
-            .with_status(TabStatus::busy("Active")),
+            .with_status(TabStatus::idle("Active")),
     ));
     let tab_id = part.tab_id(&key).unwrap();
     let tab_element = session_tab_id(tab_id);

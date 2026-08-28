@@ -1,7 +1,6 @@
 use super::PaneKey;
 use super::TabContextMenuOutcome;
 use super::WorkbenchHost;
-use crate::LogicalViewport;
 use crate::PaneInput;
 use crate::PaneSplitDirection;
 use crate::TabInput;
@@ -18,7 +17,7 @@ fn session_id(value: &str) -> zeta_protocol::SessionId {
 fn session_input(id: zeta_protocol::SessionId) -> TabInput {
     TabInput::session(
         id,
-        TabInputMetadata::new("Session", "/workspace").with_status(TabStatus::busy("Active")),
+        TabInputMetadata::new("Session", "/workspace").with_status(TabStatus::idle("Active")),
     )
 }
 
@@ -74,7 +73,6 @@ fn switching_group_inputs_preserves_each_binding() {
             || "files",
         )
         .expect("files activation");
-    assert!(opened.opened());
     assert_eq!(host.binding(&terminal), Some(&"terminal"));
     assert_eq!(host.binding(opened.current()), Some(&"files"));
 
@@ -83,7 +81,6 @@ fn switching_group_inputs_preserves_each_binding() {
             panic!("existing input must not create a replacement binding")
         })
         .expect("terminal activation");
-    assert!(!activated.opened());
     assert_eq!(activated.current(), &terminal);
     assert_eq!(host.binding(&terminal), Some(&"terminal"));
 }
@@ -150,38 +147,6 @@ fn closing_a_tab_detaches_only_its_bindings() {
         host.workbench().tab_part().active_tab_key(),
         Some(&second_tab)
     );
-}
-
-#[test]
-fn host_delegates_layout_without_mutating_model() {
-    let host = WorkbenchHost::<()>::new();
-    let before = host.workbench().clone();
-    let layout = host.layout(
-        crate::WorkbenchLayoutSpec::new(
-            32.0,
-            crate::TabContainerLayoutSpec::new(
-                crate::PartVisibility::Collapsed,
-                200.0,
-                160.0,
-                480.0,
-                240.0,
-            ),
-            crate::InspectorLayoutSpec::new(
-                crate::PartVisibility::Collapsed,
-                320.0,
-                240.0,
-                560.0,
-                240.0,
-            ),
-        ),
-        LogicalViewport {
-            width: 1_000.0,
-            height: 700.0,
-        },
-    );
-
-    assert!(layout.is_some());
-    assert_eq!(host.workbench(), &before);
 }
 
 #[test]
