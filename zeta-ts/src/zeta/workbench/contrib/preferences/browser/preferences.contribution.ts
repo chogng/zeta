@@ -1,6 +1,6 @@
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
-import { IContextMenuService } from '../../../../platform/contextview/browser/contextMenu.js';
+import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/instantiation.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';

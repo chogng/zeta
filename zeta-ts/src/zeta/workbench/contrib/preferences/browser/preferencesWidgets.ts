@@ -171,8 +171,8 @@ class SettingActions extends Disposable {
 		this.setOpen(true);
 		try {
 			this.options.contextMenuProvider.showContextMenu({
-				anchor: this.trigger.domNode,
-				actions,
+				getAnchor: () => this.trigger.domNode,
+				getActions: () => actions,
 				onHide: () => this.setOpen(false),
 			});
 		} catch (error) {

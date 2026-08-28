@@ -7,7 +7,7 @@ import type { IKeybindingsResourceApi } from "../../platform/keybinding/common/k
 import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
 import type { IWorkspaceContextApi } from "../../platform/workspace/common/workspaceIpc.js";
 import { IStorageService } from "../../platform/storage/common/storage.js";
-import type { WorkbenchContextMenuServiceFactory } from "../../workbench/services/contextmenu/browser/workbenchContextMenuService.js";
+import type { WorkbenchContextMenuServiceFactory } from "../../workbench/browser/workbenchInteractionServices.js";
 import { BrowserStorageService } from "../../workbench/services/storage/browser/storageService.js";
 import { WorkbenchConfigurationService } from "../../workbench/services/configuration/browser/configurationService.js";
 import type { SessionsProfile } from "../common/sessionsProfile.js";

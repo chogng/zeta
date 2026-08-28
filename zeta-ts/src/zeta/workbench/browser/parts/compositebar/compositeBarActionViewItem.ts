@@ -165,8 +165,8 @@ export class CompositeBarOverflowViewItem extends ActionViewItem {
 		this.container.setAttribute("aria-expanded", "true");
 		try {
 			this.contextMenuProvider.showContextMenu({
-				anchor: this.container,
-				actions,
+				getAnchor: () => this.container,
+				getActions: () => actions,
 				onHide: () => this.container.setAttribute("aria-expanded", "false"),
 			});
 		} catch (error) {

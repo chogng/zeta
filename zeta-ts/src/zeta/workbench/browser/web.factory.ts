@@ -14,7 +14,7 @@ import {
 } from "../../platform/workspace/common/workspace.js";
 import {
 	createBrowserWorkbenchContextMenuService,
-} from "../services/contextmenu/browser/contextMenuService.js";
+} from "./workbenchInteractionServices.js";
 import {
 	createBrowserTitlebarPart,
 } from "./parts/titlebar/titlebarPart.js";

@@ -1,5 +1,5 @@
 import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
-import { IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
+import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import { IStorageService } from "../../../../platform/storage/common/storage.js";
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { IEditorService } from "../../../services/editor/common/editorService.js";

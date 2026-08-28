@@ -2,7 +2,7 @@ import './media/preferencesEditor.css';
 import { h } from '../../../../base/browser/dom.js';
 import { Dimension, type IDimension } from '../../../../base/browser/geometry.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { IContextMenuService } from '../../../../platform/contextview/browser/contextMenu.js';
+import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import type { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { EditorPaneVisibility, type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
 import type { EditorInput } from '../../../services/editor/common/editorService.js';

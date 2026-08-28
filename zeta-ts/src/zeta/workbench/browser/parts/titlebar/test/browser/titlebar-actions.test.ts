@@ -3,7 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import type {
 	IContextMenuService,
-} from "../../../../../../platform/contextview/browser/contextMenu.js";
+} from "../../../../../../platform/contextview/browser/contextView.js";
 import type {
 	IMenubarControl,
 } from "../../../../../../workbench/browser/parts/titlebar/menubarControl.js";
@@ -230,9 +230,7 @@ test("browser titlebar uses one icon trigger for the application menus", () => {
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
 		showContextMenu(options) {
-			if ("actions" in options) {
-				menuLabels = options.actions.map((action) => action.label);
-			}
+			menuLabels = options.getActions?.().map((action) => action.label) ?? [];
 		},
 		hideContextMenu() {},
 	};

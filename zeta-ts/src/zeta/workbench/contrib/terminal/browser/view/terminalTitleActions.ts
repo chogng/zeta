@@ -8,7 +8,7 @@ import { MenuId, MenusRegistry } from "../../../../../platform/actions/common/ac
 import type { IMenuService } from "../../../../../platform/actions/common/menuService.js";
 import { CommandsRegistry } from "../../../../../platform/commands/common/commands.js";
 import { ContextKeyExpr, type IContextKey, type IContextKeyService, RawContextKey } from "../../../../../platform/contextkey/common/contextkey.js";
-import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
+import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { ITerminalInstance, ITerminalProfile } from "../../../../services/terminal/common/terminal.js";
 import { terminalProfileIcon } from "./terminalProfileIcon.js";
 

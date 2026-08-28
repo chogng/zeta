@@ -66,8 +66,8 @@ export class SettingsSearchMenu extends Disposable {
 		this.setOpen(true);
 		try {
 			this.options.contextMenuProvider.showContextMenu({
-				anchor: this.domNode,
-				actions,
+				getAnchor: () => this.domNode,
+				getActions: () => actions,
 				onHide: () => this.setOpen(false),
 			});
 		} catch (error) {

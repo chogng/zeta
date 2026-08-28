@@ -1,5 +1,5 @@
 import type {
-	IActionContextMenuOptions,
+	IContextMenuDelegate,
 	IContextMenuProvider,
 } from "../../contextmenu.js";
 import { addDisposableListener, stopEvent, h } from "../../dom.js";
@@ -83,9 +83,9 @@ export class DropdownMenuActionViewItem extends ActionViewItem {
 		if (actions.length === 0) return;
 
 		this.setVisible(true);
-		const options: IActionContextMenuOptions = {
-			anchor: button.domNode,
-			actions,
+		const options: IContextMenuDelegate = {
+			getAnchor: () => button.domNode,
+			getActions: () => actions,
 			onHide: () => this.setVisible(false),
 		};
 		try {

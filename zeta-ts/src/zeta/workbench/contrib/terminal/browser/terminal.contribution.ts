@@ -1,6 +1,6 @@
 import { IMenuService } from "../../../../platform/actions/common/menuService.js";
 import { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
-import { IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
+import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IThemeService } from "../../../../platform/theme/common/themeService.js";
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";

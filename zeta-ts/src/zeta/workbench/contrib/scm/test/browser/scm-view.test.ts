@@ -7,7 +7,7 @@ import { URI } from "../../../../../base/common/uri.js";
 import { MenuId, registerAction2 } from "../../../../../platform/actions/common/actions.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import { ServiceContainer } from "../../../../../platform/instantiation/common/instantiation.js";
-import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
+import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { HoverSetupOptions, IHoverService, IManagedHover } from "../../../../../platform/hover/common/hoverService.js";
 import type { IFileIconThemeService } from "../../../../../platform/theme/browser/fileIconThemeService.js";
 import { IGitService, type GraphQuery, type GitStatus } from "../../../../../workbench/services/git/common/gitService.js";

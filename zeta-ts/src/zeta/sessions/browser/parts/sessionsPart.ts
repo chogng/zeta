@@ -1,7 +1,7 @@
 import "./media/sessionsPart.css";
 import { Dimension } from "../../../base/browser/geometry.js";
 import type { ICommandService } from "../../../platform/commands/common/commands.js";
-import type { IContextMenuService } from "../../../platform/contextview/browser/contextMenu.js";
+import type { IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
 import type { IContextViewService } from "../../../platform/contextview/browser/contextView.js";
 import type { IQuickInputService } from "../../../platform/quickinput/common/quickInput.js";
 import type { IChatService } from "../../../workbench/services/chat/common/chatService.js";

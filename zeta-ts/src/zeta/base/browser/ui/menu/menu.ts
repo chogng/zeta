@@ -1,4 +1,4 @@
-import { type IAction, Separator, SubmenuAction } from "../../../common/actions.js";
+import { type IAction, type IActionRunner, Separator, SubmenuAction } from "../../../common/actions.js";
 import { addDisposableListener, isNode, h } from "../../dom.js";
 import { FocusNavigationBoundary, FocusNavigationDirection, focusFirst, focusLast, moveFocus } from "../../focus.js";
 import type { ResolvedKeybinding } from "../../../common/keybindings.js";
@@ -9,7 +9,7 @@ import { AnchorAxisAlignment, AnchorPosition, ContextView, ContextViewFocusResto
 import { appendIcon } from "../icon/icon.js";
 import { KeybindingLabel } from "../keybindinglabel/keybindinglabel.js";
 
-interface MenuActionViewItemOptions {
+export interface MenuActionViewItemOptions {
 	readonly onDidSelect?: () => void;
 	readonly submenuLayer?: number;
 	readonly contextViewContainer?: HTMLElement;
@@ -17,6 +17,9 @@ interface MenuActionViewItemOptions {
 	readonly getKeybinding?: (
 		action: IAction,
 	) => ResolvedKeybinding | undefined;
+	readonly actionRunner?: IActionRunner;
+	readonly actionContext?: unknown;
+	readonly checkedActionRepresentation?: "radio" | "checkbox";
 }
 
 function prependMenuLeadingSlot(
@@ -39,6 +42,9 @@ function prependMenuLeadingSlot(
 class MenuActionViewItem extends ButtonActionViewItem {
 	private readonly onDidSelect: (() => void) | undefined;
 	private readonly keybinding: ResolvedKeybinding | undefined;
+	private readonly actionRunner: IActionRunner | undefined;
+	private readonly actionContext: unknown;
+	private readonly checkedActionRepresentation: "radio" | "checkbox";
 
 	constructor(
 		action: IAction,
@@ -47,6 +53,9 @@ class MenuActionViewItem extends ButtonActionViewItem {
 		super(action);
 		this.onDidSelect = options.onDidSelect;
 		this.keybinding = options.keybinding;
+		this.actionRunner = options.actionRunner;
+		this.actionContext = options.actionContext;
+		this.checkedActionRepresentation = options.checkedActionRepresentation ?? "checkbox";
 	}
 
 	override render(container: HTMLElement): void {
@@ -55,7 +64,12 @@ class MenuActionViewItem extends ButtonActionViewItem {
 		if (this.action.checked === undefined) {
 			this.button.domNode.setAttribute("role", "menuitem");
 		} else {
-			this.button.domNode.setAttribute("role", "menuitemcheckbox");
+			this.button.domNode.setAttribute(
+				"role",
+				this.checkedActionRepresentation === "radio"
+					? "menuitemradio"
+					: "menuitemcheckbox",
+			);
 			this.button.domNode.setAttribute(
 				"aria-checked",
 				String(this.action.checked),
@@ -77,7 +91,9 @@ class MenuActionViewItem extends ButtonActionViewItem {
 
 	protected override runAction(): unknown {
 		try {
-			return super.runAction();
+			return this.actionRunner
+				? this.actionRunner.run(this.action, this.actionContext)
+				: super.runAction();
 		} finally {
 			this.onDidSelect?.();
 		}
@@ -93,6 +109,8 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
 	private readonly getKeybinding:
 		| ((action: IAction) => ResolvedKeybinding | undefined)
 		| undefined;
+	private readonly actionRunner: IActionRunner | undefined;
+	private readonly actionContext: unknown;
 	private contextView: ContextView | undefined;
 	private menu: Menu | undefined;
 	private open = false;
@@ -107,6 +125,8 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
 		this.submenuLayer = options.submenuLayer ?? 20;
 		this.contextViewContainer = options.contextViewContainer;
 		this.getKeybinding = options.getKeybinding;
+		this.actionRunner = options.actionRunner;
+		this.actionContext = options.actionContext;
 	}
 
 	override render(container: HTMLElement): void {
@@ -127,6 +147,8 @@ class SubmenuMenuActionViewItem extends ButtonActionViewItem {
 			contextViewContainer: this.contextViewContainer,
 			layer: this.submenuLayer,
 			getKeybinding: this.getKeybinding,
+			actionRunner: this.actionRunner,
+			actionContext: this.actionContext,
 			onDidSelect: () => {
 				this.hide();
 				this.onDidSelect?.();
@@ -214,6 +236,16 @@ export interface MenuOptions {
 		action: IAction,
 	) => ResolvedKeybinding | undefined;
 	readonly layer?: number;
+	readonly actionRunner?: IActionRunner;
+	readonly actionContext?: unknown;
+	readonly className?: string;
+	readonly actionViewItemProvider?: (
+		action: IAction,
+		options: MenuActionViewItemOptions,
+	) => ActionViewItem | undefined;
+	readonly getCheckedActionsRepresentation?: (
+		action: IAction,
+	) => "radio" | "checkbox";
 }
 
 interface MenuEntry {
@@ -235,19 +267,26 @@ export class Menu extends Disposable {
 		const element = h(ownerDocument, "div");
 		this.element = element;
 		this._register(toDisposable(() => element.remove()));
-		element.className = "zeta-menu";
+		element.className = options.className
+			? `zeta-menu ${options.className}`
+			: "zeta-menu";
 		element.setAttribute("role", "menu");
 		container.append(element);
 
 		for (const action of options.actions) {
+			const itemOptions: MenuActionViewItemOptions = {
+				onDidSelect: options.onDidSelect,
+				submenuLayer: (options.layer ?? 20) + 1,
+				contextViewContainer: options.contextViewContainer,
+				keybinding: options.getKeybinding?.(action),
+				getKeybinding: options.getKeybinding,
+				actionRunner: options.actionRunner,
+				actionContext: options.actionContext,
+				checkedActionRepresentation: options.getCheckedActionsRepresentation?.(action),
+			};
 			const item = this._register(
-				createMenuActionViewItem(action, {
-					onDidSelect: options.onDidSelect,
-					submenuLayer: (options.layer ?? 20) + 1,
-					contextViewContainer: options.contextViewContainer,
-					keybinding: options.getKeybinding?.(action),
-					getKeybinding: options.getKeybinding,
-				}),
+				options.actionViewItemProvider?.(action, itemOptions) ??
+					createMenuActionViewItem(action, itemOptions),
 			);
 			if (item instanceof SubmenuMenuActionViewItem) {
 				this.submenus.push(item);

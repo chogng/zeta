@@ -19,7 +19,7 @@ test("toolbar submenu items retain toolbar button semantics", async () => {
 			import("../../../../platform/actions/browser/menuEntryActionViewItem.js"),
 		]);
 	let shownOptions:
-		| import("../../../../base/browser/contextmenu.js").IActionContextMenuOptions
+		| import("../../../../base/browser/contextmenu.js").IContextMenuDelegate
 		| undefined;
 	const childAction = {
 		id: "test.toolbar.child",
@@ -54,8 +54,8 @@ test("toolbar submenu items retain toolbar button semantics", async () => {
 	));
 	button.click();
 	assert.ok(shownOptions);
-	assert.equal(shownOptions.anchor, button);
-	assert.deepEqual(shownOptions.actions, [childAction]);
+	assert.equal(shownOptions.getAnchor(), button);
+	assert.deepEqual(shownOptions.getActions(), [childAction]);
 	assert.equal(button.getAttribute("aria-expanded"), "true");
 	shownOptions.onHide?.(false);
 	assert.equal(button.getAttribute("aria-expanded"), "false");
@@ -71,14 +71,12 @@ test("menu entry actions switch to their alternative while Alt is held", async (
 		{ ModifierKeyEmitter },
 		{ MenuItemAction },
 		{ ContextKeyService },
-		{ createActionViewItem },
-		{ resolveContextMenuActions },
+		{ createActionViewItem, resolveAlternativeMenuActions },
 	] = await Promise.all([
 		import("../../../../base/browser/dom.js"),
 		import("../../../../platform/actions/common/actions.js"),
 		import("../../../../platform/contextkey/common/contextkey.js"),
 		import("../../../../platform/actions/browser/menuEntryActionViewItem.js"),
-		import("../../../../platform/contextview/browser/contextMenu.js"),
 	]);
 	const runs: string[] = [];
 	const commandService = {
@@ -115,7 +113,7 @@ test("menu entry actions switch to their alternative while Alt is held", async (
 	button.click();
 	await new Promise(resolve => setTimeout(resolve, 0));
 	assert.deepEqual(runs, ["test.toolbar.alternative"]);
-	assert.equal(resolveContextMenuActions({ anchor: button, actions: [primary] }, {} as import("../../../../platform/actions/common/menuService.js").IMenuService)[0]?.id, "test.toolbar.alternative");
+	assert.equal(resolveAlternativeMenuActions([primary], true)[0]?.id, "test.toolbar.alternative");
 
 	dom.window.dispatchEvent(new dom.window.KeyboardEvent("keyup", { key: "Alt" }));
 	assert.equal(button.textContent, "Primary");
@@ -137,9 +135,9 @@ test("DropdownWithPrimaryActionViewItem presents one split toolbar item", async 
 		import("../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js"),
 		import("../../../../base/browser/ui/toolbar/toolbar.js"),
 	]);
-	let shownOptions: import("../../../../base/browser/contextmenu.js").IActionContextMenuOptions | undefined;
+	let shownOptions: import("../../../../base/browser/contextmenu.js").IContextMenuDelegate | undefined;
 	const contextMenuProvider = {
-		showContextMenu(options: import("../../../../base/browser/contextmenu.js").IActionContextMenuOptions) {
+		showContextMenu(options: import("../../../../base/browser/contextmenu.js").IContextMenuDelegate) {
 			shownOptions = options;
 		},
 	};
@@ -181,8 +179,8 @@ test("DropdownWithPrimaryActionViewItem presents one split toolbar item", async 
 	assert.equal(dom.window.document.activeElement, primaryButton);
 
 	dropdownButton.click();
-	assert.equal(shownOptions?.anchor, dropdownButton);
-	assert.deepEqual(shownOptions?.actions.map(({ id }) => id), ["cmd"]);
+	assert.equal(shownOptions?.getAnchor(), dropdownButton);
+	assert.deepEqual(shownOptions?.getActions().map(({ id }) => id), ["cmd"]);
 	assert.equal(dropdownButton.getAttribute("aria-expanded"), "true");
 	assert.equal(splitItem.classList.contains("active"), true);
 	shownOptions?.onHide?.(false);
@@ -197,12 +195,12 @@ test("DropdownWithPrimaryActionViewItem presents one split toolbar item", async 
 	splitViewItem.focus(true);
 	assert.equal(dom.window.document.activeElement, updatedDropdownButton);
 	splitViewItem.showDropdown();
-	assert.deepEqual(shownOptions?.actions.map(({ id }) => id), ["other"]);
+	assert.deepEqual(shownOptions?.getActions().map(({ id }) => id), ["other"]);
 	assert.equal(splitItem.classList.contains("active"), true);
 	splitViewItem.update(testAction("select-final"), [testAction("final")]);
 	assert.equal(splitItem.classList.contains("active"), false);
 	splitViewItem.showDropdown();
-	assert.deepEqual(shownOptions?.actions.map(({ id }) => id), ["final"]);
+	assert.deepEqual(shownOptions?.getActions().map(({ id }) => id), ["final"]);
 	shownOptions?.onHide?.(false);
 	assert.deepEqual(visibility, [true, false, true, false, true, false]);
 
@@ -404,7 +402,7 @@ test("menu toolbar keeps navigation inline and moves other groups into More Acti
 	const contexts = registrations.add(new ContextKeyService());
 	const menus = new MenuService(commands, contexts);
 	let shownOptions:
-		| import("../../../../base/browser/contextmenu.js").IActionContextMenuOptions
+		| import("../../../../base/browser/contextmenu.js").IContextMenuDelegate
 		| undefined;
 	const toolbar = new MenuWorkbenchToolBar(
 		dom.window.document.body,
@@ -425,7 +423,7 @@ test("menu toolbar keeps navigation inline and moves other groups into More Acti
 	assert.equal(toolbar.element.textContent?.includes("Secondary"), false);
 	buttons[1]?.click();
 	assert.deepEqual(
-		shownOptions?.actions.map(({ id }) => id),
+		shownOptions?.getActions().map(({ id }) => id),
 		["test.toolbar.secondary"],
 	);
 	assert.throws(
@@ -591,6 +589,7 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 		{ CommandService },
 		{ BrowserContextViewService },
 		{ BrowserContextMenuService },
+		{ BrowserNotificationService },
 	] = await Promise.all([
 		import("../../../../base/common/actions.js"),
 		import("../../../../base/browser/ui/toolbar/toolbar.js"),
@@ -600,6 +599,7 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 		import("../../../../workbench/services/commands/common/commandService.js"),
 		import("../../../../platform/contextview/browser/contextViewService.js"),
 		import("../../../../platform/contextview/browser/contextMenuService.js"),
+		import("../../../../platform/notification/browser/notificationService.js"),
 	]);
 	const host = dom.window.document.querySelector<HTMLElement>("main");
 	assert.ok(host);
@@ -607,8 +607,10 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 	const commands = new CommandService(new ServiceContainer());
 	const menus = new MenuService(commands, contexts);
 	using contextViews = new BrowserContextViewService(host);
+	using notifications = new BrowserNotificationService(host);
 	using contextMenus = new BrowserContextMenuService(
 		menus,
+		contexts,
 		{
 			inChordMode: false,
 			onDidUpdateKeybindings: Event.None,
@@ -618,6 +620,7 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 			lookupKeybinding() { return undefined; },
 		},
 		contextViews,
+		notifications,
 	);
 	const openingOrder: string[] = [];
 	contextMenus.onDidShowContextMenu(() => openingOrder.push("show"));
@@ -665,6 +668,25 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 	await Promise.resolve();
 	assert.equal(cleared, 1);
 	assert.equal(more.getAttribute("aria-expanded"), "false");
+
+	toolbar.setActions([testAction("close")], [
+		testAction("fail", async () => {
+			await Promise.resolve();
+			throw new Error("Action failed after the menu closed");
+		}),
+	]);
+	const nextMore = toolbar.element.querySelector<HTMLButtonElement>(
+		"[data-action-id='zeta.toolbar.moreActions'] button",
+	);
+	assert.ok(nextMore);
+	nextMore.click();
+	host.querySelector<HTMLButtonElement>("[data-action-id='fail'] button")?.click();
+	await Promise.resolve();
+	await Promise.resolve();
+	assert.equal(
+		notifications.getNotifications()[0]?.message,
+		"Action failed after the menu closed",
+	);
 
 	dom.window.close();
 	for (const name of ["window", "Node", "Element", "HTMLElement"]) {

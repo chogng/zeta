@@ -5,7 +5,7 @@ import { Emitter } from "../../../../base/common/event.js";
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from "../../../../base/common/layout.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import type { IConfigurationChangeEvent, IConfigurationKey, IConfigurationService } from "../../../configuration/common/configurationService.js";
-import type { IContextMenuService } from "../../../contextview/browser/contextMenu.js";
+import type { IContextMenuService } from "../../../contextview/browser/contextView.js";
 import { h } from "../../../../base/browser/dom.js";
 
 const environment = new JSDOM("<!doctype html><html><body><main><button id='first'>First</button><button id='second'>Second</button></main></body></html>");

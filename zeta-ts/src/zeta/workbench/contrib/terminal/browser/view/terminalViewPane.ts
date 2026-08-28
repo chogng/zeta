@@ -3,7 +3,7 @@ import { Disposable } from "../../../../../base/common/lifecycle.js";
 import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
 import type { IMenuService } from "../../../../../platform/actions/common/menuService.js";
 import type { IContextKeyService } from "../../../../../platform/contextkey/common/contextkey.js";
-import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
+import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { IThemeService } from "../../../../../platform/theme/common/themeService.js";
 import { AppServerRemoteError } from "../../../../../platform/app-server/common/appServerError.js";
 import type { IWorkspaceContextService } from "../../../../../platform/workspace/common/workspace.js";

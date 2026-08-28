@@ -10,7 +10,7 @@ import { TAB_CLOSE_ACTION_ID } from "../../../../../base/browser/ui/tablist/tabL
 import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
 import { MenuId } from "../../../../../platform/actions/common/actions.js";
 import { MenuService } from "../../../../../platform/actions/common/menuService.js";
-import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
+import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import { ServiceContainer } from "../../../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
 import { CommandService } from "../../../../../workbench/services/commands/common/commandService.js";

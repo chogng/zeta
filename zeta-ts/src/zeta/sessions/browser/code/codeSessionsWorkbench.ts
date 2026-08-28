@@ -7,7 +7,7 @@ import type { IKeybindingsResourceApi } from "../../../platform/keybinding/commo
 import type { IStorageService } from "../../../platform/storage/common/storage.js";
 import type { WorkbenchPart } from "../../../workbench/browser/part.js";
 import { WorkbenchInteractionServices } from "../../../workbench/browser/workbenchInteractionServices.js";
-import type { WorkbenchContextMenuServiceFactory } from "../../../workbench/services/contextmenu/browser/workbenchContextMenuService.js";
+import type { WorkbenchContextMenuServiceFactory } from "../../../workbench/browser/workbenchInteractionServices.js";
 import type { ISessionsWindowApi } from "../../common/sessionsWindow.js";
 import type { SessionsProfile } from "../../common/sessionsProfile.js";
 import { SessionsWorkbenchLayout } from "../layout.js";
@@ -19,6 +19,8 @@ import { SessionsPart } from "../parts/sessionsPart.js";
 import { SessionsSidebarPart } from "../parts/sessionsSidebarPart.js";
 import { SessionsTitlebarPart } from "../parts/sessionsTitlebarPart.js";
 import { h } from "../../../base/browser/dom.js";
+import { BrowserNotificationService } from "../../../platform/notification/browser/notificationService.js";
+import { INotificationService } from "../../../platform/notification/common/notification.js";
 
 export interface CodeSessionsWorkbenchOptions {
 	readonly profile: SessionsProfile;
@@ -54,11 +56,14 @@ export class CodeSessionsWorkbench extends Disposable {
 		this.layoutService = layoutService;
 		runtime.container.registerInstance(ILayoutService, layoutService);
 		runtime.container.registerInstance(IConfigurationService, options.configurationService);
+		const notificationService = this._register(new BrowserNotificationService(this.domNode));
+		runtime.container.registerInstance(INotificationService, notificationService);
 		const interactionServices = this._register(new WorkbenchInteractionServices({
 			container: runtime.container,
 			layoutService,
 			configurationService: options.configurationService,
 			keybindingsResourceApi: options.keybindingsResourceApi,
+			notificationService,
 			createContextMenuService: options.createContextMenuService,
 		}));
 		const titlebar = this._register(new SessionsTitlebarPart(this.domNode, profile, runtime.view, {

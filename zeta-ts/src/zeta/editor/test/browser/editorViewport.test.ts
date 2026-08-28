@@ -32,9 +32,6 @@ for (const [name, value] of Object.entries({
 const { EditorViewport } = await import(
 	"../../browser/view.js"
 );
-const { EditorMinimap } = await import(
-	"../../browser/view.js"
-);
 const { EditorTextDirection } = await import(
 	"../../browser/view.js"
 );
@@ -262,7 +259,7 @@ test("EditorViewport projects indentation guides for visible logical rows only",
 	dom.window.close();
 });
 
-test("EditorViewport renders a bounded minimap and maps a primary click to document scroll", () => {
+test("EditorViewport renders a canvas minimap and maps a primary click to document scroll", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel(lines(200).join("\n"));
@@ -271,23 +268,22 @@ test("EditorViewport renders a bounded minimap and maps a primary click to docum
 		model,
 		lineHeight: 20,
 		textMeasurer: fixedTextMeasurer(),
-		minimap: EditorMinimap.On,
+		minimap: { enabled: true },
 	});
 	viewport.layout({ width: 300, height: 100 });
 	const minimap = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-minimap");
 	assert.equal(minimap.hidden, false);
-	assert.equal(minimap.querySelectorAll(".stanza-editor-minimap-row").length, 160);
-	const minimapRow = requiredElement<HTMLElement>(minimap, ".stanza-editor-minimap-row");
-	assert.equal(minimapRow.style.height, "1px");
-	assert.equal(Number.parseFloat(minimapRow.style.width) <= 44, true);
+	const canvas = requiredElement<HTMLCanvasElement>(minimap, ".stanza-editor-minimap-canvas");
+	assert.equal(canvas.width, 32);
+	assert.equal(canvas.height, 100);
 	const overview = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-overview-ruler");
 	assert.equal(overview.style.left, "290px");
 
 	viewport.element.scrollTop = 1950;
 	viewport.element.dispatchEvent(new dom.window.Event("scroll"));
 	assert.equal(viewport.viewportLayout.scrollPosition.top, 1950);
-	assert.equal(minimap.style.transform, "translate3d(230px, 1950px, 0)");
-	assert.equal(requiredElement<HTMLElement>(minimap, ".stanza-editor-minimap-viewport").style.transform, "translate3d(0, 48.75px, 0)");
+	assert.equal(minimap.style.transform, "translate3d(254px, 1950px, 0)");
+	assert.equal(requiredElement<HTMLElement>(minimap, ".stanza-editor-minimap-slider").style.transform, "translate3d(0, 48.75px, 0)");
 
 	minimap.dispatchEvent(new dom.window.MouseEvent("pointerdown", {
 		bubbles: true,
@@ -296,7 +292,7 @@ test("EditorViewport renders a bounded minimap and maps a primary click to docum
 		clientY: 75,
 	}));
 	assert.equal(viewport.viewportLayout.scrollPosition.top, 2925);
-	assert.equal(requiredElement<HTMLElement>(minimap, ".stanza-editor-minimap-viewport").style.transform, "translate3d(0, 73.125px, 0)");
+	assert.equal(requiredElement<HTMLElement>(minimap, ".stanza-editor-minimap-slider").style.transform, "translate3d(0, 73.125px, 0)");
 
 	dom.window.document.dispatchEvent(new dom.window.MouseEvent("pointermove", {
 		bubbles: true,
@@ -368,17 +364,23 @@ test("EditorViewport lets a direct host own its focus outline and omits active l
 	dom.window.close();
 });
 
-test("EditorViewport rejects an unknown minimap mode", () => {
+test("EditorViewport normalizes minimap options through common editor configuration", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha");
-	assert.throws(() => new EditorViewport({
+	using viewport = new EditorViewport({
 		container,
 		model,
 		lineHeight: 20,
 		textMeasurer: fixedTextMeasurer(),
-		minimap: "invalid" as never,
-	}), /Unknown Stanza editor minimap mode/);
+		minimap: { enabled: true, side: 'left', scale: 99 },
+	});
+	viewport.layout({ width: 300, height: 40 });
+	const minimap = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-minimap');
+	assert.equal(minimap.style.transform, 'translate3d(0px, 0px, 0)');
+	const canvas = requiredElement<HTMLCanvasElement>(minimap, '.stanza-editor-minimap-canvas');
+	assert.equal(canvas.height, 40);
+	assert.equal(requiredElement<HTMLElement>(viewport.element, '.stanza-editor-content').style.transform, `translate3d(${canvas.width}px, 0, 0)`);
 	dom.window.close();
 });
 
@@ -465,6 +467,7 @@ test("Soft wrapping virtualizes visual rows and maps DOM coordinates back to log
 		lineHeight: 20,
 		textMeasurer: fixedTextMeasurer(10, 24),
 		lineWrapping: EditorLineWrapping.On,
+		minimap: { enabled: false },
 	});
 
 	viewport.layout({ width: 90, height: 40 });
@@ -531,6 +534,7 @@ test("Soft wrapping applies the configured indent to continuation DOM rows", () 
 		textMeasurer: fixedTextMeasurer(10, 24),
 		lineWrapping: EditorLineWrapping.On,
 		wrappingIndent: WrappingIndent.Same,
+		minimap: { enabled: false },
 	});
 
 	viewport.layout({ width: 116, height: 60 });
@@ -599,7 +603,7 @@ test("Folding model removes folded physical rows from the viewport projection", 
 	dom.window.close();
 });
 
-test("EditorViewport keeps short minimap rows at the top and omits a useless slider", () => {
+test("EditorViewport keeps short minimap content at the top and omits a useless slider", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha\nbeta\ngamma");
@@ -608,18 +612,14 @@ test("EditorViewport keeps short minimap rows at the top and omits a useless sli
 		model,
 		lineHeight: 20,
 		textMeasurer: fixedTextMeasurer(),
-		minimap: EditorMinimap.On,
+		minimap: { enabled: true },
 	});
 	viewport.layout({ width: 300, height: 100 });
 	const minimap = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-minimap");
-	const rows = minimap.querySelectorAll<HTMLElement>(".stanza-editor-minimap-row");
-	assert.deepEqual([...rows].map(row => ({ top: row.style.top, height: row.style.height })), [
-		{ top: "0px", height: "2px" },
-		{ top: "2px", height: "2px" },
-		{ top: "4px", height: "2px" },
-	]);
-	assert.equal(requiredElement<HTMLElement>(minimap, ".stanza-editor-minimap-viewport").hidden, true);
-	assert.equal(minimap.style.transform, "translate3d(230px, 0px, 0)");
+	const canvas = requiredElement<HTMLCanvasElement>(minimap, '.stanza-editor-minimap-canvas');
+	assert.equal(canvas.height, 100);
+	assert.equal(requiredElement<HTMLElement>(minimap, ".stanza-editor-minimap-slider").hidden, true);
+	assert.equal(minimap.style.transform, "translate3d(252px, 0px, 0)");
 	dom.window.close();
 });
 

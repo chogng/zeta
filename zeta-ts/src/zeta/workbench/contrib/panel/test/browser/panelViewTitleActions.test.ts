@@ -4,7 +4,7 @@ import { JSDOM } from "jsdom";
 import type { IAction } from "../../../../../base/common/actions.js";
 import { Event } from "../../../../../base/common/event.js";
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
-import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
+import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import { OutputService } from "../../../../../workbench/services/output/browser/outputService.js";
 import type { ITaskService } from "../../../../../workbench/services/tasks/common/taskService.js";
 import type { ITerminalService } from "../../../../../workbench/services/terminal/common/terminal.js";
@@ -17,7 +17,7 @@ test("Output projects channel selection and active-channel clearing into the Pan
 	const contextMenus: IContextMenuService = {
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
-		showContextMenu: options => { shownActions = "actions" in options ? options.actions : []; },
+		showContextMenu: options => { shownActions = options.getActions?.() ?? []; },
 		hideContextMenu() {},
 	};
 	try {

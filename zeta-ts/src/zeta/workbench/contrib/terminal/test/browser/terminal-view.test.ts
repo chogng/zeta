@@ -3,7 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import type { IAction } from "../../../../../base/common/actions.js";
 import { Event } from "../../../../../base/common/event.js";
-import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
+import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { ITerminalInstance } from "../../../../../workbench/services/terminal/common/terminal.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -51,8 +51,8 @@ const contextMenuService: IContextMenuService = {
 	onDidShowContextMenu: Event.None,
 	onDidHideContextMenu: Event.None,
 	showContextMenu(options) {
-		shownProfileActions = "actions" in options ? options.actions : [];
-		shownProfileAnchor = "actions" in options ? options.anchor : undefined;
+		shownProfileActions = options.getActions?.() ?? [];
+		shownProfileAnchor = options.getAnchor();
 	},
 	hideContextMenu() {},
 };

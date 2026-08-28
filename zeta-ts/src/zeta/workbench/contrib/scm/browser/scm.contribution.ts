@@ -1,7 +1,7 @@
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { IMenuService } from "../../../../platform/actions/common/menuService.js";
 import { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
-import { IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
+import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import { ICommandService } from "../../../../platform/commands/common/commands.js";
 import { IHoverService } from "../../../../platform/hover/common/hoverService.js";
 import { IFileIconThemeService } from "../../../../platform/theme/browser/fileIconThemeService.js";

@@ -119,9 +119,6 @@ import { ISessionsManagementService } from "../../sessions/services/sessions/com
 import {
 	WorkbenchConfigurationService,
 } from "../services/configuration/browser/configurationService.js";
-import type {
-	WorkbenchContextMenuServiceFactory,
-} from "../services/contextmenu/browser/workbenchContextMenuService.js";
 import {
 	DialogService,
 } from "../services/dialogs/common/dialogService.js";
@@ -228,7 +225,7 @@ import { IEditorGroupsService } from '../services/editor/common/editorGroupsServ
 import { OUTPUT_VIEW_ID } from "../contrib/output/common/output.js";
 import { createEditorDecorationSources } from "./parts/editor/editorDecorations.js";
 import { installWorkbenchServiceContributions } from "./workbenchServiceContributions.js";
-import { WorkbenchInteractionServices } from "./workbenchInteractionServices.js";
+import { type WorkbenchContextMenuServiceFactory, WorkbenchInteractionServices } from "./workbenchInteractionServices.js";
 import { ConnectToRemoteCommandId } from "../contrib/remote/browser/remoteActions.js";
 import type { IUserKeyboardLayoutApi } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
 import { WorkbenchModeService } from "../services/workbenchMode/browser/workbenchModeService.js";
@@ -561,6 +558,7 @@ export class Workbench extends Disposable {
 			keyboardLayoutProvider,
 			userKeyboardLayoutApi,
 			statusbarService,
+			notificationService,
 			createContextMenuService,
 		}));
 		const commands = interactionServices.commandService;

@@ -2,7 +2,7 @@ import "./titlebarpart.css";
 import { MenuWorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
 import { MenuId } from "../../../../platform/actions/common/actions.js";
 import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
-import type { IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
+import type { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import { WorkbenchPart } from "../../part.js";
 import { WorkbenchWindowBarHeight } from "../workbenchPartDimensions.js";
 import { BrowserMenubarControl, type IMenubarControl } from "./menubarControl.js";

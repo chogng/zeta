@@ -9,7 +9,7 @@ import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { URI } from "../../../../base/common/uri.js";
 import { TextPosition } from "../../../../editor/common/core/text.js";
 import { TextRange } from "../../../../editor/common/core/text.js";
-import type { IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
+import type { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import type { IStorageService } from "../../../../platform/storage/common/storage.js";
 import { StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
 import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";

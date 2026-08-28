@@ -1351,7 +1351,7 @@ export class EditorLayoutInfoComputer extends EditorOptionDefinition<EditorOptio
 		return { typicalViewportLineCount, extraLinesBeforeFirstLine, extraLinesBeyondLastLine, desiredRatio, minimapLineCount };
 	}
 
-	private static computeMinimapLayout(input: IMinimapLayoutInput, memory: ComputeOptionsMemory): EditorMinimapLayoutInfo {
+	public static computeMinimapLayout(input: IMinimapLayoutInput, memory: ComputeOptionsMemory): EditorMinimapLayoutInfo {
 		const outerWidth = Math.max(0, input.outerWidth);
 		const outerHeight = Math.max(0, input.outerHeight);
 		const pixelRatio = Math.max(1, input.pixelRatio);

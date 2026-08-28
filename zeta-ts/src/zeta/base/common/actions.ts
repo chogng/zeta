@@ -1,4 +1,6 @@
 import type { Icon } from "./icon.js";
+import { Emitter, type Event } from "./event.js";
+import { Disposable } from "./lifecycle.js";
 
 /** A resolved action that can be presented by menus, toolbars, and buttons. */
 export interface IAction {
@@ -11,6 +13,40 @@ export interface IAction {
 	readonly badge?: string;
 
 	run(...args: readonly unknown[]): unknown;
+}
+
+export interface IRunEvent {
+	readonly action: IAction;
+	readonly context?: unknown;
+	readonly error?: unknown;
+}
+
+export interface IActionRunner {
+	readonly onWillRun: Event<IRunEvent>;
+	readonly onDidRun: Event<IRunEvent>;
+
+	run(action: IAction, context?: unknown): Promise<void>;
+}
+
+/** Runs actions through one observable error boundary. */
+export class ActionRunner extends Disposable implements IActionRunner {
+	private readonly _onWillRun = this._register(new Emitter<IRunEvent>());
+	private readonly _onDidRun = this._register(new Emitter<IRunEvent>());
+
+	readonly onWillRun = this._onWillRun.event;
+	readonly onDidRun = this._onDidRun.event;
+
+	async run(action: IAction, context?: unknown): Promise<void> {
+		this._onWillRun.fire({ action, context });
+		let error: unknown;
+		try {
+			await action.run(context);
+		} catch (cause) {
+			error = cause;
+		} finally {
+			this._onDidRun.fire({ action, context, error });
+		}
+	}
 }
 
 /** A non-interactive separator between groups of actions. */

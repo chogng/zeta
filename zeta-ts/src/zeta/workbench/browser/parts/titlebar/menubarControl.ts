@@ -6,7 +6,7 @@ import { Disposable, type IDisposable, toDisposable } from "../../../../base/com
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { MenuId } from "../../../../platform/actions/common/actions.js";
 import type { IMenu, IMenuService } from "../../../../platform/actions/common/menuService.js";
-import type { IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
+import type { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import { localize, type ILocalizationService } from "../../../services/localization/common/localizationService.js";
 
 /** Host-selected menubar presentation owned by the titlebar. */
@@ -111,8 +111,8 @@ export class BrowserMenubarControl extends Disposable
 		this.button.toggleClassName("active", true);
 		this.button.domNode.setAttribute("aria-expanded", "true");
 		this.contextMenuService.showContextMenu({
-			anchor: this.button.domNode,
-			actions,
+			getAnchor: () => this.button.domNode,
+			getActions: () => actions,
 			onHide: () => {
 				this.active = false;
 				this.button.toggleClassName("active", false);

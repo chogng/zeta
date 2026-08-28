@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import type { IActionContextMenuOptions, IContextMenuProvider } from "../../browser/contextmenu.js";
+import type { IContextMenuDelegate, IContextMenuProvider } from "../../browser/contextmenu.js";
 import { setHoverDelegate, type HoverDelegateSetupOptions, type IManagedHover } from "../../browser/ui/hover/hoverDelegate.js";
 import { ToolBar } from "../../browser/ui/toolbar/toolbar.js";
 import type { IAction } from "../../common/actions.js";
@@ -34,7 +34,7 @@ test("ToolBar renders primary actions and trails More Actions", () => {
 
 	buttons[1]?.click();
 	assert.deepEqual(
-		contextMenuProvider.lastOptions?.actions.map(({ id }) => id),
+		contextMenuProvider.lastOptions?.getActions().map(({ id }) => id),
 		["secondary"],
 	);
 	assert.equal(buttons[1]?.getAttribute("aria-expanded"), "true");
@@ -135,9 +135,9 @@ test("ToolBar can place More Actions before a named primary action", () => {
 });
 
 class TestContextMenuProvider implements IContextMenuProvider {
-	lastOptions: IActionContextMenuOptions | undefined;
+	lastOptions: IContextMenuDelegate | undefined;
 
-	showContextMenu(options: IActionContextMenuOptions): void {
+	showContextMenu(options: IContextMenuDelegate): void {
 		this.lastOptions = options;
 	}
 }

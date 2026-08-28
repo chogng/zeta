@@ -4,7 +4,7 @@ import { AnchorPosition } from "../../../../../base/common/layout.js";
 import { MenuWorkbenchToolBar } from "../../../../../platform/actions/browser/toolbar.js";
 import { MenuId } from "../../../../../platform/actions/common/actions.js";
 import type { IMenuService } from "../../../../../platform/actions/common/menuService.js";
-import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
+import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import { ChatTabsControl, type ChatTab, type ChatTabsDelegate } from "./chatTabsControl.js";
 import { MultiChatTabsControl } from "./multiChatTabsControl.js";
 import type { PartTitleProjection } from "../../../../browser/parts/views/viewPane.js";

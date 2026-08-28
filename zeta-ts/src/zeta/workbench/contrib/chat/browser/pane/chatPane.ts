@@ -1,6 +1,6 @@
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
-import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
+import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { IChatService } from "../../../../services/chat/common/chatService.js";
 import type { IActiveSessionThread, IUntitledChatSession, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";

@@ -10,7 +10,7 @@ import type { Icon } from "../../../../../base/common/icon.js";
 import { Disposable, MutableDisposable, DisposableStore, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
 import { WorkbenchToolBar } from "../../../../../platform/actions/browser/toolbar.js";
-import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
+import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
 import type { ModelCatalogEntry } from "../../../../services/chat/common/chatService.js";

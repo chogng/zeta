@@ -32,7 +32,6 @@ const { CodeEditorPane: EditorPane } = await import("../../browser/codeEditorPan
 const { BrowserTextModelService } = await import("../../../../services/textmodelResolver/browser/browserTextModelService.js");
 const { BrowserTextResourceStore } = await import("../../browser/browserTextResourceStore.js");
 const { EditorTextDirection } = await import("../../../../../editor/browser/view.js");
-const { EditorMinimap } = await import("../../../../../editor/browser/view.js");
 const { EditorIndentationKind } = await import("../../../../../editor/common/editorIndentation.js");
 const { EditorLineWrapping } = await import("../../../../../editor/common/config/editorOptions.js");
 
@@ -223,7 +222,7 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 		fontLigatures: true,
 		experimentalGpuAcceleration: "on",
 		lineWrapping: EditorLineWrapping.On,
-		minimap: EditorMinimap.Off,
+		minimap: { enabled: false },
 		activeLineHighlight: "off",
 		showLineNumbers: false,
 		showIndentationGuides: false,
@@ -260,7 +259,7 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 	assert.equal(received?.lineHeight, 26);
 	assert.equal(received?.fontLigatures, true);
 	assert.equal(received?.experimentalGpuAcceleration, "on");
-	assert.equal(received?.minimap, EditorMinimap.Off);
+	assert.deepEqual(received?.minimap, { enabled: false });
 	assert.equal(received?.activeLineHighlight, "off");
 	assert.equal(received?.showLineNumbers, false);
 	assert.equal(received?.showIndentationGuides, false);

@@ -1089,7 +1089,7 @@ test("CompositeBar moves non-fitting label tabs into its overflow menu", () => {
 	let hideOverflowMenu: (() => void) | undefined;
 	const contextMenuProvider: IContextMenuProvider = {
 		showContextMenu(options): void {
-			overflowActions = options.actions;
+			overflowActions = options.getActions();
 			hideOverflowMenu = () => options.onHide?.(true);
 		},
 	};

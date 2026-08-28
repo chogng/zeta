@@ -6,7 +6,6 @@ import { CODE_EDITOR_ID, matchCodeEditor } from "./codeEditorInput.js";
 import { CodeEditorPane } from "./codeEditorPane.js";
 import { DIFF_EDITOR_ID, matchDiffEditor } from "./diffEditorInput.js";
 import { DiffEditorPane } from "./diffEditorPane.js";
-import { EditorMinimap } from "../../../../editor/browser/view.js";
 import { WrappingIndent } from "../../../../editor/common/config/editorOptions.js";
 import { CodeEditorConfiguration, type WrappingIndentSetting } from "../common/editorConfiguration.js";
 
@@ -34,7 +33,7 @@ registerEditorPane({
 			experimentalGpuAcceleration: configuration?.getValue(CodeEditorConfiguration.experimentalGpuAcceleration),
 			lineWrapping: configuration?.getValue(CodeEditorConfiguration.wordWrap),
 			wrappingIndent: toWrappingIndent(configuration?.getValue(CodeEditorConfiguration.wrappingIndent)),
-			minimap: configuration?.getValue(CodeEditorConfiguration.minimapEnabled) === false ? EditorMinimap.Off : EditorMinimap.On,
+			minimap: { enabled: configuration?.getValue(CodeEditorConfiguration.minimapEnabled) !== false },
 			activeLineHighlight: configuration?.getValue(CodeEditorConfiguration.highlightActiveLine) === false ? "off" : "on",
 			showLineNumbers: configuration?.getValue(CodeEditorConfiguration.lineNumbers),
 			showIndentationGuides: configuration?.getValue(CodeEditorConfiguration.indentationGuides),

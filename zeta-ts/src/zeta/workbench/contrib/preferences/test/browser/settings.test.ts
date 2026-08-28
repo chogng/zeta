@@ -3,7 +3,7 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import type { IAction } from '../../../../../base/common/actions.js';
 import type { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
-import type { IContextMenuService as ContextMenuService } from '../../../../../platform/contextview/browser/contextMenu.js';
+import type { IContextMenuService as ContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { ILocalizationService } from '../../../../../workbench/services/localization/common/localizationService.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>', {
@@ -40,7 +40,7 @@ const { DisposableStore } = await import('../../../../../base/common/lifecycle.j
 const { ConfigurationRegistry } = await import('../../../../../platform/configuration/common/configurationRegistry.js');
 const { IClipboardService: ClipboardServiceId } = await import('../../../../../platform/clipboard/common/clipboardService.js');
 const { IConfigurationService: ConfigurationServiceId } = await import('../../../../../platform/configuration/common/configurationService.js');
-const { IContextMenuService } = await import('../../../../../platform/contextview/browser/contextMenu.js');
+const { IContextMenuService } = await import('../../../../../platform/contextview/browser/contextView.js');
 const { IContextViewService } = await import('../../../../../platform/contextview/browser/contextView.js');
 const { BrowserContextViewService } = await import('../../../../../platform/contextview/browser/contextViewService.js');
 const { ServiceContainer, SyncDescriptor } = await import('../../../../../platform/instantiation/common/instantiation.js');
@@ -266,7 +266,7 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
 		showContextMenu: options => {
-			menuActions = 'actions' in options ? options.actions : [];
+			menuActions = options.getActions?.() ?? [];
 			hideMenu = 'onHide' in options ? options.onHide : undefined;
 		},
 		hideContextMenu() {},

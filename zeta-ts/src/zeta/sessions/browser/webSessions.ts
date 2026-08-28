@@ -3,7 +3,7 @@ import { addDisposableListener } from "../../base/browser/dom.js";
 import { DisposableStore, type IDisposable } from "../../base/common/lifecycle.js";
 import type { WorkbenchModeId } from "../../workbench/common/workbenchMode.js";
 import { createDisconnectedRendererApi } from "../../platform/app-server/browser/rendererApi.js";
-import { createBrowserWorkbenchContextMenuService } from "../../workbench/services/contextmenu/browser/contextMenuService.js";
+import { createBrowserWorkbenchContextMenuService } from "../../workbench/browser/workbenchInteractionServices.js";
 import type { SessionsProfile } from "../common/sessionsProfile.js";
 import { startSessionsWorkbench } from "./sessionsWorkbench.js";
 

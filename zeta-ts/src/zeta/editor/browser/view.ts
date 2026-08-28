@@ -13,7 +13,7 @@ import { TextPosition, type TextRange } from '../common/core/text.js';
 import { type TextModel } from '../common/model/textModel.js';
 import { type EditorVisualLineProjection } from '../common/viewModel/modelLineProjection.js';
 import { type EditorScrollPosition } from '../common/viewModel.js';
-import { EditorLineWrapping, EditorOptions, type IEditorOptions, isWrappingIndent, WrappingIndent } from '../common/config/editorOptions.js';
+import { ComputeOptionsMemory, EditorLayoutInfoComputer, EditorLineWrapping, EditorOptions, type EditorMinimapLayoutInfo, type EditorMinimapOptions, type IEditorMinimapOptions, type IEditorOptions, isWrappingIndent, WrappingIndent } from '../common/config/editorOptions.js';
 import { type EditorLineVisibilitySource, ViewModelLines } from '../common/viewModel/viewModelLines.js';
 import { type EditorViewportChange, type EditorViewportLayout, ViewLayout } from '../common/viewLayout/viewLayout.js';
 import { CompositionController } from './controller/compositionController.js';
@@ -38,8 +38,7 @@ import { GlyphMarginPart, resolveGlyphMarginLanes } from './viewparts/glyphMargi
 import { RulersPart, type EditorRuler } from './viewparts/rulers/rulersPart.js';
 import { EditorScrollbarPart } from './viewparts/editorScrollbar/editorScrollbarPart.js';
 import { LineNumbersPart } from './viewparts/lineNumbers/lineNumbersPart.js';
-import { MinimapPart } from './viewparts/minimap/minimapPart.js';
-import { MINIMAP_MINIMUM_EDITOR_WIDTH, MINIMAP_WIDTH } from './viewparts/minimap/minimapPresentation.js';
+import { Minimap } from './viewparts/minimap/minimap.js';
 import { OverviewRulerPart } from './viewparts/overviewRuler/overviewRulerPart.js';
 import { ScrollDecorationPart } from './viewparts/scrollDecoration/scrollDecorationPart.js';
 import { EditorViewContext, EditorViewPartCollection } from './view/viewPart.js';
@@ -341,11 +340,6 @@ export interface EditorViewportPadding {
 	readonly left: number;
 }
 
-export enum EditorMinimap {
-	On = "on",
-	Off = "off",
-}
-
 export type { EditorRuler } from "./viewparts/rulers/rulersPart.js";
 
 /** Controls the browser paragraph direction used to shape Stanza's rendered text. */
@@ -378,7 +372,7 @@ export interface EditorViewportOptions {
 	readonly glyphMargin?: boolean;
 	readonly rulers?: readonly EditorRuler[];
 	readonly showIndentationGuides?: boolean;
-	readonly minimap?: EditorMinimap;
+	readonly minimap?: IEditorMinimapOptions;
 	readonly indentation?: EditorIndentationOptions;
 	/** Browser text-direction input; automatic direction is the default. */
 	readonly textDirection?: EditorTextDirection;
@@ -425,7 +419,9 @@ export class View extends Disposable {
 	private readonly showIndentationGuides: boolean;
 	private readonly padding: EditorViewportPadding;
 	private readonly indentation: ResolvedEditorIndentationOptions;
-	private readonly minimap: EditorMinimap;
+	private readonly minimap: EditorMinimapOptions;
+	private readonly minimapLayoutMemory = new ComputeOptionsMemory();
+	private readonly pixelRatio: number;
 	private readonly viewLineOptions: ViewLineOptions;
 	private readonly elementSizeObserver: ElementSizeObserver;
 	private softWrapping: boolean;
@@ -452,7 +448,11 @@ export class View extends Disposable {
 		this.showGlyphMargin = this.presentation !== 'embedded' && (options.glyphMargin ?? true);
 		this.showIndentationGuides = options.showIndentationGuides ?? this.presentation !== "embedded";
 		this.padding = resolveEditorViewportPadding(options.padding);
-		this.minimap = options.minimap ?? (this.presentation === "document" ? EditorMinimap.On : EditorMinimap.Off);
+		this.minimap = EditorOptions.minimap.validate({
+			...options.minimap,
+			enabled: options.minimap?.enabled ?? this.presentation === 'document',
+		}) as EditorMinimapOptions;
+		this.pixelRatio = Math.max(1, ownerDocument.defaultView?.devicePixelRatio ?? 1);
 		this.softWrapping = options.lineWrapping === EditorLineWrapping.On;
 		try {
 			this.indentation = resolveEditorIndentationOptions(options.indentation);
@@ -463,9 +463,6 @@ export class View extends Disposable {
 				lineHeight: options.lineHeight,
 				tabSize: this.indentation.tabSize,
 			});
-			if (!Object.values(EditorMinimap).includes(this.minimap)) {
-				throw new TypeError("Unknown Stanza editor minimap mode");
-			}
 			if (options.experimentalGpuAcceleration !== undefined && options.experimentalGpuAcceleration !== 'on' && options.experimentalGpuAcceleration !== 'off') {
 				throw new TypeError("Unknown Stanza editor GPU acceleration mode");
 			}
@@ -632,15 +629,19 @@ export class View extends Disposable {
 			horizontalScrollbarSize: DEFAULT_EDITOR_SCROLLBAR.horizontalScrollbarSize,
 			verticalScrollbarSize: DEFAULT_EDITOR_SCROLLBAR.verticalScrollbarSize,
 		}));
-		const minimapPart = this.viewParts.register(new MinimapPart({
+		const minimapPart = this.viewParts.register(new Minimap({
 			host: this.element,
 			model: this.model,
+			options: this.minimap,
+			semanticTokenSource: options.semanticTokenSource,
+			tabSize: this.indentation.tabSize,
 			readLayout: () => this.viewport.layout,
+			readMinimapLayout: () => this.computeMinimapLayout(this.viewport.layout.viewportSize.width, this.viewport.layout.viewportSize.height),
+			readVisualProjection: () => this.visualProjection,
+			readProjectionRevision: () => this.viewModelLines.revision,
 			scrollTo: position => this.scrollTo(position),
 			readMarkers: () => this.viewOverlays.decorationsPart.minimapMarkers(),
 			readMarkersRevision: () => this.viewOverlays.decorationsPart.markersRevision,
-			enabled: this.minimap === EditorMinimap.On,
-			verticalScrollbarWidth: DEFAULT_EDITOR_SCROLLBAR.verticalScrollbarSize,
 		}));
 		const overviewRulerPart = this.viewParts.register(new OverviewRulerPart({
 			host: this.element,
@@ -702,6 +703,8 @@ export class View extends Disposable {
 				this.viewLines.renderVisibleLineText();
 				this.viewLinesGpu?.invalidateTokens();
 				this.viewLinesGpu?.render(this.createRenderingContext(this.viewport.layout));
+				minimapPart.invalidateTokens();
+				minimapPart.renderNow(this.createRenderingContext(this.viewport.layout));
 			}));
 		}
 		const fontSet = ownerDocument.fonts;
@@ -836,15 +839,15 @@ export class View extends Disposable {
 
 		const line = this.model.getLineContent(visualLine.logicalLineIndex);
 		const domCaretLeft = this.domCaretLeft(visualLineIndex, position.columnIndex - visualLine.startColumn);
-		const caretLeft = domCaretLeft ?? (this.textLeft + (visualLine.wrappedTextIndentWidth ?? 0) +
+		const caretLeft = domCaretLeft ?? (this.contentTextLeft + (visualLine.wrappedTextIndentWidth ?? 0) +
 			this.textMeasurer.measureLineWidth(line.slice(visualLine.startColumn, position.columnIndex)));
 		const caretRight = caretLeft + Math.max(
 			1,
 			this.textMeasurer.measureLineWidth(" "),
 		);
 		let left = this.softWrapping ? 0 : layout.scrollPosition.left;
-		if (caretLeft < left + this.textLeft) {
-			left = caretLeft - this.textLeft;
+		if (caretLeft < left + this.contentTextLeft) {
+			left = caretLeft - this.contentTextLeft;
 		} else if (caretRight > left + layout.viewportSize.width) {
 			left = caretRight - layout.viewportSize.width;
 		}
@@ -858,7 +861,7 @@ export class View extends Disposable {
 		const visualLine = visualProjection.lineAt(visualLineIndex)!;
 		const domCaretLeft = this.domCaretLeft(visualLineIndex, position.columnIndex - visualLine.startColumn);
 		return Object.freeze({
-			left: domCaretLeft ?? (this.textLeft + (visualLine.wrappedTextIndentWidth ?? 0) + this.textMeasurer.measureLineWidth(
+			left: domCaretLeft ?? (this.contentTextLeft + (visualLine.wrappedTextIndentWidth ?? 0) + this.textMeasurer.measureLineWidth(
 				this.model.getLineContent(visualLine.logicalLineIndex).slice(visualLine.startColumn, position.columnIndex),
 			)),
 			top: this.padding.top + visualLineIndex * this.viewport.layout.lineHeight,
@@ -945,7 +948,7 @@ export class View extends Disposable {
 			this.model,
 			this.visualProjection,
 			this.viewport.layout,
-			{ left, top },
+			{ left: left - this.contentOffsetLeft, top },
 			{
 				gutterWidth: this.gutterWidth,
 				textLeft: this.textLeft,
@@ -994,14 +997,43 @@ export class View extends Disposable {
 		return this.marginPart.textLeft;
 	}
 
+	private get contentTextLeft(): number {
+		return this.contentOffsetLeft + this.textLeft;
+	}
+
+	private get contentOffsetLeft(): number {
+		const layout = this.viewport.layout;
+		const minimapLayout = this.computeMinimapLayout(layout.viewportSize.width, layout.viewportSize.height);
+		return this.minimap.side === 'left' ? minimapLayout.minimapWidth : 0;
+	}
+
 	private updateWrapWidth(viewportWidth: number): void {
-		const rightControlWidth = this.minimap === EditorMinimap.On && viewportWidth >= MINIMAP_MINIMUM_EDITOR_WIDTH
-			? MINIMAP_WIDTH + DEFAULT_EDITOR_SCROLLBAR.verticalScrollbarSize
+		const minimapWidth = this.computeMinimapLayout(viewportWidth, this.viewport.layout.viewportSize.height).minimapWidth;
+		const rightControlWidth = minimapWidth > 0
+			? minimapWidth + DEFAULT_EDITOR_SCROLLBAR.verticalScrollbarSize
 			: 0;
 		this.viewModelLines.setWrapWidth(Math.max(
 			0,
 			viewportWidth - this.gutterWidth - this.textMeasurer.horizontalPadding - rightControlWidth,
 		));
+	}
+
+	private computeMinimapLayout(viewportWidth: number, viewportHeight: number): EditorMinimapLayoutInfo {
+		return EditorLayoutInfoComputer.computeMinimapLayout({
+			outerWidth: viewportWidth,
+			outerHeight: viewportHeight,
+			lineHeight: this.viewport.layout.lineHeight,
+			typicalHalfwidthCharacterWidth: Math.max(1, this.textMeasurer.measureLineWidth('n')),
+			pixelRatio: this.pixelRatio,
+			scrollBeyondLastLine: false,
+			paddingTop: this.padding.top,
+			paddingBottom: this.padding.bottom,
+			minimap: this.minimap,
+			verticalScrollbarWidth: DEFAULT_EDITOR_SCROLLBAR.verticalScrollbarSize,
+			viewLineCount: this.visualProjection.visualLineCount,
+			remainingWidth: Math.max(0, viewportWidth - this.gutterWidth),
+			isViewportWrapping: this.softWrapping,
+		}, this.minimapLayoutMemory);
 	}
 
 	private project(layout: EditorViewportLayout): void {
@@ -1014,6 +1046,8 @@ export class View extends Disposable {
 		this.element.classList.toggle("vertically-scrollable", layout.maximumScrollPosition.top > 0);
 		this.contentNode.setWidth(layout.contentSize.width);
 		this.contentNode.setHeight(layout.contentSize.height);
+		const contentOffsetLeft = this.contentOffsetLeft;
+		this.contentNode.setTransform(contentOffsetLeft > 0 ? `translate3d(${contentOffsetLeft}px, 0, 0)` : '');
 		this.viewParts.prepareRender(context);
 		this.viewOverlays.prepareRender(context);
 		this.viewParts.render(context);

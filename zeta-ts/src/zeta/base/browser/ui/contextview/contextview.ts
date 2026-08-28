@@ -287,7 +287,11 @@ function getAnchorDocument(
 	anchor: ContextViewAnchor,
 	fallback: Document,
 ): Document {
-	return isElementAnchor(anchor) ? anchor.ownerDocument : fallback;
+	if (isElementAnchor(anchor)) return anchor.ownerDocument;
+	const targetWindow = "targetWindow" in anchor
+		? (anchor as IRectangle & { readonly targetWindow?: Window }).targetWindow
+		: undefined;
+	return targetWindow?.document ?? fallback;
 }
 
 function getAnchorRectangle(anchor: ContextViewAnchor): IRectangle {

@@ -5,7 +5,7 @@ import type { IDimension, IRectangle } from "../../../base/browser/geometry.js";
 import { Direction, Grid, Sizing, type IView } from "../../../base/browser/ui/grid/grid.js";
 import { Disposable, setDisposableOwner, toDisposable } from "../../../base/common/lifecycle.js";
 import type { ICommandService } from "../../../platform/commands/common/commands.js";
-import type { IContextMenuService } from "../../../platform/contextview/browser/contextMenu.js";
+import type { IContextMenuService } from "../../../platform/contextview/browser/contextView.js";
 import type { IContextViewService } from "../../../platform/contextview/browser/contextView.js";
 import type { IQuickInputService } from "../../../platform/quickinput/common/quickInput.js";
 import { ChatPane } from "../../../workbench/contrib/chat/browser/pane/chatPane.js";

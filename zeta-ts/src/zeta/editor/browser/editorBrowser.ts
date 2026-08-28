@@ -14,10 +14,10 @@ import { LanguageConfigurationService, type ILanguageConfigurationService } from
 import { LanguageFeaturesService } from '../common/services/languageFeaturesService.js';
 import { type TextModel } from "../common/model/textModel.js";
 import { type EditorIndentationOptions } from "../common/editorIndentation.js";
-import { type EditorActiveLineHighlight, type EditorLanguageEditingAdapter, type EditorMinimap, type EditorRuler, type EditorTextDirection, type EditorView, type EditorViewport, type EditorViewportPresentation } from "./view.js";
+import { type EditorActiveLineHighlight, type EditorLanguageEditingAdapter, type EditorRuler, type EditorTextDirection, type EditorView, type EditorViewport, type EditorViewportPresentation } from "./view.js";
 import { CodeEditorWidget, type CodeEditorViewPositionState, type CodeEditorViewSelectionState, type CodeEditorViewState } from "./widget/codeEditor/codeEditorWidget.js";
 import { type EditorHitTarget } from "../common/viewModel/pointerHitTest.js";
-import { type EditorLineWrapping, type IEditorOptions, type WrappingIndent } from "../common/config/editorOptions.js";
+import { type EditorLineWrapping, type IEditorMinimapOptions, type IEditorOptions, type WrappingIndent } from "../common/config/editorOptions.js";
 import { type LanguageLocation } from "../contrib/gotoSymbol/common/languageNavigation.js";
 import { type LanguageWorkspaceEdit } from "../common/languages/languageWorkspaceEdit.js";
 import { type ILanguageDiagnosticsService } from "../common/services/languageDiagnosticsService.js";
@@ -111,7 +111,7 @@ export interface EditorBrowserOptions {
 	readonly fontSize?: number;
 	readonly lineHeight?: number;
 	readonly fontLigatures?: boolean;
-	readonly minimap?: EditorMinimap;
+	readonly minimap?: IEditorMinimapOptions;
 	readonly sectionHeaders?: EditorSectionHeaderOptions | false;
 	readonly activeLineHighlight?: EditorActiveLineHighlight;
 	readonly showLineNumbers?: boolean;

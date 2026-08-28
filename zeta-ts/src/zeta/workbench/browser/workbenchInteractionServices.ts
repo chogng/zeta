@@ -1,16 +1,17 @@
 import { setHoverDelegate } from "../../base/browser/ui/hover/hoverDelegate.js";
-import { Disposable } from "../../base/common/lifecycle.js";
+import { Disposable, type IDisposable } from "../../base/common/lifecycle.js";
 import { IMenuService, MenuService } from "../../platform/actions/common/menuService.js";
 import { ICommandService } from "../../platform/commands/common/commands.js";
 import { type IConfigurationService as IConfigurationServiceContract } from "../../platform/configuration/common/configurationService.js";
 import { IContextKeyService, ContextKeyService } from "../../platform/contextkey/common/contextkey.js";
-import { IContextMenuService } from "../../platform/contextview/browser/contextMenu.js";
-import { IContextViewService } from "../../platform/contextview/browser/contextView.js";
+import { BrowserContextMenuService } from "../../platform/contextview/browser/contextMenuService.js";
+import { IContextMenuService, IContextViewService } from "../../platform/contextview/browser/contextView.js";
 import { BrowserContextViewService } from "../../platform/contextview/browser/contextViewService.js";
 import { HoverService } from "../../platform/hover/browser/hoverService.js";
 import { IHoverService } from "../../platform/hover/common/hoverService.js";
 import type { ServiceContainer } from "../../platform/instantiation/common/instantiation.js";
 import { IKeybindingService } from "../../platform/keybinding/common/keybinding.js";
+import type { INotificationService } from "../../platform/notification/common/notification.js";
 import { type IKeybindingsResourceApi, IKeybindingsResourceService } from "../../platform/keybinding/common/keybindingsResource.js";
 import { IKeyboardLayoutService, type IKeyboardLayoutProvider } from "../../platform/keyboardLayout/common/keyboardLayout.js";
 import {
@@ -21,7 +22,6 @@ import {
 import { type ILayoutService as ILayoutServiceContract } from "../../platform/layout/common/layoutService.js";
 import { IQuickInputService } from "../../platform/quickinput/common/quickInput.js";
 import { CommandService } from "../services/commands/common/commandService.js";
-import type { WorkbenchContextMenuServiceFactory } from "../services/contextmenu/browser/workbenchContextMenuService.js";
 import { BrowserKeyboardLayoutService } from "../services/keybinding/browser/keyboardLayoutService.js";
 import { WorkbenchKeybindingService } from "../services/keybinding/browser/keybindingService.js";
 import { IKeyboardShortcutTroubleshootingService } from "../services/keybinding/common/keyboardShortcutTroubleshooting.js";
@@ -34,6 +34,30 @@ import { ChatContextPickService } from "../services/chat/browser/chatContextPick
 import { IChatContextPickService, type IChatContextPickService as IChatContextPickServiceContract } from "../services/chat/common/chatContextService.js";
 import type { IStatusbarService } from "../services/statusbar/browser/statusbar.js";
 
+export interface WorkbenchContextMenuServiceOptions {
+	readonly menuService: IMenuService;
+	readonly contextKeyService: IContextKeyService;
+	readonly keybindingService: IKeybindingService;
+	readonly contextViewService: IContextViewService;
+	readonly notificationService: INotificationService;
+}
+
+export type WorkbenchContextMenuServiceFactory = (
+	options: WorkbenchContextMenuServiceOptions,
+) => IContextMenuService & IDisposable;
+
+export function createBrowserWorkbenchContextMenuService(
+	options: WorkbenchContextMenuServiceOptions,
+): BrowserContextMenuService {
+	return new BrowserContextMenuService(
+		options.menuService,
+		options.contextKeyService,
+		options.keybindingService,
+		options.contextViewService,
+		options.notificationService,
+	);
+}
+
 export interface WorkbenchInteractionServicesOptions {
 	readonly container: ServiceContainer;
 	readonly layoutService: ILayoutServiceContract;
@@ -42,6 +66,7 @@ export interface WorkbenchInteractionServicesOptions {
 	readonly keyboardLayoutProvider?: IKeyboardLayoutProvider;
 	readonly userKeyboardLayoutApi?: IUserKeyboardLayoutApi;
 	readonly statusbarService?: IStatusbarService;
+	readonly notificationService: INotificationService;
 	readonly createContextMenuService: WorkbenchContextMenuServiceFactory;
 }
 
@@ -112,8 +137,10 @@ export class WorkbenchInteractionServices extends Disposable {
 		container.registerInstance(IPreferencesService, this._register(new PreferencesService(() => container.get(IEditorService))));
 		this.contextMenuService = this._register(options.createContextMenuService({
 			menuService: this.menuService,
+			contextKeyService: this.contextKeyService,
 			keybindingService: this.keybindingService,
 			contextViewService: this.contextViewService,
+			notificationService: options.notificationService,
 		}));
 		container.registerInstance(IContextMenuService, this.contextMenuService);
 		const hoverService = this._register(new HoverService(options.configurationService, this.contextViewService, this.contextMenuService));

@@ -10,7 +10,7 @@ import { MenuWorkbenchToolBar } from "../../../../platform/actions/browser/toolb
 import { MenuId } from "../../../../platform/actions/common/actions.js";
 import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
 import type { IContextKey, IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
-import type { IContextMenuService } from "../../../../platform/contextview/browser/contextMenu.js";
+import type { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import type { IHoverService } from "../../../../platform/hover/common/hoverService.js";
 import type { IFileIconThemeService } from "../../../../platform/theme/browser/fileIconThemeService.js";
 import type { GitCommitChange, GitCommitChanges, GitCommitSummary, GraphPage, GitHead, GitReference, GitRemoteProvider, IGitService } from "../../../services/git/common/gitService.js";
@@ -352,7 +352,11 @@ export class ScmGraphViewPane extends ViewPane {
 			event.preventDefault();
 			event.stopPropagation();
 			this.contextMenuService.showContextMenu({
-				anchor: event,
+				getAnchor: () => ({
+					x: event.clientX,
+					y: event.clientY,
+					targetWindow: event.view ?? undefined,
+				}),
 				menuId: MenuId.SCMHistoryItemContext,
 				menuActionOptions: { arg: commit },
 			});
@@ -440,7 +444,11 @@ export class ScmGraphViewPane extends ViewPane {
 				event.preventDefault();
 				event.stopPropagation();
 				this.contextMenuService.showContextMenu({
-					anchor: event,
+					getAnchor: () => ({
+						x: event.clientX,
+						y: event.clientY,
+						targetWindow: event.view ?? undefined,
+					}),
 					menuId: MenuId.SCMHistoryItemChangeContext,
 					menuActionOptions: { args: [commit, change] },
 				});
