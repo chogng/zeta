@@ -352,7 +352,6 @@ corepack pnpm --dir zeta-ts test:extensions
 corepack pnpm --dir zeta-ts typecheck:extensions
 corepack pnpm --dir zeta-ts test:unit
 corepack pnpm --dir zeta-ts test:build-tools
-corepack pnpm --dir docs-site run check:docs
 ```
 
 `test:extensions` 与 `typecheck:extensions` 覆盖静态链、Host transport/domain projection 与 Workbench provider seams。App Server runtime 当前由 sibling Rust tests 和 Host standalone suite 封住；根 workspace 仍需在缺失的本地 crate 恢复后补跑完整 `zeta-app-server` package test。

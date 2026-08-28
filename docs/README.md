@@ -1,7 +1,7 @@
 # Zeta 文档导航
 
-> 本文件是跨产品 `docs/` 的索引。新增跨产品文档必须同时加入本索引和
-> [`build/docs/generateDocs.ts`](../build/docs/generateDocs.ts) 的分组。
+> 本文件是跨产品 `docs/` 的工程文档索引。新增跨产品工程文档必须同时加入本索引。
+> 面向使用者的文档和文档站由独立的 [`zeta-docs`](https://github.com/chogng/zeta-docs) 仓库维护。
 > `app` 专属系统文档由 [`app/docs/README.md`](../app/docs/README.md) 索引，避免产品宿主
 > 文档和共享系统文档混在同一目录。
 > 系统性的阅读方法（先系统后 crate、两层文档职责）见
@@ -17,7 +17,7 @@
 | 理解共享 backend、协议、执行和存储 | 本目录对应的系统文档与 `zeta-rs/*/README.md` |
 | 理解 `app` 产品行为 | [`app/docs/README.md`](../app/docs/README.md) |
 | 理解某个 crate 的实现契约 | 对应 crate 的 `README.md` |
-| 查看 docs-site 如何收录文档 | [`build/docs/generateDocs.ts`](../build/docs/generateDocs.ts) |
+| 学习如何使用 Zeta | [`zeta-docs`](https://github.com/chogng/zeta-docs) |
 
 ## 1. 我该看哪份？
 
@@ -137,7 +137,7 @@ Surface、Native Text Input、Rendering、UI 迁移、Native 弃用、应用迁�
 
 ## 4. 维护规则
 
-1. 新文档：入本索引 + docs-site 分组，声明类型（设计/规格/计划/参考）；
+1. 新工程文档：加入本索引并声明类型（设计/规格/计划/参考）；面向使用者的内容加入 `zeta-docs/docs/toc.json`；
 2. 计划类文档完成后：结论并入对应设计文档的状态标记，计划本体标 Done 或删除——
    不允许长期留着已完成的计划冒充现状；
 3. 设计文档描述未实现组件必须挂状态标记（已实现/部分/仅设计/推迟），词表定义见

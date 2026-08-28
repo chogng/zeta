@@ -2,7 +2,6 @@ packages:
   - build
   - scripts
   - zeta-ts
-  - docs-site
 allowBuilds:
   electron: true
   esbuild: true

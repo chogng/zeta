@@ -186,7 +186,7 @@ flowchart TD
 | App Server 与 ChatGPT 订阅适配 | `cargo test --manifest-path Cargo.toml -p zeta-app-server --lib -p zeta-chatgpt -p zeta-model-provider` | OAuth/refresh/stream/reconnect/fault matrix |
 | Protocol | `corepack pnpm run verify:protocol` | schema hash、fixtures、生成 TypeScript 和 Desktop consumer 同批通过 |
 | Desktop | `corepack pnpm --dir zeta-ts run typecheck:renderer` | `corepack pnpm --dir zeta-ts run test:unit`，已知范围外失败必须单独登记，不能静默忽略 |
-| 文档 | `corepack pnpm --dir docs-site run check:docs` | 链接、状态、生成文档和 capability matrix 一致 |
+| 文档 | 检查本仓工程文档；用户行为变化时同步修改 `zeta-docs` | 链接、状态和能力矩阵一致 |
 | Rust 全阶段 | 受影响 crate 的 `cargo fmt --check`、`cargo clippy` 和测试 | `cargo fmt --manifest-path Cargo.toml --all -- --check`；`cargo clippy --manifest-path Cargo.toml --workspace --all-targets -- -D warnings`；`cargo test --manifest-path Cargo.toml --workspace` |
 
 ## 12. Agent Loop v1 完成标准

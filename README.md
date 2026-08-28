@@ -99,6 +99,7 @@ python3 -B build/cargo_with_v8.py run -p app
 
 ## Where to read next
 
+- [Zeta user documentation](https://github.com/chogng/zeta-docs)
 - [Product lines and host boundaries](docs/product-lines.md)
 - [System architecture](docs/architecture.md)
 - [CLI/TUI architecture](docs/zeta-cli-architecture.md)
