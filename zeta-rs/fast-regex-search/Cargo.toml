@@ -1,0 +1,26 @@
+[package]
+name = "zeta-fast-regex-search"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_fast_regex_search"
+path = "src/lib.rs"
+
+[dependencies]
+globset = { workspace = true }
+ignore = { workspace = true }
+regex = { workspace = true }
+regex-syntax = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+zeta-workspace = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true
