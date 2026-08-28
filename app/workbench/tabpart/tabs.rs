@@ -7,6 +7,7 @@ use crate::{
     PaintIcon, PaintRect, Point, Rect, Size, Tab, TabBackgrounds, TabList, TabListStyle,
     TabSelection, TabState, TabStyle, TextBlock, TextStyle, UiScene,
 };
+use zeta_icons::icons;
 use zui::ui::AccessibilityRole;
 use zui::ui::AccessibilitySelection;
 use zui::ui::CursorFeedback;
@@ -385,7 +386,7 @@ impl<'a> TabContainer<'a> {
             ActionBarOrientation::Horizontal,
             vec![
                 ActionBarItem::Action(ActionViewItem::icon(
-                    self.style.settings_icon,
+                    icons::ELLIPSIS,
                     format!("Actions for {}", tab.name),
                     self.button_state(tab.action_id),
                 )),

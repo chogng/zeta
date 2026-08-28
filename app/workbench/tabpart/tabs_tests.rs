@@ -254,7 +254,7 @@ fn close_button_is_a_child_action_and_resolves_to_the_stable_tab_key() {
 }
 
 #[test]
-fn settings_button_is_hover_only_and_opens_actions_for_the_stable_tab_key() {
+fn tab_actions_button_is_hover_only_and_opens_actions_for_the_stable_tab_key() {
     let (part, first_key, _) = part_with_two_sessions();
     let tab_id = part.tab_id(&first_key).unwrap();
     let mounts = [
@@ -319,6 +319,15 @@ fn settings_button_is_hover_only_and_opens_actions_for_the_stable_tab_key() {
         assert_eq!(
             tab_intent_for_element(&part, settings_action),
             Some(TabIntent::OpenActions(TabInputKey::Settings))
+        );
+        assert_eq!(
+            hovered
+                .scene()
+                .icons()
+                .iter()
+                .filter(|icon| icon.icon() == zeta_icons::icons::ELLIPSIS)
+                .count(),
+            1
         );
     }
 }

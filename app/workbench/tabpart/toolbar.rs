@@ -98,7 +98,7 @@ impl TabContainerToolbar {
             ActionBarOrientation::Horizontal,
             vec![
                 ActionBarItem::Action(ActionViewItem::icon(
-                    icons::SETTINGS,
+                    icons::LAYOUT,
                     "Configure tab layout",
                     layout_button_state,
                 )),
@@ -299,7 +299,7 @@ impl TabLayoutMenu {
             viewport,
             anchor,
             vec![ContextMenuItem::new(
-                "Show tabs horizontally",
+                "Move tabs to titlebar",
                 button_state(dispatch, TAB_CONTAINER_TOGGLE),
             )],
             ContextMenuStyle::new(
@@ -325,7 +325,7 @@ impl TabLayoutMenu {
                 .interactive_item_bounds(0)
                 .expect("Tab layout menu command is enabled"),
             AccessibilityRole::MenuItem,
-            "Show tabs horizontally",
+            "Move tabs to titlebar",
         )
         .with_parent(TAB_LAYOUT_MENU)
         .with_cursor(CursorFeedback::Pointer)

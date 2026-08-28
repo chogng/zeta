@@ -48,7 +48,7 @@ fn toolbar_fills_the_container_row_with_search_and_add_action() {
         vec!["TabContainerToolbar", "SearchBox", "InputBox"]
     );
     assert_eq!(scene.icons().len(), 3);
-    assert_eq!(scene.icons()[1].icon(), zeta_icons::icons::SETTINGS);
+    assert_eq!(scene.icons()[1].icon(), zeta_icons::icons::LAYOUT);
     assert!(
         scene
             .icons()
@@ -97,7 +97,7 @@ fn toolbar_fills_the_container_row_with_search_and_add_action() {
 }
 
 #[test]
-fn settings_action_opens_the_single_horizontal_layout_command() {
+fn layout_action_opens_the_move_to_titlebar_command() {
     let part_bounds = Rect::from_xywh(0.0, 32.0, 220.0, 668.0);
     let mut dispatch = UiDispatch::default();
     let mut text_layout = TextInputLayoutEngine::new();
@@ -135,14 +135,14 @@ fn settings_action_opens_the_single_horizontal_layout_command() {
             .iter()
             .find(|node| node.id == TAB_CONTAINER_TOGGLE)
             .map(|node| (node.role, node.label.as_str())),
-        Some((AccessibilityRole::MenuItem, "Show tabs horizontally"))
+        Some((AccessibilityRole::MenuItem, "Move tabs to titlebar"))
     );
     assert!(
         open_frame
             .scene()
             .text_blocks()
             .iter()
-            .any(|text| text.text() == "Show tabs horizontally")
+            .any(|text| text.text() == "Move tabs to titlebar")
     );
 
     let item = open_frame
