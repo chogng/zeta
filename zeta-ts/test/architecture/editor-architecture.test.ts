@@ -105,6 +105,7 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"common/model/textModel.ts",
 		"common/cursor/editorSelectionController.ts",
 		"common/services/editorBaseApi.ts",
+		"common/services/completionsEnablement.ts",
 		"common/services/languageConfigurationService.ts",
 		"common/services/languageFeatures.ts",
 		"common/services/languageFeaturesService.ts",
@@ -184,6 +185,8 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"common/services/semanticTokensProviderStyling.ts",
 		"common/services/semanticTokensStyling.ts",
 		"common/services/semanticTokensStylingService.ts",
+		"common/services/textModelSync/textModelSync.impl.ts",
+		"common/services/textModelSync/textModelSync.protocol.ts",
 		"common/model/documentTransaction.ts",
 		"contrib/academic/common/schema.ts",
 		"editor.code.all.ts",
@@ -337,6 +340,25 @@ test("Text engine PieceTree tests follow VS Code's common model layout", () => {
 	assert.equal(statSafe(join(editorRoot, "common/model/pieceTreeTextBuffer/rbTreeBase.ts")), true);
 	assert.equal(statSafe(join(editorRoot, "common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.ts")), true);
 	assert.equal(statSafe(join(editorRoot, "test/common/pieceTreeTextBuffer.test.ts")), false);
+});
+
+test("Tree-sitter runtime stays behind App Server syntax facts", () => {
+	const packageManifest = readFileSync(resolve(desktopRoot, "package.json"), "utf8");
+	const syntaxCrate = readFileSync(resolve(desktopRoot, "../zeta-rs/syntax/src/lib.rs"), "utf8");
+	const syntaxOperations = readFileSync(resolve(desktopRoot, "../zeta-rs/app-server/src/server/syntax_operations.rs"), "utf8");
+	const syntaxAdapter = readFileSync(join(workbenchRoot, "services/language/browser/appServerSyntaxProviders.ts"), "utf8");
+	const styling = readFileSync(join(editorRoot, "common/services/semanticTokensStylingService.ts"), "utf8");
+	assert.doesNotMatch(packageManifest, /tree-sitter/u);
+	assert.equal(existsSync(join(editorRoot, "common/services/treeSitter")), false);
+	assert.match(syntaxCrate, /SyntaxDocument/u);
+	assert.match(syntaxOperations, /SyntaxDocument::open/u);
+	assert.match(syntaxAdapter, /ISyntaxApi/u);
+	assert.match(syntaxAdapter, /LanguageTokenResult/u);
+	assert.match(styling, /LanguageToken/u);
+	for (const file of collectFiles(editorRoot)) {
+		if (!file.endsWith(".ts")) continue;
+		assert.doesNotMatch(readFileSync(file, "utf8"), /@vscode\/tree-sitter-wasm/u, relative(editorRoot, file));
+	}
 });
 
 test("Window modes select independent Stanza feature implementations behind the shared Workbench entry", () => {

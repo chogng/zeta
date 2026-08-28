@@ -28,7 +28,7 @@ export type { DocumentHighlight, DocumentHighlightProvider, DocumentHighlightReq
 export type { LanguageFeatureRequest } from './common/languages/languageFeatureRequest.js';
 export { LanguageDiagnosticSeverity } from './common/languages/languageResults.js';
 export type { LanguageDiagnostic, LanguageDiagnosticCode, LanguageDiagnosticResult, LanguageToken, LanguageTokenResult, LanguageTokenResultDelta, LanguageTokenResultSplice } from './common/languages/languageResults.js';
-export type { LanguageWorkerDocumentSynchronization } from './common/languages/languageWorkerDocumentMirror.js';
+export type { LanguageWorkerDocumentSynchronization } from './common/services/textModelSync/textModelSync.protocol.js';
 export type { LanguageCreateFileEdit, LanguageDeleteFileEdit, LanguageDeleteMode, LanguageExistingTargetBehavior, LanguageMissingTargetBehavior, LanguageRenameFileEdit, LanguageTextDocumentEdit, LanguageWorkspaceEdit, LanguageWorkspaceEditEntry } from './common/languages/languageWorkspaceEdit.js';
 export type { SyntaxProvider, SyntaxProviderRequest, SyntaxRequest } from './common/languages/syntax/syntaxProviders.js';
 export type { LanguageWorkspaceSymbol, LanguageWorkspaceSymbolKind, LanguageWorkspaceSymbolProvider } from './common/languages/workspaceSymbols.js';

@@ -77,8 +77,8 @@ export interface EditorPaneOptions {
 	readonly showIndentationGuides?: boolean;
 	readonly bracketPairColorization?: boolean;
 	readonly stickyScroll?: boolean;
-	readonly suggestions?: boolean;
-	readonly inlineCompletions?: boolean;
+	readonly suggestions?: EditorBrowserOptions["suggestions"];
+	readonly inlineCompletions?: EditorBrowserOptions["inlineCompletions"];
 	readonly parameterHints?: boolean;
 	readonly inlayHints?: boolean;
 	readonly codeLens?: boolean;

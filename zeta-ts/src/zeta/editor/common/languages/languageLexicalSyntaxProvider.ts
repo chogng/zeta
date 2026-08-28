@@ -3,7 +3,7 @@ import { type SyntaxProvider, type SyntaxProviderRequest } from "./syntax/syntax
 import { BUILTIN_LANGUAGE_IDS, createBuiltinLanguageConfigurationSource } from "./languageBuiltinConfigurations.js";
 import { type LanguageConfigurationSource, type ResolvedLanguageConfiguration } from "./languageConfiguration.js";
 import { createLanguageLexicalLineScanner } from "./languageLexicalConfiguration.js";
-import { type LanguageWorkerDocumentSynchronization } from "./languageWorkerDocumentMirror.js";
+import { type LanguageWorkerDocumentSynchronization } from '../services/textModelSync/textModelSync.protocol.js';
 
 export interface LanguageLexicalSyntaxProviderOptions {
 	readonly onDidUpdateCache?: LanguageLexicalCacheUpdateObserver;

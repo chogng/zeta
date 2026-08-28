@@ -2,7 +2,8 @@ import { isNonEmptyArray } from "../../../base/common/arrays.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { LanguageWorkerResultDisposition, type LanguageWorker, type LanguageWorkerModelSynchronizer, type LanguageWorkerRequest, type LanguageWorkerResultSettler } from "./languageRequestCoordinator.js";
-import { LanguageWorkerDocumentMirror, type LanguageWorkerDocumentChange, type LanguageWorkerDocumentSynchronizationObserver } from "./languageWorkerDocumentMirror.js";
+import { LanguageWorkerDocumentMirror } from '../services/textModelSync/textModelSync.impl.js';
+import { type LanguageWorkerDocumentChange, type LanguageWorkerDocumentSynchronizationObserver } from '../services/textModelSync/textModelSync.protocol.js';
 import { assertRequestId, createCancelMessage, createFailureMessage, createResultMessage, createSyncFailureMessage, decodeClientMessage, decodeRequestSnapshot, decodeServerMessage, encodeRequestMessage, encodeSyncMessage, isProtocolMessage, readRequestId, type FailureWireMessage, type LanguageWorkerWireCodec, type LanguageWorkerWireResultState, type RequestWireMessage, type ResultWireMessage, type SyncFailureWireMessage } from "./languageWorkerWireProtocol.js";
 import { type TextModelChange } from "../core/text.js";
 

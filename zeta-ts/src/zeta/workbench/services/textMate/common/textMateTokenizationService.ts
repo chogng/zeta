@@ -1,6 +1,6 @@
 import { arraysEqual, commonPrefixLength, commonSuffixLength } from "../../../../base/common/arrays.js";
 import { escapeRegExpCharacters } from "../../../../base/common/strings.js";
-import { type LanguageWorkerDocumentSynchronization } from "../../../../editor/common/languages/languageWorkerDocumentMirror.js";
+import { type LanguageWorkerDocumentSynchronization } from '../../../../editor/common/services/textModelSync/textModelSync.protocol.js';
 import { type LanguageToken, type LanguageTokenResult } from "../../../../editor/common/languages/languageResults.js";
 import { TextPosition, TextRange, type TextSnapshot } from "../../../../editor/common/core/text.js";
 import { defaultTextMateScopeResolver, type TextMateResolvedTokenStyle, type TextMateScopeResolver } from "./textMateScopeResolver.js";

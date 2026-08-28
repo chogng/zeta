@@ -2,7 +2,7 @@ import { isNonEmptyArray } from "../../../../base/common/arrays.js";
 import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { assertLanguageId, assertLanguageSelector } from "../languageId.js";
 import { type LanguageDiagnosticResult, type LanguageTokenResult } from "../languageResults.js";
-import { type LanguageWorkerDocumentSynchronization } from "../languageWorkerDocumentMirror.js";
+import { type LanguageWorkerDocumentSynchronization } from '../../services/textModelSync/textModelSync.protocol.js';
 import { type TextSnapshot } from "../../core/text.js";
 
 export interface SyntaxRequest {

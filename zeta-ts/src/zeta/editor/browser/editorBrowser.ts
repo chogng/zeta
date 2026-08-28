@@ -21,6 +21,7 @@ import { type EditorLineWrapping, type IEditorOptions, type WrappingIndent } fro
 import { type LanguageLocation } from "../contrib/gotoSymbol/common/languageNavigation.js";
 import { type LanguageWorkspaceEdit } from "../common/languages/languageWorkspaceEdit.js";
 import { type ILanguageDiagnosticsService } from "../common/services/languageDiagnosticsService.js";
+import { isCompletionsEnablement, type CompletionsEnablement } from "../common/services/completionsEnablement.js";
 import { EditorWorkerClient, type EditorWorkerFactory } from "../common/services/editorWorker.js";
 import { EditorWorker } from "../common/services/editorWebWorker.js";
 import { type DecorationSource, type OwnedDecorationSource } from "./viewparts/decorations/decorationPresentation.js";
@@ -125,8 +126,8 @@ export interface EditorBrowserOptions {
 	readonly showIndentationGuides?: boolean;
 	readonly bracketPairColorization?: boolean;
 	readonly stickyScroll?: boolean;
-	readonly suggestions?: boolean;
-	readonly inlineCompletions?: boolean;
+	readonly suggestions?: CompletionsEnablement;
+	readonly inlineCompletions?: CompletionsEnablement;
 	readonly parameterHints?: boolean;
 	readonly inlayHints?: boolean;
 	readonly codeLens?: boolean;
@@ -402,6 +403,12 @@ function validateOptions(options: EditorBrowserOptions): void {
 	if (options.selectionHighlightMaxLength !== undefined && (!Number.isSafeInteger(options.selectionHighlightMaxLength) || options.selectionHighlightMaxLength < 0)) {
 		throw new RangeError("Editor selection highlight maximum length must be a non-negative integer");
 	}
+	if (options.suggestions !== undefined && !isCompletionsEnablement(options.suggestions)) {
+		throw new TypeError("Editor suggestions option must be boolean or a language enablement map");
+	}
+	if (options.inlineCompletions !== undefined && !isCompletionsEnablement(options.inlineCompletions)) {
+		throw new TypeError("Editor inline completions option must be boolean or a language enablement map");
+	}
 	for (const [name, value] of [
 		["line numbers", options.showLineNumbers],
 		["glyph margin", options.glyphMargin],
@@ -409,8 +416,6 @@ function validateOptions(options: EditorBrowserOptions): void {
 		["indentation guides", options.showIndentationGuides],
 		["bracket pair colorization", options.bracketPairColorization],
 		["sticky scroll", options.stickyScroll],
-		["suggestions", options.suggestions],
-		["inline completions", options.inlineCompletions],
 		["parameter hints", options.parameterHints],
 		["inlay hints", options.inlayHints],
 		["CodeLens", options.codeLens],

@@ -4,7 +4,7 @@ import { LanguageRequestCoordinator, type LanguageRequestOptions, type LanguageR
 import { LanguageResultAcceptance } from "../languageResultStore.js";
 import { createLanguageDiagnosticSnapshotNormalizer, createLanguageDiagnosticStore, createLanguageTokenSnapshotNormalizer, createLanguageTokenStore, type LanguageDiagnostic, type LanguageDiagnosticResult, type LanguageTokenResult } from "../languageResults.js";
 import { type TextModel } from "../../model/textModel.js";
-import { type LanguageWorkerDocumentSynchronization, type LanguageWorkerDocumentSynchronizationObserver } from "../languageWorkerDocumentMirror.js";
+import { type LanguageWorkerDocumentSynchronization, type LanguageWorkerDocumentSynchronizationObserver } from '../../services/textModelSync/textModelSync.protocol.js';
 
 export const SYNTAX_TOKEN_LANE = "tokens";
 export const SYNTAX_DIAGNOSTIC_LANE = "diagnostics";

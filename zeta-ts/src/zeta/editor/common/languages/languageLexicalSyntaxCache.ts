@@ -1,5 +1,5 @@
 import { commonPrefixLength, commonSuffixLength } from "../../../base/common/arrays.js";
-import { type LanguageWorkerDocumentSynchronization } from "./languageWorkerDocumentMirror.js";
+import { type LanguageWorkerDocumentSynchronization } from '../services/textModelSync/textModelSync.protocol.js';
 import { createBuiltinLanguageConfigurationSource } from "./languageBuiltinConfigurations.js";
 import { createLanguageLexicalLineScanner } from "./languageLexicalConfiguration.js";
 import { LanguageLexicalLineScanner, type LanguageLexicalLineResult, type LanguageLexicalMultilineEvent, type LanguageLexicalState } from "./languageLexicalLineScanner.js";
