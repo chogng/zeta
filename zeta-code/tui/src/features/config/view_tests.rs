@@ -91,7 +91,7 @@ fn provider_api_key_input_is_masked_keeps_its_explanation_and_submits_with_enter
     let outcome = state.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     assert!(state.search().unwrap().masked());
-    assert_eq!(key_hints, "Enter to save");
+    assert_eq!(key_hints, "Enter save  ·  Esc back");
     assert_eq!(state.visible_items().len(), 1);
     assert_eq!(
         state.visible_items()[0].label(),

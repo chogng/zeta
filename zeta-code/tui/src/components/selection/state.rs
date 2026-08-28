@@ -1,5 +1,6 @@
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
+use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
 use ratatui::style::Color;
 
@@ -466,6 +467,15 @@ impl SelectionViewState {
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> SelectionInputOutcome {
+        if key.code == KeyCode::Esc && key.modifiers.is_empty() {
+            if key.kind != KeyEventKind::Press {
+                return SelectionInputOutcome::Consumed;
+            }
+            return match self.model.dismissal {
+                SelectionDismissal::Allowed => SelectionInputOutcome::Dismiss,
+                SelectionDismissal::Blocked => SelectionInputOutcome::Consumed,
+            };
+        }
         if key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Enter {
             if let Some(outcome) = self.free_form_outcome() {
                 return outcome;
@@ -496,12 +506,6 @@ impl SelectionViewState {
         }
 
         match key.code {
-            KeyCode::Esc => {
-                return match self.model.dismissal {
-                    SelectionDismissal::Allowed => SelectionInputOutcome::Dismiss,
-                    SelectionDismissal::Blocked => SelectionInputOutcome::Consumed,
-                };
-            }
             KeyCode::Up => self.move_selection(SelectionDirection::Previous),
             KeyCode::Down => self.move_selection(SelectionDirection::Next),
             KeyCode::Home => self.select_first_visible(),

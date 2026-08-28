@@ -5,6 +5,10 @@ use crate::app::AppEvent;
 use crate::components::composer::ComposerInput;
 use crate::components::composer::ComposerSubmission;
 use crate::components::composer::built_in_slash_command_definitions;
+use crate::components::pane::PaneViewModel;
+use crate::components::selection::SelectionItem;
+use crate::components::selection::SelectionTab;
+use crate::components::selection::SelectionViewModel;
 use crate::components::transcript::MessageRole;
 use crate::features::config::TerminalSettings;
 use crate::features::config::config_view;
@@ -575,6 +579,36 @@ fn config_provider_api_key_enter_saves_and_returns_to_config() {
 }
 
 #[test]
+fn one_escape_cancels_provider_api_key_input_and_returns_to_config() {
+    let config = empty_config_snapshot();
+    let providers = ProviderListResult {
+        providers: vec![ProviderCatalogEntryDto {
+            provider: "openai".into(),
+            display_name: "OpenAI".into(),
+            api_key_policy: ProviderApiKeyPolicyDto::Required,
+            api_key_configured: false,
+        }],
+    };
+    let mut app = App::new();
+    app.update(AppEvent::ConfigViewOpened(config_view(
+        &config,
+        &providers,
+        TerminalSettings::default(),
+        7,
+    )));
+    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
+
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+        None
+    );
+    assert_eq!(app.selection_view().unwrap().title(), "Config");
+}
+
+#[test]
 fn statusline_slash_command_is_owned_by_the_local_host() {
     let mut app = App::new();
     app.insert_text("/statusline");
@@ -890,6 +924,39 @@ fn two_root_escape_presses_within_the_gesture_window_open_rewind() {
             started + Duration::from_millis(200),
         ),
         Some(AppCommand::OpenRewindPane)
+    );
+}
+
+#[test]
+fn escape_from_a_view_does_not_count_toward_the_root_rewind_sequence() {
+    let mut app = App::new();
+    let started = Instant::now();
+    assert_eq!(
+        app.handle_key_at(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE), started),
+        None
+    );
+    app.update(AppEvent::SelectionViewOpened(PaneViewModel::new(
+        SelectionViewModel::new(
+            "Feature",
+            vec![SelectionTab::new("Items", vec![SelectionItem::new("Item")])],
+        ),
+        "Esc back",
+    )));
+
+    assert_eq!(
+        app.handle_key_at(
+            KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
+            started + Duration::from_millis(100),
+        ),
+        None
+    );
+    assert!(app.selection_view().is_none());
+    assert_eq!(
+        app.handle_key_at(
+            KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
+            started + Duration::from_millis(200),
+        ),
+        None
     );
 }
 

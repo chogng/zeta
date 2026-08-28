@@ -264,8 +264,6 @@ fn selection_view_supports_keyboard_tab_switching_and_search() {
     assert!(rendered.find("Esc") < rendered.find("move selection"));
 
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    assert!(app.selection_view().is_some());
-    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.selection_view().is_none());
 }
 

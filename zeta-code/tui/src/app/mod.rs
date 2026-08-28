@@ -1,6 +1,7 @@
 mod bootstrap;
 mod command;
 mod dispatch;
+mod escape;
 mod event;
 mod event_loop;
 mod frame;

@@ -53,17 +53,19 @@ fn selection_view_preserves_composer_draft_and_owns_input_until_dismissed() {
     assert_eq!(pane.selection_view().unwrap().query(), "s");
     assert_eq!(pane.text(), "draft");
 
-    pane.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    assert!(pane.selection_view().is_some());
-    pane.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert_eq!(
+        pane.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+        InteractionPaneOutcome::ViewDismissed
+    );
 
     assert!(pane.selection_view().is_none());
     assert_eq!(pane.text(), "draft");
 }
 
 #[test]
-fn repeated_escape_does_not_close_a_view_after_exiting_search() {
+fn repeated_escape_does_not_close_the_parent_after_dismissing_a_search_view() {
     let mut pane = InteractionPane::new();
+    pane.show_selection_view(selection_view("Parent"));
     pane.show_selection_view(PaneViewModel::new(
         SelectionViewModel::new(
             "Help",
@@ -79,7 +81,7 @@ fn repeated_escape_does_not_close_a_view_after_exiting_search() {
 
     assert_eq!(
         pane.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
-        InteractionPaneOutcome::Consumed
+        InteractionPaneOutcome::ViewDismissed
     );
     assert_eq!(
         pane.handle_key(KeyEvent::new_with_kind(
@@ -89,12 +91,7 @@ fn repeated_escape_does_not_close_a_view_after_exiting_search() {
         )),
         InteractionPaneOutcome::Consumed
     );
-    assert!(pane.selection_view().is_some());
-
-    assert_eq!(
-        pane.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
-        InteractionPaneOutcome::ViewDismissed
-    );
+    assert_eq!(pane.selection_view().unwrap().title(), "Parent");
 }
 
 #[test]

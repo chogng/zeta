@@ -1,4 +1,6 @@
 use super::command::AppCommand;
+use super::escape::RootEscapeOutcome;
+use super::escape::RootEscapeSequence;
 use super::event::AppEvent;
 use crate::components::composer::ComposerInput;
 use crate::components::interaction::InteractionPane;
@@ -59,14 +61,11 @@ use crossterm::event::KeyEventKind;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
-use std::time::Duration;
 use std::time::Instant;
 use zeta_protocol::ApprovalMode;
 
 #[path = "config_state.rs"]
 mod config_state;
-
-const DOUBLE_ESCAPE_WINDOW: Duration = Duration::from_millis(500);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Status {
@@ -87,7 +86,7 @@ pub(crate) struct App {
     transcript_scroll: TranscriptScroll,
     welcome: WelcomeModel,
     selection_actions: Vec<SelectionActions>,
-    last_root_escape: Option<Instant>,
+    root_escape_sequence: RootEscapeSequence,
     status: Status,
     status_line: StatusLineModel,
     terminal_settings: TerminalSettings,
@@ -123,7 +122,7 @@ impl App {
             transcript_scroll: TranscriptScroll::default(),
             welcome: WelcomeModel::for_workspace(Path::new(".")),
             selection_actions: Vec::new(),
-            last_root_escape: None,
+            root_escape_sequence: RootEscapeSequence::default(),
             status: Status::Ready,
             status_line: StatusLineModel::new(),
             terminal_settings: TerminalSettings::default(),
@@ -150,7 +149,7 @@ impl App {
             transcript_scroll: TranscriptScroll::default(),
             welcome: WelcomeModel::for_workspace(workspace_root),
             selection_actions: Vec::new(),
-            last_root_escape: None,
+            root_escape_sequence: RootEscapeSequence::default(),
             status: Status::Ready,
             status_line: StatusLineModel::new(),
             terminal_settings: TerminalSettings::default(),
@@ -186,10 +185,12 @@ impl App {
         let temporary_interaction_active = self.selection_view().is_some()
             || self.slash_popup().is_some()
             || self.mention_popup().is_some();
-        if key.kind == KeyEventKind::Press
-            && (key.code != KeyCode::Esc || temporary_interaction_active)
-        {
-            self.last_root_escape = None;
+        let is_root_escape_press = key.kind == KeyEventKind::Press
+            && key.code == KeyCode::Esc
+            && key.modifiers.is_empty()
+            && !temporary_interaction_active;
+        if key.kind == KeyEventKind::Press && !is_root_escape_press {
+            self.root_escape_sequence.reset();
         }
         let keymap_context = self.app_keymap_context(key.kind == KeyEventKind::Press);
         match self.app_keymap.route_chord(&key, keymap_context, now) {
@@ -200,7 +201,7 @@ impl App {
             }
         }
         if !self.accepts_input() {
-            self.last_root_escape = None;
+            self.root_escape_sequence.reset();
             return self.handle_app_key(key, now);
         }
 
@@ -234,6 +235,7 @@ impl App {
             InteractionPaneOutcome::Unhandled => None,
             InteractionPaneOutcome::ViewDismissed => {
                 self.selection_actions.pop();
+                self.root_escape_sequence.reset();
                 None
             }
         }
@@ -369,9 +371,7 @@ impl App {
                 mode,
             } => {
                 let (model, capture) = capture_view(action, revision, intent, mode);
-                self.interaction_pane.show_selection_view(model);
-                self.selection_actions
-                    .push(SelectionActions::ShortcutCapture(capture));
+                self.push_selection_view(model, SelectionActions::ShortcutCapture(capture));
                 None
             }
             ShortcutAction::ClearUser {
@@ -510,42 +510,27 @@ impl App {
     }
 
     fn show_selection_view(&mut self, model: PaneViewModel<SelectionViewModel>) {
-        self.interaction_pane.show_selection_view(model);
-        self.selection_actions.push(SelectionActions::ReadOnly);
+        self.push_selection_view(model, SelectionActions::ReadOnly);
     }
 
     fn show_interaction_view(&mut self, view: InteractionSelectionView) {
-        self.interaction_pane.show_selection_view(view.model);
-        self.selection_actions
-            .push(SelectionActions::Interaction(view.state));
+        self.push_selection_view(view.model, SelectionActions::Interaction(view.state));
     }
 
     fn show_skills_view(&mut self, view: SkillSelectionView) {
-        self.interaction_pane.show_selection_view(view.model);
-        self.selection_actions
-            .push(SelectionActions::Skills(view.actions));
+        self.push_selection_view(view.model, SelectionActions::Skills(view.actions));
     }
 
     fn show_mcp_view(&mut self, view: McpSelectionView) {
-        self.interaction_pane.show_selection_view(view.model);
-        self.selection_actions
-            .push(SelectionActions::Mcp(view.actions));
+        self.push_selection_view(view.model, SelectionActions::Mcp(view.actions));
     }
 
     fn show_connector_view(&mut self, view: ConnectorSelectionView) {
-        self.interaction_pane.show_selection_view(view.model);
-        self.selection_actions
-            .push(SelectionActions::Connectors(view.actions));
+        self.push_selection_view(view.model, SelectionActions::Connectors(view.actions));
     }
 
     fn replace_connector_view(&mut self, view: ConnectorSelectionView) {
-        self.interaction_pane.replace_selection_view(view.model);
-        match self.selection_actions.last_mut() {
-            Some(actions) => *actions = SelectionActions::Connectors(view.actions),
-            None => self
-                .selection_actions
-                .push(SelectionActions::Connectors(view.actions)),
-        }
+        self.replace_selection_view(view.model, SelectionActions::Connectors(view.actions));
     }
 
     pub(crate) fn connector_view_open(&self) -> bool {
@@ -556,89 +541,80 @@ impl App {
     }
 
     fn show_file_view(&mut self, view: FileSelectionView) {
-        self.interaction_pane.show_selection_view(view.model);
-        self.selection_actions
-            .push(SelectionActions::Files(view.actions));
+        self.push_selection_view(view.model, SelectionActions::Files(view.actions));
     }
 
     fn replace_mcp_view(&mut self, view: McpSelectionView) {
-        self.interaction_pane.replace_selection_view(view.model);
-        match self.selection_actions.last_mut() {
-            Some(actions) => *actions = SelectionActions::Mcp(view.actions),
-            None => self
-                .selection_actions
-                .push(SelectionActions::Mcp(view.actions)),
-        }
+        self.replace_selection_view(view.model, SelectionActions::Mcp(view.actions));
     }
 
     fn show_model_view(&mut self, view: ModelSelectionView) {
-        self.interaction_pane.show_selection_view(view.model);
-        self.selection_actions
-            .push(SelectionActions::Model(view.actions));
+        self.push_selection_view(view.model, SelectionActions::Model(view.actions));
     }
 
     fn show_rewind_view(&mut self, view: RewindSelectionView) {
-        self.interaction_pane.show_selection_view(view.model);
-        self.selection_actions
-            .push(SelectionActions::Rewind(view.actions));
+        self.push_selection_view(view.model, SelectionActions::Rewind(view.actions));
     }
 
     fn show_session_view(&mut self, view: SessionSelectionView) {
-        self.interaction_pane.show_selection_view(view.model);
-        self.selection_actions
-            .push(SelectionActions::Sessions(view.actions));
+        self.push_selection_view(view.model, SelectionActions::Sessions(view.actions));
     }
 
     fn show_thread_view(&mut self, view: ThreadSelectionView) {
-        self.interaction_pane.show_selection_view(view.model);
-        self.selection_actions
-            .push(SelectionActions::Threads(view.actions));
+        self.push_selection_view(view.model, SelectionActions::Threads(view.actions));
+    }
+
+    fn push_selection_view(
+        &mut self,
+        model: PaneViewModel<SelectionViewModel>,
+        actions: SelectionActions,
+    ) {
+        self.root_escape_sequence.reset();
+        self.interaction_pane.show_selection_view(model);
+        self.selection_actions.push(actions);
+    }
+
+    fn replace_selection_view(
+        &mut self,
+        model: PaneViewModel<SelectionViewModel>,
+        actions: SelectionActions,
+    ) {
+        self.root_escape_sequence.reset();
+        self.interaction_pane.replace_selection_view(model);
+        match self.selection_actions.last_mut() {
+            Some(current) => *current = actions,
+            None => self.selection_actions.push(actions),
+        }
     }
 
     fn close_selection_view(&mut self) {
+        self.root_escape_sequence.reset();
         self.interaction_pane.pop_selection_view();
         self.selection_actions.pop();
     }
 
     fn replace_skills_view(&mut self, view: SkillSelectionView) {
-        self.interaction_pane.replace_selection_view(view.model);
-        match self.selection_actions.last_mut() {
-            Some(actions) => *actions = SelectionActions::Skills(view.actions),
-            None => self
-                .selection_actions
-                .push(SelectionActions::Skills(view.actions)),
-        }
+        self.replace_selection_view(view.model, SelectionActions::Skills(view.actions));
     }
 
     fn show_theme_view(&mut self, view: ThemeSelectionView) {
-        self.interaction_pane.show_selection_view(view.model);
-        self.selection_actions
-            .push(SelectionActions::Theme(view.actions));
+        self.push_selection_view(view.model, SelectionActions::Theme(view.actions));
     }
 
     fn show_shortcut_view(&mut self, view: ShortcutView) {
-        self.interaction_pane.show_selection_view(view.model);
-        self.selection_actions
-            .push(SelectionActions::Shortcuts(view.actions));
+        self.push_selection_view(view.model, SelectionActions::Shortcuts(view.actions));
     }
 
     fn show_status_line_view(&mut self, view: StatusLineSelectionView) {
-        self.interaction_pane.show_selection_view(view.model);
-        self.selection_actions
-            .push(SelectionActions::StatusLine(view.actions));
+        self.push_selection_view(view.model, SelectionActions::StatusLine(view.actions));
     }
 
     fn replace_status_line_view(&mut self, view: StatusLineSelectionView) {
-        self.interaction_pane.replace_selection_view(view.model);
-        match self.selection_actions.last_mut() {
-            Some(actions) => *actions = SelectionActions::StatusLine(view.actions),
-            None => self
-                .selection_actions
-                .push(SelectionActions::StatusLine(view.actions)),
-        }
+        self.replace_selection_view(view.model, SelectionActions::StatusLine(view.actions));
     }
 
     fn close_shortcut_views(&mut self) {
+        self.root_escape_sequence.reset();
         while matches!(
             self.selection_actions.last(),
             Some(SelectionActions::Shortcuts(_) | SelectionActions::ShortcutCapture(_))
@@ -649,6 +625,7 @@ impl App {
     }
 
     fn close_theme_views(&mut self) {
+        self.root_escape_sequence.reset();
         while matches!(
             self.selection_actions.last(),
             Some(SelectionActions::Theme(_))
@@ -899,17 +876,10 @@ impl App {
     ) -> Option<AppCommand> {
         match action {
             AppKeymapAction::CycleApprovalMode => Some(AppCommand::CycleNextApprovalMode),
-            AppKeymapAction::RootEscape => {
-                if self
-                    .last_root_escape
-                    .take()
-                    .is_some_and(|previous| now.duration_since(previous) <= DOUBLE_ESCAPE_WINDOW)
-                {
-                    return Some(AppCommand::OpenRewindPane);
-                }
-                self.last_root_escape = Some(now);
-                None
-            }
+            AppKeymapAction::RootEscape => match self.root_escape_sequence.press(now) {
+                RootEscapeOutcome::WaitingForSecondPress => None,
+                RootEscapeOutcome::OpenRewind => Some(AppCommand::OpenRewindPane),
+            },
             AppKeymapAction::OpenRewind => Some(AppCommand::OpenRewindPane),
             AppKeymapAction::ReadClipboardImage => Some(AppCommand::ReadClipboardImage),
             AppKeymapAction::InterruptOrQuit => self.quit_or_interrupt(),

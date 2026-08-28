@@ -3,7 +3,6 @@ use super::SearchBoxModel;
 use super::SearchBoxState;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
-use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
 
 fn key(code: KeyCode) -> KeyEvent {
@@ -60,39 +59,15 @@ fn text_and_paste_only_change_an_active_search() {
 }
 
 #[test]
-fn escape_clears_and_exits_input_mode() {
+fn escape_is_left_for_the_owning_view() {
     let mut search = search_box();
     search.handle_key(key(KeyCode::Char(' ')));
     search.handle_key(key(KeyCode::Char('s')));
 
     assert_eq!(
         search.handle_key(key(KeyCode::Esc)),
-        SearchBoxInputOutcome::QueryChanged
-    );
-    assert_eq!(search.query(), "");
-    assert!(!search.input_active());
-    assert_eq!(
-        search.handle_key(key(KeyCode::Esc)),
         SearchBoxInputOutcome::Ignored
     );
-}
-
-#[test]
-fn repeated_escape_is_consumed_after_the_press_exits_search() {
-    let mut search = search_box();
-    search.handle_key(key(KeyCode::Char(' ')));
-
-    assert_eq!(
-        search.handle_key(key(KeyCode::Esc)),
-        SearchBoxInputOutcome::QueryChanged
-    );
-    assert_eq!(
-        search.handle_key(KeyEvent::new_with_kind(
-            KeyCode::Esc,
-            KeyModifiers::NONE,
-            KeyEventKind::Repeat,
-        )),
-        SearchBoxInputOutcome::Consumed
-    );
-    assert!(!search.input_active());
+    assert_eq!(search.query(), "s");
+    assert!(search.input_active());
 }

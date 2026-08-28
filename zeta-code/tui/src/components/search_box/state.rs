@@ -1,6 +1,5 @@
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
-use crossterm::event::KeyEventKind;
 use std::fmt;
 
 pub(crate) const SEARCH_BOX_HEIGHT: u16 = 3;
@@ -76,9 +75,6 @@ impl SearchBoxState {
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> SearchBoxInputOutcome {
-        if key.code == KeyCode::Esc && key.kind == KeyEventKind::Repeat {
-            return SearchBoxInputOutcome::Consumed;
-        }
         if !self.input_active {
             if key.code == KeyCode::Char(' ') {
                 self.input_active = true;
@@ -88,11 +84,6 @@ impl SearchBoxState {
         }
 
         match key.code {
-            KeyCode::Esc => {
-                self.query.clear();
-                self.input_active = false;
-                SearchBoxInputOutcome::QueryChanged
-            }
             KeyCode::Backspace => {
                 self.query.pop();
                 SearchBoxInputOutcome::QueryChanged

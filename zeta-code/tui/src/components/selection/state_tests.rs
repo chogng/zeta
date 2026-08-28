@@ -320,21 +320,17 @@ fn selection_without_search_ignores_text_and_space() {
 }
 
 #[test]
-fn escape_closes_search_before_dismissing_the_view() {
+fn escape_dismisses_the_view_while_search_is_active() {
     let mut state = state();
     state.handle_key(key(KeyCode::Char(' ')));
     state.handle_key(key(KeyCode::Char('s')));
 
     assert_eq!(
         state.handle_key(key(KeyCode::Esc)),
-        SelectionInputOutcome::Consumed
-    );
-    assert!(!state.search_active());
-    assert_eq!(state.query(), "");
-    assert_eq!(
-        state.handle_key(key(KeyCode::Esc)),
         SelectionInputOutcome::Dismiss
     );
+    assert!(state.search_active());
+    assert_eq!(state.query(), "s");
 }
 
 #[test]
