@@ -30,7 +30,7 @@ test("document editing separates editor capabilities from Workbench hosting", ()
 		"common/model/lineDocument.ts",
 		"common/model/textModelBlockState.ts",
 		"common/model/lineDocumentProjection.ts",
-		"common/services/textModelService.ts",
+		"common/services/resolverService.ts",
 		"common/commands/documentCommands.ts",
 		"browser/widget/richTextEditor/richTextEditorWidget.ts",
 		"browser/widget/richTextEditor/richTextEditorWidget.css",

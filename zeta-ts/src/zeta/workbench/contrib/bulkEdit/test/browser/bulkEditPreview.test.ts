@@ -6,7 +6,7 @@ import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
 import { type TextModel } from "../../../../../editor/common/model/textModel.js";
-import { type ITextModelService, type TextModelReference } from "../../../../../editor/common/services/textModelService.js";
+import { type ITextModelService, type TextModelReference } from "../../../../../editor/common/services/resolverService.js";
 import { type LanguageWorkspaceEdit } from "../../../../../editor/common/languages/languageWorkspaceEdit.js";
 import { FileKind, FileNotFoundError, type IFileService } from "../../../../../platform/files/common/files.js";
 import { type IWorkingCopyService } from "../../../../services/workingCopy/common/workingCopyService.js";

@@ -9,9 +9,9 @@ import { type TextRange } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { type EditorView, type EditorViewport } from "../../browser/view.js";
 import { type CodeEditorWidget } from "../../browser/widget/codeEditor/codeEditorWidget.js";
+import { type ModelLanguageChangeEvent } from "../../common/services/model.js";
 import { type IStandaloneThemeData } from "../common/standaloneTheme.js";
 import { StandaloneServices, type StandaloneServiceOverrides } from "./standaloneServices.js";
-import { type StandaloneModelLanguageChangeEvent } from "./standaloneModelService.js";
 
 type StandaloneEditorBrowserOptions = Omit<EditorBrowserOptions,
 	"container" | "input" | "languageId" | "model" | "languageFeaturesService" |
@@ -45,7 +45,7 @@ export interface IStandaloneEditorApi {
 	readonly onDidCreateEditor: Event<IStandaloneCodeEditor>;
 	readonly onDidCreateModel: Event<TextModel>;
 	readonly onWillDisposeModel: Event<TextModel>;
-	readonly onDidChangeModelLanguage: Event<StandaloneModelLanguageChangeEvent>;
+	readonly onDidChangeModelLanguage: Event<ModelLanguageChangeEvent>;
 	readonly defineTheme: typeof defineTheme;
 	readonly setTheme: typeof setTheme;
 }
@@ -56,7 +56,7 @@ const createEditorEmitter = new Emitter<IStandaloneCodeEditor>();
 export const onDidCreateEditor: Event<IStandaloneCodeEditor> = createEditorEmitter.event;
 export const onDidCreateModel: Event<TextModel> = listener => StandaloneServices.get().modelService.onDidCreateModel(listener);
 export const onWillDisposeModel: Event<TextModel> = listener => StandaloneServices.get().modelService.onWillDisposeModel(listener);
-export const onDidChangeModelLanguage: Event<StandaloneModelLanguageChangeEvent> = listener => StandaloneServices.get().modelService.onDidChangeModelLanguage(listener);
+export const onDidChangeModelLanguage: Event<ModelLanguageChangeEvent> = listener => StandaloneServices.get().modelService.onDidChangeModelLanguage(listener);
 
 /** Creates one browser editor. A supplied model must come from createModel(). */
 export function create(

@@ -1,7 +1,7 @@
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { TextModel } from "../../../../editor/common/model/textModel.js";
-import type { ITextModelService, TextModelBlockInput, TextModelWorkingCopyReference } from "../../../../editor/common/services/textModelService.js";
+import type { ITextModelService, TextModelBlockInput, TextModelWorkingCopyReference } from "../../../../editor/common/services/resolverService.js";
 import type { ITextFileService } from "../../textfile/common/textFileService.js";
 import type { IWorkingCopyService } from "../../workingCopy/common/workingCopyService.js";
 import { DocumentWorkingCopy } from "./documentWorkingCopy.js";

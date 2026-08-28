@@ -16,7 +16,7 @@ import { EditorPaneVisibility } from "../../../browser/parts/editor/editorPane.j
 import { CODE_EDITOR_ID, languageForEditorInput } from "./codeEditorInput.js";
 import { type ITextResourceStore } from "../../../../editor/common/services/textResourceStore.js";
 import { EditorBrowser, isEditorTextViewState, type EditorBrowserOptions, type EditorTextViewState } from "../../../../editor/browser/editorBrowser.js";
-import { type ITextModelService, type TextModelReference } from "../../../../editor/common/services/textModelService.js";
+import { type ITextModelService, type TextModelReference } from "../../../../editor/common/services/resolverService.js";
 import { type EditorTextDirection } from "../../../../editor/browser/view.js";
 import { type EditorLineWrapping, type WrappingIndent } from "../../../../editor/common/config/editorOptions.js";
 import { type IWorkingCopy, type IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";

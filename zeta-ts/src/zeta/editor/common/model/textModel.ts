@@ -4,7 +4,7 @@ import { canCoalesceHistoryEdits, canReplaceHistoryEdits, coalesceHistoryUndoEdi
 import type { TextBuffer } from "./textBuffer.js";
 import { createTextBuffer } from "./textBufferFactory.js";
 import { normalizeTextLineEndings, TextEditHistoryGroup, TextEditHistoryMergeMode, TextModelChangeReason, TextPosition, TextRange, TextLength, type ISingleEditOperation, type TextEdit, type TextModelChange, type TextModelContentChange, type TextSnapshot } from "../core/text.js";
-import { TextModelHistory, type TextModelHistoryEntry } from "./editStack.js";
+import { TextModelHistory, type TextModelHistoryEntry, type TextModelHistorySnapshot } from "./editStack.js";
 import { TrackedRangeCollection, type TrackedRange, type TrackedRangeStickiness } from "./trackedRange.js";
 import { classifyTextModelSize, type TextModelLargeFilePolicy } from "./textModelLargeFile.js";
 import type { DocumentSelection } from "../core/documentSelection.js";
@@ -65,6 +65,12 @@ export interface TextModelBlockInitialization extends TextModelBlockOptions {
 export interface TextEditOptions {
 	readonly historyGroup?: TextEditHistoryGroup;
 	readonly historyMergeMode?: TextEditHistoryMergeMode;
+}
+
+export interface TextModelUndoRedoSnapshot {
+	readonly text: string;
+	readonly history: TextModelHistorySnapshot;
+	readonly nextTransactionId: number;
 }
 
 const DEFAULT_HISTORY_TRANSACTIONS = 1_000;
@@ -298,6 +304,25 @@ export class TextModel extends Disposable {
 	get canRedo(): boolean {
 		this.assertNotDisposed();
 		return this.history.canRedo;
+	}
+
+	/** Captures model-local history for a resolver that is about to release this model instance. */
+	createUndoRedoSnapshot(): TextModelUndoRedoSnapshot | undefined {
+		this.assertNotDisposed();
+		const history = this.history.createSnapshot();
+		if (!history || history.undo.length === 0 && history.redo.length === 0) return undefined;
+		return Object.freeze({ text: this.getText(), history, nextTransactionId: this.nextTransactionId });
+	}
+
+	/** Restores history only into a newly created model with the exact captured text. */
+	restoreUndoRedoSnapshot(snapshot: TextModelUndoRedoSnapshot): boolean {
+		this.assertNotDisposed();
+		this.ensureDirectTextMutationAllowed();
+		if (this._version !== 1 || this.canUndo || this.canRedo) throw new Error('Undo and redo history can only be restored into a new TextModel');
+		if (snapshot.text !== this.getText()) return false;
+		this.history.restoreSnapshot(snapshot.history);
+		this.nextTransactionId = Math.max(this.nextTransactionId, snapshot.nextTransactionId);
+		return true;
 	}
 
 	getText(): string {

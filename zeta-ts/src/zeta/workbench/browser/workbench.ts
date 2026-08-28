@@ -202,7 +202,7 @@ import { IWorkingCopyBackupService, type WorkingCopyBackup } from "../services/w
 import { projectExtensionTokenTheme } from "../services/textMate/common/textMateThemeProjection.js";
 import { BrowserWorkspaceEditService } from "../services/language/browser/browserWorkspaceEditService.js";
 import { IWorkspaceEditService } from "../services/language/common/workspaceEditService.js";
-import { ITextModelService } from "../../editor/common/services/textModelService.js";
+import { ITextModelService } from "../../editor/common/services/resolverService.js";
 import { BrowserBulkEditService } from "../contrib/bulkEdit/browser/bulkEditService.js";
 import { IBulkEditService } from "../contrib/bulkEdit/common/bulkEdit.js";
 import { getBrowserTextModelService } from "../services/textmodelResolver/browser/browserTextModelService.js";

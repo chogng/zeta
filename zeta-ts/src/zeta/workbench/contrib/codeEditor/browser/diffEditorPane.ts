@@ -11,7 +11,7 @@ import { type ITextResourceStore } from "../../../../editor/common/services/text
 import { DiffModel } from "../../../../editor/common/diff/diffModel.js";
 import { type IDiffComputationService } from "../../../../editor/common/diff/diffComputationService.js";
 import { DiffEditorWidget } from "../../../../editor/browser/widget/diffEditor/diffEditorWidget.js";
-import { type TextModelReference, type ITextModelService } from "../../../../editor/common/services/textModelService.js";
+import { type TextModelReference, type ITextModelService } from "../../../../editor/common/services/resolverService.js";
 import { DiffEditorBreadcrumbsController } from "../../../../editor/contrib/diffEditorBreadcrumbs/browser/diffEditorBreadcrumbs.js";
 import { h } from "../../../../base/browser/dom.js";
 

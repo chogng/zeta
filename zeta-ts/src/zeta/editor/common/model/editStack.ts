@@ -9,6 +9,12 @@ export interface TextModelHistoryEntry {
 	readonly lineIds: readonly string[] | undefined;
 }
 
+export interface TextModelHistorySnapshot {
+	readonly undo: readonly TextModelHistoryEntry[];
+	readonly redo: readonly TextModelHistoryEntry[];
+	readonly textUnits: number;
+}
+
 export class TextModelHistory {
 	private readonly undoStack: TextModelHistoryEntry[] = [];
 	private readonly redoStack: TextModelHistoryEntry[] = [];
@@ -26,6 +32,24 @@ export class TextModelHistory {
 
 	get canRedo(): boolean {
 		return this.redoStack.length > 0;
+	}
+
+	createSnapshot(): TextModelHistorySnapshot | undefined {
+		if (this.protectedGroup) return undefined;
+		return Object.freeze({
+			undo: Object.freeze(this.undoStack.map(cloneEntry)),
+			redo: Object.freeze(this.redoStack.map(cloneEntry)),
+			textUnits: this.historyTextUnits,
+		});
+	}
+
+	restoreSnapshot(snapshot: TextModelHistorySnapshot): void {
+		if (this.protectedGroup) throw new Error('Cannot restore undo and redo while a history revision is active');
+		this.reset();
+		this.undoStack.push(...snapshot.undo.map(cloneEntry));
+		this.redoStack.push(...snapshot.redo.map(cloneEntry));
+		this.historyTextUnits = this.undoStack.concat(this.redoStack).reduce((total, entry) => total + entry.textUnits, 0);
+		this.trim();
 	}
 
 	isRevisionActive(historyGroup: TextEditHistoryGroup): boolean {
@@ -213,8 +237,8 @@ function createEntry(
 	historyGroup: TextEditHistoryGroup | undefined,
 	lineIds?: readonly string[],
 ): TextModelHistoryEntry {
-	return {
-		edits,
+	return Object.freeze({
+		edits: Object.freeze(edits.map(edit => Object.freeze({ ...edit }))),
 		textUnits: edits.reduce(
 			(total, edit) => total + edit.text.length,
 			0,
@@ -222,5 +246,9 @@ function createEntry(
 		transactionId,
 		historyGroup,
 		lineIds: lineIds === undefined ? undefined : Object.freeze([...lineIds]),
-	};
+	});
+}
+
+function cloneEntry(entry: TextModelHistoryEntry): TextModelHistoryEntry {
+	return createEntry(entry.edits, entry.transactionId, entry.historyGroup, entry.lineIds);
 }

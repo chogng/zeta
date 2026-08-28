@@ -1,36 +1,16 @@
-import { Emitter, type Event } from "../../../base/common/event.js";
+import { Emitter } from "../../../base/common/event.js";
 import { Disposable, DisposableMap } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
-import { TextModel } from "../../common/model/textModel.js";
-import { createServiceIdentifier } from "../../../platform/instantiation/common/instantiation.js";
+import { TextModel } from "../model/textModel.js";
+import type { IModelService, ModelLanguageChangeEvent } from "./model.js";
 
-export interface StandaloneModelLanguageChangeEvent {
-	readonly model: TextModel;
-	readonly oldLanguageId: string;
-	readonly newLanguageId: string;
-}
-
-export interface IStandaloneModelService {
-	readonly onDidCreateModel: Event<TextModel>;
-	readonly onWillDisposeModel: Event<TextModel>;
-	readonly onDidChangeModelLanguage: Event<StandaloneModelLanguageChangeEvent>;
-	createModel(value: string, languageId?: string, resource?: URI): TextModel;
-	getModel(resource: URI): TextModel | undefined;
-	getModels(): readonly TextModel[];
-	getModelResource(model: TextModel): URI;
-	getModelLanguage(model: TextModel): string;
-	setModelLanguage(model: TextModel, languageId: string): void;
-}
-
-export const IStandaloneModelService = createServiceIdentifier<IStandaloneModelService>("standaloneModelService");
-
-/** URI and language registry for caller-owned standalone TextModels. */
-export class StandaloneModelService extends Disposable implements IStandaloneModelService {
-	private readonly entries = this._register(new DisposableMap<string, StandaloneModelEntry>());
-	private readonly entriesByModel = new WeakMap<TextModel, StandaloneModelEntry>();
+/** Resource and language registry for caller-owned TextModels. */
+export class ModelService extends Disposable implements IModelService {
+	private readonly entries = this._register(new DisposableMap<string, ModelEntry>());
+	private readonly entriesByModel = new WeakMap<TextModel, ModelEntry>();
 	private readonly createEmitter = this._register(new Emitter<TextModel>());
 	private readonly willDisposeEmitter = this._register(new Emitter<TextModel>());
-	private readonly languageEmitter = this._register(new Emitter<StandaloneModelLanguageChangeEvent>());
+	private readonly languageEmitter = this._register(new Emitter<ModelLanguageChangeEvent>());
 	private modelIdentity = 1;
 
 	readonly onDidCreateModel = this.createEmitter.event;
@@ -38,13 +18,13 @@ export class StandaloneModelService extends Disposable implements IStandaloneMod
 	readonly onDidChangeModelLanguage = this.languageEmitter.event;
 
 	createModel(value: string, languageId = "plaintext", resource = this.nextResource()): TextModel {
-		if (typeof value !== "string") throw new TypeError("Standalone model value must be a string");
+		if (typeof value !== "string") throw new TypeError("Model value must be a string");
 		const normalizedLanguageId = requireLanguageId(languageId);
 		const key = resource.toString();
-		if (this.entries.has(key)) throw new Error(`A standalone model already exists for '${key}'`);
+		if (this.entries.has(key)) throw new Error(`A model already exists for '${key}'`);
 		const model = new TextModel(value);
 		try {
-			const entry = new StandaloneModelEntry(model, resource, normalizedLanguageId, () => this.removeEntry(key, model));
+			const entry = new ModelEntry(model, resource, normalizedLanguageId, () => this.removeEntry(key, model));
 			this.entries.set(key, entry);
 			this.entriesByModel.set(model, entry);
 			this.createEmitter.fire(model);
@@ -84,15 +64,15 @@ export class StandaloneModelService extends Disposable implements IStandaloneMod
 		return URI.parse(`inmemory://stanza/model/${this.modelIdentity++}`);
 	}
 
-	private entryForResource(resource: URI): StandaloneModelEntry | undefined {
+	private entryForResource(resource: URI): ModelEntry | undefined {
 		const key = resource.toString();
 		for (const [candidate, entry] of this.entries) if (candidate === key) return entry;
 		return undefined;
 	}
 
-	private requireEntry(model: TextModel): StandaloneModelEntry {
+	private requireEntry(model: TextModel): ModelEntry {
 		const entry = this.entriesByModel.get(model);
-		if (!entry) throw new ReferenceError("TextModel is not registered with the standalone model service");
+		if (!entry) throw new ReferenceError("TextModel is not registered with the model service");
 		return entry;
 	}
 
@@ -105,7 +85,7 @@ export class StandaloneModelService extends Disposable implements IStandaloneMod
 	}
 }
 
-class StandaloneModelEntry extends Disposable {
+class ModelEntry extends Disposable {
 	constructor(
 		readonly model: TextModel,
 		readonly resource: URI,
@@ -119,7 +99,7 @@ class StandaloneModelEntry extends Disposable {
 
 function requireLanguageId(languageId: string): string {
 	if (typeof languageId !== "string" || languageId.trim().length === 0) {
-		throw new TypeError("Standalone model language id must be a non-empty string");
+		throw new TypeError("Model language id must be a non-empty string");
 	}
 	return languageId;
 }

@@ -25,7 +25,7 @@ import { getEditorContributions, type DocumentCollaborationContribution, type Do
 import { DocumentOutlineNavigator } from '../documentOutlineNavigator.js';
 import { DocumentCollaborationController } from '../../../contrib/collaboration/common/controller.js';
 import { createDocumentFragmentFromHtml } from '../../../contrib/clipboard/browser/htmlDocumentFragment.js';
-import type { ITextModelService, TextModelBlockInput, TextModelWorkingCopyReference } from '../../../common/services/textModelService.js';
+import type { ITextModelService, TextModelBlockInput, TextModelWorkingCopyReference } from '../../../common/services/resolverService.js';
 import type { IDocumentCollaborationService } from '../../../common/services/documentCollaborationService.js';
 import type { DocumentCollaborationPresence } from '../../../common/services/documentCollaborationService.js';
 import type { DocumentCollaborationInvite } from '../../../common/services/documentCollaborationService.js';

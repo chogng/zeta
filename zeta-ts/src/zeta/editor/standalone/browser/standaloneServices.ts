@@ -11,8 +11,9 @@ import { ILanguageFeaturesService } from '../../common/services/languageFeatures
 import { LanguageFeaturesService } from '../../common/services/languageFeaturesService.js';
 import { ILanguageService, LanguageService } from '../../common/services/languageService.js';
 import { ILanguageConfigurationService, LanguageConfigurationService } from '../../common/services/languageConfigurationService.js';
+import { IModelService } from '../../common/services/model.js';
+import { ModelService } from '../../common/services/modelService.js';
 import { type IStandaloneThemeService } from "../common/standaloneTheme.js";
-import { IStandaloneModelService, StandaloneModelService } from "./standaloneModelService.js";
 import { StandaloneThemeService } from "./standaloneThemeService.js";
 
 export interface StandaloneServiceOverrides {
@@ -27,7 +28,7 @@ export interface StandaloneServiceOverrides {
 
 export class StandaloneServiceCollection extends Disposable {
 	readonly instantiationService: ServiceContainer;
-	readonly modelService: IStandaloneModelService;
+	readonly modelService: IModelService;
 	readonly languageService: ILanguageService;
 	readonly languageConfigurationService: ILanguageConfigurationService;
 	readonly languageFeaturesService: ILanguageFeaturesService;
@@ -48,8 +49,8 @@ export class StandaloneServiceCollection extends Disposable {
 		else instantiationService.registerSingleton(ILanguageFeaturesService, accessor => new LanguageFeaturesService(accessor.get(ILanguageConfigurationService)));
 		instantiationService.registerSingleton(IThemeService, () => new StandaloneThemeService(window));
 		this.themeService = instantiationService.get(IThemeService) as IStandaloneThemeService;
-		instantiationService.registerSingleton(IStandaloneModelService, () => new StandaloneModelService());
-		this.modelService = instantiationService.get(IStandaloneModelService);
+		instantiationService.registerSingleton(IModelService, () => new ModelService());
+		this.modelService = instantiationService.get(IModelService);
 		this.languageService = instantiationService.get(ILanguageService);
 		this.languageConfigurationService = instantiationService.get(ILanguageConfigurationService);
 		this.languageFeaturesService = instantiationService.get(ILanguageFeaturesService);

@@ -44,7 +44,7 @@ export interface TextModelWorkingCopyReference extends TextModelReference {
 	saveAs(resource: URI, signal: AbortSignal): Promise<void>;
 }
 
-/** Owns the lifetime and persisted baseline of text models. */
+/** Resolves resource identities to reference-counted text models and their persisted baseline. */
 export interface ITextModelService<TInput extends TextModelInput = TextModelInput, TReference extends TextModelReference = TextModelReference> extends IDisposable {
 	acquire(input: TInput, signal: AbortSignal): Promise<TReference>;
 }

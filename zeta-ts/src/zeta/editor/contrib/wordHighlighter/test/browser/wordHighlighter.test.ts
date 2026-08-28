@@ -28,7 +28,7 @@ for (const [name, value] of Object.entries({
 const { EditorView, EditorViewport } = await import('../../../../browser/view.js');
 const { getHighlightDecorationOptions } = await import('../../browser/highlightDecorations.js');
 const { TextualMultiDocumentHighlightFeature } = await import('../../browser/textualHighlightProvider.js');
-const { WordHighlighterContribution } = await import('../../browser/wordHighlighter.js');
+const { WordHighlighterContribution } = await import('../../browser/wordHighlighter.contribution.js');
 
 test('Word highlighter uses the textual provider for complete Unicode words', async () => {
 	using languages = new LanguageFeaturesService();

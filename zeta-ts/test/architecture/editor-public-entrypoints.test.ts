@@ -13,9 +13,10 @@ test("flat Stanza domain exposes public entrypoints and mode bundles", () => {
 	for (const retiredEntrypoint of ["stanza.api.ts", "stanza.code.all.ts", "stanza.academic.all.ts", "stanza.all.ts", "stanza.main.ts", "stanza.worker.start.ts"]) {
 		assert.equal(exists(join(editorRoot, retiredEntrypoint)), false, retiredEntrypoint);
 	}
-	for (const standaloneOwner of ["standalone/browser/standaloneServices.ts", "standalone/browser/standaloneEditor.ts", "standalone/browser/standaloneLanguages.ts", "standalone/browser/standaloneModelService.ts"]) {
+	for (const standaloneOwner of ["standalone/browser/standaloneServices.ts", "standalone/browser/standaloneEditor.ts", "standalone/browser/standaloneLanguages.ts"]) {
 		assert.equal(exists(join(editorRoot, standaloneOwner)), true, standaloneOwner);
 	}
+	for (const modelOwner of ["common/services/model.ts", "common/services/modelService.ts"]) assert.equal(exists(join(editorRoot, modelOwner)), true, modelOwner);
 });
 
 test("public Stanza entrypoints retain distinct API, contribution, main, and worker roles", () => {
@@ -32,7 +33,7 @@ test("public Stanza entrypoints retain distinct API, contribution, main, and wor
 	const standaloneEditor = readFileSync(join(editorRoot, "standalone/browser/standaloneEditor.ts"), "utf8");
 	const standaloneLanguages = readFileSync(join(editorRoot, "standalone/browser/standaloneLanguages.ts"), "utf8");
 	const standaloneServices = readFileSync(join(editorRoot, "standalone/browser/standaloneServices.ts"), "utf8");
-	const standaloneModels = readFileSync(join(editorRoot, "standalone/browser/standaloneModelService.ts"), "utf8");
+	const models = readFileSync(join(editorRoot, "common/services/modelService.ts"), "utf8");
 	assert.match(api, /TextModel/u);
 	assert.match(api, /createStandaloneEditorApi/u);
 	assert.match(api, /createEditorBaseApi/u);
@@ -55,8 +56,8 @@ test("public Stanza entrypoints retain distinct API, contribution, main, and wor
 	assert.match(standaloneLanguages, /registerHoverProvider/u);
 	assert.match(baseApi, /export function createEditorBaseApi/u);
 	assert.match(standaloneServices, /StandaloneServices/u);
-	assert.match(standaloneModels, /onDidCreateModel/u);
-	for (const standaloneOwner of [standaloneEditor, standaloneLanguages, standaloneServices, standaloneModels]) assert.doesNotMatch(standaloneOwner, /workbench/u);
+	assert.match(models, /onDidCreateModel/u);
+	for (const commonOrStandaloneOwner of [standaloneEditor, standaloneLanguages, standaloneServices, models]) assert.doesNotMatch(commonOrStandaloneOwner, /workbench/u);
 	assert.match(codeBundle, /editor\.all/u);
 	assert.doesNotMatch(codeBundle, /contrib\//u);
 	assert.doesNotMatch(codeBundle, /contrib\/academic/u);

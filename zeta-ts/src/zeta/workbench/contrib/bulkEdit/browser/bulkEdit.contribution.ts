@@ -1,7 +1,7 @@
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { isCancellationError } from "../../../../base/common/errors.js";
 import { type LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
-import { ITextModelService } from "../../../../editor/common/services/textModelService.js";
+import { ITextModelService } from "../../../../editor/common/services/resolverService.js";
 import { IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
 import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IFileService } from "../../../../platform/files/common/files.js";

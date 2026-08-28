@@ -49,5 +49,5 @@ import "./contrib/tokenization/browser/tokenization.contribution.js";
 import "./contrib/transpose/browser/transposeController.js";
 import "./contrib/unicodeHighlighter/browser/unicodeHighlighter.contribution.js";
 import "./contrib/unusualLineTerminators/browser/unusualLineTerminators.contribution.js";
-import "./contrib/wordHighlighter/browser/wordHighlighter.js";
+import "./contrib/wordHighlighter/browser/wordHighlighter.contribution.js";
 import "./contrib/wordWrap/browser/wordWrapController.js";

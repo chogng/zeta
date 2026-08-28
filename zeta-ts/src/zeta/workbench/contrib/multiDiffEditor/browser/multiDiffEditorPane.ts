@@ -8,7 +8,7 @@ import { assertDefined } from '../../../../base/common/types.js';
 import { MultiDiffEditorWidget, type MultiDiffEditorItem, type MultiDiffEditorLocation } from '../../../../editor/browser/widget/multiDiffEditor/multiDiffEditorWidget.js';
 import { DiffModel } from '../../../../editor/common/diff/diffModel.js';
 import { type IDiffComputationService } from '../../../../editor/common/diff/diffComputationService.js';
-import { type ITextModelService, type TextModelReference } from '../../../../editor/common/services/textModelService.js';
+import { type ITextModelService, type TextModelReference } from '../../../../editor/common/services/resolverService.js';
 import { MenuWorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { MenuId } from '../../../../platform/actions/common/actions.js';
 import type { IMenuService } from '../../../../platform/actions/common/menuService.js';

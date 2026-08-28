@@ -5,7 +5,7 @@ import { Emitter } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { BrowserTextModelService } from "../../../../services/textmodelResolver/browser/browserTextModelService.js";
 import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
-import { TextModelConflictError } from "../../../../../editor/common/services/textModelService.js";
+import { TextModelConflictError } from "../../../../../editor/common/services/resolverService.js";
 import { type IFileChangeEvent } from "../../../../../platform/files/common/files.js";
 import { TextFileContentSource, TextFileSaveConflictError, type ITextFileService, type TextFileSaveRequest } from "../../../../services/textfile/common/textFileService.js";
 import { BrowserTextResourceStore } from "../../browser/browserTextResourceStore.js";
@@ -43,6 +43,47 @@ test("Stanza text model acquisition delegates absent bootstrap content and obser
 	const cancelled = new AbortController();
 	cancelled.abort();
 	await assert.rejects(models.acquire({ resource }, cancelled.signal), isCancellationError);
+});
+
+test('Stanza text model service restores undo and redo after the final reference is released', async () => {
+	const resource = URI.file('C:\\project\\history.ts');
+	const textFiles = new TestTextFileService('alpha');
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	let reference = await models.acquire({ resource }, new AbortController().signal);
+	reference.model.applyEdits([{ range: TextRange.emptyAt(TextPosition.at(0, 5)), text: '!' }]);
+	await reference.save(new AbortController().signal);
+	const releasedModel = reference.model;
+	reference.dispose();
+
+	reference = await models.acquire({ resource }, new AbortController().signal);
+	assert.notEqual(reference.model, releasedModel);
+	assert.equal(reference.model.canUndo, true);
+	reference.model.undo();
+	assert.equal(reference.model.getText(), 'alpha');
+	await reference.save(new AbortController().signal);
+	reference.dispose();
+
+	reference = await models.acquire({ resource }, new AbortController().signal);
+	assert.equal(reference.model.canRedo, true);
+	reference.model.redo();
+	assert.equal(reference.model.getText(), 'alpha!');
+	reference.dispose();
+});
+
+test('Stanza text model service drops retained history when persisted content changed', async () => {
+	const resource = URI.file('C:\\project\\history.ts');
+	const textFiles = new TestTextFileService('alpha');
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
+	const first = await models.acquire({ resource }, new AbortController().signal);
+	first.model.applyEdits([{ range: TextRange.emptyAt(TextPosition.at(0, 5)), text: '!' }]);
+	await first.save(new AbortController().signal);
+	first.dispose();
+	textFiles.setText('external');
+
+	const reopened = await models.acquire({ resource }, new AbortController().signal);
+	assert.equal(reopened.model.getText(), 'external');
+	assert.equal(reopened.model.canUndo, false);
+	reopened.dispose();
 });
 
 test("Stanza text model references track dirty content, save snapshots, and explicitly revert", async () => {

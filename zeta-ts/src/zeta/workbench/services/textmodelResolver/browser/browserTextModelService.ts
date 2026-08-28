@@ -3,10 +3,11 @@ import { Emitter } from "../../../../base/common/event.js";
 import { type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { runWhenWindowIdle } from "../../../../base/browser/scheduler.js";
-import { TextModelConflictError, type TextModelInput, type TextModelReference, type ITextModelService } from "../../../../editor/common/services/textModelService.js";
+import { TextModelConflictError, type TextModelInput, type TextModelReference, type ITextModelService } from "../../../../editor/common/services/resolverService.js";
 import { TextResourceConflictError, type TextResourceChangeEvent, type ITextResourceStore } from "../../../../editor/common/services/textResourceStore.js";
 import { normalizeTextLineEndings } from "../../../../editor/common/core/text.js";
 import { TextModel, type TextModelMaintenanceOptions } from "../../../../editor/common/model/textModel.js";
+import { ModelUndoRedoParticipant } from '../../../../editor/common/services/modelUndoRedoParticipant.js';
 
 interface TextModelEntry {
 	readonly resource: URI;
@@ -38,6 +39,7 @@ export interface BrowserTextModelServiceOptions {
 /** Shares text models by exact resource identity while references are open. */
 export class BrowserTextModelService implements ITextModelService {
 	private readonly entries = new Map<string, TextModelEntry>();
+	private readonly undoRedoParticipant = new ModelUndoRedoParticipant();
 	private disposed = false;
 
 	constructor(private readonly resourceStore: ITextResourceStore, private readonly options: BrowserTextModelServiceOptions = {}) {
@@ -68,6 +70,7 @@ export class BrowserTextModelService implements ITextModelService {
 		const model = new TextModel(content.text, {
 			maintenance: this.options.maintenance,
 		});
+		this.undoRedoParticipant.restore(input.resource, model);
 		const dirtyEmitter = new Emitter<void>();
 		const externalChangeEmitter = new Emitter<void>();
 		const entry: TextModelEntry = {
@@ -95,6 +98,7 @@ export class BrowserTextModelService implements ITextModelService {
 		this.disposed = true;
 		for (const entry of this.entries.values()) this.disposeEntry(entry);
 		this.entries.clear();
+		this.undoRedoParticipant.dispose();
 	}
 
 	[Symbol.dispose](): void {
@@ -218,6 +222,7 @@ export class BrowserTextModelService implements ITextModelService {
 
 	private disposeEntry(entry: TextModelEntry): void {
 		entry.disposed = true;
+		this.undoRedoParticipant.remember(entry.resource, entry.model);
 		entry.modelChangeListener.dispose();
 		entry.fileChangeListener.dispose();
 		entry.dirtyEmitter.dispose();
