@@ -47,6 +47,7 @@ members = [
     "zeta-rs/tool-executor",
     "zeta-rs/file-identity",
     "zeta-rs/file-search",
+    "zeta-rs/fast-regex-search",
     "zeta-rs/file-system",
     "zeta-rs/file-system-tool",
     "zeta-rs/file-watcher",
@@ -181,6 +182,7 @@ glyphon = "0.12.0"
 icon-loader = { version = "0.4.1", default-features = false, features = ["gtk"] }
 image = { version = "0.25.10", default-features = false }
 ignore = "0.4"
+globset = "0.4"
 lazy_static = "1"
 libc = "0.2"
 keyring = { version = "3.6", default-features = false }
@@ -210,6 +212,7 @@ ratex-svg = { version = "0.1.14", features = ["embed-fonts"] }
 ratex-types = "0.1.14"
 ratatui = "0.29.0"
 regex = "1"
+regex-syntax = "0.8"
 rust-stemmers = "1"
 resvg = { version = "0.47", default-features = false }
 schemars = "1.2.1"
@@ -325,6 +328,7 @@ zeta-file-identity = { path = "zeta-rs/file-identity" }
 zeta-file-search = { path = "zeta-rs/file-search" }
 zeta-file-system = { path = "zeta-rs/file-system" }
 zeta-file-system-tool = { path = "zeta-rs/file-system-tool" }
+zeta-fast-regex-search = { path = "zeta-rs/fast-regex-search" }
 zeta-file-watcher = { path = "zeta-rs/file-watcher" }
 zeta-files = { path = "app/files" }
 zeta-git = { path = "zeta-rs/git" }

@@ -11367,6 +11367,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-fast-regex-search"
+version = "0.1.0"
+dependencies = [
+ "globset",
+ "ignore",
+ "regex",
+ "regex-syntax",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.19",
+ "zeta-workspace",
+]
+
+[[package]]
 name = "zeta-file-identity"
 version = "0.1.0"
 dependencies = [

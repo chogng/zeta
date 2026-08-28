@@ -8,9 +8,9 @@ use bwrap::MountAccess;
 use std::path::{Path, PathBuf};
 use zeta_install_context::InstallContext;
 use zeta_sandboxing::{
-    FileSystemAccess, NetworkAccess, PreparedCommand, SandboxBackend, SandboxCommand, SandboxError,
-    SandboxKind, SandboxPolicy, SandboxProcessDenial, SandboxProcessExitStatus,
-    PROTECTED_WORKSPACE_METADATA_NAMES,
+    FileSystemAccess, NetworkAccess, PROTECTED_WORKSPACE_METADATA_NAMES, PreparedCommand,
+    SandboxBackend, SandboxCommand, SandboxError, SandboxKind, SandboxPolicy, SandboxProcessDenial,
+    SandboxProcessExitStatus,
 };
 use zeta_workspace::WorkspaceRoot;
 
