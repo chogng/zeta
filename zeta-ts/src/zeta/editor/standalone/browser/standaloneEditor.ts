@@ -86,7 +86,7 @@ export function create(
 	const ownsModel = suppliedModel === undefined;
 	try {
 		const modelResource = services.modelService.getModelResource(model);
-		const editor = new StandaloneCodeEditor({
+		const editorOptions: EditorBrowserOptions = {
 			...browserOptions,
 			container: domElement,
 			input: { resource: modelResource, label, readOnly },
@@ -95,9 +95,11 @@ export function create(
 			languageFeaturesService: services.languageFeaturesService,
 			languageConfigurationService: services.languageConfigurationService,
 			syntaxWorkerFactory: services.syntaxWorkerFactory,
-			completionWorkerFactory: services.completionWorkerFactory,
 			instantiationService: services.instantiationService,
-		}, model, ownsModel, services.themeService);
+		};
+		const editor = services.completionWorkerFactory
+			? new StandaloneCodeEditor({ ...editorOptions, completionWorkerFactory: services.completionWorkerFactory }, model, ownsModel, services.themeService)
+			: new StandaloneCodeEditor(editorOptions, model, ownsModel, services.themeService);
 		editors.add(editor);
 		editor.registerEditorLifetime(toDisposable(() => editors.delete(editor)));
 		createEditorEmitter.fire(editor);

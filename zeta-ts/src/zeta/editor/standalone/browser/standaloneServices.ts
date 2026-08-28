@@ -19,6 +19,7 @@ export interface StandaloneServiceOverrides {
 	readonly languageConfigurationService?: ILanguageConfigurationService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
 	readonly syntaxWorkerFactory?: SyntaxWorkerFactory;
+	/** Explicit Worker authority that replaces the local completion provider registry. */
 	readonly completionWorkerFactory?: LanguageCompletionWorkerFactory;
 }
 
@@ -30,7 +31,7 @@ export class StandaloneServiceCollection extends Disposable {
 	readonly languageFeaturesService: ILanguageFeaturesService;
 	readonly themeService: IStandaloneThemeService;
 	readonly syntaxWorkerFactory: SyntaxWorkerFactory;
-	readonly completionWorkerFactory: LanguageCompletionWorkerFactory;
+	readonly completionWorkerFactory: LanguageCompletionWorkerFactory | undefined;
 
 	constructor(overrides: StandaloneServiceOverrides) {
 		super();
@@ -53,7 +54,7 @@ export class StandaloneServiceCollection extends Disposable {
 		if (!overrides.languageConfigurationService) this._register(registerBuiltinLanguageConfigurations(this.languageConfigurationService.configurations));
 		const workers = new EditorWorkerService();
 		this.syntaxWorkerFactory = overrides.syntaxWorkerFactory ?? workers.syntaxWorkerFactory;
-		this.completionWorkerFactory = overrides.completionWorkerFactory ?? workers.completionWorkerFactory;
+		this.completionWorkerFactory = overrides.completionWorkerFactory;
 	}
 }
 

@@ -3,6 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../base/common/uri.js";
 import { lightColorTheme } from "../../../platform/theme/common/colorTheme.js";
+import { LanguageCompletionItemKind } from "../../common/languages/completion/languageCompletions.js";
 import { LanguageFeaturesService } from "../../common/services/languageFeaturesService.js";
 import { LanguageConfigurationService } from '../../common/services/languageConfigurationService.js';
 import { HoverService } from '../../contrib/hover/common/hover.js';
@@ -98,6 +99,46 @@ test("standalone languages API feeds the shared editor registries", async () => 
 	assert.deepEqual(await hover.provideHover('stanza-public-test', stanza.TextPosition.at(0, 1)), { contents: ['Public hover'] });
 });
 
+test("standalone completion providers execute in a live editor", async () => {
+	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	let requests = 0;
+	using language = stanza.languages.register({ id: "stanza-completion-test" });
+	using provider = stanza.languages.registerCompletionProvider({
+		id: "standalone.test",
+		languageIds: ["stanza-completion-test"],
+		provideCompletions: request => {
+			requests += 1;
+			return {
+				items: [{
+					id: "standalone-result",
+					label: "standaloneResult",
+					kind: LanguageCompletionItemKind.Text,
+					range: stanza.TextRange.emptyAt(request.position),
+					insertText: "standaloneResult",
+				}],
+				isIncomplete: false,
+			};
+		},
+	});
+	const container = dom.window.document.querySelector<HTMLElement>("main")!;
+	const editor = stanza.editor.create(container, { languageId: "stanza-completion-test" });
+
+	editor.view.element.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+		bubbles: true,
+		cancelable: true,
+		ctrlKey: true,
+		key: " ",
+	}));
+	await new Promise<void>(resolve => setImmediate(resolve));
+	await new Promise<void>(resolve => setImmediate(resolve));
+
+	assert.equal(requests, 1);
+	assert.equal(container.querySelector(".stanza-editor-completion-option")?.textContent, "TextstandaloneResult");
+	editor.dispose();
+	dom.window.close();
+});
+
 test("standalone API registers URI and language identity with model lifecycle events", () => {
 	const resource = URI.parse("inmemory://stanza/registry.ts");
 	const created: string[] = [];
@@ -150,8 +191,6 @@ test("standalone editor owns only the implicit model it creates", () => {
 		resource: URI.parse("inmemory://stanza/owned.txt"),
 	});
 	const model = editor.getModel();
-	const workersCreatedByEditor = createdWorkerCount - terminatedWorkerCount;
-	assert.equal(workersCreatedByEditor > 0, true);
 
 	editor.dispose();
 	assert.equal(model.isDisposed, true);
