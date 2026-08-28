@@ -33,11 +33,12 @@ pub use identity::{
     FIRST_TAB_CONTAINER_SESSION_TAB, FIRST_TITLEBAR_SESSION_ACTION, FIRST_TITLEBAR_SESSION_TAB,
     SESSION_SEARCH_INPUT, TAB_CONTAINER, TAB_CONTAINER_ACTION_BAR, TAB_CONTAINER_LIST,
     TAB_CONTAINER_SETTINGS_ACTION, TAB_CONTAINER_SETTINGS_CLOSE, TAB_CONTAINER_SETTINGS_TAB,
-    TAB_CONTAINER_TOGGLE, TAB_CONTAINER_TOOLBAR, TITLEBAR, TITLEBAR_SETTINGS_ACTION,
-    TITLEBAR_SETTINGS_CLOSE, TITLEBAR_SETTINGS_TAB, TITLEBAR_TAB_CONTAINER, TITLEBAR_TAB_LIST,
-    WINDOW, WORKSPACE_PANE_TOGGLE, session_tab_action_id, session_tab_close_id, session_tab_id,
-    tab_group_list_id, titlebar_session_tab_action_id, titlebar_session_tab_close_id,
-    titlebar_session_tab_id, titlebar_tab_group_list_id,
+    TAB_CONTAINER_TOGGLE, TAB_CONTAINER_TOOLBAR, TAB_LAYOUT_MENU_MOVE_TO_TITLEBAR, TITLEBAR,
+    TITLEBAR_SETTINGS_ACTION, TITLEBAR_SETTINGS_CLOSE, TITLEBAR_SETTINGS_TAB,
+    TITLEBAR_TAB_CONTAINER, TITLEBAR_TAB_LIST, WINDOW, WORKSPACE_PANE_TOGGLE,
+    session_tab_action_id, session_tab_close_id, session_tab_id, tab_group_list_id,
+    titlebar_session_tab_action_id, titlebar_session_tab_close_id, titlebar_session_tab_id,
+    titlebar_tab_group_list_id,
 };
 pub use style::WorkbenchUiStyle;
 pub use tab_mount::TabIntent;

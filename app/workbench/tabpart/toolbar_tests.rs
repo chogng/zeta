@@ -3,10 +3,13 @@
 use super::{TOOLBAR_CONTENT_GAP, TOOLBAR_HEIGHT, TabContainerToolbar};
 use crate::tabpart::identity::{
     ADD_SESSION, SESSION_SEARCH_INPUT, TAB_CONTAINER_ACTION_BAR, TAB_CONTAINER_TOGGLE,
-    TAB_LAYOUT_MENU, TAB_LAYOUT_MENU_TRIGGER,
+    TAB_LAYOUT_MENU, TAB_LAYOUT_MENU_MOVE_TO_TITLEBAR, TAB_LAYOUT_MENU_TRIGGER,
 };
 use crate::tabpart::test_style;
-use crate::{CaretVisibility, Color, Point, Rect, TextInput, TextInputLayoutEngine};
+use crate::{
+    CaretVisibility, Color, Point, Rect, TabPart, TextInput, TextInputLayoutEngine, Titlebar,
+    TitlebarInsets,
+};
 use zui::ui::UiIntent;
 use zui::ui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
 
@@ -126,6 +129,18 @@ fn layout_action_opens_the_move_to_titlebar_command() {
         &dispatch,
     );
     let mut open_frame = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
+    let tab_part = TabPart::default();
+    let titlebar = Titlebar::new(
+        Rect::from_xywh(0.0, 0.0, 1000.0, 32.0),
+        test_style(),
+        &tab_part,
+        tab_part.active_tab_key(),
+        true,
+        None,
+        TitlebarInsets::NONE,
+        &dispatch,
+    );
+    open_frame.draw_component(&titlebar);
     open_frame.draw_component(&toolbar);
     let nodes = open_frame.interaction().accessibility_nodes(&dispatch);
 
@@ -133,7 +148,7 @@ fn layout_action_opens_the_move_to_titlebar_command() {
     assert_eq!(
         nodes
             .iter()
-            .find(|node| node.id == TAB_CONTAINER_TOGGLE)
+            .find(|node| node.id == TAB_LAYOUT_MENU_MOVE_TO_TITLEBAR)
             .map(|node| (node.role, node.label.as_str())),
         Some((AccessibilityRole::MenuItem, "Move tabs to titlebar"))
     );
@@ -147,7 +162,7 @@ fn layout_action_opens_the_move_to_titlebar_command() {
 
     let item = open_frame
         .interaction()
-        .node(TAB_CONTAINER_TOGGLE)
+        .node(TAB_LAYOUT_MENU_MOVE_TO_TITLEBAR)
         .expect("layout menu command")
         .bounds();
     let item_center = Point::new(
@@ -160,6 +175,12 @@ fn layout_action_opens_the_move_to_titlebar_command() {
         dispatch
             .release_primary(item_center, open_frame.interaction())
             .intent,
-        Some(UiIntent::Activate(TAB_CONTAINER_TOGGLE))
+        Some(UiIntent::Activate(TAB_LAYOUT_MENU_MOVE_TO_TITLEBAR))
+    );
+    assert!(
+        open_frame
+            .interaction()
+            .node(TAB_CONTAINER_TOGGLE)
+            .is_some()
     );
 }

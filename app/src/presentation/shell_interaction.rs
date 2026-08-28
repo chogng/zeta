@@ -3,7 +3,7 @@ use zui::ui::ElementId;
 
 pub(crate) use zeta_workbench::{
     ADD_SESSION, FIRST_TAB_CONTAINER_SESSION_TAB, SESSION_SEARCH_INPUT, TAB_CONTAINER_TOGGLE,
-    WINDOW, WORKSPACE_PANE_TOGGLE,
+    TAB_LAYOUT_MENU_MOVE_TO_TITLEBAR, WINDOW, WORKSPACE_PANE_TOGGLE,
 };
 #[cfg(test)]
 pub(crate) use zeta_workbench::{

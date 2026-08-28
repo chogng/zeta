@@ -11,7 +11,11 @@ pub(crate) type NativeCommandRegistry = CommandRegistry<NativeApp>;
 
 /// Converts native UI entry points into stable product command requests.
 pub(crate) fn command_request_for_element(id: ElementId) -> Option<CommandRequest> {
-    if id == shell_interaction::TAB_CONTAINER_TOGGLE {
+    if matches!(
+        id,
+        shell_interaction::TAB_CONTAINER_TOGGLE
+            | shell_interaction::TAB_LAYOUT_MENU_MOVE_TO_TITLEBAR
+    ) {
         return Some(AppCommandId::ToggleTabContainer.into());
     }
     if id == shell_interaction::WORKSPACE_PANE_TOGGLE {

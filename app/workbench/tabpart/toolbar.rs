@@ -16,7 +16,8 @@ use zui::ui::{
 use super::WorkbenchUiStyle;
 use super::identity::{
     ADD_SESSION, SESSION_SEARCH_INPUT, TAB_CONTAINER, TAB_CONTAINER_ACTION_BAR,
-    TAB_CONTAINER_TOGGLE, TAB_CONTAINER_TOOLBAR, TAB_LAYOUT_MENU, TAB_LAYOUT_MENU_TRIGGER,
+    TAB_CONTAINER_TOOLBAR, TAB_LAYOUT_MENU, TAB_LAYOUT_MENU_MOVE_TO_TITLEBAR,
+    TAB_LAYOUT_MENU_TRIGGER,
 };
 
 pub const PART_PADDING: f32 = 10.0;
@@ -300,7 +301,7 @@ impl TabLayoutMenu {
             anchor,
             vec![ContextMenuItem::new(
                 "Move tabs to titlebar",
-                button_state(dispatch, TAB_CONTAINER_TOGGLE),
+                button_state(dispatch, TAB_LAYOUT_MENU_MOVE_TO_TITLEBAR),
             )],
             ContextMenuStyle::new(
                 style.surface,
@@ -320,7 +321,7 @@ impl TabLayoutMenu {
     fn item_region(&self) -> InteractionRegion {
         InteractionRegion::new(
             "TabLayoutMenuItem",
-            TAB_CONTAINER_TOGGLE,
+            TAB_LAYOUT_MENU_MOVE_TO_TITLEBAR,
             self.context_menu
                 .interactive_item_bounds(0)
                 .expect("Tab layout menu command is enabled"),

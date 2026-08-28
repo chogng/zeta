@@ -4,13 +4,18 @@ use super::builtin_command_registry;
 use super::command_request_for_element;
 use crate::shell_interaction::{
     ADD_SESSION, AGENT_FILES, AGENT_FILES_REFRESH, CONTEXT_DIFF, CONTEXT_LOCATION,
-    CONTEXT_WORKING_DIRECTORY, TAB_CONTAINER_TOGGLE,
+    CONTEXT_WORKING_DIRECTORY, TAB_CONTAINER_TOGGLE, TAB_LAYOUT_MENU_MOVE_TO_TITLEBAR,
 };
 
 #[test]
 fn element_entry_points_map_to_stable_product_commands() {
     assert_eq!(
         command_request_for_element(TAB_CONTAINER_TOGGLE).map(|request| request.command_id()),
+        Some(AppCommandId::ToggleTabContainer)
+    );
+    assert_eq!(
+        command_request_for_element(TAB_LAYOUT_MENU_MOVE_TO_TITLEBAR)
+            .map(|request| request.command_id()),
         Some(AppCommandId::ToggleTabContainer)
     );
     assert_eq!(

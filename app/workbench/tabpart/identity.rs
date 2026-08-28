@@ -33,6 +33,7 @@ pub const TAB_CONTAINER_ACTION_BAR: ElementId = ElementId::scoped(SHELL_SCOPE, 2
 pub const ADD_SESSION: ElementId = ElementId::scoped(SHELL_SCOPE, 27);
 pub const TAB_LAYOUT_MENU_TRIGGER: ElementId = ElementId::scoped(SHELL_SCOPE, 54);
 pub const TAB_LAYOUT_MENU: ElementId = ElementId::scoped(TAB_LAYOUT_MENU_SCOPE, 1);
+pub const TAB_LAYOUT_MENU_MOVE_TO_TITLEBAR: ElementId = ElementId::scoped(TAB_LAYOUT_MENU_SCOPE, 2);
 pub const FIRST_TAB_CONTAINER_SESSION_TAB: ElementId = ElementId::scoped(TAB_CONTAINER_SCOPE, 2);
 pub const FIRST_TITLEBAR_SESSION_TAB: ElementId = ElementId::scoped(TITLEBAR_TAB_SCOPE, 2);
 pub const FIRST_TAB_CONTAINER_SESSION_CLOSE: ElementId =
