@@ -676,6 +676,6 @@ fn schema_fixtures_match_the_generators() {
     let typescript_fixture = include_str!("../schema/typescript/types.ts");
     let schema = include_str!("../schema/json/schema.json");
 
-    assert_eq!(typescript_fixture, typescript());
-    assert_eq!(schema, json_schema());
+    assert_eq!(typescript_fixture.replace("\r\n", "\n"), typescript());
+    assert_eq!(schema.replace("\r\n", "\n"), json_schema());
 }
