@@ -6,7 +6,7 @@
   align-items: stretch;
   line-height: 24px;
   font-variant-numeric: tabular-nums;
-  border-radius: 4px;
+  border-radius: 0;
 }
 
 .zeta-statusbar-item-label {
@@ -27,7 +27,7 @@
   text-decoration: none;
   cursor: pointer;
   outline: 0;
-  border-radius: 4px;
+  border-radius: 0;
 }
 
 .zeta-statusbar-item.icon-only:not(.compact-left):not(.compact-right) > .zeta-statusbar-item-label {

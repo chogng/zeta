@@ -1,7 +1,16 @@
 .zeta-workbench-sidebar,
 .zeta-workbench-agentSidebar {
-  border: 1px solid var(--zeta-border);
-  border-radius: 8px;
+  border: 0;
+  border-radius: 0;
+  background: var(--zeta-side-bar-background);
+}
+
+.zeta-workbench-sidebar {
+  border-right: 1px solid var(--zeta-border);
+}
+
+.zeta-workbench-agentSidebar {
+  border-left: 1px solid var(--zeta-border);
 }
 .zeta-sidebar-part {
   background: var(--zeta-side-bar-background);

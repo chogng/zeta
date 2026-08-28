@@ -89,6 +89,12 @@ test("TabList exposes its ActionBar edge treatment as a presentation", () => {
 		onActivate: () => undefined,
 	});
 	assert.equal(tabList.element.classList.contains("zeta-tab-list-inset"), true);
+	tabList.setPresentation("flush");
+	assert.equal(tabList.element.classList.contains("zeta-tab-list-inset"), false);
+	assert.equal(tabList.element.classList.contains("zeta-tab-list-flush"), true);
+	tabList.setPresentation("inset");
+	assert.equal(tabList.element.classList.contains("zeta-tab-list-inset"), true);
+	assert.equal(tabList.element.classList.contains("zeta-tab-list-flush"), false);
 	tabList.dispose();
 	dom.window.close();
 });

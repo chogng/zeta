@@ -128,6 +128,7 @@ import { IResourceLabelService, ResourceLabelService } from "./labels.js";
 import { ILabelService, LabelService } from "../../platform/label/common/labelService.js";
 import { WorkbenchLayout, type WorkbenchDefaultLayout } from "./layout.js";
 import { IWorkbenchLayoutService, type WorkbenchPartId } from "../services/layout/browser/layoutService.js";
+import { IWorkbenchLayoutStyleService } from "../services/layout/common/workbenchLayoutStyleService.js";
 import { BrowserStorageService } from "../services/storage/browser/storageService.js";
 import { SystemOutputService } from "../services/output/browser/systemOutputService.js";
 import { IWorkspaceSearchService } from "../../platform/search/common/search.js";
@@ -817,10 +818,12 @@ export class Workbench extends Disposable {
 			fallbackPartVisibility: DEFAULT_WORKBENCH_LAYOUT.parts,
 			defaultLayout,
 			storageService: storage,
+			layoutStyle: configuration.getValue(WorkbenchConfiguration.layoutStyle),
 		}));
 		workbenchLayout = layout;
 		this.workbenchLayout = layout;
 		services.registerInstance(IWorkbenchLayoutService, layout);
+		services.registerInstance(IWorkbenchLayoutStyleService, layout);
 		this._register(new WorkbenchContextKeysHandler(contextKeys, workspaceContext, editorService, editorService, layout, workingCopyService));
 		this._register(bindResizableLayout(layoutService.onDidLayoutMainContainer, layout));
 		const openAuxiliaryComposite = (compositeId: string): PaneComposite => {

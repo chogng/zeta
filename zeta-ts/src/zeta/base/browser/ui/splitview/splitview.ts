@@ -96,6 +96,7 @@ export class SplitView extends Disposable {
 	private _endSnappingEnabled: boolean;
 	private _orthogonalStartSash: Sash | undefined;
 	private _orthogonalEndSash: Sash | undefined;
+	private _sashPresentation: SashPresentation;
 
 	readonly onDidChangeViewSizes: Event<void> =
 		this._onDidChangeViewSizes.event;
@@ -107,6 +108,7 @@ export class SplitView extends Disposable {
 		private readonly options: SplitViewOptions = {},
 	) {
 		super();
+		this._sashPresentation = options.sashPresentation;
 		const ownerDocument = container.ownerDocument;
 		const element = h(ownerDocument, "div");
 		this.element = element;
@@ -115,6 +117,15 @@ export class SplitView extends Disposable {
 		container.append(element);
 		this._startSnappingEnabled = options.startSnappingEnabled ?? true;
 		this._endSnappingEnabled = options.endSnappingEnabled ?? true;
+	}
+
+	get sashPresentation(): SashPresentation {
+		return this._sashPresentation;
+	}
+
+	set sashPresentation(presentation: SashPresentation) {
+		this._sashPresentation = presentation;
+		for (const item of this.sashItems) item.sash.presentation = presentation;
 	}
 
 	get viewCount(): number {
@@ -425,7 +436,7 @@ export class SplitView extends Disposable {
 		const sash = this.sashes.add(new Sash(
 			this.element,
 			this.orientation === "horizontal" ? "vertical" : "horizontal",
-			this.options.sashPresentation,
+			this._sashPresentation,
 		));
 		sash.orthogonalStartSash = this._orthogonalStartSash;
 		sash.orthogonalEndSash = this._orthogonalEndSash;

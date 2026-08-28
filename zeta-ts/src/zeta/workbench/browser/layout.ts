@@ -7,7 +7,9 @@ import { Disposable, toDisposable } from "../../base/common/lifecycle.js";
 import { isRecord } from "../../base/common/types.js";
 import type { ILayoutOffsetInfo } from "../../platform/layout/common/layoutService.js";
 import { type IStorageService, StorageScope, StorageTarget } from "../../platform/storage/common/storage.js";
+import type { WorkbenchLayoutStyle } from "../common/configuration.js";
 import { type IWorkbenchLayoutService, type WorkbenchPartId, type WorkbenchPartVisibilityChangeEvent, workbenchPartIds } from "../services/layout/common/workbenchLayoutService.js";
+import type { IWorkbenchLayoutStyleService } from "../services/layout/common/workbenchLayoutStyleService.js";
 import type { WorkbenchPart } from "./part.js";
 import { WorkbenchPartView } from "./workbenchPartView.js";
 
@@ -22,6 +24,24 @@ const DEFAULT_AUXILIARYBAR_WIDTH = 380;
 const DEFAULT_AGENT_SIDEBAR_WIDTH = 280;
 const DEFAULT_PANEL_HEIGHT = 200;
 const EDITOR_LAYOUT_PRIORITY = "high" as const;
+
+interface WorkbenchLayoutStyleMetrics {
+	readonly windowLeftEdgeInset: number;
+	readonly windowRightEdgeInset: number;
+	readonly partGutterHalf: number;
+}
+
+const modernWorkbenchLayoutMetrics: WorkbenchLayoutStyleMetrics = {
+	windowLeftEdgeInset: WINDOW_LEFT_EDGE_INSET,
+	windowRightEdgeInset: WINDOW_RIGHT_EDGE_INSET,
+	partGutterHalf: PART_GUTTER_HALF,
+};
+
+const flatWorkbenchLayoutMetrics: WorkbenchLayoutStyleMetrics = {
+	windowLeftEdgeInset: 0,
+	windowRightEdgeInset: 0,
+	partGutterHalf: 0,
+};
 
 /** Host initial layout for a new workspace, or explicit visibility overrides when forced. */
 export interface WorkbenchDefaultLayout {
@@ -62,6 +82,7 @@ export interface WorkbenchLayoutOptions {
 	readonly fallbackPartVisibility?: WorkbenchDefaultLayout["parts"];
 	readonly defaultLayout?: WorkbenchDefaultLayout;
 	readonly storageService?: IStorageService;
+	readonly layoutStyle?: WorkbenchLayoutStyle;
 }
 
 /**
@@ -72,7 +93,8 @@ export interface WorkbenchLayoutOptions {
  */
 export class WorkbenchLayout
 	extends Disposable
-	implements IResizable, IWorkbenchLayoutService {
+	implements IResizable, IWorkbenchLayoutService, IWorkbenchLayoutStyleService {
+	readonly container: HTMLElement;
 	private readonly views = new Map<WorkbenchPartId, WorkbenchPartView>();
 	private readonly grid: SerializableGrid<WorkbenchPartView>;
 	private readonly stateModel: WorkbenchLayoutStateModel;
@@ -80,16 +102,19 @@ export class WorkbenchLayout
 	private readonly _onDidChangePartVisibility = this._register(
 		new Emitter<WorkbenchPartVisibilityChangeEvent>(),
 	);
+	private layoutStyle: WorkbenchLayoutStyle;
 
 	readonly onDidChangePartVisibility = this._onDidChangePartVisibility.event;
 	readonly domNode: HTMLDivElement;
 
 	constructor(
-		container: Element,
+		container: HTMLElement,
 		parts: ReadonlyMap<WorkbenchPartId, WorkbenchPart>,
 		options: WorkbenchLayoutOptions = {},
 	) {
 		super();
+		this.container = container;
+		this.layoutStyle = options.layoutStyle ?? "modern";
 		validateParts(parts);
 		this.domNode = h(container.ownerDocument, "div");
 		this.domNode.className = "zeta-workbench-layout";
@@ -133,7 +158,7 @@ export class WorkbenchLayout
 			createWorkbenchGridDescriptor(this.views, initialDimension, initialState),
 			{ fromJSON: (data) => this.view(parseWorkbenchPartId(data)) },
 			{
-				sashPresentation: { type: "inset", gap: PART_GUTTER_SIZE },
+				sashPresentation: this.layoutStyle === "modern" ? { type: "inset", gap: PART_GUTTER_SIZE } : undefined,
 				edgeSnapping: true,
 			},
 		));
@@ -145,6 +170,16 @@ export class WorkbenchLayout
 			this._register(options.storageService.onWillSaveState(() => {
 				this.saveState();
 			}));
+		}
+	}
+
+	setLayoutStyle(style: WorkbenchLayoutStyle): void {
+		if (this.layoutStyle === style) return;
+		this.layoutStyle = style;
+		this.grid.sashPresentation = style === "modern" ? { type: "inset", gap: PART_GUTTER_SIZE } : undefined;
+		this.projectPartFrameInsets();
+		if (this.grid.width > 0 && this.grid.height > 0) {
+			this.layout(new Dimension(this.grid.width, this.grid.height));
 		}
 	}
 
@@ -278,38 +313,41 @@ export class WorkbenchLayout
 		agentSidebarVisible = this.isPartVisible("agentSidebar"),
 		panelVisible = this.isPartVisible("panel"),
 	): void {
+		const metrics = this.layoutStyle === "modern"
+			? modernWorkbenchLayoutMetrics
+			: flatWorkbenchLayoutMetrics;
 		const centralInsets = {
-			left: sidebarVisible ? PART_GUTTER_HALF : WINDOW_LEFT_EDGE_INSET,
+			left: sidebarVisible ? metrics.partGutterHalf : metrics.windowLeftEdgeInset,
 			right: auxiliarybarVisible || agentSidebarVisible
-				? PART_GUTTER_HALF
-				: WINDOW_RIGHT_EDGE_INSET,
+				? metrics.partGutterHalf
+				: metrics.windowRightEdgeInset,
 		};
 		this.view("sidebar").setFrameInsets({
 			top: 0,
-			right: PART_GUTTER_HALF,
+			right: metrics.partGutterHalf,
 			bottom: 0,
-			left: WINDOW_LEFT_EDGE_INSET,
+			left: metrics.windowLeftEdgeInset,
 		});
 		this.view("auxiliarybar").setFrameInsets({
 			top: 0,
-			right: agentSidebarVisible ? PART_GUTTER_HALF : WINDOW_RIGHT_EDGE_INSET,
+			right: agentSidebarVisible ? metrics.partGutterHalf : metrics.windowRightEdgeInset,
 			bottom: 0,
-			left: PART_GUTTER_HALF,
+			left: metrics.partGutterHalf,
 		});
 		this.view("agentSidebar").setFrameInsets({
 			top: 0,
-			right: WINDOW_RIGHT_EDGE_INSET,
+			right: metrics.windowRightEdgeInset,
 			bottom: 0,
-			left: PART_GUTTER_HALF,
+			left: metrics.partGutterHalf,
 		});
 		this.view("editor").setFrameInsets({
 			top: 0,
 			right: centralInsets.right,
-			bottom: panelVisible ? PART_GUTTER_HALF : 0,
+			bottom: panelVisible ? metrics.partGutterHalf : 0,
 			left: centralInsets.left,
 		});
 		this.view("panel").setFrameInsets({
-			top: panelVisible ? PART_GUTTER_HALF : 0,
+			top: panelVisible ? metrics.partGutterHalf : 0,
 			right: centralInsets.right,
 			bottom: 0,
 			left: centralInsets.left,

@@ -2,6 +2,7 @@ import { type IDimension } from "../../geometry.js";
 import { type Event } from "../../../common/event.js";
 import { Disposable } from "../../../common/lifecycle.js";
 import { GridView, type GridLocation, type GridViewDescriptor, type GridViewOptions, type GridViewSizing, type ISerializableView as ISerializableGridView, type IView as IGridView, type IViewDeserializer, type SerializedGridViewDescriptor } from "./gridview.js";
+import type { SashPresentation } from '../sash/sash.js';
 
 /** A view hosted by the identity-addressed {@link Grid}. */
 export type IView = IGridView;
@@ -57,9 +58,14 @@ export class Grid<TView extends IView = IView> extends Disposable {
 	get minimumHeight(): number { return this.gridview.minimumHeight; }
 	get maximumHeight(): number { return this.gridview.maximumHeight; }
 	get edgeSnapping(): boolean { return this.gridview.edgeSnapping; }
+	get sashPresentation(): SashPresentation { return this.gridview.sashPresentation; }
 
 	set edgeSnapping(enabled: boolean) {
 		this.gridview.edgeSnapping = enabled;
+	}
+
+	set sashPresentation(presentation: SashPresentation) {
+		this.gridview.sashPresentation = presentation;
 	}
 
 	constructor(gridView: GridView);

@@ -19,6 +19,7 @@ import { MultiEditorTabsControl } from "./multiEditorTabsControl.js";
 import { NoEditorTabsControl } from "./noEditorTabsControl.js";
 import { SingleEditorTabsControl } from "./singleEditorTabsControl.js";
 import { h } from "../../../../base/browser/dom.js";
+import { WorkbenchConfiguration } from '../../../common/configuration.js';
 
 /** Platform services used to populate the Editor title toolbar. */
 export interface EditorTitleActions {
@@ -64,6 +65,7 @@ export class EditorTitleControl extends Disposable {
 		this.tabsAndActionsDomNode.className = "zeta-editor-tabs-and-actions";
 		this.domNode.append(this.tabsAndActionsDomNode);
 		this.tabsSlot.value = this.createTabsControl(this.tabsMode);
+		this.updateTabsLayoutStyle();
 		const actionsDomNode = h(ownerDocument, "div");
 		actionsDomNode.className = "zeta-editor-title-actions";
 		this.tabsAndActionsDomNode.append(actionsDomNode);
@@ -93,12 +95,14 @@ export class EditorTitleControl extends Disposable {
 				if (event.affectsConfiguration(EditorTabsModeConfiguration)) {
 					this.tabsMode = configurationService.getValue(EditorTabsModeConfiguration);
 					this.tabsSlot.value = this.createTabsControl(this.tabsMode);
+					this.updateTabsLayoutStyle();
 					this.tabs.setEditors(this.editors, this.activeInput);
 				}
 				if (event.affectsConfiguration(EditorBreadcrumbsEnabledConfiguration)) {
 					this.breadcrumbsEnabled = configurationService.getValue(EditorBreadcrumbsEnabledConfiguration);
 					this.updateBreadcrumbVisibility();
 				}
+				if (event.affectsConfiguration(WorkbenchConfiguration.layoutStyle)) this.updateTabsLayoutStyle();
 			}));
 		}
 		this._register(toDisposable(() => this.domNode.remove()));
@@ -128,6 +132,12 @@ export class EditorTitleControl extends Disposable {
 				: new MultiEditorTabsControl(this.tabsAndActionsDomNode, this.delegate);
 		if (firstAction) this.tabsAndActionsDomNode.insertBefore(control.domNode, firstAction);
 		return control;
+	}
+
+	private updateTabsLayoutStyle(): void {
+		if (!(this.tabs instanceof MultiEditorTabsControl)) return;
+		const style = this.configurationService?.getValue(WorkbenchConfiguration.layoutStyle) ?? WorkbenchConfiguration.layoutStyle.defaultValue;
+		this.tabs.setPresentation(style === 'modern' ? 'inset' : 'flush');
 	}
 
 	private get tabs(): EditorTabsControl {

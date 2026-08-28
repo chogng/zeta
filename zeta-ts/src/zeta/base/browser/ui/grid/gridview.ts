@@ -56,6 +56,7 @@ abstract class GridNode {
 	abstract layout(width: number, height: number, top: number, left: number): void;
 	setBoundarySashes(_sashes: BoundarySashes): void {}
 	setEdgeSnapping(_enabled: boolean): void {}
+	setSashPresentation(_presentation: SashPresentation): void {}
 }
 
 class LeafNode extends GridNode {
@@ -173,6 +174,11 @@ class BranchNode extends GridNode {
 		this.updateSplitViewEdgeSnappingEnablement();
 	}
 
+	override setSashPresentation(presentation: SashPresentation): void {
+		this.splitView.sashPresentation = presentation;
+		for (const child of this.children) child.setSashPresentation(presentation);
+	}
+
 	private axisConstraint(
 		property: "minimumWidth" | "maximumWidth" | "minimumHeight" | "maximumHeight",
 		orthogonalReducer: (left: number, right: number) => number,
@@ -286,7 +292,7 @@ class AxisView implements ISplitViewView {
  */
 export class GridView extends Disposable {
 	readonly element: HTMLDivElement;
-	private readonly sashPresentation: SashPresentation;
+	private _sashPresentation: SashPresentation;
 	private readonly treeResources = this._register(new DisposableStore());
 	private readonly leaves = new Map<IView, LeafNode>();
 	private readonly _onDidChange = this._register(new Emitter<void>());
@@ -322,7 +328,7 @@ export class GridView extends Disposable {
 		const ownerDocument = container.ownerDocument;
 		this.element = h(ownerDocument, "div");
 		this.element.className = "zeta-grid zeta-grid-view";
-		this.sashPresentation = options.sashPresentation;
+		this._sashPresentation = options.sashPresentation;
 		this._edgeSnapping = options.edgeSnapping ?? false;
 		this._register(toDisposable(() => this.element.remove()));
 		container.append(this.element);
@@ -340,11 +346,17 @@ export class GridView extends Disposable {
 	get minimumHeight(): number { return this.root.minimumHeight; }
 	get maximumHeight(): number { return this.root.maximumHeight; }
 	get edgeSnapping(): boolean { return this._edgeSnapping; }
+	get sashPresentation(): SashPresentation { return this._sashPresentation; }
 
 	set edgeSnapping(enabled: boolean) {
 		if (this._edgeSnapping === enabled) return;
 		this._edgeSnapping = enabled;
 		this.root.setEdgeSnapping(enabled);
+	}
+
+	set sashPresentation(presentation: SashPresentation) {
+		this._sashPresentation = presentation;
+		this.root.setSashPresentation(presentation);
 	}
 
 	layout(width: number, height: number): void {
@@ -533,7 +545,7 @@ export class GridView extends Disposable {
 		this.leaves.clear();
 		const host: GridNodeHost = {
 			container: this.element,
-			sashPresentation: this.sashPresentation,
+			sashPresentation: this._sashPresentation,
 			ownSplitView: (splitView) => this.treeResources.add(splitView),
 			registerEvent: (disposable) => {
 				this.treeResources.add(disposable);

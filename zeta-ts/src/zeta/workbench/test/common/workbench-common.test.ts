@@ -178,6 +178,17 @@ test("workbench configuration resolves registered color themes", () => {
 	);
 });
 
+test("workbench configuration exposes modern and flat layout styles", () => {
+	assert.equal(ConfigurationsRegistry.owns(WorkbenchConfiguration.layoutStyle), true);
+	assert.equal(WorkbenchConfiguration.layoutStyle.defaultValue, "modern");
+	assert.equal(WorkbenchConfiguration.layoutStyle.parse("modern"), "modern");
+	assert.equal(WorkbenchConfiguration.layoutStyle.parse("flat"), "flat");
+	assert.throws(
+		() => WorkbenchConfiguration.layoutStyle.parse("classic"),
+		/Unknown Workbench layout style/,
+	);
+});
+
 test("workbench theme registries reject duplicate themes", () => {
 	const registry = new WorkbenchThemeRegistry([darkColorTheme]);
 	assert.equal(registry.getColorTheme(darkColorTheme.id), darkColorTheme);

@@ -71,6 +71,7 @@ export class TabList<T> extends Disposable {
 	private readonly actionBar: ActionBar;
 	private readonly scrollable: ScrollableElement;
 	private readonly activate: (value: T) => void;
+	private presentation: TabListPresentation;
 
 	constructor(container: HTMLElement, options: TabListOptions<T>) {
 		super();
@@ -78,6 +79,7 @@ export class TabList<T> extends Disposable {
 		const onClose = options.onClose;
 		const closeActionIcon = options.closeActionIcon;
 		const presentation = options.presentation ?? "flush";
+		this.presentation = presentation;
 		const orientation = options.orientation ?? "horizontal";
 		const dragAndDrop = options.dragAndDrop;
 		const actionBarDragAndDrop: ActionBarDragAndDrop | undefined = dragAndDrop
@@ -121,6 +123,13 @@ export class TabList<T> extends Disposable {
 			"zeta-tab-list-scroll-content",
 		);
 		this.element = this.scrollable.element;
+	}
+
+	setPresentation(presentation: TabListPresentation): void {
+		if (this.presentation === presentation) return;
+		this.element.classList.remove(`zeta-tab-list-${this.presentation}`);
+		this.presentation = presentation;
+		this.element.classList.add(`zeta-tab-list-${presentation}`);
 	}
 
 	setTabs(

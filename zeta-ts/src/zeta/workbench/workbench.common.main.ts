@@ -6,3 +6,4 @@
  * for selecting their editor contributions.
  */
 import "./browser/workbench.contribution.js";
+import "./contrib/modernUI/browser/modernUI.contribution.js";

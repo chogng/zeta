@@ -38,6 +38,14 @@
 
 文件位置不是所有权的唯一证据，root class 和构造者才是。Part 私有子控件可以与 Part CSS 共置，但 selector 必须以该私有子控件的 root class 开始，不能借 Part root 任意穿透共享组件。
 
+### Workbench 外观贡献
+
+`workbench/contrib/modernUI` 是 Workbench 外观方案的集中覆盖层。它只在 `.modern-ui` 存在时覆盖已有稳定 class，不创建 Part DOM，也不接管交互状态。
+
+- Part 和组件 CSS 定义 Flat 基线；Modern UI 的圆角、边框和外观差异放在 `browser/media`。
+- 网格间距、Sash 命中区域和 TabList 展示能力仍由各自组件实现，Modern UI 只选择这些公开能力。
+- 其他 contribution 不得借这个例外修改 Workbench Part；新增全局外观方案必须拥有独立根 class 和独立 media 目录。
+
 ## Retained DOM 写入所有权
 
 `FastDomNode` 是 retained DOM 的局部样式写缓存，不是 `HTMLElement` 的替代接口。创建稳定节点的组件同时创建并保留唯一 wrapper；允许宿主投影根节点几何时，组件传递这个 wrapper，不得让宿主重新包装同一节点。wrapper 从构造时开始拥有其缓存属性，不读取 DOM 猜测初值；同一属性之后只能继续通过这个 wrapper 修改。文本、子树、`hidden`、tab order 和 ARIA 仍由具体组件直接拥有，不进入样式缓存。

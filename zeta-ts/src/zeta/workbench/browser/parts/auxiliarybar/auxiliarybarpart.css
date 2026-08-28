@@ -1,6 +1,7 @@
 .zeta-workbench-auxiliarybar {
-  border: 1px solid var(--zeta-border);
-  border-radius: 8px;
+  border: 0;
+  border-left: 1px solid var(--zeta-border);
+  border-radius: 0;
   background: var(--zeta-auxiliary-bar-background);
 }
 

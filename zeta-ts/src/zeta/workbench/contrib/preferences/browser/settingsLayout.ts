@@ -70,6 +70,12 @@ export const SettingsNavigation = [
 				description: 'Choose the colors used by the Workbench.',
 				settings: ['workbench.colorTheme'],
 			},
+			{
+				id: 'layout',
+				label: 'Layout',
+				description: 'Choose how Workbench regions connect to each other.',
+				settings: ['workbench.layoutStyle'],
+			},
 		],
 	},
 	{
@@ -95,6 +101,12 @@ export const SettingsNavigation = [
 				label: 'Display',
 				description: 'Configure line wrapping, guides, highlighting, and scrolling aids.',
 				settings: ['breadcrumbs.enabled', 'editor.wordWrap', 'editor.wrappingIndent', 'editor.lineNumbers', 'editor.guides.*', 'editor.matchBrackets', 'editor.bracketPairColorization.*', 'editor.stickyScroll.*', 'editor.highlightActiveLine', 'editor.unicodeHighlights'],
+			},
+			{
+				id: 'performance',
+				label: 'Performance',
+				description: 'Configure editor rendering performance.',
+				settings: ['editor.experimentalGpuAcceleration'],
 			},
 			{
 				id: 'minimap',

@@ -267,6 +267,43 @@ test("Workbench layout hides and restores Parts with context keys", () => {
 	dom.window.close();
 });
 
+test("Workbench layout switches between modern and flat geometry without replacing Parts", () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	const harness = createLayoutHarness(dom.window.document, {
+		initialDimension: new Dimension(1_200, 800),
+		layoutStyle: "modern",
+	});
+	harness.layout.layout(new Dimension(1_200, 800));
+	const state = harness.layout.state;
+	const editor = harness.container.querySelector<HTMLElement>("[data-part='editor']");
+	const editorFrame = editor?.parentElement as HTMLElement | undefined;
+	const sidebarFrame = harness.container.querySelector<HTMLElement>("[data-part='sidebar']")?.parentElement as HTMLElement | undefined;
+	assert.equal(editorFrame?.style.paddingLeft, "3px");
+	assert.equal(sidebarFrame?.style.paddingLeft, "6px");
+	assert.equal(harness.container.querySelectorAll(".zeta-sash-inset").length, 4);
+
+	harness.layout.setLayoutStyle("flat");
+
+	assert.equal(editorFrame?.style.paddingLeft, "0px");
+	assert.equal(editorFrame?.style.paddingRight, "0px");
+	assert.equal(editorFrame?.style.paddingBottom, "0px");
+	assert.equal(sidebarFrame?.style.paddingLeft, "0px");
+	assert.equal(sidebarFrame?.style.paddingRight, "0px");
+	assert.equal(harness.container.querySelectorAll(".zeta-sash-inset").length, 0);
+	assert.deepEqual(harness.layout.state, state);
+	assert.equal(harness.container.querySelector("[data-part='editor']"), editor);
+
+	harness.layout.setLayoutStyle("modern");
+
+	assert.equal(editorFrame?.style.paddingLeft, "3px");
+	assert.equal(sidebarFrame?.style.paddingLeft, "6px");
+	assert.equal(harness.container.querySelectorAll(".zeta-sash-inset").length, 4);
+	assert.deepEqual(harness.layout.state, state);
+
+	harness.disposables.dispose();
+	dom.window.close();
+});
+
 test("Workbench pane sashes snap closed and remain available for drag restore", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
 	const contextKeys = new ContextKeyService();

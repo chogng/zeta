@@ -2,8 +2,8 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid var(--zeta-border);
-  border-radius: 8px;
+  border: 0;
+  border-radius: 0;
   background: var(--zeta-editor-background);
 }
 

@@ -1,0 +1,9 @@
+.zeta-workbench.modern-ui :is(
+  .zeta-workbench-sidebar,
+  .zeta-workbench-agentSidebar,
+  .zeta-workbench-panel,
+  .zeta-workbench-auxiliarybar
+) {
+  border: 1px solid var(--zeta-border);
+  border-radius: 8px;
+}

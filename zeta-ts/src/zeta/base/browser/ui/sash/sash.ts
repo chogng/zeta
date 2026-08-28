@@ -101,6 +101,7 @@ export class Sash extends Disposable {
 	private _orthogonalStartSash: Sash | undefined;
 	private _orthogonalEndSash: Sash | undefined;
 	private _linkedSash: Sash | undefined;
+	private _presentation: SashPresentation;
 
 	constructor(
 		container: HTMLElement,
@@ -113,11 +114,8 @@ export class Sash extends Disposable {
 		this.element = element;
 		this._register(toDisposable(() => element.remove()));
 		element.className = `zeta-sash zeta-sash-${orientation}`;
-		if (presentation?.type === "inset") {
-			assertPositiveFinite(presentation.gap, "inset gap");
-			element.classList.add("zeta-sash-inset");
-			element.style.setProperty("--zeta-sash-inset-gap", `${presentation.gap}px`);
-		}
+		this._presentation = undefined;
+		this.presentation = presentation;
 		element.setAttribute("role", "separator");
 		element.setAttribute("aria-orientation", orientation);
 		element.setAttribute("aria-disabled", "false");
@@ -181,6 +179,22 @@ export class Sash extends Disposable {
 
 	get state(): SashState {
 		return this._state;
+	}
+
+	get presentation(): SashPresentation {
+		return this._presentation;
+	}
+
+	set presentation(presentation: SashPresentation) {
+		if (sameSashPresentation(this._presentation, presentation)) return;
+		if (presentation?.type === "inset") assertPositiveFinite(presentation.gap, "inset gap");
+		this._presentation = presentation;
+		this.element.classList.toggle("zeta-sash-inset", presentation?.type === "inset");
+		if (presentation?.type === "inset") {
+			this.element.style.setProperty("--zeta-sash-inset-gap", `${presentation.gap}px`);
+		} else {
+			this.element.style.removeProperty("--zeta-sash-inset-gap");
+		}
 	}
 
 	set state(state: SashState) {
@@ -411,6 +425,11 @@ function sashHoverDelay(element: HTMLElement): number {
 	return isFiniteNumber(milliseconds) && milliseconds >= 0
 		? milliseconds
 		: DefaultSashHoverDelay;
+}
+
+function sameSashPresentation(left: SashPresentation, right: SashPresentation): boolean {
+	if (left === right) return true;
+	return left?.type === "inset" && right?.type === "inset" && left.gap === right.gap;
 }
 
 function assertPositiveFinite(value: number, name: string): void {

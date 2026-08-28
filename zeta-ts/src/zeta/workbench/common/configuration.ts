@@ -4,6 +4,8 @@ import { WorkbenchModeConfigurationKey, WorkbenchModeRegistry } from "./workbenc
 import "../../platform/theme/common/themeConfiguration.js";
 import { defaultWorkbenchColorThemePreference, SystemColorThemePreference, WorkbenchThemesRegistry } from "./theme.js";
 
+export type WorkbenchLayoutStyle = "modern" | "flat";
+
 /** Typed configuration keys owned by the workbench layer. */
 export const WorkbenchConfiguration = Object.freeze({
 	...AccessibilityConfiguration,
@@ -32,6 +34,23 @@ export const WorkbenchConfiguration = Object.freeze({
 					...WorkbenchThemesRegistry.getColorThemes().map(theme => ({ value: theme.id, label: theme.label })),
 				];
 			},
+		},
+	}),
+	layoutStyle: ConfigurationsRegistry.registerConfiguration<WorkbenchLayoutStyle>({
+		key: "workbench.layoutStyle",
+		defaultValue: "modern",
+		parse(value: unknown): WorkbenchLayoutStyle {
+			if (value === "modern" || value === "flat") return value;
+			throw new TypeError(`Unknown Workbench layout style: ${String(value)}`);
+		},
+		setting: {
+			valueType: "select",
+			title: "Layout style",
+			description: "Choose floating Modern surfaces or edge-to-edge Flat Workbench regions.",
+			options: [
+				{ value: "modern", label: "Modern" },
+				{ value: "flat", label: "Flat" },
+			],
 		},
 	}),
 });

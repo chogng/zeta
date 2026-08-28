@@ -125,6 +125,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(findSettingCategory(layout, HoverConfiguration.delay.key), 'general');
 	assert.equal(findSettingCategory(layout, SashConfiguration.size.key), 'general');
 	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.colorTheme.key), 'appearance');
+	assert.equal(findSettingCategory(layout, WorkbenchConfiguration.layoutStyle.key), 'appearance');
 	assert.equal(findSettingCategory(layout, EditorSelectionConfiguration.defaultNewDocumentEditor.key), 'editor');
 	assert.equal(findSettingCategory(layout, CodeEditorConfiguration.fontFamily.key), 'editor');
 	assert.equal(findSettingCategory(layout, WorkspaceSearchConfiguration.maxResults.key), 'editor');
@@ -138,6 +139,14 @@ test('settingsLayout is the single projection from registered settings to catego
 			label: 'Dynamic test theme',
 		});
 		assert.equal(themeSetting.options.some(option => option.value === 'test-preferences-dynamic-theme'), true);
+	}
+	const layoutStyleSetting = defaults.get(WorkbenchConfiguration.layoutStyle);
+	assert.equal(layoutStyleSetting.valueType, 'select');
+	if (layoutStyleSetting.valueType === 'select') {
+		assert.deepEqual(layoutStyleSetting.options, [
+			{ value: 'modern', label: 'Modern' },
+			{ value: 'flat', label: 'Flat' },
+		]);
 	}
 
 	model.dispose();

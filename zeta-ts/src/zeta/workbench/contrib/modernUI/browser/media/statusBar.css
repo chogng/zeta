@@ -1,0 +1,22 @@
+:is(.zeta-workbench, .zeta-auxiliary-window-container).modern-ui :is(
+  .zeta-statusbar-item,
+  .zeta-statusbar-item-label
+) {
+  border-radius: 4px;
+}
+
+:is(.zeta-workbench, .zeta-auxiliary-window-container).modern-ui :is(
+  .zeta-statusbar-item.compact-left,
+  .zeta-statusbar-item.compact-left > .zeta-statusbar-item-label
+) {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+:is(.zeta-workbench, .zeta-auxiliary-window-container).modern-ui :is(
+  .zeta-statusbar-item.compact-right,
+  .zeta-statusbar-item.compact-right > .zeta-statusbar-item-label
+) {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}

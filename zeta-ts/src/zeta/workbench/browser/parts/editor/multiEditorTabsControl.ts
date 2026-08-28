@@ -1,6 +1,6 @@
 import "./media/multiEditorTabsControl.css";
 import { DataTransfers } from "../../../../base/browser/dnd.js";
-import { TabList } from "../../../../base/browser/ui/tablist/tabList.js";
+import { TabList, type TabListPresentation } from "../../../../base/browser/ui/tablist/tabList.js";
 import { containsExternalEditorDrop } from "./editorDropData.js";
 import type { EditorInput } from "./editorInput.js";
 import { EditorTabsControl, editorInputKey, type EditorTabDescriptor, type EditorTabsDelegate } from "./editorTabsControl.js";
@@ -76,6 +76,10 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 			};
 		}), activeKey);
 		this.tabList.element.hidden = editors.length === 0;
+	}
+
+	setPresentation(presentation: TabListPresentation): void {
+		this.tabList.setPresentation(presentation);
 	}
 }
 

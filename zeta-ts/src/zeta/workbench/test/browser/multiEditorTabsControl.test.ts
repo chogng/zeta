@@ -10,6 +10,7 @@ import type { EditorInput } from "../../browser/parts/editor/editorInput.js";
 import { MultiEditorTabsControl } from "../../browser/parts/editor/multiEditorTabsControl.js";
 import { EditorTitleControl } from "../../browser/parts/editor/editorTitleControl.js";
 import { EditorBreadcrumbsEnabledConfiguration, EditorTabsModeConfiguration } from "../../services/editor/common/editorConfiguration.js";
+import { WorkbenchConfiguration } from '../../common/configuration.js';
 
 test("MultiEditorTabsControl reports the tab edge used as a drag drop insertion point", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");
@@ -93,6 +94,13 @@ test("EditorTitleControl switches tab modes and breadcrumbs from configuration",
 	control.setEditors([descriptor(first), descriptor(second)], second);
 
 	assert.equal(control.domNode.querySelectorAll(".zeta-tab").length, 2);
+	const firstTab = control.domNode.querySelector('.zeta-tab');
+	assert.equal(control.domNode.querySelector('.zeta-tab-list')?.classList.contains('zeta-tab-list-inset'), true);
+	await configuration.updateValue(WorkbenchConfiguration.layoutStyle, 'flat');
+	assert.equal(control.domNode.querySelector('.zeta-tab-list')?.classList.contains('zeta-tab-list-flush'), true);
+	assert.equal(control.domNode.querySelector('.zeta-tab'), firstTab);
+	await configuration.updateValue(WorkbenchConfiguration.layoutStyle, 'modern');
+	assert.equal(control.domNode.querySelector('.zeta-tab-list')?.classList.contains('zeta-tab-list-inset'), true);
 	assert.match(control.domNode.querySelector(".zeta-editor-breadcrumbs")?.textContent ?? "", /folder.*second/);
 	assert.equal(control.height, 57);
 

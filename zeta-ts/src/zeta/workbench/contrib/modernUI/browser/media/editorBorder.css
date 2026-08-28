@@ -1,0 +1,4 @@
+:is(.zeta-workbench, .zeta-auxiliary-window-container).modern-ui .zeta-workbench-editor {
+  border: 1px solid var(--zeta-border);
+  border-radius: 8px;
+}

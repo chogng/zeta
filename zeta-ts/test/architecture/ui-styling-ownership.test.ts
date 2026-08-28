@@ -21,6 +21,25 @@ test("Workbench Part CSS does not reach into shared interaction controls", async
 	assert.deepEqual(violations, []);
 });
 
+test("Modern UI contribution owns the conditional Workbench appearance CSS", async () => {
+	const sourceRoot = join(process.cwd(), "src", "zeta");
+	const modernUIRoot = join(sourceRoot, "workbench", "contrib", "modernUI", "browser");
+	const contribution = await readFile(join(modernUIRoot, "modernUI.contribution.ts"), "utf8");
+	const mediaFiles = await cssFiles(join(modernUIRoot, "media"));
+
+	assert.ok(mediaFiles.length > 0);
+	for (const file of mediaFiles) {
+		const source = await readFile(file, "utf8");
+		assert.match(source, /\.modern-ui\b/, relative(sourceRoot, file));
+		assert.match(contribution, new RegExp(`import './media/${file.split(/[\\/]/).at(-1)?.replace(".", "\\.")}';`));
+	}
+
+	for (const file of await cssFiles(join(sourceRoot, "workbench", "browser", "parts"))) {
+		const source = await readFile(file, "utf8");
+		assert.doesNotMatch(source, /\b(?:data-layout-style|modern-ui)\b/, relative(sourceRoot, file));
+	}
+});
+
 test("CSS uses state classes instead of ARIA attributes as visual selectors", async () => {
 	const sourceRoot = join(process.cwd(), "src", "zeta");
 	const violations: string[] = [];
