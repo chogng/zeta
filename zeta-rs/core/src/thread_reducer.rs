@@ -545,7 +545,33 @@ pub fn reduce_thread_event(
             ..
         } => {
             require_no_command(envelope)?;
-            import_history(&mut snapshot, source_thread_id, before_turn_id, turns)?;
+            import_history(
+                &mut snapshot,
+                source_thread_id,
+                HistoryImportBoundary::Rewind { before_turn_id },
+                turns,
+            )?;
+            for item in &snapshot.items {
+                snapshot
+                    .item_sequences
+                    .insert(item.item_id().clone(), envelope.sequence);
+            }
+        }
+        ThreadEvent::ForkHistoryImported {
+            source_thread_id,
+            source_sequence,
+            turns,
+            ..
+        } => {
+            require_no_command(envelope)?;
+            import_history(
+                &mut snapshot,
+                source_thread_id,
+                HistoryImportBoundary::Fork {
+                    source_sequence: *source_sequence,
+                },
+                turns,
+            )?;
             for item in &snapshot.items {
                 snapshot
                     .item_sequences
@@ -1713,10 +1739,16 @@ fn validate_steered_items(
     Ok(())
 }
 
+#[derive(Clone, Copy)]
+enum HistoryImportBoundary<'a> {
+    Fork { source_sequence: u64 },
+    Rewind { before_turn_id: &'a TurnId },
+}
+
 fn import_history(
     snapshot: &mut ThreadSnapshot,
     source_thread_id: &ThreadId,
-    before_turn_id: &TurnId,
+    boundary: HistoryImportBoundary<'_>,
     turns: &[Turn],
 ) -> Result<(), CoreError> {
     if source_thread_id == &snapshot.thread_id {
@@ -1729,13 +1761,22 @@ fn import_history(
             "Thread history can only be imported immediately after creation".into(),
         ));
     }
+    if matches!(boundary, HistoryImportBoundary::Fork { source_sequence: 0 }) {
+        return Err(CoreError::Journal(
+            "fork history source sequence must be positive".into(),
+        ));
+    }
 
     let mut turn_ids = BTreeSet::new();
     let mut item_ids = BTreeSet::new();
     let mut tool_calls = BTreeSet::new();
     let mut tool_results = BTreeSet::new();
     for turn in turns {
-        if &turn.turn_id == before_turn_id {
+        if matches!(
+            boundary,
+            HistoryImportBoundary::Rewind { before_turn_id }
+                if &turn.turn_id == before_turn_id
+        ) {
             return Err(CoreError::Journal(
                 "rewind checkpoint must be excluded from imported history".into(),
             ));
@@ -1746,7 +1787,7 @@ fn import_history(
         ) || turn.pending_interaction.is_some()
         {
             return Err(CoreError::Journal(
-                "only terminal Turns can be imported into rewound history".into(),
+                "only terminal Turns can be imported into child history".into(),
             ));
         }
         if !turn_ids.insert(turn.turn_id.clone()) {

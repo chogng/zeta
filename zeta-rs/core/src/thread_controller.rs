@@ -159,6 +159,14 @@ pub struct CreateRewoundThreadRequest {
     pub before_turn_id: TurnId,
 }
 
+pub struct CreateForkedThreadRequest {
+    pub session_id: SessionId,
+    pub thread_id: ThreadId,
+    pub title: String,
+    pub source_thread_id: ThreadId,
+    pub source_sequence: u64,
+}
+
 /// Fields controlled by the Thread Goal API. `token_budget` is a double option so callers can
 /// distinguish "leave unchanged" from "clear the budget".
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -550,6 +558,58 @@ impl ThreadController {
                     thread_id: event_thread_id,
                     source_thread_id: request.source_thread_id,
                     before_turn_id: request.before_turn_id,
+                    turns: imported_turns,
+                }],
+            )?;
+            Ok(snapshot.clone())
+        })
+    }
+
+    /// Creates a child Thread containing the source's terminal history at one exact fork point.
+    ///
+    /// The source prefix is replayed from durable events so Session saga recovery cannot import
+    /// parent updates committed after the recorded fork sequence.
+    pub fn create_forked_thread(
+        &self,
+        request: CreateForkedThreadRequest,
+    ) -> Result<ThreadSnapshot, CoreError> {
+        let source =
+            self.load_snapshot_at_sequence(&request.source_thread_id, request.source_sequence)?;
+        if source.session_id != request.session_id {
+            return Err(CoreError::InvalidInput(
+                "fork source belongs to another Session".into(),
+            ));
+        }
+        let mut imported_turns = source
+            .public_thread()
+            .turns
+            .into_iter()
+            .take_while(|turn| is_terminal_turn_status(turn.status))
+            .collect::<Vec<_>>();
+        for turn in &mut imported_turns {
+            turn.usage = zeta_protocol::ModelUsageSummary::default();
+        }
+        let created = self.create_thread(CreateThreadRequest {
+            session_id: request.session_id,
+            thread_id: request.thread_id.clone(),
+            title: request.title,
+        })?;
+        if created.sequence > 1 {
+            return Ok(created);
+        }
+
+        let child_thread_id = request.thread_id;
+        let event_thread_id = child_thread_id.clone();
+        self.mutate_thread(&child_thread_id, |snapshot| {
+            if snapshot.sequence > 1 {
+                return Ok(snapshot.clone());
+            }
+            self.record_batch(
+                snapshot,
+                vec![ThreadEvent::ForkHistoryImported {
+                    thread_id: event_thread_id,
+                    source_thread_id: request.source_thread_id,
+                    source_sequence: request.source_sequence,
                     turns: imported_turns,
                 }],
             )?;
@@ -1671,6 +1731,33 @@ impl ThreadController {
             .ok_or_else(|| CoreError::Journal("cannot recover an empty rollout".into()))
     }
 
+    fn load_snapshot_at_sequence(
+        &self,
+        thread_id: &ThreadId,
+        sequence: u64,
+    ) -> Result<ThreadSnapshot, CoreError> {
+        if sequence == 0 {
+            return Err(CoreError::InvalidInput(
+                "fork source sequence must be positive".into(),
+            ));
+        }
+        let events = self.store.load(thread_id)?;
+        let actual = events.last().map_or(0, |event| event.sequence);
+        if actual < sequence {
+            return Err(CoreError::ThreadStore(ThreadStoreError::SequenceConflict {
+                expected: sequence,
+                actual,
+            }));
+        }
+        events
+            .iter()
+            .take_while(|event| event.sequence <= sequence)
+            .try_fold(None, |snapshot, event| {
+                reduce_thread_event(snapshot, event).map(Some)
+            })?
+            .ok_or_else(|| CoreError::NotFound(thread_id.to_string()))
+    }
+
     fn transition_turn(
         &self,
         thread_id: &ThreadId,
@@ -1978,6 +2065,13 @@ fn validate_thread_expectation(
             }))
         }
     }
+}
+
+fn is_terminal_turn_status(status: TurnStatus) -> bool {
+    matches!(
+        status,
+        TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted
+    )
 }
 
 fn matching_created_thread(

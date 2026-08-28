@@ -42,7 +42,7 @@ pub(super) fn selection_view(
             SelectionItem::new(item.label()).with_id(id).with_columns(
                 item.label(),
                 item.description(),
-                enabled.to_string(),
+                checkbox(enabled),
             )
         })
         .collect();
@@ -54,6 +54,10 @@ pub(super) fn selection_view(
         model: PaneViewModel::new(model, "Enter/Space toggle  ·  ↑/↓ select  ·  Esc back"),
         actions,
     }
+}
+
+const fn checkbox(checked: bool) -> &'static str {
+    if checked { "[ ✔ ]" } else { "[   ]" }
 }
 
 #[cfg(test)]

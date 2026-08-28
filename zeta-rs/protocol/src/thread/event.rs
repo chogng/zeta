@@ -102,6 +102,13 @@ pub enum ThreadEvent {
         before_turn_id: TurnId,
         turns: Vec<Turn>,
     },
+    ForkHistoryImported {
+        thread_id: ThreadId,
+        source_thread_id: ThreadId,
+        #[ts(type = "number")]
+        source_sequence: u64,
+        turns: Vec<Turn>,
+    },
     ContextCheckpointCommitted {
         thread_id: ThreadId,
         checkpoint: ContextCheckpoint,
@@ -278,6 +285,7 @@ impl ThreadEvent {
             Self::TurnExecutionBound { .. } => "turn.execution_bound",
             Self::AgentContextSeedCommitted { .. } => "agent.context_seed_committed",
             Self::HistoryImported { .. } => "thread.history_imported",
+            Self::ForkHistoryImported { .. } => "thread.fork_history_imported",
             Self::ContextCheckpointCommitted { .. } => "context.checkpoint_committed",
             Self::ContextOverflowRecoveryCommitted { .. } => "context.overflow_recovery_committed",
             Self::TurnAccepted { .. } => "turn.accepted",
@@ -321,6 +329,7 @@ impl ThreadEvent {
             | Self::TurnExecutionBound { thread_id, .. }
             | Self::AgentContextSeedCommitted { thread_id, .. }
             | Self::HistoryImported { thread_id, .. }
+            | Self::ForkHistoryImported { thread_id, .. }
             | Self::ContextCheckpointCommitted { thread_id, .. }
             | Self::ContextOverflowRecoveryCommitted { thread_id, .. }
             | Self::TurnAccepted { thread_id, .. }

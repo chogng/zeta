@@ -219,6 +219,7 @@ impl TranscriptAccumulator {
             | ThreadEvent::TurnExecutionBound { .. }
             | ThreadEvent::AgentContextSeedCommitted { .. }
             | ThreadEvent::HistoryImported { .. }
+            | ThreadEvent::ForkHistoryImported { .. }
             | ThreadEvent::ContextCheckpointCommitted { .. }
             | ThreadEvent::ContextOverflowRecoveryCommitted { .. }
             | ThreadEvent::TurnAccepted { .. }

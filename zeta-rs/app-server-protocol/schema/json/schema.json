@@ -22409,6 +22409,39 @@
         },
         {
           "properties": {
+            "sourceSequence": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "sourceThreadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "turns": {
+              "items": {
+                "$ref": "#/$defs/Turn"
+              },
+              "type": "array"
+            },
+            "type": {
+              "const": "forkHistoryImported",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "sourceThreadId",
+            "sourceSequence",
+            "turns"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
             "checkpoint": {
               "$ref": "#/$defs/ContextCheckpoint"
             },

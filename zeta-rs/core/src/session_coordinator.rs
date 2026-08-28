@@ -732,7 +732,25 @@ impl SessionCoordinator {
                     })?,
                 })?
             }
-            ThreadOrigin::Root | ThreadOrigin::Fork { .. } => {
+            ThreadOrigin::Fork {
+                parent_thread_id,
+                parent_sequence,
+            } => {
+                if agent_context_seed.is_some() {
+                    return Err(CoreError::Journal(
+                        "ordinary Thread cannot carry an Agent context seed".into(),
+                    ));
+                }
+                self.threads
+                    .create_forked_thread(crate::CreateForkedThreadRequest {
+                        session_id: snapshot.session_id.clone(),
+                        thread_id: thread_id.clone(),
+                        title,
+                        source_thread_id: parent_thread_id,
+                        source_sequence: parent_sequence,
+                    })?
+            }
+            ThreadOrigin::Root => {
                 if agent_context_seed.is_some() {
                     return Err(CoreError::Journal(
                         "ordinary Thread cannot carry an Agent context seed".into(),

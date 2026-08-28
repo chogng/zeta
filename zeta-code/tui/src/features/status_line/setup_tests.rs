@@ -8,7 +8,7 @@ use ratatui::backend::TestBackend;
 use unicode_width::UnicodeWidthStr;
 
 #[test]
-fn setup_lists_each_item_with_a_description_boolean_and_toggle_action() {
+fn setup_lists_each_item_with_a_description_checkbox_and_toggle_action() {
     let mut settings = StatusLineSettings::default();
     settings.set(StatusLineItem::GitChanges, false);
     let view = selection_view(settings, 7);
@@ -23,10 +23,10 @@ fn setup_lists_each_item_with_a_description_boolean_and_toggle_action() {
             .map(|item| (item.label(), item.description().unwrap().trim()))
             .collect::<Vec<_>>(),
         vec![
-            ("Permissions", "Current permission mode true"),
-            ("Model", "Configured model true"),
-            ("Git branch", "Current Git branch true"),
-            ("Git changes", "Working tree changes false"),
+            ("Permissions", "Current permission mode [ ✔ ]"),
+            ("Model", "Configured model [ ✔ ]"),
+            ("Git branch", "Current Git branch [ ✔ ]"),
+            ("Git changes", "Working tree changes [   ]"),
         ]
     );
     assert!(matches!(
@@ -41,7 +41,7 @@ fn setup_lists_each_item_with_a_description_boolean_and_toggle_action() {
 }
 
 #[test]
-fn setup_aligns_items_descriptions_and_booleans_in_three_columns() {
+fn setup_aligns_items_descriptions_and_checkboxes_in_three_columns() {
     let mut settings = StatusLineSettings::default();
     settings.set(StatusLineItem::GitChanges, false);
     let view = selection_view(settings, 1);
@@ -85,10 +85,10 @@ fn setup_aligns_items_descriptions_and_booleans_in_three_columns() {
         column_of(git_changes, "Working tree changes"),
         description_column
     );
-    let boolean_column = column_of(model, "true");
-    assert_eq!(column_of(permissions, "true"), boolean_column);
-    assert_eq!(column_of(git_branch, "true"), boolean_column);
-    assert_eq!(column_of(git_changes, "false"), boolean_column);
+    let checkbox_column = column_of(model, "[ ✔ ]");
+    assert_eq!(column_of(permissions, "[ ✔ ]"), checkbox_column);
+    assert_eq!(column_of(git_branch, "[ ✔ ]"), checkbox_column);
+    assert_eq!(column_of(git_changes, "[   ]"), checkbox_column);
 }
 
 fn column_of(row: &str, text: &str) -> usize {

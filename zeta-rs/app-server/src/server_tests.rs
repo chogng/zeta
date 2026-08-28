@@ -1462,20 +1462,35 @@ fn typed_commands_replay_and_reject_payload_conflicts() {
 }
 
 #[test]
-fn fork_freezes_parent_thread_sequence_in_session_lineage() {
-    let server = server();
+fn fork_preserves_parent_context_without_calling_the_model() {
+    let model = Arc::new(RecordingModel::default());
+    let server = server_with_model(model.clone());
     let mut connection = server.connection();
     initialize(&server, &mut connection);
     let session = create_session(&server, &mut connection, 2, "session");
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
     let root = create_thread(&server, &mut connection, 3, "root", session_id, 1);
     let root_id = root["result"]["value"]["threadId"].as_str().unwrap();
+    call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":4,"method":"session/request",
+            "params":{
+                "commandId":"parent-turn","sessionId":session_id,"expectedSequence":1,
+                "request":{"type":"startTurn","threadId":root_id,"input":[{"type":"text","text":"parent prompt"}]}
+            }
+        }),
+    );
+    wait_for_latest_turn(&server, root_id, TurnStatus::Completed);
+    assert_eq!(model.requests().len(), 1);
+
     let fork = call(
         &server,
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0",
-            "id":4,
+            "id":5,
             "method":"session/request",
             "params":{
                 "commandId":"fork",
@@ -1485,6 +1500,7 @@ fn fork_freezes_parent_thread_sequence_in_session_lineage() {
             }
         }),
     );
+    assert_eq!(model.requests().len(), 1);
 
     assert_eq!(
         fork["result"]["value"]["session"]["threads"][1]["origin"]["type"],
@@ -1492,8 +1508,44 @@ fn fork_freezes_parent_thread_sequence_in_session_lineage() {
     );
     assert_eq!(
         fork["result"]["value"]["session"]["threads"][1]["origin"]["parentSequence"],
+        server
+            .sessions()
+            .threads()
+            .read_thread(&zeta_protocol::ThreadId::new(root_id).unwrap())
+            .unwrap()
+            .sequence
+    );
+    let child_id = fork["result"]["value"]["threadId"].as_str().unwrap();
+    let child = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":6,"method":"session/thread/read",
+            "params":{"sessionId":session_id,"threadId":child_id}
+        }),
+    );
+    assert_eq!(
+        child["result"]["thread"]["turns"].as_array().unwrap().len(),
         1
     );
+    call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":7,"method":"session/request",
+            "params":{
+                "commandId":"child-turn","sessionId":session_id,
+                "expectedSequence":child["result"]["thread"]["sequence"],
+                "request":{"type":"startTurn","threadId":child_id,"input":[{"type":"text","text":"child prompt"}]}
+            }
+        }),
+    );
+    wait_for_latest_turn(&server, child_id, TurnStatus::Completed);
+    let requests = model.requests();
+    assert_eq!(requests.len(), 2);
+    assert!(model_request_contains_text(&requests[1], "parent prompt"));
+    assert!(model_request_contains_text(&requests[1], "done"));
+    assert!(model_request_contains_text(&requests[1], "child prompt"));
 }
 
 #[test]
@@ -2076,8 +2128,14 @@ fn completed_turn_replays_without_invoking_the_model_twice() {
 }
 
 #[derive(Default)]
-struct SkillRecordingModel {
+struct RecordingModel {
     requests: Mutex<Vec<ModelRequest>>,
+}
+
+impl RecordingModel {
+    fn requests(&self) -> Vec<ModelRequest> {
+        self.requests.lock().unwrap().clone()
+    }
 }
 
 struct EmptySkillConfig;
@@ -2088,7 +2146,7 @@ impl zeta_skills_extension::SkillConfigSnapshotProvider for EmptySkillConfig {
     }
 }
 
-impl ModelService for SkillRecordingModel {
+impl ModelService for RecordingModel {
     fn invoke(
         &self,
         _: zeta_core::ModelSelection<'_>,
@@ -2102,6 +2160,18 @@ impl ModelService for SkillRecordingModel {
             stop_reason: StopReason::Completed,
         })
     }
+}
+
+fn model_request_contains_text(request: &ModelRequest, expected: &str) -> bool {
+    request.input.iter().any(|item| {
+        let InputItem::Message(message) = item else {
+            return false;
+        };
+        message
+            .content
+            .iter()
+            .any(|part| matches!(part, ContentPart::Text(text) if text == expected))
+    })
 }
 
 #[test]
@@ -2121,7 +2191,7 @@ fn explicit_skill_flows_through_core_extension_lifecycle() {
         "---\nname: skill-creator\ndescription: Create skills\n---\n\nExtension instructions.\n",
     )
     .unwrap();
-    let model = Arc::new(SkillRecordingModel::default());
+    let model = Arc::new(RecordingModel::default());
     let server = server_with_model(model.clone())
         .with_skill_runtime(
             zeta_skills_extension::BuiltInSkillSource::Root(root.clone()),

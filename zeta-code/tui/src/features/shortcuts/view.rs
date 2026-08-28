@@ -390,17 +390,11 @@ fn non_empty(items: Vec<SelectionItem>, label: &str) -> Vec<SelectionItem> {
 
 fn fixed_shortcut_items() -> impl Iterator<Item = SelectionItem> {
     [
-        ("Enter", "send the current prompt or queue a follow-up"),
-        (
-            "Shift-Enter / Alt-Enter / Ctrl-J",
-            "insert a newline in the current prompt",
-        ),
         ("Esc Esc", "open rewind checkpoints from the root view"),
         (
             "Tab",
             "complete the selected slash command or workspace path",
         ),
-        ("Esc", "close the active popup or view"),
         (
             "↑ / ↓",
             "move the cursor, recall prompts, or select an item",

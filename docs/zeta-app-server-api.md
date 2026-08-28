@@ -77,8 +77,7 @@ Canonical 产品实体和内部契约的详细定义见 [`protocol.md`](protocol
 
 - App Server connection/session 只是传输生命周期，不能与产品 Session 混用。
 
-Session 不嵌入 Thread 历史，只保存 membership、lineage 和 lifecycle。Fork 的 lineage 固定为
-`parentThreadId + parentSequence`，因此父 Thread 后续继续执行不会改变已创建分支的起点。
+Session 不嵌入 Thread 历史，只保存 membership、lineage 和 lifecycle。Fork 的 lineage 固定为 `parentThreadId + parentSequence`；Core 按这个锚点重放父 Thread，并把锚点内连续、已结束的 Turn 导入子 Thread，因此未完成的 Turn 和父 Thread 后续提交都不会进入已创建的分支。
 
 ## 2. 一致性模型
 
@@ -605,9 +604,7 @@ spawn 前执行 `env_clear`，所以 PTY 看不到最终 map 之外的 App Serve
 
 ### 分叉 Thread
 
-`session/request` 的 `request.type = forkThread` 比 create 多一个 `parentThreadId`。Server 在执行
-命令时读取父 Thread 的当前 sequence，并把它持久化进 `ThreadOrigin::Fork`。Fork 只复制 lineage
-起点；它不让两个 Thread 共享后续 sequence。
+`session/request` 的 `request.type = forkThread` 比 create 多一个 `parentThreadId`。Server 执行命令时读取父 Thread 的当前 sequence，并把它持久化进 `ThreadOrigin::Fork`。Core 随后只重放到这个 sequence，把其中从开头连续出现的 terminal Turns 作为 `ForkHistoryImported` 写入子 Thread；正在执行或排队的 Turn 不导入。子 Thread 拥有独立历史和 sequence，父 Thread 的后续提交不会改变它。
 
 ### 生命周期
 

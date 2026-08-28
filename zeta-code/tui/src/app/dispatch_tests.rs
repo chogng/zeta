@@ -18,6 +18,7 @@ use zeta_app_server_client::{
 use zeta_app_server_protocol::protocol::common::ClientInfo;
 use zeta_app_server_protocol::protocol::config::{ProviderConfigDto, ProviderConfigureParams};
 use zeta_app_server_protocol::protocol::session::SessionReadParams;
+use zeta_app_server_protocol::protocol::session::SessionThreadReadParams;
 use zeta_app_server_protocol::protocol::skills::SkillEnablementDto;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryListParams;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryPermissionDto;
@@ -27,6 +28,8 @@ use zeta_client::ClientResponse;
 use zeta_client::OperationClient;
 use zeta_protocol::CommandId;
 use zeta_protocol::SessionStatus;
+use zeta_protocol::SessionThreadStatus;
+use zeta_protocol::ThreadOrigin;
 
 #[test]
 fn help_lists_only_builtins_with_execution_paths() {
@@ -53,11 +56,12 @@ fn help_lists_only_builtins_with_execution_paths() {
 }
 
 #[test]
-fn new_fork_and_resume_change_the_active_typed_conversation() {
-    let (mut client, state_root) = client();
+fn fork_persists_lineage_switches_threads_and_does_not_call_the_model() {
+    let (mut client, state_root, model) = client_with_model_probe();
     let mut conversation = ActiveConversation::start(&mut client, "original".into()).unwrap();
     let original_session = conversation.session_id().clone();
     let original_thread = conversation.thread_id().clone();
+    let original_thread_sequence = conversation.thread_sequence();
     let mut app = App::new();
 
     conversation.execute(
@@ -69,6 +73,38 @@ fn new_fork_and_resume_change_the_active_typed_conversation() {
     assert_eq!(conversation.session_id(), &original_session);
     assert_ne!(conversation.thread_id(), &original_thread);
     assert_eq!(app.status(), &Status::Ready);
+
+    let forked_thread_id = conversation.thread_id().clone();
+    let persisted_session = client
+        .read_session(SessionReadParams {
+            session_id: original_session.clone(),
+        })
+        .unwrap()
+        .session;
+    let forked_membership = persisted_session
+        .threads
+        .iter()
+        .find(|thread| thread.thread_id == forked_thread_id)
+        .unwrap();
+    assert_eq!(forked_membership.status, SessionThreadStatus::Active);
+    assert_eq!(
+        forked_membership.origin,
+        ThreadOrigin::Fork {
+            parent_thread_id: original_thread,
+            parent_sequence: original_thread_sequence,
+        }
+    );
+    let persisted_thread = client
+        .read_session_thread(SessionThreadReadParams {
+            session_id: original_session.clone(),
+            thread_id: forked_thread_id,
+            history: None,
+        })
+        .unwrap()
+        .thread;
+    assert_eq!(conversation.thread_sequence(), persisted_thread.sequence);
+    assert!(persisted_thread.turns.is_empty());
+    assert_eq!(model.calls(), 0);
 
     conversation.execute(
         &mut client,
@@ -91,14 +127,15 @@ fn new_fork_and_resume_change_the_active_typed_conversation() {
             .text
             .starts_with("Resumed session")
     );
+    assert_eq!(model.calls(), 0);
 
     drop(client);
     let _ = fs::remove_dir_all(state_root);
 }
 
 #[test]
-fn archive_archives_the_current_session_and_starts_a_replacement() {
-    let (mut client, state_root) = client();
+fn archive_persists_status_starts_a_replacement_and_does_not_call_the_model() {
+    let (mut client, state_root, model) = client_with_model_probe();
     let mut conversation = ActiveConversation::start(&mut client, "archive me".into()).unwrap();
     let archived_session_id = conversation.session_id().clone();
     let mut app = App::new();
@@ -117,6 +154,13 @@ fn archive_archives_the_current_session_and_starts_a_replacement() {
         .session;
     assert_eq!(archived.status, SessionStatus::Archived);
     assert_ne!(conversation.session_id(), &archived_session_id);
+    let replacement = client
+        .read_session(SessionReadParams {
+            session_id: conversation.session_id().clone(),
+        })
+        .unwrap()
+        .session;
+    assert_eq!(replacement.status, SessionStatus::Active);
     assert_eq!(
         app.messages().last().unwrap().text,
         format!(
@@ -124,6 +168,7 @@ fn archive_archives_the_current_session_and_starts_a_replacement() {
             conversation.session_id()
         )
     );
+    assert_eq!(model.calls(), 0);
 
     drop(client);
     let _ = fs::remove_dir_all(state_root);
@@ -383,7 +428,7 @@ fn add_dir_adds_lists_and_removes_the_exact_session_directory() {
         )
         .with_capabilities(crate::client_capabilities())
         .with_workspace_root(&workspace)
-        .with_model_operation_client(Arc::new(OfflineOperationClient)),
+        .with_model_operation_client(Arc::new(OfflineOperationClient::default())),
     )
     .unwrap();
     let mut conversation = ActiveConversation::start(&mut client, "add dir".into()).unwrap();
@@ -487,6 +532,15 @@ fn invocation(command: TuiSlashCommandAction, arguments: &str) -> SlashCommandIn
 }
 
 fn client() -> (AppServerClient<InProcessTransport>, PathBuf) {
+    let (client, state_root, _) = client_with_model_probe();
+    (client, state_root)
+}
+
+fn client_with_model_probe() -> (
+    AppServerClient<InProcessTransport>,
+    PathBuf,
+    Arc<OfflineOperationClient>,
+) {
     static NEXT_STATE_ROOT: AtomicU64 = AtomicU64::new(1);
     let state_root = std::env::temp_dir().join(format!(
         "zeta-tui-slash-dispatch-{}-{}-{}",
@@ -497,6 +551,7 @@ fn client() -> (AppServerClient<InProcessTransport>, PathBuf) {
             .as_nanos(),
         NEXT_STATE_ROOT.fetch_add(1, Ordering::Relaxed)
     ));
+    let model = Arc::new(OfflineOperationClient::default());
     let client = start_in_process_client(
         InProcessClientOptions::new(
             &state_root,
@@ -505,16 +560,26 @@ fn client() -> (AppServerClient<InProcessTransport>, PathBuf) {
                 version: "1".into(),
             },
         )
-        .with_model_operation_client(Arc::new(OfflineOperationClient)),
+        .with_model_operation_client(model.clone()),
     )
     .unwrap();
-    (client, state_root)
+    (client, state_root, model)
 }
 
-struct OfflineOperationClient;
+#[derive(Default)]
+struct OfflineOperationClient {
+    calls: AtomicU64,
+}
+
+impl OfflineOperationClient {
+    fn calls(&self) -> u64 {
+        self.calls.load(Ordering::SeqCst)
+    }
+}
 
 impl OperationClient for OfflineOperationClient {
     fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         Err(ClientError::Transport(
             "model transport is disabled in TUI command tests".into(),
         ))

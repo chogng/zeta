@@ -235,8 +235,13 @@ fn next_approval_mode_is_durable_and_is_frozen_by_each_new_turn() {
 }
 
 #[test]
-fn fork_captures_the_parent_sequence_in_session_lineage() {
-    let coordinator = coordinator();
+fn fork_imports_the_terminal_parent_prefix_at_the_recorded_sequence() {
+    let session_store = Arc::new(InMemorySessionStore::default());
+    let thread_store = Arc::new(InMemoryThreadStore::default());
+    let coordinator = SessionCoordinator::with_store(
+        session_store.clone(),
+        Arc::new(ThreadController::with_store(thread_store.clone())),
+    );
     let session = create_session(&coordinator);
     let root = coordinator
         .create_thread(CreateSessionThreadRequest {
@@ -246,12 +251,55 @@ fn fork_captures_the_parent_sequence_in_session_lineage() {
             title: "root".into(),
         })
         .unwrap();
+    let completed = coordinator
+        .threads
+        .start_turn(
+            &root.thread_id,
+            StartTurnRequest {
+                command_id: CommandId::new("completed-turn").unwrap(),
+                expected_sequence: SequenceExpectation::Exact(1),
+                model: None,
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                tool_mode: zeta_protocol::ToolMode::Direct,
+                tool_profile: None,
+                activated_skills: Vec::new(),
+                input: vec![zeta_protocol::UserInput::Text {
+                    text: "parent prompt".into(),
+                }],
+            },
+        )
+        .unwrap();
+    let completed_sequence = coordinator
+        .threads
+        .complete_turn(&root.thread_id, &completed.turn_id, "parent answer".into())
+        .unwrap()
+        .sequence;
+    let active = coordinator
+        .threads
+        .start_turn(
+            &root.thread_id,
+            StartTurnRequest {
+                command_id: CommandId::new("active-turn").unwrap(),
+                expected_sequence: SequenceExpectation::Exact(completed_sequence),
+                model: None,
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                tool_mode: zeta_protocol::ToolMode::Direct,
+                tool_profile: None,
+                activated_skills: Vec::new(),
+                input: vec![zeta_protocol::UserInput::Text {
+                    text: "unfinished prompt".into(),
+                }],
+            },
+        )
+        .unwrap();
     let parent_sequence = coordinator
         .threads
         .read_thread(&root.thread_id)
         .unwrap()
         .sequence;
-    coordinator
+    let forked = coordinator
         .fork_thread(ForkSessionThreadRequest {
             command_id: CommandId::new("fork").expect("test ID is non-empty"),
             session_id: session.session_id.clone(),
@@ -260,6 +308,11 @@ fn fork_captures_the_parent_sequence_in_session_lineage() {
             title: "branch".into(),
         })
         .unwrap();
+    let child = coordinator
+        .threads
+        .read_thread(&forked.thread_id)
+        .unwrap()
+        .public_thread();
 
     assert!(matches!(
         &coordinator
@@ -273,6 +326,48 @@ fn fork_captures_the_parent_sequence_in_session_lineage() {
             parent_sequence: sequence,
         } if parent_thread_id == &root.thread_id && *sequence == parent_sequence
     ));
+    assert_eq!(child.turns.len(), 1);
+    assert_eq!(child.turns[0].turn_id, completed.turn_id);
+    assert_eq!(
+        child.turns[0].usage,
+        zeta_protocol::ModelUsageSummary::default()
+    );
+    assert!(child.turns[0].items.iter().any(|item| {
+        matches!(item, zeta_protocol::ThreadItem::UserMessage { text, .. } if text == "parent prompt")
+    }));
+    assert!(child.turns[0].items.iter().any(|item| {
+        matches!(item, zeta_protocol::ThreadItem::AgentMessage { text, .. } if text == "parent answer")
+    }));
+    assert!(!child.turns[0].items.iter().any(|item| {
+        matches!(item, zeta_protocol::ThreadItem::UserMessage { text, .. } if text == "unfinished prompt")
+    }));
+
+    coordinator
+        .threads
+        .complete_turn(
+            &root.thread_id,
+            &active.turn_id,
+            "late parent answer".into(),
+        )
+        .unwrap();
+    assert_eq!(
+        coordinator
+            .threads
+            .read_thread(&forked.thread_id)
+            .unwrap()
+            .turns
+            .len(),
+        1
+    );
+
+    drop(coordinator);
+    let recovered_threads = ThreadController::with_store(thread_store);
+    let recovered = recovered_threads
+        .recover_thread(&forked.thread_id)
+        .unwrap()
+        .public_thread();
+    assert_eq!(recovered.turns.len(), 1);
+    assert_eq!(recovered.turns[0].turn_id, completed.turn_id);
 }
 
 #[test]

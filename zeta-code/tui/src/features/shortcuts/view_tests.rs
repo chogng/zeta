@@ -91,11 +91,8 @@ fn shortcut_view_lists_keys_before_responsibilities() {
             "ctrl+d",
             "ctrl+o",
             "ctrl+z",
-            "Enter",
-            "Shift-Enter / Alt-Enter / Ctrl-J",
             "Esc Esc",
             "Tab",
-            "Esc",
             "↑ / ↓",
             "← / →",
             "Home / End",
@@ -138,7 +135,7 @@ fn shortcut_rows_align_responsibility_and_source_columns_without_command_ids() {
         .collect::<Vec<_>>();
     let default_row = rows.iter().find(|row| row.contains("ctrl+o")).unwrap();
     let user_row = rows.iter().find(|row| row.contains("ctrl+y")).unwrap();
-    let fixed_row = rows.iter().find(|row| row.contains("Enter")).unwrap();
+    let fixed_row = rows.iter().find(|row| row.contains("Esc Esc")).unwrap();
 
     let responsibility_column = default_row.find("Copy last response").unwrap();
     assert_eq!(
@@ -146,7 +143,7 @@ fn shortcut_rows_align_responsibility_and_source_columns_without_command_ids() {
         Some(responsibility_column)
     );
     assert_eq!(
-        fixed_row.find("send the current prompt"),
+        fixed_row.find("open rewind checkpoints"),
         Some(responsibility_column)
     );
     assert_eq!(default_row.find("default"), fixed_row.find("default"));

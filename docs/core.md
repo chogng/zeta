@@ -239,6 +239,7 @@ membership / defaults        one logical writer
 
 - 同一 Thread 的结构性 mutation FIFO；
 - 不同 Thread 可并行；
+- fork 根据 Session 已持久化的父 Thread sequence 重放精确前缀，并把连续、已结束的 Turn 写入子 Thread；
 - model、Tool 和 Agent I/O 不占 projection lock 或 writer lease；
 - interrupt、interaction response、Tool completion、model completion 和 Agent result 都回到
   同一提交序列；

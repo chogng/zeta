@@ -97,6 +97,7 @@ pub use thread_controller::CancelTurnInteractionRequest;
 pub use thread_controller::CancelledTurnInteraction;
 pub use thread_controller::CompletedTurn;
 pub use thread_controller::CreateAgentThreadRequest;
+pub use thread_controller::CreateForkedThreadRequest;
 pub use thread_controller::CreateRewoundThreadRequest;
 pub use thread_controller::CreateThreadRequest;
 pub use thread_controller::InMemoryThreadStore;
