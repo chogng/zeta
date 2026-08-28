@@ -15,7 +15,6 @@ use crate::features::status_line::StatusLineSelectionView;
 use crate::features::status_line::StatusLineSettings;
 use crate::features::theme::ThemeSelectionView;
 use crate::features::thread::TurnActivity;
-use crate::features::workspace_files::FileSelectionView;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_app_server_protocol::protocol::git::GitStatusResult;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
@@ -42,7 +41,6 @@ pub(crate) enum AppEvent {
     PreferredModelReceived(Option<ModelRefDto>),
     FailureReported(String),
     FileSearchSnapshotReceived(PathSearchSnapshot),
-    FileViewOpened(FileSelectionView),
     GitStatusReceived(GitStatusResult),
     HostOperationCompleted(Result<String, String>),
     InterruptFailed(String),

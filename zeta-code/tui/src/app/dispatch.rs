@@ -240,14 +240,6 @@ impl ActiveConversation {
                         .map_err(session_error)?,
                 );
             }
-            TuiSlashCommandAction::Files => {
-                output.events.push(AppEvent::FileViewOpened(
-                    crate::features::workspace_files::load_directory(
-                        client,
-                        std::path::PathBuf::from(arguments),
-                    )?,
-                ));
-            }
             TuiSlashCommandAction::Fork => {
                 output.conversation_change = Some(
                     self.fork_active_thread(client, &arguments)

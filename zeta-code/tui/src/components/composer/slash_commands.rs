@@ -24,7 +24,6 @@ pub(crate) enum TuiSlashCommandAction {
     Rewind,
     Clear,
     Config,
-    Files,
     Fork,
     Help,
     Shortcuts,
@@ -56,7 +55,6 @@ impl TuiSlashCommandAction {
             Self::Rewind => "return to an earlier message checkpoint",
             Self::Clear => "clear the terminal and start a new chat",
             Self::Config => "show the current configuration",
-            Self::Files => "browse and preview workspace files",
             Self::Fork => "fork the current chat",
             Self::Help => "show executable slash commands",
             Self::Shortcuts => "browse and customize terminal shortcuts",
@@ -76,7 +74,6 @@ impl TuiSlashCommandAction {
             | Self::ArchiveThread
             | Self::Rewind
             | Self::Clear
-            | Self::Files
             | Self::Fork
             | Self::Export
             | Self::Model

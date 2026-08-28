@@ -14,28 +14,23 @@ use crate::components::selection::SelectionViewModel;
 use crate::mouse::MouseMode;
 use ratatui::layout::Rect;
 use std::collections::VecDeque;
-use std::path::PathBuf;
 
 #[test]
 fn request_actions_wait_for_the_active_request_without_losing_order() {
     let mut queued = VecDeque::new();
-    let first = AppCommand::OpenWorkspaceDirectory {
-        path: PathBuf::from("src"),
-    };
-    let second = AppCommand::PreviewWorkspaceFile {
-        path: PathBuf::from("src/lib.rs"),
-    };
+    let first = AppCommand::OpenConfigPane;
+    let second = AppCommand::OpenRewindPane;
 
     assert!(schedule_action(Some(first), true, &mut queued).is_none());
     assert!(schedule_action(Some(second), true, &mut queued).is_none());
     assert_eq!(queued.len(), 2);
     assert!(matches!(
         schedule_action(None, false, &mut queued),
-        Some(AppCommand::OpenWorkspaceDirectory { .. })
+        Some(AppCommand::OpenConfigPane)
     ));
     assert!(matches!(
         schedule_action(None, false, &mut queued),
-        Some(AppCommand::PreviewWorkspaceFile { .. })
+        Some(AppCommand::OpenRewindPane)
     ));
 }
 

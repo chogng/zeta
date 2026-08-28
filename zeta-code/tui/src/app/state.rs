@@ -48,8 +48,6 @@ use crate::features::theme::ThemeSelectionView;
 use crate::features::thread::ThreadFeatureState;
 use crate::features::thread::ThreadPresentationEvent;
 use crate::features::thread::TurnActivity;
-use crate::features::workspace_files::FileSelectionAction;
-use crate::features::workspace_files::FileSelectionView;
 use crate::keymap::AppChordMatch;
 use crate::keymap::AppKeymap;
 use crate::keymap::AppKeymapAction;
@@ -100,7 +98,6 @@ enum SelectionActions {
     Interaction(InteractionSelectionState),
     Connectors(BTreeMap<SelectionItemId, ConnectorSelectionAction>),
     Mcp(BTreeMap<SelectionItemId, McpSelectionAction>),
-    Files(BTreeMap<SelectionItemId, FileSelectionAction>),
     Model(BTreeMap<SelectionItemId, ModelSelectionAction>),
     Rewind(BTreeMap<SelectionItemId, RewindSelectionAction>),
     Sessions(BTreeMap<SelectionItemId, SessionSelectionAction>),
@@ -291,14 +288,6 @@ impl App {
                     server_id: server_id.clone(),
                     enablement: *enablement,
                 }),
-            },
-            SelectionActions::Files(actions) => match actions.get(item_id)? {
-                FileSelectionAction::OpenDirectory { path } => {
-                    Some(AppCommand::OpenWorkspaceDirectory { path: path.clone() })
-                }
-                FileSelectionAction::PreviewFile { path } => {
-                    Some(AppCommand::PreviewWorkspaceFile { path: path.clone() })
-                }
             },
             SelectionActions::Model(actions) => match actions.get(item_id)? {
                 ModelSelectionAction::Select { preference } => {
@@ -540,10 +529,6 @@ impl App {
         )
     }
 
-    fn show_file_view(&mut self, view: FileSelectionView) {
-        self.push_selection_view(view.model, SelectionActions::Files(view.actions));
-    }
-
     fn replace_mcp_view(&mut self, view: McpSelectionView) {
         self.replace_selection_view(view.model, SelectionActions::Mcp(view.actions));
     }
@@ -766,7 +751,6 @@ impl App {
             AppEvent::FileSearchSnapshotReceived(snapshot) => {
                 self.interaction_pane.apply_file_search_snapshot(snapshot);
             }
-            AppEvent::FileViewOpened(view) => self.show_file_view(view),
             AppEvent::GitStatusReceived(status) => self.status_line.apply_git_status(&status),
             AppEvent::HostOperationCompleted(Ok(notice)) => {
                 self.thread

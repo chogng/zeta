@@ -31,10 +31,10 @@ Tool、approval policy 或 persistence。
 - enabled、compatible、名称无歧义且不与已有命令冲突的 Skill 直接显示为 `/name`；提交时保留
   `/name …` 用户文本并附加 exact pinned `SkillRef`，完整 `SKILL.md` 只在 App Server 接受 Turn
   后按需加载；`skills/changed` 会刷新这部分动态命令；
-- `/resume`、`/thread`、`/archive-thread`、`/rewind`、`/clear`、`/files`、`/fork`、`/model`、`/theme` 与 `/new` 可解析 inline arguments，并在执行前展开
+- `/resume`、`/thread`、`/archive-thread`、`/rewind`、`/clear`、`/fork`、`/model`、`/theme` 与 `/new` 可解析 inline arguments，并在执行前展开
   large-paste placeholder；product command 明确拒绝 image arguments；
 - command popup 只注册已有真实执行流的 built-ins：`/status`、`/statusline`、`/skills`、`/mcp`、`/connectors`、`/resume`、
-  `/thread`、`/archive-thread`、`/archive-session`、`/rewind`、`/clear`、`/config`、`/files`、
+  `/thread`、`/archive-thread`、`/archive-session`、`/rewind`、`/clear`、`/config`、
   `/fork`、`/help`、`/shortcuts`、`/copy`、`/export`、`/model`、`/theme`、`/new`、`/quit` 与 `/exit`；
 - `/help` 使用保留 composer 的 interaction view stack 打开可搜索的命令列表；Space 进入搜索模式，上下键循环选择，Esc/Ctrl-C 返回 composer；快捷键只由 `/shortcuts` 展示；
 - `/skills` 通过 typed `skills/list` 打开同一 interaction surface，提供
@@ -53,8 +53,6 @@ Tool、approval policy 或 persistence。
   `/archive-thread` 归档目标并在必要时选择或创建 replacement Thread；`/archive-session` 归档当前
   Session 并建立 replacement Session。所有 mutation 都通过 typed `session/request`，随后在后台
   切换 subscription；
-- `/files` 只通过 App Server `fs/readDirectory`/`fs/readFile` 浏览 workspace，目录优先、支持父目录
-  和 UTF-8 preview；preview 限 64 KiB/200 行，不直接访问宿主 filesystem；
 - `/config` 异步调用 `config/read` 与 `provider/list`；Config 标签页包含本地 Mouse interactions 开关，Providers 标签页展示后端注册的完整供应商目录，并通过隐藏输入框把 API key 交给 profile SecretStore；`/model` 使用 expected revision 更新 preferred model；
 - 启动时读取 client 保存的 `initialize.slashCommands` snapshot，通过
   [`zeta-slash-commands`](../../zeta-rs/slash-commands/README.md) 与 built-ins 做防冲突合并；
@@ -191,6 +189,7 @@ src/
 │   ├── shortcuts/                 # searchable view, action menu and key/chord capture
 │   ├── status_line.rs             # status-line module root
 │   ├── status_line/               # item settings, profile resource, setup view and pure footer view
+│   ├── workspace_files.rs         # file-mention search module root
 │   └── workspace_files/           # bounded async file-search runtime
 ├── mouse.rs                        # shared mouse-mode contract for pages and terminal lifecycle
 ├── host/

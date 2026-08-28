@@ -41,12 +41,6 @@ pub(crate) enum AppCommand {
     ReadClipboardImage,
     OpenCustomThemePane,
     OpenRewindPane,
-    OpenWorkspaceDirectory {
-        path: PathBuf,
-    },
-    PreviewWorkspaceFile {
-        path: PathBuf,
-    },
     RewindToCheckpoint {
         before_turn_id: TurnId,
         checkpoint_label: String,

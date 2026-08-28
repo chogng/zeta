@@ -97,8 +97,8 @@ zeta-cli
 ```
 
 本地只读能力不必统一绕行 App Server：composer 的 workspace path mention 直接调用
-`zeta-file-search`；需要 workspace authority、跨进程一致性或 watcher revision 的目录浏览与 Git
-状态通过 typed App Server filesystem/Git contract。原则不是“所有数据经过一个 facade”，而是
+`zeta-file-search`；需要 workspace authority、跨进程一致性或 watcher revision 的 Git 状态通过
+typed App Server Git contract。原则不是“所有数据经过一个 facade”，而是
 “每个 feature 消费事实 owner 已提供的 public typed interface”。
 
 进程内模式只是一种 transport 优化。TUI 仍然经过 initialize、typed request/response、
@@ -282,11 +282,10 @@ zeta-code/tui/
 │   │   │   ├── request.rs
 │   │   │   ├── view.rs
 │   │   │   └── skills_tests.rs
+│   │   ├── workspace_files.rs
 │   │   ├── workspace_files/
-│   │   │   ├── mod.rs
 │   │   │   ├── search.rs
-│   │   │   ├── completion.rs
-│   │   │   └── workspace_files_tests.rs
+│   │   │   └── search_tests.rs
 │   │   ├── status_line.rs
 │   │   └── status_line/
 │   │       ├── model.rs
@@ -609,7 +608,7 @@ owner 的公开 typed interface，`view.rs` 组装 component。没有请求的 f
 | `interactions` | owner-directed approval 与 structured user-input view/response mapping |
 | `config` | typed config read/update UI |
 | `skills` | typed catalog、enablement intent 和 selection row model |
-| `workspace_files` | `zeta-file-search` mention completion + typed filesystem browser/preview |
+| `workspace_files` | `zeta-file-search` mention completion |
 | `status_line` | 汇集既有接口结果并执行 item 排列、降级与渲染 |
 
 resources 等已经有 typed contract、但尚无 `zeta code` 用户场景的能力不提前出现在
@@ -945,6 +944,7 @@ features/
 │   ├── state.rs
 │   ├── subscription.rs
 │   └── update.rs
+├── workspace_files.rs
 └── workspace_files/
 host/
 └── clipboard.rs
@@ -973,7 +973,7 @@ lib_tests.rs
   channel 有界，Tick 可丢弃而 input/control 不静默丢失；
 - `client/RequestTask` 在 worker 执行 typed request，`app/request_completion.rs` 校验 scope 并把
   completion 安装到单写者 state；同一 request slot 前的用户 intent 保序排队，全部 product
-  command、Turn mutation、文件浏览与 subscription switch 均不在 draw/input 线程等待；
+  command、Turn mutation 与 subscription switch 均不在 draw/input 线程等待；
 - `features/thread/ThreadSubscription` 在启动和 active Thread 切换时调用 typed
   `session/thread/subscribe`/`session/thread/unsubscribe`，验证 Session/Thread scope，并用最后确认的 snapshot
   sequence 丢弃重复或旧 scope update；stream instance/cursor 单独排序 transient，gap/runtime
@@ -1152,7 +1152,7 @@ connection close 和 runtime 切换都有确定结果；当前 local authority c
 ### 阶段四：垂直功能
 
 按已接受的 App Server contract 逐个添加 config、resources、approval 等 feature。config、MCP、
-Skill、workspace file browser、Git status、approval 与 user input 已按该规则接入；每个后续 feature
+Skill、workspace file mention、Git status、approval 与 user input 已按该规则接入；每个后续 feature
 同时交付 state、typed command、view、错误/恢复行为和测试，不采用先建一个全局
 `services/` 再逐步塞逻辑的方式。
 

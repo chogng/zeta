@@ -481,44 +481,6 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::OpenWorkspaceDirectory { path } => {
-                        if pending_request.is_none() {
-                            let mut request_client = client.clone();
-                            pending_request = spawn_request(
-                                "zeta-tui-read-directory",
-                                move || {
-                                    RequestCompletion::Presentation(
-                                        crate::features::workspace_files::load_directory(
-                                            &mut request_client,
-                                            path,
-                                        )
-                                        .map(AppEvent::FileViewOpened)
-                                        .map_err(|error| error.to_string()),
-                                    )
-                                },
-                                &mut app,
-                            );
-                        }
-                    }
-                    AppCommand::PreviewWorkspaceFile { path } => {
-                        if pending_request.is_none() {
-                            let mut request_client = client.clone();
-                            pending_request = spawn_request(
-                                "zeta-tui-read-file-preview",
-                                move || {
-                                    RequestCompletion::Presentation(
-                                        crate::features::workspace_files::load_file_preview(
-                                            &mut request_client,
-                                            path,
-                                        )
-                                        .map(AppEvent::SelectionViewOpened)
-                                        .map_err(|error| error.to_string()),
-                                    )
-                                },
-                                &mut app,
-                            );
-                        }
-                    }
                     AppCommand::RewindToCheckpoint {
                         before_turn_id,
                         checkpoint_label,
