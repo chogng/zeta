@@ -110,6 +110,7 @@ function clipSemanticTokens(tokens: readonly ResolvedSemanticToken[], startColum
 			endColumn: end - startColumn,
 			presentation: token.presentation,
 			...(token.modifiers && token.modifiers.length > 0 ? { modifiers: token.modifiers } : {}),
+			...(token.syntaxPresentation === undefined ? {} : { syntaxPresentation: token.syntaxPresentation }),
 		})];
 	}));
 }

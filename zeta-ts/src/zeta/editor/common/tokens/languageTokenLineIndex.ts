@@ -4,7 +4,7 @@ import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { type VersionedLanguageResult } from "../languages/languageRequestCoordinator.js";
 import { LanguageResultStoreChangeReason, type VersionedLanguageResultStore } from "../languages/languageResultStore.js";
 import { getLanguageTokenResultDelta, type LanguageToken, type LanguageTokenResult, type LanguageTokenResultDelta, type LanguageTokenResultSplice } from "./languageTokens.js";
-import { TextPosition, TextRange } from "../core/text.js";
+import { TextPosition, TextRange, type TextModelChange } from "../core/text.js";
 import { type TextModel } from "../model/textModel.js";
 
 export interface LanguageTokenLine {
@@ -102,7 +102,11 @@ export class LanguageTokenLineIndex extends Disposable {
 		this.indexedModelVersion = initialResult?.modelVersion ?? this.model.version;
 		this.indexedRequestId = initialResult?.requestId;
 		this.state = initialResult ? buildState(initialResult.value.tokens) : EMPTY_STATE;
-		this._register(store.onDidChange(change => this.acceptStoreChange(change.reason, change.modelVersion, change.result)));
+		this._register(store.onDidChange(change => {
+			if (change.reason === LanguageResultStoreChangeReason.ModelChanged) return;
+			this.acceptStoreChange(change.reason, change.modelVersion, change.result);
+		}));
+		this._register(this.model.onDidChange(change => this.acceptModelChange(this.model.version, change)));
 		this._register(toDisposable(() => {
 			this.state = EMPTY_STATE;
 			this.invalidatedBase = undefined;
@@ -142,14 +146,6 @@ export class LanguageTokenLineIndex extends Disposable {
 	}
 
 	private acceptStoreChange(reason: LanguageResultStoreChangeReason, modelVersion: number, result: VersionedLanguageResult<LanguageTokenResult> | undefined): void {
-		if (reason === LanguageResultStoreChangeReason.ModelChanged) {
-			if (this.indexedRequestId !== undefined) this.invalidatedBase = Object.freeze({ requestId: this.indexedRequestId, state: this.state });
-			this.indexedModelVersion = modelVersion;
-			this.indexedRequestId = undefined;
-			this.state = EMPTY_STATE;
-			this.emit(reason, 0, 0);
-			return;
-		}
 		if (!result) {
 			this.invalidatedBase = undefined;
 			this.indexedModelVersion = modelVersion;
@@ -166,6 +162,15 @@ export class LanguageTokenLineIndex extends Disposable {
 		this.indexedRequestId = result.requestId;
 		this.state = update.state;
 		this.emit(reason, update.rebuiltLineCount, update.reusedLineCount);
+	}
+
+	private acceptModelChange(modelVersion: number, change: TextModelChange): void {
+		if (this.indexedRequestId !== undefined) this.invalidatedBase = Object.freeze({ requestId: this.indexedRequestId, state: this.state });
+		const update = preserveUnaffectedLines(this.state, change);
+		this.indexedModelVersion = modelVersion;
+		this.indexedRequestId = undefined;
+		this.state = update.state;
+		this.emit(LanguageResultStoreChangeReason.ModelChanged, update.rebuiltLineCount, update.reusedLineCount);
 	}
 
 	private findBase(requestId: number): LanguageTokenIndexBase | undefined {
@@ -189,6 +194,39 @@ export class LanguageTokenLineIndex extends Disposable {
 function fullUpdate(tokens: readonly LanguageToken[]): LanguageTokenIndexUpdate {
 	const state = buildState(tokens);
 	return Object.freeze({ state, rebuiltLineCount: state.lines.length, reusedLineCount: 0 });
+}
+
+function preserveUnaffectedLines(state: LanguageTokenIndexState, change: TextModelChange): LanguageTokenIndexUpdate {
+	if (state.tokenCount === 0 || change.changes.length === 0) return Object.freeze({ state, rebuiltLineCount: 0, reusedLineCount: state.lines.length });
+	const changes = [...change.changes].sort((left, right) => left.range.start.compareTo(right.range.start));
+	const lineStates: LanguageTokenLineState[] = [];
+	const ranges: LanguageTokenLineItemRange[] = [];
+	let tokenCount = 0;
+	for (const lineState of state.lineStates) {
+		if (changes.some(entry => entry.range.start.lineIndex <= lineState.lineIndex && lineState.lineIndex <= entry.range.end.lineIndex)) continue;
+		let lineDelta = 0;
+		for (const entry of changes) {
+			if (entry.range.end.lineIndex >= lineState.lineIndex) break;
+			lineDelta += countLineBreaks(entry.text) - (entry.range.end.lineIndex - entry.range.start.lineIndex);
+		}
+		const shiftedLineIndex = lineState.lineIndex + lineDelta;
+		const shifted = lineDelta === 0 ? lineState : createLineState(shiftedLineIndex, lineState.payload);
+		const nextTokenCount = tokenCount + shifted.payload.tokens.length;
+		lineStates.push(shifted);
+		ranges.push(Object.freeze({ startItemIndex: tokenCount, endItemIndex: nextTokenCount }));
+		tokenCount = nextTokenCount;
+	}
+	return Object.freeze({
+		state: createState(tokenCount, lineStates, ranges),
+		rebuiltLineCount: 0,
+		reusedLineCount: lineStates.length,
+	});
+}
+
+function countLineBreaks(text: string): number {
+	let count = 0;
+	for (let index = 0; index < text.length; index += 1) if (text.charCodeAt(index) === 10) count += 1;
+	return count;
 }
 
 function applyDelta(base: LanguageTokenIndexState, tokens: readonly LanguageToken[], delta: LanguageTokenResultDelta): LanguageTokenIndexUpdate {

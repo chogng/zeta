@@ -28,6 +28,6 @@ registerEditorContribution({
 	},
 	install: context => {
 		if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization) return;
-		context.register(new LanguageAnalysisController(context.getCapability(TextEditorCapability.syntax), context.languageId, context.options.whenLanguageSupportReady ?? (() => Promise.resolve()), context.options.onDidChangeLanguageSupport, context.onLanguageError));
+		context.register(new LanguageAnalysisController(context.getCapability(TextEditorCapability.syntax), context.languageId, context.options.onDidChangeLanguageSupport, context.onLanguageError));
 	},
 });

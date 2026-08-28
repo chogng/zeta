@@ -13,6 +13,6 @@ registerEditorContribution({
 	},
 	install: context => {
 		if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization || context.model.largeFile.tooLargeForSynchronization) return;
-		context.register(new SemanticTokensController(context.getCapability(TextEditorCapability.semanticTokens), context.languageId, context.options.whenLanguageSupportReady ?? (() => Promise.resolve()), context.options.onDidChangeLanguageSupport, context.onLanguageError));
+		context.register(new SemanticTokensController(context.getCapability(TextEditorCapability.semanticTokens), context.languageId, context.options.onDidChangeLanguageSupport, context.onLanguageError));
 	},
 });

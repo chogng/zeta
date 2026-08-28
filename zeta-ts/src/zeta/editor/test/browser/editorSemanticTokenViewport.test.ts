@@ -108,7 +108,10 @@ test("Viewport clips semantic token spans to every soft-wrapped text fragment", 
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	using model = new TextModel("abcdef");
 	using store = createLanguageTokenStore(model);
-	acceptTokens(store, model, 1, [token(0, 1, 5, "keyword")]);
+	acceptTokens(store, model, 1, [{
+		...token(0, 1, 5, "keyword"),
+		presentation: { foreground: "#123456", fontStyle: ["italic"] },
+	}]);
 	using index = new LanguageTokenLineIndex(store);
 	using viewport = new EditorViewport({
 		container,
@@ -131,6 +134,10 @@ test("Viewport clips semantic token spans to every soft-wrapped text fragment", 
 		lineIndex: "2",
 		text: "e",
 	}]);
+	assert.deepEqual([...viewport.element.querySelectorAll<HTMLElement>(".stanza-editor-token")].map(element => ({
+		color: element.style.color,
+		fontStyle: element.style.fontStyle,
+	})), Array.from({ length: 3 }, () => ({ color: "rgb(18, 52, 86)", fontStyle: "italic" })));
 
 	dom.window.close();
 });

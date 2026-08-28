@@ -23,7 +23,7 @@ export class GlyphRasterizer implements IGlyphRasterizer {
 	}
 
 	public getTextMetrics(text: string, style: IGpuGlyphStyle): TextMetrics {
-		this.applyFont(style, style.fontSize * this.devicePixelRatio);
+		this.applyRasterFont(style);
 		return this.context.measureText(text);
 	}
 

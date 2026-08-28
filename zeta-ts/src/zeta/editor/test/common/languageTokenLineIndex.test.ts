@@ -103,6 +103,52 @@ test("Model changes invalidate token lines before consumers observe new text", (
 	}]);
 });
 
+test("Model changes preserve unaffected token lines and shift later lines", () => {
+	using model = new TextModel("alpha\nmiddle\nomega");
+	using store = createLanguageTokenStore(model);
+	acceptTokens(store, model, 1, [
+		token(0, 0, 5, "first"),
+		token(1, 0, 6, "changed"),
+		token(2, 0, 5, "last"),
+	]);
+	using index = new LanguageTokenLineIndex(store);
+	const firstLine = index.lines[0];
+	const events: unknown[] = [];
+	using listener = index.onDidChange(event => events.push(event));
+
+	model.applyEdits([{
+		range: TextRange.from(TextPosition.at(1, 0), TextPosition.at(1, 6)),
+		text: "changed\ninserted",
+	}]);
+	model.applyEdits([{
+		range: TextRange.emptyAt(TextPosition.at(2, 8)),
+		text: "\n",
+	}]);
+
+	assert.equal(store.result, undefined);
+	assert.equal(index.modelVersion, 3);
+	assert.equal(index.requestId, undefined);
+	assert.equal(index.tokenCount, 2);
+	assert.equal(index.lines[0], firstLine);
+	assert.deepEqual(index.lines.map(line => line.lineIndex), [0, 4]);
+	assert.deepEqual(index.getLineTokens(0).map(entry => entry.tokenType), ["first"]);
+	assert.deepEqual(index.getLineTokens(1), []);
+	assert.deepEqual(index.getLineTokens(4).map(entry => entry.tokenType), ["last"]);
+	assert.deepEqual(events.map(event => ({
+		reason: (event as { readonly reason: LanguageResultStoreChangeReason }).reason,
+		tokenCount: (event as { readonly tokenCount: number }).tokenCount,
+		reusedLineCount: (event as { readonly reusedLineCount: number }).reusedLineCount,
+	})), [{
+		reason: LanguageResultStoreChangeReason.ModelChanged,
+		tokenCount: 2,
+		reusedLineCount: 2,
+	}, {
+		reason: LanguageResultStoreChangeReason.ModelChanged,
+		tokenCount: 2,
+		reusedLineCount: 2,
+	}]);
+});
+
 test("Token line index validates queries and owns neither store nor model", () => {
 	using model = new TextModel("abc");
 	using store = createLanguageTokenStore(model);

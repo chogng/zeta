@@ -50,7 +50,7 @@ export abstract class BaseRenderStrategy extends Disposable implements IGpuRende
 				}
 				const glyph = input.atlas.getGlyph(this.glyphRasterizer, segment.segment, style, deviceX);
 				const fontHeight = glyph.fontBoundingBoxAscent + glyph.fontBoundingBoxDescent;
-				const baseline = lineTop + (input.layout.lineHeight * this.glyphRasterizer.devicePixelRatio - fontHeight) / 2 + glyph.fontBoundingBoxAscent;
+				const baseline = Math.round(lineTop + Math.floor((input.layout.lineHeight * this.glyphRasterizer.devicePixelRatio - fontHeight) / 2) + glyph.fontBoundingBoxAscent);
 				appendGlyphQuad(vertices, glyph, Math.floor(deviceX) + glyph.originOffsetX, baseline + glyph.originOffsetY);
 				deviceX += glyph.advance;
 			}

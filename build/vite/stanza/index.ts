@@ -45,7 +45,6 @@ const editor = disposables.add(stanzaApi.editor.create(container, {
   parameterHints: true,
   inlayHints: true,
   codeLens: true,
-  experimentalGpuAcceleration: "on",
   placeholder: "Start typing…",
 }));
 

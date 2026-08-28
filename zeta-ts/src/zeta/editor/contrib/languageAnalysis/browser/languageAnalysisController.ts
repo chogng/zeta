@@ -10,14 +10,13 @@ export class LanguageAnalysisController extends Disposable {
 	constructor(
 		private readonly syntaxService: SyntaxService,
 		private readonly languageId: string,
-		whenLanguageSupportReady: () => Promise<unknown>,
 		onDidChangeLanguageSupport: Event<void> | undefined,
 		private readonly handleLanguageError: (error: unknown) => void,
 	) {
 		super();
 		const scheduleAnalysis = () => {
 			const requestGeneration = ++this.requestGeneration;
-			queueMicrotask(() => void this.requestAnalysis(requestGeneration, whenLanguageSupportReady));
+			queueMicrotask(() => void this.requestAnalysis(requestGeneration));
 		};
 		this._register(syntaxService.tokens.textModel.onDidChange(scheduleAnalysis));
 		if (onDidChangeLanguageSupport) this._register(onDidChangeLanguageSupport(scheduleAnalysis));
@@ -27,9 +26,8 @@ export class LanguageAnalysisController extends Disposable {
 		scheduleAnalysis();
 	}
 
-	private async requestAnalysis(requestGeneration: number, whenLanguageSupportReady: () => Promise<unknown>): Promise<void> {
+	private async requestAnalysis(requestGeneration: number): Promise<void> {
 		try {
-			await whenLanguageSupportReady();
 			if (this.isDisposed || requestGeneration !== this.requestGeneration) return;
 			await this.syntaxService.requestAll(this.languageId);
 		} catch (error) {

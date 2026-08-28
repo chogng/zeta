@@ -92,7 +92,6 @@ export interface EditorBrowserOptions {
 	readonly completionWorkerFactory?: LanguageCompletionWorkerFactory;
 	readonly languageSupport?: IDisposable;
 	readonly onDidChangeLanguageSupport?: Event<void>;
-	readonly whenLanguageSupportReady?: () => Promise<unknown>;
 	readonly onLanguageError?: (error: unknown) => void;
 	readonly indentation?: EditorIndentationOptions;
 	readonly lineWrapping?: EditorLineWrapping;
@@ -365,9 +364,6 @@ function validateOptions(options: EditorBrowserOptions): void {
 	}
 	if (options.input?.readOnly !== undefined && typeof options.input.readOnly !== "boolean") {
 		throw new TypeError("Editor input read-only mode must be boolean");
-	}
-	if (options.whenLanguageSupportReady !== undefined && typeof options.whenLanguageSupportReady !== "function") {
-		throw new TypeError("Editor language readiness must be a function");
 	}
 	if (options.onLanguageError !== undefined && typeof options.onLanguageError !== "function") {
 		throw new TypeError("Editor language error handler must be a function");

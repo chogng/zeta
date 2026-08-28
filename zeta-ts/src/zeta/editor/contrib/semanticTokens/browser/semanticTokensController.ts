@@ -10,14 +10,13 @@ export class SemanticTokensController extends Disposable {
 	constructor(
 		private readonly semanticTokensService: SemanticTokensService,
 		private readonly languageId: string,
-		whenLanguageSupportReady: () => Promise<unknown>,
 		onDidChangeLanguageSupport: Event<void> | undefined,
 		private readonly handleLanguageError: (error: unknown) => void,
 	) {
 		super();
 		const scheduleTokens = () => {
 			const requestGeneration = ++this.requestGeneration;
-			queueMicrotask(() => void this.requestTokens(requestGeneration, whenLanguageSupportReady));
+			queueMicrotask(() => void this.requestTokens(requestGeneration));
 		};
 		this._register(semanticTokensService.tokens.textModel.onDidChange(scheduleTokens));
 		if (onDidChangeLanguageSupport) this._register(onDidChangeLanguageSupport(scheduleTokens));
@@ -27,9 +26,8 @@ export class SemanticTokensController extends Disposable {
 		scheduleTokens();
 	}
 
-	private async requestTokens(requestGeneration: number, whenLanguageSupportReady: () => Promise<unknown>): Promise<void> {
+	private async requestTokens(requestGeneration: number): Promise<void> {
 		try {
-			await whenLanguageSupportReady();
 			if (this.isDisposed || requestGeneration !== this.requestGeneration) return;
 			await this.semanticTokensService.requestTokens(this.languageId);
 		} catch (error) {

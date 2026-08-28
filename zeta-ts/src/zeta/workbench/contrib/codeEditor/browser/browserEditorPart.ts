@@ -35,7 +35,6 @@ export function createBrowserEditorPart(options: BrowserEditorPartOptions): Edit
 			...(options.languageFeaturesService ? {} : { completionWorkerFactory: createCompletionWorkerFactory() }),
 			...(ownsTextMateService ? { languageSupport: textMateService } : {}),
 			onDidChangeLanguageSupport,
-			whenLanguageSupportReady: () => textMateService.grammars.whenReady(),
 		});
 	} catch (error) {
 		if (ownsTextMateService) textMateService.dispose();
