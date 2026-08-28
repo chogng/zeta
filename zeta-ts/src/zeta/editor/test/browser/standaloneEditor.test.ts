@@ -3,7 +3,6 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../base/common/uri.js";
 import { lightColorTheme } from "../../../platform/theme/common/colorTheme.js";
-import { LanguageCompletionItemKind } from "../../common/languages/completion/languageCompletions.js";
 import { LanguageFeaturesService } from "../../common/services/languageFeaturesService.js";
 import { LanguageConfigurationService } from '../../common/services/languageConfigurationService.js';
 import { HoverService } from '../../contrib/hover/common/hover.js';
@@ -84,6 +83,16 @@ test("standalone public API keeps compiled theme snapshots internal", () => {
 	}
 });
 
+test("standalone languages API exposes provider value types", () => {
+	assert.equal(stanza.languages.LanguageCompletionItemKind, stanza.LanguageCompletionItemKind);
+	assert.equal(stanza.languages.LanguageCompletionInsertTextFormat, stanza.LanguageCompletionInsertTextFormat);
+	assert.equal(stanza.languages.LanguageCompletionTriggerKind, stanza.LanguageCompletionTriggerKind);
+	assert.equal(stanza.languages.LanguageDiagnosticSeverity, stanza.LanguageDiagnosticSeverity);
+	assert.equal(stanza.languages.DocumentHighlightKind, stanza.DocumentHighlightKind);
+	assert.equal(stanza.languages.RGBA8, stanza.RGBA8);
+	assert.deepEqual(new stanza.languages.RGBA8(300, -1, 64, 255), new stanza.RGBA8(255, 0, 64, 255));
+});
+
 test("standalone languages API feeds the shared editor registries", async () => {
 	using language = stanza.languages.register({ id: 'stanza-public-test', extensions: ['.stanza-public'] });
 	using configuration = stanza.languages.setLanguageConfiguration('stanza-public-test', { comments: { lineComment: '//' } });
@@ -109,13 +118,15 @@ test("standalone completion providers execute in a live editor", async () => {
 		languageIds: ["stanza-completion-test"],
 		provideCompletions: request => {
 			requests += 1;
+			assert.equal(request.context.kind, stanza.languages.LanguageCompletionTriggerKind.Invoke);
 			return {
 				items: [{
 					id: "standalone-result",
 					label: "standaloneResult",
-					kind: LanguageCompletionItemKind.Text,
+					kind: stanza.languages.LanguageCompletionItemKind.Text,
 					range: stanza.TextRange.emptyAt(request.position),
 					insertText: "standaloneResult",
+					insertTextFormat: stanza.languages.LanguageCompletionInsertTextFormat.PlainText,
 				}],
 				isIncomplete: false,
 			};

@@ -1,8 +1,11 @@
 import type { IDisposable } from '../../../base/common/lifecycle.js';
-import type { LanguageCompletionProvider } from '../../common/languages/completion/languageCompletionProviders.js';
-import type { DocumentHighlightProvider, MultiDocumentHighlightProvider } from '../../common/languages/documentHighlights.js';
+import { RGBA8 } from '../../common/core/misc/rgba.js';
+import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind } from '../../common/languages/completion/languageCompletions.js';
+import { LanguageCompletionTriggerKind, type LanguageCompletionProvider } from '../../common/languages/completion/languageCompletionProviders.js';
+import { DocumentHighlightKind, type DocumentHighlightProvider, type MultiDocumentHighlightProvider } from '../../common/languages/documentHighlights.js';
 import type { LanguageConfiguration, LanguageConfigurationRegistrationOptions } from '../../common/languages/languageConfiguration.js';
 import type { LanguageDescription, LanguageRegistrationOptions } from '../../common/languages/languageRegistry.js';
+import { LanguageDiagnosticSeverity } from '../../common/languages/languageResults.js';
 import type { SyntaxProvider } from '../../common/languages/syntax/syntaxProviders.js';
 import type { LanguageWorkspaceSymbolProvider } from '../../common/languages/workspaceSymbols.js';
 import type { LanguageCallHierarchyProvider, LanguageTypeHierarchyProvider } from '../../contrib/callHierarchy/common/languageHierarchy.js';
@@ -25,6 +28,12 @@ import type { LanguageSemanticTokensProvider } from '../../contrib/semanticToken
 import { StandaloneServices } from './standaloneServices.js';
 
 export interface IStandaloneLanguagesApi {
+	readonly LanguageCompletionInsertTextFormat: typeof LanguageCompletionInsertTextFormat;
+	readonly LanguageCompletionItemKind: typeof LanguageCompletionItemKind;
+	readonly LanguageCompletionTriggerKind: typeof LanguageCompletionTriggerKind;
+	readonly LanguageDiagnosticSeverity: typeof LanguageDiagnosticSeverity;
+	readonly DocumentHighlightKind: typeof DocumentHighlightKind;
+	readonly RGBA8: typeof RGBA8;
 	readonly register: typeof register;
 	readonly setLanguageConfiguration: typeof setLanguageConfiguration;
 	readonly registerSyntaxProvider: typeof registerSyntaxProvider;
@@ -94,6 +103,12 @@ export function registerMultiDocumentHighlightProvider(provider: MultiDocumentHi
 
 export function createStandaloneLanguagesApi(): IStandaloneLanguagesApi {
 	return Object.freeze({
+		LanguageCompletionInsertTextFormat,
+		LanguageCompletionItemKind,
+		LanguageCompletionTriggerKind,
+		LanguageDiagnosticSeverity,
+		DocumentHighlightKind,
+		RGBA8,
 		register,
 		setLanguageConfiguration,
 		registerSyntaxProvider,
