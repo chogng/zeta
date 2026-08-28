@@ -1,4 +1,4 @@
-import { getEditorIndentationUnit, getLeadingIndentation, normalizeEditorIndentation, normalizeEditorIndentationText, resolveEditorIndentationOptions, unshiftEditorIndentation, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from "../editorIndentation.js";
+import { getEditorIndentationUnit, getLeadingIndentation, normalizeEditorIndentation, normalizeEditorIndentationText, resolveEditorIndentationOptions, unshiftEditorIndentation, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from "../core/misc/indentation.js";
 import { createSelectionEditCommand, type EditorSelectionEdit } from "./cursorTypeEditOperations.js";
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../commands/editorEditCommand.js";
 import { LanguageIndentAction, type LanguageEnterAction, type LanguageOnEnterRule, type ResolvedLanguageConfiguration } from "../languages/languageConfiguration.js";

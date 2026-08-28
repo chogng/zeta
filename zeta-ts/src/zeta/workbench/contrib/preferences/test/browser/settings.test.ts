@@ -266,6 +266,7 @@ test('PreferencesEditor renders and updates registry-backed settings only', asyn
 	let menuActions: readonly IAction[] = [];
 	let hideMenu: ((didCancel: boolean) => void) | undefined;
 	const clipboardService: IClipboardService = {
+		readText: async () => '',
 		writeText: value => {
 			copied.push(value);
 			return Promise.resolve();

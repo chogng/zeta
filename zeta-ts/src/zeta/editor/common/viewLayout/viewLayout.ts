@@ -3,7 +3,7 @@ import { type ISize } from '../../../base/common/layout.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { clamp, isFiniteNumber, isNonNegativeSafeInteger, isPositiveSafeInteger } from '../../../base/common/numbers.js';
 import { type TextModelChange } from '../core/text.js';
-import { type EditorLineHeightChangeAccessor, type EditorLineRange, type EditorScrollPosition, type EditorViewportLineSource, type EditorViewportModelSource } from '../viewModel.js';
+import { type EditorLineHeightChangeAccessor, type EditorLineRange, type EditorScrollPosition, type EditorViewZoneLayout, type EditorViewportLineSource, type EditorViewportModelSource } from '../viewModel.js';
 import { LinesLayout, type EditorViewportVerticalPadding } from './linesLayout.js';
 import { type CustomLineHeightData } from './lineHeights.js';
 
@@ -20,6 +20,8 @@ export interface EditorViewportLayout {
 	readonly visibleLines: EditorLineRange;
 	readonly renderLines: EditorLineRange;
 	readonly renderTop: number;
+	readonly relativeVerticalOffset?: readonly number[];
+	readonly viewZones?: readonly EditorViewZoneLayout[];
 }
 
 export enum EditorViewportChangeReason {
@@ -29,6 +31,7 @@ export enum EditorViewportChangeReason {
 	ContentWidth = 'contentWidth',
 	LineHeight = 'lineHeight',
 	Scroll = 'scroll',
+	ViewZones = 'viewZones',
 }
 
 export interface EditorViewportChange {
@@ -132,6 +135,36 @@ export class ViewLayout extends Disposable {
 		return this.currentLayout;
 	}
 
+	public addViewZone(afterLineIndex: number, heightInPixels: number): string {
+		const id = this.linesLayout.addViewZone(afterLineIndex, heightInPixels);
+		this.publish(EditorViewportChangeReason.ViewZones);
+		return id;
+	}
+
+	public changeViewZone(id: string, afterLineIndex: number, heightInPixels: number): EditorViewportLayout {
+		if (!this.linesLayout.changeViewZone(id, afterLineIndex, heightInPixels)) return this.currentLayout;
+		this.publish(EditorViewportChangeReason.ViewZones);
+		return this.currentLayout;
+	}
+
+	public removeViewZone(id: string): EditorViewportLayout {
+		if (!this.linesLayout.removeViewZone(id)) return this.currentLayout;
+		this.publish(EditorViewportChangeReason.ViewZones);
+		return this.currentLayout;
+	}
+
+	public getVerticalOffsetForLineIndex(lineIndex: number): number {
+		return this.linesLayout.getVerticalOffsetForLineIndex(lineIndex);
+	}
+
+	public getLineIndexAtVerticalOffset(verticalOffset: number): number {
+		return this.linesLayout.getLineNumberAtVerticalOffset(verticalOffset);
+	}
+
+	public getViewZoneLayout(id: string): EditorViewZoneLayout | undefined {
+		return this.linesLayout.getViewZoneLayout(id);
+	}
+
 	public setScrollPosition(position: EditorScrollPosition): EditorViewportLayout {
 		const next = readScrollPosition(position);
 		if (scrollPositionsEqual(this.requestedScrollPosition, next)) return this.currentLayout;
@@ -162,6 +195,7 @@ export class ViewLayout extends Disposable {
 			top: clamp(this.requestedScrollPosition.top, 0, maximumScrollPosition.top),
 		});
 		const viewportData = this.linesLayout.getLinesViewportData(scrollPosition.top, this.viewportSize.height);
+		const viewZones = this.linesLayout.getViewZoneLayouts();
 		return Object.freeze({
 			modelVersion: this.model.version,
 			lineHeight: this.linesLayout.lineHeight,
@@ -172,6 +206,10 @@ export class ViewLayout extends Disposable {
 			visibleLines: viewportData.visibleLines,
 			renderLines: viewportData.renderLines,
 			renderTop: viewportData.renderTop,
+			...(viewZones.length > 0 ? {
+				relativeVerticalOffset: viewportData.relativeVerticalOffset,
+				viewZones,
+			} : {}),
 		});
 	}
 }
@@ -255,7 +293,24 @@ function layoutsEqual(left: EditorViewportLayout, right: EditorViewportLayout): 
 		scrollPositionsEqual(left.maximumScrollPosition, right.maximumScrollPosition) &&
 		lineRangesEqual(left.visibleLines, right.visibleLines) &&
 		lineRangesEqual(left.renderLines, right.renderLines) &&
-		left.renderTop === right.renderTop;
+		left.renderTop === right.renderTop &&
+		numberArraysEqual(left.relativeVerticalOffset, right.relativeVerticalOffset) &&
+		viewZonesEqual(left.viewZones, right.viewZones);
+}
+
+function numberArraysEqual(left: readonly number[] | undefined, right: readonly number[] | undefined): boolean {
+	if (left === right) return true;
+	if (!left || !right || left.length !== right.length) return false;
+	return left.every((value, index) => value === right[index]);
+}
+
+function viewZonesEqual(left: readonly EditorViewZoneLayout[] | undefined, right: readonly EditorViewZoneLayout[] | undefined): boolean {
+	if (left === right) return true;
+	if (!left || !right || left.length !== right.length) return false;
+	return left.every((zone, index) => {
+		const candidate = right[index];
+		return candidate !== undefined && zone.id === candidate.id && zone.afterLineIndex === candidate.afterLineIndex && zone.top === candidate.top && zone.heightInPixels === candidate.heightInPixels;
+	});
 }
 
 function lineRangesEqual(left: EditorLineRange, right: EditorLineRange): boolean {

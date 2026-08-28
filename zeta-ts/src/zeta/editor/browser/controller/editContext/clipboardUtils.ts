@@ -1,3 +1,5 @@
+import { h } from '../../../../base/browser/dom.js';
+
 /** Clipboard data readable by an editor input adapter. */
 export interface IReadableClipboardData {
 	readonly types: readonly string[];
@@ -34,7 +36,7 @@ export function createClipboardCopyEvent(browserEvent: ClipboardEvent, isCut: bo
 	return {
 		isCut,
 		clipboardData: createWritableClipboardData(browserEvent.clipboardData),
-		hasClipboardData: browserEvent.clipboardData !== null,
+		hasClipboardData: browserEvent.clipboardData != null,
 		browserEvent,
 		setHandled: () => {
 			if (handled) return;
@@ -92,3 +94,55 @@ export function createWritableClipboardData(dataTransfer: DataTransfer | null | 
 function readPlainText(clipboardData: IReadableClipboardData): string {
 	return clipboardData.getData('text/plain');
 }
+
+export function readEditorClipboardText(clipboardData: IReadableClipboardData, ownerDocument: Document): string {
+	try {
+		const text = clipboardData.getData('text/plain');
+		if (text.length > 0) return text;
+	} catch {
+		// A browser transfer may expose HTML without allowing plain-text access.
+	}
+	try {
+		return readEditorHtmlText(clipboardData.getData('text/html'), ownerDocument);
+	} catch {
+		return '';
+	}
+}
+
+/** Reduces untrusted HTML to inert deterministic text for paste and drop paths. */
+export function readEditorHtmlText(html: string, ownerDocument: Document): string {
+	if (html.length === 0) return '';
+	const template = h(ownerDocument, 'template');
+	template.innerHTML = html;
+	const parts: string[] = [];
+	appendHtmlClipboardText(template.content, parts);
+	return parts.join('').replaceAll('\u00a0', ' ').replace(/\n{3,}/g, '\n\n').replace(/^\n|\n$/g, '');
+}
+
+function appendHtmlClipboardText(node: Node, parts: string[]): void {
+	if (node.nodeType === node.TEXT_NODE) {
+		parts.push(node.textContent ?? '');
+		return;
+	}
+	if (node.nodeType !== node.ELEMENT_NODE && node.nodeType !== node.DOCUMENT_FRAGMENT_NODE) return;
+	const element = node.nodeType === node.ELEMENT_NODE ? node as HTMLElement : undefined;
+	if (element && (element.localName === 'script' || element.localName === 'style' || element.localName === 'noscript')) return;
+	if (element?.localName === 'br') {
+		appendLineBreak(parts);
+		return;
+	}
+	const block = element !== undefined && HTML_CLIPBOARD_BLOCK_ELEMENTS.has(element.localName);
+	if (block) appendLineBreak(parts);
+	for (const child of node.childNodes) appendHtmlClipboardText(child, parts);
+	if (block) appendLineBreak(parts);
+}
+
+function appendLineBreak(parts: string[]): void {
+	if (parts.length === 0 || parts.at(-1) !== '\n') parts.push('\n');
+}
+
+const HTML_CLIPBOARD_BLOCK_ELEMENTS = new Set([
+	'address', 'article', 'aside', 'blockquote', 'div', 'dl', 'dt', 'dd', 'fieldset', 'figcaption',
+	'figure', 'footer', 'form', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'hr', 'li',
+	'main', 'nav', 'ol', 'p', 'section', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'ul',
+]);

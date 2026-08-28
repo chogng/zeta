@@ -7,7 +7,12 @@ import { CodeEditorPane } from "./codeEditorPane.js";
 import { DIFF_EDITOR_ID, matchDiffEditor } from "./diffEditorInput.js";
 import { DiffEditorPane } from "./diffEditorPane.js";
 import { WrappingIndent } from "../../../../editor/common/config/editorOptions.js";
+import { bindCodeLensCacheStorage } from "../../../../editor/contrib/codelens/browser/codeLensCache.js";
+import { IStorageService } from "../../../../platform/storage/common/storage.js";
+import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
 import { CodeEditorConfiguration, type WrappingIndentSetting } from "../common/editorConfiguration.js";
+
+registerWorkbenchContribution("workbench.contrib.codeLensCachePersistence", WorkbenchPhase.BlockStartup, accessor => bindCodeLensCacheStorage(accessor.get(IStorageService)));
 
 registerEditorPane({
 	id: CODE_EDITOR_ID,
@@ -50,6 +55,10 @@ registerEditorPane({
 			parameterHints: configuration?.getValue(CodeEditorConfiguration.parameterHints),
 			inlayHints: configuration?.getValue(CodeEditorConfiguration.inlayHints),
 			codeLens: configuration?.getValue(CodeEditorConfiguration.codeLens),
+			colorDecorators: configuration?.getValue(CodeEditorConfiguration.colorDecorators),
+			colorDecoratorsActivatedOn: configuration?.getValue(CodeEditorConfiguration.colorDecoratorsActivatedOn),
+			colorDecoratorsLimit: configuration?.getValue(CodeEditorConfiguration.colorDecoratorsLimit),
+			defaultColorDecorators: configuration?.getValue(CodeEditorConfiguration.defaultColorDecorators),
 			formatOnSave: configuration?.getValue(CodeEditorConfiguration.formatOnSave),
 			find: configuration ? {
 				seedSearchStringFromSelection: configuration.getValue(CodeEditorConfiguration.findSeedFromSelection),

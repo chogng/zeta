@@ -1,5 +1,5 @@
 import { TextPosition, TextRange, type TextEdit, type TextSnapshot } from '../core/text.js';
-import { type InplaceReplaceResult } from '../languages/inplaceReplaceSupport.js';
+import { type InplaceReplaceResult } from '../languages/supports/inplaceReplaceSupport.js';
 import { type LanguageWorkerWireCodec } from '../languages/languageWorkerWire.js';
 import { EDITOR_WORKER_MINIMAL_EDITS_LANE, EDITOR_WORKER_NAVIGATE_VALUE_LANE, EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE, type EditorWorkerLane, type EditorWorkerMinimalEditsRequest, type EditorWorkerNavigateValueRequest, type EditorWorkerRequest, type EditorWorkerResult } from './editorWorker.js';
 import { type UnicodeHighlight, type UnicodeHighlightKind } from './unicodeTextModelHighlighter.js';

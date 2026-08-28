@@ -32,7 +32,7 @@ const { CodeEditorPane: EditorPane } = await import("../../browser/codeEditorPan
 const { BrowserTextModelService } = await import("../../../../services/textmodelResolver/browser/browserTextModelService.js");
 const { BrowserTextResourceStore } = await import("../../browser/browserTextResourceStore.js");
 const { EditorTextDirection } = await import("../../../../../editor/browser/view.js");
-const { EditorIndentationKind } = await import("../../../../../editor/common/editorIndentation.js");
+const { EditorIndentationKind } = await import("../../../../../editor/common/core/misc/indentation.js");
 const { EditorLineWrapping } = await import("../../../../../editor/common/config/editorOptions.js");
 
 test.after(() => browserEnvironment.window.close());
@@ -234,6 +234,10 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 		parameterHints: false,
 		inlayHints: false,
 		codeLens: false,
+		colorDecorators: false,
+		colorDecoratorsActivatedOn: "click",
+		colorDecoratorsLimit: 250,
+		defaultColorDecorators: "always",
 		formatOnSave: true,
 		find: {
 			seedSearchStringFromSelection: false,
@@ -272,6 +276,10 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 	assert.equal(received?.parameterHints, false);
 	assert.equal(received?.inlayHints, false);
 	assert.equal(received?.codeLens, false);
+	assert.equal(received?.colorDecorators, false);
+	assert.equal(received?.colorDecoratorsActivatedOn, "click");
+	assert.equal(received?.colorDecoratorsLimit, 250);
+	assert.equal(received?.defaultColorDecorators, "always");
 	assert.equal(received?.formatOnSave, true);
 	assert.deepEqual(received?.find, {
 		seedSearchStringFromSelection: false,

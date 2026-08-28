@@ -3,7 +3,7 @@ import { TextPosition, TextRange, normalizeTextLineEndings, type TextEdit, type 
 import { StringText } from '../core/text/abstractText.js';
 import { TextReplacement } from '../core/edits/textEdit.js';
 import { getWordAtText } from '../core/wordHelper.js';
-import { BasicInplaceReplace } from '../languages/inplaceReplaceSupport.js';
+import { BasicInplaceReplace } from '../languages/supports/inplaceReplaceSupport.js';
 import { type LanguageWorkerRequest } from '../languages/languageRequestCoordinator.js';
 import { EDITOR_WORKER_MINIMAL_EDITS_LANE, EDITOR_WORKER_NAVIGATE_VALUE_LANE, EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE, type EditorWorkerImplementation, type EditorWorkerLane, type EditorWorkerMinimalEditsRequest, type EditorWorkerNavigateValueRequest, type EditorWorkerRequest, type EditorWorkerResult } from './editorWorker.js';
 import { computeUnicodeHighlights } from './unicodeTextModelHighlighter.js';

@@ -79,6 +79,15 @@ function lastVisualLineIndex(projection: EditorVisualLineProjection, logicalLine
 }
 
 function createLineTopReader(layout: EditorViewportLayout): (visualLineIndex: number) => number {
+	const offsets = layout.relativeVerticalOffset;
+	if (offsets) {
+		return visualLineIndex => {
+			const offsetIndex = visualLineIndex - layout.renderLines.startLineIndex;
+			if (offsetIndex >= 0 && offsetIndex < offsets.length) return offsets[offsetIndex]!;
+			if (offsetIndex === offsets.length && offsets.length > 0) return offsets[offsets.length - 1]! + layout.lineHeight;
+			return layout.renderTop + offsetIndex * layout.lineHeight;
+		};
+	}
 	const paddingTop = layout.renderTop - layout.renderLines.startLineIndex * layout.lineHeight;
 	return visualLineIndex => paddingTop + visualLineIndex * layout.lineHeight;
 }

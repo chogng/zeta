@@ -31,7 +31,7 @@ Stanza 是当前唯一的 Zeta editor runtime。不保留旧 editor ID、DOM cla
 | Selection/decorations | 基础具备 | selection、实例控制器、tracked range、decoration collection |
 | Language model | 已具备 Code 主路径 | 版本化 token/diagnostic/completion、TextMate 与 parser facts、跨文件 definition/declaration/references/implementation/type definition、Peek、workspace symbols、call/type hierarchy、rename、code action 与有序 WorkspaceEdit 均接通 App Server；更广的语言覆盖由 LSP provider collection 演进，不再复制 editor contract |
 | Browser view | 部分具备 | common viewport、虚拟行 DOM、字体行宽、gutter、selection/caret、基础 decoration、hit-test、active-position reveal、字符/块 canvas minimap（公共布局、semantic-token 颜色、click/drag scroll）、diagnostic severity marker、可见行缩进参考线已完成；富交互与主题细化尚未完成 |
-| EditorView / ViewController | 部分具备 | `EditorView` 选择并拥有 EditContext 生命周期，`ViewController` 将 beforeinput/textupdate/keydown 路由到 common command，覆盖 IME 协作、pointer selection、Alt+Shift 列选择、键盘导航、textarea 编辑、plain/syntax-marked safe HTML 选区与空选区整行 copy/cut/paste、单个显式文本文件 clipboard paste/drop、前端本地 MIME paste provider 与内置 `text/uri-list`；Android/macOS 特化仍未完成 |
+| EditorView / ViewController | 部分具备 | `EditorView` 选择并拥有 EditContext 生命周期，`ViewController` 将 beforeinput/textupdate/keydown 路由到 common command，覆盖 IME 协作、pointer selection、Alt+Shift 列选择、键盘导航、textarea 编辑、plain/syntax-marked safe HTML 选区与空选区整行 copy/cut/paste、单个显式文本文件 clipboard paste/drop 与 `text/uri-list`；Android/macOS 特化仍未完成 |
 | SuggestController | 部分具备 | 独立 contribution 拥有 completion service/session 的 browser 接线、键盘/鼠标接受、Ctrl+Space invoke、trigger character 与 incomplete refresh、completion/listbox ARIA；完整 screen-reader navigation 与平台辅助输入仍待真实平台验证 |
 | Accessibility | 部分具备 | editor label、聚焦 textarea 的文本/主选区镜像、multi-selection `aria-description`、completion/listbox ARIA、dialog state 与 cursor/selection/save live-region announcements、forced-colors focus/selection/caret/diagnostic 语义已具备；完整 screen-reader navigation 与平台辅助输入仍待真实平台验证 |
 | Large-file policy | 已具备 | 模型创建时固定判断 20 MiB/30 万行 tokenization、50 MiB synchronization、256M text-unit heap 阈值；保留编辑/滚动/查找/保存，关闭或限制全量后台 token、diagnostic、folding、CodeLens、Inlay Hint、symbol、occurrence 与 bracket colorization |
@@ -225,19 +225,11 @@ DOM 无关的内核生命周期只支持单 selection。browser 已按 Current 1
 基础 `compositionstart`、`compositionupdate`、`compositionend` 和候选窗
 anchor；Android diff、macOS 长按及其他平台差异仍未完成。
 
-### Current 6：固定行高 viewport 内核
+### Current 6：固定基线行高与 View Zone 布局内核
 
-`ViewLayout`、`LinesLayout` 与 `LineHeightsManager` 已在 `editor/common/viewLayout` 中建立 DOM 无关的 view-model
-边界。browser 层负责测量并输入 viewport size、content width 和 line height；
-common 层负责内容尺寸、横纵滚动约束、可见行范围和 overscan render range。
-输出 layout 是不可变快照并携带 `TextModel.version`，因此即使一次编辑没有
-改变行数，renderer 仍能按版本丢弃旧投影。resize 与 line-height 更新尽量
-保持原 fractional top-line anchor，模型收缩则把 scroll position 约束回新的
-内容边界。
+`ViewLayout`、`LinesLayout` 与 `LineHeightsManager` 已在 `editor/common/viewLayout` 中建立 DOM 无关的 view-model 边界。browser 层负责测量并输入 viewport size、content width 和 line height；common 层负责内容尺寸、横纵滚动约束、可见行范围、overscan render range，以及 visual line 之间由 feature 声明的 View Zone 空间。输出 layout 是不可变快照并携带 `TextModel.version`，因此即使一次编辑没有改变行数，renderer 仍能按版本丢弃旧投影。resize 与 line-height 更新尽量保持原 fractional top-line anchor，模型收缩则把 scroll position 约束回新的内容边界。
 
-common 契约明确限定为固定行高，不包含软换行、折叠、inline widget、字体
-测量或 DOM。`editor/browser` 已按 Current 7 消费这个 contract；浏览器职责
-没有进入 common，也没有下沉进 base。
+common 契约使用固定文本行高，但允许 View Zone 在行间增加独立高度；它只保存锚点和几何，不持有 feature DOM。软换行、折叠、字体测量和 DOM 仍由既有 owner 负责。`editor/browser` 消费这个 contract，挂载调用方拥有的 zone root，并让文本行、overlay、命中测试和滚动共享同一组纵向坐标。
 
 ### Current 7：只读虚拟行 browser projection
 
@@ -462,7 +454,7 @@ router。
 offset，并使用 `Isolated` history，确保 paste/cut 不会与前后的连续 typing
 合成一个 undo step。
 
-`StanzaClipboardController` 由 editor view 组合持有并监听原生
+`ClipboardController` 由 editor view 组合持有并监听浏览器
 copy/cut/paste。copy 写入可移植的 `text/plain`、转义后的预格式化 `text/html`；
 Editor 的多 selection 复制额外写入版本化 `application/x-stanza-editor`
 元数据。粘贴时，合法且数量匹配的元数据逐 selection 分发；外部纯文本或无效
@@ -471,18 +463,12 @@ inert template 中转换为确定性文本，脚本、样式和 noscript 内容�
 所有输入最终仍经过 common command 和权威
 `TextModel`，成功 cut/paste 后清空 textarea 并 reveal primary。
 
-clipboard 输出的换行约定由显式 `StanzaClipboardLineEnding` 控制，默认按宿主
+clipboard 输出的换行约定由显式 `ClipboardLineEnding` 控制，默认按宿主
 Windows 选择 CRLF，其余平台选择 LF；进入 model 时仍统一规范化为 LF。浏览器
 拒绝自定义 MIME 时保留 plain text，不影响跨应用复制。空 selection 的显式
 策略和整行 round-trip 见 Current 20。
 
-当前已有前端本地 `StanzaClipboardPasteProvider`：它只能读取事件期捕获的不可变
-文本 MIME 快照，按声明顺序执行，并且异步结果必须仍匹配原 model version 与
-selection 才能提交。内置 `text/uri-list` provider 会忽略注释行。异步 Clipboard
-在原生 event 没有文本、metadata、受支持文件或匹配 provider 时，于同一用户手势先读取
-rich `text/plain`/`text/html`，再回退 `readText()`；延迟、拒绝、空值或 stale 结果都不能
-修改 model。若 copy/cut event 缺少 `clipboardData`，Async writer 写入同一 portable
-plain/HTML payload，且 cut 仅在写入成功后提交；这些路径不绕开 common command。
+`ClipboardController` 独立持有 copy/cut/paste 语义，包括整行策略、metadata、HTML 输出、文本文件 paste 与 `text/uri-list` paste；URI 注释行会被忽略，异步结果必须仍匹配原 model version 与 selection 才能提交。浏览器 event 没有文本或 metadata 时，它通过 platform `IClipboardService` 读写 plain text；平台层不持有编辑器 metadata 或 HTML。`TextDropController` 只处理文本与文本文件 drop。所有删除仍由 common command 执行，但剪切范围已由 clipboard owner 决定。
 
 ### Current 18：Textarea composition adapter
 
@@ -557,12 +543,12 @@ paste mode。全部 payload 为 `Line` 且目标 selection 都 collapsed 时，
 普通逐 selection paste，避免 line mode 隐式绕过目标范围。
 
 plain-text 输出会连续拼接 line entries，避免每个自带 LF 的行之间出现额外
-空行；跨平台输出仍由 `StanzaClipboardLineEnding` 转换。当前已经有
-copy-with-syntax、单个用户提供文本文件、内置 `text/uri-list` 与可注册的本地
-MIME paste provider。若原生 paste event 没有可用文本、metadata、受支持文件或
-provider，浏览器层在同一用户手势内先读取 rich Async Clipboard，再回退 plain text；
-其异步结果仍必须通过 captured model revision 与完整 selection set 的闸门。copy/cut
-event 没有 `clipboardData` 时，Async writer 输出等价的 plain/HTML payload，cut 等待成功。
+空行；跨平台输出仍由 `ClipboardLineEnding` 转换。copy-with-syntax 数据、文本文件 paste
+与 `text/uri-list` 都由 `ClipboardController` 处理；`editContext/clipboardUtils.ts` 只适配
+浏览器 event transfer，并把外部 HTML 安全还原成文本。浏览器 paste event 没有可用文本
+或 metadata 时，platform clipboard service 只读取 plain text；异步结果仍必须通过 captured
+model revision 与完整 selection set 的闸门。copy/cut event 没有 `clipboardData` 时，同一
+service 输出 plain text，cut 等待成功。
 
 ### Current 21：Versioned language request boundary
 

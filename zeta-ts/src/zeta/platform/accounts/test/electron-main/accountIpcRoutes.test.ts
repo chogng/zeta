@@ -15,7 +15,7 @@ test('account IPC accepts supported login methods and opens a device challenge',
 	} as unknown as AppServerSupervisor;
 	const route = accountIpcRoutes(supervisor, {
 		openerService: { openExternal: async target => { opened.push(target); } },
-		clipboardService: { writeText: async value => { copied.push(value); } },
+		clipboardService: { readText: async () => '', writeText: async value => { copied.push(value); } },
 	}).find(candidate => candidate.channel === 'zeta:accounts:login-start');
 	assert.ok(route);
 
@@ -38,7 +38,7 @@ test('account IPC opens browser login without copying a device code', async () =
 	} as unknown as AppServerSupervisor;
 	const route = accountIpcRoutes(supervisor, {
 		openerService: { openExternal: async target => { opened.push(target); } },
-		clipboardService: { writeText: async value => { copied.push(value); } },
+		clipboardService: { readText: async () => '', writeText: async value => { copied.push(value); } },
 	}).find(candidate => candidate.channel === 'zeta:accounts:login-start');
 	assert.ok(route);
 
@@ -59,7 +59,7 @@ test('account IPC cancels a device flow when opening the browser fails', async (
 	} as unknown as AppServerSupervisor;
 	const route = accountIpcRoutes(supervisor, {
 		openerService: { openExternal: async () => { throw new Error('open failed'); } },
-		clipboardService: { writeText: async () => {} },
+		clipboardService: { readText: async () => '', writeText: async () => {} },
 	}).find(candidate => candidate.channel === 'zeta:accounts:login-start');
 	assert.ok(route);
 

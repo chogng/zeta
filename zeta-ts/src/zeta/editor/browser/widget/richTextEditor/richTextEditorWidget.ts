@@ -24,7 +24,7 @@ import { EditorDom } from '../../editorDom.js';
 import { getEditorContributions, type DocumentCollaborationContribution, type DocumentCollaborationStartResult, type DocumentFormattingContribution } from '../../editorExtensions.js';
 import { DocumentOutlineNavigator } from '../documentOutlineNavigator.js';
 import { DocumentCollaborationController } from '../../../contrib/collaboration/common/controller.js';
-import { createDocumentFragmentFromHtml } from '../../../contrib/clipboard/browser/htmlDocumentFragment.js';
+import { createDocumentFragmentFromHtml } from './htmlDocumentFragment.js';
 import type { ITextModelService, TextModelBlockInput, TextModelWorkingCopyReference } from '../../../common/services/resolverService.js';
 import type { IDocumentCollaborationService } from '../../../common/services/documentCollaborationService.js';
 import type { DocumentCollaborationPresence } from '../../../common/services/documentCollaborationService.js';

@@ -1,6 +1,6 @@
 import { Disposable, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
-import { createEditorColumnSelectionSet } from "../../common/cursor/columnSelection.js";
+import { createEditorColumnSelectionSet } from "../../common/cursor/cursorColumnSelection.js";
 import { SelectionDirection, TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";
 import { type TextModel } from "../../common/model/textModel.js";

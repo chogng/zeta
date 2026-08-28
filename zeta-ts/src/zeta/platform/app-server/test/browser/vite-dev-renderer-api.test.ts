@@ -7,7 +7,7 @@ import { WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SE
 
 const connectorHostServices = {
 	openerService: { openExternal: async () => undefined },
-	clipboardService: { writeText: async () => undefined },
+	clipboardService: { readText: async () => '', writeText: async () => undefined },
 };
 
 class FakeHotContext implements ViteDevHotContext {

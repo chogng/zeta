@@ -8,7 +8,7 @@ import { TextSelection, TextSelectionSet } from "../../../common/core/selection.
 import { TextRange } from "../../../common/core/text.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { findTextMatches, TextSearchPatternKind, TextSearchQueryError, type TextSearchMatch, type TextSearchQuery } from "../../../common/model/textModelSearch.js";
-import { createReplaceAllTextMatchesCommand, createReplaceTextMatchCommand, resolveTextSearchReplacement } from "../../../common/commands/textSearchCommands.js";
+import { createReplaceAllTextMatchesCommand, createReplaceTextMatchCommand, resolveTextSearchReplacement } from "../common/textSearchCommands.js";
 import { TrackedRangeStickiness, type TrackedRange } from "../../../common/model/trackedRange.js";
 import { type EditorViewport } from "../../../browser/view.js";
 

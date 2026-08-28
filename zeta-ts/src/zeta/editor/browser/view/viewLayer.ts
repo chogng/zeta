@@ -37,6 +37,7 @@ export class ViewLayer<TLine> extends Disposable {
 	private renderedModelVersion = -1;
 	private renderedLineHeight = -1;
 	private renderedProjectionRevision = -1;
+	private renderedVerticalOffsets: readonly number[] | undefined;
 
 	constructor(options: ViewLayerOptions<TLine>) {
 		super();
@@ -67,6 +68,7 @@ export class ViewLayer<TLine> extends Disposable {
 			this.renderedModelVersion === viewportData.modelVersion &&
 			this.renderedLineHeight === viewportData.lineHeight &&
 			this.renderedProjectionRevision === projectionRevision &&
+			numberArraysEqual(this.renderedVerticalOffsets, viewportData.relativeVerticalOffset) &&
 			lineRangesEqual(this.renderedRange, viewportData.renderLines)
 		) return;
 
@@ -80,8 +82,10 @@ export class ViewLayer<TLine> extends Disposable {
 			const needsLineRender = !existing || this.renderedModelVersion !== viewportData.modelVersion || this.renderedProjectionRevision !== projectionRevision;
 			if (needsLineRender) this.lineRenderer.renderLine(line, visualLine);
 			if (!existing || this.renderedLineHeight !== viewportData.lineHeight) this.lineRenderer.layoutLine(line, viewportData.lineHeight);
+			const domNode = this.lineRenderer.getDomNode(line);
+			domNode.style.top = `${viewportData.getLineTop(visualLineIndex) - viewportData.renderTop}px`;
 			next.set(visualLineIndex, line);
-			fragment.append(this.lineRenderer.getDomNode(line));
+			fragment.append(domNode);
 		}
 		reset(this.domNode, fragment);
 		this.lines = next;
@@ -89,7 +93,12 @@ export class ViewLayer<TLine> extends Disposable {
 		this.renderedModelVersion = viewportData.modelVersion;
 		this.renderedLineHeight = viewportData.lineHeight;
 		this.renderedProjectionRevision = projectionRevision;
+		this.renderedVerticalOffsets = viewportData.relativeVerticalOffset;
 	}
+}
+
+function numberArraysEqual(left: readonly number[] | undefined, right: readonly number[]): boolean {
+	return left !== undefined && left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function lineRangesEqual(left: EditorLineRange, right: EditorLineRange): boolean {

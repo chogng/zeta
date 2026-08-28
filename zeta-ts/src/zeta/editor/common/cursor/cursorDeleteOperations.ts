@@ -1,4 +1,3 @@
-import { EditorEmptySelectionClipboardPolicy, getEditorClipboardEntries } from "../../contrib/clipboard/common/clipboard.js";
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../commands/editorEditCommand.js";
 import { createSelectionEditCommand, normalizeSelectionOffsets, type EditorSelectionEdit } from "./cursorTypeEditOperations.js";
 import { type TextSelectionSet } from "../core/selection.js";
@@ -6,40 +5,19 @@ import { TextPosition, TextRange } from "../core/text.js";
 import { type TextModel } from "../model/textModel.js";
 import { getTextGraphemeBoundaries } from "../core/textSegmentation.js";
 
-/** Deletes only non-empty selections as one isolated cut transaction. */
-export function createCutCommand(model: TextModel, selections: TextSelectionSet): EditorEditCommand {
-	return createSelectionEditCommand(
-		model,
-		selections,
-		selections.selections.map(selection => emptySelectionEdit(selection.range)),
-		EditorCommandHistoryMode.Isolated,
-	);
-}
-
-/** Cuts selected text and optional complete lines as one isolated transaction. */
-export function createClipboardCutCommand(model: TextModel, selections: TextSelectionSet, emptySelectionPolicy: EditorEmptySelectionClipboardPolicy): EditorEditCommand {
-	const entries = getEditorClipboardEntries(
-		model,
-		selections,
-		emptySelectionPolicy,
-	);
-	const sourceRanges = mergeDeletionRanges(
-		model,
-		entries.map(entry => entry.sourceRange),
-	);
-	const selectionsAfter = normalizeSelectionOffsets(
-		entries.map(entry => {
-			const targetOffset = mapOffsetThroughDeletions(
-				model.offsetAt(entry.sourceRange.start),
-				sourceRanges,
-			);
-			return {
-				anchorOffset: targetOffset,
-				activeOffset: targetOffset,
-			};
-		}),
-		selections.primaryIndex,
-	);
+/** Deletes the ranges selected by the clipboard owner as one isolated transaction. */
+export function createCutCommand(model: TextModel, selections: TextSelectionSet, cutRanges: readonly TextRange[]): EditorEditCommand {
+	if (cutRanges.length !== selections.selections.length) {
+		throw new TypeError("Cut ranges must match the editor selections");
+	}
+	const sourceRanges = mergeDeletionRanges(model, cutRanges);
+	const selectionsAfter = normalizeSelectionOffsets(cutRanges.map(range => {
+		const targetOffset = mapOffsetThroughDeletions(model.offsetAt(range.start), sourceRanges);
+		return {
+			anchorOffset: targetOffset,
+			activeOffset: targetOffset,
+		};
+	}), selections.primaryIndex);
 	return {
 		edits: Object.freeze(sourceRanges.map(range => ({ range: range.range, text: "" }))),
 		selectionsAfter: selectionsAfter.selections,
@@ -181,10 +159,7 @@ function mergeDeletionRanges(model: TextModel, ranges: readonly TextRange[]): re
 	const sorted = ranges.map(range => ({
 		startOffset: model.offsetAt(range.start),
 		endOffset: model.offsetAt(range.end),
-	})).filter(range => range.startOffset !== range.endOffset).sort((left, right) =>
-		left.startOffset - right.startOffset ||
-		left.endOffset - right.endOffset
-	);
+	})).filter(range => range.startOffset !== range.endOffset).sort((left, right) => left.startOffset - right.startOffset || left.endOffset - right.endOffset);
 	const merged: Array<{ startOffset: number; endOffset: number }> = [];
 	for (const range of sorted) {
 		const previous = merged[merged.length - 1];
@@ -196,10 +171,7 @@ function mergeDeletionRanges(model: TextModel, ranges: readonly TextRange[]): re
 	}
 	return Object.freeze(merged.map(range => Object.freeze({
 		...range,
-		range: TextRange.from(
-			model.positionAt(range.startOffset),
-			model.positionAt(range.endOffset),
-		),
+		range: TextRange.from(model.positionAt(range.startOffset), model.positionAt(range.endOffset)),
 	})));
 }
 

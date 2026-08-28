@@ -1,7 +1,8 @@
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
-/** Writes explicit user-facing text through the current host clipboard. */
+/** Reads and writes user-facing text through the current host clipboard. */
 export interface IClipboardService {
+	readText(): Promise<string>;
 	writeText(value: string): Promise<void>;
 }
 

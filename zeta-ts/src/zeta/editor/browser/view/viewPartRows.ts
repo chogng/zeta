@@ -34,6 +34,8 @@ export class ViewPartRows extends Disposable {
 			}
 			row.setHeight(context.layout.lineHeight);
 			row.setLineHeight(context.layout.lineHeight);
+			row.setPosition('absolute');
+			row.setTop(context.viewportData.getLineTop(lineIndex) - context.layout.renderTop);
 			next.set(lineIndex, row);
 			projected.set(lineIndex, row.domNode);
 			fragment.append(row.domNode);

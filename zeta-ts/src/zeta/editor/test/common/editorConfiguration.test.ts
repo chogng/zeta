@@ -17,8 +17,7 @@ import {
 import { EditorZoom } from '../../common/config/editorZoom.js';
 import { createBareFontInfoFromRawSettings } from '../../common/config/fontInfoFromSettings.js';
 import { EDITOR_FONT_DEFAULTS } from '../../common/config/fontInfo.js';
-import { diffEditorDefaultOptions } from '../../common/config/diffEditor.js';
-import { resolveDiffEditorOptions } from '../../common/config/diffEditorOptions.js';
+import { diffEditorDefaultOptions, resolveDiffEditorOptions } from '../../common/config/diffEditor.js';
 import { editorConfiguration, isDiffEditorConfigurationKey, isEditorConfigurationKey } from '../../common/config/editorConfigurationSchema.js';
 import { CodeEditorConfiguration } from '../../../workbench/contrib/codeEditor/common/editorConfiguration.js';
 
@@ -158,7 +157,12 @@ test('diff editor options merge nested defaults and validate limits', () => {
 test('editor settings are registered by the common configuration owner', () => {
 	assert.equal(CodeEditorConfiguration.fontSize.defaultValue, 13);
 	assert.equal(CodeEditorConfiguration.wordWrap.defaultValue, EditorLineWrapping.Off);
+	assert.equal(CodeEditorConfiguration.colorDecorators.defaultValue, true);
+	assert.equal(CodeEditorConfiguration.colorDecoratorsActivatedOn.defaultValue, 'clickAndHover');
+	assert.equal(CodeEditorConfiguration.colorDecoratorsLimit.defaultValue, 500);
+	assert.equal(CodeEditorConfiguration.defaultColorDecorators.defaultValue, 'auto');
 	assert.equal(ConfigurationsRegistry.getConfiguration('editor.fontSize')?.key, CodeEditorConfiguration.fontSize);
+	assert.equal(ConfigurationsRegistry.getConfiguration('editor.colorDecorators')?.key, CodeEditorConfiguration.colorDecorators);
 	assert.equal(ConfigurationsRegistry.getConfiguration('diffEditor.showInlineChanges')?.key, CodeEditorConfiguration.diffShowInlineChanges);
 	assert.equal(editorConfiguration.properties['editor.tabSize']?.default, 4);
 	assert.equal(isEditorConfigurationKey('tabSize'), true);

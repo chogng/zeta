@@ -12,7 +12,7 @@ import { type LanguageLexicalContextSource } from "../../common/languages/langua
 import { LanguageLexicalContextIndex } from "../../common/languages/languageLexicalContext.js";
 import { assertLanguageId } from "../../common/languages/languageId.js";
 import { type TextModel } from "../../common/model/textModel.js";
-import { resolveEditorIndentationOptions, type EditorIndentationOptions } from "../../common/editorIndentation.js";
+import { resolveEditorIndentationOptions, type EditorIndentationOptions } from "../../common/core/misc/indentation.js";
 
 /** Browser input adapter for DOM-free language editing commands. */
 export class LanguageEditingAdapter extends Disposable implements EditorLanguageEditingAdapter {

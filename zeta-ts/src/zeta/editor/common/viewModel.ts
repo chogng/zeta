@@ -26,6 +26,14 @@ export interface EditorLineHeightChangeAccessor {
 	removeCustomLineHeight(decorationId: string): void;
 }
 
+/** Immutable geometry for one block of vertical space between visual lines. */
+export interface EditorViewZoneLayout {
+	readonly id: string;
+	readonly afterLineIndex: number;
+	readonly top: number;
+	readonly heightInPixels: number;
+}
+
 /** The scroll coordinates exchanged between the view-model and the browser view. */
 export interface EditorScrollPosition {
 	readonly left: number;

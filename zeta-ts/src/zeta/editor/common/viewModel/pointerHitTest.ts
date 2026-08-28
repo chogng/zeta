@@ -28,6 +28,7 @@ export interface HitTestMetrics {
 	readonly gutterWidth: number;
 	readonly textLeft: number;
 	readonly paddingTop?: number;
+	readonly getLineIndexAtVerticalOffset?: (verticalOffset: number) => number;
 }
 
 export enum EditorHitTargetKind {
@@ -120,7 +121,7 @@ export function hitTestStanzaVisualEditorPoint(model: TextModel, projection: Edi
 	if (contentTop < 0) {
 		return target(EditorHitTargetKind.EmptyContent, 0, 0);
 	}
-	const visualLineIndex = Math.floor(contentTop / layout.lineHeight);
+	const visualLineIndex = metrics.getLineIndexAtVerticalOffset?.(contentTop + (metrics.paddingTop ?? 0)) ?? Math.floor(contentTop / layout.lineHeight);
 	if (visualLineIndex >= projection.visualLineCount) {
 		const logicalLineIndex = model.lineCount - 1;
 		return target(EditorHitTargetKind.AfterLines, logicalLineIndex, model.getLineContent(logicalLineIndex).length);

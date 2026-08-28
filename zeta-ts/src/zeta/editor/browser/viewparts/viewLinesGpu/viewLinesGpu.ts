@@ -81,7 +81,7 @@ export class ViewLinesGpu extends Disposable {
 		const layout = context.layout;
 		this.context.layout(layout.viewportSize.width, layout.viewportSize.height, layout.scrollPosition.left, layout.scrollPosition.top);
 		const overlay = context.overlay;
-		if (this.context.status !== 'ready' || this.isForcedColors() || !overlay || !this.isRenderingContextCurrent(context, overlay.visualLineProjection)) {
+		if (layout.viewZones || this.context.status !== 'ready' || this.isForcedColors() || !overlay || !this.isRenderingContextCurrent(context, overlay.visualLineProjection)) {
 			this.showDomText();
 			this.context.hideCanvas();
 			return;

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createEditorColumnSelectionSet } from "../../common/cursor/columnSelection.js";
+import { createEditorColumnSelectionSet } from "../../common/cursor/cursorColumnSelection.js";
 import { TextSelection } from "../../common/core/selection.js";
 import { TextPosition } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";

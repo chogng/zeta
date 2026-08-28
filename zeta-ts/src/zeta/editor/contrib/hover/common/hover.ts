@@ -2,7 +2,7 @@ import { isNonEmptyArray } from "../../../../base/common/arrays.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type TextPosition, type TextRange } from "../../../common/core/text.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
-import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languages/languageFeatureRegistry.js";
+import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languageFeatureRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type URI } from "../../../../base/common/uri.js";
 

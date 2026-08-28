@@ -51,6 +51,11 @@
   min-width: 100%;
 }
 
+.stanza-editor-view-zone {
+  position: absolute;
+  box-sizing: border-box;
+}
+
 .stanza-editor-diagnostic-hover {
   position: fixed;
   z-index: 100;

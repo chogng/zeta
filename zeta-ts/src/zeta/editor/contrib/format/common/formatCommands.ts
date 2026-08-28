@@ -4,7 +4,7 @@ import { type TextSelectionSet } from "../../../common/core/selection.js";
 import { type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
-import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languages/languageFeatureRegistry.js";
+import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languageFeatureRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type URI } from "../../../../base/common/uri.js";
 

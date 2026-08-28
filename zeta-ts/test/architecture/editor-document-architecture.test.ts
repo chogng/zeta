@@ -34,7 +34,7 @@ test("document editing separates editor capabilities from Workbench hosting", ()
 		"common/commands/documentCommands.ts",
 		"browser/widget/richTextEditor/richTextEditorWidget.ts",
 		"browser/widget/richTextEditor/richTextEditorWidget.css",
-		"contrib/clipboard/browser/htmlDocumentFragment.ts",
+		"browser/widget/richTextEditor/htmlDocumentFragment.ts",
 		"contrib/formatting/browser/formattingContribution.ts",
 		"contrib/collaboration/common/protocol.ts",
 		"contrib/collaboration/common/controller.ts",

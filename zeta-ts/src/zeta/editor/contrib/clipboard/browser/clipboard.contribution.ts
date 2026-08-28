@@ -1,16 +1,28 @@
-import { registerEditorContribution } from "../../../browser/editorExtensions.js";
-import { TextEditorCapability } from "../../textEditorCapabilities.js";
-import { ClipboardController } from "./clipboardController.js";
-import { UriListPasteProvider } from "./clipboardPasteProvider.js";
+import { BrowserClipboardService } from '../../../../platform/clipboard/browser/browserClipboardService.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
+import { IInstantiationService, SyncDescriptor, type IInstantiationService as InstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { EditorContributionInstantiation, registerEditorContribution, type TextEditorContributionContext } from '../../../browser/editorExtensions.js';
+import { TextEditorCapability } from '../../textEditorCapabilities.js';
+import { ClipboardController } from './clipboardController.js';
 
-registerEditorContribution({
-	id: "editor.contrib.clipboard",
-	install: context => {
-		if (context.kind !== "text") return;
-		context.register(new ClipboardController(context.view.editContext, context.viewport, context.selections, {
+class ClipboardContribution extends Disposable {
+	public constructor(context: TextEditorContributionContext, instantiationService: InstantiationService) {
+		super();
+		const ownerWindow = context.view.element.ownerDocument.defaultView;
+		const clipboardService = instantiationService.getOptional(IClipboardService)
+			?? new BrowserClipboardService(ownerWindow?.navigator.clipboard);
+		this._register(new ClipboardController(context.view.editContext, context.viewport, context.selections, clipboardService, {
 			semanticTokens: context.getOptionalCapability(TextEditorCapability.semanticTokenSource),
 			isEditingAllowed: () => !context.view.compositionController.composing,
-			pasteProviders: [UriListPasteProvider],
 		}));
+	}
+}
+
+registerEditorContribution({
+	id: 'editor.contrib.clipboard',
+	runtime: {
+		descriptor: new SyncDescriptor(ClipboardContribution, { serviceDependencies: [IInstantiationService] }),
+		instantiation: EditorContributionInstantiation.Eager,
 	},
 });

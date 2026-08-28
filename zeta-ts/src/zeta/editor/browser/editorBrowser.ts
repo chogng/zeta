@@ -13,7 +13,7 @@ import type { ILanguageFeaturesService } from '../common/services/languageFeatur
 import { LanguageConfigurationService, type ILanguageConfigurationService } from '../common/services/languageConfigurationService.js';
 import { LanguageFeaturesService } from '../common/services/languageFeaturesService.js';
 import { type TextModel } from "../common/model/textModel.js";
-import { type EditorIndentationOptions } from "../common/editorIndentation.js";
+import { type EditorIndentationOptions } from "../common/core/misc/indentation.js";
 import { type EditorActiveLineHighlight, type EditorRuler, type EditorTextDirection, type EditorView, type EditorViewport, type EditorViewportPresentation } from "./view.js";
 import { CodeEditorWidget, type CodeEditorViewPositionState, type CodeEditorViewSelectionState, type CodeEditorViewState } from "./widget/codeEditor/codeEditorWidget.js";
 import { type EditorHitTarget } from "../common/viewModel/pointerHitTest.js";
@@ -133,6 +133,10 @@ export interface EditorBrowserOptions {
 	readonly parameterHints?: boolean;
 	readonly inlayHints?: boolean;
 	readonly codeLens?: boolean;
+	readonly colorDecorators?: boolean;
+	readonly colorDecoratorsActivatedOn?: 'clickAndHover' | 'click' | 'hover';
+	readonly colorDecoratorsLimit?: number;
+	readonly defaultColorDecorators?: 'auto' | 'always' | 'never';
 	readonly formatOnSave?: boolean;
 	readonly find?: EditorFindOptions;
 	/** Applies a single LF at the save boundary when the document has content and no final LF. */
@@ -405,6 +409,15 @@ function validateOptions(options: EditorBrowserOptions): void {
 	if (options.matchBrackets !== undefined && options.matchBrackets !== "never" && options.matchBrackets !== "near" && options.matchBrackets !== "always") {
 		throw new TypeError("Editor bracket matching option is invalid");
 	}
+	if (options.colorDecoratorsActivatedOn !== undefined && options.colorDecoratorsActivatedOn !== 'clickAndHover' && options.colorDecoratorsActivatedOn !== 'click' && options.colorDecoratorsActivatedOn !== 'hover') {
+		throw new TypeError('Editor color decorator activation is invalid');
+	}
+	if (options.defaultColorDecorators !== undefined && options.defaultColorDecorators !== 'auto' && options.defaultColorDecorators !== 'always' && options.defaultColorDecorators !== 'never') {
+		throw new TypeError('Editor default color decorators option is invalid');
+	}
+	if (options.colorDecoratorsLimit !== undefined && (!Number.isSafeInteger(options.colorDecoratorsLimit) || options.colorDecoratorsLimit < 0)) {
+		throw new RangeError('Editor color decorator limit must be a non-negative integer');
+	}
 	if (options.suggestions !== undefined && !isCompletionsEnablement(options.suggestions)) {
 		throw new TypeError("Editor suggestions option must be boolean or a language enablement map");
 	}
@@ -421,6 +434,7 @@ function validateOptions(options: EditorBrowserOptions): void {
 		["parameter hints", options.parameterHints],
 		["inlay hints", options.inlayHints],
 		["CodeLens", options.codeLens],
+		['color decorators', options.colorDecorators],
 		["format on save", options.formatOnSave],
 		["selection highlight", options.selectionHighlight],
 		["multiline selection highlight", options.selectionHighlightMultiline],

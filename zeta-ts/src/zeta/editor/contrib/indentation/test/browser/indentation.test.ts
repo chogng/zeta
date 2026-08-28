@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { EditorIndentationKind, getLeadingIndentation, normalizeEditorIndentation, normalizeEditorIndentationText, resolveEditorIndentationOptions, shiftEditorIndentation, unshiftEditorIndentation } from "../../../../common/editorIndentation.js";
+import { EditorIndentationKind, getLeadingIndentation, normalizeEditorIndentation, normalizeEditorIndentationText, resolveEditorIndentationOptions, shiftEditorIndentation, unshiftEditorIndentation } from "../../../../common/core/misc/indentation.js";
 
 test("Editor indentation resolves spaces and maps mixed whitespace by visual columns", () => {
 	const options = resolveEditorIndentationOptions({

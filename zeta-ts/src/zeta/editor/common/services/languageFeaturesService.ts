@@ -1,6 +1,6 @@
 import { runWithBufferedEvents } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
-import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderRegistration } from '../languages/languageFeatureRegistry.js';
+import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderRegistration } from '../languageFeatureRegistry.js';
 import { LanguageCompletionProviderRegistry, type LanguageCompletionProviderRegistration } from '../languages/completion/languageCompletionProviders.js';
 import { createLanguageWordCompletionProvider } from '../languages/completion/languageWordCompletionProvider.js';
 import type { DocumentHighlightProvider, MultiDocumentHighlightProvider } from '../languages/documentHighlights.js';

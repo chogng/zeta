@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
 import { createTypeTextCommand } from "../../../common/cursor/cursorTypeOperations.js";
-import { EditorIndentationKind } from "../../../common/editorIndentation.js";
+import { EditorIndentationKind } from "../../../common/core/misc/indentation.js";
 import { EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { registerBuiltinLanguageConfigurations } from "../../../common/languages/languageBuiltinConfigurations.js";
 import { LanguageConfigurationRegistry, LanguageIndentAction } from "../../../common/languages/languageConfiguration.js";

@@ -1,9 +1,8 @@
-import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type URI } from "../../../../base/common/uri.js";
-import { type TextRange } from "../../../common/core/text.js";
-import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
-import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languages/languageFeatureRegistry.js";
-import { type TextModel } from "../../../common/model/textModel.js";
+import { type Event } from '../../../../base/common/event.js';
+import { type URI } from '../../../../base/common/uri.js';
+import { type TextRange } from '../../../common/core/text.js';
+import { type LanguageFeatureRequest } from '../../../common/languages/languageFeatureRequest.js';
+import { type LanguageFeatureProviderMetadata } from '../../../common/languageFeatureRegistry.js';
 
 export interface LanguageCodeLensCommand {
 	readonly id: string;
@@ -22,45 +21,7 @@ export interface LanguageCodeLensRequest extends LanguageFeatureRequest {
 }
 
 export interface LanguageCodeLensProvider extends LanguageFeatureProviderMetadata {
+	readonly onDidChange?: Event<void>;
 	provideCodeLenses(request: LanguageCodeLensRequest, signal: AbortSignal): readonly LanguageCodeLens[] | Promise<readonly LanguageCodeLens[]>;
 	resolveCodeLens?(lens: LanguageCodeLens, request: LanguageCodeLensRequest, signal: AbortSignal): LanguageCodeLens | Promise<LanguageCodeLens>;
-}
-
-/** Owns versioned code-lens discovery and resolve; command execution is host-owned. */
-export class CodeLensService extends Disposable {
-	constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureProviderRegistry<LanguageCodeLensProvider>, private readonly resource?: URI) {
-		super();
-	}
-
-	async provideCodeLenses(languageId: string, signal: AbortSignal = new AbortController().signal): Promise<readonly LanguageCodeLens[]> {
-		const request = this.createRequest(languageId, signal);
-		const result: LanguageCodeLens[] = [];
-		for (const provider of this.providers.getProviders(languageId)) {
-			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
-			const lenses = await provider.provideCodeLenses(request, signal);
-			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
-			result.push(...lenses.map(normalizeLanguageCodeLens));
-		}
-		return Object.freeze(result);
-	}
-
-	async resolveCodeLens(languageId: string, lens: LanguageCodeLens, signal: AbortSignal = new AbortController().signal): Promise<LanguageCodeLens> {
-		const request = this.createRequest(languageId, signal);
-		for (const provider of this.providers.getProviders(languageId)) {
-			if (!provider.resolveCodeLens) continue;
-			const resolved = await provider.resolveCodeLens(lens, request, signal);
-			if (!isLanguageFeatureRequestCurrent(request)) throw new Error("Code lens result became stale");
-			return normalizeLanguageCodeLens(resolved);
-		}
-		return lens;
-	}
-
-	private createRequest(languageId: string, signal: AbortSignal): LanguageCodeLensRequest {
-		return Object.freeze({ ...createLanguageFeatureRequest(this.model, languageId, signal), ...(this.resource ? { resource: this.resource } : {}) });
-	}
-}
-
-function normalizeLanguageCodeLens(lens: LanguageCodeLens): LanguageCodeLens {
-	if (!lens || typeof lens !== "object") throw new TypeError("Code lens must be an object");
-	return Object.freeze({ range: lens.range, ...(lens.command ? { command: Object.freeze({ id: lens.command.id, title: lens.command.title, ...(lens.command.arguments ? { arguments: Object.freeze([...lens.command.arguments]) } : {}) }) } : {}), ...(lens.data !== undefined ? { data: lens.data } : {}) });
 }

@@ -1,0 +1,124 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { JSDOM } from 'jsdom';
+import { h } from '../../../../../base/browser/dom.js';
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
+import { EditorSelectionController } from '../../../../common/cursor/editorSelectionController.js';
+import { TextSelection, TextSelectionSet } from '../../../../common/core/selection.js';
+import { TextPosition, TextRange } from '../../../../common/core/text.js';
+import { TextDecorationCollection } from '../../../../common/model/decorationCollection.js';
+import { TextModel } from '../../../../common/model/textModel.js';
+
+const browserEnvironment = new JSDOM('<!doctype html><body></body>');
+for (const [name, value] of Object.entries({
+	window: browserEnvironment.window,
+	document: browserEnvironment.window.document,
+	Node: browserEnvironment.window.Node,
+	Element: browserEnvironment.window.Element,
+	HTMLElement: browserEnvironment.window.HTMLElement,
+	Event: browserEnvironment.window.Event,
+	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
+})) Object.defineProperty(globalThis, name, { configurable: true, value });
+
+const { EditorViewport } = await import('../../../../browser/view.js');
+const { SelectionAnchorController } = await import('../../browser/anchorSelect.js');
+
+test.after(() => browserEnvironment.window.close());
+
+test('Selection anchor follows edits and supports set, go to, select, and cancel', () => {
+	const fixture = createFixture('abcd');
+	using resources = fixture.resources;
+	fixture.selections.setSelections(singleCaret(0, 2));
+	fixture.controller.setSelectionAnchor();
+	assert.equal(fixture.controller.selectionAnchorSet, true);
+	assert.deepEqual(fixture.decorations.decorations[0]?.range, TextRange.emptyAt(TextPosition.at(0, 2)));
+
+	fixture.model.applyEdits([{ range: TextRange.emptyAt(TextPosition.at(0, 0)), text: 'x' }]);
+	fixture.selections.setSelections(singleCaret(0, 0));
+	fixture.controller.goToSelectionAnchor();
+	assert.deepEqual(fixture.selections.selections, singleCaret(0, 3));
+
+	fixture.selections.setSelections(singleCaret(0, 5));
+	fixture.controller.selectFromAnchorToCursor();
+	assert.deepEqual(fixture.selections.selections, TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 3), TextPosition.at(0, 5))));
+	assert.equal(fixture.controller.selectionAnchorSet, false);
+	assert.deepEqual(fixture.decorations.decorations, []);
+
+	fixture.controller.setSelectionAnchor();
+	fixture.controller.cancelSelectionAnchor();
+	assert.equal(fixture.controller.selectionAnchorSet, false);
+	fixture.dom.window.close();
+});
+
+test('Selection anchor keybindings use the two-key commands and leave navigation alone', () => {
+	const fixture = createFixture('abcd');
+	using resources = fixture.resources;
+	fixture.selections.setSelections(singleCaret(0, 1));
+	fixture.input.dispatchEvent(keydown(fixture.dom.window, 'k', { ctrlKey: true }));
+	const set = keydown(fixture.dom.window, 'b', { ctrlKey: true });
+	fixture.input.dispatchEvent(set);
+	assert.equal(set.defaultPrevented, true);
+	assert.equal(fixture.controller.selectionAnchorSet, true);
+
+	fixture.selections.setSelections(singleCaret(0, 4));
+	const arrow = keydown(fixture.dom.window, 'ArrowLeft');
+	fixture.input.dispatchEvent(arrow);
+	assert.equal(arrow.defaultPrevented, false);
+	fixture.input.dispatchEvent(keydown(fixture.dom.window, 'k', { ctrlKey: true }));
+	const select = keydown(fixture.dom.window, 'k', { ctrlKey: true });
+	fixture.input.dispatchEvent(select);
+	assert.equal(select.defaultPrevented, true);
+	assert.deepEqual(fixture.selections.selections.primary, TextSelection.from(TextPosition.at(0, 1), TextPosition.at(0, 4)));
+	assert.equal(fixture.controller.selectionAnchorSet, false);
+
+	fixture.controller.setSelectionAnchor();
+	const cancel = keydown(fixture.dom.window, 'Escape');
+	fixture.input.dispatchEvent(cancel);
+	assert.equal(cancel.defaultPrevented, true);
+	assert.equal(fixture.controller.selectionAnchorSet, false);
+	fixture.dom.window.close();
+});
+
+function createFixture(text: string): {
+	readonly dom: JSDOM;
+	readonly model: TextModel;
+	readonly selections: EditorSelectionController;
+	readonly decorations: TextDecorationCollection<void>;
+	readonly viewport: InstanceType<typeof EditorViewport>;
+	readonly input: HTMLTextAreaElement;
+	readonly controller: InstanceType<typeof SelectionAnchorController>;
+	readonly resources: DisposableStore;
+} {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = dom.window.document.querySelector<HTMLElement>('main')!;
+	const model = new TextModel(text);
+	const selections = new EditorSelectionController(model, singleCaret(0, 0));
+	const decorations = new TextDecorationCollection<void>(model);
+	const viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	const input = h(dom.window.document, 'textarea') as unknown as HTMLTextAreaElement;
+	container.append(input);
+	const controller = new SelectionAnchorController(input, viewport, selections, decorations);
+	const resources = new DisposableStore();
+	resources.add(model);
+	resources.add(selections);
+	resources.add(decorations);
+	resources.add(viewport);
+	resources.add(controller);
+	return { dom, model, selections, decorations, viewport, input, controller, resources };
+}
+
+class FixedTextMeasurer implements TextMeasurer {
+	readonly horizontalPadding = 24;
+	readonly contentLeftPadding = 12;
+	refresh(): boolean { return false; }
+	measureLineWidth(text: string): number { return text.length * 10; }
+}
+
+function singleCaret(lineIndex: number, columnIndex: number): TextSelectionSet {
+	return TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(lineIndex, columnIndex)));
+}
+
+function keydown(targetWindow: typeof browserEnvironment.window, key: string, options: KeyboardEventInit = {}): KeyboardEvent {
+	return new targetWindow.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key, ...options }) as unknown as KeyboardEvent;
+}

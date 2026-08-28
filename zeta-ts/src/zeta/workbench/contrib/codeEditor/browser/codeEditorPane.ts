@@ -83,6 +83,10 @@ export interface EditorPaneOptions {
 	readonly parameterHints?: boolean;
 	readonly inlayHints?: boolean;
 	readonly codeLens?: boolean;
+	readonly colorDecorators?: EditorBrowserOptions["colorDecorators"];
+	readonly colorDecoratorsActivatedOn?: EditorBrowserOptions["colorDecoratorsActivatedOn"];
+	readonly colorDecoratorsLimit?: EditorBrowserOptions["colorDecoratorsLimit"];
+	readonly defaultColorDecorators?: EditorBrowserOptions["defaultColorDecorators"];
 	readonly formatOnSave?: boolean;
 	readonly find?: EditorBrowserOptions["find"];
 	readonly indentation?: EditorBrowserOptions["indentation"];
@@ -188,6 +192,10 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 				parameterHints: this.options.parameterHints,
 				inlayHints: this.options.inlayHints,
 				codeLens: this.options.codeLens,
+				colorDecorators: this.options.colorDecorators,
+				colorDecoratorsActivatedOn: this.options.colorDecoratorsActivatedOn,
+				colorDecoratorsLimit: this.options.colorDecoratorsLimit,
+				defaultColorDecorators: this.options.defaultColorDecorators,
 				formatOnSave: this.options.formatOnSave,
 				find: this.options.find,
 				indentation: this.options.indentation,

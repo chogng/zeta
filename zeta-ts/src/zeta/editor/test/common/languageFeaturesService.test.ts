@@ -22,3 +22,23 @@ test('language identity, configuration, and feature providers have separate owne
 	assert.equal(languageConfigurationService.getLanguageConfiguration('demo').comments.lineComment, '//');
 	assert.equal(languageFeaturesService.hoverProvider.getProviders('demo').length, 1);
 });
+
+test('language feature registries report effective provider changes', () => {
+	using languageConfigurationService = new LanguageConfigurationService();
+	using languageFeaturesService = new LanguageFeaturesService(languageConfigurationService);
+	let changes = 0;
+	using listener = languageFeaturesService.colorProvider.onDidChange(() => changes += 1);
+	const registration = languageFeaturesService.colorProvider.registerGroup([]);
+
+	assert.equal(changes, 0);
+	registration.replace([{
+		languageIds: ['css'],
+		provideDocumentColors: () => [],
+		provideColorPresentations: () => [],
+	}]);
+	assert.equal(changes, 1);
+	registration.replace([]);
+	assert.equal(changes, 2);
+	registration.dispose();
+	assert.equal(changes, 2);
+});

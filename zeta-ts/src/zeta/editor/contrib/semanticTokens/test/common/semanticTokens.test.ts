@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { TextPosition, TextRange } from "../../../../common/core/text.js";
 import { LanguageRequestCancellationReason, LanguageRequestStatus } from "../../../../common/languages/languageRequestCoordinator.js";
-import { LanguageFeatureProviderRegistry } from "../../../../common/languages/languageFeatureRegistry.js";
+import { LanguageFeatureProviderRegistry } from "../../../../common/languageFeatureRegistry.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { type LanguageTokenResult } from "../../../../common/tokens/languageTokens.js";
 import { SemanticTokensService, type LanguageSemanticTokensProvider } from "../../common/semanticTokens.js";

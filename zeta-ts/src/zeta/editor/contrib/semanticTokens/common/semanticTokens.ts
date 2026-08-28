@@ -1,6 +1,6 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
-import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languages/languageFeatureRegistry.js";
+import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../../../common/languageFeatureRegistry.js";
 import { LanguageRequestCoordinator, type LanguageRequestOptions, type LanguageRequestOutcome, type LanguageWorker, type LanguageWorkerRequest } from "../../../common/languages/languageRequestCoordinator.js";
 import { LanguageResultAcceptance } from "../../../common/languages/languageResultStore.js";
 import { createLanguageTokenStore, type LanguageTokenResult } from "../../../common/tokens/languageTokens.js";

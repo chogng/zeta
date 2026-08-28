@@ -2,13 +2,13 @@ import { type Event } from '../../base/common/event.js';
 import { getClientArea, type IDimension } from '../../base/browser/geometry.js';
 import { addDisposableListener, h } from '../../base/browser/dom.js';
 import { FastDomNode } from '../../base/browser/fastDomNode.js';
-import { Disposable, type IDisposable, toDisposable } from '../../base/common/lifecycle.js';
+import { AbstractDisposable, Disposable, type IDisposable, toDisposable } from '../../base/common/lifecycle.js';
 import { runWhenWindowIdle } from '../../base/browser/scheduler.js';
 import { type ISize } from '../../base/common/layout.js';
 import { clamp, isFiniteNumber } from '../../base/common/numbers.js';
 import { type IAccessibilityService } from '../../platform/accessibility/common/accessibility.js';
 import { type EditorSelectionController } from '../common/cursor/editorSelectionController.js';
-import { resolveEditorIndentationOptions, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from '../common/editorIndentation.js';
+import { resolveEditorIndentationOptions, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from '../common/core/misc/indentation.js';
 import { TextPosition, type TextRange } from '../common/core/text.js';
 import { type TextModel } from '../common/model/textModel.js';
 import { type EditorVisualLineProjection } from '../common/viewModel/modelLineProjection.js';
@@ -384,6 +384,19 @@ export interface EditorContentPosition {
 	readonly height: number;
 }
 
+/** A caller-owned DOM root placed in vertical space between visual lines. */
+export interface EditorViewZone {
+	afterLineIndex: number;
+	heightInPixels: number;
+	readonly domNode: HTMLElement;
+}
+
+export interface EditorViewZoneHandle extends IDisposable {
+	readonly top: number;
+	readonly heightInPixels: number;
+	layout(): void;
+}
+
 /**
  * Read-only browser projection of one Stanza text model.
  *
@@ -423,6 +436,8 @@ export class View extends Disposable {
 	private readonly viewLineOptions: ViewLineOptions;
 	private readonly elementSizeObserver: ElementSizeObserver;
 	private softWrapping: boolean;
+	private readonly viewZones = new Map<string, EditorViewZone>();
+	private readonly viewZoneLayouts = new Map<string, { readonly top: number; readonly heightInPixels: number }>();
 
 	get currentLayout(): EditorViewportLayout {
 		return this.viewport.layout;
@@ -512,6 +527,11 @@ export class View extends Disposable {
 		this.element.append(this.contentElement, this.textMetricsElement, this.accessibilityStatusElement);
 		options.container.append(this.element);
 		this._register(toDisposable(() => this.element.remove()));
+		this._register(toDisposable(() => {
+			for (const zone of this.viewZones.values()) zone.domNode.remove();
+			this.viewZones.clear();
+			this.viewZoneLayouts.clear();
+		}));
 		this.textMeasurer =
 			options.textMeasurer ??
 			new DomTextMeasurer(this.textMetricsElement);
@@ -817,6 +837,22 @@ export class View extends Disposable {
 		return layout;
 	}
 
+	/** Mounts one caller-owned view zone and returns its layout lifetime. */
+	addViewZone(zone: EditorViewZone): EditorViewZoneHandle {
+		this.assertNotDisposed();
+		this.validateViewZone(zone);
+		const id = this.viewport.addViewZone(zone.afterLineIndex, zone.heightInPixels);
+		this.viewZones.set(id, zone);
+		zone.domNode.classList.add('stanza-editor-view-zone');
+		this.element.append(zone.domNode);
+		this.layoutViewZones(this.viewport.layout);
+		return new ViewZoneHandle(
+			() => this.layoutViewZone(id),
+			() => this.removeViewZone(id),
+			() => this.viewZoneLayouts.get(id),
+		);
+	}
+
 	scrollTo(position: EditorScrollPosition): EditorViewportLayout {
 		const layout = this.viewport.setScrollPosition(position);
 		this.project(layout);
@@ -829,7 +865,7 @@ export class View extends Disposable {
 		const visualProjection = this.visualProjection;
 		const visualLineIndex = visualProjection.visualLineIndexAt(position);
 		const visualLine = visualProjection.lineAt(visualLineIndex)!;
-		const lineTop = this.padding.top + visualLineIndex * layout.lineHeight;
+		const lineTop = this.viewport.getVerticalOffsetForLineIndex(visualLineIndex);
 		const lineBottom = lineTop + layout.lineHeight;
 		let top = layout.scrollPosition.top;
 		if (lineTop < top) {
@@ -865,7 +901,7 @@ export class View extends Disposable {
 			left: domCaretLeft ?? (this.contentTextLeft + (visualLine.wrappedTextIndentWidth ?? 0) + this.textMeasurer.measureLineWidth(
 				this.model.getLineContent(visualLine.logicalLineIndex).slice(visualLine.startColumn, position.columnIndex),
 			)),
-			top: this.padding.top + visualLineIndex * this.viewport.layout.lineHeight,
+			top: this.viewport.getVerticalOffsetForLineIndex(visualLineIndex),
 			height: this.viewport.layout.lineHeight,
 		});
 	}
@@ -954,6 +990,7 @@ export class View extends Disposable {
 				gutterWidth: this.gutterWidth,
 				textLeft: this.textLeft,
 				paddingTop: this.padding.top,
+				getLineIndexAtVerticalOffset: offset => this.viewport.getLineIndexAtVerticalOffset(offset),
 			},
 			this.textMeasurer,
 		);
@@ -1047,6 +1084,7 @@ export class View extends Disposable {
 		this.element.classList.toggle("vertically-scrollable", layout.maximumScrollPosition.top > 0);
 		this.contentNode.setWidth(layout.contentSize.width);
 		this.contentNode.setHeight(layout.contentSize.height);
+		this.layoutViewZones(layout);
 		const contentOffsetLeft = this.contentOffsetLeft;
 		this.contentNode.setTransform(contentOffsetLeft > 0 ? `translate3d(${contentOffsetLeft}px, 0, 0)` : '');
 		this.viewParts.prepareRender(context);
@@ -1055,6 +1093,40 @@ export class View extends Disposable {
 		this.viewOverlays.render(context);
 		this.viewLinesGpu?.render(context);
 		this.syncScrollPosition(layout);
+	}
+
+	private layoutViewZone(id: string): void {
+		const zone = this.viewZones.get(id);
+		if (!zone) return;
+		this.validateViewZone(zone);
+		this.viewport.changeViewZone(id, zone.afterLineIndex, zone.heightInPixels);
+		this.layoutViewZones(this.viewport.layout);
+	}
+
+	private removeViewZone(id: string): void {
+		const zone = this.viewZones.get(id);
+		if (!zone) return;
+		this.viewZones.delete(id);
+		this.viewZoneLayouts.delete(id);
+		zone.domNode.remove();
+		if (!this.isDisposed) this.viewport.removeViewZone(id);
+	}
+
+	private layoutViewZones(layout: EditorViewportLayout): void {
+		this.viewZoneLayouts.clear();
+		for (const geometry of layout.viewZones ?? []) {
+			this.viewZoneLayouts.set(geometry.id, geometry);
+			const zone = this.viewZones.get(geometry.id);
+			if (!zone) continue;
+			zone.domNode.style.top = `${geometry.top}px`;
+			zone.domNode.style.height = `${geometry.heightInPixels}px`;
+		}
+	}
+
+	private validateViewZone(zone: EditorViewZone): void {
+		if (!zone || !(zone.domNode instanceof this.element.ownerDocument.defaultView!.HTMLElement)) throw new TypeError('Editor view zone requires a DOM root from the editor document');
+		if (!Number.isSafeInteger(zone.afterLineIndex) || zone.afterLineIndex < -1 || zone.afterLineIndex >= this.visualProjection.visualLineCount) throw new RangeError('Editor view zone line index is outside the visual line collection');
+		if (!isFiniteNumber(zone.heightInPixels) || zone.heightInPixels <= 0) throw new RangeError('Editor view zone height must be finite and positive');
 	}
 
 	private observeRenderedLineWidths(layout: EditorViewportLayout): void {
@@ -1152,3 +1224,30 @@ function nonNegativePaddingValue(value: number, side: keyof EditorViewportPaddin
 
 
 export { View as EditorViewport };
+
+class ViewZoneHandle extends AbstractDisposable implements EditorViewZoneHandle {
+	public constructor(
+		private readonly layoutCallback: () => void,
+		private readonly removeCallback: () => void,
+		private readonly readLayout: () => { readonly top: number; readonly heightInPixels: number } | undefined,
+	) {
+		super();
+	}
+
+	public get top(): number {
+		return this.readLayout()?.top ?? 0;
+	}
+
+	public get heightInPixels(): number {
+		return this.readLayout()?.heightInPixels ?? 0;
+	}
+
+	public layout(): void {
+		this.assertNotDisposed();
+		this.layoutCallback();
+	}
+
+	protected disposeCore(): void {
+		this.removeCallback();
+	}
+}

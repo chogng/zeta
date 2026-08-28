@@ -185,6 +185,8 @@ const properties: Record<string, JsonSchema> = {
 	'editor.copyWithSyntaxHighlighting': { type: 'boolean', default: true },
 	'editor.links': { type: 'boolean', default: true },
 	'editor.colorDecorators': { type: 'boolean', default: true },
+	'editor.colorDecoratorsActivatedOn': { type: 'string', enum: ['clickAndHover', 'click', 'hover'], default: 'clickAndHover' },
+	'editor.colorDecoratorsLimit': { type: 'number', default: 500, minimum: 0 },
 	'editor.columnSelection': { type: 'boolean', default: false },
 	'editor.multiCursorModifier': { type: 'string', enum: ['ctrlCmd', 'alt'], default: 'alt' },
 	'editor.multiCursorMergeOverlapping': { type: 'boolean', default: true },

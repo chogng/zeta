@@ -10,7 +10,7 @@ import { type TextPosition, type TextRange } from '../../../common/core/text.js'
 import { EditorSelectionChangeReason, type EditorSelectionChange, type EditorSelectionController } from '../../../common/cursor/editorSelectionController.js';
 import { getWordSelectionRange } from '../../../common/cursor/wordBoundary.js';
 import { DocumentHighlightKind, type DocumentHighlight, type DocumentHighlightProvider, type DocumentHighlightRequest, type DocumentHighlightTarget, type MultiDocumentHighlightProvider } from '../../../common/languages/documentHighlights.js';
-import { type LanguageFeatureProviderMetadata, type LanguageFeatureProviderRegistry } from '../../../common/languages/languageFeatureRegistry.js';
+import { type LanguageFeatureProviderMetadata, type LanguageFeatureProviderRegistry } from '../../../common/languageFeatureRegistry.js';
 import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { TrackedRangeStickiness } from '../../../common/model/trackedRange.js';

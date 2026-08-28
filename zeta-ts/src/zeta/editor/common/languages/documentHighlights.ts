@@ -2,7 +2,7 @@ import { type URI } from '../../../base/common/uri.js';
 import { type CancellationToken } from '../../../base/common/cancellation.js';
 import { type TextPosition, type TextRange, type TextSnapshot } from '../core/text.js';
 import { type TextModel } from '../model/textModel.js';
-import { type LanguageFeatureProviderMetadata } from './languageFeatureRegistry.js';
+import { type LanguageFeatureProviderMetadata } from '../languageFeatureRegistry.js';
 
 export enum DocumentHighlightKind {
 	Text = 'text',

@@ -1,9 +1,10 @@
 // Complete Code line-editor feature implementation. Academic owns a separate bundle.
 import "./browser/coreCommands.js";
 import "./contrib/languageAnalysis/browser/languageAnalysis.contribution.js";
-import "./contrib/anchorSelect/browser/anchorSelectController.js";
+import './contrib/anchorSelect/browser/anchorSelect.js';
 import "./contrib/bracketMatching/browser/bracketMatching.contribution.js";
 import "./contrib/callHierarchy/browser/languageHierarchy.contribution.js";
+import './contrib/dropOrPasteInto/browser/textDropController.js';
 import "./contrib/clipboard/browser/clipboard.contribution.js";
 import "./contrib/codeAction/browser/codeAction.contribution.js";
 import "./contrib/codelens/browser/codelensController.js";
@@ -11,7 +12,6 @@ import "./contrib/colorPicker/browser/colorPickerController.js";
 import "./contrib/comment/browser/comment.contribution.js";
 import "./contrib/contextmenu/browser/contextMenuController.js";
 import "./contrib/cursorUndo/browser/cursorUndoController.js";
-import "./contrib/dropOrPasteInto/browser/textDropController.js";
 import "./contrib/editorState/browser/editorStateController.js";
 import "./contrib/find/browser/find.contribution.js";
 import "./contrib/fontZoom/browser/fontZoomController.js";

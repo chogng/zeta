@@ -72,5 +72,6 @@ export function createEditorViewportData(layout: EditorViewportLayout): Viewport
 		visibleLines: layout.visibleLines,
 		renderLines: layout.renderLines,
 		renderTop: layout.renderTop,
+		relativeVerticalOffset: layout.relativeVerticalOffset,
 	});
 }

@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { URI } from "../../../base/common/uri.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";
-import { LanguageFeatureProviderRegistry } from "../../common/languages/languageFeatureRegistry.js";
+import { LanguageFeatureProviderRegistry } from "../../common/languageFeatureRegistry.js";
 import { type LanguageWorkspaceSymbol, type LanguageWorkspaceSymbolProvider, WorkspaceSymbolService } from "../../common/languages/workspaceSymbols.js";
 
 const RANGE = TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 4));

@@ -91,6 +91,56 @@ test("ViewLayout includes vertical padding in content and row projection", () =>
 	});
 });
 
+test('ViewLayout reserves independently addressable view zones between lines', () => {
+	using model = new TextModel(lines(4));
+	using viewport = new ViewLayout(model, { lineHeight: 20 });
+	viewport.setViewportSize({ width: 200, height: 30 });
+	const reasons: EditorViewportChangeReason[] = [];
+	using listener = viewport.onDidChange(change => reasons.push(change.reason));
+
+	const beforeFirst = viewport.addViewZone(-1, 10);
+	const beforeThird = viewport.addViewZone(1, 15);
+
+	assert.deepEqual({
+		contentHeight: viewport.layout.contentSize.height,
+		lineTops: Array.from({ length: 4 }, (_, lineIndex) => viewport.getVerticalOffsetForLineIndex(lineIndex)),
+		viewZones: viewport.layout.viewZones,
+		visibleLines: viewport.layout.visibleLines,
+	}, {
+		contentHeight: 105,
+		lineTops: [10, 30, 65, 85],
+		viewZones: [
+			{ id: beforeFirst, afterLineIndex: -1, top: 0, heightInPixels: 10 },
+			{ id: beforeThird, afterLineIndex: 1, top: 50, heightInPixels: 15 },
+		],
+		visibleLines: { startLineIndex: 0, endLineIndexExclusive: 1 },
+	});
+	viewport.setViewportSize({ width: 200, height: 10 });
+	viewport.setScrollPosition({ left: 0, top: 50 });
+	assert.deepEqual(viewport.layout.visibleLines, { startLineIndex: 2, endLineIndexExclusive: 2 });
+	viewport.setViewportSize({ width: 200, height: 30 });
+	viewport.setScrollPosition({ left: 0, top: 0 });
+	reasons.length = 0;
+
+	viewport.changeViewZone(beforeFirst, 0, 5);
+	viewport.removeViewZone(beforeThird);
+
+	assert.deepEqual({
+		contentHeight: viewport.layout.contentSize.height,
+		lineTops: Array.from({ length: 4 }, (_, lineIndex) => viewport.getVerticalOffsetForLineIndex(lineIndex)),
+		viewZones: viewport.layout.viewZones,
+		reasons,
+	}, {
+		contentHeight: 85,
+		lineTops: [0, 25, 45, 65],
+		viewZones: [{ id: beforeFirst, afterLineIndex: 0, top: 20, heightInPixels: 5 }],
+		reasons: [
+			EditorViewportChangeReason.ViewZones,
+			EditorViewportChangeReason.ViewZones,
+		],
+	});
+});
+
 test("Viewport resize and line-height changes preserve a stable top line", () => {
 	using model = new TextModel(lines(100));
 	using viewport = new ViewLayout(model, {

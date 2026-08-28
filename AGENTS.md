@@ -15,12 +15,12 @@ Before modifying this repository:
 - When comparing responsibilities, capabilities, implementation status, or design options, prefer a compact conclusion-oriented table when it makes the distinction clearer.
 - Use `✅` and `❌` only for genuinely binary judgments. Use explicit labels such as `部分具备`, `尚未完成`, `协调`, or `委托` for nuanced states.
 
-- 禁止往`app/src`中写入代码
 - 回复时请说人话, 避免抽象语言描述
 - 禁止 native, projection name
 - crate 主要负责能力和依赖隔离
 - 禁止兜底写法，过渡设计，过渡思考
 - 当你思考项目架构时，请考虑从长期架构的终极形态去设计，而不是基于当前架构的优化方向
+- 拆分文件时，避免拆过头
 - 使用playwright测试web and electron-ui 以及electron , 调试不通过截图
 - 写 Readme.md 描述 crate 职责时，请用不超过3点来完整描述
 - 禁止使用 mod.rs, 有 mod.rs 让其退场

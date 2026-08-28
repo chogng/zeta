@@ -1,9 +1,11 @@
 import { ConfigurationsRegistry } from "../../../../platform/configuration/common/configurationRegistry.js";
-import { EditorIndentationKind } from "../../../../editor/common/editorIndentation.js";
+import { EditorIndentationKind } from "../../../../editor/common/core/misc/indentation.js";
 import { EditorLineWrapping } from "../../../../editor/common/config/editorOptions.js";
 
 export type WrappingIndentSetting = "none" | "same" | "indent" | "deepIndent";
 export type MatchBracketsSetting = "never" | "near" | "always";
+export type ColorDecoratorsActivatedOnSetting = "clickAndHover" | "click" | "hover";
+export type DefaultColorDecoratorsSetting = "auto" | "always" | "never";
 
 /** Typed user preferences owned by the Workbench code-editor integration. */
 export const CodeEditorConfiguration = Object.freeze({
@@ -225,6 +227,47 @@ export const CodeEditorConfiguration = Object.freeze({
 		defaultValue: true,
 		parse: value => parseBoolean(value, "editor.codeLens"),
 		setting: booleanSetting("CodeLens", "Show provider actions and references near relevant code."),
+	}),
+	colorDecorators: ConfigurationsRegistry.registerConfiguration<boolean>({
+		key: "editor.colorDecorators",
+		defaultValue: true,
+		parse: value => parseBoolean(value, "editor.colorDecorators"),
+		setting: booleanSetting("Color decorators", "Show an editable color swatch beside recognized color values."),
+	}),
+	colorDecoratorsActivatedOn: ConfigurationsRegistry.registerConfiguration<ColorDecoratorsActivatedOnSetting>({
+		key: "editor.colorDecoratorsActivatedOn",
+		defaultValue: "clickAndHover",
+		parse(value: unknown): ColorDecoratorsActivatedOnSetting {
+			if (value === "clickAndHover" || value === "click" || value === "hover") return value;
+			throw new TypeError(`editor.colorDecoratorsActivatedOn must be clickAndHover, click, or hover; received ${String(value)}`);
+		},
+		setting: selectSetting("Color picker activation", "Choose how color swatches open the color picker.", [
+			{ value: "clickAndHover", label: "Click and hover" },
+			{ value: "click", label: "Click" },
+			{ value: "hover", label: "Hover" },
+		]),
+	}),
+	colorDecoratorsLimit: ConfigurationsRegistry.registerConfiguration<number>({
+		key: "editor.colorDecoratorsLimit",
+		defaultValue: 500,
+		parse(value: unknown): number {
+			if (Number.isSafeInteger(value) && (value as number) >= 0) return value as number;
+			throw new RangeError(`editor.colorDecoratorsLimit must be a non-negative integer; received ${String(value)}`);
+		},
+		setting: numberSetting("Color decorator limit", "Limit the number of color swatches rendered in one document.", 0, 1_000_000),
+	}),
+	defaultColorDecorators: ConfigurationsRegistry.registerConfiguration<DefaultColorDecoratorsSetting>({
+		key: "editor.defaultColorDecorators",
+		defaultValue: "auto",
+		parse(value: unknown): DefaultColorDecoratorsSetting {
+			if (value === "auto" || value === "always" || value === "never") return value;
+			throw new TypeError(`editor.defaultColorDecorators must be auto, always, or never; received ${String(value)}`);
+		},
+		setting: selectSetting("Default color detection", "Choose when the editor scans CSS color literals without a language provider.", [
+			{ value: "auto", label: "Auto" },
+			{ value: "always", label: "Always" },
+			{ value: "never", label: "Never" },
+		]),
 	}),
 	diffShowLineNumbers: ConfigurationsRegistry.registerConfiguration<boolean>({
 		key: "diffEditor.showLineNumbers",

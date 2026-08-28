@@ -3,7 +3,7 @@ import { Emitter, runWithBufferedEvents, type Event } from "../../../../base/com
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { LanguageCompletionProvider, LanguageCompletionProviderRegistration } from "../../../../editor/common/languages/completion/languageCompletionProviders.js";
 import type { LanguageConfigurationContributionInput, LanguageConfigurationRegistration } from "../../../../editor/common/languages/languageConfiguration.js";
-import { parseLanguageConfiguration } from "../../../../editor/common/languages/languageConfigurationParser.js";
+import { parseLanguageConfiguration } from "./languageConfigurationParser.js";
 import type { LanguageDescriptionContribution, LanguageDescriptionRegistration } from "../../../../editor/common/languages/languageRegistry.js";
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import type { ILanguageService } from '../../../../editor/common/services/languageService.js';

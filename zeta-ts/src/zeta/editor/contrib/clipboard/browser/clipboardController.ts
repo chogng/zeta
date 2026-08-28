@@ -1,49 +1,53 @@
-import { addDisposableListener, h } from "../../../../base/browser/dom.js";
+import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { isWindows } from "../../../../base/common/platform.js";
-import { EditorClipboardPasteMode, EditorEmptySelectionClipboardPolicy, getEditorClipboardEntries, type EditorClipboardEntry } from "../common/clipboard.js";
-import { createClipboardCutCommand } from "../../../common/cursor/cursorDeleteOperations.js";
+import { isWindows } from '../../../../base/common/platform.js';
+import { type IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
+import { createCutCommand } from '../../../common/cursor/cursorDeleteOperations.js';
 import { createDistributedPasteTextCommand, createLinePasteCommand, createPasteTextCommand } from "../../../common/cursor/cursorTypeOperations.js";
 import { type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
-import { type TextSelectionSet } from "../../../common/core/selection.js";
+import { type TextSelection, type TextSelectionSet } from "../../../common/core/selection.js";
+import { TextPosition, TextRange } from '../../../common/core/text.js';
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { EditContext } from "../../../browser/controller/editContext/editContext.js";
-import { type IClipboardCopyEvent, type IClipboardPasteEvent, type IReadableClipboardData, type IWritableClipboardData, createClipboardCopyEvent, createClipboardPasteEvent } from "../../../browser/controller/editContext/clipboardUtils.js";
-import { type SemanticTokenSource } from "../../../browser/viewparts/semanticTokens/semanticTokenPresentation.js";
-import { createStanzaSyntaxClipboardHtml } from "./syntaxClipboardHtml.js";
-import { TEXT_FILE_TRANSFER_MAX_BYTES, selectTextFileTransfer } from "../../dropOrPasteInto/browser/textFileTransfer.js";
-import { captureStanzaClipboardTextTransfer, normalizeStanzaClipboardPasteProviders, provideStanzaClipboardPaste, type ClipboardPasteProvider } from "./clipboardPasteProvider.js";
-import { createStanzaBrowserClipboardSystemTextReader, type ClipboardSystemTextReader } from "./clipboardSystemText.js";
-import { createStanzaBrowserClipboardRichTextReader, createStanzaBrowserClipboardRichTextWriter, type ClipboardRichTextItem, type ClipboardRichTextReader, type ClipboardRichTextWriter } from "./clipboardRichText.js";
+import { createClipboardCopyEvent, createClipboardPasteEvent, readEditorClipboardText, type IClipboardCopyEvent, type IClipboardPasteEvent, type IReadableClipboardData, type IWritableClipboardData } from '../../../browser/controller/editContext/clipboardUtils.js';
+import { SemanticTokenPresentation, type SemanticTokenSource } from "../../../browser/viewparts/semanticTokens/semanticTokenPresentation.js";
+import { TEXT_FILE_TRANSFER_MAX_BYTES, selectTextFileTransfer } from '../../dropOrPasteInto/browser/textFileTransfer.js';
 
-export const EDITOR_CLIPBOARD_MIME = "application/x-stanza-editor";
-export const EDITOR_HTML_CLIPBOARD_MIME = "text/html";
+export const EDITOR_CLIPBOARD_MIME = 'application/x-stanza-editor';
+export const EDITOR_HTML_CLIPBOARD_MIME = 'text/html';
 
 export enum ClipboardLineEnding {
-	LF = "\n",
-	CRLF = "\r\n",
+	LF = '\n',
+	CRLF = '\r\n',
 }
 
-export interface ClipboardControllerOptions {
-	readonly lineEnding?: ClipboardLineEnding;
-	readonly emptySelectionPolicy?: EditorEmptySelectionClipboardPolicy;
-	/** Optional current token projection used only for portable HTML copy output. */
-	readonly semanticTokens?: SemanticTokenSource;
-	/** Rejects cut and paste while another input adapter owns a protected edit. */
-	readonly isEditingAllowed?: () => boolean;
-	/** Ordered local providers for declared non-plain clipboard representations. */
-	readonly pasteProviders?: readonly ClipboardPasteProvider[];
-	/**
-	 * Optional Async Clipboard plain-text fallback. It is used only when the
-	 * native paste event has no textual, metadata, file, or provider payload.
-	 */
-	readonly systemTextReader?: ClipboardSystemTextReader;
-	/** Optional rich Async Clipboard fallback, used before the plain-text fallback. */
-	readonly richTextReader?: ClipboardRichTextReader;
-	/** Optional rich Async Clipboard writer, used only without event clipboard data. */
-	readonly richTextWriter?: ClipboardRichTextWriter;
+export enum EditorEmptySelectionClipboardPolicy {
+	Ignore = 'ignore',
+	Line = 'line',
+}
+
+export enum EditorClipboardPasteMode {
+	Selection = 'selection',
+	Line = 'line',
+}
+
+interface EditorClipboardEntry {
+	readonly text: string;
+	readonly sourceRange: TextRange;
+	readonly pasteMode: EditorClipboardPasteMode;
+}
+
+interface EditorClipboardPayload {
+	readonly plainText: string;
+	readonly html: string;
+	readonly metadata: string;
+}
+
+interface EditorClipboardPasteData {
+	readonly texts: readonly string[];
+	readonly modes: readonly EditorClipboardPasteMode[];
 }
 
 interface ClipboardMetadata {
@@ -52,9 +56,13 @@ interface ClipboardMetadata {
 	readonly pasteModes: readonly EditorClipboardPasteMode[];
 }
 
-interface ClipboardPasteData {
-	readonly texts: readonly string[];
-	readonly modes: readonly EditorClipboardPasteMode[];
+export interface ClipboardControllerOptions {
+	readonly lineEnding?: ClipboardLineEnding;
+	readonly emptySelectionPolicy?: EditorEmptySelectionClipboardPolicy;
+	/** Optional current token source used only for portable HTML copy output. */
+	readonly semanticTokens?: SemanticTokenSource;
+	/** Rejects cut and paste while another input adapter owns a protected edit. */
+	readonly isEditingAllowed?: () => boolean;
 }
 
 /**
@@ -65,16 +73,13 @@ export class ClipboardController extends Disposable {
 	private readonly emptySelectionPolicy: EditorEmptySelectionClipboardPolicy;
 	private readonly semanticTokens: SemanticTokenSource | undefined;
 	private readonly isEditingAllowed: () => boolean;
-	private readonly pasteProviders: readonly ClipboardPasteProvider[];
-	private readonly systemTextReader: ClipboardSystemTextReader | undefined;
-	private readonly richTextReader: ClipboardRichTextReader | undefined;
-	private readonly richTextWriter: ClipboardRichTextWriter | undefined;
 	private asynchronousPasteRequest = 0;
 
 	constructor(
 		target: EditContext | HTMLElement,
 		private readonly viewport: EditorViewport,
 		private readonly selectionController: EditorSelectionController,
+		private readonly clipboardService: IClipboardService,
 		options: ClipboardControllerOptions = {},
 	) {
 		super();
@@ -95,28 +100,16 @@ export class ClipboardController extends Disposable {
 			this.dispose();
 			throw new TypeError("Stanza clipboard edit gate must be a function");
 		}
-		if (options.systemTextReader !== undefined && typeof options.systemTextReader.readText !== "function") {
+		if (!clipboardService || typeof clipboardService.readText !== 'function' || typeof clipboardService.writeText !== 'function') {
 			this.dispose();
-			throw new TypeError("Stanza clipboard system text reader must provide readText");
+			throw new TypeError('Editor clipboard requires the platform clipboard service');
 		}
-		if (options.richTextReader !== undefined && typeof options.richTextReader.readText !== "function") {
-			this.dispose();
-			throw new TypeError("Stanza clipboard rich text reader must provide readText");
-		}
-		if (options.richTextWriter !== undefined && typeof options.richTextWriter.writeText !== "function") {
-			this.dispose();
-			throw new TypeError("Stanza clipboard rich text writer must provide writeText");
-		}
-		this.lineEnding = readLineEnding(options.lineEnding);
+		this.lineEnding = resolveClipboardLineEnding(options.lineEnding);
 		this.emptySelectionPolicy = readEmptySelectionPolicy(
 			options.emptySelectionPolicy,
 		);
 		this.semanticTokens = options.semanticTokens;
 		this.isEditingAllowed = options.isEditingAllowed ?? (() => true);
-		this.pasteProviders = normalizeStanzaClipboardPasteProviders(options.pasteProviders);
-		this.systemTextReader = options.systemTextReader ?? createStanzaBrowserClipboardSystemTextReader(this.element.ownerDocument);
-		this.richTextReader = options.richTextReader ?? createStanzaBrowserClipboardRichTextReader(this.element.ownerDocument);
-		this.richTextWriter = options.richTextWriter ?? createStanzaBrowserClipboardRichTextWriter(this.element.ownerDocument);
 		this._register(toDisposable(() => {
 			this.asynchronousPasteRequest += 1;
 		}));
@@ -156,7 +149,7 @@ export class ClipboardController extends Disposable {
 			event.setHandled();
 			return;
 		}
-		this.writeRichSystemClipboard(event, entries);
+		this.writeSystemClipboard(event, entries);
 	}
 
 	private handleCut(event: IClipboardCopyEvent): void {
@@ -172,10 +165,10 @@ export class ClipboardController extends Disposable {
 		);
 		if (event.hasClipboardData && this.writeClipboard(event.clipboardData, entries)) {
 			event.setHandled();
-			this.executeCut();
+			this.executeCut(entries);
 			return;
 		}
-		this.writeRichSystemClipboard(event, entries, true);
+		this.writeSystemClipboard(event, entries, true);
 	}
 
 	private handlePaste(event: IClipboardPasteEvent): void {
@@ -185,18 +178,20 @@ export class ClipboardController extends Disposable {
 			event.setHandled();
 			return;
 		}
-		const text = readClipboardText(nativeClipboard, this.element.ownerDocument);
-		const clipboardData = readClipboardMetadata(
+		const text = readEditorClipboardText(nativeClipboard, this.element.ownerDocument);
+		const clipboardData = readEditorClipboardPasteData(
 			nativeClipboard,
 			this.selectionController.selections.selections.length,
 		);
 		if (text.length === 0 && !clipboardData?.texts.some(value => value.length > 0)) {
-			if (this.pasteProviders.some(provider => provider.mimeTypes.some(type => nativeClipboard.types.includes(type)))) {
-				this.pasteProvidedText(event);
+			const uriList = readUriList(nativeClipboard.getData('text/uri-list'));
+			if (uriList) {
+				event.setHandled();
+				this.selectionController.execute(createPasteTextCommand(this.viewport.textModel, this.selectionController.selections, uriList));
+				this.afterEdit();
 				return;
 			}
 			if (this.pasteTextFile(event)) return;
-			if (this.pasteRichSystemText(event)) return;
 			this.pasteSystemText(event);
 			return;
 		}
@@ -216,68 +211,13 @@ export class ClipboardController extends Disposable {
 		this.afterEdit();
 	}
 
-	private pasteTextFile(event: IClipboardPasteEvent): boolean {
-		const file = selectTextFileTransfer(event.clipboardData.files);
-		if (!file) return false;
+	private pasteSystemText(event: IClipboardPasteEvent): void {
 		const model = this.viewport.textModel;
 		const expectedVersion = model.version;
 		const expectedSelections = this.selectionController.selections;
 		const request = ++this.asynchronousPasteRequest;
 		event.setHandled();
-		void file.text().then(text => {
-			if (
-				this.isDisposed ||
-				request !== this.asynchronousPasteRequest ||
-				text.length > TEXT_FILE_TRANSFER_MAX_BYTES ||
-				!this.isEditingAllowed() ||
-				model.version !== expectedVersion ||
-				!selectionSetsEqual(this.selectionController.selections, expectedSelections)
-			) {
-				return;
-			}
-			this.selectionController.execute(createPasteTextCommand(model, expectedSelections, text));
-			this.afterEdit();
-		}).catch(() => {
-			// The host supplied the file, but it could not be decoded as text.
-		});
-		return true;
-	}
-
-	private pasteProvidedText(event: IClipboardPasteEvent): void {
-		const clipboardData = event.clipboardData;
-		const model = this.viewport.textModel;
-		const expectedVersion = model.version;
-		const expectedSelections = this.selectionController.selections;
-		const request = ++this.asynchronousPasteRequest;
-		const transfer = captureStanzaClipboardTextTransfer(clipboardData);
-		event.setHandled();
-		void provideStanzaClipboardPaste(this.pasteProviders, transfer).then(text => {
-			if (
-				text === undefined ||
-				this.isDisposed ||
-				request !== this.asynchronousPasteRequest ||
-				!this.isEditingAllowed() ||
-				model.version !== expectedVersion ||
-				!selectionSetsEqual(this.selectionController.selections, expectedSelections)
-			) {
-				return;
-			}
-			this.selectionController.execute(createPasteTextCommand(model, expectedSelections, text));
-			this.afterEdit();
-		}).catch(() => {
-			// A provider is optional; invalid or failed output must not mutate the model.
-		});
-	}
-
-	private pasteSystemText(event: IClipboardPasteEvent): boolean {
-		const reader = this.systemTextReader;
-		if (!reader) return false;
-		const model = this.viewport.textModel;
-		const expectedVersion = model.version;
-		const expectedSelections = this.selectionController.selections;
-		const request = ++this.asynchronousPasteRequest;
-		event.setHandled();
-		void Promise.resolve(reader.readText()).then(text => {
+		void this.clipboardService.readText().then(text => {
 			if (
 				text.length === 0 ||
 				this.isDisposed ||
@@ -291,53 +231,32 @@ export class ClipboardController extends Disposable {
 			this.selectionController.execute(createPasteTextCommand(model, expectedSelections, text));
 			this.afterEdit();
 		}).catch(() => {
-			// Permission failures and unavailable system text must leave the model unchanged.
+			// Clipboard permission failures leave the model unchanged.
 		});
-		return true;
 	}
 
-	private pasteRichSystemText(event: IClipboardPasteEvent): boolean {
-		const reader = this.richTextReader;
-		if (!reader) return false;
-		const model = this.viewport.textModel;
-		const expectedVersion = model.version;
-		const expectedSelections = this.selectionController.selections;
-		const request = ++this.asynchronousPasteRequest;
-		event.setHandled();
-		void Promise.resolve(reader.readText()).then(item => {
-			const text = item?.plainText ?? (item?.html ? readEditorHtmlText(item.html, this.element.ownerDocument) : "");
-			if (text.length === 0 || this.isDisposed || request !== this.asynchronousPasteRequest || !this.isEditingAllowed() || model.version !== expectedVersion || !selectionSetsEqual(this.selectionController.selections, expectedSelections)) return;
-			this.selectionController.execute(createPasteTextCommand(model, expectedSelections, text));
-			this.afterEdit();
-		}).catch(() => {
-			// Permission and representation failures leave the model unchanged.
-		});
-		return true;
-	}
-
-	private writeRichSystemClipboard(event: IClipboardCopyEvent, entries: readonly EditorClipboardEntry[], cut = false): boolean {
-		const writer = this.richTextWriter;
-		if (!writer || !entries.some(entry => entry.text.length > 0)) return false;
+	private writeSystemClipboard(event: IClipboardCopyEvent, entries: readonly EditorClipboardEntry[], cut = false): boolean {
+		if (!entries.some(entry => entry.text.length > 0)) return false;
 		const model = this.viewport.textModel;
 		const expectedVersion = model.version;
 		const expectedSelections = this.selectionController.selections;
 		const request = ++this.asynchronousPasteRequest;
 		const payload = this.createClipboardPayload(entries);
 		event.setHandled();
-		void Promise.resolve(writer.writeText(payload)).then(() => {
+		void this.clipboardService.writeText(payload.plainText).then(() => {
 			if (!cut || this.isDisposed || request !== this.asynchronousPasteRequest || !this.isEditingAllowed() || model.version !== expectedVersion || !selectionSetsEqual(this.selectionController.selections, expectedSelections)) return;
-			this.executeCut();
+			this.executeCut(entries);
 		}).catch(() => {
 			// Permission failures must never mutate the model, especially for cut.
 		});
 		return true;
 	}
 
-	private executeCut(): void {
-		this.selectionController.execute(createClipboardCutCommand(
+	private executeCut(entries: readonly EditorClipboardEntry[]): void {
+		this.selectionController.execute(createCutCommand(
 			this.viewport.textModel,
 			this.selectionController.selections,
-			this.emptySelectionPolicy,
+			entries.map(entry => entry.sourceRange),
 		));
 		this.afterEdit();
 	}
@@ -353,15 +272,10 @@ export class ClipboardController extends Disposable {
 		} catch {
 			return false;
 		}
-		const metadata: ClipboardMetadata = {
-			version: 2,
-			selectionTexts: entries.map(entry => entry.text),
-			pasteModes: entries.map(entry => entry.pasteMode),
-		};
 		try {
 			clipboardData.setData(
 				EDITOR_CLIPBOARD_MIME,
-				JSON.stringify(metadata),
+				payload.metadata,
 			);
 		} catch {
 			// Plain text remains portable when a browser rejects custom MIME data.
@@ -374,16 +288,26 @@ export class ClipboardController extends Disposable {
 		return true;
 	}
 
-	private createClipboardPayload(entries: readonly EditorClipboardEntry[]): Required<ClipboardRichTextItem> {
-		return Object.freeze({
-			plainText: joinClipboardEntries(entries, this.lineEnding),
-			html: createStanzaSyntaxClipboardHtml(
-				entries,
-				this.lineEnding,
-				this.semanticTokens,
-				this.element.ownerDocument,
-			),
+	private createClipboardPayload(entries: readonly EditorClipboardEntry[]): EditorClipboardPayload {
+		return createEditorClipboardPayload(entries, this.lineEnding, this.semanticTokens, this.element.ownerDocument);
+	}
+
+	private pasteTextFile(event: IClipboardPasteEvent): boolean {
+		const file = selectTextFileTransfer(event.clipboardData.files);
+		if (!file) return false;
+		const model = this.viewport.textModel;
+		const expectedVersion = model.version;
+		const expectedSelections = this.selectionController.selections;
+		const request = ++this.asynchronousPasteRequest;
+		event.setHandled();
+		void file.text().then(text => {
+			if (text.length > TEXT_FILE_TRANSFER_MAX_BYTES || this.isDisposed || request !== this.asynchronousPasteRequest || !this.isEditingAllowed() || model.version !== expectedVersion || !selectionSetsEqual(this.selectionController.selections, expectedSelections)) return;
+			this.selectionController.execute(createPasteTextCommand(model, expectedSelections, text));
+			this.afterEdit();
+		}).catch(() => {
+			// The supplied file could not be decoded as text.
 		});
+		return true;
 	}
 
 	private afterEdit(): void {
@@ -396,7 +320,190 @@ export class ClipboardController extends Disposable {
 	}
 }
 
-function createMetadataPasteCommand(model: TextModel, selections: TextSelectionSet, data: ClipboardPasteData): EditorEditCommand {
+function getEditorClipboardEntries(model: TextModel, selections: TextSelectionSet, policy: EditorEmptySelectionClipboardPolicy): readonly EditorClipboardEntry[] {
+	if (!Object.values(EditorEmptySelectionClipboardPolicy).includes(policy)) {
+		throw new TypeError('Unknown editor empty-selection clipboard policy');
+	}
+	return Object.freeze(selections.selections.map(selection => createClipboardEntry(model, selection, policy)));
+}
+
+function createClipboardEntry(model: TextModel, selection: TextSelection, policy: EditorEmptySelectionClipboardPolicy): EditorClipboardEntry {
+	if (!selection.collapsed) {
+		return Object.freeze({
+			text: model.getTextInRange(selection.range),
+			sourceRange: selection.range,
+			pasteMode: EditorClipboardPasteMode.Selection,
+		});
+	}
+	if (policy === EditorEmptySelectionClipboardPolicy.Ignore) {
+		return Object.freeze({
+			text: '',
+			sourceRange: selection.range,
+			pasteMode: EditorClipboardPasteMode.Selection,
+		});
+	}
+	const lineIndex = selection.active.lineIndex;
+	if (lineIndex + 1 < model.lineCount) {
+		const sourceRange = TextRange.from(TextPosition.at(lineIndex, 0), TextPosition.at(lineIndex + 1, 0));
+		return Object.freeze({ text: model.getTextInRange(sourceRange), sourceRange, pasteMode: EditorClipboardPasteMode.Line });
+	}
+	const lineText = model.getLineContent(lineIndex);
+	const sourceRange = lineIndex === 0
+		? TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, lineText.length))
+		: TextRange.from(TextPosition.at(lineIndex - 1, model.getLineContent(lineIndex - 1).length), TextPosition.at(lineIndex, lineText.length));
+	return Object.freeze({ text: `${lineText}\n`, sourceRange, pasteMode: EditorClipboardPasteMode.Line });
+}
+
+function resolveClipboardLineEnding(lineEnding: ClipboardLineEnding | undefined): ClipboardLineEnding {
+	const resolved = lineEnding ?? (isWindows ? ClipboardLineEnding.CRLF : ClipboardLineEnding.LF);
+	if (!Object.values(ClipboardLineEnding).includes(resolved)) throw new TypeError('Unknown editor clipboard line ending');
+	return resolved;
+}
+
+function createEditorClipboardPayload(entries: readonly EditorClipboardEntry[], lineEnding: ClipboardLineEnding, tokens: SemanticTokenSource | undefined, ownerDocument: Document): EditorClipboardPayload {
+	const metadata: ClipboardMetadata = {
+		version: 2,
+		selectionTexts: entries.map(entry => entry.text),
+		pasteModes: entries.map(entry => entry.pasteMode),
+	};
+	return Object.freeze({
+		plainText: joinClipboardEntries(entries, lineEnding),
+		html: createSyntaxClipboardHtml(entries, lineEnding, tokens, ownerDocument),
+		metadata: JSON.stringify(metadata),
+	});
+}
+
+function readEditorClipboardPasteData(clipboardData: IReadableClipboardData, selectionCount: number): EditorClipboardPasteData | undefined {
+	let parsed: unknown;
+	try {
+		const raw = clipboardData.getData(EDITOR_CLIPBOARD_MIME);
+		if (!raw) return undefined;
+		parsed = JSON.parse(raw);
+	} catch {
+		return undefined;
+	}
+	if (typeof parsed !== 'object' || parsed === null || !('version' in parsed) || (parsed.version !== 1 && parsed.version !== 2) || !('selectionTexts' in parsed) || !Array.isArray(parsed.selectionTexts) || parsed.selectionTexts.length !== selectionCount || parsed.selectionTexts.some(text => typeof text !== 'string')) {
+		return undefined;
+	}
+	const texts = parsed.selectionTexts as string[];
+	let modes = parsed.version === 2 && 'pasteModes' in parsed && Array.isArray(parsed.pasteModes) && parsed.pasteModes.length === selectionCount && parsed.pasteModes.every(mode => Object.values(EditorClipboardPasteMode).includes(mode))
+		? parsed.pasteModes as EditorClipboardPasteMode[]
+		: texts.map(() => EditorClipboardPasteMode.Selection);
+	if (modes.some((mode, index) => mode === EditorClipboardPasteMode.Line && !texts[index]!.endsWith('\n'))) {
+		modes = texts.map(() => EditorClipboardPasteMode.Selection);
+	}
+	return Object.freeze({ texts: Object.freeze([...texts]), modes: Object.freeze([...modes]) });
+}
+
+function joinClipboardEntries(entries: readonly EditorClipboardEntry[], lineEnding: ClipboardLineEnding): string {
+	const included = entries.filter(entry => entry.text.length > 0);
+	let result = '';
+	let previousMode: EditorClipboardPasteMode | undefined;
+	for (const entry of included) {
+		if (result.length > 0 && previousMode !== EditorClipboardPasteMode.Line) result += lineEnding;
+		result += toExternalLineEndings(entry.text, lineEnding);
+		previousMode = entry.pasteMode;
+	}
+	return result;
+}
+
+function createSyntaxClipboardHtml(entries: readonly EditorClipboardEntry[], lineEnding: ClipboardLineEnding, tokens: SemanticTokenSource | undefined, ownerDocument: Document): string {
+	const included = entries.filter(entry => entry.text.length > 0);
+	const contents = included.map(entry => renderClipboardEntry(entry, tokens, ownerDocument));
+	const separators = included.map((entry, index) => index === 0 || included[index - 1]!.pasteMode === EditorClipboardPasteMode.Line ? '' : '\n');
+	return `<pre><code>${toExternalLineEndings(contents.map((content, index) => `${separators[index]}${content}`).join(''), lineEnding)}</code></pre>`;
+}
+
+function renderClipboardEntry(entry: EditorClipboardEntry, tokens: SemanticTokenSource | undefined, ownerDocument: Document): string {
+	if (!tokens) return escapeHtml(entry.text);
+	try {
+		const model = tokens.textModel;
+		const endOffset = model.offsetAt(entry.sourceRange.end);
+		const exactStartOffset = endOffset - entry.text.length;
+		if (exactStartOffset >= 0 && model.getText().slice(exactStartOffset, endOffset) === entry.text) {
+			return renderTokenizedRange(tokens, model.positionAt(exactStartOffset), entry.sourceRange.end, ownerDocument);
+		}
+		if (entry.pasteMode !== EditorClipboardPasteMode.Line || !entry.text.endsWith('\n')) return escapeHtml(entry.text);
+		const lineText = entry.text.slice(0, -1);
+		const contentEndOffset = model.getText()[endOffset - 1] === '\n' ? endOffset - 1 : endOffset;
+		const contentStartOffset = contentEndOffset - lineText.length;
+		if (contentStartOffset < 0 || model.getText().slice(contentStartOffset, contentEndOffset) !== lineText) return escapeHtml(entry.text);
+		return `${renderTokenizedRange(tokens, model.positionAt(contentStartOffset), model.positionAt(contentEndOffset), ownerDocument)}\n`;
+	} catch {
+		return escapeHtml(entry.text);
+	}
+}
+
+function renderTokenizedRange(tokens: SemanticTokenSource, start: TextPosition, end: TextPosition, ownerDocument: Document): string {
+	const parts: string[] = [];
+	const model = tokens.textModel;
+	const colors = resolveTokenColors(ownerDocument);
+	for (let lineIndex = start.lineIndex; lineIndex <= end.lineIndex; lineIndex += 1) {
+		const lineText = model.getLineContent(lineIndex);
+		const startColumn = lineIndex === start.lineIndex ? start.columnIndex : 0;
+		const endColumn = lineIndex === end.lineIndex ? end.columnIndex : lineText.length;
+		parts.push(renderTokenizedLine(lineText, startColumn, endColumn, tokens.getLineTokens(lineIndex), colors));
+		if (lineIndex < end.lineIndex) parts.push('\n');
+	}
+	return parts.join('');
+}
+
+function renderTokenizedLine(lineText: string, startColumn: number, endColumn: number, tokens: ReturnType<SemanticTokenSource['getLineTokens']>, colors: ReadonlyMap<SemanticTokenPresentation, string>): string {
+	let column = startColumn;
+	const parts: string[] = [];
+	for (const token of tokens) {
+		const tokenStart = Math.max(startColumn, token.startColumn);
+		const tokenEnd = Math.min(endColumn, token.endColumn);
+		if (tokenEnd <= tokenStart) continue;
+		if (column < tokenStart) parts.push(escapeHtml(lineText.slice(column, tokenStart)));
+		const color = token.syntaxPresentation?.foreground ?? (token.presentation ? colors.get(token.presentation) : undefined);
+		const style = color ? ` style="color: ${escapeHtml(color)}"` : '';
+		const modifiers = token.modifiers?.join(' ') ?? '';
+		parts.push(`<span class="stanza-editor-token${token.presentation ? ` ${token.presentation}` : ''}${modifiers ? ` ${modifiers}` : ''}"${style}>${escapeHtml(lineText.slice(tokenStart, tokenEnd))}</span>`);
+		column = tokenEnd;
+	}
+	if (column < endColumn) parts.push(escapeHtml(lineText.slice(column, endColumn)));
+	return parts.join('');
+}
+
+function resolveTokenColors(ownerDocument: Document): ReadonlyMap<SemanticTokenPresentation, string> {
+	const view = ownerDocument.defaultView;
+	if (!view) return new Map();
+	const style = view.getComputedStyle(ownerDocument.documentElement);
+	const colors = new Map<SemanticTokenPresentation, string>();
+	for (const [presentation, variable] of TOKEN_COLOR_VARIABLES) {
+		const color = style.getPropertyValue(variable).trim();
+		if (color.length > 0) colors.set(presentation, color);
+	}
+	return colors;
+}
+
+const TOKEN_COLOR_VARIABLES = new Map<SemanticTokenPresentation, string>([
+	[SemanticTokenPresentation.Comment, '--zeta-editor-token-comment-foreground'],
+	[SemanticTokenPresentation.Keyword, '--zeta-editor-token-keyword-foreground'],
+	[SemanticTokenPresentation.String, '--zeta-editor-token-string-foreground'],
+	[SemanticTokenPresentation.Number, '--zeta-editor-token-number-foreground'],
+	[SemanticTokenPresentation.Regexp, '--zeta-editor-token-regexp-foreground'],
+	[SemanticTokenPresentation.Type, '--zeta-editor-token-type-foreground'],
+	[SemanticTokenPresentation.Function, '--zeta-editor-token-function-foreground'],
+	[SemanticTokenPresentation.Variable, '--zeta-editor-token-variable-foreground'],
+	[SemanticTokenPresentation.Operator, '--zeta-editor-token-operator-foreground'],
+]);
+
+function toExternalLineEndings(text: string, lineEnding: ClipboardLineEnding): string {
+	return lineEnding === ClipboardLineEnding.LF ? text : text.replaceAll('\n', ClipboardLineEnding.CRLF);
+}
+
+function escapeHtml(text: string): string {
+	return text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+}
+
+function readUriList(value: string): string | undefined {
+	const entries = value.split(/\r?\n/).map(entry => entry.trim()).filter(entry => entry.length > 0 && !entry.startsWith('#'));
+	return entries.length > 0 ? entries.join('\n') : undefined;
+}
+
+function createMetadataPasteCommand(model: TextModel, selections: TextSelectionSet, data: EditorClipboardPasteData): EditorEditCommand {
 	return data.modes.every(mode => mode === EditorClipboardPasteMode.Line) &&
 		canPasteCompleteLines(selections)
 		? createLinePasteCommand(model, selections, data.texts)
@@ -407,59 +514,12 @@ function canPasteCompleteLines(selections: TextSelectionSet): boolean {
 	return selections.selections.every(selection => selection.collapsed);
 }
 
-function readLineEnding(lineEnding: ClipboardLineEnding | undefined): ClipboardLineEnding {
-	const resolved = lineEnding ?? (
-		isWindows ? ClipboardLineEnding.CRLF : ClipboardLineEnding.LF
-	);
-	if (!Object.values(ClipboardLineEnding).includes(resolved)) {
-		throw new TypeError("Unknown Stanza clipboard line ending");
-	}
-	return resolved;
-}
-
 function readEmptySelectionPolicy(policy: EditorEmptySelectionClipboardPolicy | undefined): EditorEmptySelectionClipboardPolicy {
 	const resolved = policy ?? EditorEmptySelectionClipboardPolicy.Line;
 	if (!Object.values(EditorEmptySelectionClipboardPolicy).includes(resolved)) {
 		throw new TypeError("Unknown Stanza empty-selection clipboard policy");
 	}
 	return resolved;
-}
-
-function joinClipboardEntries(entries: readonly EditorClipboardEntry[], lineEnding: ClipboardLineEnding): string {
-	const included = entries.filter(entry => entry.text.length > 0);
-	let result = "";
-	let previousMode: EditorClipboardPasteMode | undefined;
-	for (const entry of included) {
-		if (
-			result.length > 0 &&
-			previousMode !== EditorClipboardPasteMode.Line
-		) {
-			result += lineEnding;
-		}
-		result += toExternalLineEndings(entry.text, lineEnding);
-		previousMode = entry.pasteMode;
-	}
-	return result;
-}
-
-function toExternalLineEndings(text: string, lineEnding: ClipboardLineEnding): string {
-	return lineEnding === ClipboardLineEnding.LF
-		? text
-		: text.replaceAll("\n", ClipboardLineEnding.CRLF);
-}
-
-function readClipboardText(clipboardData: IReadableClipboardData, ownerDocument: Document): string {
-	try {
-		const text = clipboardData.getData("text/plain");
-		if (text.length > 0) return text;
-	} catch {
-		// A browser may expose only a rich clipboard representation.
-	}
-	try {
-		return readEditorHtmlText(clipboardData.getData(EDITOR_HTML_CLIPBOARD_MIME), ownerDocument);
-	} catch {
-		return "";
-	}
 }
 
 function selectionSetsEqual(left: TextSelectionSet, right: TextSelectionSet): boolean {
@@ -470,85 +530,4 @@ function selectionSetsEqual(left: TextSelectionSet, right: TextSelectionSet): bo
 			return selection.anchor.compareTo(expected.anchor) === 0 &&
 				selection.active.compareTo(expected.active) === 0;
 		});
-}
-
-/** Reduces untrusted HTML to inert deterministic text for Stanza paste and drop paths. */
-export function readEditorHtmlText(html: string, ownerDocument: Document): string {
-	if (html.length === 0) return "";
-	const template = h(ownerDocument, "template");
-	template.innerHTML = html;
-	const parts: string[] = [];
-	appendHtmlClipboardText(template.content, parts);
-	return parts.join("").replaceAll("\u00a0", " ").replace(/\n{3,}/g, "\n\n").replace(/^\n|\n$/g, "");
-}
-
-function appendHtmlClipboardText(node: Node, parts: string[]): void {
-	if (node.nodeType === node.TEXT_NODE) {
-		parts.push(node.textContent ?? "");
-		return;
-	}
-	if (node.nodeType !== node.ELEMENT_NODE && node.nodeType !== node.DOCUMENT_FRAGMENT_NODE) return;
-	const element = node.nodeType === node.ELEMENT_NODE ? node as HTMLElement : undefined;
-	if (element && (element.localName === "script" || element.localName === "style" || element.localName === "noscript")) return;
-	if (element?.localName === "br") {
-		appendLineBreak(parts);
-		return;
-	}
-	const block = element !== undefined && HTML_CLIPBOARD_BLOCK_ELEMENTS.has(element.localName);
-	if (block) appendLineBreak(parts);
-	for (const child of node.childNodes) appendHtmlClipboardText(child, parts);
-	if (block) appendLineBreak(parts);
-}
-
-function appendLineBreak(parts: string[]): void {
-	if (parts.length === 0 || parts.at(-1) !== "\n") parts.push("\n");
-}
-
-const HTML_CLIPBOARD_BLOCK_ELEMENTS = new Set([
-	"address", "article", "aside", "blockquote", "div", "dl", "dt", "dd", "fieldset", "figcaption",
-	"figure", "footer", "form", "h1", "h2", "h3", "h4", "h5", "h6", "header", "hr", "li",
-	"main", "nav", "ol", "p", "section", "table", "tbody", "td", "tfoot", "th", "thead", "tr", "ul",
-]);
-
-function readClipboardMetadata(clipboardData: IReadableClipboardData, selectionCount: number): ClipboardPasteData | undefined {
-	let parsed: unknown;
-	try {
-		const raw = clipboardData.getData(EDITOR_CLIPBOARD_MIME);
-		if (!raw) return undefined;
-		parsed = JSON.parse(raw);
-	} catch {
-		return undefined;
-	}
-	if (
-		typeof parsed !== "object" ||
-		parsed === null ||
-		!("version" in parsed) ||
-		(parsed.version !== 1 && parsed.version !== 2) ||
-		!("selectionTexts" in parsed) ||
-		!Array.isArray(parsed.selectionTexts) ||
-		parsed.selectionTexts.length !== selectionCount ||
-		parsed.selectionTexts.some(text => typeof text !== "string")
-	) {
-		return undefined;
-	}
-	const texts = parsed.selectionTexts as string[];
-	let modes = parsed.version === 2 &&
-		"pasteModes" in parsed &&
-		Array.isArray(parsed.pasteModes) &&
-		parsed.pasteModes.length === selectionCount &&
-		parsed.pasteModes.every(mode =>
-			Object.values(EditorClipboardPasteMode).includes(mode)
-		)
-		? parsed.pasteModes as EditorClipboardPasteMode[]
-		: texts.map(() => EditorClipboardPasteMode.Selection);
-	if (modes.some((mode, index) =>
-		mode === EditorClipboardPasteMode.Line &&
-		!texts[index]!.endsWith("\n")
-	)) {
-		modes = texts.map(() => EditorClipboardPasteMode.Selection);
-	}
-	return Object.freeze({
-		texts: Object.freeze([...texts]),
-		modes: Object.freeze([...modes]),
-	});
 }

@@ -1,5 +1,5 @@
 import { isFiniteNumber, isNonNegativeSafeInteger, isPositiveSafeInteger } from '../../../base/common/numbers.js';
-import { type EditorLineHeightChangeAccessor, type EditorLineRange, type EditorViewportLineSource } from '../viewModel.js';
+import { type EditorLineHeightChangeAccessor, type EditorLineRange, type EditorViewZoneLayout, type EditorViewportLineSource } from '../viewModel.js';
 import { CustomLineHeightData, LineHeightsManager } from './lineHeights.js';
 
 export type { EditorLineRange, EditorViewportLineSource } from '../viewModel.js';
@@ -19,6 +19,13 @@ export interface LinesLayoutViewport {
 	readonly relativeVerticalOffset: readonly number[];
 }
 
+interface ViewZoneData {
+	readonly id: string;
+	readonly ordinal: number;
+	readonly afterLineIndex: number;
+	readonly heightInPixels: number;
+}
+
 /**
  * Calculates line positions and virtualized line ranges.
  *
@@ -32,6 +39,9 @@ export class LinesLayout {
 	private overscanLineCount: number;
 	private paddingTop: number;
 	private paddingBottom: number;
+	private readonly viewZones = new Map<string, ViewZoneData>();
+	private nextViewZoneId = 0;
+	private nextViewZoneOrdinal = 0;
 
 	public constructor(
 		lineSourceOrCount: EditorViewportLineSource | number,
@@ -97,12 +107,51 @@ export class LinesLayout {
 		return hadAChange;
 	}
 
+	public addViewZone(afterLineIndex: number, heightInPixels: number): string {
+		validateViewZone(afterLineIndex, heightInPixels, this.lineCount);
+		const id = `view-zone-${++this.nextViewZoneId}`;
+		this.viewZones.set(id, Object.freeze({
+			id,
+			ordinal: ++this.nextViewZoneOrdinal,
+			afterLineIndex,
+			heightInPixels,
+		}));
+		return id;
+	}
+
+	public changeViewZone(id: string, afterLineIndex: number, heightInPixels: number): boolean {
+		validateViewZone(afterLineIndex, heightInPixels, this.lineCount);
+		const current = this.viewZones.get(id);
+		if (!current) throw new Error(`Unknown editor view zone: ${id}`);
+		if (current.afterLineIndex === afterLineIndex && current.heightInPixels === heightInPixels) return false;
+		this.viewZones.set(id, Object.freeze({ ...current, afterLineIndex, heightInPixels }));
+		return true;
+	}
+
+	public removeViewZone(id: string): boolean {
+		return this.viewZones.delete(id);
+	}
+
+	public getViewZoneLayouts(): readonly EditorViewZoneLayout[] {
+		let accumulatedHeight = 0;
+		return Object.freeze(this.sortedViewZones.map(zone => {
+			const afterLineIndex = Math.min(zone.afterLineIndex, this.lineCount - 1);
+			const top = this.paddingTop + this.lineHeights.getVerticalOffsetForLineIndex(afterLineIndex + 1, this.lineCount) + accumulatedHeight;
+			accumulatedHeight += zone.heightInPixels;
+			return Object.freeze({ id: zone.id, afterLineIndex, top, heightInPixels: zone.heightInPixels });
+		}));
+	}
+
+	public getViewZoneLayout(id: string): EditorViewZoneLayout | undefined {
+		return this.getViewZoneLayouts().find(zone => zone.id === id);
+	}
+
 	public getLinesTotalHeight(): number {
-		return this.paddingTop + this.lineHeights.getTotalHeight(this.lineCount) + this.paddingBottom;
+		return this.paddingTop + this.lineHeights.getTotalHeight(this.lineCount) + this.viewZonesTotalHeight + this.paddingBottom;
 	}
 
 	public getVerticalOffsetForLineIndex(lineIndex: number): number {
-		return this.paddingTop + this.lineHeights.getVerticalOffsetForLineIndex(lineIndex, this.lineCount);
+		return this.paddingTop + this.lineHeights.getVerticalOffsetForLineIndex(lineIndex, this.lineCount) + this.getViewZonesHeightBeforeLineIndex(lineIndex);
 	}
 
 	public getLineHeightForLineIndex(lineIndex: number): number {
@@ -117,14 +166,10 @@ export class LinesLayout {
 			throw new RangeError('Line viewport coordinates must be finite and non-negative');
 		}
 		const lineCount = this.lineCount;
-		const totalLineHeight = this.lineHeights.getTotalHeight(lineCount);
-		const visibleLines = getVisibleLineRange(
-			lineCount,
-			this.lineHeights,
-			viewportHeight,
-			verticalOffset,
-			this.paddingTop,
-		);
+		const totalLineHeight = this.lineHeights.getTotalHeight(lineCount) + this.viewZonesTotalHeight;
+		const visibleLines = this.viewZones.size === 0
+			? getVisibleLineRange(lineCount, this.lineHeights, viewportHeight, verticalOffset, this.paddingTop)
+			: this.getVisibleLineRangeWithViewZones(verticalOffset, viewportHeight);
 
 		const hasVisibleLines = visibleLines.startLineIndex < visibleLines.endLineIndexExclusive;
 		const renderLines = Object.freeze(hasVisibleLines
@@ -148,10 +193,50 @@ export class LinesLayout {
 
 	public getLineNumberAtVerticalOffset(verticalOffset: number): number {
 		if (!isFiniteNumber(verticalOffset)) throw new RangeError('Vertical offset must be finite');
-		const lineCount = this.lineCount;
-		const lineOffset = verticalOffset - this.paddingTop;
-		return this.lineHeights.getLineIndexAtVerticalOffset(lineOffset, lineCount);
+		if (this.viewZones.size === 0) return this.lineHeights.getLineIndexAtVerticalOffset(verticalOffset - this.paddingTop, this.lineCount);
+		let low = 0;
+		let high = this.lineCount;
+		while (low < high) {
+			const middle = Math.floor((low + high) / 2);
+			const bottom = this.getVerticalOffsetForLineIndex(middle) + this.lineHeights.heightForLineIndex(middle);
+			if (bottom <= verticalOffset) low = middle + 1;
+			else high = middle;
+		}
+		return low;
 	}
+
+	private getVisibleLineRangeWithViewZones(verticalOffset: number, viewportHeight: number): EditorLineRange {
+		if (viewportHeight === 0) return lineRange(0, 0);
+		const visibleBottom = verticalOffset + viewportHeight;
+		const startLineIndex = this.getLineNumberAtVerticalOffset(verticalOffset);
+		if (startLineIndex >= this.lineCount || this.getVerticalOffsetForLineIndex(startLineIndex) >= visibleBottom) return lineRange(startLineIndex, startLineIndex);
+		let endLineIndexExclusive = startLineIndex;
+		while (endLineIndexExclusive < this.lineCount && this.getVerticalOffsetForLineIndex(endLineIndexExclusive) < visibleBottom) endLineIndexExclusive += 1;
+		return lineRange(startLineIndex, endLineIndexExclusive);
+	}
+
+	private getViewZonesHeightBeforeLineIndex(lineIndex: number): number {
+		let height = 0;
+		for (const zone of this.viewZones.values()) {
+			if (Math.min(zone.afterLineIndex, this.lineCount - 1) < lineIndex) height += zone.heightInPixels;
+		}
+		return height;
+	}
+
+	private get viewZonesTotalHeight(): number {
+		let height = 0;
+		for (const zone of this.viewZones.values()) height += zone.heightInPixels;
+		return height;
+	}
+
+	private get sortedViewZones(): readonly ViewZoneData[] {
+		return [...this.viewZones.values()].sort((left, right) => left.afterLineIndex - right.afterLineIndex || left.ordinal - right.ordinal);
+	}
+}
+
+function validateViewZone(afterLineIndex: number, heightInPixels: number, lineCount: number): void {
+	if (!Number.isSafeInteger(afterLineIndex) || afterLineIndex < -1 || afterLineIndex >= lineCount) throw new RangeError('View zone line index is outside the line collection');
+	if (!isFiniteNumber(heightInPixels) || heightInPixels <= 0) throw new RangeError('View zone height must be finite and positive');
 }
 
 export function getVisibleLineRange(

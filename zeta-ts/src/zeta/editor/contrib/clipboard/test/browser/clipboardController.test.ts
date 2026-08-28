@@ -7,6 +7,7 @@ import { TextSelection, TextSelectionSet } from "../../../../common/core/selecti
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { type ClipboardControllerOptions } from "../../browser/clipboardController.js";
+import { type IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 
 class FixedTextMeasurer implements TextMeasurer {
 	readonly horizontalPadding = 24;
@@ -22,8 +23,9 @@ class FixedTextMeasurer implements TextMeasurer {
 }
 
 class MemoryClipboardData {
-	files: readonly File[] = [];
 	private readonly values = new Map<string, string>();
+
+	constructor(readonly files: readonly File[] = []) {}
 
 	get types(): readonly string[] {
 		return [...this.values.keys()];
@@ -38,11 +40,44 @@ class MemoryClipboardData {
 	}
 }
 
+class DeferredClipboardService implements IClipboardService {
+	private readonly readRequests: Array<(text: string) => void> = [];
+	private readonly writeRequests: Array<{ readonly text: string; readonly resolve: () => void }> = [];
+
+	get readRequestCount(): number {
+		return this.readRequests.length;
+	}
+
+	get writeRequestCount(): number {
+		return this.writeRequests.length;
+	}
+
+	get writtenText(): string | undefined {
+		return this.writeRequests[0]?.text;
+	}
+
+	readText(): Promise<string> {
+		return new Promise(resolve => this.readRequests.push(resolve));
+	}
+
+	writeText(text: string): Promise<void> {
+		return new Promise(resolve => this.writeRequests.push({ text, resolve }));
+	}
+
+	resolveRead(requestIndex: number, text: string): void {
+		this.readRequests[requestIndex]?.(text);
+	}
+
+	resolveWrite(requestIndex = 0): void {
+		this.writeRequests[requestIndex]?.resolve();
+	}
+}
+
 class DeferredTextFile {
 	private readonly result: Promise<string>;
 	private resolveResult: ((text: string) => void) | undefined;
 
-	constructor(readonly name: string, readonly type = "", readonly size = 16) {
+	constructor(readonly name: string, readonly type = '', readonly size = 16) {
 		this.result = new Promise(resolve => {
 			this.resolveResult = resolve;
 		});
@@ -57,41 +92,10 @@ class DeferredTextFile {
 	}
 }
 
-class DeferredSystemTextReader {
-	private readonly requests: Array<(text: string) => void> = [];
-
-	get requestCount(): number {
-		return this.requests.length;
-	}
-
-	readText(): Promise<string> {
-		return new Promise(resolve => this.requests.push(resolve));
-	}
-
-	resolve(requestIndex: number, text: string): void {
-		this.requests[requestIndex]?.(text);
-	}
-}
-
-class DeferredRichTextWriter {
-	private readonly requests: Array<{ readonly item: { readonly plainText: string; readonly html: string }; readonly resolve: () => void; readonly reject: (error: Error) => void }> = [];
-
-	get requestCount(): number {
-		return this.requests.length;
-	}
-
-	get item(): { readonly plainText: string; readonly html: string } | undefined {
-		return this.requests[0]?.item;
-	}
-
-	writeText(item: { readonly plainText: string; readonly html: string }): Promise<void> {
-		return new Promise((resolve, reject) => this.requests.push({ item, resolve, reject }));
-	}
-
-	resolve(requestIndex = 0): void {
-		this.requests[requestIndex]?.resolve();
-	}
-}
+const inertClipboardService: IClipboardService = Object.freeze({
+	readText: async () => '',
+	writeText: async () => {},
+});
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -111,9 +115,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorViewport } = await import("../../../../browser/view.js");
-const { ClipboardController, EDITOR_CLIPBOARD_MIME, EDITOR_HTML_CLIPBOARD_MIME, ClipboardLineEnding } = await import("../../browser/clipboardController.js");
-const { UriListPasteProvider } = await import("../../browser/clipboardPasteProvider.js");
-const { EditorClipboardPasteMode, EditorEmptySelectionClipboardPolicy } = await import("../../common/clipboard.js");
+const { ClipboardController, ClipboardLineEnding, EDITOR_CLIPBOARD_MIME, EDITOR_HTML_CLIPBOARD_MIME, EditorClipboardPasteMode, EditorEmptySelectionClipboardPolicy } = await import("../../browser/clipboardController.js");
 const { SemanticTokenPresentation } = await import("../../../../browser/viewparts/semanticTokens/semanticTokenPresentation.js");
 const { EditorView } = await import("../../../../browser/view.js");
 
@@ -122,11 +124,11 @@ function attachClipboard(
 	viewport: InstanceType<typeof EditorViewport>,
 	selections: EditorSelectionController,
 	options: ClipboardControllerOptions = {},
+	clipboardService: IClipboardService = inertClipboardService,
 ): InstanceType<typeof ClipboardController> {
-	return new ClipboardController(input.editContext, viewport, selections, {
+	return new ClipboardController(input.editContext, viewport, selections, clipboardService, {
 		...options,
 		isEditingAllowed: () => !input.compositionController.composing && (options.isEditingAllowed?.() ?? true),
-		pasteProviders: [UriListPasteProvider, ...(options.pasteProviders ?? [])],
 	});
 }
 
@@ -522,7 +524,7 @@ test("Clipboard preserves current semantic token markup in portable HTML", () =>
 	dom.window.close();
 });
 
-test("Clipboard reads one user-provided text file only while its revision and selections remain current", async () => {
+test('Clipboard reads system text only for an empty event transfer', async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
@@ -535,109 +537,23 @@ test("Clipboard reads one user-provided text file only while its revision and se
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
 	});
+	const clipboardService = new DeferredClipboardService();
 	using input = new EditorView(viewport, selections);
-	using clipboard = attachClipboard(input, viewport, selections);
-	const file = new DeferredTextFile("snippet.rs");
-	const data = new MemoryClipboardData();
-	data.files = [file as unknown as File];
-
-	const paste = clipboardEvent(dom.window, "paste", data);
-	input.element.dispatchEvent(paste);
-	assert.equal(paste.defaultPrevented, true);
-	file.resolve(" two\r\nthree");
-	await flushPromises();
-	assert.equal(model.getText(), "one two\nthree");
-
-	const staleFile = new DeferredTextFile("later.ts", "text/plain");
-	const staleData = new MemoryClipboardData();
-	staleData.files = [staleFile as unknown as File];
-	input.element.dispatchEvent(clipboardEvent(dom.window, "paste", staleData));
-	selections.setSelections(TextSelectionSet.single(caret(0, 0)));
-	staleFile.resolve("ignored");
-	await flushPromises();
-	assert.equal(model.getText(), "one two\nthree");
-
-	dom.window.close();
-});
-
-test("Clipboard runs local URI providers and discards stale asynchronous provider results", async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
-	const container = dom.window.document.querySelector("main");
-	assert.ok(container);
-	using model = new TextModel("one");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 3)));
-	using viewport = new EditorViewport({
-		container,
-		model,
-		lineHeight: 20,
-		textMeasurer: new FixedTextMeasurer(),
-		selectionController: selections,
-	});
-	let resolveProvidedText: ((text: string) => void) | undefined;
-	const providedText = new Promise<string>(resolve => {
-		resolveProvidedText = resolve;
-	});
-	using input = new EditorView(viewport, selections);
-	using clipboard = attachClipboard(input, viewport, selections, {
-		pasteProviders: [{
-			id: "test.delayed-snippet",
-			mimeTypes: ["application/x-zeta-snippet"],
-			providePaste: () => providedText,
-		}],
-	});
-
-	const uriData = new MemoryClipboardData();
-	uriData.setData("text/uri-list", "# copied URI\nfile:///workspace/one.rs\nhttps://example.test/two");
-	const uriPaste = clipboardEvent(dom.window, "paste", uriData);
-	input.element.dispatchEvent(uriPaste);
-	assert.equal(uriPaste.defaultPrevented, true);
-	await flushPromises();
-	assert.equal(model.getText(), "onefile:///workspace/one.rs\nhttps://example.test/two");
-
-	selections.setSelections(TextSelectionSet.single(caret(0, 0)));
-	const delayedData = new MemoryClipboardData();
-	delayedData.setData("application/x-zeta-snippet", "opaque");
-	const delayedPaste = clipboardEvent(dom.window, "paste", delayedData);
-	input.element.dispatchEvent(delayedPaste);
-	assert.equal(delayedPaste.defaultPrevented, true);
-	selections.setSelections(TextSelectionSet.single(caret(0, 1)));
-	resolveProvidedText?.("must not apply");
-	await flushPromises();
-	assert.equal(model.getText(), "onefile:///workspace/one.rs\nhttps://example.test/two");
-
-	dom.window.close();
-});
-
-test("Clipboard uses the system text reader only as a stale-safe empty-transfer fallback", async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
-	const container = dom.window.document.querySelector("main");
-	assert.ok(container);
-	using model = new TextModel("one");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 3)));
-	using viewport = new EditorViewport({
-		container,
-		model,
-		lineHeight: 20,
-		textMeasurer: new FixedTextMeasurer(),
-		selectionController: selections,
-	});
-	const systemTextReader = new DeferredSystemTextReader();
-	using input = new EditorView(viewport, selections);
-	using clipboard = attachClipboard(input, viewport, selections, { systemTextReader });
+	using clipboard = attachClipboard(input, viewport, selections, {}, clipboardService);
 
 	const fallbackPaste = clipboardEvent(dom.window, "paste", new MemoryClipboardData());
 	input.element.dispatchEvent(fallbackPaste);
 	assert.equal(fallbackPaste.defaultPrevented, true);
-	assert.equal(systemTextReader.requestCount, 1);
-	systemTextReader.resolve(0, " two");
+	assert.equal(clipboardService.readRequestCount, 1);
+	clipboardService.resolveRead(0, ' two');
 	await flushPromises();
 	assert.equal(model.getText(), "one two");
 
 	selections.setSelections(TextSelectionSet.single(caret(0, 0)));
 	input.element.dispatchEvent(clipboardEvent(dom.window, "paste", new MemoryClipboardData()));
-	assert.equal(systemTextReader.requestCount, 2);
+	assert.equal(clipboardService.readRequestCount, 2);
 	selections.setSelections(TextSelectionSet.single(caret(0, 1)));
-	systemTextReader.resolve(1, "ignored");
+	clipboardService.resolveRead(1, 'ignored');
 	await flushPromises();
 	assert.equal(model.getText(), "one two");
 
@@ -645,60 +561,65 @@ test("Clipboard uses the system text reader only as a stale-safe empty-transfer 
 	nativeText.setData("text/plain", "!");
 	selections.setSelections(TextSelectionSet.single(caret(0, model.getLineContent(0).length)));
 	input.element.dispatchEvent(clipboardEvent(dom.window, "paste", nativeText));
-	assert.equal(systemTextReader.requestCount, 2);
+	assert.equal(clipboardService.readRequestCount, 2);
 	assert.equal(model.getText(), "one two!");
 
 	dom.window.close();
 });
 
-test("Clipboard safely prefers the rich system reader before its plain-text fallback", async () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
-	const container = dom.window.document.querySelector("main");
+test('Clipboard owns URI-list and bounded text-file paste', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = dom.window.document.querySelector('main');
 	assert.ok(container);
-	using model = new TextModel("one");
+	using model = new TextModel('one');
 	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 3)));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
-	let plainReaderCalls = 0;
 	using input = new EditorView(viewport, selections);
-	using clipboard = attachClipboard(input, viewport, selections, {
-		richTextReader: { readText: () => Promise.resolve({ html: "<b> two</b><script>ignored()</script>" }) },
-		systemTextReader: { readText: () => { plainReaderCalls += 1; return Promise.resolve(" fallback"); } },
-	});
-	const paste = clipboardEvent(dom.window, "paste", new MemoryClipboardData());
-	input.element.dispatchEvent(paste);
-	assert.equal(paste.defaultPrevented, true);
+	using clipboard = attachClipboard(input, viewport, selections);
+
+	const uriData = new MemoryClipboardData();
+	uriData.setData('text/uri-list', '# copied URI\nfile:///workspace/one.rs\nhttps://example.test/two');
+	const uriPaste = clipboardEvent(dom.window, 'paste', uriData);
+	input.element.dispatchEvent(uriPaste);
+	assert.equal(uriPaste.defaultPrevented, true);
+	assert.equal(model.getText(), 'onefile:///workspace/one.rs\nhttps://example.test/two');
+
+	const file = new DeferredTextFile('snippet.rs');
+	const filePaste = clipboardEvent(dom.window, 'paste', new MemoryClipboardData([file as unknown as File]));
+	input.element.dispatchEvent(filePaste);
+	assert.equal(filePaste.defaultPrevented, true);
+	file.resolve('\nlet value = 1;');
 	await flushPromises();
-	assert.equal(model.getText(), "one two");
-	assert.equal(plainReaderCalls, 0);
+	assert.equal(model.getText(), 'onefile:///workspace/one.rs\nhttps://example.test/two\nlet value = 1;');
 	dom.window.close();
 });
 
-test("Clipboard falls back to Async rich copy and delays cut until it succeeds", async () => {
+test('Clipboard writes system text and delays cut until it succeeds', async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("one");
 	using selections = new EditorSelectionController(model, TextSelectionSet.single(selection(0, 0, 0, 3)));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
-	const writer = new DeferredRichTextWriter();
+	const clipboardService = new DeferredClipboardService();
 	using input = new EditorView(viewport, selections);
-	using clipboard = attachClipboard(input, viewport, selections, { richTextWriter: writer });
+	using clipboard = attachClipboard(input, viewport, selections, {}, clipboardService);
 
 	const copy = clipboardEvent(dom.window, "copy", null);
 	input.element.dispatchEvent(copy);
 	assert.equal(copy.defaultPrevented, true);
-	assert.equal(writer.requestCount, 1);
-	assert.deepEqual(writer.item, { plainText: "one", html: "<pre><code>one</code></pre>" });
-	writer.resolve();
+	assert.equal(clipboardService.writeRequestCount, 1);
+	assert.equal(clipboardService.writtenText, "one");
+	clipboardService.resolveWrite();
 	await flushPromises();
 	assert.equal(model.getText(), "one");
 
 	const cut = clipboardEvent(dom.window, "cut", null);
 	input.element.dispatchEvent(cut);
 	assert.equal(cut.defaultPrevented, true);
-	assert.equal(writer.requestCount, 2);
+	assert.equal(clipboardService.writeRequestCount, 2);
 	assert.equal(model.getText(), "one");
-	writer.resolve(1);
+	clipboardService.resolveWrite(1);
 	await flushPromises();
 	assert.equal(model.getText(), "");
 	dom.window.close();

@@ -1,4 +1,4 @@
-import { getEditorIndentationUnit, resolveEditorIndentationOptions, type EditorIndentationOptions } from "../../../common/editorIndentation.js";
+import { getEditorIndentationUnit, resolveEditorIndentationOptions, type EditorIndentationOptions } from "../../../common/core/misc/indentation.js";
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
 import { type TextSelectionSet } from "../../../common/core/selection.js";
 import { TextPosition, TextRange, type TextEdit } from "../../../common/core/text.js";

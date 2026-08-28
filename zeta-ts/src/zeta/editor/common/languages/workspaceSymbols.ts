@@ -1,7 +1,7 @@
 import { Disposable } from "../../../base/common/lifecycle.js";
 import { type URI } from "../../../base/common/uri.js";
 import { type TextRange } from "../core/text.js";
-import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "./languageFeatureRegistry.js";
+import { LanguageFeatureProviderRegistry, type LanguageFeatureProviderMetadata } from "../languageFeatureRegistry.js";
 
 export type LanguageWorkspaceSymbolKind = string | number;
 

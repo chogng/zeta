@@ -1,6 +1,6 @@
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../platform/instantiation/common/instantiation.js';
-import type { LanguageFeatureProviderRegistry } from '../languages/languageFeatureRegistry.js';
+import type { LanguageFeatureProviderRegistry } from '../languageFeatureRegistry.js';
 import type { LanguageCompletionProvider, LanguageCompletionProviderRegistry } from '../languages/completion/languageCompletionProviders.js';
 import type { DocumentHighlightProvider, MultiDocumentHighlightProvider } from '../languages/documentHighlights.js';
 import type { SyntaxProviderRegistry } from '../languages/syntax/syntaxProviders.js';

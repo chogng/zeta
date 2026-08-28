@@ -2,7 +2,7 @@ import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js'
 import { TextRange, type TextEdit } from '../core/text.js';
 import { type LanguageWorker } from '../languages/languageRequestCoordinator.js';
 import { LanguageRequestCoordinator, LanguageRequestStatus } from '../languages/languageRequestCoordinator.js';
-import { type InplaceReplaceResult } from '../languages/inplaceReplaceSupport.js';
+import { type InplaceReplaceResult } from '../languages/supports/inplaceReplaceSupport.js';
 import { type TextModel } from '../model/textModel.js';
 import { type UnicodeHighlight } from './unicodeTextModelHighlighter.js';
 

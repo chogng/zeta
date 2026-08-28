@@ -16,6 +16,7 @@ export enum DecorationPresentation {
 	WordHighlightStrong = "word-highlight-strong",
 	WordHighlightText = "word-highlight-text",
 	SelectionHighlight = "selection-highlight",
+	SelectionAnchor = "selection-anchor",
 	BracketMatch = "bracket-match",
 	ErrorUnderline = "error-underline",
 	WarningUnderline = "warning-underline",
@@ -26,6 +27,7 @@ export enum DecorationPresentation {
 	DiffAdded = "diff-added",
 	DiffModified = "diff-modified",
 	DiffDeleted = "diff-deleted",
+	ColorSwatch = "color-swatch",
 	GlyphMargin = "glyph-margin",
 	LineDecoration = "line-decoration",
 }
@@ -85,6 +87,7 @@ export interface DecorationBlockPresentation {
 /** Groups the visual details that a decoration source resolves for one model decoration. */
 export interface DecorationPresentationResolution {
 	readonly presentation: DecorationPresentation;
+	readonly color?: string;
 	readonly linesDecoration?: DecorationLinesPresentation;
 	readonly blockDecoration?: DecorationBlockPresentation;
 	readonly glyphMargin?: DecorationGlyphMarginPresentation;
@@ -97,6 +100,7 @@ export interface ResolvedDecoration {
 	readonly range: TextRange;
 	readonly presentation: DecorationPresentation;
 	readonly hoverText?: string;
+	readonly color?: string;
 	readonly linesDecoration?: DecorationLinesPresentation;
 	readonly blockDecoration?: DecorationBlockPresentation;
 	readonly glyphMargin?: DecorationGlyphMarginPresentation;
@@ -170,6 +174,7 @@ export function createStanzaDecorationSource<TMetadata>(
 				if (hoverText !== undefined && (typeof hoverText !== "string" || hoverText.trim().length === 0)) {
 					throw new TypeError("Stanza decoration hover text must be non-empty text");
 				}
+				const color = normalizeColor(details?.color, presentation);
 				const linesDecoration = normalizeLinesPresentation(details?.linesDecoration, linesDecorationLanes);
 				const blockDecoration = normalizeBlockPresentation(details?.blockDecoration);
 				const glyphMargin = normalizeGlyphMarginPresentation(details?.glyphMargin, glyphMarginLanes);
@@ -183,6 +188,7 @@ export function createStanzaDecorationSource<TMetadata>(
 					range: decoration.range,
 					presentation,
 					...(hoverText === undefined ? {} : { hoverText }),
+					...(color === undefined ? {} : { color }),
 					...(linesDecoration === undefined ? {} : { linesDecoration }),
 					...(blockDecoration === undefined ? {} : { blockDecoration }),
 					...(glyphMargin === undefined ? {} : { glyphMargin }),
@@ -255,6 +261,7 @@ function validatePresentation(
 		presentation !== DecorationPresentation.WordHighlightStrong &&
 		presentation !== DecorationPresentation.WordHighlightText &&
 		presentation !== DecorationPresentation.SelectionHighlight &&
+		presentation !== DecorationPresentation.SelectionAnchor &&
 		presentation !== DecorationPresentation.BracketMatch &&
 		presentation !== DecorationPresentation.ErrorUnderline &&
 		presentation !== DecorationPresentation.WarningUnderline &&
@@ -265,6 +272,7 @@ function validatePresentation(
 		&& presentation !== DecorationPresentation.DiffAdded
 		&& presentation !== DecorationPresentation.DiffModified
 		&& presentation !== DecorationPresentation.DiffDeleted
+		&& presentation !== DecorationPresentation.ColorSwatch
 		&& presentation !== DecorationPresentation.GlyphMargin
 		&& presentation !== DecorationPresentation.LineDecoration
 	) {
@@ -303,6 +311,16 @@ function normalizeLinesPresentation(presentation: DecorationLinesPresentation | 
 		...(ariaLabel === undefined ? {} : { ariaLabel }),
 		...(expanded === undefined ? {} : { expanded }),
 	});
+}
+
+function normalizeColor(value: string | undefined, presentation: DecorationPresentation): string | undefined {
+	if (value === undefined) {
+		if (presentation === DecorationPresentation.ColorSwatch) throw new TypeError("Stanza color-swatch decoration requires a color");
+		return undefined;
+	}
+	if (presentation !== DecorationPresentation.ColorSwatch) throw new TypeError("Stanza decoration color is only valid for color swatches");
+	if (!/^#[0-9a-f]{8}$/iu.test(value)) throw new TypeError("Stanza decoration color must be an eight-digit hexadecimal color");
+	return value.toLowerCase();
 }
 
 function normalizeBlockPresentation(

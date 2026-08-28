@@ -5,7 +5,6 @@ import { createDeleteWordBackwardCommand, createDeleteWordForwardCommand } from 
 import { createDistributedPasteTextCommand, createPasteTextCommand, createTypeTextCommand } from "../../common/cursor/cursorTypeOperations.js";
 import { EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
-import { getSelectionTexts } from "../../common/commands/selectionText.js";
 import { TextPosition } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
 
@@ -265,7 +264,7 @@ test("Paste commands support shared and distributed isolated text", () => {
 	);
 });
 
-test("Selection text and cut preserve collapsed cursors and restore history", () => {
+test("Cut preserves collapsed cursors and restores history", () => {
 	using model = new TextModel("abc def");
 	const initial = TextSelectionSet.withPrimary([
 		TextSelection.from(TextPosition.at(0, 2), TextPosition.at(0, 0)),
@@ -273,8 +272,7 @@ test("Selection text and cut preserve collapsed cursors and restore history", ()
 	], 0);
 	using controller = new EditorSelectionController(model, initial);
 
-	assert.deepEqual(getSelectionTexts(model, initial), ["ab", ""]);
-	controller.execute(createCutCommand(model, controller.selections));
+	controller.execute(createCutCommand(model, controller.selections, controller.selections.selections.map(selection => selection.range)));
 	assert.deepEqual({
 		text: model.getText(),
 		selections: controller.selections,

@@ -98,7 +98,7 @@ flowchart LR
     Parts --> DOM[DOM / GPU mutation]
 ```
 
-- `ViewLayout` 是 DOM-free layout owner，生成不可变 `EditorViewportLayout`；`LinesLayout`、`LineHeightsManager` 分别负责行集合与行高。
+- `ViewLayout` 是 DOM-free layout owner，生成不可变 `EditorViewportLayout`；`LinesLayout` 统一负责行集合、行高与行间 View Zone，browser 只挂载调用方拥有的 zone DOM。
 - `EditorViewport` 同时承担当前 view host、同步 scheduler、measurement 组合、hit test 和 DOM scroll 同步。
 - `ViewLines` 先建立当前 rendered lines；`EditorViewContext` 提供当前 layout 和单次渲染上下文的稳定入口。
 - `EditorRenderingContext` 是每次同步 render pass 的不可变快照，包含 layout、viewport data 和通过 model version 校验的 overlay geometry。

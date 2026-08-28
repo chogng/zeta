@@ -3,7 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../../base/common/platform.js";
 import { type TextMeasurer } from "../../../browser/config/fontMeasurements.js";
-import { EditorIndentationKind } from "../../../common/editorIndentation.js";
+import { EditorIndentationKind } from "../../../common/core/misc/indentation.js";
 import { EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { registerBuiltinLanguageConfigurations } from "../../../common/languages/languageBuiltinConfigurations.js";
 import { LanguageConfigurationRegistry, LanguageIndentAction } from "../../../common/languages/languageConfiguration.js";

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { EditorIndentationKind } from "../../../../common/editorIndentation.js";
+import { EditorIndentationKind } from "../../../../common/core/misc/indentation.js";
 import { EditorSelectionController } from "../../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
