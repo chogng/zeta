@@ -42,7 +42,6 @@ use zeta_core::SessionCoordinator;
 use zeta_core::ThreadController;
 use zeta_extensions::ExtensionRoot;
 use zeta_install_context::InstallContext;
-use zeta_keyring_store::KeyringSecretStore;
 use zeta_kimi::KimiOAuth;
 use zeta_login::InteractiveLoginDriver;
 use zeta_login::LoginService;
@@ -79,6 +78,7 @@ use zeta_plugins::PluginActivationAuthority;
 use zeta_plugins::PluginActivationSnapshot;
 use zeta_protocol::ContextWindow;
 use zeta_rollout::LocalStateRepository;
+use zeta_secrets::FileSecretStore;
 use zeta_secrets::SecretStore;
 use zeta_skills_extension::BuiltInSkillSource;
 use zeta_skills_extension::SkillConfigSnapshotProvider;
@@ -648,14 +648,16 @@ impl std::error::Error for OpenAppServerError {}
 
 /// Process-wide durable authority shared by all Workspace runtimes for one profile.
 ///
-/// The profile runtime owns the single recovered Session projection, config store, Marketplace
-/// Manager/change watcher, and live profile notification graph. Workspace filesystem, terminal,
-/// Git, language, and execution services remain in separately composed [`AppServer`] instances.
+/// The profile runtime owns the single recovered Session projection, config store, secret store,
+/// Marketplace Manager/change watcher, and live profile notification graph. Workspace filesystem,
+/// terminal, Git, language, and execution services remain in separately composed [`AppServer`]
+/// instances.
 pub struct LocalProfileRuntime {
     profile_root: PathBuf,
     database_path: PathBuf,
     sessions: Arc<SessionCoordinator>,
     config: Arc<ConfigStore>,
+    secrets: Arc<dyn SecretStore>,
     updates: Arc<UpdateBroker>,
     update_scopes: Mutex<BTreeMap<ProfileUpdateScopeKey, Arc<UpdateBroker>>>,
     marketplace: Mutex<Option<ProfileMarketplaceAuthority>>,
@@ -704,15 +706,25 @@ impl LocalProfileRuntime {
             ConfigStore::open_with_paths(database_path.clone(), profile_root.join("config.toml"))
                 .map_err(|error| OpenAppServerError(error.0))?,
         );
+        let secrets: Arc<dyn SecretStore> = Arc::new(
+            FileSecretStore::open(profile_root.join("secrets"))
+                .map_err(|error| OpenAppServerError(error.to_string()))?,
+        );
         Ok(Self {
             profile_root,
             database_path,
             sessions,
             config,
+            secrets,
             updates: Arc::new(UpdateBroker::default()),
             update_scopes: Mutex::new(BTreeMap::new()),
             marketplace: Mutex::new(None),
         })
+    }
+
+    /// Returns the one secret store used by every Workspace runtime in this profile authority.
+    pub fn secret_store(&self) -> Arc<dyn SecretStore> {
+        Arc::clone(&self.secrets)
     }
 
     fn scoped_updates(
@@ -917,20 +929,33 @@ pub fn open_local_app_server_with_code_index_providers(
             options.workspace = Some(default_workspace_config(workspace_root)?);
         }
     }
+    let profile_secrets = match (&profile_runtime, options.connector_runtime.as_ref()) {
+        (Some(runtime), Some(connectors)) => {
+            if !Arc::ptr_eq(&runtime.secrets, &connectors.secrets) {
+                return Err(OpenAppServerError(
+                    "shared profile runtime and Connector runtime use different SecretStore authorities"
+                        .into(),
+                ));
+            }
+            Arc::clone(&runtime.secrets)
+        }
+        (Some(runtime), None) => Arc::clone(&runtime.secrets),
+        (None, Some(connectors)) => Arc::clone(&connectors.secrets),
+        (None, None) => Arc::new(
+            FileSecretStore::open(options.profile_root.join("secrets"))
+                .map_err(|error| OpenAppServerError(error.to_string()))?,
+        ),
+    };
     let mut connector_runtime = match options.connector_runtime.take() {
         Some(runtime) => Some(runtime),
         None => {
-            let secrets = Arc::new(
-                KeyringSecretStore::for_profile(&options.profile_root)
-                    .map_err(|error| OpenAppServerError(error.to_string()))?,
-            );
             let plugin_authority =
                 PluginActivationAuthority::open(options.profile_root.join("plugins"))
                     .map_err(|error| OpenAppServerError(error.to_string()))?;
             Some(LocalConnectorRuntime::from_plugin_authority(
                 &options.profile_root,
                 plugin_authority,
-                secrets,
+                Arc::clone(&profile_secrets),
             )?)
         }
     };
@@ -951,10 +976,6 @@ pub fn open_local_app_server_with_code_index_providers(
     if let (Some(runtime), Some(services)) = (&mut connector_runtime, product_services) {
         configure_product_connector_oauth(runtime, services.connector_oauth)?;
     }
-    let profile_secrets = connector_runtime
-        .as_ref()
-        .map(|runtime| Arc::clone(&runtime.secrets))
-        .ok_or_else(|| OpenAppServerError("local SecretStore is unavailable".into()))?;
     let workspace = options.workspace.map(|workspace| {
         Arc::new(WorkspaceConfigTracker::new(WorkspaceConfigStore::open(
             workspace.config_path,

@@ -8,7 +8,6 @@ use ts_rs::TS;
 pub enum SessionThreadStatus {
     Creating,
     Active,
-    Archived,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

@@ -27,6 +27,7 @@ pub enum WorkspaceAccessMutation {
     AlreadyPresent,
     RemovedSource,
     RemovedDirectory,
+    UpdatedPermissions,
     NotPresent,
 }
 
@@ -34,7 +35,11 @@ impl WorkspaceAccessMutation {
     pub(crate) fn changes_scope(self) -> bool {
         matches!(
             self,
-            Self::AddedDirectory | Self::AddedSource | Self::RemovedSource | Self::RemovedDirectory
+            Self::AddedDirectory
+                | Self::AddedSource
+                | Self::RemovedSource
+                | Self::RemovedDirectory
+                | Self::UpdatedPermissions
         )
     }
 }

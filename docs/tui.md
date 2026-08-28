@@ -604,11 +604,11 @@ owner 的公开 typed interface，`view.rs` 组装 component。没有请求的 f
 | Feature | 职责 |
 | --- | --- |
 | `thread` | active Thread snapshot/update、Turn start/interrupt、transient merge 与页面组装 |
-| `sessions` | Session list/create/resume/archive 与 Thread create/fork/rewind/switch/archive |
+| `sessions` | Session list/create/resume/archive 与 Thread create/fork/rewind/switch |
 | `interactions` | owner-directed approval 与 structured user-input view/response mapping |
 | `config` | typed config read/update UI |
 | `skills` | typed catalog、enablement intent 和 selection row model |
-| `additional_directories` | 当前 Session 的附加目录列表、添加与移除意图 |
+| `additional_directories` | 当前 Session 的附加目录列表、添加、移除和逐目录能力修改意图 |
 | `workspace_files` | `zeta-file-search` mention completion |
 | `status_line` | 汇集既有接口结果并执行 item 排列、降级与渲染 |
 
@@ -638,7 +638,7 @@ TUI 不能靠检查 ToolCall 名称或 arguments JSON 自行弹窗并决定策�
 [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md#22-外部-agent-配置导入仅限-desktop)，
 Skill 来源边界见 [`skills.md`](skills.md#151-外部-agent-skill-导入仅限-desktop)。
 
-`/add-dir <path>` 是另一条 Session 级文件访问流程。TUI 只发送 typed `workspace/additionalDirectories/add`；App Server canonicalize 目录、建立仅对当前 Session 有效的授权，并让本地 `read_file`、`write_file`、`edit`、`grep` 与 `glob` 接受该目录下的绝对路径。不带参数的 `/add-dir` 打开可搜索列表，Enter 通过 typed remove RPC 撤销目录。活动 Turn 也可以修改这份权限：新增目录确认后，同一 Turn 的下一次本地文件 tool call 会冻结最新 scope；已经发出的模型请求不变，下一次模型调用才从同一 authority 生成更新后的 `<filesystem><workspace_roots>`。移除会立即撤销旧 token。该流程不写入对话历史、不改变主 Workspace 或 cwd、不扫描外部 Agent 配置，也不让附加目录贡献项目配置。
+`/add-dir <path>` 是另一条 Session 级文件访问流程。TUI 发送 `workspace/additionalDirectories/add`，默认允许读取和修改文件；App Server 规范化目录并建立仅对当前 Session 有效的授权，使 `read_file`、`write_file`、`edit`、`grep` 与 `glob` 接受该目录下的绝对路径。不带参数的 `/add-dir` 打开可搜索列表，Enter 通过 remove RPC 撤销目录。Config 页的 Directory permissions 标签按目录提供 Read files、Modify files、Run commands、Watch file changes 和 Load project configuration 五个开关，并通过带期望版本的 `workspace/additionalDirectories/permissions/set` 更新后端权限。关闭 Read files 会同时关闭依赖读取能力的其它开关；过期页面会被后端拒绝。新增、移除和权限修改都会让旧凭证失效，下一次本地文件 Tool 调用和模型调用取得新快照。该流程不写入对话历史，也不改变主 Workspace 或 cwd；Run commands、Watch file changes 和 Load project configuration 当前只记录授权，相应功能尚未使用附加目录。
 
 Feature 之间不能依赖彼此的私有模块。跨功能结果由 `app/` 协调，交互复用通过
 `components/`，纯布局复用通过 `ui/`；只有重复已经出现且语义一致时才提取公开的小型 value
@@ -994,13 +994,10 @@ lib_tests.rs
 - `features/thread/request.rs` 只构造并执行 typed Thread/Turn request，返回 typed result；
   request module 不引用或更新 `App`。event loop 把结果转换为 `AppEvent`，presentation module
   只把 canonical Turn snapshot 分类为可展示 outcome；
-- `features/sessions/ActiveConversation` 拥有当前 product Session/Thread identity 与 sequence，
-  create/fork/rewind/resume/switch/archive 返回 conversation change/notice，不直接写 `App`；新的
-  canonical snapshot 由后台 subscription completion 安装。Session picker、Thread active/archived
-  tabs 与 replacement lifecycle 由同一 feature 拥有；
+- `features/sessions/ActiveConversation` 拥有当前 product Session/Thread identity 与 sequence，create/fork/rewind/resume/switch/archive 返回 conversation change/notice，不直接写 `App`；新的 canonical snapshot 由后台 subscription completion 安装。Session picker、Session 归档与 replacement lifecycle 由同一 feature 拥有；
 - `features/interactions` 把 owner-directed full request 转成 approval 或多问题 user-input Pane，
   只返回 exact typed response；owner selection、deadline 与 cancellation 留在 App Server；
-- `features/config/request.rs` 与 `features/skills/request.rs` 分别拥有已有 typed config/model 与 Skill catalog/enablement 调用，App 不再内联这些领域 payload；`ConfigResource` 有界读取、revision 校验并原子保存 `<profile>/zeta-code/terminal.json`，其鼠标交互设置只约束 TUI 本地 `MouseMode`，不进入 App Server 配置；
+- `features/config/request.rs` 与 `features/skills/request.rs` 分别拥有已有 typed config/model 与 Skill catalog/enablement 调用，App 不再内联这些领域 payload；Config 页面从 App Server 读取当前 Session 的附加目录权限，并通过带版本的完整能力集合修改一个目录；`ConfigResource` 有界读取、revision 校验并原子保存 `<profile>/zeta-code/terminal.json`，其鼠标交互设置只约束 TUI 本地 `MouseMode`，不进入 App Server 配置；
 - `components/tab_list.rs` 已拥有横向 tab 集合、当前项、左右/Tab 循环切换、鼠标命中、窄宽度换行和 Ratatui 绘制；`components/selection` 组合它并只拥有 query/filter/selection state、输入 outcome 与列表 Ratatui view；`InteractionPane`、App 和产品 view builder 只消费 selection component contract；
 - `ui/layout.rs` 拥有跨 presentation surface 复用的纯 geometry；`ui/theme.rs` 只拥有共享主题
   snapshot 到终端色彩能力的窄投影，用户文件解析与完整 token catalog 留在 `zeta-theme`；
@@ -1065,7 +1062,7 @@ lib_tests.rs
   `ImageAttachmentRef` → durable `UserImageAttachment` → provider 临时 image block”纵切。TUI
   不建立私有 blob store；Thread history 与 command receipt 不持久化 data URL；
 - status line 已按固定顺序显示可独立开关的权限模式、模型、Git 分支和 Git 变更；workspace 路径只在空会话 Welcome Banner 显示，Turn 运行状态不进入该行，usage 也不从 transcript 推导；
-- Config surface 包含 Config、Providers 与 Language servers 三个标签页。Mouse interactions 是 Config 标签页中的 item，由 `<profile>/zeta-code/terminal.json` 保存，不进入 App Server 配置。Providers 通过 `provider/list` 展示后端注册表中的完整供应商目录，列表仅显示供应商名称；隐藏输入框通过 `provider/apiKey/set` 把 API key 写入 profile SecretStore，密钥不在列表中展示。MCP、Skill、Plugin 和 Hook 不再作为 Config tab 重复展示，已有 `/mcp` 与 `/skills` 页面继续拥有各自能力。
+- Config surface 包含 Config、Directory permissions、Providers 与 Language servers 四个标签页。Mouse interactions 是 Config 标签页中的 item，由 `<profile>/zeta-code/terminal.json` 保存，不进入 App Server 配置。Directory permissions 管理当前 Session 每个附加目录的完整能力集合，不写入 profile 配置；读取和修改文件已经生效，命令、监听与项目配置加载仍等待相应功能接入。Providers 通过 `provider/list` 展示后端注册表中的完整供应商目录，列表仅显示供应商名称；隐藏输入框通过 `provider/apiKey/set` 把 API key 写入 profile SecretStore，密钥不在列表中展示。MCP、Skill、Plugin 和 Hook 不再作为 Config tab 重复展示，已有 `/mcp` 与 `/skills` 页面继续拥有各自能力。
 
 新增能力必须先证明是 `zeta code` 产品要求，再按 canonical contract 和垂直 feature 接入；不能
 因为 Native 已有 richer component，或某能力技术上可实现，就把它复制成 TUI backlog。
@@ -1088,7 +1085,7 @@ lib_tests.rs
 | `components/selection` state/view 边界 | Current |
 | composer/interaction component 物理边界 | Current |
 | Thread transient merge、cursor recovery 与 bounded data plane | Current |
-| Session/Thread picker、archive 与恢复 | Current |
+| Session picker/archive 与 Thread 恢复 | Current |
 | owner-directed approval / user input / deadline | Current |
 | 多行 composer 与 active-Turn follow-up queue | Current |
 | bounded Thread history window 与 Ctrl-Home 增量加载 | Current |
@@ -1145,7 +1142,7 @@ connection close 和 runtime 切换都有确定结果；当前 local authority c
 ### 阶段三：核心交互
 
 1. 在 `features/sessions/` 完成 Session list/resume/archive；（Current）
-2. 完成 Thread create/fork/rewind/switch/archive；（Current）
+2. 完成 Thread create/fork/rewind/switch；（Current）
 3. 让 Turn start/interrupt 全部经过 `features/thread/request.rs`；（Current）
 4. 让 Thread projection 与 `components/transcript/` 展示完整 ThreadItem；（Current）
 5. 在对应 component 内完成当前产品要求的 scroll 与 composer history；（Current）

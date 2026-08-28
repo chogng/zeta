@@ -344,7 +344,9 @@ fn bare_slash_renders_the_first_command_window() {
     assert!(rendered.contains("/skills"));
     assert!(rendered.contains("/mcp"));
     assert!(rendered.contains("/resume"));
-    assert!(rendered.contains("/archive-thread"));
+    assert!(rendered.contains("/archive"));
+    assert!(!rendered.contains("/archive-thread"));
+    assert!(!rendered.contains("/archive-session"));
     assert!(!rendered.contains("/thread "));
     assert!(!rendered.contains("/login"));
     assert!(!rendered.contains("/plugins"));

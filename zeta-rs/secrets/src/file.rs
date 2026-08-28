@@ -17,15 +17,19 @@ use crate::SecretStoreError;
 use crate::SecretStoreErrorKind;
 use crate::SecretValue;
 
+#[cfg(windows)]
+#[path = "file_windows.rs"]
+mod windows;
+
 const MAX_SECRET_BYTES: u64 = 1024 * 1024;
 const KEY_DOMAIN: &[u8] = b"zeta-file-secret-store-key-v1\0";
 
-/// Explicit opt-in durable secret backend rooted in a private product directory.
+/// Profile-scoped durable secret backend rooted in a private product directory.
 ///
 /// Keys are represented only by domain-separated SHA-256 filenames. Values are written through a
 /// private, synced staging file and atomically promoted under a process-local operation lock. On
-/// Unix, directories are mode 0700 and value files are mode 0600. Other platforms fail closed until
-/// an equivalent private-permission adapter exists.
+/// Unix, directories are mode 0700 and value files are mode 0600. Windows uses an owner-only
+/// protected DACL and write-through atomic replacement. Other platforms fail closed.
 pub struct FileSecretStore {
     values: PathBuf,
     operations: Mutex<()>,
@@ -58,7 +62,19 @@ fn prepare_values_directory(root: &Path) -> Result<PathBuf, SecretStoreError> {
     Ok(values)
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
+fn prepare_values_directory(root: &Path) -> Result<PathBuf, SecretStoreError> {
+    fs::create_dir_all(root).map_err(store_io)?;
+    windows::set_private_directory_permissions(root).map_err(store_io)?;
+    let root = root.canonicalize().map_err(store_io)?;
+    let values = root.join("values");
+    fs::create_dir_all(&values).map_err(store_io)?;
+    windows::set_private_directory_permissions(&values).map_err(store_io)?;
+    cleanup_staging_files(&values)?;
+    Ok(values)
+}
+
+#[cfg(not(any(unix, windows)))]
 fn prepare_values_directory(_: &Path) -> Result<PathBuf, SecretStoreError> {
     Err(SecretStoreError::new(
         SecretStoreErrorKind::BackendUnavailable,
@@ -99,6 +115,16 @@ impl SecretStore for FileSecretStore {
         }
         let _guard = self.operations.lock().map_err(lock_error)?;
         let destination = self.value_path(key);
+        match fs::symlink_metadata(&destination) {
+            Ok(metadata) if !metadata.file_type().is_file() => {
+                return Err(backend_failure(
+                    "secret store destination is not a regular file",
+                ));
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(store_io(error)),
+        }
         let staging = self.values.join(staging_filename()?);
         let result = (|| {
             let mut options = fs::OpenOptions::new();
@@ -181,14 +207,7 @@ fn promote_file(staging: &Path, destination: &Path) -> Result<(), SecretStoreErr
 
 #[cfg(windows)]
 fn promote_file(staging: &Path, destination: &Path) -> Result<(), SecretStoreError> {
-    match fs::rename(staging, destination) {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-            fs::remove_file(destination).map_err(store_io)?;
-            fs::rename(staging, destination).map_err(store_io)
-        }
-        Err(error) => Err(store_io(error)),
-    }
+    windows::promote_file(staging, destination).map_err(store_io)
 }
 
 #[cfg(unix)]
@@ -198,10 +217,16 @@ fn set_private_directory_permissions(path: &Path) -> Result<(), SecretStoreError
     fs::set_permissions(path, fs::Permissions::from_mode(0o700)).map_err(store_io)
 }
 
+#[cfg(unix)]
 fn sync_directory(path: &Path) -> Result<(), SecretStoreError> {
     fs::File::open(path)
         .and_then(|directory| directory.sync_all())
         .map_err(store_io)
+}
+
+#[cfg(windows)]
+fn sync_directory(_: &Path) -> Result<(), SecretStoreError> {
+    Ok(())
 }
 
 fn lock_error<T>(_: std::sync::PoisonError<T>) -> SecretStoreError {

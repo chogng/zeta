@@ -104,6 +104,7 @@ fn workspace_roots_are_rendered_only_for_the_matching_session() {
             first.clone(),
             WorkspaceRoot::open(workspace.path()).unwrap(),
             authorization,
+            zeta_workspace_access::AdditionalDirectoryPermissions::local_file_tools(),
         )
         .unwrap();
     let customizations =

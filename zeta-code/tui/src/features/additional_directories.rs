@@ -14,6 +14,7 @@ use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryA
 use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryListParams;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryListResult;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryMutationResult;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryPermissionDto;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryRemoveParams;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceTrustStateDto;
 use zeta_protocol::SessionId;
@@ -53,6 +54,10 @@ where
     client.add_workspace_additional_directory(WorkspaceAdditionalDirectoryAddParams {
         session_id: session_id.clone(),
         root,
+        permissions: vec![
+            WorkspaceAdditionalDirectoryPermissionDto::ReadFiles,
+            WorkspaceAdditionalDirectoryPermissionDto::WriteFiles,
+        ],
     })
 }
 
@@ -71,6 +76,7 @@ where
         })
         .map(|result| {
             selection_view(WorkspaceAdditionalDirectoryListResult {
+                revision: result.revision,
                 directories: result.directories,
             })
         })
@@ -94,10 +100,23 @@ fn selection_view(
             );
             SelectionItem::new(directory.root.display().to_string())
                 .with_id(item_id)
-                .with_description(match directory.trust {
-                    WorkspaceTrustStateDto::Restricted => "restricted file access",
-                    WorkspaceTrustStateDto::Trusted => "trusted workspace access",
-                })
+                .with_description(format!(
+                    "{} · {}",
+                    match directory.trust {
+                        WorkspaceTrustStateDto::Restricted => "restricted",
+                        WorkspaceTrustStateDto::Trusted => "trusted",
+                    },
+                    if directory.permissions.is_empty() {
+                        "no permissions".to_owned()
+                    } else {
+                        directory
+                            .permissions
+                            .iter()
+                            .map(permission_label)
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    }
+                ))
         })
         .collect();
     AdditionalDirectorySelectionView {
@@ -113,6 +132,18 @@ fn selection_view(
             "Space search  ·  ↑/↓ select  ·  Enter remove  ·  Esc back",
         ),
         actions,
+    }
+}
+
+fn permission_label(permission: &WorkspaceAdditionalDirectoryPermissionDto) -> &'static str {
+    match permission {
+        WorkspaceAdditionalDirectoryPermissionDto::ReadFiles => "read files",
+        WorkspaceAdditionalDirectoryPermissionDto::WriteFiles => "write files",
+        WorkspaceAdditionalDirectoryPermissionDto::ExecuteCommands => "execute commands",
+        WorkspaceAdditionalDirectoryPermissionDto::WatchFileChanges => "watch changes",
+        WorkspaceAdditionalDirectoryPermissionDto::LoadProjectConfiguration => {
+            "load project configuration"
+        }
     }
 }
 

@@ -125,10 +125,7 @@ Policy port 的 executor。`open_local_app_server` 会从 user config snapshot �
 的 unauthenticated 或 SecretStore-backed MCP server，并把 catalog 与本地工具组合。Host 可用
 `LocalAppServerOptions::with_plugin_activation` 注入固定 activation，或用 `with_plugin_authority` 注入 live
 authority；两者都会自动构造 Connector catalog、SQLite authority 与 package-rooted Plugin MCP provider。
-没有注入时，local composition 打开 `<profile>/plugins` 的 durable `PluginActivationAuthority` 和按 profile
-隔离的 `KeyringSecretStore`。Authority generation 会重建 Connector definitions 与 Plugin MCP provider，
-并复用 MCP safe-point replacement。Keyring operation
-失败会 fail closed，不自动降级到文件副本；host 仍可通过显式 runtime 注入 `FileSecretStore`。Config、Connector
+没有注入时，local composition 打开 `<profile>/plugins` 的 durable `PluginActivationAuthority`。`LocalProfileRuntime` 同时打开 `<profile>/secrets` 的唯一 `FileSecretStore`，并向该 profile 内所有 Workspace App Server 共享同一 `Arc<dyn SecretStore>`。显式 embedded host 仍可注入 `KeyringSecretStore` 或其他 backend；共享 profile runtime 时，如果 Connector runtime 携带了另一个 store，composition 会拒绝启动。Authority generation 会重建 Connector definitions 与 Plugin MCP provider，并复用 MCP safe-point replacement。Config、Connector
 或 MCP list-changed hint 会在后台构建新 generation；每次 model invocation 同时冻结可见 definitions 和响应后的 binder，因此 watcher 在模型
 响应前发布新 registry 也不会把旧响应劫持到同名新工具。已绑定调用继续持有原 Tool/Policy generation，
 直到 execute 排空；Plugin-backed call 在 dispatch 前获取 exact activation lease，Connector-bound call 再
@@ -540,9 +537,10 @@ Workspace Trust management (workspaceTrustHost)
 └─ workspace/trust/forget → remove one decision by opaque WorkspaceTrustId
 
 Session additional-directory authority
-├─ workspace/additionalDirectories/list → current Session roots
-├─ workspace/additionalDirectories/add → canonicalize + explicit session lease + publish file-tool and model workspace roots
-└─ workspace/additionalDirectories/remove → revoke exact root lease + refresh the Session workspace roots
+├─ workspace/additionalDirectories/list → current Session roots + complete permissions + revision
+├─ workspace/additionalDirectories/add → canonicalize + explicit session lease + caller-declared initial permissions
+├─ workspace/additionalDirectories/permissions/set → revision-checked complete permission replacement + old lease revocation
+└─ workspace/additionalDirectories/remove → revoke exact root lease + refresh capability-specific Session roots
 
 ConfigChange trust revocation
 ├─ revoke shared capability lease
@@ -741,6 +739,7 @@ MIME、size 与 SHA-256，不复制图片 bytes。
 | other Core failure | `CoreOperationFailed` |
 | missing config store | `ConfigUnavailable` |
 | config sequence mismatch | `ConfigRevisionConflict` |
+| stale additional-directory permission page | `WorkspaceAccessRevisionConflict` |
 | missing exact MCP server/runtime | `McpServerNotFound` / `McpRuntimeUnavailable` |
 | missing OAuth service/provider | `McpOAuthUnavailable` |
 | replayed, changed-target or state-mismatched OAuth callback | `McpOAuthInvalidCallback` |

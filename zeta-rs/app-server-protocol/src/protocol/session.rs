@@ -80,9 +80,6 @@ pub enum SessionRequest {
         before_turn_id: TurnId,
         title: String,
     },
-    ArchiveThread {
-        thread_id: ThreadId,
-    },
     StartTurn {
         thread_id: ThreadId,
         #[serde(default, skip_serializing_if = "Option::is_none")]

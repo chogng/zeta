@@ -31,6 +31,7 @@ pub enum WorkspaceCapability {
     /// Read repository metadata and bounded read-only content without approving workspace code.
     InspectRepository,
     ExecuteProcess,
+    ObserveFileChanges,
     LoadExecutableConfiguration,
     ActivateWorkspaceExtension,
     UseWorkspaceDeclaredTool,
@@ -44,6 +45,7 @@ impl fmt::Display for WorkspaceCapability {
                 formatter.write_str("inspect repository metadata and read-only content")
             }
             Self::ExecuteProcess => formatter.write_str("execute a process"),
+            Self::ObserveFileChanges => formatter.write_str("observe file changes"),
             Self::LoadExecutableConfiguration => {
                 formatter.write_str("load executable configuration")
             }

@@ -50,6 +50,7 @@ fn additional_root_resolution_is_bound_to_the_exact_session_and_lease() {
             session_id.clone(),
             primary_authorization.root().clone(),
             additional_authorization,
+            zeta_workspace_access::AdditionalDirectoryPermissions::local_file_tools(),
         )
         .unwrap();
     let ripgrep = RipgrepExecutable::from_path(std::env::current_exe().unwrap()).unwrap();
@@ -67,6 +68,7 @@ fn additional_root_resolution_is_bound_to_the_exact_session_and_lease() {
             &additional_file.display().to_string(),
             true,
             Some(&session_id),
+            WorkspaceCapability::InspectRepository,
         )
         .unwrap();
     assert_eq!(resolved.absolute, additional_file.canonicalize().unwrap());
@@ -107,6 +109,7 @@ fn additional_root_resolution_is_bound_to_the_exact_session_and_lease() {
                 &additional_file.display().to_string(),
                 true,
                 Some(&SessionId::new("other-session").unwrap()),
+                WorkspaceCapability::InspectRepository,
             )
             .is_err()
     );
@@ -121,6 +124,7 @@ fn additional_root_resolution_is_bound_to_the_exact_session_and_lease() {
                 &additional_file.display().to_string(),
                 true,
                 Some(&session_id),
+                WorkspaceCapability::InspectRepository,
             )
             .is_err()
     );

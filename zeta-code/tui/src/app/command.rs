@@ -1,5 +1,6 @@
 use crate::components::composer::ComposerSubmission;
 use crate::components::composer::SlashCommandInvocation;
+use crate::features::config::AdditionalDirectoryPermissionEdit;
 use crate::features::config::ConfigEdit;
 use crate::features::config::ProviderApiKeyEdit;
 use crate::features::interactions::InteractionResponse;
@@ -9,7 +10,6 @@ use std::path::PathBuf;
 use zeta_app_server_protocol::protocol::config::McpServerEnablementDto;
 use zeta_app_server_protocol::protocol::skills::SkillEnablementDto;
 use zeta_protocol::SkillId;
-use zeta_protocol::ThreadId;
 use zeta_protocol::TurnId;
 
 /// A typed side-effect intent emitted by the single-writer application state.
@@ -25,6 +25,7 @@ pub(crate) enum AppCommand {
     OpenStatusLinePane,
     EditShortcut(ShortcutEdit),
     EditConfig(ConfigEdit),
+    EditAdditionalDirectoryPermissions(AdditionalDirectoryPermissionEdit),
     SetProviderApiKey(ProviderApiKeyEdit),
     EditStatusLine(StatusLineEdit),
     ConnectConnectorDeviceOAuth {
@@ -50,9 +51,6 @@ pub(crate) enum AppCommand {
     },
     ResumeSession {
         session_id: String,
-    },
-    ArchiveThread {
-        thread_id: ThreadId,
     },
     ResolveInteraction(InteractionResponse),
     SetMcpEnablement {

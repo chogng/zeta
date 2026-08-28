@@ -41,6 +41,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use zeta_app_server_protocol::protocol::provider::{
     ProviderApiKeyPolicyDto, ProviderCatalogEntryDto, ProviderListResult,
 };
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryDto;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryListResult;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryPermissionDto;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceTrustStateDto;
 use zeta_protocol::ApprovalMode;
 use zeta_protocol::ContentDigest;
 use zeta_protocol::ItemId;
@@ -56,6 +60,17 @@ use zeta_protocol::ThreadStatus;
 use zeta_protocol::Turn;
 use zeta_protocol::TurnId;
 use zeta_protocol::TurnStatus;
+
+fn config_session() -> SessionId {
+    SessionId::new("config-state-session").unwrap()
+}
+
+fn no_additional_directories() -> WorkspaceAdditionalDirectoryListResult {
+    WorkspaceAdditionalDirectoryListResult {
+        revision: 0,
+        directories: Vec::new(),
+    }
+}
 use zeta_slash_commands::{
     SlashCommandArgumentMode, SlashCommandCatalog, SlashCommandDefinition, SlashCommandOrigin,
 };
@@ -526,6 +541,8 @@ fn config_mouse_selection_emits_a_revision_bound_edit() {
         &ProviderListResult { providers: vec![] },
         TerminalSettings::default(),
         7,
+        &config_session(),
+        &no_additional_directories(),
     )));
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -534,6 +551,40 @@ fn config_mouse_selection_emits_a_revision_bound_edit() {
         action,
         Some(AppCommand::EditConfig(edit))
             if edit.terminal.expected_revision == 7 && !edit.terminal.mouse_interactions
+    ));
+}
+
+#[test]
+fn config_directory_permission_selection_emits_a_revision_bound_server_edit() {
+    let config = empty_config_snapshot();
+    let directories = WorkspaceAdditionalDirectoryListResult {
+        revision: 3,
+        directories: vec![WorkspaceAdditionalDirectoryDto {
+            root: "/workspace/shared".into(),
+            trust: WorkspaceTrustStateDto::Trusted,
+            permissions: vec![
+                WorkspaceAdditionalDirectoryPermissionDto::ReadFiles,
+                WorkspaceAdditionalDirectoryPermissionDto::WriteFiles,
+            ],
+        }],
+    };
+    let mut app = App::new();
+    app.update(AppEvent::ConfigViewOpened(config_view(
+        &config,
+        &ProviderListResult { providers: vec![] },
+        TerminalSettings::default(),
+        7,
+        &config_session(),
+        &directories,
+    )));
+    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert!(matches!(
+        action,
+        Some(AppCommand::EditAdditionalDirectoryPermissions(edit))
+            if edit.params.expected_revision == 3 && edit.params.permissions.is_empty()
     ));
 }
 
@@ -554,7 +605,10 @@ fn config_provider_api_key_enter_saves_and_returns_to_config() {
         &providers,
         TerminalSettings::default(),
         7,
+        &config_session(),
+        &no_additional_directories(),
     )));
+    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
 
     assert_eq!(
@@ -573,7 +627,14 @@ fn config_provider_api_key_enter_saves_and_returns_to_config() {
 
     app.update(AppEvent::ConfigApiKeySaved {
         provider: "openai".into(),
-        view: config_view(&config, &providers, TerminalSettings::default(), 7),
+        view: config_view(
+            &config,
+            &providers,
+            TerminalSettings::default(),
+            7,
+            &config_session(),
+            &no_additional_directories(),
+        ),
     });
 
     assert_eq!(app.selection_view().unwrap().title(), "Config");
@@ -596,7 +657,10 @@ fn one_escape_cancels_provider_api_key_input_and_returns_to_config() {
         &providers,
         TerminalSettings::default(),
         7,
+        &config_session(),
+        &no_additional_directories(),
     )));
+    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));

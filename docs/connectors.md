@@ -7,7 +7,7 @@
 > [`plugins.md`](plugins.md)。MCP 调用边界：[`mcp.md`](mcp.md)。
 > 当前状态：Connector domain、SQLite authority、API-token connect/disconnect、App Server 协议、
 > package-rooted Plugin activation、ready/standalone MCP composition、模型安全点 registry replacement、
-> in-flight dispatch drain、OS keyring 与显式文件 `SecretStore`、OAuth PKCE 状态机和产品连接入口已实现。
+> in-flight dispatch drain、profile 私有文件与可注入 OS keyring `SecretStore`、OAuth PKCE 状态机和产品连接入口已实现。
 > Desktop loopback 浏览器回调、通用 device poll、OAuth App Server 控制面、refresh/revoke、GitHub
 > brokered PKCE 与 public-client device adapters 已接通；正式 package 已内置通用 Marketplace
 > endpoint 与固定 TUF root，Connector 产品发行仍需注入真实 broker URL/client ID。
@@ -165,8 +165,8 @@ connection generation；任何状态变化都必须同时推进 snapshot generat
 | OAuth state/PKCE/exchange 编排 | ✅ 已实现 provider port、App Server RPC 与 Desktop loopback callback |
 | refresh、远端 revoke | ✅ 已实现通用 lifecycle 与 GitHub adapter；远端失败保留本地连接供重试 |
 | `zeta-secrets` memory/unavailable backend | ✅ 已实现 |
-| OS keyring backend | ✅ 已实现并作为本地默认 Connector persistence |
-| 显式文件 backend | ✅ 已实现，保持 explicit opt-in，不作为自动 fallback |
+| profile 私有文件 backend | ✅ 已实现并作为本地默认 Connector persistence |
+| 系统钥匙串 backend | ✅ 保留为显式 host 注入选项；daemon 默认不请求钥匙串许可 |
 | App Server list/connect/disconnect + changed notification | ✅ 已实现 |
 | Desktop API-token UI；TUI 列表/断开/通知刷新 | ✅ 已实现 |
 | OAuth browser/device interaction | ✅ Desktop browser+device、browser host device、TUI device 已实现 |

@@ -64,7 +64,6 @@ pub enum SessionCommandResult {
     SessionModelChanged { model: ModelRef },
     SessionNextApprovalModeChanged { approval_mode: ApprovalMode },
     ThreadCreated { thread_id: ThreadId },
-    ThreadArchived { thread_id: ThreadId },
     SessionCompleted,
     SessionArchived,
 }
@@ -385,36 +384,6 @@ pub fn reduce_session_event(
             }
             thread.membership.status = SessionThreadStatus::Active;
             update_thread_command_sequence(&mut snapshot, thread_id, envelope.sequence);
-        }
-        SessionEvent::ThreadArchived { thread_id, .. } => {
-            let receipt = require_new_session_command(&snapshot, envelope)?;
-            if receipt.command
-                != (SessionCommand::ArchiveThread {
-                    thread_id: thread_id.clone(),
-                })
-            {
-                return Err(CoreError::Journal(
-                    "Thread archive command does not match its event".into(),
-                ));
-            }
-            let thread = snapshot
-                .threads
-                .iter_mut()
-                .find(|thread| thread.membership.thread_id == *thread_id)
-                .ok_or_else(|| CoreError::NotFound(thread_id.to_string()))?;
-            if thread.membership.status != SessionThreadStatus::Active {
-                return Err(CoreError::Journal(
-                    "only an active Thread can be archived".into(),
-                ));
-            }
-            thread.membership.status = SessionThreadStatus::Archived;
-            snapshot.commands.push(SessionCommandSnapshot {
-                receipt: receipt.clone(),
-                result: SessionCommandResult::ThreadArchived {
-                    thread_id: thread_id.clone(),
-                },
-                response_sequence: envelope.sequence,
-            });
         }
         SessionEvent::SessionCompleted { .. } => {
             let receipt = require_new_session_command(&snapshot, envelope)?;

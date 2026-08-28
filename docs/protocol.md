@@ -171,7 +171,7 @@ Item 才能进入 authoritative Thread history。
 
 ```text
 SessionCommand
-  Create / CreateThread / ForkThread / ArchiveThread / Complete / Archive
+  Create / CreateThread / ForkThread / Complete / Archive
 
 ThreadCommand
   StartTurn / SteerTurn / InterruptTurn / ResolveUserInput / ResolveDynamicTool

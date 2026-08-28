@@ -46,6 +46,8 @@ use zeta_app_server_protocol::protocol::turn::InputItem;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryAddParams;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryListParams;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryMutationDto;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryPermissionDto;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryPermissionsSetParams;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryRemoveParams;
 use zeta_app_server_protocol::schema_hash;
 use zeta_async_utils::CancellationToken;
@@ -146,9 +148,10 @@ fn client_reads_workspace_directories_through_the_typed_contract() {
 #[test]
 fn client_manages_session_additional_directories_through_typed_contracts() {
     let mut client = AppServerClient::new(MockTransport(VecDeque::from([
-        r#"{"jsonrpc":"2.0","id":1,"result":{"directories":[]}}"#.into(),
-        r#"{"jsonrpc":"2.0","id":2,"result":{"mutation":"added","directories":[{"root":"/tmp/extra","trust":"trusted"}]}}"#.into(),
-        r#"{"jsonrpc":"2.0","id":3,"result":{"mutation":"removed","directories":[]}}"#.into(),
+        r#"{"jsonrpc":"2.0","id":1,"result":{"revision":0,"directories":[]}}"#.into(),
+        r#"{"jsonrpc":"2.0","id":2,"result":{"mutation":"added","revision":1,"directories":[{"root":"/tmp/extra","trust":"trusted","permissions":["readFiles","writeFiles"]}]}}"#.into(),
+        r#"{"jsonrpc":"2.0","id":3,"result":{"mutation":"updated","revision":2,"directories":[{"root":"/tmp/extra","trust":"trusted","permissions":["readFiles"]}]}}"#.into(),
+        r#"{"jsonrpc":"2.0","id":4,"result":{"mutation":"removed","revision":3,"directories":[]}}"#.into(),
     ])));
     let session_id = SessionId::new("additional-directory-session").unwrap();
 
@@ -165,6 +168,10 @@ fn client_manages_session_additional_directories_through_typed_contracts() {
         .add_workspace_additional_directory(WorkspaceAdditionalDirectoryAddParams {
             session_id: session_id.clone(),
             root: "/tmp/extra".into(),
+            permissions: vec![
+                WorkspaceAdditionalDirectoryPermissionDto::ReadFiles,
+                WorkspaceAdditionalDirectoryPermissionDto::WriteFiles,
+            ],
         })
         .unwrap();
     assert_eq!(
@@ -172,6 +179,21 @@ fn client_manages_session_additional_directories_through_typed_contracts() {
         WorkspaceAdditionalDirectoryMutationDto::Added
     );
     assert_eq!(added.directories[0].root, PathBuf::from("/tmp/extra"));
+    let updated = client
+        .set_workspace_additional_directory_permissions(
+            WorkspaceAdditionalDirectoryPermissionsSetParams {
+                session_id: session_id.clone(),
+                root: "/tmp/extra".into(),
+                expected_revision: 1,
+                permissions: vec![WorkspaceAdditionalDirectoryPermissionDto::ReadFiles],
+            },
+        )
+        .unwrap();
+    assert_eq!(
+        updated.mutation,
+        WorkspaceAdditionalDirectoryMutationDto::Updated
+    );
+    assert_eq!(updated.revision, 2);
     let removed = client
         .remove_workspace_additional_directory(WorkspaceAdditionalDirectoryRemoveParams {
             session_id,

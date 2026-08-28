@@ -339,6 +339,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     AppCommand::OpenConfigPane => {
                         config_actions::open_config(
                             &mut config_resource,
+                            conversation.session_id(),
                             &client,
                             &mut pending_request,
                             &mut app,
@@ -346,6 +347,14 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     }
                     AppCommand::EditConfig(edit) => {
                         config_actions::edit_config(&mut config_resource, &edit, &mut app);
+                    }
+                    AppCommand::EditAdditionalDirectoryPermissions(edit) => {
+                        config_actions::set_additional_directory_permissions(
+                            edit,
+                            &client,
+                            &mut pending_request,
+                            &mut app,
+                        );
                     }
                     AppCommand::SetProviderApiKey(edit) => {
                         let terminal_snapshot = config_resource
@@ -355,6 +364,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         config_actions::set_provider_api_key(
                             edit,
                             terminal_snapshot,
+                            conversation.session_id(),
                             &client,
                             &mut pending_request,
                             &mut app,
@@ -580,33 +590,6 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                         command,
                                         result: Err(error.to_string()),
                                     },
-                                },
-                                &mut app,
-                            );
-                        }
-                    }
-                    AppCommand::ArchiveThread { thread_id } => {
-                        let command = format!("/archive-thread {thread_id}");
-                        app.update(AppEvent::CommandStarted(command.clone()));
-                        if pending_request.is_none() {
-                            let mut request_client = client.clone();
-                            let mut next_conversation = conversation.clone();
-                            let next_subscription = thread_subscription.clone();
-                            pending_request = spawn_request(
-                                "zeta-tui-archive-thread",
-                                move || RequestCompletion::ConversationChanged {
-                                    command,
-                                    result: next_conversation
-                                        .archive_thread(&mut request_client, thread_id)
-                                        .map_err(|error| error.to_string())
-                                        .and_then(|change| {
-                                            finish_conversation_request(
-                                                &mut request_client,
-                                                next_conversation,
-                                                next_subscription,
-                                                change,
-                                            )
-                                        }),
                                 },
                                 &mut app,
                             );

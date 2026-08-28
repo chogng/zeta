@@ -50,10 +50,6 @@ pub enum SessionEvent {
         session_id: SessionId,
         thread_id: ThreadId,
     },
-    ThreadArchived {
-        session_id: SessionId,
-        thread_id: ThreadId,
-    },
     SessionCompleted {
         session_id: SessionId,
     },
@@ -71,7 +67,6 @@ impl SessionEvent {
             | Self::ThreadCreationPlanned { session_id, .. }
             | Self::AgentThreadCreationPlanned { session_id, .. }
             | Self::ThreadAttached { session_id, .. }
-            | Self::ThreadArchived { session_id, .. }
             | Self::SessionCompleted { session_id }
             | Self::SessionArchived { session_id } => session_id,
         }

@@ -17,9 +17,8 @@ pub(crate) enum TuiSlashCommandAction {
     Skills,
     Mcp,
     Resume,
-    ArchiveThread,
+    Archive,
     Connectors,
-    ArchiveSession,
     Rewind,
     Clear,
     Config,
@@ -48,8 +47,7 @@ impl TuiSlashCommandAction {
             Self::Mcp => "list configured MCP tools",
             Self::Connectors => "show external service connections",
             Self::Resume => "list or resume a saved session",
-            Self::ArchiveThread => "archive a thread in the current session",
-            Self::ArchiveSession => "archive the current session and start a new one",
+            Self::Archive => "archive the current session and start a new one",
             Self::Rewind => "return to an earlier message checkpoint",
             Self::Clear => "clear the terminal and start a new chat",
             Self::Config => "show the current configuration",
@@ -69,7 +67,6 @@ impl TuiSlashCommandAction {
     pub(crate) fn argument_mode(self) -> SlashCommandArgumentMode {
         match self {
             Self::Resume
-            | Self::ArchiveThread
             | Self::Rewind
             | Self::Clear
             | Self::AddDir

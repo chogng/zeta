@@ -30,8 +30,6 @@ use crate::features::rewind::RewindSelectionAction;
 use crate::features::rewind::RewindSelectionView;
 use crate::features::sessions::SessionSelectionAction;
 use crate::features::sessions::SessionSelectionView;
-use crate::features::sessions::ThreadSelectionAction;
-use crate::features::sessions::ThreadSelectionView;
 use crate::features::shortcuts::ShortcutAction;
 use crate::features::shortcuts::ShortcutCaptureOutcome;
 use crate::features::shortcuts::ShortcutCaptureState;
@@ -104,7 +102,6 @@ enum SelectionActions {
     Model(BTreeMap<SelectionItemId, ModelSelectionAction>),
     Rewind(BTreeMap<SelectionItemId, RewindSelectionAction>),
     Sessions(BTreeMap<SelectionItemId, SessionSelectionAction>),
-    Threads(BTreeMap<SelectionItemId, ThreadSelectionAction>),
     Skills(BTreeMap<SelectionItemId, SkillSelectionAction>),
     StatusLine(BTreeMap<SelectionItemId, StatusLineSelectionAction>),
     Theme(BTreeMap<SelectionItemId, ThemeSelectionAction>),
@@ -261,6 +258,9 @@ impl App {
                 ConfigSelectionAction::SetMouseInteractions(edit) => {
                     Some(AppCommand::EditConfig(edit))
                 }
+                ConfigSelectionAction::SetAdditionalDirectoryPermissions(edit) => {
+                    Some(AppCommand::EditAdditionalDirectoryPermissions(edit))
+                }
                 ConfigSelectionAction::OpenProviderApiKey {
                     provider,
                     display_name,
@@ -316,11 +316,6 @@ impl App {
             SelectionActions::Sessions(actions) => match actions.get(item_id)? {
                 SessionSelectionAction::Resume { session_id } => Some(AppCommand::ResumeSession {
                     session_id: session_id.clone(),
-                }),
-            },
-            SelectionActions::Threads(actions) => match actions.get(item_id)? {
-                ThreadSelectionAction::Archive { thread_id } => Some(AppCommand::ArchiveThread {
-                    thread_id: thread_id.clone(),
                 }),
             },
             SelectionActions::Skills(actions) => match actions.get(item_id)?.clone() {
@@ -562,10 +557,6 @@ impl App {
 
     fn show_session_view(&mut self, view: SessionSelectionView) {
         self.push_selection_view(view.model, SelectionActions::Sessions(view.actions));
-    }
-
-    fn show_thread_view(&mut self, view: ThreadSelectionView) {
-        self.push_selection_view(view.model, SelectionActions::Threads(view.actions));
     }
 
     fn push_selection_view(
@@ -818,7 +809,6 @@ impl App {
             AppEvent::ModelViewOpened(view) => self.show_model_view(view),
             AppEvent::RewindViewOpened(view) => self.show_rewind_view(view),
             AppEvent::SessionViewOpened(view) => self.show_session_view(view),
-            AppEvent::ThreadViewOpened(view) => self.show_thread_view(view),
             AppEvent::SelectionViewClosed => self.close_selection_view(),
             AppEvent::SelectionViewOpened(model) => self.show_selection_view(model),
             AppEvent::SkillsViewOpened(view) => self.show_skills_view(view),

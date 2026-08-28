@@ -86,23 +86,19 @@ fn recovery_reopens_the_exact_durable_conversation() {
 }
 
 #[test]
-fn recovery_uses_the_latest_active_thread_when_the_previous_one_was_archived() {
+fn recovery_uses_the_latest_active_thread_when_the_preferred_thread_is_missing() {
     let (mut client, state_root) = client();
     let mut conversation =
         ActiveConversation::start(&mut client, "recover fallback".into()).unwrap();
     let session_id = conversation.session_id().clone();
-    let archived_thread_id = conversation.thread_id().clone();
     conversation
         .fork_active_thread(&mut client, "surviving thread")
         .unwrap();
     let active_thread_id = conversation.thread_id().clone();
-    conversation
-        .archive_thread(&mut client, archived_thread_id.clone())
-        .unwrap();
 
     let recovered = ActiveConversation::recover(
         &mut client,
-        TuiRecoveryState::new(session_id, archived_thread_id),
+        TuiRecoveryState::new(session_id, ThreadId::new("missing-thread").unwrap()),
     )
     .unwrap();
 

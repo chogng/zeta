@@ -11,7 +11,7 @@ export type ThreadOrigin =
 	| { readonly type: "fork"; readonly parentThreadId: ThreadId; readonly parentSequence: number }
 	| { readonly type: "rewind"; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly beforeTurnId: string }
 	| { readonly type: "agentSpawn"; readonly parentThreadId: ThreadId; readonly parentSequence: number; readonly delegationId: string };
-export type SessionThreadStatus = "creating" | "active" | "archived";
+export type SessionThreadStatus = "creating" | "active";
 export type AgentThreadExecutionStatus = "idle" | "queued" | "running" | "waiting" | "completed" | "failed" | "cancelled";
 export type AgentWaitingReason = "approval" | "userInput" | "capability";
 

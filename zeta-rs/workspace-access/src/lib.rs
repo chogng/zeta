@@ -10,6 +10,7 @@ mod authority;
 mod contributions;
 #[path = "access/error.rs"]
 mod error;
+mod permissions;
 #[path = "access/snapshot.rs"]
 mod snapshot;
 
@@ -20,6 +21,9 @@ pub use contributions::AdditionalDirectoryContribution;
 pub use contributions::AdditionalDirectoryContributionPolicy;
 pub use contributions::AdditionalInstructionsPolicy;
 pub use error::WorkspaceAccessError;
+pub use permissions::AdditionalDirectoryPermission;
+pub use permissions::AdditionalDirectoryPermissions;
+pub use permissions::AdditionalDirectoryPermissionsError;
 pub use snapshot::WorkspaceAccessMutation;
 pub use snapshot::WorkspaceAccessRevision;
 pub use snapshot::WorkspaceAccessSnapshot;

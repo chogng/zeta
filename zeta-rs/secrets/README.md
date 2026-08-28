@@ -1,8 +1,6 @@
 # `zeta-secrets`
 
-> 本 README 解释 opaque secret value、store port 与 backend obligation。跨系统 credential
-> ownership 和 backend policy 见 [`docs/secrets.md`](../../docs/secrets.md)。OS keyring 实现契约见
-> [`zeta-keyring-store`](../keyring-store/README.md)。
+> 本 README 解释 opaque secret value、store port 与 backend obligation。跨系统 credential ownership 和 backend policy 见 [`docs/secrets.md`](../../docs/secrets.md)；OS keyring adapter 见 [`zeta-keyring-store`](../keyring-store/README.md)。
 
 `zeta-secrets` 只保存 opaque bytes。OAuth、token refresh、account metadata、credential scope、
 request signing 和 Provider header materialization 均属于消费它的 domain runtime。
@@ -17,7 +15,7 @@ request signing 和 Provider header materialization 均属于消费它的 domain
 | `DeleteSecretOutcome` | exact delete result | 区分 `Deleted` 与 `NotFound` |
 | `MemorySecretStore` | process-local ephemeral backend | replacement、delete、drop 时 zeroize stored bytes |
 | `UnavailableSecretStore` | explicit fail-closed backend | 所有操作返回 `BackendUnavailable` |
-| `FileSecretStore` | explicit opt-in durable backend | hashed filenames、私有权限、有界读取、同步 staging 与 replace |
+| `FileSecretStore` | profile-scoped durable backend | hashed filenames、私有权限、有界读取、同步 staging 与 replace |
 | `SecretStoreError` | sanitized error | message 不能包含 secret/header/raw backend response |
 | `SecretStoreErrorKind` | stable caller classification | unavailable、access denied、backend failure |
 
@@ -76,15 +74,10 @@ cargo test -p zeta-secrets
 bazel test //zeta-rs/secrets:secrets-unit-tests
 ```
 
-当前测试覆盖 memory/file round-trip、replace/delete、Debug redaction、key validation、unavailable error、
-Unix 0700/0600 权限、stale staging cleanup、key filename 隐藏与 1 MiB 上限。
+当前测试覆盖 memory/file round-trip、replace/delete、Debug redaction、key validation、unavailable error、Unix 0700/0600 权限、stale staging cleanup、key filename 隐藏与 1 MiB 上限；Windows 实现 owner-only protected DACL 与 write-through atomic replacement。
 新增 backend 时必须补 error/log/debug negative tests，并证明 replacement/delete/drop 的 secret
 buffer 处理。
 
 ## 当前限制与演进
 
-当前具有 memory、unavailable 与显式文件 backend。`FileSecretStore` 适合 host 明确选择的私有产品
-目录：Unix 使用 0700/0600 与原子 rename；未实现等价 ACL 的非 Unix host 在 `open` 时明确返回
-`BackendUnavailable`，不会静默写入普通文件。OS keyring 位于独立 `zeta-keyring-store` 并实现同一
-`SecretStore` contract；加密文件、跨进程锁、migration 与 rotation metadata 尚未实现。后续 backend
-不得扩大 `SecretValue` 的复制、序列化或日志接口。
+当前具有 memory、unavailable 与 profile 私有文件 backend。`FileSecretStore` 是本地产品默认：Unix 使用 0700/0600 与原子 rename，Windows 使用 owner-only protected DACL 与 write-through atomic replacement。其他平台在 `open` 时明确返回 `BackendUnavailable`。OS keyring 位于独立 `zeta-keyring-store`，供 host 显式注入，不是 daemon 默认。加密文件、跨进程锁、migration 与 rotation metadata 尚未实现。后续 backend 不得扩大 `SecretValue` 的复制、序列化或日志接口。

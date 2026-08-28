@@ -6,6 +6,10 @@ use zeta_workspace::WorkspaceCapability;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum WorkspaceAccessError {
     WorkingDirectoryCannotBeAdditional,
+    RevisionConflict {
+        expected: u64,
+        actual: u64,
+    },
     CapabilityUnavailable {
         root: PathBuf,
         capability: WorkspaceCapability,
@@ -18,6 +22,10 @@ impl fmt::Display for WorkspaceAccessError {
             Self::WorkingDirectoryCannotBeAdditional => {
                 formatter.write_str("the working directory cannot also be an additional directory")
             }
+            Self::RevisionConflict { expected, actual } => write!(
+                formatter,
+                "Workspace access revision conflict: expected {expected}, actual {actual}"
+            ),
             Self::CapabilityUnavailable { root, capability } => write!(
                 formatter,
                 "Workspace access is not authorized to {capability}: {}",

@@ -31,11 +31,8 @@ Tool、approval policy 或 persistence。
 - enabled、compatible、名称无歧义且不与已有命令冲突的 Skill 直接显示为 `/name`；提交时保留
   `/name …` 用户文本并附加 exact pinned `SkillRef`，完整 `SKILL.md` 只在 App Server 接受 Turn
   后按需加载；`skills/changed` 会刷新这部分动态命令；
-- `/resume`、`/archive-thread`、`/rewind`、`/clear`、`/add-dir`、`/fork`、`/model`、`/theme` 与 `/new` 可解析 inline arguments，并在执行前展开
-  large-paste placeholder；product command 明确拒绝 image arguments；
-- command popup 只注册已有真实执行流的 built-ins：`/status`、`/statusline`、`/skills`、`/mcp`、`/connectors`、`/resume`、
-  `/archive-thread`、`/archive-session`、`/rewind`、`/clear`、`/config`、`/add-dir`、
-  `/fork`、`/help`、`/shortcuts`、`/copy`、`/export`、`/model`、`/theme`、`/new` 与 `/quit`；
+- `/resume`、`/rewind`、`/clear`、`/add-dir`、`/fork`、`/model`、`/theme` 与 `/new` 可解析 inline arguments，并在执行前展开 large-paste placeholder；product command 明确拒绝 image arguments；
+- command popup 只注册已有真实执行流的 built-ins：`/status`、`/statusline`、`/skills`、`/mcp`、`/connectors`、`/resume`、`/archive`、`/rewind`、`/clear`、`/config`、`/add-dir`、`/fork`、`/help`、`/shortcuts`、`/copy`、`/export`、`/model`、`/theme`、`/new` 与 `/quit`；
 - `/status` 展示当前 Session 实际模型、完整上下文窗口、扣除 output reservation、safety margin 与 auto-compaction 边界后的可用窗口、最近一次同模型调用后的剩余窗口，以及 Session ID、Thread ID 和 Thread sequence；provider usage 不完整时剩余值标记为估算，尚无可信值时显示 unknown；
 - `/help` 使用保留 composer 的 interaction view stack 打开可搜索的命令列表；Space 进入搜索模式，上下键循环选择，Esc/Ctrl-C 返回 composer；快捷键只由 `/shortcuts` 展示；
 - `/skills` 通过 typed `skills/list` 打开同一 interaction surface，提供
@@ -45,16 +42,14 @@ Tool、approval policy 或 persistence。
 - `/connectors` 通过 typed `connector/list` 打开 Connector Pane；已连接项可以执行
   generation-checked disconnect，`connector/changed` 只在该 Pane 打开时触发 catalog refresh；
   API token/OAuth 连接仍由 Desktop Settings 完成；
-- `/add-dir <path>` 通过 typed App Server RPC 把 canonical 目录加入当前 Session 的文件访问作用域；本地 `read_file`、`write_file`、`edit`、`grep` 与 `glob` 随即接受该目录中的绝对路径，下一 Turn 的 environment snapshot 也会把它列入 `workspace_roots`。不带参数时打开可搜索列表，Enter 撤销所选目录；快照放在模型请求尾部且不写入对话历史，主 Workspace、cwd、相对路径和项目配置均不改变；
+- `/add-dir <path>` 通过 typed App Server RPC 把 canonical 目录加入当前 Session 的访问作用域，默认打开读取与修改文件；本地 `read_file`、`write_file`、`edit`、`grep` 与 `glob` 随即按各自能力接受该目录中的绝对路径，下一 Turn 的 environment snapshot 只列出仍允许读取的目录。不带参数时打开可搜索列表，Enter 撤销所选目录；快照放在模型请求尾部且不写入对话历史，主 Workspace、cwd、相对路径和项目配置均不改变；
 - 同一 profile 中的 `marketplace/changed` 与 `plugin/changed` 会触发 Skill catalog 重读，并在
   Connector Pane 已打开时重读 Connector projection；TUI 当前不提供独立 Marketplace 浏览/安装界面；
 - `/rewind` 或主界面 500 ms 内连续按两次 Esc 打开可搜索的历史消息 checkpoint Pane；Enter
   通过 typed `session/request` 的 `RewindThread` operation，创建具有 Rewind lineage 的子 Thread，只导入所选消息之前的
   terminal Turns。原 Thread 保持不变，TUI 切换订阅并以 `/rewind <turn-id>` 记录结果；
-- `/resume` 提供 Session picker；`/archive-thread` 归档目标并在必要时选择或创建 replacement Thread；`/archive-session` 归档当前
-  Session 并建立 replacement Session。所有 mutation 都通过 typed `session/request`，随后在后台
-  切换 subscription；
-- `/config` 异步调用 `config/read` 与 `provider/list`；Config 标签页包含本地 Mouse interactions 开关，Providers 标签页展示后端注册的完整供应商目录，并通过隐藏输入框把 API key 交给 profile SecretStore；`/model` 使用 expected revision 更新 preferred model；
+- `/resume` 提供 Session picker；`/archive` 归档当前 Session 并建立 replacement Session。所有 mutation 都通过 typed `session/request`，随后在后台切换 subscription；
+- `/config` 异步读取服务端配置、供应商目录和当前 Session 的附加目录权限；Directory permissions 标签页按目录提供读取、修改、执行、文件监听与项目配置加载开关，使用 Workspace access revision 防止旧页面覆盖新选择。Config 标签页包含本地 Mouse interactions 开关，Providers 标签页展示后端注册的完整供应商目录，并通过隐藏输入框把 API key 交给 profile SecretStore；`/model` 使用 expected revision 更新 preferred model；
 - 启动时读取 client 保存的 `initialize.slashCommands` snapshot，通过
   [`zeta-slash-commands`](../../zeta-rs/slash-commands/README.md) 与 built-ins 做防冲突合并；
   server-advertised command 保留 `/name`、inline text/image/large-paste 参数并作为普通 Turn
@@ -118,7 +113,7 @@ transport retry。workspace mention 当前插入 workspace-relative 原子文本
 
 图片 bytes 的持久化由共享 `zeta-attachments` content-addressed store 拥有；TUI 只在草稿期间保留
 本地 data URL，并在 `StartTurn` 前通过 App Server 分块上传或安全导入远程 URL，最终只提交 typed
-`ImageAttachmentRef`。`/status` 只消费 typed model capacity 与 Turn `contextUsage`，不从 transcript 推导上下文占用。缺少 typed backend contract 的 login、compact、service tier 等命令不会进入 registry。`/statusline` 使用 `<profile>/zeta-code/statusline.json` 保存权限、模型、Git 分支和 Git 变更四个显示开关；Config 页面展示 Config、Providers 与 Language servers，其中 Mouse interactions 保存在 `<profile>/zeta-code/terminal.json`，关闭后 `App::mouse_mode` 始终把拖选留给终端。Providers 来自后端注册表，API key 只通过 `provider/apiKey/set` 写入 SecretStore，不进入普通配置或展示状态。MCP、Skill、Plugin 和 Hook 不在 Config 中重复展示。
+`ImageAttachmentRef`。`/status` 只消费 typed model capacity 与 Turn `contextUsage`，不从 transcript 推导上下文占用。缺少 typed backend contract 的 login、compact、service tier 等命令不会进入 registry。`/statusline` 使用 `<profile>/zeta-code/statusline.json` 保存权限、模型、Git 分支和 Git 变更四个显示开关；Config 页面展示 Config、Directory permissions、Providers 与 Language servers，其中 Mouse interactions 保存在 `<profile>/zeta-code/terminal.json`，关闭后 `App::mouse_mode` 始终把拖选留给终端。Directory permissions 是当前 Session 的 Workspace access authority，不写入 terminal 设置或 User Config；执行、监听和项目配置加载目前只保存权限，相关 consumer 尚未接入附加目录。Providers 来自后端注册表，API key 只通过 `provider/apiKey/set` 写入 SecretStore，不进入普通配置或展示状态。MCP、Skill、Plugin 和 Hook 不在 Config 中重复展示。
 
 从 repository root 启动当前 TUI：
 
@@ -561,7 +556,7 @@ approval 与多问题 option/free-form user input、blocked Esc/Ctrl-C semantics
 selection render，以及 snapshot
 terminal/wait/resume mapping，以及 transcript chrome、error 去重、role
 label/Unicode/zero-width wrapping、bounded scroll/history window、copy/export，以及 status-line item 顺序/开关、profile 保存、Git 长短值降级、Unicode-safe truncation、welcome home-relative 路径，以及 terminal mode acquisition failure、逆序 rollback、suspend/reacquire 与幂等
-restore；还覆盖 request task 非阻塞 completion、request intent 保序、Session/Thread picker/archive、
+restore；还覆盖 request task 非阻塞 completion、request intent 保序、Session picker/archive 与 Thread recovery、
 workspace directory/preview 和 interaction deadline。
 
 跨 feature 复用的完整配置快照只由 `test_support::empty_config_snapshot` 构造；各测试随后只修改

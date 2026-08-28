@@ -3,7 +3,7 @@
 > - 物理位置：`zeta-rs/secrets/`
 > - Rust crate：`zeta_secrets`
 > - 层次：host secret persistence primitive
-> - 当前实现：typed key/value、`load/store/delete` port、OS keyring、ephemeral memory、unavailable 与显式文件 backend
+> - 当前实现：typed key/value、`load/store/delete` port、profile 私有文件、OS keyring、ephemeral memory 与 unavailable backend
 > - Crate 实现、安全义务与测试：[`zeta-rs/secrets/README.md`](../zeta-rs/secrets/README.md)
 > - OS keyring adapter：[`zeta-rs/keyring-store/README.md`](../zeta-rs/keyring-store/README.md)
 > - Direct-provider credential：[`model-provider.md`](model-provider.md#6-供应商凭据边界)
@@ -18,7 +18,7 @@
 | 调用方需求 | 秘密存储负责 | 秘密存储不负责 |
 | --- | --- | --- |
 | 保存或读取一个敏感值 | 按不透明 `SecretKey` 执行 `load/store/delete` | 解释它是 API key、OAuth token 还是其他凭据 |
-| 在不同宿主持久化 | 使用系统钥匙串、显式文件或临时后端 | 替调用方选择账户、供应商或授权范围 |
+| 在不同宿主持久化 | 使用 profile 私有文件或调用方注入的临时 backend | 替调用方选择账户、供应商或授权范围 |
 | 后端不可用 | 返回明确错误 | 静默降级到不安全文件或普通配置 |
 | 记录诊断信息 | 只记录脱敏错误和不敏感键 | 输出秘密字节、认证标头或完整命令 |
 | 删除秘密 | 返回已删除或不存在的明确结果 | 撤销远端 token 或完成供应商登出 |
@@ -41,7 +41,7 @@ primitive，不能共享一套虚假的 `CredentialManager`。
 
 - `SecretKey`、`SecretValue` 和 secret-store error；
 - `SecretStore::load/store/delete`；
-- OS keyring、显式 file、ephemeral 等 backend adapter；
+- profile 私有 file、OS keyring、ephemeral 与 unavailable backend adapter；
 - Zeta namespace isolation；
 - secret value 的 `Debug` 脱敏和内存清理；
 - backend access、atomic replacement、权限和 negative logging tests。
@@ -87,8 +87,7 @@ wire and transport
   zeta-websocket-client ── WebSocket handshake/message transport
 ```
 
-`zeta-api`、`zeta-client`、`zeta-http-client` 和 `zeta-websocket-client` 都不依赖 `zeta-secrets`。它们接收已经构造完成的
-请求或已经解析的 sensitive transport value，不查 keychain，也不刷新 token。
+`zeta-api`、`zeta-client`、`zeta-http-client` 和 `zeta-websocket-client` 都不依赖 `zeta-secrets`。它们接收已经构造完成的请求或已经解析的 sensitive transport value，不读取 secret backend，也不刷新 token。
 
 ## 4. 公共接口
 
@@ -125,25 +124,24 @@ MCP/Connector 使用自己的 namespace，不能把 Provider key schema 当成�
 
 | Host | 默认 backend | 说明 |
 | --- | --- | --- |
-| Desktop | OS keyring | macOS Keychain、Windows Credential Manager、Linux Secret Service |
-| CLI/TUI interactive | OS keyring | 不可用时必须显式选择 file 或 ephemeral，不能静默降级 |
+| Desktop | profile 私有文件 | `<profile>/secrets/values/`，hashed 文件名，不调用系统钥匙串 |
+| CLI/TUI interactive | profile 私有文件 | 与 Desktop 共用同一 profile authority |
 | CI/exec | ephemeral / injected | secret 由进程环境或调用方注入，不自动落盘 |
-| Explicit file | opt-in | 只用于无法使用 OS keyring 的 host |
+| Standalone embedded host | injected | host 必须显式注入与自己 authority 一致的 backend |
+| Explicit keyring host | OS keyring | host 明确选择时注入 `KeyringSecretStore`，不是 daemon 默认 |
 
-生产 backend 必须一次实现完整的 `load/store/delete`。不保留旧
-`MacosKeychainCredentialStore::read_secret`，因为只读 adapter 会迫使 writer 形成第二套 authority。
+生产 backend 必须一次实现完整的 `load/store/delete`。`LocalProfileRuntime` 为一个 profile 只打开一个 `FileSecretStore`，并把同一个 `Arc<dyn SecretStore>` 注入该 daemon 内所有 Workspace App Server、Connector、MCP 与 Provider credential adapter。
 
-显式 file backend 的最低要求：
+profile file backend 的最低要求：
 
 - parent directory 私有，Unix file mode 至少 `0600`；
 - Zeta 专属文件名和 schema version；
 - temp file + fsync + atomic replace；
 - 并发写入有确定的 serialization；
-- delete 清理所有 fallback copy；
+- delete 清理 exact value file；
 - error、backup、fixture 和 telemetry 不包含 secret。
 
-OS keyring backend 不得把 secret 放进 process arguments。只有能使用安全平台 API 或安全 stdin
-contract 时才能实现；不能为了“先接上”调用会在进程列表暴露 password 的命令行。
+`config.toml`、SQLite、Marketplace cache 和普通 JSON 只保存 non-secret reference。daemon 默认的 secret bytes 只进入 `<profile>/secrets/values/` 下的 opaque hashed value file；显式 keyring host 只进入 OS credential facility。两者之间不做 fallback、双写或自动迁移。
 
 ## 6. 生命周期与一致性
 
@@ -173,9 +171,12 @@ zeta-rs/secrets/
     ├── store.rs
     ├── memory.rs
     ├── file.rs
+    ├── file_windows.rs
     ├── secrets_tests.rs
     └── file_tests.rs
+```
 
+```text
 zeta-rs/keyring-store/
 ├── BUILD.bazel
 ├── Cargo.toml
@@ -185,9 +186,7 @@ zeta-rs/keyring-store/
     └── lib_tests.rs
 ```
 
-当前显式文件实现位于 `zeta-secrets/src/file.rs`；平台 keyring adapter 位于独立的
-`zeta-keyring-store`，避免基础 value/port crate 引入平台依赖。只有同一 crate 内多个 backend 需要共同
-私有基础设施时才引入 `backend/` 层级。
+文件 backend 的跨平台实现位于 `zeta-secrets/src/file.rs` 和 `file_windows.rs`。OS keyring adapter 位于独立的 `zeta-keyring-store`，避免基础 value/port crate 强制引入平台 credential 依赖。
 
 ## 8. 依赖方向
 
@@ -222,8 +221,8 @@ Desktop renderer ──▶ SecretStore
 - concurrent backend access；
 - backend unavailable/access denied 分类；
 - OS keyring adapter contract 的完整 round trip；真实平台 keyring round trip 由 opt-in host test 验证；
-- file permission、atomic replace、crash recovery；
-- logout/delete 后所有 fallback copy 均不可读取；
+- file backend 的完整 round trip、permission、atomic replace 与 stale staging cleanup；
+- logout/delete 后 exact value file 不可读取；
 - schema、App Server DTO、Thread event 和 rollout 中无 secret-bearing field。
 
 ## 10. 固定决策
@@ -235,7 +234,7 @@ Desktop renderer ──▶ SecretStore
 4. secrets 只保存 opaque bytes，不理解 token 或 account。
 5. Config 只保存 reference，不保存 secret。
 6. API/client/Core 不读取 secret store。
-7. 本地 Connector composition 默认使用按 profile 隔离的 OS keyring；keyring operation 失败时明确
-   fail closed，不自动读取文件副本。显式文件 backend 只由 host 主动注入，并只在能强制 0700/0600
-   权限的 Unix host 启用。
-8. App Server protocol 和普通 server operation 不暴露 secret；local composition 只把 `SecretStore` 注入 Connector、MCP、ChatGPT 与 Kimi credential adapter。订阅 token 只在本地 credential owner 与单次模型请求之间流动，不进入 Core Agent Loop 状态。
+7. 本地 composition 默认使用 `<profile>/secrets` 下的私有文件 backend；Unix 强制 0700/0600，Windows 使用 owner-only protected DACL 和 write-through atomic replacement。
+8. `zeta-keyring-store` 保留为可注入的平台 adapter；它不是 daemon 默认，不与文件 backend fallback 或双写。
+9. `LocalProfileRuntime` 拥有一个 profile 的唯一 `SecretStore`；共享 profile runtime 时注入不同 store 会直接拒绝，不形成第二套 credential authority。
+10. App Server protocol 和普通 server operation 不暴露 secret；local composition 只把 `SecretStore` 注入 Connector、MCP、ChatGPT 与 Kimi credential adapter。订阅 token 只在本地 credential owner 与单次模型请求之间流动，不进入 Core Agent Loop 状态。

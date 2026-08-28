@@ -481,10 +481,13 @@ fn dto_driven_schema_contains_registered_rpc_envelopes() {
     assert_eq!(definitions["ThreadId"]["minLength"], 1);
     assert_eq!(definitions["SessionId"]["minLength"], 1);
     assert_eq!(definitions["CommandId"]["minLength"], 1);
-    assert_eq!(
-        definitions["SessionRequest"]["oneOf"][9]["properties"]["input"]["minItems"],
-        1
-    );
+    let start_turn_request = definitions["SessionRequest"]["oneOf"]
+        .as_array()
+        .expect("SessionRequest should be a tagged union")
+        .iter()
+        .find(|request| request["properties"]["type"]["const"] == "startTurn")
+        .expect("SessionRequest should contain startTurn");
+    assert_eq!(start_turn_request["properties"]["input"]["minItems"], 1);
     assert_eq!(
         definitions["ResourceReadParams"]["properties"]["maxBytes"]["maximum"],
         262_144

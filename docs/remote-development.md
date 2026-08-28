@@ -228,7 +228,7 @@ SSH launcher 使用 `BatchMode=yes`，不会在后台窗口等待密码输入。
    `zeta code` TUI 收到 connection closed 后立即结束当前 connection generation，把 Session/Thread
    durable identity 交还 CLI host；当前 generation 的 request task 与 queued action 随 event loop
    一起丢弃。CLI 只对 SSH transport failure 重试同一 verified exact runtime；新连接握手成功后，TUI
-   读取该 Session 的 canonical active Thread 和完整最新 snapshot。若原 Thread 已归档，则选择该
+   读取该 Session 的 canonical active Thread 和完整最新 snapshot。若原 Thread 不存在或尚未 active，则选择该
    Session 最新 active Thread；runtime 缺失、schema 改变、protocol stream failure 或 server
    rejection 不进入退避。Remote TUI 状态栏显示远端 Workspace，但在 App Server 提供路径候选契约前
    显式关闭本机 `@file` 扫描，避免把启动目录中的本机文件投影到远端会话。

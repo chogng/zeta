@@ -1612,6 +1612,9 @@ impl AppServer {
             Some(ClientMethod::WorkspaceAdditionalDirectoryRemove) => {
                 self.workspace_additional_directory_remove(connection, &request.params)
             }
+            Some(ClientMethod::WorkspaceAdditionalDirectoryPermissionsSet) => {
+                self.workspace_additional_directory_permissions_set(connection, &request.params)
+            }
             Some(ClientMethod::WorkspaceTrustRead) => {
                 self.workspace_trust_read(connection, &request.params)
             }

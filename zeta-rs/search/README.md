@@ -102,11 +102,7 @@ App Server `search_operations.rs` 的 DTO 映射、[`docs/search.md`](../../docs
 
 ## 当前限制与潜在演进
 
-当前实现每次查询启动冻结的 `rg`，只搜索磁盘内容；未保存 Editor buffer、replace、multi-root、`add-dir` runtime、持久化索引和 watcher 驱动失效均尚未实现。未来本 crate 只消费 host 从 `zeta_workspace_access::WorkspaceAccessAuthority` 冻结出的 capability snapshot：主工作目录默认进入，所有具备 file-read grant 的附加目录都可以进入，但它们不会因此成为项目配置根。Agent Import 的一次性来源不能自行扩大搜索范围。
-
-引入多 root 前必须先扩展领域结果：`SearchMatch` 当前只有 relative `path`，不足以区分不同 root
-中的同名文件。目标 contract 需要 root-qualified match identity，并按 root 独立执行 glob、
-ignore、containment 和错误隔离；不能把多个 absolute path flatten 成一个伪 Workspace。
+当前实现每次查询启动冻结的 `rg`，只搜索一个受信 `WorkspaceRoot` 的磁盘内容；未保存 Editor buffer、replace、持久化索引和 watcher 驱动失效均尚未实现。本 crate 不依赖 `zeta-workspace-access`，也不消费 Session 的 `/add-dir` 权限；Agent 对附加目录的内容搜索由本地 `grep` / `glob` 工具负责。产品若需要聚合多个 Workspace folder，必须由 App Server 根据产品级 folder identity 协调多个单 root 搜索，不能把多个 absolute path flatten 成一个伪 Workspace。
 
 潜在方向是在本 crate 内部加入索引实现，但只有先定义 ignore、一致性、watcher、持久化和隐私
 语义后才可以进行。当前不预先引入 `Engine` 或 `Backend` trait；出现第二种真实执行实现时，再以

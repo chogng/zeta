@@ -4,19 +4,20 @@
 
 ## 快速理解
 
-`zeta-workspace-access` 把一个主工作目录与零个附加授权目录组合成带版本的访问权限集合。新增目录不改变 cwd 或项目身份；模型和工具必须从同一权限集合冻结快照，不能维护第二份目录列表。
+`zeta-workspace-access` 把一个主工作目录与零个附加授权目录组合成带版本的访问权限集合。每个目录来源携带独立的读取、修改、执行、监听和配置加载权限；新增目录不改变 cwd 或项目身份，模型和工具必须按所需能力从同一权限集合冻结快照。
 
-crate 使用能力名而不是命令名：`/add-dir` 只是 Session 用户修改权限集合的一个入口，启动参数、持久配置和将来的宿主授权也会修改同一集合。模型环境和本地文件工具已经消费这份 Workspace 访问权限；Search 与沙箱接入附加根时也必须冻结同一个 authority，不能依赖 slash command。命令解析继续属于产品入口，把这层命名为 `add-dir` 会让一个入口错误拥有所有 consumer 的执行状态。
+crate 使用能力名而不是命令名：`/add-dir` 只是 Session 用户修改权限集合的一个入口，启动参数、持久配置和将来的宿主授权也会修改同一集合。模型环境和本地文件工具已经消费这份 Workspace 访问权限；Agent 进程工具与沙箱接入附加根时也必须冻结同一个 authority，不能依赖 slash command。Workspace Files 与 Workspace Search 继续绑定产品级 Workspace，不消费 Session authority。命令解析继续属于产品入口，把这层命名为 `add-dir` 会让一个入口错误拥有所有 consumer 的执行状态。
 
 | 操作 | 权限集合变化 | 已冻结快照 | 新快照 |
 | --- | --- | --- | --- |
 | 添加来源 | revision 增加 | 不扩大 | 包含新增目录 |
 | 重复添加 | 不变 | 不变 | 不变 |
+| 替换能力集合 | revision 增加并撤销旧 lease | 已冻结 token 失败关闭 | 只包含仍获权的目录 |
 | 移除来源 | revision 增加并撤销该 lease | 已撤销 token 失败关闭 | 不再包含该来源 |
 
 ## 所有权
 
-- `WorkspaceAccessAuthority` 拥有主目录角色、附加目录、来源授权、撤销和单调 revision。
+- `WorkspaceAccessAuthority` 拥有主目录角色、附加目录、逐来源能力集合、撤销和单调 revision。
 - `WorkspaceAccessSnapshot` 为一个明确的 `WorkspaceCapability` 冻结有序 `TrustedWorkspace` 集合。
 - `AdditionalDirectoryContributionPolicy` 独立描述允许发现的配置贡献，不把文件访问解释成配置激活。
 
@@ -30,6 +31,7 @@ AppServer 负责按 Session 保存 authority、解析用户路径和处理 RPC�
 | `access/snapshot.rs` | revision、mutation 与不可变能力快照 |
 | `access/error.rs` | 权限集合构造和冻结错误 |
 | `additional_directory.rs` | 附加目录来源及其配置贡献解析 |
+| `permissions.rs` | 用户可见能力集合、依赖校验与 `WorkspaceCapability` 映射 |
 | `contributions.rs` | 精确配置贡献 allowlist |
 
 ## 验证

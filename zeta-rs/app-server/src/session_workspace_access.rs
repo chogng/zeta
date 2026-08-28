@@ -6,6 +6,7 @@ use zeta_workspace::WorkspaceAuthorization;
 use zeta_workspace::WorkspaceCapability;
 use zeta_workspace::WorkspaceRoot;
 use zeta_workspace::WorkspaceTrustDecision;
+use zeta_workspace_access::AdditionalDirectoryPermissions;
 use zeta_workspace_access::AdditionalDirectorySource;
 use zeta_workspace_access::WorkspaceAccessAuthority;
 use zeta_workspace_access::WorkspaceAccessError;
@@ -25,6 +26,7 @@ pub(crate) struct SessionWorkspaceAccess {
 pub(crate) struct SessionAdditionalDirectory {
     root: WorkspaceRoot,
     decision: WorkspaceTrustDecision,
+    permissions: AdditionalDirectoryPermissions,
 }
 
 impl SessionAdditionalDirectory {
@@ -34,6 +36,10 @@ impl SessionAdditionalDirectory {
 
     pub(crate) fn decision(&self) -> WorkspaceTrustDecision {
         self.decision
+    }
+
+    pub(crate) fn permissions(&self) -> &AdditionalDirectoryPermissions {
+        &self.permissions
     }
 }
 
@@ -57,13 +63,18 @@ impl SessionWorkspaceAccess {
         session_id: SessionId,
         working_directory: WorkspaceRoot,
         authorization: WorkspaceAuthorization,
+        permissions: AdditionalDirectoryPermissions,
     ) -> Result<WorkspaceAccessMutation, WorkspaceAccessError> {
         self.authorities
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .entry(session_id)
             .or_insert_with(|| WorkspaceAccessAuthority::new(working_directory))
-            .add_directory(authorization, AdditionalDirectorySource::SessionCommand)
+            .add_directory(
+                authorization,
+                AdditionalDirectorySource::SessionCommand,
+                permissions,
+            )
     }
 
     pub(crate) fn remove_directory(
@@ -98,12 +109,61 @@ impl SessionWorkspaceAccess {
             .filter_map(|directory| {
                 authority
                     .decision(directory.root(), AdditionalDirectorySource::SessionCommand)
-                    .map(|decision| SessionAdditionalDirectory {
+                    .zip(
+                        authority
+                            .permissions(
+                                directory.root(),
+                                AdditionalDirectorySource::SessionCommand,
+                            )
+                            .cloned(),
+                    )
+                    .map(|(decision, permissions)| SessionAdditionalDirectory {
                         root: directory.root().clone(),
                         decision,
+                        permissions,
                     })
             })
             .collect()
+    }
+
+    pub(crate) fn revision(&self, session_id: &SessionId) -> u64 {
+        self.authorities
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(session_id)
+            .map(|authority| authority.revision().get())
+            .unwrap_or(0)
+    }
+
+    pub(crate) fn set_permissions(
+        &self,
+        session_id: &SessionId,
+        path: &Path,
+        expected_revision: u64,
+        permissions: AdditionalDirectoryPermissions,
+    ) -> Result<WorkspaceAccessMutation, WorkspaceAccessError> {
+        let mut authorities = self
+            .authorities
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let Some(authority) = authorities.get_mut(session_id) else {
+            if expected_revision == 0 {
+                return Ok(WorkspaceAccessMutation::NotPresent);
+            }
+            return Err(WorkspaceAccessError::RevisionConflict {
+                expected: expected_revision,
+                actual: 0,
+            });
+        };
+        let Some(root) = authority.find_additional_root(path) else {
+            return Ok(WorkspaceAccessMutation::NotPresent);
+        };
+        authority.set_permissions(
+            &root,
+            AdditionalDirectorySource::SessionCommand,
+            expected_revision,
+            permissions,
+        )
     }
 
     pub(crate) fn snapshot_for(

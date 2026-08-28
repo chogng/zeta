@@ -16,10 +16,25 @@ use zeta_app_server_protocol::protocol::config::LanguageServerModeDto;
 use zeta_app_server_protocol::protocol::provider::{
     ProviderApiKeyPolicyDto, ProviderCatalogEntryDto, ProviderListResult,
 };
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryListResult;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryPermissionDto;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryPermissionsSetParams;
+use zeta_protocol::SessionId;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ConfigEdit {
     pub(crate) terminal: TerminalSettingsEdit,
+    pub(crate) server_config: ConfigReadResult,
+    pub(crate) providers: ProviderListResult,
+    pub(crate) session_id: SessionId,
+    pub(crate) additional_directories: WorkspaceAdditionalDirectoryListResult,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct AdditionalDirectoryPermissionEdit {
+    pub(crate) params: WorkspaceAdditionalDirectoryPermissionsSetParams,
+    pub(crate) terminal: TerminalSettings,
+    pub(crate) terminal_revision: u64,
     pub(crate) server_config: ConfigReadResult,
     pub(crate) providers: ProviderListResult,
 }
@@ -27,6 +42,7 @@ pub(crate) struct ConfigEdit {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ConfigSelectionAction {
     SetMouseInteractions(ConfigEdit),
+    SetAdditionalDirectoryPermissions(AdditionalDirectoryPermissionEdit),
     OpenProviderApiKey {
         provider: String,
         display_name: String,
@@ -77,6 +93,8 @@ pub(crate) fn config_view(
     providers: &ProviderListResult,
     terminal: TerminalSettings,
     terminal_revision: u64,
+    session_id: &SessionId,
+    additional_directories: &WorkspaceAdditionalDirectoryListResult,
 ) -> ConfigSelectionView {
     let mut actions = BTreeMap::new();
     let mouse_id = SelectionItemId::new("terminal-mouse-interactions");
@@ -90,6 +108,8 @@ pub(crate) fn config_view(
             },
             server_config: config.clone(),
             providers: providers.clone(),
+            session_id: session_id.clone(),
+            additional_directories: additional_directories.clone(),
         }),
     );
     let mut config_items = vec![
@@ -103,6 +123,15 @@ pub(crate) fn config_view(
     ];
     config_items.extend(overview(config));
     let provider_items = provider_items(providers, &mut actions);
+    let permission_items = additional_directory_permission_items(
+        additional_directories,
+        session_id,
+        terminal,
+        terminal_revision,
+        config,
+        providers,
+        &mut actions,
+    );
 
     ConfigSelectionView {
         model: PaneViewModel::new(
@@ -110,6 +139,7 @@ pub(crate) fn config_view(
                 "Config",
                 vec![
                     SelectionTab::new("Config", config_items),
+                    SelectionTab::new("Directory permissions", permission_items),
                     SelectionTab::new("Providers", provider_items),
                     SelectionTab::new("Language servers", language_servers(config)),
                 ],
@@ -119,6 +149,134 @@ pub(crate) fn config_view(
             "Space search  ·  Enter select/toggle  ·  ←/→ tabs  ·  ↑/↓ inspect  ·  Esc back",
         ),
         actions,
+    }
+}
+
+fn additional_directory_permission_items(
+    snapshot: &WorkspaceAdditionalDirectoryListResult,
+    session_id: &SessionId,
+    terminal: TerminalSettings,
+    terminal_revision: u64,
+    config: &ConfigReadResult,
+    providers: &ProviderListResult,
+    actions: &mut BTreeMap<SelectionItemId, ConfigSelectionAction>,
+) -> Vec<SelectionItem> {
+    let mut items = Vec::new();
+    for (directory_index, directory) in snapshot.directories.iter().enumerate() {
+        for permission in all_additional_directory_permissions() {
+            let id = SelectionItemId::new(format!(
+                "additional-directory-{directory_index}-{}",
+                permission_id(permission)
+            ));
+            let enabled = directory.permissions.contains(permission);
+            actions.insert(
+                id.clone(),
+                ConfigSelectionAction::SetAdditionalDirectoryPermissions(
+                    AdditionalDirectoryPermissionEdit {
+                        params: WorkspaceAdditionalDirectoryPermissionsSetParams {
+                            session_id: session_id.clone(),
+                            root: directory.root.clone(),
+                            expected_revision: snapshot.revision,
+                            permissions: toggled_permissions(&directory.permissions, *permission),
+                        },
+                        terminal,
+                        terminal_revision,
+                        server_config: config.clone(),
+                        providers: providers.clone(),
+                    },
+                ),
+            );
+            items.push(
+                SelectionItem::new(format!(
+                    "{} · {}",
+                    permission_title(permission),
+                    directory.root.display()
+                ))
+                .with_id(id)
+                .with_columns(
+                    permission_title(permission),
+                    permission_description(permission),
+                    checkbox(enabled),
+                ),
+            );
+        }
+    }
+    or_empty(items, "No additional directories in this Session")
+}
+
+fn all_additional_directory_permissions() -> &'static [WorkspaceAdditionalDirectoryPermissionDto] {
+    use WorkspaceAdditionalDirectoryPermissionDto as Permission;
+    &[
+        Permission::ReadFiles,
+        Permission::WriteFiles,
+        Permission::ExecuteCommands,
+        Permission::WatchFileChanges,
+        Permission::LoadProjectConfiguration,
+    ]
+}
+
+fn toggled_permissions(
+    current: &[WorkspaceAdditionalDirectoryPermissionDto],
+    permission: WorkspaceAdditionalDirectoryPermissionDto,
+) -> Vec<WorkspaceAdditionalDirectoryPermissionDto> {
+    use WorkspaceAdditionalDirectoryPermissionDto::ReadFiles;
+
+    let mut permissions = current
+        .iter()
+        .copied()
+        .collect::<std::collections::BTreeSet<_>>();
+    if permissions.contains(&permission) {
+        if permission == ReadFiles {
+            permissions.clear();
+        } else {
+            permissions.remove(&permission);
+        }
+    } else {
+        permissions.insert(ReadFiles);
+        permissions.insert(permission);
+    }
+    permissions.into_iter().collect()
+}
+
+fn permission_id(permission: &WorkspaceAdditionalDirectoryPermissionDto) -> &'static str {
+    match permission {
+        WorkspaceAdditionalDirectoryPermissionDto::ReadFiles => "read-files",
+        WorkspaceAdditionalDirectoryPermissionDto::WriteFiles => "write-files",
+        WorkspaceAdditionalDirectoryPermissionDto::ExecuteCommands => "execute-commands",
+        WorkspaceAdditionalDirectoryPermissionDto::WatchFileChanges => "watch-file-changes",
+        WorkspaceAdditionalDirectoryPermissionDto::LoadProjectConfiguration => {
+            "load-project-configuration"
+        }
+    }
+}
+
+fn permission_title(permission: &WorkspaceAdditionalDirectoryPermissionDto) -> &'static str {
+    match permission {
+        WorkspaceAdditionalDirectoryPermissionDto::ReadFiles => "Read files",
+        WorkspaceAdditionalDirectoryPermissionDto::WriteFiles => "Modify files",
+        WorkspaceAdditionalDirectoryPermissionDto::ExecuteCommands => "Run commands",
+        WorkspaceAdditionalDirectoryPermissionDto::WatchFileChanges => "Watch file changes",
+        WorkspaceAdditionalDirectoryPermissionDto::LoadProjectConfiguration => {
+            "Load project configuration"
+        }
+    }
+}
+
+fn permission_description(permission: &WorkspaceAdditionalDirectoryPermissionDto) -> &'static str {
+    match permission {
+        WorkspaceAdditionalDirectoryPermissionDto::ReadFiles => "Allow read_file, grep and glob",
+        WorkspaceAdditionalDirectoryPermissionDto::WriteFiles => {
+            "Allow file-writing tools; requires Read files"
+        }
+        WorkspaceAdditionalDirectoryPermissionDto::ExecuteCommands => {
+            "Permission gate; process tools are not connected yet"
+        }
+        WorkspaceAdditionalDirectoryPermissionDto::WatchFileChanges => {
+            "Permission gate; directory watcher is not connected yet"
+        }
+        WorkspaceAdditionalDirectoryPermissionDto::LoadProjectConfiguration => {
+            "Permission gate; project config loading is not connected yet"
+        }
     }
 }
 

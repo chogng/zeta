@@ -122,8 +122,9 @@ use zeta_app_server_protocol::protocol::terminal::TerminalWriteParams;
 use zeta_app_server_protocol::protocol::workspace::{
     WorkspaceAdditionalDirectoryAddParams, WorkspaceAdditionalDirectoryListParams,
     WorkspaceAdditionalDirectoryListResult, WorkspaceAdditionalDirectoryMutationResult,
-    WorkspaceAdditionalDirectoryRemoveParams, WorkspaceFoldersSetParams, WorkspaceFoldersSetResult,
-    WorkspaceSwitchParams, WorkspaceSwitchResult,
+    WorkspaceAdditionalDirectoryPermissionsSetParams, WorkspaceAdditionalDirectoryRemoveParams,
+    WorkspaceFoldersSetParams, WorkspaceFoldersSetResult, WorkspaceSwitchParams,
+    WorkspaceSwitchResult,
 };
 use zeta_app_server_protocol::rpc::{JsonRpcId, JsonRpcRequest, JsonRpcResponse};
 
@@ -387,6 +388,16 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: WorkspaceAdditionalDirectoryRemoveParams,
     ) -> Result<WorkspaceAdditionalDirectoryMutationResult, ClientError> {
         self.call(ClientMethod::WorkspaceAdditionalDirectoryRemove, params)
+    }
+
+    pub fn set_workspace_additional_directory_permissions(
+        &mut self,
+        params: WorkspaceAdditionalDirectoryPermissionsSetParams,
+    ) -> Result<WorkspaceAdditionalDirectoryMutationResult, ClientError> {
+        self.call(
+            ClientMethod::WorkspaceAdditionalDirectoryPermissionsSet,
+            params,
+        )
     }
 
     /// Synchronizes one authoritative editor snapshot with the App Server language runtime.

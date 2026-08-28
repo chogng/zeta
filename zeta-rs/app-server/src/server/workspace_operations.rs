@@ -14,6 +14,8 @@ use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryL
 use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryListResult;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryMutationDto;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryMutationResult;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryPermissionDto;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryPermissionsSetParams;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryRemoveParams;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceFolderDto;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceFoldersSetParams;
@@ -36,6 +38,8 @@ use zeta_config::WorkspaceTrustSetting;
 use zeta_workspace::WorkspaceRoot;
 use zeta_workspace::WorkspaceTrustDecision;
 use zeta_workspace::WorkspaceTrustSource;
+use zeta_workspace_access::AdditionalDirectoryPermission;
+use zeta_workspace_access::AdditionalDirectoryPermissions;
 use zeta_workspace_access::WorkspaceAccessMutation;
 
 impl AppServer {
@@ -46,11 +50,12 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         require_workspace_trust_host(connection)?;
         let params: WorkspaceAdditionalDirectoryListParams = decode(params)?;
-        let directories = self
+        let snapshot = self
             .list_session_additional_directories(&params.session_id)
             .map_err(workspace_runtime_error)?;
         result(&WorkspaceAdditionalDirectoryListResult {
-            directories: additional_directory_dtos(directories),
+            revision: snapshot.revision,
+            directories: additional_directory_dtos(snapshot.directories),
         })
     }
 
@@ -64,12 +69,14 @@ impl AppServer {
         if params.root.as_os_str().is_empty() {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
-        let (mutation, directories) = self
-            .add_session_additional_directory(&params.session_id, params.root)
+        let permissions = additional_directory_permissions(params.permissions)?;
+        let (mutation, snapshot) = self
+            .add_session_additional_directory(&params.session_id, params.root, permissions)
             .map_err(workspace_runtime_error)?;
         result(&WorkspaceAdditionalDirectoryMutationResult {
             mutation: additional_directory_mutation(mutation),
-            directories: additional_directory_dtos(directories),
+            revision: snapshot.revision,
+            directories: additional_directory_dtos(snapshot.directories),
         })
     }
 
@@ -83,12 +90,39 @@ impl AppServer {
         if params.root.as_os_str().is_empty() {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
-        let (mutation, directories) = self
+        let (mutation, snapshot) = self
             .remove_session_additional_directory(&params.session_id, &params.root)
             .map_err(workspace_runtime_error)?;
         result(&WorkspaceAdditionalDirectoryMutationResult {
             mutation: additional_directory_mutation(mutation),
-            directories: additional_directory_dtos(directories),
+            revision: snapshot.revision,
+            directories: additional_directory_dtos(snapshot.directories),
+        })
+    }
+
+    pub(super) fn workspace_additional_directory_permissions_set(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        require_workspace_trust_host(connection)?;
+        let params: WorkspaceAdditionalDirectoryPermissionsSetParams = decode(params)?;
+        if params.root.as_os_str().is_empty() {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        let permissions = additional_directory_permissions(params.permissions)?;
+        let (mutation, snapshot) = self
+            .set_session_additional_directory_permissions(
+                &params.session_id,
+                &params.root,
+                params.expected_revision,
+                permissions,
+            )
+            .map_err(workspace_runtime_error)?;
+        result(&WorkspaceAdditionalDirectoryMutationResult {
+            mutation: additional_directory_mutation(mutation),
+            revision: snapshot.revision,
+            directories: additional_directory_dtos(snapshot.directories),
         })
     }
 
@@ -351,6 +385,11 @@ fn additional_directory_dtos(
         .map(|directory| WorkspaceAdditionalDirectoryDto {
             root: directory.root,
             trust: workspace_trust_state(directory.decision),
+            permissions: directory
+                .permissions
+                .entries()
+                .map(additional_directory_permission_dto)
+                .collect(),
         })
         .collect()
 }
@@ -368,7 +407,72 @@ fn additional_directory_mutation(
         WorkspaceAccessMutation::RemovedDirectory | WorkspaceAccessMutation::RemovedSource => {
             WorkspaceAdditionalDirectoryMutationDto::Removed
         }
+        WorkspaceAccessMutation::UpdatedPermissions => {
+            WorkspaceAdditionalDirectoryMutationDto::Updated
+        }
         WorkspaceAccessMutation::NotPresent => WorkspaceAdditionalDirectoryMutationDto::NotPresent,
+    }
+}
+
+fn additional_directory_permissions(
+    values: Vec<WorkspaceAdditionalDirectoryPermissionDto>,
+) -> Result<AdditionalDirectoryPermissions, RpcError> {
+    let permissions = values
+        .into_iter()
+        .map(additional_directory_permission)
+        .collect::<Vec<_>>();
+    let unique = permissions
+        .iter()
+        .copied()
+        .collect::<std::collections::BTreeSet<_>>();
+    if unique.len() != permissions.len() {
+        return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+    }
+    AdditionalDirectoryPermissions::new(permissions)
+        .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))
+}
+
+fn additional_directory_permission(
+    value: WorkspaceAdditionalDirectoryPermissionDto,
+) -> AdditionalDirectoryPermission {
+    match value {
+        WorkspaceAdditionalDirectoryPermissionDto::ReadFiles => {
+            AdditionalDirectoryPermission::ReadFiles
+        }
+        WorkspaceAdditionalDirectoryPermissionDto::WriteFiles => {
+            AdditionalDirectoryPermission::WriteFiles
+        }
+        WorkspaceAdditionalDirectoryPermissionDto::ExecuteCommands => {
+            AdditionalDirectoryPermission::ExecuteCommands
+        }
+        WorkspaceAdditionalDirectoryPermissionDto::WatchFileChanges => {
+            AdditionalDirectoryPermission::WatchFileChanges
+        }
+        WorkspaceAdditionalDirectoryPermissionDto::LoadProjectConfiguration => {
+            AdditionalDirectoryPermission::LoadProjectConfiguration
+        }
+    }
+}
+
+fn additional_directory_permission_dto(
+    value: AdditionalDirectoryPermission,
+) -> WorkspaceAdditionalDirectoryPermissionDto {
+    match value {
+        AdditionalDirectoryPermission::ReadFiles => {
+            WorkspaceAdditionalDirectoryPermissionDto::ReadFiles
+        }
+        AdditionalDirectoryPermission::WriteFiles => {
+            WorkspaceAdditionalDirectoryPermissionDto::WriteFiles
+        }
+        AdditionalDirectoryPermission::ExecuteCommands => {
+            WorkspaceAdditionalDirectoryPermissionDto::ExecuteCommands
+        }
+        AdditionalDirectoryPermission::WatchFileChanges => {
+            WorkspaceAdditionalDirectoryPermissionDto::WatchFileChanges
+        }
+        AdditionalDirectoryPermission::LoadProjectConfiguration => {
+            WorkspaceAdditionalDirectoryPermissionDto::LoadProjectConfiguration
+        }
     }
 }
 
@@ -450,6 +554,9 @@ fn workspace_runtime_error(error: WorkspaceRuntimeError) -> RpcError {
         }
         WorkspaceRuntimeError::Busy => {
             RpcError::new(-32071, AppServerErrorName::WorkspaceSwitchBusy)
+        }
+        WorkspaceRuntimeError::AccessRevisionConflict => {
+            RpcError::new(-32074, AppServerErrorName::WorkspaceAccessRevisionConflict)
         }
         WorkspaceRuntimeError::TrustRequired => {
             RpcError::new(-32073, AppServerErrorName::WorkspaceTrustRequired)

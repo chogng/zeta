@@ -220,7 +220,7 @@ membership / defaults        one logical writer
 负责：
 
 - 创建、读取和恢复 Session；
-- create、attach、fork、spawn、archive Thread 的结构协调；
+- create、attach、fork、spawn Thread 的结构协调；
 - root/parent/child lineage；
 - Session lifecycle 与 shared defaults；
 - 跨 Session/Thread stream 的可恢复 saga。

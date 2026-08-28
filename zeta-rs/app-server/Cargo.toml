@@ -58,7 +58,6 @@ zeta-hooks = { workspace = true }
 zeta-install-context = { workspace = true }
 zeta-tool-executor = { workspace = true }
 zeta-instructions = { workspace = true }
-zeta-keyring-store = { workspace = true }
 zeta-kimi = { workspace = true }
 zeta-lsp-server-provider = { workspace = true }
 zeta-lsp-manager = { workspace = true }

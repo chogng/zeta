@@ -55,7 +55,7 @@ Desktop 的 Models 设置页已接入这条控制面：ChatGPT 与 Kimi 使用�
 - OAuth authorize/token/revoke HTTP codec；
 - PKCE、state、callback listener、refresh token 或 cookie；
 - API key、AWS SigV4、Google ADC 等非交互凭据的 materialization；
-- `SecretStore`、keychain 或 token 的序列化；
+- `SecretStore` backend 或 token 的序列化；
 - 模型 endpoint、模型请求、retry、SSE 或 telemetry；
 - Provider 选择和模型执行。
 

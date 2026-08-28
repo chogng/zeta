@@ -11,7 +11,6 @@ export function createSessionApi(): ISessionApi {
 		unsubscribe: (params) => invoke<void>("zeta:session:unsubscribe", params),
 		createThread: (params) => invoke<SessionThreadResult>("zeta:session:thread:create", params),
 		forkThread: (params) => invoke<SessionThreadResult>("zeta:session:thread:fork", params),
-		archiveThread: (params) => invoke<SessionResult>("zeta:session:thread:archive", params),
 		complete: (params) => invoke<SessionResult>("zeta:session:complete", params),
 		archive: (params) => invoke<SessionResult>("zeta:session:archive", params),
 		stop: (params) => invoke<SessionResult>("zeta:session:stop", params),

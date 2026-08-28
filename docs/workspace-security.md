@@ -10,7 +10,7 @@
 | 用户操作 | 项目身份如何变化 | 文件访问如何变化 | 当前状态 |
 | --- | --- | --- | --- |
 | 打开工作区 | 建立主工作目录和当前项目 | 默认允许访问主目录 | 已实现 |
-| `/add-dir` | 不变 | 为当前 Session 的本地文件工具增加附加目录 | TUI 与 App Server 已实现 |
+| `/add-dir` | 不变 | 为当前 Session 增加附加目录，并默认允许读取和修改文件 | TUI 与 App Server 已实现 |
 | `/cd` | 切换主工作目录和当前项目 | 重新建立默认访问与项目配置作用域 | 尚未实现 |
 | 搜索内容 | 不变 | 默认搜索主目录；`grep`/`glob` 可显式搜索 Session 附加目录 | 部分具备 |
 | 导入外部 Agent 配置 | 不变 | 使用一次性导入来源，不产生持续目录授权 | 只读检查已实现 |
@@ -88,23 +88,33 @@ Restricted root 的安全 Files 与 watcher 会继续保留。
 - **附加目录**：额外文件访问 root；它不成为第二个项目，也不改变主工作目录。
 - **`/cd`**：替换主工作目录，并重新建立项目配置与 session discovery 作用域。
 
-`/add-dir` 只是 Session 用户修改访问权限的入口，不是领域 owner。`zeta-workspace-access` 拥有“一个主工作目录 + 若干显式附加目录”的权限 authority、directory source lifetime、canonical deduplication、revision、revocation 与 capability snapshot；`zeta-workspace` 继续只拥有单 root identity、containment 与 trust token。App Server 负责按 Session 保存 authority、解析每个 root 的 capability 与 trust，并协调 consumer。
+`/add-dir` 只是用户把目录加入当前 Session 的入口。`zeta-workspace-access` 统一保存主工作目录、附加目录、每个附加目录的能力开关、来源生命周期、版本和撤销状态；`zeta-workspace` 继续负责单个目录的身份、路径包含关系和信任凭证。App Server 按 Session 保存这份权限，并让需要访问本地目录的功能按自己的能力取得目录快照。
 
 | 操作 | 改变当前项目 | 本地文件工具可访问 | 自动加载配置 | 生命周期 |
 | --- | --- | --- | --- | --- |
 | 启动时的主目录 | ✅ | 主目录 | 完整项目配置 | 直到 `/cd` 或进程结束 |
 | 启动参数 `--add-dir` | ❌ | 尚未实现 | 尚未实现 | 本次启动 |
-| 会话命令 `/add-dir` | ❌ | 主目录 + 附加目录 | ❌ | 当前会话 |
+| 会话命令 `/add-dir` | ❌ | 主目录 + 获得对应能力的附加目录 | 由“加载项目配置”开关决定；当前加载功能尚未接入 | 当前会话 |
 | 持久 `additionalDirectories` | ❌ | 尚未实现 | ❌ | 配置有效期间 |
 | `/cd` | ✅ | 以新主目录重新解析 | 加载新主目录的完整项目配置 | 直到再次切换 |
 
-配置激活必须与文件访问授权分离。当前 Session 命令只扩展本地 `read_file`、`write_file`、`edit`、`grep` 与 `glob`：相对路径仍解析到主 Workspace，附加目录必须使用绝对路径。Shell、Terminal、`apply_patch`、Workspace Files/Search service、watcher 与项目配置发现仍只使用既有 Workspace owner。领域策略已经能表达未来允许的 Skills、Agent definitions、`enabledPlugins`、`extraKnownMarketplaces` 与 instruction allowlist，但产品 runtime 尚未激活这些贡献。
+`/add-dir` 默认打开“读取文件”和“修改文件”。`zeta code` 的 Config 页面提供当前 Session 的“Directory permissions”标签，每个附加目录分别管理以下开关：
 
-Rust API 不使用 `bool` 表达这些差异。`zeta-workspace-access` 用 `AdditionalDirectorySource` 保留 directory origin，并解析 `AdditionalDirectoryContributionPolicy`；不能把“目录已授权”直接解释为“目录配置已激活”。
+| 开关 | 控制的权限 | 当前是否生效 |
+| --- | --- | --- |
+| Read files | `read_file`、`grep`、`glob` 读取或搜索该目录 | 已生效，默认打开 |
+| Modify files | `write_file`、`edit` 修改该目录 | 已生效，默认打开 |
+| Run commands | 允许进程工具把该目录作为执行范围 | 权限已可设置；Shell 与 Terminal 尚未接入 |
+| Watch file changes | 允许后台监听该目录变化 | 权限已可设置；watcher 尚未接入 |
+| Load project configuration | 允许发现白名单内的 instructions、Skills、Agent 和插件配置 | 权限已可设置；配置发现与激活尚未接入 |
 
-`/add-dir` 本身是用户对该精确目录的会话级授权动作。App Server canonicalize 后签发 `ExplicitUserDecision` lease，但不写入 User Config；移除目录、归档 Session 或切换主 Workspace 都会 revoke lease。三个附加目录 RPC 只接受声明 `workspaceTrustHost` 的产品连接；不同 Session 的 authority 互不可见。活动 Turn 可以修改权限集合：确认添加后，下一次文件工具路径解析冻结最新 revision，因此同一 Turn 的后续 tool call 可以访问；移除后旧 snapshot 的 token 立即失效。已经发给模型的单次请求保持不变，下一次模型调用才会看到更新后的 environment roots。
+除“读取文件”外的能力都依赖读取权限。关闭 Read files 会同时关闭该目录的其它开关；后端也拒绝“未允许读取却允许修改、执行、监听或加载配置”的无效权限组合。相对路径仍解析到主 Workspace，访问附加目录必须使用绝对路径。`apply_patch`、Workspace Files 和 Workspace Search 仍只使用产品打开的主 Workspace。
 
-Core 在每次模型调用边界把 Session identity 交给 `HarnessContextProvider`。App Server 的 `SessionWorkspaceAccess` 从文件工具使用的同一 `WorkspaceAccessAuthority` 冻结 capability snapshot，再交给 `zeta-agent-environment` 生成强类型环境和 `<filesystem><workspace_roots>`：主 Workspace 是第一项，仍有效的附加目录随后列出，cwd 不变，相对路径仍属于主 Workspace。Core 把完整 environment snapshot 放在 durable Thread history 之后的请求尾部；它不制造持久用户消息，目录变化也不会改动 system instructions 前缀。
+Rust API 不使用一个 `bool` 表示目录是否“全权可用”。`AdditionalDirectoryPermissions` 保存完整能力集合，`AdditionalDirectorySource` 保存目录来源，`AdditionalDirectoryContributionPolicy` 只在“加载项目配置”已授权时解析允许发现的配置类型。目录已加入不能被解释成所有 Tool 都已获权，也不能被解释成目录配置已经生效。
+
+`/add-dir` 本身是用户对该精确目录的会话级授权动作。App Server 规范化路径后签发 `ExplicitUserDecision` lease，但不写入 User Config；移除目录、归档 Session 或切换主 Workspace 都会撤销 lease。`workspace/additionalDirectories/list|add|remove|permissions/set` 只接受声明 `workspaceTrustHost` 的产品连接；不同 Session 的权限互不可见。权限更新携带期望版本，过期页面不能覆盖较新的选择。添加、移除或关闭能力都会推进版本并撤销旧凭证；同一 Turn 的后续文件 Tool 调用会取得最新能力快照。已经发给模型的单次请求保持不变，下一次模型调用才会看到更新后的可读目录。
+
+Core 在每次模型调用边界把 Session identity 交给 `HarnessContextProvider`。App Server 从文件工具使用的同一权限集合取得“读取文件”快照，再交给 `zeta-agent-environment` 生成 `<filesystem><workspace_roots>`：主 Workspace 是第一项，仍允许读取的附加目录随后列出，cwd 不变，相对路径仍属于主 Workspace。Core 把完整环境快照放在持久 Thread 历史之后的请求尾部；它不制造持久用户消息，目录变化也不会改动 system instructions 前缀。
 
 ## 与外部 Agent 导入的关系
 
@@ -144,12 +154,12 @@ authority。活动 Turn 会阻止 authority switch，直到旧 runtime 能一致
   内容替换不会自动失效信任。
 - Path validation 与后续 I/O 不是 atomic；在 hostile concurrent mutation 的 threat model 下，
   仍需 handle-relative filesystem API。
-- `/add-dir` 当前只服务 `zeta code` 的 Session 命令和本地文件工具；启动参数、持久配置、Workspace Files/Search service、watcher、Shell、Terminal、`apply_patch` 与配置贡献尚未接入。
+- `/add-dir` 当前只让 `zeta code` 当前 Session 的模型环境和本地文件工具识别附加目录。Workspace Files 与 Workspace Search 继续只展示和搜索产品打开的 Workspace。`--add-dir` 启动参数、用户设置中的持久附加目录、watcher、Shell、Terminal、`apply_patch` 和项目配置加载尚未接入；Config 中相应能力开关只记录授权，不代表这些功能已经可用。
 
 ## 后续计划
 
 1. 把 Session 之外的 `LaunchArgument` 与 `PersistentConfiguration` source 接入各自 host owner。
-2. 为附加 root 接入 Files/Search/watch 与 allowlisted contribution runtime，同时保留 Session 隔离和精确 revocation。
+2. 让 Agent 进程工具、watcher、`apply_patch` 和白名单配置加载使用各自的附加目录能力快照，同时保留 Session 隔离和精确撤销。
 3. 增加 `/cd` authority switch；它替换项目 identity 并重新加载主目录配置，而不是复用
    `add-dir` mutation。
 4. 在 host trust resolver 中增加 filesystem identity change invalidation。

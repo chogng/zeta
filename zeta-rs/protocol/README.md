@@ -80,7 +80,7 @@ derive `Eq`、serde、`JsonSchema` 与 `TS`。是否生成 TypeScript/schema art
 ```text
 SessionCommand
 ├─ Create / SetModel / Complete / Archive
-└─ CreateThread / ForkThread / RewindThread / ArchiveThread
+└─ CreateThread / ForkThread / RewindThread
 
 ThreadCommand
 ├─ StartTurn / SteerTurn / InterruptTurn

@@ -20,7 +20,7 @@ Desktop Search contrib 只拥有查询表单、取消时机、增量结果投影
 | 用户操作 | 当前行为 | 当前限制 |
 | --- | --- | --- |
 | 搜索主工作目录文字 | 分批返回匹配项并持续显示进度 | 最多 5,000 条结果 |
-| 搜索附加目录 | 目标语义是与主目录一起搜索 | `add-dir` 尚未实现 |
+| 搜索 `/add-dir` 目录 | Agent 使用 `grep` / `glob` | 不进入 Workspace Search 面板 |
 | 修改查询 | 取消旧任务并启动新任务 | 旧任务结果不会混入新查询 |
 | 使用正则或文件过滤 | 在 Rust 边界重新校验输入 | 只能使用工作区相对 glob |
 | 点击结果打开文件 | 尚未接通编辑器 | 结果当前只用于查看 |
@@ -34,14 +34,13 @@ Desktop Search contrib 只拥有查询表单、取消时机、增量结果投影
 | 结果分组、高亮、状态和重新搜索取消 | Renderer | ✅ |
 | IPC sender、exact shape 与输入上限的快速校验 | Electron Main | ✅ |
 | workspace root 授权与 `rg` executable 冻结 | Rust / App Server composition | ✅ |
-| 主工作目录与附加目录的 Search scope | `zeta-workspace-access` + App Server | 权限 authority 已接入，Search runtime 尚未消费附加根 |
 | 查询校验、`rg` 进程、结果解析、分页与取消 | `zeta-search` | ✅ |
 | connection ID → `SearchOwner`、DTO 转换与稳定 RPC error | App Server | ✅ |
 | wire DTO、method registry、schema 与 TypeScript bindings | `zeta-app-server-protocol` | ✅ |
 | 文件路径 fuzzy match | `zeta-file-search` | ✅，与内容搜索无依赖 |
 | 点击结果后读取文件并打开编辑器 | Files / Editor vertical | 尚未完成 |
 | 独立 workspace code index | `zeta-code-index` + App Server | ✅ 本地 lexical chunk retrieval；不作为当前 SearchView backend |
-| replace、multi-root 和 watcher 驱动的产品搜索失效 | 未确定 | 尚未完成 |
+| replace 和 watcher 驱动的产品搜索失效 | 未确定 | 尚未完成 |
 
 ## 端到端流程
 
@@ -103,11 +102,7 @@ SearchViewPane
 近期只在现有 contract 内完善可用性：空结果/错误呈现、查询历史和搜索中再次提交。结果点击必须
 等待受信 file-content API 与 editor opening contract，不由 Search 绕过。
 
-当前 Search runtime 只消费主工作目录；`zeta-workspace-access` 已实现并接入 Session 权限 authority，但 Search 尚未冻结它的 capability snapshot。未来 Search scope 由主工作目录和全部具备文件读取权限的附加目录组成，不把附加目录提升为独立项目，也不触发项目配置加载。无论目录来自启动参数、会话命令还是持久 `additionalDirectories`，只要其 file-access grant 有效，Search 都可以消费它；Agent Import 的一次性来源则不能自动进入 Search。
-
-多 root Search 不能继续只返回裸 relative path。协议必须增加稳定 root identity 或 root alias，
-使 `src/lib.rs` 能明确归属于主目录或某个附加目录，并避免不同 root 的同名 path 碰撞。Glob、
-ignore 与 containment 也必须逐 root 计算，不能先把多个绝对目录拼成一个伪 Workspace。
+Workspace Search 不消费 Session 的 `WorkspaceAccessAuthority`。`/add-dir` 改变的是当前对话中 Agent 文件工具的访问范围，产品搜索面板继续绑定 Workspace root；切换 Session 不会悄悄改变面板搜索范围。将来若产品需要聚合多个 Workspace folder，应由 `workspace/folders/set` 与产品级 root identity 定义，不能复用 `/add-dir` 的 Session 生命周期。
 
 当前已经存在独立的 [`zeta-code-index`](../zeta-rs/code-index/README.md)，它在 workspace side
 完成 ignore-aware chunking、持久化 generation 与 FTS5 retrieval；跨系统边界见

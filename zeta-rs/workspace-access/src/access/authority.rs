@@ -1,5 +1,8 @@
 use crate::AdditionalDirectory;
+use crate::AdditionalDirectoryContributionPolicy;
+use crate::AdditionalDirectoryPermissions;
 use crate::AdditionalDirectorySource;
+use crate::AdditionalInstructionsPolicy;
 use crate::WorkspaceAccessError;
 use crate::WorkspaceAccessMutation;
 use crate::WorkspaceAccessRevision;
@@ -12,7 +15,12 @@ use zeta_workspace::WorkspaceCapability;
 use zeta_workspace::WorkspaceRoot;
 use zeta_workspace::WorkspaceTrustDecision;
 
-type SourceAuthorizations = BTreeMap<AdditionalDirectorySource, WorkspaceAuthorization>;
+struct AdditionalDirectoryGrant {
+    authorization: WorkspaceAuthorization,
+    permissions: AdditionalDirectoryPermissions,
+}
+
+type SourceAuthorizations = BTreeMap<AdditionalDirectorySource, AdditionalDirectoryGrant>;
 
 /// Mutable authority for one primary Workspace and its additional authorized roots.
 ///
@@ -56,6 +64,7 @@ impl WorkspaceAccessAuthority {
         &mut self,
         authorization: WorkspaceAuthorization,
         source: AdditionalDirectorySource,
+        permissions: AdditionalDirectoryPermissions,
     ) -> Result<WorkspaceAccessMutation, WorkspaceAccessError> {
         let root = authorization.root().clone();
         if root == self.working_directory {
@@ -85,7 +94,13 @@ impl WorkspaceAccessAuthority {
             self.authorizations
                 .entry(root.canonical_path().to_path_buf())
                 .or_default()
-                .insert(source, authorization);
+                .insert(
+                    source,
+                    AdditionalDirectoryGrant {
+                        authorization,
+                        permissions,
+                    },
+                );
             self.revision.advance();
         }
         Ok(mutation)
@@ -109,8 +124,8 @@ impl WorkspaceAccessAuthority {
         }
         let canonical = root.canonical_path();
         if let Some(source_authorizations) = self.authorizations.get_mut(canonical) {
-            if let Some(authorization) = source_authorizations.remove(&source) {
-                authorization.revoke();
+            if let Some(grant) = source_authorizations.remove(&source) {
+                grant.authorization.revoke();
             }
             if source_authorizations.is_empty() {
                 self.authorizations.remove(canonical);
@@ -146,7 +161,86 @@ impl WorkspaceAccessAuthority {
         self.authorizations
             .get(root.canonical_path())
             .and_then(|authorizations| authorizations.get(&source))
-            .map(WorkspaceAuthorization::decision)
+            .map(|grant| grant.authorization.decision())
+    }
+
+    /// Returns the permissions retaining one root/source pair.
+    pub fn permissions(
+        &self,
+        root: &WorkspaceRoot,
+        source: AdditionalDirectorySource,
+    ) -> Option<&AdditionalDirectoryPermissions> {
+        self.authorizations
+            .get(root.canonical_path())
+            .and_then(|authorizations| authorizations.get(&source))
+            .map(|grant| &grant.permissions)
+    }
+
+    /// Resolves allowlisted project contributions independently from file access.
+    pub fn contribution_policy(
+        &self,
+        root: &WorkspaceRoot,
+        instructions: AdditionalInstructionsPolicy,
+    ) -> AdditionalDirectoryContributionPolicy {
+        use crate::AdditionalDirectoryPermission;
+
+        let permitted = self
+            .authorizations
+            .get(root.canonical_path())
+            .into_iter()
+            .flat_map(BTreeMap::iter)
+            .any(|(source, grant)| {
+                source.permits_project_contributions()
+                    && grant
+                        .permissions
+                        .allows(AdditionalDirectoryPermission::LoadProjectConfiguration)
+            });
+        if !permitted {
+            return AdditionalDirectoryContributionPolicy::FileAccessOnly;
+        }
+        match instructions {
+            AdditionalInstructionsPolicy::Exclude => {
+                AdditionalDirectoryContributionPolicy::AllowlistedProjectContributions
+            }
+            AdditionalInstructionsPolicy::Include => {
+                AdditionalDirectoryContributionPolicy::AllowlistedProjectContributionsWithInstructions
+            }
+        }
+    }
+
+    /// Replaces the complete permission set for one root/source pair.
+    pub fn set_permissions(
+        &mut self,
+        root: &WorkspaceRoot,
+        source: AdditionalDirectorySource,
+        expected_revision: u64,
+        permissions: AdditionalDirectoryPermissions,
+    ) -> Result<WorkspaceAccessMutation, WorkspaceAccessError> {
+        if self.revision.get() != expected_revision {
+            return Err(WorkspaceAccessError::RevisionConflict {
+                expected: expected_revision,
+                actual: self.revision.get(),
+            });
+        }
+        let Some(grant) = self
+            .authorizations
+            .get_mut(root.canonical_path())
+            .and_then(|authorizations| authorizations.get_mut(&source))
+        else {
+            return Ok(WorkspaceAccessMutation::NotPresent);
+        };
+        if grant.permissions == permissions {
+            return Ok(WorkspaceAccessMutation::AlreadyPresent);
+        }
+        let authorization = WorkspaceAuthorization::new(
+            grant.authorization.root().clone(),
+            grant.authorization.decision(),
+        );
+        grant.authorization.revoke();
+        grant.authorization = authorization;
+        grant.permissions = permissions;
+        self.revision.advance();
+        Ok(WorkspaceAccessMutation::UpdatedPermissions)
     }
 
     /// Freezes the latest additional roots as tokens for one exact capability.
@@ -156,12 +250,19 @@ impl WorkspaceAccessAuthority {
     ) -> Result<WorkspaceAccessSnapshot, WorkspaceAccessError> {
         let mut additional_roots = Vec::with_capacity(self.additional_directories.len());
         for directory in &self.additional_directories {
-            let token = self
+            let grants = self
                 .authorizations
                 .get(directory.root().canonical_path())
                 .into_iter()
                 .flat_map(BTreeMap::values)
-                .find_map(|authorization| authorization.require(capability).ok())
+                .filter(|grant| grant.permissions.allows_workspace_capability(capability))
+                .collect::<Vec<_>>();
+            if grants.is_empty() {
+                continue;
+            }
+            let token = grants
+                .into_iter()
+                .find_map(|grant| grant.authorization.require(capability).ok())
                 .ok_or_else(|| WorkspaceAccessError::CapabilityUnavailable {
                     root: directory.root().canonical_path().to_path_buf(),
                     capability,
@@ -178,8 +279,8 @@ impl WorkspaceAccessAuthority {
 
 impl Drop for WorkspaceAccessAuthority {
     fn drop(&mut self) {
-        for authorization in self.authorizations.values().flat_map(BTreeMap::values) {
-            authorization.revoke();
+        for grant in self.authorizations.values().flat_map(BTreeMap::values) {
+            grant.authorization.revoke();
         }
     }
 }

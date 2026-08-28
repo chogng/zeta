@@ -47,7 +47,6 @@ export interface ISessionApi {
 	unsubscribe(params: SessionUnsubscribeParams): Promise<void>;
 	createThread(params: SessionOperationInput<"createThread">): Promise<SessionThreadResult>;
 	forkThread(params: SessionOperationInput<"forkThread">): Promise<SessionThreadResult>;
-	archiveThread(params: SessionOperationInput<"archiveThread">): Promise<SessionResult>;
 	complete(params: SessionOperationInput<"complete">): Promise<SessionResult>;
 	archive(params: SessionOperationInput<"archive">): Promise<SessionResult>;
 	stop(params: SessionOperationInput<"stop">): Promise<SessionResult>;

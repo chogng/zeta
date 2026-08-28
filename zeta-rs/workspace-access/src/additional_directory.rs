@@ -1,5 +1,3 @@
-use crate::AdditionalDirectoryContributionPolicy;
-use crate::AdditionalInstructionsPolicy;
 use zeta_workspace::WorkspaceRoot;
 
 /// Host source retaining access to one additional directory.
@@ -14,7 +12,7 @@ pub enum AdditionalDirectorySource {
 }
 
 impl AdditionalDirectorySource {
-    fn permits_project_contributions(self) -> bool {
+    pub(crate) fn permits_project_contributions(self) -> bool {
         matches!(self, Self::LaunchArgument | Self::SessionCommand)
     }
 }
@@ -67,27 +65,5 @@ impl AdditionalDirectory {
 
     pub(crate) fn has_no_sources(&self) -> bool {
         self.sources.is_empty()
-    }
-
-    /// Resolves configuration contributions independently from filesystem authorization.
-    pub fn contribution_policy(
-        &self,
-        instructions: AdditionalInstructionsPolicy,
-    ) -> AdditionalDirectoryContributionPolicy {
-        if !self
-            .sources
-            .iter()
-            .any(|source| source.permits_project_contributions())
-        {
-            return AdditionalDirectoryContributionPolicy::FileAccessOnly;
-        }
-        match instructions {
-            AdditionalInstructionsPolicy::Exclude => {
-                AdditionalDirectoryContributionPolicy::AllowlistedProjectContributions
-            }
-            AdditionalInstructionsPolicy::Include => {
-                AdditionalDirectoryContributionPolicy::AllowlistedProjectContributionsWithInstructions
-            }
-        }
     }
 }

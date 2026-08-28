@@ -97,6 +97,7 @@ pub enum AppServerErrorName {
     WorkspaceSwitchUnavailable,
     WorkspaceSwitchBusy,
     WorkspaceSwitchFailed,
+    WorkspaceAccessRevisionConflict,
     WorkspaceTrustRequired,
     WorkspaceAuthorityMismatch,
     ExtensionsUnavailable,

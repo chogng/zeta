@@ -59,8 +59,7 @@ listener/browser interaction 已由 Electron main 持有。`device_oauth::Pendin
 broker；或选择 `GitHubDeviceOAuthProvider`：仅需 public client ID。旧的 `GitHubOAuthProvider` 继续作为可信
 host 直连 adapter。OAuth secret 以 runtime token 与 lifecycle bundle 分层封装，MCP projection 只能拿到
 runtime token。远端 revoke 成功后才提交本地 disconnect；失败时保留 ready connection 以便重试。
-不能通过扩张 authority event payload 来保存 OAuth code、refresh token 或 raw credential。生产显式文件
-file backend 位于 `zeta-secrets`，OS keyring adapter 位于独立的 `zeta-keyring-store`；均不属于本 crate。
+不能通过扩张 authority event payload 来保存 OAuth code、refresh token 或 raw credential。生产 profile 私有文件 backend 位于 `zeta-secrets`，OS keyring adapter 位于独立 `zeta-keyring-store`；两者均不属于本 crate，由 host composition 选择并注入。
 
 验证入口：
 

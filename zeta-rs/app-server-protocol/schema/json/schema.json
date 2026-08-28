@@ -1421,6 +1421,7 @@
         "WorkspaceSwitchUnavailable",
         "WorkspaceSwitchBusy",
         "WorkspaceSwitchFailed",
+        "WorkspaceAccessRevisionConflict",
         "WorkspaceTrustRequired",
         "WorkspaceAuthorityMismatch",
         "ExtensionsUnavailable",
@@ -2119,6 +2120,22 @@
             },
             "params": {
               "$ref": "#/$defs/WorkspaceAdditionalDirectoryRemoveParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workspace/additionalDirectories/permissions/set",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/WorkspaceAdditionalDirectoryPermissionsSetParams"
             }
           },
           "required": [
@@ -5271,6 +5288,22 @@
           "properties": {
             "method": {
               "const": "workspace/additionalDirectories/remove",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/WorkspaceAdditionalDirectoryMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workspace/additionalDirectories/permissions/set",
               "type": "string"
             },
             "result": {
@@ -19670,26 +19703,6 @@
             "sessionId": {
               "$ref": "#/$defs/SessionId"
             },
-            "threadId": {
-              "$ref": "#/$defs/ThreadId"
-            },
-            "type": {
-              "const": "threadArchived",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "sessionId",
-            "threadId"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "sessionId": {
-              "$ref": "#/$defs/SessionId"
-            },
             "type": {
               "const": "sessionCompleted",
               "type": "string"
@@ -19877,22 +19890,6 @@
             "parentThreadId",
             "beforeTurnId",
             "title"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "threadId": {
-              "$ref": "#/$defs/ThreadId"
-            },
-            "type": {
-              "const": "archiveThread",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "threadId"
           ],
           "type": "object"
         },
@@ -20360,8 +20357,7 @@
       "description": "Session-owned lifecycle for one Thread membership.",
       "enum": [
         "creating",
-        "active",
-        "archived"
+        "active"
       ],
       "type": "string"
     },
@@ -24853,6 +24849,12 @@
     "WorkspaceAdditionalDirectoryAddParams": {
       "description": "Adds one App Server-hosted path for the lifetime of a product Session.",
       "properties": {
+        "permissions": {
+          "items": {
+            "$ref": "#/$defs/WorkspaceAdditionalDirectoryPermissionDto"
+          },
+          "type": "array"
+        },
         "root": {
           "type": "string"
         },
@@ -24862,13 +24864,20 @@
       },
       "required": [
         "sessionId",
-        "root"
+        "root",
+        "permissions"
       ],
       "type": "object"
     },
     "WorkspaceAdditionalDirectoryDto": {
       "description": "One session-scoped directory that extends file access without changing the primary Workspace.",
       "properties": {
+        "permissions": {
+          "items": {
+            "$ref": "#/$defs/WorkspaceAdditionalDirectoryPermissionDto"
+          },
+          "type": "array"
+        },
         "root": {
           "type": "string"
         },
@@ -24878,7 +24887,8 @@
       },
       "required": [
         "root",
-        "trust"
+        "trust",
+        "permissions"
       ],
       "type": "object"
     },
@@ -24901,9 +24911,15 @@
             "$ref": "#/$defs/WorkspaceAdditionalDirectoryDto"
           },
           "type": "array"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
+        "revision",
         "directories"
       ],
       "type": "object"
@@ -24914,6 +24930,7 @@
         "added",
         "alreadyPresent",
         "removed",
+        "updated",
         "notPresent"
       ],
       "type": "string"
@@ -24928,11 +24945,57 @@
         },
         "mutation": {
           "$ref": "#/$defs/WorkspaceAdditionalDirectoryMutationDto"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
         "mutation",
+        "revision",
         "directories"
+      ],
+      "type": "object"
+    },
+    "WorkspaceAdditionalDirectoryPermissionDto": {
+      "description": "User-visible capability granted to one session-scoped additional directory.",
+      "enum": [
+        "readFiles",
+        "writeFiles",
+        "executeCommands",
+        "watchFileChanges",
+        "loadProjectConfiguration"
+      ],
+      "type": "string"
+    },
+    "WorkspaceAdditionalDirectoryPermissionsSetParams": {
+      "description": "Replaces one additional directory's complete permission set at an observed revision.",
+      "properties": {
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "permissions": {
+          "items": {
+            "$ref": "#/$defs/WorkspaceAdditionalDirectoryPermissionDto"
+          },
+          "type": "array"
+        },
+        "root": {
+          "type": "string"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "root",
+        "expectedRevision",
+        "permissions"
       ],
       "type": "object"
     },

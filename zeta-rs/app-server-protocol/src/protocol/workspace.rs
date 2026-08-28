@@ -166,6 +166,20 @@ pub struct WorkspaceFoldersSetResult {
 pub struct WorkspaceAdditionalDirectoryDto {
     pub root: PathBuf,
     pub trust: WorkspaceTrustStateDto,
+    pub permissions: Vec<WorkspaceAdditionalDirectoryPermissionDto>,
+}
+
+/// User-visible capability granted to one session-scoped additional directory.
+#[derive(
+    Clone, Copy, Debug, Deserialize, Eq, JsonSchema, Ord, PartialEq, PartialOrd, Serialize, TS,
+)]
+#[serde(rename_all = "camelCase")]
+pub enum WorkspaceAdditionalDirectoryPermissionDto {
+    ReadFiles,
+    WriteFiles,
+    ExecuteCommands,
+    WatchFileChanges,
+    LoadProjectConfiguration,
 }
 
 /// Reads the additional directories retained by one product Session.
@@ -178,6 +192,8 @@ pub struct WorkspaceAdditionalDirectoryListParams {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceAdditionalDirectoryListResult {
+    #[ts(type = "number")]
+    pub revision: u64,
     pub directories: Vec<WorkspaceAdditionalDirectoryDto>,
 }
 
@@ -187,6 +203,19 @@ pub struct WorkspaceAdditionalDirectoryListResult {
 pub struct WorkspaceAdditionalDirectoryAddParams {
     pub session_id: SessionId,
     pub root: PathBuf,
+    pub permissions: Vec<WorkspaceAdditionalDirectoryPermissionDto>,
+}
+
+/// Replaces one additional directory's complete permission set at an observed revision.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceAdditionalDirectoryPermissionsSetParams {
+    pub session_id: SessionId,
+    pub root: PathBuf,
+    #[schemars(range(min = 0))]
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub permissions: Vec<WorkspaceAdditionalDirectoryPermissionDto>,
 }
 
 /// Removes one session command source without revoking another source retaining the same root.
@@ -204,6 +233,7 @@ pub enum WorkspaceAdditionalDirectoryMutationDto {
     Added,
     AlreadyPresent,
     Removed,
+    Updated,
     NotPresent,
 }
 
@@ -211,5 +241,7 @@ pub enum WorkspaceAdditionalDirectoryMutationDto {
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceAdditionalDirectoryMutationResult {
     pub mutation: WorkspaceAdditionalDirectoryMutationDto,
+    #[ts(type = "number")]
+    pub revision: u64,
     pub directories: Vec<WorkspaceAdditionalDirectoryDto>,
 }

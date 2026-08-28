@@ -304,16 +304,25 @@ fn additional_directories_are_session_scoped_and_removable() {
         .unwrap();
 
     let (mutation, directories) = server
-        .add_session_additional_directory(&first.session_id, additional.path.clone())
+        .add_session_additional_directory(
+            &first.session_id,
+            additional.path.clone(),
+            zeta_workspace_access::AdditionalDirectoryPermissions::local_file_tools(),
+        )
         .unwrap();
 
     assert_eq!(mutation, WorkspaceAccessMutation::AddedDirectory);
-    assert_eq!(directories.len(), 1);
-    assert_eq!(directories[0].root, additional.root().canonical_path());
+    assert_eq!(directories.revision, 1);
+    assert_eq!(directories.directories.len(), 1);
+    assert_eq!(
+        directories.directories[0].root,
+        additional.root().canonical_path()
+    );
     assert_eq!(
         server
             .list_session_additional_directories(&second.session_id)
             .unwrap()
+            .directories
             .len(),
         0
     );
@@ -321,7 +330,7 @@ fn additional_directories_are_session_scoped_and_removable() {
         .remove_session_additional_directory(&first.session_id, &additional.path)
         .unwrap();
     assert_eq!(mutation, WorkspaceAccessMutation::RemovedDirectory);
-    assert!(directories.is_empty());
+    assert!(directories.directories.is_empty());
 }
 
 #[test]
@@ -344,9 +353,11 @@ fn primary_workspace_cannot_be_added_as_an_additional_directory() {
         })
         .unwrap();
 
-    let Err(error) =
-        server.add_session_additional_directory(&session.session_id, primary.path.clone())
-    else {
+    let Err(error) = server.add_session_additional_directory(
+        &session.session_id,
+        primary.path.clone(),
+        zeta_workspace_access::AdditionalDirectoryPermissions::local_file_tools(),
+    ) else {
         panic!("primary Workspace should be rejected as an additional directory");
     };
 
@@ -406,6 +417,119 @@ fn additional_directory_mutation_requires_a_workspace_trust_host_connection() {
     .unwrap();
 
     assert_eq!(response["error"]["message"], "WorkspaceTrustRequired");
+}
+
+#[test]
+fn additional_directory_permissions_are_revision_bound_and_filter_capability_snapshots() {
+    let primary = TestWorkspace::new("add-dir-permission-primary", "primary.txt");
+    let additional = TestWorkspace::new("add-dir-permission-extra", "extra.txt");
+    let server = server()
+        .with_local_workspace_host(None, host_trust())
+        .unwrap();
+    let host = server.local_workspace_host.as_ref().unwrap();
+    server
+        .commit_trusted_workspace_runtime(primary.authorization(), test_local_tools(), host)
+        .unwrap();
+    let session = server
+        .sessions
+        .create_session(CreateSessionRequest {
+            command_id: CommandId::new("create-permission-add-dir-session").unwrap(),
+            title: "session".into(),
+            model: None,
+            workspace: None,
+        })
+        .unwrap();
+    let mut connection = server.connection();
+    server.handle_json(
+        &mut connection,
+        &serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "clientInfo": {"name": "zeta-code", "version": "1"},
+                "capabilities": {"workspaceTrustHost": {"version": 1}}
+            }
+        })
+        .to_string(),
+    );
+    let added: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "workspace/additionalDirectories/add",
+                "params": {
+                    "sessionId": session.session_id,
+                    "root": additional.path,
+                    "permissions": ["readFiles", "writeFiles"]
+                }
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    assert_eq!(added["result"]["revision"], 1);
+
+    let updated: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 3,
+                "method": "workspace/additionalDirectories/permissions/set",
+                "params": {
+                    "sessionId": session.session_id,
+                    "root": additional.path,
+                    "expectedRevision": 1,
+                    "permissions": ["readFiles"]
+                }
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    assert_eq!(updated["result"]["mutation"], "updated");
+    assert_eq!(updated["result"]["revision"], 2);
+    assert_eq!(
+        updated["result"]["directories"][0]["permissions"],
+        serde_json::json!(["readFiles"])
+    );
+    let access = server
+        .workspace_runtime
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .session_workspace_access
+        .clone();
+    assert!(
+        access
+            .snapshot_for(&session.session_id, WorkspaceCapability::MutateRepository)
+            .unwrap()
+            .unwrap()
+            .additional_roots()
+            .is_empty()
+    );
+
+    let stale: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 4,
+                "method": "workspace/additionalDirectories/permissions/set",
+                "params": {
+                    "sessionId": session.session_id,
+                    "root": additional.path,
+                    "expectedRevision": 1,
+                    "permissions": ["readFiles", "writeFiles"]
+                }
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    assert_eq!(stale["error"]["message"], "WorkspaceAccessRevisionConflict");
 }
 
 #[test]
@@ -1378,7 +1502,11 @@ fn active_turn_accepts_session_access_changes_and_revokes_old_snapshots() {
         .unwrap();
 
     let (mutation, _) = server
-        .add_session_additional_directory(&session.session_id, additional.path.clone())
+        .add_session_additional_directory(
+            &session.session_id,
+            additional.path.clone(),
+            zeta_workspace_access::AdditionalDirectoryPermissions::local_file_tools(),
+        )
         .unwrap();
     assert_eq!(mutation, WorkspaceAccessMutation::AddedDirectory);
     let access = {
@@ -1400,7 +1528,7 @@ fn active_turn_accepts_session_access_changes_and_revokes_old_snapshots() {
         .remove_session_additional_directory(&session.session_id, &additional.path)
         .unwrap();
     assert_eq!(mutation, WorkspaceAccessMutation::RemovedDirectory);
-    assert!(directories.is_empty());
+    assert!(directories.directories.is_empty());
     assert!(frozen_token.ensure_active().is_err());
     let empty_snapshot = access
         .snapshot_for(&session.session_id, WorkspaceCapability::MutateRepository)

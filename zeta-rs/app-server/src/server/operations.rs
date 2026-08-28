@@ -36,13 +36,12 @@ use zeta_app_server_protocol::protocol::turn::{
 };
 use zeta_app_server_protocol::schema_hash;
 use zeta_core::{
-    ArchiveSessionThreadRequest, CreateSessionRequest, CreateSessionThreadRequest,
-    ForkSessionThreadRequest, InterruptTurnRequest, ResolveTurnInteractionRequest,
-    RewindSessionThreadRequest, SequenceExpectation, SessionLifecycleRequest,
-    SetSessionModelRequest, SetSessionNextApprovalModeRequest, ShellTurnInvocation,
-    StartContextCompactionRequest, StartSessionShellTurnRequest, StartSessionTurnRequest,
-    StartTurnDisposition, SteerTurnDisposition, SteerTurnRequest, ThreadSnapshot,
-    TurnExecutionBackend, TurnStatus,
+    CreateSessionRequest, CreateSessionThreadRequest, ForkSessionThreadRequest,
+    InterruptTurnRequest, ResolveTurnInteractionRequest, RewindSessionThreadRequest,
+    SequenceExpectation, SessionLifecycleRequest, SetSessionModelRequest,
+    SetSessionNextApprovalModeRequest, ShellTurnInvocation, StartContextCompactionRequest,
+    StartSessionShellTurnRequest, StartSessionTurnRequest, StartTurnDisposition,
+    SteerTurnDisposition, SteerTurnRequest, ThreadSnapshot, TurnExecutionBackend, TurnStatus,
 };
 use zeta_protocol::AgentRequestEnvelope;
 use zeta_protocol::ModelAccess;
@@ -460,9 +459,6 @@ impl AppServer {
                     title,
                 )?,
             )),
-            SessionRequest::ArchiveThread { thread_id } => result(&SessionRequestResult::Session(
-                self.archive_session_thread_request(mutation, thread_id)?,
-            )),
             SessionRequest::StartTurn {
                 thread_id,
                 tool_mode,
@@ -618,29 +614,6 @@ impl AppServer {
                 .map_err(core_error)?
                 .public_session(),
             thread_id: rewound.thread_id,
-        })
-    }
-
-    fn archive_session_thread_request(
-        &self,
-        mutation: SessionMutation,
-        thread_id: zeta_protocol::ThreadId,
-    ) -> Result<SessionResult, RpcError> {
-        self.sessions
-            .archive_thread(ArchiveSessionThreadRequest {
-                command_id: mutation.command_id,
-                session_id: mutation.session_id.clone(),
-                expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
-                thread_id,
-            })
-            .map_err(core_error)?;
-        self.notify_session_updates(&mutation.session_id, mutation.expected_sequence)?;
-        Ok(SessionResult {
-            session: self
-                .sessions
-                .read_session(&mutation.session_id)
-                .map_err(core_error)?
-                .public_session(),
         })
     }
 

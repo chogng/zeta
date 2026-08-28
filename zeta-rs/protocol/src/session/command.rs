@@ -50,9 +50,6 @@ pub enum SessionCommand {
         context_seed_digest: ContextSeedDigest,
         title: String,
     },
-    ArchiveThread {
-        thread_id: ThreadId,
-    },
     Complete,
     Archive,
 }

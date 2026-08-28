@@ -10897,7 +10897,6 @@ dependencies = [
  "zeta-http-client",
  "zeta-install-context",
  "zeta-instructions",
- "zeta-keyring-store",
  "zeta-kimi",
  "zeta-linux-sandbox",
  "zeta-login",
@@ -11961,6 +11960,7 @@ dependencies = [
  "getrandom 0.2.17",
  "sha2 0.10.9",
  "tempfile",
+ "windows-sys 0.59.0",
  "zeroize",
 ]
 

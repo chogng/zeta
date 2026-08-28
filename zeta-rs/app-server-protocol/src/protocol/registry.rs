@@ -375,6 +375,8 @@ use crate::protocol::workspace::WorkspaceAdditionalDirectoryListParams;
 use crate::protocol::workspace::WorkspaceAdditionalDirectoryListResult;
 use crate::protocol::workspace::WorkspaceAdditionalDirectoryMutationDto;
 use crate::protocol::workspace::WorkspaceAdditionalDirectoryMutationResult;
+use crate::protocol::workspace::WorkspaceAdditionalDirectoryPermissionDto;
+use crate::protocol::workspace::WorkspaceAdditionalDirectoryPermissionsSetParams;
 use crate::protocol::workspace::WorkspaceAdditionalDirectoryRemoveParams;
 use crate::protocol::workspace::WorkspaceFolderDto;
 use crate::protocol::workspace::WorkspaceFolderSetEntry;
@@ -713,6 +715,11 @@ client_methods! {
     },
     WorkspaceAdditionalDirectoryRemove => "workspace/additionalDirectories/remove" {
         params: WorkspaceAdditionalDirectoryRemoveParams,
+        response: WorkspaceAdditionalDirectoryMutationResult,
+        serialization: SessionExclusive,
+    },
+    WorkspaceAdditionalDirectoryPermissionsSet => "workspace/additionalDirectories/permissions/set" {
+        params: WorkspaceAdditionalDirectoryPermissionsSetParams,
         response: WorkspaceAdditionalDirectoryMutationResult,
         serialization: SessionExclusive,
     },
@@ -2251,6 +2258,8 @@ typescript_bindings! {
     WorkspaceAdditionalDirectoryRemoveParams,
     WorkspaceAdditionalDirectoryMutationDto,
     WorkspaceAdditionalDirectoryMutationResult,
+    WorkspaceAdditionalDirectoryPermissionDto,
+    WorkspaceAdditionalDirectoryPermissionsSetParams,
     WorkspaceTrustReadParams,
     WorkspaceTrustReadResult,
     WorkspaceTrustEntryDto,

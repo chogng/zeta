@@ -173,68 +173,6 @@ impl ActiveConversation {
         }
     }
 
-    pub(crate) fn archive_thread<T>(
-        &mut self,
-        client: &mut AppServerClient<T>,
-        thread_id: ThreadId,
-    ) -> Result<ConversationChange, SessionsError>
-    where
-        T: JsonRpcTransport,
-    {
-        self.session = client
-            .read_session(SessionReadParams {
-                session_id: self.session.session_id.clone(),
-            })?
-            .session;
-        let archived_current = thread_id == self.thread_id;
-        let result = client.request_session(SessionRequestParams {
-            command_id: new_command_id("archive-thread"),
-            session_id: self.session.session_id.clone(),
-            expected_sequence: self.session.sequence,
-            request: SessionRequest::ArchiveThread {
-                thread_id: thread_id.clone(),
-            },
-        })?;
-        self.session = expect_session_result(result)?.session;
-        if archived_current {
-            if let Some(next_thread_id) = self
-                .session
-                .threads
-                .iter()
-                .rev()
-                .find(|thread| thread.status == SessionThreadStatus::Active)
-                .map(|thread| thread.thread_id.clone())
-            {
-                self.thread_id = next_thread_id;
-            } else {
-                let created = client
-                    .request_session(SessionRequestParams {
-                        command_id: new_command_id("replacement-thread"),
-                        session_id: self.session.session_id.clone(),
-                        expected_sequence: self.session.sequence,
-                        request: SessionRequest::CreateThread {
-                            title: "TUI conversation".into(),
-                        },
-                    })
-                    .and_then(expect_thread_result)?;
-                self.session = created.session;
-                self.thread_id = created.thread_id;
-            }
-        }
-        let snapshot = client
-            .read_session_thread(SessionThreadReadParams {
-                session_id: self.session.session_id.clone(),
-                thread_id: self.thread_id.clone(),
-                history: None,
-            })?
-            .thread;
-        self.thread_sequence = snapshot.sequence;
-        Ok(ConversationChange {
-            notice: format!("Archived thread {thread_id}."),
-            transcript: ConversationTranscript::Replace,
-        })
-    }
-
     pub(crate) fn archive_session_and_replace<T>(
         &mut self,
         client: &mut AppServerClient<T>,
@@ -250,7 +188,7 @@ impl ActiveConversation {
         let archived_id = self.session.session_id.clone();
         client
             .request_session(SessionRequestParams {
-                command_id: new_command_id("archive-session"),
+                command_id: new_command_id("archive"),
                 session_id: archived_id.clone(),
                 expected_sequence: self.session.sequence,
                 request: SessionRequest::Archive,

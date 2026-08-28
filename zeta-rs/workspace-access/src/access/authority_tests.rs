@@ -1,6 +1,7 @@
 use super::*;
 use crate::AdditionalDirectoryContribution;
 use crate::AdditionalDirectoryContributionPolicy;
+use crate::AdditionalDirectoryPermission;
 use crate::AdditionalInstructionsPolicy;
 use zeta_workspace::WorkspaceTrustDecision;
 use zeta_workspace::WorkspaceTrustSource;
@@ -14,7 +15,8 @@ fn working_directory_cannot_be_added_as_an_additional_directory() {
     assert_eq!(
         authority.add_directory(
             authorization(root),
-            AdditionalDirectorySource::SessionCommand
+            AdditionalDirectorySource::SessionCommand,
+            file_permissions(),
         ),
         Err(WorkspaceAccessError::WorkingDirectoryCannotBeAdditional)
     );
@@ -37,6 +39,7 @@ fn canonical_aliases_share_one_entry_with_independent_sources_and_revision() {
             .add_directory(
                 authorization(canonical.clone()),
                 AdditionalDirectorySource::PersistentConfiguration,
+                file_permissions(),
             )
             .unwrap(),
         WorkspaceAccessMutation::AddedDirectory
@@ -46,6 +49,7 @@ fn canonical_aliases_share_one_entry_with_independent_sources_and_revision() {
             .add_directory(
                 authorization(aliased),
                 AdditionalDirectorySource::SessionCommand,
+                file_permissions(),
             )
             .unwrap(),
         WorkspaceAccessMutation::AddedSource
@@ -66,12 +70,14 @@ fn snapshot_is_capability_bound_sorted_and_revoked_on_remove() {
         .add_directory(
             authorization(zeta_root.clone()),
             AdditionalDirectorySource::SessionCommand,
+            file_permissions(),
         )
         .unwrap();
     authority
         .add_directory(
             authorization(alpha_root.clone()),
             AdditionalDirectorySource::SessionCommand,
+            file_permissions(),
         )
         .unwrap();
 
@@ -108,6 +114,7 @@ fn idempotent_mutations_do_not_advance_revision() {
         .add_directory(
             authorization(root.clone()),
             AdditionalDirectorySource::SessionCommand,
+            file_permissions(),
         )
         .unwrap();
 
@@ -116,6 +123,7 @@ fn idempotent_mutations_do_not_advance_revision() {
             .add_directory(
                 authorization(root.clone()),
                 AdditionalDirectorySource::SessionCommand,
+                file_permissions(),
             )
             .unwrap(),
         WorkspaceAccessMutation::AlreadyPresent
@@ -128,6 +136,56 @@ fn idempotent_mutations_do_not_advance_revision() {
 }
 
 #[test]
+fn capability_snapshots_include_only_directories_granting_that_capability() {
+    let working = tempfile::tempdir().unwrap();
+    let additional = tempfile::tempdir().unwrap();
+    let root = WorkspaceRoot::open(additional.path()).unwrap();
+    let mut authority = WorkspaceAccessAuthority::new(WorkspaceRoot::open(working.path()).unwrap());
+    authority
+        .add_directory(
+            authorization(root.clone()),
+            AdditionalDirectorySource::SessionCommand,
+            file_permissions(),
+        )
+        .unwrap();
+
+    assert_eq!(
+        authority
+            .snapshot_for(WorkspaceCapability::InspectRepository)
+            .unwrap()
+            .additional_roots()
+            .len(),
+        1
+    );
+    let write_token = authority
+        .snapshot_for(WorkspaceCapability::MutateRepository)
+        .unwrap()
+        .additional_roots()[0]
+        .clone();
+    assert_eq!(
+        authority
+            .set_permissions(
+                &root,
+                AdditionalDirectorySource::SessionCommand,
+                1,
+                AdditionalDirectoryPermissions::new([AdditionalDirectoryPermission::ReadFiles])
+                    .unwrap(),
+            )
+            .unwrap(),
+        WorkspaceAccessMutation::UpdatedPermissions
+    );
+    assert_eq!(authority.revision().get(), 2);
+    assert!(write_token.ensure_active().is_err());
+    assert!(
+        authority
+            .snapshot_for(WorkspaceCapability::MutateRepository)
+            .unwrap()
+            .additional_roots()
+            .is_empty()
+    );
+}
+
+#[test]
 fn source_lifetime_controls_contribution_policy() {
     let working = tempfile::tempdir().unwrap();
     let additional = tempfile::tempdir().unwrap();
@@ -137,25 +195,28 @@ fn source_lifetime_controls_contribution_policy() {
         .add_directory(
             authorization(root.clone()),
             AdditionalDirectorySource::SessionCommand,
+            AdditionalDirectoryPermissions::new([
+                AdditionalDirectoryPermission::ReadFiles,
+                AdditionalDirectoryPermission::LoadProjectConfiguration,
+            ])
+            .unwrap(),
         )
         .unwrap();
     authority
         .add_directory(
             authorization(root.clone()),
             AdditionalDirectorySource::PersistentConfiguration,
+            file_permissions(),
         )
         .unwrap();
-    let directory = &authority.additional_directories()[0];
-
     assert!(
-        directory
-            .contribution_policy(AdditionalInstructionsPolicy::Exclude)
+        authority
+            .contribution_policy(&root, AdditionalInstructionsPolicy::Exclude)
             .allows(AdditionalDirectoryContribution::Skills)
     );
     authority.remove_directory(&root, AdditionalDirectorySource::SessionCommand);
     assert_eq!(
-        authority.additional_directories()[0]
-            .contribution_policy(AdditionalInstructionsPolicy::Include),
+        authority.contribution_policy(&root, AdditionalInstructionsPolicy::Include),
         AdditionalDirectoryContributionPolicy::FileAccessOnly
     );
 }
@@ -165,4 +226,8 @@ fn authorization(root: WorkspaceRoot) -> WorkspaceAuthorization {
         root,
         WorkspaceTrustDecision::Trusted(WorkspaceTrustSource::ExplicitUserDecision),
     )
+}
+
+fn file_permissions() -> AdditionalDirectoryPermissions {
+    AdditionalDirectoryPermissions::local_file_tools()
 }

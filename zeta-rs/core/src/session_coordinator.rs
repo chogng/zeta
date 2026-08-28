@@ -108,13 +108,6 @@ pub struct RewindSessionThreadRequest {
     pub title: String,
 }
 
-pub struct ArchiveSessionThreadRequest {
-    pub command_id: CommandId,
-    pub session_id: SessionId,
-    pub expected_sequence: SequenceExpectation,
-    pub thread_id: ThreadId,
-}
-
 pub struct SessionLifecycleRequest {
     pub command_id: CommandId,
     pub session_id: SessionId,
@@ -466,32 +459,6 @@ impl SessionCoordinator {
                 before_turn_id: request.before_turn_id,
             },
             request.title,
-        )
-    }
-
-    pub fn archive_thread(
-        &self,
-        request: ArchiveSessionThreadRequest,
-    ) -> Result<SessionMutationResult, CoreError> {
-        validate_command_id(&request.command_id)?;
-        let thread_id = request.thread_id;
-        let command = SessionCommand::ArchiveThread {
-            thread_id: thread_id.clone(),
-        };
-        self.apply_single_command(
-            request.session_id,
-            request.expected_sequence,
-            SessionCommandReceipt {
-                command_id: request.command_id,
-                command,
-            },
-            |session_id| SessionEvent::ThreadArchived {
-                session_id,
-                thread_id: thread_id.clone(),
-            },
-            SessionCommandResult::ThreadArchived {
-                thread_id: thread_id.clone(),
-            },
         )
     }
 

@@ -101,6 +101,12 @@ pub(super) struct WorkspaceRuntime {
 pub(super) struct SessionAdditionalDirectorySnapshot {
     pub(super) root: PathBuf,
     pub(super) decision: WorkspaceTrustDecision,
+    pub(super) permissions: zeta_workspace_access::AdditionalDirectoryPermissions,
+}
+
+pub(super) struct SessionAdditionalDirectorySnapshotSet {
+    pub(super) revision: u64,
+    pub(super) directories: Vec<SessionAdditionalDirectorySnapshot>,
 }
 
 impl WorkspaceRuntime {
@@ -860,6 +866,7 @@ impl WorkspaceToolPorts {
 pub(crate) enum WorkspaceRuntimeError {
     Unavailable,
     Busy,
+    AccessRevisionConflict,
     TrustRequired,
     Failed(String),
 }
@@ -869,6 +876,9 @@ impl fmt::Display for WorkspaceRuntimeError {
         match self {
             Self::Unavailable => formatter.write_str("local Workspace switching is unavailable"),
             Self::Busy => formatter.write_str("a Turn is still active in the current Workspace"),
+            Self::AccessRevisionConflict => {
+                formatter.write_str("the additional-directory permissions changed")
+            }
             Self::TrustRequired => {
                 formatter.write_str("the Workspace is not trusted for executable local services")
             }
@@ -1393,7 +1403,7 @@ impl AppServer {
     pub(super) fn list_session_additional_directories(
         &self,
         session_id: &SessionId,
-    ) -> Result<Vec<SessionAdditionalDirectorySnapshot>, WorkspaceRuntimeError> {
+    ) -> Result<SessionAdditionalDirectorySnapshotSet, WorkspaceRuntimeError> {
         self.sessions
             .read_session(session_id)
             .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
@@ -1414,10 +1424,11 @@ impl AppServer {
         &self,
         session_id: &SessionId,
         root: PathBuf,
+        permissions: zeta_workspace_access::AdditionalDirectoryPermissions,
     ) -> Result<
         (
             WorkspaceAccessMutation,
-            Vec<SessionAdditionalDirectorySnapshot>,
+            SessionAdditionalDirectorySnapshotSet,
         ),
         WorkspaceRuntimeError,
     > {
@@ -1454,7 +1465,7 @@ impl AppServer {
             .require(WorkspaceCapability::MutateRepository)
             .map_err(|_| WorkspaceRuntimeError::TrustRequired)?;
         let mutation = session_workspace_access
-            .add_directory(session_id.clone(), primary, authorization)
+            .add_directory(session_id.clone(), primary, authorization, permissions)
             .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
         let snapshots =
             session_additional_directory_snapshots(&session_workspace_access, session_id);
@@ -1468,7 +1479,7 @@ impl AppServer {
     ) -> Result<
         (
             WorkspaceAccessMutation,
-            Vec<SessionAdditionalDirectorySnapshot>,
+            SessionAdditionalDirectorySnapshotSet,
         ),
         WorkspaceRuntimeError,
     > {
@@ -1489,6 +1500,48 @@ impl AppServer {
             Arc::clone(&runtime.session_workspace_access)
         };
         let mutation = session_workspace_access.remove_directory(session_id, root);
+        let snapshots =
+            session_additional_directory_snapshots(&session_workspace_access, session_id);
+        Ok((mutation, snapshots))
+    }
+
+    pub(super) fn set_session_additional_directory_permissions(
+        &self,
+        session_id: &SessionId,
+        root: &std::path::Path,
+        expected_revision: u64,
+        permissions: zeta_workspace_access::AdditionalDirectoryPermissions,
+    ) -> Result<
+        (
+            WorkspaceAccessMutation,
+            SessionAdditionalDirectorySnapshotSet,
+        ),
+        WorkspaceRuntimeError,
+    > {
+        self.sessions
+            .read_session(session_id)
+            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
+        let _workspace_authority = self.workspace_authority_gate.lock().map_err(|_| {
+            WorkspaceRuntimeError::Failed("Workspace authority gate poisoned".into())
+        })?;
+        let session_workspace_access = {
+            let runtime = self
+                .workspace_runtime
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if runtime.authorization.is_none() {
+                return Err(WorkspaceRuntimeError::Unavailable);
+            }
+            Arc::clone(&runtime.session_workspace_access)
+        };
+        let mutation = session_workspace_access
+            .set_permissions(session_id, root, expected_revision, permissions)
+            .map_err(|error| match error {
+                zeta_workspace_access::WorkspaceAccessError::RevisionConflict { .. } => {
+                    WorkspaceRuntimeError::AccessRevisionConflict
+                }
+                other => WorkspaceRuntimeError::Failed(other.to_string()),
+            })?;
         let snapshots =
             session_additional_directory_snapshots(&session_workspace_access, session_id);
         Ok((mutation, snapshots))
@@ -2307,15 +2360,20 @@ impl AppServer {
 fn session_additional_directory_snapshots(
     access: &SessionWorkspaceAccess,
     session_id: &SessionId,
-) -> Vec<SessionAdditionalDirectorySnapshot> {
-    access
+) -> SessionAdditionalDirectorySnapshotSet {
+    let directories = access
         .list(session_id)
         .iter()
         .map(|directory| SessionAdditionalDirectorySnapshot {
             root: directory.root().canonical_path().to_path_buf(),
             decision: directory.decision(),
+            permissions: directory.permissions().clone(),
         })
-        .collect()
+        .collect();
+    SessionAdditionalDirectorySnapshotSet {
+        revision: access.revision(session_id),
+        directories,
+    }
 }
 
 fn append_multi_agent_tools(

@@ -699,9 +699,7 @@ broker endpoint、heartbeat operation lock 和 PID/process-generation record 是
 | Session、Thread event 与恢复状态 | ❌ | ✅ |
 | secret bytes | ❌ | ❌，由 Secret Store 拥有 |
 
-Electron 的 `userData` 继续保留 `state.json`、Chromium session/cache、日志、crash data 与发行版窗口
-状态；它不是 Zeta profile root。Secret 继续由系统 Keychain/Credential Manager/Secret Service 拥有，
-不得因为 `.zeta` 统一而落入 JSON、TOML、SQLite 或 Marketplace cache。
+Electron 的 `userData` 继续保留 `state.json`、Chromium session/cache、日志、crash data 与发行版窗口状态；它不是 Zeta profile root。Secret 由 `LocalProfileRuntime` 拥有的 `<profile>/secrets/values/` 私有文件 backend 保存，不使用系统钥匙串，也不得落入 JSON、TOML、SQLite 或 Marketplace cache。
 Desktop 首次使用新 profile 时只会以“目标不存在”为条件复制旧 `configuration.json`、
 `keybindings.json` 和 `themes/`。SQLite/WAL 不做文件级复制；需要迁移旧后端 profile 时必须通过
 显式 `ZETA_PROFILE_ROOT` 保持原 authority，或使用能够协调 writer/backup 的专门迁移流程。

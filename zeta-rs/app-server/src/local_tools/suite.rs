@@ -21,6 +21,7 @@ use zeta_protocol::SessionId;
 use zeta_protocol::{ToolCall, ToolDefinition, ToolExecutionOutput, ToolName, ToolOutputStream};
 use zeta_shell_command::RipgrepExecutable;
 use zeta_workspace::TrustedWorkspace;
+use zeta_workspace::WorkspaceCapability;
 use zeta_workspace::WorkspaceRoot;
 
 const READ_DESCRIPTION: &str = r#"Reads a file from the workspace and returns its content with line numbers.
@@ -138,6 +139,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         value: &str,
         existing: bool,
         session_id: Option<&SessionId>,
+        capability: WorkspaceCapability,
     ) -> Result<ResolvedFilePath, String> {
         self.workspace
             .ensure_active()
@@ -147,10 +149,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         if let Some(session_id) = session_id {
             if let Some(snapshot) = self
                 .session_workspace_access
-                .snapshot_for(
-                    session_id,
-                    zeta_workspace::WorkspaceCapability::MutateRepository,
-                )
+                .snapshot_for(session_id, capability)
                 .map_err(|error| error.to_string())?
             {
                 roots.extend(
@@ -211,7 +210,16 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
                     .unwrap_or(".")
             });
         let resolved = self
-            .resolve(path, false, session_id)
+            .resolve(
+                path,
+                false,
+                session_id,
+                if write {
+                    WorkspaceCapability::MutateRepository
+                } else {
+                    WorkspaceCapability::InspectRepository
+                },
+            )
             .map_err(CoreError::Policy)?;
         let source_id = call.name.as_str();
         let canonical = serde_json::to_vec(
@@ -266,7 +274,12 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
     ) -> Result<ToolExecutionOutput, CoreError> {
         let path = string_arg(&call.arguments, "path")?;
         let resolved = self
-            .resolve(&path, false, session_id)
+            .resolve(
+                &path,
+                false,
+                session_id,
+                WorkspaceCapability::InspectRepository,
+            )
             .map_err(CoreError::Execution)?;
         let metadata = fs::metadata(&resolved.absolute)
             .map_err(|_| CoreError::Execution(format!("file not found: {path}")))?;
@@ -338,7 +351,12 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         let path = string_arg(&call.arguments, "path")?;
         let content = string_arg(&call.arguments, "content")?;
         let resolved = self
-            .resolve(&path, false, session_id)
+            .resolve(
+                &path,
+                false,
+                session_id,
+                WorkspaceCapability::MutateRepository,
+            )
             .map_err(CoreError::Execution)?;
         if resolved.absolute.is_dir() {
             return Ok(ToolExecutionOutput::Failure(format!(
@@ -413,7 +431,12 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
             ));
         }
         let resolved = self
-            .resolve(&path, false, session_id)
+            .resolve(
+                &path,
+                false,
+                session_id,
+                WorkspaceCapability::MutateRepository,
+            )
             .map_err(CoreError::Execution)?;
         if !self
             .read_paths
@@ -506,7 +529,12 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         let path = nullable_string(&call.arguments, "path")?
             .unwrap_or_else(|| self.workspace.root().canonical_path().display().to_string());
         let resolved = self
-            .resolve(&path, false, session_id)
+            .resolve(
+                &path,
+                false,
+                session_id,
+                WorkspaceCapability::InspectRepository,
+            )
             .map_err(CoreError::Execution)?;
         let glob = nullable_string(&call.arguments, "glob")?;
         let insensitive = nullable_bool(&call.arguments, "case_insensitive")?.unwrap_or(false);
@@ -549,7 +577,12 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         let path = nullable_string(&call.arguments, "path")?
             .unwrap_or_else(|| self.workspace.root().canonical_path().display().to_string());
         let resolved = self
-            .resolve(&path, false, session_id)
+            .resolve(
+                &path,
+                false,
+                session_id,
+                WorkspaceCapability::InspectRepository,
+            )
             .map_err(CoreError::Execution)?;
         let mut command = Command::new(self.ripgrep.path());
         command
@@ -681,8 +714,12 @@ impl<B: zeta_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
         let scope = identity.thread_id().to_string();
         let session_id = identity.session_id();
         for path in facts.read_paths() {
-            if let Ok(resolved) = self.resolve(&path.display().to_string(), true, Some(session_id))
-            {
+            if let Ok(resolved) = self.resolve(
+                &path.display().to_string(),
+                true,
+                Some(session_id),
+                WorkspaceCapability::InspectRepository,
+            ) {
                 self.read_paths
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)

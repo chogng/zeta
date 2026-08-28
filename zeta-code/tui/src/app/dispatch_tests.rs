@@ -17,6 +17,7 @@ use zeta_app_server_client::{
 };
 use zeta_app_server_protocol::protocol::common::ClientInfo;
 use zeta_app_server_protocol::protocol::config::{ProviderConfigDto, ProviderConfigureParams};
+use zeta_app_server_protocol::protocol::session::SessionReadParams;
 use zeta_app_server_protocol::protocol::skills::SkillEnablementDto;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryListParams;
 use zeta_client::ClientError;
@@ -24,6 +25,7 @@ use zeta_client::ClientRequest;
 use zeta_client::ClientResponse;
 use zeta_client::OperationClient;
 use zeta_protocol::CommandId;
+use zeta_protocol::SessionStatus;
 
 #[test]
 fn help_lists_only_builtins_with_execution_paths() {
@@ -37,6 +39,7 @@ fn help_lists_only_builtins_with_execution_paths() {
 
     assert!(help.contains(&"/status"));
     assert!(help.contains(&"/resume"));
+    assert!(help.contains(&"/archive"));
     assert!(help.contains(&"/rewind"));
     assert!(help.contains(&"/add-dir"));
     assert!(help.contains(&"/model"));
@@ -44,6 +47,8 @@ fn help_lists_only_builtins_with_execution_paths() {
     assert!(!help.contains(&"/login"));
     assert!(!help.contains(&"/plugins"));
     assert!(!help.contains(&"/review"));
+    assert!(!help.contains(&"/archive-thread"));
+    assert!(!help.contains(&"/archive-session"));
 }
 
 #[test]
@@ -84,6 +89,39 @@ fn new_fork_and_resume_change_the_active_typed_conversation() {
             .unwrap()
             .text
             .starts_with("Resumed session")
+    );
+
+    drop(client);
+    let _ = fs::remove_dir_all(state_root);
+}
+
+#[test]
+fn archive_archives_the_current_session_and_starts_a_replacement() {
+    let (mut client, state_root) = client();
+    let mut conversation = ActiveConversation::start(&mut client, "archive me".into()).unwrap();
+    let archived_session_id = conversation.session_id().clone();
+    let mut app = App::new();
+
+    conversation.execute(
+        &mut client,
+        invocation(TuiSlashCommandAction::Archive, ""),
+        &mut app,
+    );
+
+    let archived = client
+        .read_session(SessionReadParams {
+            session_id: archived_session_id.clone(),
+        })
+        .unwrap()
+        .session;
+    assert_eq!(archived.status, SessionStatus::Archived);
+    assert_ne!(conversation.session_id(), &archived_session_id);
+    assert_eq!(
+        app.messages().last().unwrap().text,
+        format!(
+            "Archived session {archived_session_id}; started session {}.",
+            conversation.session_id()
+        )
     );
 
     drop(client);

@@ -375,17 +375,6 @@ impl UpdateBroker {
         session_id: &SessionId,
         updates: &[SessionUpdateEnvelope],
     ) {
-        if let Ok(mut transcripts) = self.transcripts.lock() {
-            for update in updates {
-                let SessionUpdate::Committed {
-                    event: SessionEvent::ThreadArchived { thread_id, .. },
-                } = &update.update
-                else {
-                    continue;
-                };
-                transcripts.remove(&(session_id.clone(), thread_id.clone()));
-            }
-        }
         let Ok(mut state) = self.state.lock() else {
             return;
         };
@@ -411,14 +400,6 @@ impl UpdateBroker {
                             thread_id.clone(),
                             0,
                         );
-                    }
-                    SessionEvent::ThreadArchived { thread_id, .. } => {
-                        if let Some(subscription) = subscriber.threads.get_mut(thread_id) {
-                            subscription.session_owners.remove(session_id);
-                        }
-                        subscriber
-                            .threads
-                            .retain(|_, subscription| !subscription.session_owners.is_empty());
                     }
                     _ => {}
                 }

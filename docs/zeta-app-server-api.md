@@ -266,6 +266,7 @@ Desktop 当前实现和 Playwright 后续边界见
 | `config/update` | config | typed command 更新配置 |
 | `execPolicy/rule/upsert` / `execPolicy/rule/remove` | config + local policy runtime | revision-safe 持久化 User typed rule，并为未来 Tool safe point 重组 policy snapshot |
 | `toolSearch/configure` | config + semantic model runtime | 选择词法模式，或探活 exact embedding 模型后启用混合 Tool Search |
+| `workspace/additionalDirectories/list` / `add` / `remove` / `permissions/set` | Session Workspace access | 管理当前 Session 的附加目录与完整能力集合；权限替换使用 Workspace access revision，目录不会成为主 Workspace |
 | `workspace/codeIndex/semantic/configure` / `authorize` / `revoke` | config + Workspace | 独立配置 semantic CodeIndex，并显式管理源码外发授权 |
 | `workspace/codeIndex/semantic/cancel` / `retry` | semantic index job | 取消或重新调度 exact-generation 本地语义 projection；status 返回无内容进度计数 |
 | `languageServer/configure` / `languageServer/remove` | config | revision-safe 修改或恢复 language-server mode/path preference |
@@ -611,7 +612,7 @@ spawn 前执行 `env_clear`，所以 PTY 看不到最终 map 之外的 App Serve
 ### 生命周期
 
 `session/request` 的所有 mutation 都要求 `commandId`、`sessionId` 与 `expectedSequence`。
-`request.type` 明确选择 `archiveThread`、`complete`、`archive` 或 `stop`；Archived Session 不允许
+`request.type` 明确选择 `complete`、`archive` 或 `stop`；Archived Session 不允许
 再修改。停止请求会先 durable archive Session，再中断该 Session 下所有活动 child Turn。连接断开
 只释放订阅、请求和资源 ownership，不隐式触发停止。
 
@@ -848,6 +849,7 @@ Resource bytes 使用标准 RFC 4648 Base64；`decodedLength` 是原始 byte 数
 - `GitNotRepository`
 - `GitOperationFailed`
 - `ConfigUnavailable`
+- `WorkspaceAccessRevisionConflict`
 - `McpServerNotFound`
 - `McpRuntimeUnavailable`
 - `McpOAuthUnavailable`

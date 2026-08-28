@@ -44,11 +44,6 @@ export function sessionIpcRoutes(supervisor: AppServerSupervisor): readonly IpcR
 			invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/request"], sessionRequest(params, { type: "forkThread", parentThreadId: params.parentThreadId, title: params.title })).then(sessionThreadResult),
 		}),
 		route({
-			channel: "zeta:session:thread:archive",
-			validate: sessionThreadArchiveParams,
-			invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/request"], sessionRequest(params, { type: "archiveThread", threadId: params.threadId })).then(sessionResult),
-		}),
-		route({
 			channel: "zeta:session:complete",
 			validate: sessionCommandParams,
 			invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/request"], sessionRequest(params, { type: "complete" })).then(sessionResult),
@@ -225,16 +220,6 @@ function sessionThreadForkParams(value: unknown): SessionOperationInput<"forkThr
 		expectedSequence: nonNegativeInteger(params.expectedSequence, "expectedSequence"),
 		parentThreadId: nonEmptyString(params.parentThreadId, "parentThreadId"),
 		title: string(params.title, "title"),
-	};
-}
-
-function sessionThreadArchiveParams(value: unknown): SessionOperationInput<"archiveThread"> {
-	const params = record(value, ["commandId", "sessionId", "expectedSequence", "threadId"]);
-	return {
-		commandId: nonEmptyString(params.commandId, "commandId"),
-		sessionId: nonEmptyString(params.sessionId, "sessionId"),
-		expectedSequence: nonNegativeInteger(params.expectedSequence, "expectedSequence"),
-		threadId: nonEmptyString(params.threadId, "threadId"),
 	};
 }
 

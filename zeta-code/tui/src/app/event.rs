@@ -9,7 +9,6 @@ use crate::features::mcp::McpSelectionView;
 use crate::features::models::ModelSelectionView;
 use crate::features::rewind::RewindSelectionView;
 use crate::features::sessions::SessionSelectionView;
-use crate::features::sessions::ThreadSelectionView;
 use crate::features::shortcuts::ShortcutView;
 use crate::features::skills::SkillSelectionView;
 use crate::features::status_line::StatusLineSelectionView;
@@ -62,7 +61,6 @@ pub(crate) enum AppEvent {
     ModelViewOpened(ModelSelectionView),
     RewindViewOpened(RewindSelectionView),
     SessionViewOpened(SessionSelectionView),
-    ThreadViewOpened(ThreadSelectionView),
     SelectionViewClosed,
     SelectionViewOpened(PaneViewModel<SelectionViewModel>),
     SkillsViewOpened(SkillSelectionView),

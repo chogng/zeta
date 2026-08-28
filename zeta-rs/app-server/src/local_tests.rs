@@ -273,6 +273,87 @@ fn shared_profile_runtime_projects_sessions_across_isolated_workspaces() {
 }
 
 #[test]
+fn shared_profile_runtime_reuses_one_durable_secret_store_across_workspaces() {
+    let profile = tempfile::tempdir().unwrap();
+    let first_workspace = tempfile::tempdir().unwrap();
+    let second_workspace = tempfile::tempdir().unwrap();
+    let runtime = Arc::new(LocalProfileRuntime::open(profile.path()).unwrap());
+    let open = |workspace: &Path| {
+        open_local_app_server(
+            LocalAppServerOptions::new(profile.path())
+                .with_profile_runtime(Arc::clone(&runtime))
+                .with_workspace_root(workspace)
+                .without_built_in_skills(),
+        )
+        .unwrap()
+    };
+    let first = open(first_workspace.path());
+    let second = open(second_workspace.path());
+    let mut first_connection = first.connection();
+    let mut second_connection = second.connection();
+    for (server, connection) in [
+        (&first, &mut first_connection),
+        (&second, &mut second_connection),
+    ] {
+        let initialized = server.handle_json(
+            connection,
+            r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"test","version":"1"},"capabilities":{}}}"#,
+        );
+        assert!(initialized.contains("\"result\""));
+    }
+
+    let saved: serde_json::Value = serde_json::from_str(&first.handle_json(
+        &mut first_connection,
+        r#"{"jsonrpc":"2.0","id":2,"method":"provider/apiKey/set","params":{"provider":"openai","apiKey":"shared-secret"}}"#,
+    ))
+    .unwrap();
+    assert_eq!(saved["result"]["apiKeyConfigured"], true);
+    assert!(!saved.to_string().contains("shared-secret"));
+
+    let listed: serde_json::Value = serde_json::from_str(&second.handle_json(
+        &mut second_connection,
+        r#"{"jsonrpc":"2.0","id":2,"method":"provider/list","params":{}}"#,
+    ))
+    .unwrap();
+    assert!(
+        listed["result"]["providers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(
+                |provider| provider["provider"] == "openai" && provider["apiKeyConfigured"] == true
+            )
+    );
+    assert_eq!(
+        std::fs::read_dir(profile.path().join("secrets/values"))
+            .unwrap()
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn shared_profile_runtime_rejects_a_second_secret_store_authority() {
+    let profile = tempfile::tempdir().unwrap();
+    let runtime = Arc::new(LocalProfileRuntime::open(profile.path()).unwrap());
+    let authority = PluginActivationAuthority::open(profile.path().join("plugins")).unwrap();
+    let options = LocalAppServerOptions::new(profile.path())
+        .with_profile_runtime(runtime)
+        .without_built_in_skills()
+        .with_plugin_authority(authority, Arc::new(MemorySecretStore::default()))
+        .unwrap();
+
+    let error = match open_local_app_server(options) {
+        Ok(_) => panic!("a second profile SecretStore authority must be rejected"),
+        Err(error) => error,
+    };
+    assert_eq!(
+        error.0,
+        "shared profile runtime and Connector runtime use different SecretStore authorities"
+    );
+}
+
+#[test]
 fn shared_profile_runtime_owns_exactly_one_marketplace_authority() {
     let profile = tempfile::tempdir().unwrap();
     let runtime = LocalProfileRuntime::open(profile.path()).unwrap();

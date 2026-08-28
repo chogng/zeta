@@ -11,9 +11,8 @@ fn builtins_follow_enum_presentation_order() {
             ("skills", TuiSlashCommandAction::Skills),
             ("mcp", TuiSlashCommandAction::Mcp),
             ("resume", TuiSlashCommandAction::Resume),
-            ("archive-thread", TuiSlashCommandAction::ArchiveThread),
+            ("archive", TuiSlashCommandAction::Archive),
             ("connectors", TuiSlashCommandAction::Connectors),
-            ("archive-session", TuiSlashCommandAction::ArchiveSession),
             ("rewind", TuiSlashCommandAction::Rewind),
             ("clear", TuiSlashCommandAction::Clear),
             ("config", TuiSlashCommandAction::Config),
@@ -29,7 +28,7 @@ fn builtins_follow_enum_presentation_order() {
             ("quit", TuiSlashCommandAction::Quit),
         ]
     );
-    assert_eq!(built_in_slash_command_definitions().len(), 21);
+    assert_eq!(built_in_slash_command_definitions().len(), 20);
 }
 
 #[test]
@@ -60,6 +59,10 @@ fn builtins_declare_argument_support() {
     );
     assert_eq!(
         TuiSlashCommandAction::Quit.argument_mode(),
+        SlashCommandArgumentMode::None
+    );
+    assert_eq!(
+        TuiSlashCommandAction::Archive.argument_mode(),
         SlashCommandArgumentMode::None
     );
 }

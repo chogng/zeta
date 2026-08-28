@@ -10,6 +10,11 @@ use crossterm::event::KeyModifiers;
 use zeta_app_server_protocol::protocol::provider::{
     ProviderApiKeyPolicyDto, ProviderCatalogEntryDto, ProviderListResult,
 };
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryDto;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryListResult;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryPermissionDto;
+use zeta_app_server_protocol::protocol::workspace::WorkspaceTrustStateDto;
+use zeta_protocol::SessionId;
 
 fn providers() -> ProviderListResult {
     ProviderListResult {
@@ -30,13 +35,31 @@ fn providers() -> ProviderListResult {
     }
 }
 
+fn session_id() -> SessionId {
+    SessionId::new("config-session").unwrap()
+}
+
+fn no_additional_directories() -> WorkspaceAdditionalDirectoryListResult {
+    WorkspaceAdditionalDirectoryListResult {
+        revision: 0,
+        directories: Vec::new(),
+    }
+}
+
 #[test]
 fn config_pane_organizes_the_snapshot_into_searchable_tabs() {
     let mut config = empty_config_snapshot();
     config.revision = 4;
     config.generation = 5;
     let providers = providers();
-    let view = config_view(&config, &providers, TerminalSettings::default(), 7);
+    let view = config_view(
+        &config,
+        &providers,
+        TerminalSettings::default(),
+        7,
+        &session_id(),
+        &no_additional_directories(),
+    );
     let mut state = SelectionViewState::new(view.model.into_body());
 
     assert_eq!(state.title(), "Config");
@@ -47,7 +70,12 @@ fn config_pane_organizes_the_snapshot_into_searchable_tabs() {
             .iter()
             .map(|tab| tab.label())
             .collect::<Vec<_>>(),
-        vec!["Config", "Providers", "Language servers"]
+        vec![
+            "Config",
+            "Directory permissions",
+            "Providers",
+            "Language servers"
+        ]
     );
     let mouse = &state.visible_items()[0];
     assert_eq!(mouse.label(), "Mouse interactions");
@@ -61,6 +89,11 @@ fn config_pane_organizes_the_snapshot_into_searchable_tabs() {
             if edit.terminal.expected_revision == 7 && !edit.terminal.mouse_interactions
     ));
 
+    let _ = state.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    assert_eq!(
+        state.visible_items()[0].label(),
+        "No additional directories in this Session"
+    );
     let _ = state.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
     assert_eq!(state.visible_items().len(), 2);
     assert_eq!(state.visible_items()[0].label(), "OpenAI");
@@ -85,13 +118,66 @@ fn config_pane_uses_an_empty_unicode_checkbox_when_mouse_interactions_are_disabl
     let mut terminal = TerminalSettings::default();
     terminal.set_mouse_interactions(false);
 
-    let view = config_view(&empty_config_snapshot(), &providers(), terminal, 0);
+    let view = config_view(
+        &empty_config_snapshot(),
+        &providers(),
+        terminal,
+        0,
+        &session_id(),
+        &no_additional_directories(),
+    );
     let state = SelectionViewState::new(view.model.into_body());
 
     assert_eq!(
         state.visible_items()[0].description(),
         Some("Clicks and hover in interactive panes [   ]")
     );
+}
+
+#[test]
+fn directory_permission_items_emit_revision_bound_complete_permission_sets() {
+    let directories = WorkspaceAdditionalDirectoryListResult {
+        revision: 4,
+        directories: vec![WorkspaceAdditionalDirectoryDto {
+            root: "/workspace/shared".into(),
+            trust: WorkspaceTrustStateDto::Trusted,
+            permissions: vec![
+                WorkspaceAdditionalDirectoryPermissionDto::ReadFiles,
+                WorkspaceAdditionalDirectoryPermissionDto::WriteFiles,
+            ],
+        }],
+    };
+    let view = config_view(
+        &empty_config_snapshot(),
+        &providers(),
+        TerminalSettings::default(),
+        0,
+        &session_id(),
+        &directories,
+    );
+    let mut state = SelectionViewState::new(view.model.into_body());
+    let _ = state.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+
+    assert_eq!(state.visible_items().len(), 5);
+    assert_eq!(
+        state.visible_items()[0].label(),
+        "Read files · /workspace/shared"
+    );
+    assert_eq!(
+        state.visible_items()[0].description(),
+        Some("Allow read_file, grep and glob [ ✔ ]")
+    );
+    let execute = &state.visible_items()[2];
+    assert!(matches!(
+        view.actions.get(execute.id().unwrap()).unwrap(),
+        ConfigSelectionAction::SetAdditionalDirectoryPermissions(edit)
+            if edit.params.expected_revision == 4
+                && edit.params.permissions == vec![
+                    WorkspaceAdditionalDirectoryPermissionDto::ReadFiles,
+                    WorkspaceAdditionalDirectoryPermissionDto::WriteFiles,
+                    WorkspaceAdditionalDirectoryPermissionDto::ExecuteCommands,
+                ]
+    ));
 }
 
 #[test]

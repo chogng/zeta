@@ -110,7 +110,7 @@ impl HarnessContextProvider for WorkspaceCustomizations {
             .session_workspace_access
             .snapshot_for(
                 request.session_id,
-                zeta_workspace::WorkspaceCapability::MutateRepository,
+                zeta_workspace::WorkspaceCapability::InspectRepository,
             )
             .map_err(|error| CoreError::Context(error.to_string()))?
             .into_iter()
