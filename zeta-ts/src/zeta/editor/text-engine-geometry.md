@@ -146,10 +146,6 @@ Define the geometry result shapes, quality states, revision bindings, and invali
 
 Use renderer-aware exact geometry for every visible case that affects caret, selection, composition, input, or pointer behavior. Retain analytic fast paths only when their equivalence is validated for the text and style class they serve.
 
-### Proposed: separate font environment, line geometry, and width aggregation
-
-File alignment with mature editor implementations may follow after these responsibilities have stable owners. A filename change must not create duplicate caches or move common geometry into the browser layer.
-
 ### Current: harden the WebGPU text backend
 
 Measure startup, scroll, typing, IME, accessibility, and memory behavior on representative files before enabling WebGPU by default. Expand GPU eligibility only when the drawing path and visible geometry agree for the added text class; DOM remains authoritative for browser shaping cases the atlas path does not implement.

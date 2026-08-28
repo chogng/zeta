@@ -16,7 +16,7 @@ Stanza 采用与 VS Code `src/vs/editor` 一致的扁平职责分区：`common` 
 
 ## 核心文档
 
-Editor 只维护三个核心入口。实现 README 可以补充局部细节，但不得复制核心规范。
+Editor 维护以下核心入口。实现 README 可以补充局部细节，但不得复制核心规范。
 
 | 文档 | Canonical responsibility | 不负责 |
 | --- | --- | --- |

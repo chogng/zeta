@@ -90,47 +90,25 @@ VS Code 的可读性来自五个明确边界：长期依赖、帧快照、失效
 ```mermaid
 flowchart LR
     Change[Model / layout / decoration change] --> Project[EditorViewport.project]
-    Project --> Layout[EditorViewportLayout]
-    Layout --> Lines[ViewLines]
-    Lines --> Parts[EditorViewPartCollection]
-    Parts --> Overlay[Overlay Parts]
-    Overlay --> DOM[DOM mutation]
+    Layout[Current EditorViewportLayout] --> Project
+    Project --> Lines[ViewLines]
+    Lines --> Context[EditorRenderingContext]
+    Context --> Prepare[Part prepareRender]
+    Prepare --> Parts[Part render]
+    Parts --> DOM[DOM / GPU mutation]
 ```
 
 - `ViewLayout` 是 DOM-free layout owner，生成不可变 `EditorViewportLayout`；`LinesLayout`、`LineHeightsManager` 分别负责行集合与行高。
 - `EditorViewport` 同时承担当前 view host、同步 scheduler、measurement 组合、hit test 和 DOM scroll 同步。
-- `EditorViewPartCollection` 按注册顺序同步 render；`ViewLines` 先建立当前 rendered lines，后续 overlay Parts 再消费它们。
-- `EditorViewContext` 当前集中 layout 读取、overlay snapshot 创建和 version validation，减少重复 callback；它仍是过渡结构。
-- 当前每次 `project` 会调用全部 Parts，Part 通过自己的 retained state 避免不必要的重建。
+- `ViewLines` 先建立当前 rendered lines；`EditorViewContext` 提供当前 layout 和单次渲染上下文的稳定入口。
+- `EditorRenderingContext` 是每次同步 render pass 的不可变快照，包含 layout、viewport data 和通过 model version 校验的 overlay geometry。
+- `EditorViewPartCollection` 和 `ViewOverlays` 先向全部 Parts 传入同一个 context 执行 `prepareRender`，再按注册顺序执行 `render`。
+- 当前每次 `project` 仍会调用全部 Parts，Part 通过自己的 retained state 避免不必要的重建。
 - `EditorViewport` 先创建并注册全部 Part，再在一个显式装配阶段挂载各 Part 根节点并固定层叠顺序；Part 不接收仅用于自行挂载的容器。
 
-### Proposed：目标 View contract
+### Proposed：按 Part 失效调度
 
-目标不是增加更多层，而是让每种状态只存在于一个层：
-
-| Contract | 生命周期 | 内容 | 明确不包含 |
-| --- | --- | --- | --- |
-| `EditorViewContext` | 一个 editor view | view model、view layout、measurement、scheduler/invalidation 等稳定共享依赖 | feature state、一次渲染的 visible range |
-| `EditorRenderingContext` | 一次 render pass | layout、viewport、visual projection、rendered lines、坐标查询和 version-bound overlay snapshot | listener、可变 model、宿主服务 |
-| `EditorViewPart` | 一个 retained visual part | 本地 DOM/cache、失效状态、render 实现 | DOM 挂载位置、全局 render 顺序 |
-| View host | 一个 editor view | Part 创建与 disposal、根 DOM 挂载、层叠顺序、frame scheduling | feature edit semantics |
-
-每个 render pass 只创建一个 frame context，再交给所有 Parts：
-
-```ts
-// Proposed shape; not the current public API.
-const context = this.createRenderingContext(layout);
-this.viewParts.render(context);
-```
-
-目标渲染顺序：
-
-1. 收集 model、configuration、scroll 和 feature change，并标记受影响的 Parts。
-2. View host 在一个 frame 中创建一致的 `EditorRenderingContext`。
-3. `ViewLines` 更新 virtualized line DOM。
-4. 只有确实需要 DOM measurement 的 Part 执行 `prepareRender` 读取阶段。
-5. 失效的 Parts 在 render 阶段写入自己的 DOM。
-6. frame 完成后清除本次失效状态。
+当前同步 scheduler 已经统一单帧上下文和 `prepareRender`/`render` 阶段，但每次 `project` 仍会遍历全部 Parts。只有可测量的重复工作需要优化时，才引入按 Part 失效标记；该机制必须继续使用同一个 `EditorRenderingContext`，并保持读取阶段先于 DOM 写入。
 
 ### DOM 与 Part 边界
 
@@ -221,10 +199,10 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 | Virtualized lines、wrapping、folding、selection、decorations、minimap | ✅ Current | `EditorViewport` 同步调度 |
 | Token、diagnostic、completion、TextMate 和 Rust syntax facts | ✅ Current | version-bound async provider path |
 | Diff editor 与 Rust diff | ✅ Current | Rust 计算，Stanza 投影 |
-| Stable view context 与 single frame context | 部分具备 | `EditorViewContext` 已存在；frame context 尚未独立 |
+| Stable view context 与 single frame context | ✅ Current | `EditorViewContext` 持有稳定读取入口；`EditorRenderingContext` 绑定单次 render pass |
 | Host-owned Part DOM mounting | ✅ Current | `EditorViewport` 显式挂载 Part 根节点并固定 sibling 顺序 |
 | Per-Part invalidation 与 coordinated frame scheduler | Proposed | 当前 `project` 同步 render 全部 Parts |
-| `prepareRender` read/write separation | Potential | 只有出现真实 DOM read/write phase 需求时引入 |
+| `prepareRender` read/write separation | ✅ Current | Part collection 先完成全部 `prepareRender`，再进入 `render` |
 | Incremental compaction 和更广 parser-grade language coverage | Potential | 由可复现性能与产品需求驱动 |
 
 ## 关键实现入口
@@ -238,6 +216,7 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 | `common/viewModel/viewModelLines.ts` | wrapping、visibility 和 model-versioned visual-line collection | folding、viewport、line-count changes |
 | `browser/view/domLineBreaksComputer.ts` | browser font measurement for logical-line breaks | DOM measurement、grapheme boundaries |
 | `browser/view.ts` | 当前 view host 和 scheduler | Part order、DOM topology、scroll |
+| `browser/view/renderingContext.ts` | 单次 render pass 的 layout、viewport data 和 version-gated overlay snapshot | 全部 View Parts 与 rendering-context tests |
 | `browser/viewparts/viewPart.ts` | view context、Part contract 和 collection | 全部 View Parts 与 render tests |
 | `browser/widget/codeEditor/codeEditorWidget.ts` | canonical browser editing surface | input、accessibility、contribution integration |
 | `browser/editorExtensions.ts` | feature-neutral registry/capability seam | `editor.*.all.ts` 与 contribution order |

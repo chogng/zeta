@@ -14,6 +14,7 @@ Stanza 以有序逻辑行为唯一内容主轴。Code 与 Academic 共用 `TextM
 | 学术论文 | 同一行主轴上的 mark、atom、facet、region、relation | schema 命令当前仍通过兼容 `DocumentNode` transaction 输入，再原子生成 line snapshot |
 | 论文代码区域 | 连续行 region，保存 `languageId` 等属性 | 不创建嵌套 `TextModel`，也不启动 Code pane |
 | 图片、引用与 hard break | 文本中的 `U+FFFC` 与一个 atom 一一对应 | 光标只位于原子前后；block atom 必须独占逻辑行 |
+| 表格 | schema-backed table/row/cell 结构投影到同一行主轴 | 行列命令、单元格导航和浏览器编辑共用同一 `TextModel`；不表示分页布局 |
 | 标题、caption 与交叉关系 | line facet 与 stable-ID relation | 编号和显示文本由 renderer 派生，不写回正文 |
 
 ## 设计不变量
@@ -160,10 +161,12 @@ Invalid schema、selection、step、plugin state 或 line snapshot 在 commit �
 | Range/Point/Facet/Region/Relation store 与 validation | ✅ Current | immutable `LineDocumentSnapshot` |
 | 普通代码受限 profile，无 source Group/全文 Block | ✅ Current | mark/atom/facet/region/relation 为空 |
 | Schema document → line semantics projection | ✅ Current | mark、inline/block atom、ancestor facet、code region、caption relation |
+| Table schema、行列命令、单元格导航与 browser editing | ✅ Current | 嵌套 table/row/cell 仍投影为同一 `TextModel` 的逻辑行 |
+| Citation 与 bibliography UI | ✅ Current | citation/reference schema、reference-index plugin、toolbar action 和 node view 已接入 Academic profile |
 | Academic browser 直接使用 LinePoint command | Proposed | 当前仍使用 DocumentPoint compatibility commands |
 | 直接 `LineDocumentTransaction` 与 line-first rich codec | Proposed | 当前 schema transaction/serialization 是兼容输入 |
-| Math、cross-reference 与 generated bibliography UI | Extension point | store contract 已能表达；profile command/view 尚未提供 |
-| Table、footnote、pagination、floating object | Potential | 专门结构或页面布局问题，不改变行主轴 |
+| Math 与 cross-reference UI | Extension point | store contract 已能表达；profile command/view 尚未提供 |
+| Footnote、pagination、floating object | Potential | 专门结构或页面布局问题，不改变行主轴 |
 
 ## 关键实现入口
 
