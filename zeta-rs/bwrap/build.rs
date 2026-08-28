@@ -4,7 +4,6 @@ use std::path::PathBuf;
 
 fn main() {
     println!("cargo:rustc-check-cfg=cfg(bwrap_available)");
-    println!("cargo:rerun-if-env-changed=ZETA_BWRAP_SOURCE_DIR");
     println!("cargo:rerun-if-env-changed=PKG_CONFIG_ALLOW_CROSS");
     println!("cargo:rerun-if-env-changed=PKG_CONFIG_PATH");
     println!("cargo:rerun-if-env-changed=PKG_CONFIG_SYSROOT_DIR");
@@ -12,10 +11,11 @@ fn main() {
     if env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("linux") {
         return;
     }
-    let Some(source_directory) = env::var_os("ZETA_BWRAP_SOURCE_DIR") else {
-        return;
-    };
-    if let Err(error) = build_bubblewrap(Path::new(&source_directory)) {
+    let manifest_directory = PathBuf::from(
+        env::var("CARGO_MANIFEST_DIR").expect("Cargo must provide CARGO_MANIFEST_DIR"),
+    );
+    let source_directory = manifest_directory.join("../vendor/bubblewrap");
+    if let Err(error) = build_bubblewrap(&source_directory) {
         panic!("failed to compile Bubblewrap for the Linux package: {error}");
     }
 }
@@ -23,7 +23,7 @@ fn main() {
 fn build_bubblewrap(source_directory: &Path) -> Result<(), String> {
     if !source_directory.is_dir() {
         return Err(format!(
-            "ZETA_BWRAP_SOURCE_DIR is not a directory: {}",
+            "vendored Bubblewrap source is not a directory: {}",
             source_directory.display()
         ));
     }

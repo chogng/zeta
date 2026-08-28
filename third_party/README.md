@@ -10,7 +10,7 @@ inventory. Third-party material is recorded according to how Zeta consumes it:
 
 | Kind | Canonical repository location | Release obligation |
 | --- | --- | --- |
-| Downloaded native runtime or vendored implementation | `third_party/<name>/` | Preserve its provenance, checksum, license, and required notices |
+| Downloaded native runtime | `third_party/<name>/` | Preserve its provenance, checksum, license, and required notices |
 | Ordinary Rust or JavaScript dependency | Owning manifest and lockfile | Validate its license policy and include required notices in the product that distributes it |
 | Component-specific bundled assets | The owning component, for example `zeta-rs/utils/typst/licenses/` | Copy the applicable license and notice texts into the release |
 | Desktop release notices | `zeta-ts/THIRD_PARTY_NOTICES.md` and `zeta-ts/licenses/` | Ship them with the desktop application |
@@ -24,7 +24,6 @@ assets.
 
 | Runtime | Purpose | Distribution policy |
 | --- | --- | --- |
-| `bubblewrap` | Linux filesystem/network namespace enforcement | Required by canonical Linux releases |
 | `node` | Shared runtime for package-provided JavaScript language servers | Required in every canonical Zeta package; language packages must not bundle it |
 | `pdfium` | Agent PDF extraction and page rendering | Required by PDF ingestion releases |
 | `powershell` | Optional Windows PowerShell 7 runtime | Bundle only for releases that require a consistent `pwsh` runtime |

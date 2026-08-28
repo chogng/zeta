@@ -31,10 +31,7 @@ fn main() {
 
 #[cfg(all(target_os = "linux", not(bwrap_available)))]
 fn main() {
-    eprintln!(
-        "bundled Bubblewrap was not compiled; build through build/release/build_zeta_package.py \
-         or set ZETA_BWRAP_SOURCE_DIR"
-    );
+    eprintln!("bundled Bubblewrap was not compiled for this target");
     std::process::exit(1);
 }
 

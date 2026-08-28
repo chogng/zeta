@@ -9,7 +9,7 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from zeta_package.bubblewrap import load_source_lock, resolve_bubblewrap
+from zeta_package.bubblewrap import load_vendored_source, resolve_bubblewrap
 from zeta_package.layout import (
     build_package_directory,
     copy_builtin_extensions,
@@ -25,8 +25,8 @@ from zeta_package.windows_helpers import resolve_windows_sandbox_helpers
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 PRODUCTION_LOCK = REPOSITORY_ROOT / "third_party" / "ripgrep" / "runtime-lock.json"
 PRODUCTION_NODE_LOCK = REPOSITORY_ROOT / "third_party" / "node" / "runtime-lock.json"
-PRODUCTION_BUBBLEWRAP_LOCK = (
-    REPOSITORY_ROOT / "third_party" / "bubblewrap" / "runtime-lock.json"
+PRODUCTION_BUBBLEWRAP_SOURCE = (
+    REPOSITORY_ROOT / "zeta-rs" / "vendor" / "bubblewrap"
 )
 
 
@@ -65,9 +65,9 @@ class PackageTests(unittest.TestCase):
             self.assertEqual(64, len(artifact["sha256"]))
             self.assertIn(artifact["format"], ("tar.xz", "zip"))
 
-        bubblewrap_lock = load_source_lock(PRODUCTION_BUBBLEWRAP_LOCK)
-        self.assertEqual("0.11.2", bubblewrap_lock.version)
-        self.assertEqual(64, len(bubblewrap_lock.archive_sha256))
+        bubblewrap_source = load_vendored_source(PRODUCTION_BUBBLEWRAP_SOURCE)
+        self.assertEqual("0.11.2", bubblewrap_source.version)
+        self.assertEqual(64, len(bubblewrap_source.archive_sha256))
 
     def test_node_lock_requires_an_explicit_musl_binary(self) -> None:
         lock = load_node_lock(PRODUCTION_NODE_LOCK)
@@ -354,9 +354,6 @@ class PackageTests(unittest.TestCase):
     def test_linux_package_contains_built_sandbox_resource_contract(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            source_archive = root / "bubblewrap-test.tar.xz"
-            write_bubblewrap_source_archive(source_archive)
-            bubblewrap_lock = write_bubblewrap_lock(root, source_archive)
             server_binary = executable_file(root / "zeta-source", b"zeta-server")
             daemon_binary = executable_file(root / "daemon-source", b"zeta-app-server-daemon")
             code_mode_host_binary = executable_file(
@@ -375,8 +372,6 @@ class PackageTests(unittest.TestCase):
             bubblewrap = resolve_bubblewrap(
                 REPOSITORY_ROOT,
                 spec,
-                bubblewrap_lock,
-                root / "bubblewrap-cache",
                 explicit_binary=bwrap_binary,
                 cargo="cargo",
                 cargo_profile="release",
@@ -414,7 +409,7 @@ class PackageTests(unittest.TestCase):
                 (output / "zeta-package.json").read_text(encoding="utf-8")
             )
             self.assertEqual(
-                "0.11.2-test",
+                "0.11.2",
                 metadata["components"]["bubblewrap"]["version"],
             )
             self.assertEqual(
@@ -570,49 +565,33 @@ class PackageTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Invalid built-in extension package"):
                 copy_builtin_extensions(source, root / "destination")
 
-    def test_bubblewrap_source_digest_mismatch_aborts(self) -> None:
+    def test_bubblewrap_metadata_rejects_invalid_source_digest(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            source_archive = root / "bubblewrap-test.tar.xz"
-            write_bubblewrap_source_archive(source_archive)
-            lock_path = write_bubblewrap_lock(root, source_archive)
-            lock = json.loads(lock_path.read_text(encoding="utf-8"))
-            lock["archive"]["sha256"] = "0" * 64
-            lock_path.write_text(json.dumps(lock), encoding="utf-8")
+            source = write_vendored_bubblewrap(root)
+            metadata_path = source / "zeta-source.json"
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            metadata["archive"]["sha256"] = "invalid"
+            metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
             bwrap_binary = executable_file(root / "bwrap-source", b"bubblewrap")
 
             with self.assertRaisesRegex(RuntimeError, "SHA-256"):
                 resolve_bubblewrap(
-                    REPOSITORY_ROOT,
+                    root,
                     TARGETS["x86_64-unknown-linux-musl"],
-                    lock_path,
-                    root / "cache",
                     explicit_binary=bwrap_binary,
                     cargo="cargo",
                     cargo_profile="release",
                 )
 
-            self.assertFalse(
-                (
-                    root
-                    / "cache"
-                    / "0.11.2-test"
-                    / source_archive.name
-                ).exists()
-            )
-
-    def test_bubblewrap_lock_rejects_source_path_escape(self) -> None:
+    def test_bubblewrap_vendor_requires_complete_source(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            source_archive = root / "bubblewrap-test.tar.xz"
-            write_bubblewrap_source_archive(source_archive)
-            lock_path = write_bubblewrap_lock(root, source_archive)
-            lock = json.loads(lock_path.read_text(encoding="utf-8"))
-            lock["archive"]["members"].append("../escape")
-            lock_path.write_text(json.dumps(lock), encoding="utf-8")
+            source = write_vendored_bubblewrap(root)
+            (source / "bubblewrap.c").unlink()
 
-            with self.assertRaisesRegex(RuntimeError, "safe relative path"):
-                load_source_lock(lock_path)
+            with self.assertRaisesRegex(RuntimeError, "bubblewrap.c"):
+                load_vendored_source(source)
 
     def test_fetches_and_extracts_exact_tar_member(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -760,55 +739,33 @@ def write_node_tar_archive(path: Path, executable_member: str, license_member: s
             archive.addfile(member, io.BytesIO(contents))
 
 
-def write_bubblewrap_source_archive(path: Path) -> None:
-    members = {
-        "COPYING": b"copying",
-        "bind-mount.c": b"source",
-        "bind-mount.h": b"header",
-        "bubblewrap.c": b"source",
-        "network.c": b"source",
-        "network.h": b"header",
-        "utils.c": b"source",
-        "utils.h": b"header",
-    }
-    with tarfile.open(str(path), "w:xz") as archive:
-        for name, contents in members.items():
-            member = tarfile.TarInfo("bubblewrap-test/" + name)
-            member.size = len(contents)
-            archive.addfile(member, io.BytesIO(contents))
-
-
-def write_bubblewrap_lock(root: Path, archive: Path) -> Path:
-    lock = {
+def write_vendored_bubblewrap(root: Path) -> Path:
+    source = root / "zeta-rs" / "vendor" / "bubblewrap"
+    source.mkdir(parents=True)
+    for name in (
+        "COPYING",
+        "bind-mount.c",
+        "bind-mount.h",
+        "bubblewrap.c",
+        "network.c",
+        "network.h",
+        "utils.c",
+        "utils.h",
+    ):
+        (source / name).write_bytes(b"source")
+    metadata = {
         "schemaVersion": 1,
-        "runtime": "bubblewrap-source",
+        "name": "bubblewrap",
         "version": "0.11.2-test",
-        "source": {
-            "repository": "https://example.invalid/bubblewrap",
-            "release": "test",
-        },
+        "repository": "https://example.invalid/bubblewrap",
+        "release": "test",
         "archive": {
-            "name": archive.name,
-            "size": archive.stat().st_size,
-            "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
-            "format": "tar.xz",
-            "root": "bubblewrap-test",
-            "members": [
-                "COPYING",
-                "bind-mount.c",
-                "bind-mount.h",
-                "bubblewrap.c",
-                "network.c",
-                "network.h",
-                "utils.c",
-                "utils.h",
-            ],
-            "url": archive.as_uri(),
+            "name": "bubblewrap-test.tar.xz",
+            "sha256": "0" * 64,
         },
     }
-    lock_path = root / "bubblewrap-lock.json"
-    lock_path.write_text(json.dumps(lock), encoding="utf-8")
-    return lock_path
+    (source / "zeta-source.json").write_text(json.dumps(metadata), encoding="utf-8")
+    return source
 
 
 def write_test_lock(

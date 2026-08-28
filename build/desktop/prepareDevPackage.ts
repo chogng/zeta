@@ -17,8 +17,8 @@ const ripgrepLockPath = join(repositoryRoot, "third_party", "ripgrep", "runtime-
 const ripgrepCacheRoot = join(repositoryRoot, "third_party", ".cache", "ripgrep");
 const nodeLockPath = join(repositoryRoot, "third_party", "node", "runtime-lock.json");
 const nodeCacheRoot = join(repositoryRoot, "third_party", ".cache", "node");
-const bubblewrapLockPath = join(repositoryRoot, "third_party", "bubblewrap", "runtime-lock.json");
-const bubblewrapCacheRoot = join(repositoryRoot, "third_party", ".cache", "bubblewrap");
+const bubblewrapSourceDirectory = join(repositoryRoot, "zeta-rs", "vendor", "bubblewrap");
+const bubblewrapMetadataPath = join(bubblewrapSourceDirectory, "zeta-source.json");
 const v8LockPath = join(repositoryRoot, "third_party", "v8", "runtime-lock.json");
 const v8CacheRoot = join(repositoryRoot, "third_party", ".cache", "v8");
 const archiveBufferLimit = 256 * 1024 * 1024;
@@ -108,7 +108,6 @@ interface ResolvedBubblewrap {
   readonly archiveSha256: string;
   readonly binary: string;
   readonly license: string;
-  readonly sourceDirectory: string;
   readonly version: string;
 }
 
@@ -537,11 +536,8 @@ async function buildFirstPartyExecutables(platform: NodeJS.Platform): Promise<Fi
     executables.sandboxSetup = requiredExecutable(sandboxArtifacts, "zeta-windows-sandbox-setup");
   }
   if (platform === "linux") {
-    const bubblewrap = await materializeBubblewrapSource();
-    const bubblewrapArtifacts = cargoBuild("zeta-bwrap", ["--bin", "bwrap"], ["bwrap"], {
-      ...cargoEnvironment,
-      ZETA_BWRAP_SOURCE_DIR: bubblewrap.sourceDirectory,
-    });
+    const bubblewrap = await resolveVendoredBubblewrapSource();
+    const bubblewrapArtifacts = cargoBuild("zeta-bwrap", ["--bin", "bwrap"], ["bwrap"], cargoEnvironment);
     executables.bubblewrap = {
       ...bubblewrap,
       binary: requiredExecutable(bubblewrapArtifacts, "bwrap"),
@@ -566,70 +562,30 @@ function requiredExecutable(executables: ReadonlyMap<string, string>, name: stri
   return executable;
 }
 
-async function materializeBubblewrapSource(): Promise<Omit<ResolvedBubblewrap, "binary">> {
-  const lock = JSON.parse(await readFile(bubblewrapLockPath, "utf8")) as {
-    readonly archive: { readonly format: string; readonly members: readonly string[]; readonly name: string; readonly root: string; readonly sha256: string; readonly size: number; readonly url?: string };
-    readonly runtime: string;
+async function resolveVendoredBubblewrapSource(): Promise<Omit<ResolvedBubblewrap, "binary">> {
+  const metadata = JSON.parse(await readFile(bubblewrapMetadataPath, "utf8")) as {
+    readonly archive: { readonly name: string; readonly sha256: string };
+    readonly name: string;
     readonly schemaVersion: number;
-    readonly source: { readonly release: string; readonly repository: string };
     readonly version: string;
   };
-  if (lock.schemaVersion !== 1 || lock.runtime !== "bubblewrap-source" || lock.archive?.format !== "tar.xz") {
-    throw new Error("Unsupported Bubblewrap source lock");
+  if (metadata.schemaVersion !== 1 || metadata.name !== "bubblewrap") {
+    throw new Error("Unsupported vendored Bubblewrap metadata");
   }
-  const archiveMetadata = lock.archive;
-  const artifact = {
-    archive: archiveMetadata.name,
-    executable: "",
-    format: archiveMetadata.format,
-    key: lock.version,
-    sha256: archiveMetadata.sha256,
-    size: archiveMetadata.size,
-    url: archiveMetadata.url ?? `${lock.source.repository.replace(/\/+$/, "")}/releases/download/${lock.source.release}/${archiveMetadata.name}`,
-    version: lock.version,
-  };
-  const versionDirectory = join(bubblewrapCacheRoot, lock.version);
-  const archive = await materializeArchive(artifact, versionDirectory);
-  const sourceDirectory = join(versionDirectory, "source");
-  const marker = join(sourceDirectory, ".zeta-source-sha256");
-  try {
-    if ((await readFile(marker, "utf8")).trim() === artifact.sha256) {
-      return {
-        archive: artifact.archive,
-        archiveSha256: artifact.sha256,
-        license: join(sourceDirectory, "COPYING"),
-        sourceDirectory,
-        version: lock.version,
-      };
-    }
-  } catch {
-    // Rebuild the verified source cache below.
+  if (!/^[a-f0-9]{64}$/u.test(metadata.archive.sha256)) {
+    throw new Error("Invalid vendored Bubblewrap archive SHA-256");
   }
-  const staging = `${sourceDirectory}.partial-${randomUUID()}`;
-  await rm(staging, { force: true, recursive: true });
-  await mkdir(staging, { recursive: true });
-  try {
-    for (const member of archiveMetadata.members) {
-      if (typeof member !== "string" || member.length === 0 || member.includes("..")) {
-        throw new Error(`Unsafe Bubblewrap archive member: ${member}`);
-      }
-      const destination = join(staging, member);
-      await mkdir(dirname(destination), { recursive: true });
-      await writeFile(destination, extractArchiveMember(archive, `${archiveMetadata.root}/${member}`));
+  for (const name of ["COPYING", "bind-mount.c", "bind-mount.h", "bubblewrap.c", "network.c", "network.h", "utils.c", "utils.h"]) {
+    const sourceMetadata = await stat(join(bubblewrapSourceDirectory, name));
+    if (!sourceMetadata.isFile()) {
+      throw new Error(`Vendored Bubblewrap source is not a file: ${name}`);
     }
-    await writeFile(join(staging, ".zeta-source-sha256"), `${artifact.sha256}\n`);
-    await rm(sourceDirectory, { force: true, recursive: true });
-    await rename(staging, sourceDirectory);
-  } catch (error) {
-    await rm(staging, { force: true, recursive: true });
-    throw error;
   }
   return {
-    archive: artifact.archive,
-    archiveSha256: artifact.sha256,
-    license: join(sourceDirectory, "COPYING"),
-    sourceDirectory,
-    version: lock.version,
+    archive: metadata.archive.name,
+    archiveSha256: metadata.archive.sha256,
+    license: join(bubblewrapSourceDirectory, "COPYING"),
+    version: metadata.version,
   };
 }
 
@@ -817,7 +773,7 @@ export async function assemblePackage(
     await copyFile(bubblewrap.license, join(licenseDirectory, "COPYING"));
     components.bubblewrap = {
       binarySha256: await sha256(bubblewrap.binary),
-      source: "source-build",
+      source: "vendored-source-build",
       sourceArchive: bubblewrap.archive,
       sourceArchiveSha256: bubblewrap.archiveSha256,
       version: bubblewrap.version,

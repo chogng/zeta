@@ -1,14 +1,16 @@
 //! Linux sandbox backend built on typed Bubblewrap command construction.
 
+mod bwrap;
 mod discovery;
 
+use bwrap::BwrapCommandBuilder;
+use bwrap::MountAccess;
 use std::path::{Path, PathBuf};
-use zeta_bwrap::{BwrapCommandBuilder, MountAccess};
 use zeta_install_context::InstallContext;
 use zeta_sandboxing::{
-    FileSystemAccess, NetworkAccess, PROTECTED_WORKSPACE_METADATA_NAMES, PreparedCommand,
-    SandboxBackend, SandboxCommand, SandboxError, SandboxKind, SandboxPolicy, SandboxProcessDenial,
-    SandboxProcessExitStatus,
+    FileSystemAccess, NetworkAccess, PreparedCommand, SandboxBackend, SandboxCommand, SandboxError,
+    SandboxKind, SandboxPolicy, SandboxProcessDenial, SandboxProcessExitStatus,
+    PROTECTED_WORKSPACE_METADATA_NAMES,
 };
 use zeta_workspace::WorkspaceRoot;
 

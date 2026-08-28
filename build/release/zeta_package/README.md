@@ -46,10 +46,7 @@ member, and rejects non-regular archive members. `node.py` applies the same
 locked size/SHA-256 gate to the shared Node.js runtime, extracts only `node[.exe]`
 and its license, and never resolves Node from the host `PATH`. Official Node.js
 releases do not contain musl builds, so musl release jobs must supply an exact
-`--node-bin`; the lock still supplies the verified upstream license. For Linux, `bubblewrap.py`
-verifies and extracts the locked upstream source, then builds the `zeta-bwrap`
-binary with the target C compiler and `libcap`; `--bwrap-bin` accepts an already
-built or signed helper. For Windows, `windows_helpers.py` builds both
+`--node-bin`; the lock still supplies the verified upstream license. For Linux, `bubblewrap.py` validates [`zeta-rs/vendor/bubblewrap`](../../zeta-rs/vendor/bubblewrap/README.md), then builds the `zeta-bwrap` binary with the target C compiler and `libcap`; `--bwrap-bin` accepts an already built or signed helper. For Windows, `windows_helpers.py` builds both
 first-party AppContainer helpers
 from `zeta-windows-sandbox`, or validates the two explicit helper overrides.
 Repository-owned built-in Skills come from

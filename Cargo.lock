@@ -11558,7 +11558,6 @@ dependencies = [
 name = "zeta-linux-sandbox"
 version = "0.1.0"
 dependencies = [
- "zeta-bwrap",
  "zeta-install-context",
  "zeta-sandboxing",
  "zeta-workspace",

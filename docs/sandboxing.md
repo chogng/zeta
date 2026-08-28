@@ -29,7 +29,7 @@ flowchart TD
     executor --> sandboxing["共享沙箱层<br/><code>zeta-sandboxing</code>"]
     sandboxing --> macos["macOS Seatbelt 后端"]
     sandboxing --> linux["Linux 后端<br/><code>zeta-linux-sandbox</code>"]
-    linux --> bwrap["Bubblewrap 参数与入口<br/><code>zeta-bwrap</code>"]
+    linux --> bwrap["Bubblewrap 可执行文件"]
     sandboxing --> windows["Windows AppContainer 后端<br/><code>zeta-windows-sandbox</code>"]
 ```
 
@@ -40,6 +40,12 @@ flowchart TD
 [`permissions.md`](permissions.md)。
 
 ## 2. crate 边界
+
+| 位置 | 唯一职责 |
+| --- | --- |
+| `zeta-sandboxing` | 统一管理要限制的文件、网络和进程能力 |
+| `zeta-linux-sandbox` | 决定这些限制在 Linux 下如何转换并强制执行 |
+| `zeta-rs/vendor/bubblewrap` | 保存 Linux 隔离工具 Bubblewrap 的上游源码 |
 
 ### 2.0 `zeta-install-context`
 
@@ -52,20 +58,7 @@ flowchart TD
 命令运行器和沙箱设置辅助程序。平台后端在主机组合阶段完成候选项验证、能力与协议探测，并冻结
 规范身份。
 
-### 2.1 `zeta-bwrap`
-
-`zeta-bwrap` 同时提供 Linux Bubblewrap 的类型化参数构建器和很薄的上游 C 入口包装器：
-
-- 接受显式挂载权限、命名空间、工作目录和内部命令；
-- 始终使用程序与参数数组，不经过 Shell；
-- 生成可检查的 `BwrapCommand`，不自行启动工具；
-- 包构建从校验和锁定的上游源码编译 `bwrap_main`，不启用 setuid 支持；
-- 不拥有 Zeta 的沙箱策略 `SandboxPolicy`、工作区授权、用户批准或降级决策。
-
-调用方不能注入任意拼接后的 `bwrap` 参数。新增 Bubblewrap 能力应先成为类型化操作，再由 Linux
-策略适配器决定是否使用。
-
-### 2.2 `zeta-sandboxing`
+### 2.1 `zeta-sandboxing`
 
 `zeta-sandboxing` 是共享契约与后端管理器：
 
@@ -80,9 +73,9 @@ macOS 实现暂时保留在本 crate，因为 Seatbelt 转换层很薄，且平�
 当 macOS 原生实现需要独立 FFI、辅助程序、较重依赖，或接近 500 行代码时，再提取为
 `zeta-macos-sandbox`；提取不能改变共享策略。
 
-### 2.3 `zeta-linux-sandbox`
+### 2.2 `zeta-linux-sandbox`
 
-`zeta-linux-sandbox` 把共享策略翻译为 `zeta-bwrap` 操作：
+`zeta-linux-sandbox` 决定 Linux 下如何落实共享策略，并通过私有的类型化参数构造器生成 Bubblewrap 调用：
 
 - 非完全访问 `FullAccess` 的文件系统默认从只读根目录开始；
 - 工作区可写 `WorkspaceWrite` 通过更具体的读写挂载重新开放工作区；
@@ -92,6 +85,10 @@ macOS 实现暂时保留在本 crate，因为 Seatbelt 转换层很薄，且平�
 
 该 crate 当前拥有系统或随包提供的 `bwrap` 发现、所需 CLI 能力探测和规范身份冻结。后续仍拥有
 版本诊断、WSL 检查、seccomp 与受管网络桥接；这些细节不能进入共享策略。
+
+### 2.3 `zeta-rs/vendor/bubblewrap`
+
+`zeta-rs/vendor/bubblewrap` 保存 Bubblewrap 0.11.2 的完整上游源码、许可证和来源元数据。它只提供 Linux 隔离工具的源码，不拥有 Zeta 的共享限制、Linux 策略翻译、可执行文件发现或失败决策。`zeta-bwrap` 只是把这份源码编译成随包 `bwrap` 的机械构建入口，不构成独立沙箱职责层。
 
 ### 2.4 `zeta-windows-sandbox`
 
@@ -121,8 +118,9 @@ Windows 测试人员应按
 允许：
 
 ```text
-zeta-linux-sandbox   → zeta-bwrap + zeta-sandboxing
+zeta-linux-sandbox   → zeta-sandboxing
 zeta-windows-sandbox → zeta-install-context + zeta-sandboxing
+zeta-bwrap build     → zeta-rs/vendor/bubblewrap
 主机组合              → zeta-install-context + 平台沙箱 + 工具运行时
 zeta-action-policy   → zeta-execpolicy + zeta-sandboxing
 zeta-execpolicy      → no sandbox dependency
@@ -133,7 +131,7 @@ zeta-auto-review     → zeta-action-policy + zeta-sandboxing
 禁止：
 
 ```text
-zeta-bwrap → zeta-sandboxing / protocol / core
+zeta-bwrap → zeta-sandboxing / zeta-linux-sandbox / protocol / core
 平台沙箱 → zeta-core / ThreadStore / 批准界面
 zeta-sandboxing → shell-command / file-system / apply-patch / app-server / provider
 zeta-sandboxing → zeta-action-policy / zeta-auto-review
@@ -165,6 +163,6 @@ zeta-install-context → zeta-sandboxing / 平台沙箱 / shell-command
 6. macOS Seatbelt 配置文件兼容性与集成测试；
 7. 受管网络代理、PTY、取消和进程树终止集成。
 
-Linux 随包源码、构建和发现已完成；真实 Linux 命名空间集成与 seccomp 仍是当前限制。Windows
+`zeta-rs/vendor/bubblewrap` 源码、Linux 随包构建和发现已完成；真实 Linux 命名空间集成与 seccomp 仍是当前限制。Windows
 辅助程序、构建、发现和强制执行路径已完成，仍需通过真实 Windows 集成测试后才能标记为生产环境
 强制执行。

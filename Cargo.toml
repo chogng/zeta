@@ -299,7 +299,6 @@ zeta-chatgpt = { path = "zeta-rs/chatgpt" }
 zeta-apply-patch = { path = "zeta-rs/apply-patch" }
 zeta-async-utils = { path = "zeta-rs/async-utils" }
 zeta-auto-review = { path = "zeta-rs/auto-review" }
-zeta-bwrap = { path = "zeta-rs/bwrap" }
 zeta-api = { path = "zeta-rs/zeta-api" }
 zeta-client = { path = "zeta-rs/zeta-client" }
 zeta-otel = { path = "zeta-rs/otel" }

@@ -10,11 +10,6 @@ publish.workspace = true
 name = "bwrap"
 path = "src/main.rs"
 
-[lib]
-doctest = false
-name = "zeta_bwrap"
-path = "src/lib.rs"
-
 [target.'cfg(target_os = "linux")'.dependencies]
 libc = { workspace = true }
 

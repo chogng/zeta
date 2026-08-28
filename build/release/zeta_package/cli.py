@@ -24,12 +24,6 @@ DEFAULT_LOCK = REPOSITORY_ROOT / "third_party" / "ripgrep" / "runtime-lock.json"
 DEFAULT_CACHE = REPOSITORY_ROOT / "third_party" / ".cache" / "ripgrep"
 DEFAULT_NODE_LOCK = REPOSITORY_ROOT / "third_party" / "node" / "runtime-lock.json"
 DEFAULT_NODE_CACHE = REPOSITORY_ROOT / "third_party" / ".cache" / "node"
-DEFAULT_BUBBLEWRAP_LOCK = (
-    REPOSITORY_ROOT / "third_party" / "bubblewrap" / "runtime-lock.json"
-)
-DEFAULT_BUBBLEWRAP_CACHE = (
-    REPOSITORY_ROOT / "third_party" / ".cache" / "bubblewrap"
-)
 
 
 def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -94,7 +88,7 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
         type=Path,
         help=(
             "Prebuilt Linux Bubblewrap executable. If omitted for Linux, "
-            "the locked upstream source is built with Cargo."
+            "the vendored upstream source is built with Cargo."
         ),
     )
     parser.add_argument(
@@ -140,18 +134,6 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
         type=Path,
         default=DEFAULT_NODE_CACHE,
         help="Verified Node.js download and extraction cache.",
-    )
-    parser.add_argument(
-        "--bubblewrap-lock",
-        type=Path,
-        default=DEFAULT_BUBBLEWRAP_LOCK,
-        help="Pinned Bubblewrap source runtime lock.",
-    )
-    parser.add_argument(
-        "--bubblewrap-cache-root",
-        type=Path,
-        default=DEFAULT_BUBBLEWRAP_CACHE,
-        help="Verified Bubblewrap source cache.",
     )
     return parser.parse_args(arguments)
 
@@ -202,8 +184,6 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
     bubblewrap = resolve_bubblewrap(
         REPOSITORY_ROOT,
         spec,
-        args.bubblewrap_lock.expanduser().resolve(),
-        args.bubblewrap_cache_root.expanduser().resolve(),
         explicit_binary=args.bwrap_bin,
         cargo=args.cargo,
         cargo_profile=args.cargo_profile,
