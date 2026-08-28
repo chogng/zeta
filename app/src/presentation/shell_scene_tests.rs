@@ -11,13 +11,12 @@ use crate::remote_connection_manager::RemoteConnectionManagerState;
 use crate::remote_connection_picker::RemoteConnectionPickerState;
 use crate::remote_tunnel_manager::RemoteTunnelManagerState;
 use crate::shell_interaction::{
-    ADD_SESSION, AGENT_CHANGES, AGENT_EDITOR_PANE, AGENT_EXPLORER_PANE, AGENT_FILES,
-    AGENT_FILES_REFRESH, AGENT_FILES_SEARCH, COMPOSER, COMPOSER_INFO_BAR, COMPOSER_PANEL,
-    ContextAction, FILE_EDITOR_DOCUMENT, FILE_EDITOR_PANE, FILE_EDITOR_TAB_LIST,
-    INSPECTOR_RESIZE_HANDLE, MULTI_DIFF_EDITOR, SESSION_HEADER, SESSION_SEARCH_INPUT,
-    TAB_CONTAINER_RESIZE_HANDLE, TAB_CONTAINER_SETTINGS_CLOSE, TAB_CONTAINER_SETTINGS_TAB,
-    TAB_CONTEXT_MENU, THREAD_TIMELINE, TITLEBAR, WORKSPACE_PANE, WORKSPACE_PANE_NAVIGATION,
-    WORKSPACE_PANE_TOOLBAR,
+    AGENT_CHANGES, AGENT_EDITOR_PANE, AGENT_EXPLORER_PANE, AGENT_FILES, AGENT_FILES_REFRESH,
+    AGENT_FILES_SEARCH, COMPOSER, COMPOSER_INFO_BAR, COMPOSER_PANEL, FILE_EDITOR_DOCUMENT,
+    FILE_EDITOR_PANE, FILE_EDITOR_TAB_LIST, INSPECTOR_RESIZE_HANDLE, MULTI_DIFF_EDITOR,
+    SESSION_HEADER, SESSION_SEARCH_INPUT, TAB_CONTAINER_RESIZE_HANDLE,
+    TAB_CONTAINER_SETTINGS_CLOSE, TAB_CONTAINER_SETTINGS_TAB, TAB_CONTEXT_MENU, THREAD_TIMELINE,
+    TITLEBAR, WORKSPACE_PANE, WORKSPACE_PANE_NAVIGATION, WORKSPACE_PANE_TOOLBAR,
 };
 use crate::tab_context_menu::TabContextMenuState;
 use crate::workspace_context::WorkspaceContext;
@@ -27,11 +26,13 @@ use crate::workspace_surface::WorkspaceSurfaceKind;
 use zeta_app_server_protocol::protocol::fs::{FsFileType, FsReadDirectoryEntry};
 use zeta_editor::CodeEditorStyle;
 use zeta_session::SessionPaneState;
+use zeta_session::interaction::ContextAction;
 use zeta_settings::SettingsState;
 use zeta_terminal::{GridSize, ScreenBuffer, TerminalCore};
 use zeta_terminal_workspace::PaneBinding;
 use zeta_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSnapshot};
 use zeta_ui_components::ScrollbarPresentation;
+use zeta_workbench::ADD_SESSION;
 use zeta_workbench::SessionSearchState;
 use zeta_workbench::TabContainerState;
 use zeta_workbench::{

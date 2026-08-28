@@ -18,6 +18,10 @@ use std::path::PathBuf;
 
 use crate::interaction::AGENT_CHANGES;
 use crate::interaction::AGENT_FILES;
+use crate::interaction::AGENT_FILES_REFRESH;
+use crate::interaction::AGENT_FILES_SEARCH;
+use zeta_commands::AppCommandId;
+use zeta_commands::CommandRequest;
 use zui::ui::ElementId;
 
 pub use files::DirectoryEntry;
@@ -79,6 +83,27 @@ impl WorkspacePaneSelection {
         }
     }
 }
+
+/// Resolves a Workspace UI-owned element into the stable product command it invokes.
+pub fn command_request_for_element(element: ElementId) -> Option<CommandRequest> {
+    let command = if let Some(selection) = WorkspacePaneSelection::from_element_id(element) {
+        match selection {
+            WorkspacePaneSelection::Changes => AppCommandId::ShowAgentChanges,
+            WorkspacePaneSelection::Files => AppCommandId::ShowAgentFiles,
+        }
+    } else {
+        match element {
+            AGENT_FILES_REFRESH => AppCommandId::RefreshAgentFiles,
+            AGENT_FILES_SEARCH => AppCommandId::ToggleAgentFileSearch,
+            _ => return None,
+        }
+    };
+    Some(command.into())
+}
+
+#[cfg(test)]
+#[path = "command_tests.rs"]
+mod command_tests;
 
 #[cfg(test)]
 pub(crate) const TEST_SCM_PANE_STYLE: ScmPaneStyle = ScmPaneStyle {

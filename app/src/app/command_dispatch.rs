@@ -1,54 +1,12 @@
 use zeta_commands::AppCommandId;
 use zeta_commands::CommandRegistry;
 use zeta_commands::CommandRequest;
-use zui::ui::ElementId;
 
 use crate::NativeApp;
-use crate::shell_interaction::{self, ContextAction, WorkspacePaneSelection};
+use crate::shell_interaction;
 use zeta_workbench::PaneSplitDirection;
 
 pub(crate) type NativeCommandRegistry = CommandRegistry<NativeApp>;
-
-/// Converts native UI entry points into stable product command requests.
-pub(crate) fn command_request_for_element(id: ElementId) -> Option<CommandRequest> {
-    if matches!(
-        id,
-        shell_interaction::TAB_CONTAINER_TOGGLE
-            | shell_interaction::TAB_LAYOUT_MENU_MOVE_TO_TITLEBAR
-    ) {
-        return Some(AppCommandId::ToggleTabContainer.into());
-    }
-    if id == shell_interaction::WORKSPACE_PANE_TOGGLE {
-        return Some(AppCommandId::ToggleWorkspacePane.into());
-    }
-    if id == shell_interaction::ADD_SESSION {
-        return Some(AppCommandId::AddSession.into());
-    }
-    if let Some(action) = WorkspacePaneSelection::from_element_id(id) {
-        return Some(
-            match action {
-                WorkspacePaneSelection::Changes => AppCommandId::ShowAgentChanges,
-                WorkspacePaneSelection::Files => AppCommandId::ShowAgentFiles,
-            }
-            .into(),
-        );
-    }
-    if id == shell_interaction::AGENT_FILES_REFRESH {
-        return Some(AppCommandId::RefreshAgentFiles.into());
-    }
-    if id == shell_interaction::AGENT_FILES_SEARCH {
-        return Some(AppCommandId::ToggleAgentFileSearch.into());
-    }
-    ContextAction::from_element_id(id).map(|action| {
-        match action {
-            ContextAction::Location => AppCommandId::PickExecutionLocation,
-            ContextAction::WorkingDirectory => AppCommandId::PickWorkingDirectory,
-            ContextAction::GitBranch => AppCommandId::PickGitBranch,
-            ContextAction::Diff => AppCommandId::ShowWorkspaceDiff,
-        }
-        .into()
-    })
-}
 
 /// Builds the product's process-local command registry.
 pub(crate) fn builtin_command_registry() -> NativeCommandRegistry {
@@ -78,12 +36,6 @@ pub(crate) fn builtin_command_registry() -> NativeCommandRegistry {
         .register(
             AppCommandId::ManageRemoteTunnels,
             execute_manage_remote_tunnels,
-        )
-        .expect("built-in command IDs must be unique");
-    registry
-        .register(
-            AppCommandId::ToggleTabContainer,
-            execute_toggle_tab_container,
         )
         .expect("built-in command IDs must be unique");
     registry
@@ -169,6 +121,11 @@ pub(crate) fn builtin_command_registry() -> NativeCommandRegistry {
 
 impl NativeApp {
     pub(super) fn dispatch_command(&mut self, request: CommandRequest) {
+        if self.workbench.dispatch_command(request)
+            == zeta_workbench::WorkbenchCommandDispatch::Handled
+        {
+            return;
+        }
         let command_id = request.command_id();
         debug_assert!(!command_id.id().is_empty());
         let Some(handler) = self.command_registry.handler(command_id) else {
@@ -236,10 +193,6 @@ fn execute_manage_remote_tunnels(app: &mut NativeApp, _request: &CommandRequest)
     app.activate_session_workbench_tab();
     app.open_remote_tunnel_manager(restore_focus);
     app.keybindings.cancel_chord();
-}
-
-fn execute_toggle_tab_container(app: &mut NativeApp, _request: &CommandRequest) {
-    app.workbench.toggle_tab_container();
 }
 
 fn execute_toggle_workspace_pane(app: &mut NativeApp, _request: &CommandRequest) {

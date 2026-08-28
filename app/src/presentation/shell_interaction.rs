@@ -1,10 +1,7 @@
 use std::ops::Range;
 use zui::ui::ElementId;
 
-pub(crate) use zeta_workbench::{
-    ADD_SESSION, FIRST_TAB_CONTAINER_SESSION_TAB, SESSION_SEARCH_INPUT, TAB_CONTAINER_TOGGLE,
-    TAB_LAYOUT_MENU_MOVE_TO_TITLEBAR, WINDOW, WORKSPACE_PANE_TOGGLE,
-};
+pub(crate) use zeta_workbench::{FIRST_TAB_CONTAINER_SESSION_TAB, SESSION_SEARCH_INPUT, WINDOW};
 #[cfg(test)]
 pub(crate) use zeta_workbench::{
     FIRST_TITLEBAR_SESSION_TAB, TAB_CONTAINER_ACTION_BAR, TAB_CONTAINER_LIST,
@@ -14,26 +11,22 @@ pub(crate) use zeta_workbench::{
 
 pub(crate) use zeta_session::interaction::{
     COMPOSER, COMPOSER_INTERACTION, CONTEXT_GIT_BRANCH, CONTEXT_LOCATION,
-    CONTEXT_WORKING_DIRECTORY, ContextAction, THREAD_TIMELINE, composer_interaction_item_id,
+    CONTEXT_WORKING_DIRECTORY, THREAD_TIMELINE, composer_interaction_item_id,
 };
 #[cfg(test)]
-pub(crate) use zeta_session::interaction::{
-    COMPOSER_INFO_BAR, COMPOSER_PANEL, CONTEXT_DIFF, SESSION_HEADER,
-};
+pub(crate) use zeta_session::interaction::{COMPOSER_INFO_BAR, COMPOSER_PANEL, SESSION_HEADER};
 #[cfg(test)]
 pub(crate) use zeta_workbench::TAB_CONTEXT_MENU;
 pub(crate) use zeta_workbench::TabContextMenuAction;
 #[cfg(test)]
 pub(crate) use zeta_workspace_ui::interaction::{
-    AGENT_CHANGES, AGENT_EDITOR_PANE, AGENT_FILES, AGENT_FILES_ACTION_BAR, AGENT_FILES_TOOLBAR,
-    WORKSPACE_PANE_NAVIGATION,
+    AGENT_CHANGES, AGENT_EDITOR_PANE, AGENT_FILES, AGENT_FILES_ACTION_BAR, AGENT_FILES_REFRESH,
+    AGENT_FILES_SEARCH, AGENT_FILES_TOOLBAR, WORKSPACE_PANE_NAVIGATION,
 };
 pub(crate) use zeta_workspace_ui::interaction::{
-    AGENT_EXPLORER_PANE, AGENT_FILE_SEARCH_INPUT, AGENT_FILES_REFRESH, AGENT_FILES_SEARCH,
-    MULTI_DIFF_EDITOR, WORKSPACE_PANE, WORKSPACE_PANE_TOOLBAR,
+    AGENT_EXPLORER_PANE, AGENT_FILE_SEARCH_INPUT, MULTI_DIFF_EDITOR, WORKSPACE_PANE,
+    WORKSPACE_PANE_TOOLBAR,
 };
-
-pub(crate) use crate::workspace_panes::WorkspacePaneSelection;
 
 const SHELL_SCOPE: u32 = 1;
 const FILE_EDITOR_ACTION_SCOPE: u32 = 7;

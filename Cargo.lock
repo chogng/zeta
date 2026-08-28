@@ -11962,6 +11962,7 @@ dependencies = [
  "serde_json",
  "zeta-app-server-client",
  "zeta-app-server-protocol",
+ "zeta-commands",
  "zeta-editor",
  "zeta-icons",
  "zeta-input-classifier",
@@ -12361,10 +12362,13 @@ dependencies = [
 name = "zeta-workbench"
 version = "0.1.0"
 dependencies = [
+ "zeta-commands",
  "zeta-icons",
  "zeta-keybinding",
  "zeta-protocol",
+ "zeta-session",
  "zeta-ui-components",
+ "zeta-workspace-ui",
  "zui",
 ]
 
@@ -12385,6 +12389,7 @@ dependencies = [
 name = "zeta-workspace-ui"
 version = "0.1.0"
 dependencies = [
+ "zeta-commands",
  "zeta-diff",
  "zeta-editor",
  "zeta-file-search",

@@ -1,7 +1,7 @@
 # `zeta-workbench`
 
 1. `tabpart/` 管顶层 Tab 的分组、顺序、选中、搜索、右键菜单和切换，以及 Titlebar、Tab Container、Toolbar 的基础 UI；`panepart/` 管 Pane 拆分树、组内输入、活动 Pane、sash UI 和拖拽周期。
-2. 根级 `layout.rs` 管窗口 Part 的显示、尺寸和几何计算；`WorkbenchHost` 是唯一公开的状态变更入口，将 Tab、Pane、布局和 `PaneInput` binding 作为一个周期提交。
+2. 根级 `layout.rs` 管窗口 Part 的显示、尺寸和几何计算；`command.rs` 汇总 Workbench 与已挂载能力 crate 的元素命令；`WorkbenchHost` 是统一命令入口和 Workbench 状态变更入口，直接执行 Workbench 命令并把其余命令交还对应能力。
 3. Session、Terminal、Files、Changes、Settings 等内容由对应能力 crate 管自己的状态和 UI；Workbench 只保存 `PaneInput` 描述与不透明 binding，并负责组合键等待提示等工作界面反馈，在关闭 Pane/Tab 时返回需要释放的 binding。
 
 ```text

@@ -23,6 +23,8 @@ use crate::WorkbenchLayout;
 use crate::WorkbenchLayoutSpec;
 use crate::WorkbenchLayoutState;
 use std::time::Instant;
+use zeta_commands::AppCommandId;
+use zeta_commands::CommandRequest;
 use zeta_ui_components::SashOrientation;
 use zeta_ui_components::SashPointerPresence;
 use zeta_ui_components::SashState;
@@ -307,6 +309,45 @@ impl<B> WorkbenchHost<B> {
             layout: WorkbenchLayoutState::default(),
             pane_resize: None,
             tab_context_menu: TabContextMenuState::default(),
+        }
+    }
+
+    /// Routes one product command through the Workbench command boundary.
+    ///
+    /// Commands whose state is owned by Workbench execute here. Commands owned by a mounted
+    /// capability are returned to the application leaf for mechanical binding dispatch.
+    pub fn dispatch_command(&mut self, request: CommandRequest) -> crate::WorkbenchCommandDispatch {
+        match request.command_id() {
+            AppCommandId::ToggleTabContainer => {
+                self.toggle_tab_container();
+                crate::WorkbenchCommandDispatch::Handled
+            }
+            AppCommandId::Copy
+            | AppCommandId::Paste
+            | AppCommandId::Save
+            | AppCommandId::ToggleTerminalSurface
+            | AppCommandId::OpenKeyboardShortcuts
+            | AppCommandId::ManageRemoteTunnels
+            | AppCommandId::ToggleWorkspacePane
+            | AppCommandId::AddSession
+            | AppCommandId::ShowAgentChanges
+            | AppCommandId::ShowAgentFiles
+            | AppCommandId::RefreshAgentFiles
+            | AppCommandId::ToggleAgentFileSearch
+            | AppCommandId::PinSession
+            | AppCommandId::CloseSession
+            | AppCommandId::RenameSession
+            | AppCommandId::GroupSession
+            | AppCommandId::ForkSession
+            | AppCommandId::PickExecutionLocation
+            | AppCommandId::PickWorkingDirectory
+            | AppCommandId::PickGitBranch
+            | AppCommandId::ShowWorkspaceDiff
+            | AppCommandId::SplitTerminalHorizontal
+            | AppCommandId::SplitTerminalVertical
+            | AppCommandId::FocusNextPane
+            | AppCommandId::FocusPreviousPane
+            | AppCommandId::ClosePane => crate::WorkbenchCommandDispatch::Capability(request),
         }
     }
 

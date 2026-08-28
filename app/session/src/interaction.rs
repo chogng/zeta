@@ -1,5 +1,7 @@
 //! Stable interaction identities owned by the Session UI feature.
 
+use zeta_commands::AppCommandId;
+use zeta_commands::CommandRequest;
 use zui::ui::ElementId;
 
 pub const SESSION_HEADER: ElementId = ElementId::scoped(16, 1);
@@ -52,6 +54,17 @@ impl ContextAction {
     }
 }
 
+/// Resolves a Session-owned element into the stable product command it invokes.
+pub fn command_request_for_element(element: ElementId) -> Option<CommandRequest> {
+    let command = match ContextAction::from_element_id(element)? {
+        ContextAction::Location => AppCommandId::PickExecutionLocation,
+        ContextAction::WorkingDirectory => AppCommandId::PickWorkingDirectory,
+        ContextAction::GitBranch => AppCommandId::PickGitBranch,
+        ContextAction::Diff => AppCommandId::ShowWorkspaceDiff,
+    };
+    Some(command.into())
+}
+
 pub fn composer_interaction_item_id(index: usize) -> ElementId {
     let local = u32::try_from(index)
         .ok()
@@ -59,3 +72,7 @@ pub fn composer_interaction_item_id(index: usize) -> ElementId {
         .expect("composer interaction item index must fit its element scope");
     ElementId::scoped(16, local)
 }
+
+#[cfg(test)]
+#[path = "interaction_tests.rs"]
+mod tests;

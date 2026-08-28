@@ -209,7 +209,7 @@ impl NativeApp {
             }
             return;
         }
-        if let Some(request) = command_dispatch::command_request_for_element(id) {
+        if let Some(request) = zeta_workbench::command_request_for_element(id) {
             self.dispatch_command(request);
         }
     }

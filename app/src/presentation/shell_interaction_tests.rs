@@ -1,48 +1,9 @@
 use super::{
-    ADD_SESSION, AGENT_CHANGES, AGENT_FILE_SEARCH_INPUT, AGENT_FILES, CONTEXT_DIFF,
-    CONTEXT_GIT_BRANCH, CONTEXT_LOCATION, CONTEXT_WORKING_DIRECTORY, ContextAction,
-    FIRST_TAB_CONTAINER_SESSION_TAB, FIRST_TITLEBAR_SESSION_TAB, SESSION_HEADER,
-    SESSION_SEARCH_INPUT, TAB_CONTAINER_ACTION_BAR, TAB_CONTAINER_LIST, TAB_CONTAINER_TOOLBAR,
-    TAB_CONTEXT_MENU, TITLEBAR_TAB_LIST, TabContextMenuAction, WorkspacePaneSelection,
+    AGENT_FILE_SEARCH_INPUT, FIRST_TAB_CONTAINER_SESSION_TAB, FIRST_TITLEBAR_SESSION_TAB,
+    SESSION_HEADER, SESSION_SEARCH_INPUT, TAB_CONTAINER_ACTION_BAR, TAB_CONTAINER_LIST,
+    TAB_CONTAINER_TOOLBAR, TAB_CONTEXT_MENU, TITLEBAR_TAB_LIST, TabContextMenuAction,
 };
-
-#[test]
-fn context_actions_have_stable_unique_element_identities() {
-    let ids = ContextAction::ALL.map(ContextAction::element_id);
-
-    assert_eq!(
-        ids,
-        [
-            CONTEXT_LOCATION,
-            CONTEXT_WORKING_DIRECTORY,
-            CONTEXT_GIT_BRANCH,
-            CONTEXT_DIFF,
-        ]
-    );
-    assert_eq!(
-        ContextAction::from_element_id(ids[2]),
-        Some(ContextAction::GitBranch)
-    );
-    assert_eq!(
-        ids.into_iter()
-            .collect::<std::collections::HashSet<_>>()
-            .len(),
-        4
-    );
-}
-
-#[test]
-fn workspace_pane_selections_have_stable_labels_and_identities() {
-    let ids = WorkspacePaneSelection::ALL.map(WorkspacePaneSelection::element_id);
-    let labels = WorkspacePaneSelection::ALL.map(WorkspacePaneSelection::label);
-
-    assert_eq!(ids, [AGENT_CHANGES, AGENT_FILES]);
-    assert_eq!(labels, ["Changes", "Files"]);
-    assert_eq!(
-        WorkspacePaneSelection::from_element_id(AGENT_FILES),
-        Some(WorkspacePaneSelection::Files)
-    );
-}
+use zeta_workbench::ADD_SESSION;
 
 #[test]
 fn sessions_toolbar_elements_have_stable_unique_identities() {

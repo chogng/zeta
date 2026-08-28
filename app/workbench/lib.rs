@@ -6,6 +6,7 @@
 use zeta_ui_components::*;
 use zui::ui::*;
 
+mod command;
 mod host;
 mod keybinding_hint;
 mod layout;
@@ -13,6 +14,7 @@ mod panepart;
 mod tabpart;
 mod workbench;
 
+pub use command::{WorkbenchCommandDispatch, command_request_for_element};
 pub use host::{
     ClosedPane, PaneActivation, PaneBindingId, PaneKey, PaneMount, TabContextMenuOutcome,
     WorkbenchHost,
