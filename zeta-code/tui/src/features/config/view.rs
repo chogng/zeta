@@ -98,7 +98,7 @@ pub(crate) fn config_view(
             .with_columns(
                 "Mouse interactions",
                 "Clicks and hover in interactive panes",
-                mouse_enabled.to_string(),
+                checkbox(mouse_enabled),
             ),
     ];
     config_items.extend(overview(config));
@@ -120,6 +120,10 @@ pub(crate) fn config_view(
         ),
         actions,
     }
+}
+
+const fn checkbox(checked: bool) -> &'static str {
+    if checked { "[ ✔ ]" } else { "[   ]" }
 }
 
 pub(crate) fn provider_api_key_view(provider: String, display_name: String) -> ConfigSelectionView {

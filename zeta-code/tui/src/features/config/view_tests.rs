@@ -53,7 +53,7 @@ fn config_pane_organizes_the_snapshot_into_searchable_tabs() {
     assert_eq!(mouse.label(), "Mouse interactions");
     assert_eq!(
         mouse.description(),
-        Some("Clicks and hover in interactive panes true")
+        Some("Clicks and hover in interactive panes [ ✔ ]")
     );
     assert!(matches!(
         view.actions.get(mouse.id().unwrap()).unwrap(),
@@ -78,6 +78,20 @@ fn config_pane_organizes_the_snapshot_into_searchable_tabs() {
         ConfigSelectionAction::OpenProviderApiKey { provider, .. } if provider == "openai"
     ));
     assert!(state.visible_items()[1].id().is_none());
+}
+
+#[test]
+fn config_pane_uses_an_empty_unicode_checkbox_when_mouse_interactions_are_disabled() {
+    let mut terminal = TerminalSettings::default();
+    terminal.set_mouse_interactions(false);
+
+    let view = config_view(&empty_config_snapshot(), &providers(), terminal, 0);
+    let state = SelectionViewState::new(view.model.into_body());
+
+    assert_eq!(
+        state.visible_items()[0].description(),
+        Some("Clicks and hover in interactive panes [   ]")
+    );
 }
 
 #[test]
