@@ -6,7 +6,7 @@ import { isSafeInteger } from '../../../../base/common/numbers.js';
 import { assertDefined } from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
 import type { IDimension } from '../../../../base/browser/geometry.js';
-import type { EditorResourceInput } from '../../../common/editorResource.js';
+import type { EditorResourceInput } from '../../editorBrowser.js';
 import { TextModel } from '../../../common/model/textModel.js';
 import type { DocumentPlugin } from '../../../common/model/documentPlugin.js';
 import { containsDocumentNode, findDocumentNode, type DocumentMark, type DocumentNode, type DocumentNodeId } from '../../../common/model/document.js';

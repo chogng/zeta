@@ -1,5 +1,5 @@
+import type { EditorResourceInput } from "../../../browser/editorBrowser.js";
 import { registerEditorContribution, type EditorCapability } from "../../../browser/editorExtensions.js";
-import { type EditorResourceInput } from "../../../common/editorResource.js";
 import { LanguageCompletionService } from "../../../common/languages/completion/languageCompletionService.js";
 import { isCompletionsEnabled } from "../../../common/services/completionsEnablement.js";
 import { LanguageCompletionSessionController } from "../common/suggestModel.js";

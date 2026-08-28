@@ -3,7 +3,7 @@ import { isNonEmptyArray } from "../../base/common/arrays.js";
 import { type Event } from "../../base/common/event.js";
 import { Disposable, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { isFiniteNumber, isSafeInteger } from "../../base/common/numbers.js";
-import { type EditorResourceInput } from "../common/editorResource.js";
+import type { URI } from "../../base/common/uri.js";
 import { EditorSelectionController } from "../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../common/core/selection.js";
 import { TextPosition, type TextRange } from "../common/core/text.js";
@@ -72,6 +72,15 @@ export interface EditorSectionHeaderOptions {
 	readonly showRegionSectionHeaders?: boolean;
 	readonly showMarkSectionHeaders?: boolean;
 	readonly markSectionHeaderRegex?: string;
+}
+
+/** Resource identity and presentation hints accepted by an editor browser surface. */
+export interface EditorResourceInput {
+	readonly resource: URI;
+	readonly label?: string;
+	readonly languageId?: string;
+	readonly readOnly?: boolean;
+	readonly initialText?: string;
 }
 
 export interface EditorBrowserOptions {
