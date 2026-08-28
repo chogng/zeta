@@ -80,7 +80,7 @@ export class DocumentCollaborationSynchronizer extends Disposable {
 		return composeTransactions(this._inFlight?.transaction, this._buffer);
 	}
 
-	/** The exact envelope currently awaiting an ordered App Server result. */
+	/** The exact envelope currently awaiting an ordered collaboration result. */
 	get inFlight(): DocumentCollaborationEnvelope | undefined {
 		this.assertNotDisposed();
 		return this._inFlight;

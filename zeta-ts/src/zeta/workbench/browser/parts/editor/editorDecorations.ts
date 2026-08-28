@@ -1,12 +1,10 @@
 import { type OwnedDecorationSource } from "../../../../editor/browser/viewparts/decorations/decorationPresentation.js";
 import { type TextModel } from "../../../../editor/common/model/textModel.js";
-import { type IDiffApi } from "../../../../platform/diff/common/diffApi.js";
 import { type ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { type URI } from "../../../../base/common/uri.js";
 
 export interface EditorDecorationSourceFactoryContext {
 	readonly accessor: ServicesAccessor;
-	readonly diffApi: IDiffApi | undefined;
 	readonly model: TextModel;
 	readonly resource: URI;
 }

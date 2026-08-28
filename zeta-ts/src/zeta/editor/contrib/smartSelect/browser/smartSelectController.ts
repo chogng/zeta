@@ -2,20 +2,20 @@ import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.j
 import { isCancellationError } from "../../../../base/common/errors.js";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { type RustSyntaxFactsService } from "../../../browser/services/rustSyntaxFactsService.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type TextSelectionSet } from "../../../common/core/selection.js";
 import { type TextRange, type TextSnapshot } from "../../../common/core/text.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { expandSmartSelection } from "../common/smartSelect.js";
+import { SelectionRangeService } from "../common/selectionRanges.js";
 
 /** Routes the editor smart-select shortcut into the DOM-free range expansion policy. */
 export class SmartSelectController extends Disposable {
 	private readonly history: TextSelectionSet[] = [];
 	private request: AbortController | undefined;
 
-	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly languageId: string, private readonly syntaxFacts: RustSyntaxFactsService | undefined, private readonly wordPattern: (() => RegExp | undefined) | undefined, private readonly onError: (error: unknown) => void) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly languageId: string, private readonly selectionRanges: SelectionRangeService, private readonly wordPattern: (() => RegExp | undefined) | undefined, private readonly onError: (error: unknown) => void) {
 		super();
 		if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza smart select dependencies must share a text model");
 		this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event), true));
@@ -32,7 +32,7 @@ export class SmartSelectController extends Disposable {
 			const before = this.selections.selections;
 			this.request?.abort();
 			this.request = undefined;
-			if (!this.syntaxFacts || before.selections.every(selection => selection.collapsed)) {
+			if (before.selections.every(selection => selection.collapsed)) {
 				this.commitExpansion(before, this.viewport.textModel.createSnapshot(), []);
 				return;
 			}
@@ -51,7 +51,7 @@ export class SmartSelectController extends Disposable {
 
 	private async expand(request: AbortController, before: TextSelectionSet, snapshot: TextSnapshot): Promise<void> {
 		try {
-			const syntaxRanges = await this.syntaxFacts?.selectionRanges(this.languageId, snapshot, before.selections.map(selection => selection.range), request.signal) ?? [];
+			const syntaxRanges = await this.selectionRanges.provideSelectionRanges(this.languageId, before.selections.map(selection => selection.range), request.signal);
 			if (request.signal.aborted || this.request !== request) return;
 			this.commitExpansion(before, snapshot, syntaxRanges);
 		} catch (error) {
@@ -76,6 +76,7 @@ registerEditorContribution({
 	id: "editor.contrib.smartSelect",
 	install: context => {
 		if (context.kind !== "text") return;
-		context.register(new SmartSelectController(context.view.element, context.viewport, context.selections, context.languageId, context.getOptionalCapability(TextEditorCapability.rustSyntaxFacts), () => context.configurations.getLanguageConfiguration(context.languageId).wordPattern, context.onLanguageError));
+		const selectionRanges = context.register(new SelectionRangeService(context.model, context.languageFeaturesService.selectionRangeProvider, context.options.input.resource));
+		context.register(new SmartSelectController(context.view.element, context.viewport, context.selections, context.languageId, selectionRanges, () => context.configurations.getLanguageConfiguration(context.languageId).wordPattern, context.onLanguageError));
 	},
 });

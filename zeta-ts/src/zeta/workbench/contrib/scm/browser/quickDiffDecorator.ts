@@ -8,7 +8,6 @@ import { TextDecorationCollection } from '../../../../editor/common/model/decora
 import { type TextModel } from '../../../../editor/common/model/textModel.js';
 import { TrackedRangeStickiness } from '../../../../editor/common/model/trackedRange.js';
 import { type IConfigurationService } from '../../../../platform/configuration/common/configurationService.js';
-import { type IDiffApi } from '../../../../platform/diff/common/diffApi.js';
 import { type IQuickDiffModelService, type QuickDiffComparison } from '../common/quickDiff.js';
 import { ScmConfiguration } from '../common/scmConfiguration.js';
 
@@ -27,9 +26,9 @@ export class QuickDiffDecorator extends Disposable implements OwnedDecorationSou
 	private readonly source: DecorationSource;
 	readonly onDidChange: Event<void>;
 
-	constructor(resource: URI, private readonly model: TextModel, diffApi: IDiffApi, modelService: IQuickDiffModelService, private readonly configurationService: IConfigurationService) {
+	constructor(resource: URI, private readonly model: TextModel, modelService: IQuickDiffModelService, private readonly configurationService: IConfigurationService) {
 		super();
-		const modelReference = this._register(modelService.createModelReference(resource, model, diffApi));
+		const modelReference = this._register(modelService.createModelReference(resource, model));
 		this.collection = this._register(new TextDecorationCollection<QuickDiffDecorationMetadata>(model));
 		this.source = createStanzaDecorationSource(this.collection, decoration => this.resolve(decoration.metadata), decoration => hoverText(decoration.metadata), {
 			linesDecorationLanes: [{ owner: QUICK_DIFF_DECORATION_OWNER, width: 4 }],

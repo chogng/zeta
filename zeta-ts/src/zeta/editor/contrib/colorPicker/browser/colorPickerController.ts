@@ -6,7 +6,7 @@ import { RGBA8 } from "../../../common/core/misc/rgba.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type EditorViewport } from "../../../browser/view.js";
-import { type ColorService, type LanguageColorInformation } from "../common/color.js";
+import { ColorService, type LanguageColorInformation } from "../common/color.js";
 
 /** Presents provider colors through a native color input and applies the selected text presentation. */
 export class ColorPickerController extends Disposable {
@@ -84,6 +84,6 @@ function hexToRgb(value: string): RGBA8 { const normalized = value.replace(/^#/,
 
 registerEditorContribution({ id: "editor.contrib.colorPicker", install: context => {
 	if (context.kind !== "text") return;
-	const service = context.register(context.languageFeaturesService.createColorService(context.model, context.options.input.resource));
+	const service = context.register(new ColorService(context.model, context.languageFeaturesService.colorProvider, context.options.input.resource));
 	context.register(new ColorPickerController(context.view.element, context.viewport, context.selections, service, context.languageId, context.onLanguageError));
 } });

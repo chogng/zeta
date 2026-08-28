@@ -3,7 +3,7 @@ import test from "node:test";
 import { isCancellationError } from "../../../../../base/common/errors.js";
 import { Emitter } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
-import { BrowserTextModelService } from "../../../../../editor/browser/services/browserTextModelService.js";
+import { BrowserTextModelService } from "../../../textmodelResolver/browser/browserTextModelService.js";
 import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
 import { type TextResourceChangeEvent, type TextResourceContent, type TextResourceResolveRequest, type TextResourceSaveRequest, type ITextResourceStore } from "../../../../../editor/common/services/textResourceStore.js";
 import { BrowserWorkingCopyService } from "../../../workingCopy/browser/browserWorkingCopyService.js";

@@ -1,5 +1,5 @@
 import { TextPosition, TextRange } from "../../../../editor/common/core/text.js";
-import type { ILanguageFeaturesService } from "../../../../editor/common/services/languageService.js";
+import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import type { LanguageWorkspaceSymbol, LanguageWorkspaceSymbolProvider } from "../../../../editor/common/languages/workspaceSymbols.js";
 import { workspaceResourceFromPath } from "../../../../platform/files/browser/fileService.js";
 import type { ISymbolIndexService, SymbolIndexMatch } from "../../../../platform/symbolIndex/common/symbolIndexService.js";
@@ -9,7 +9,7 @@ const MAX_WORKSPACE_SYMBOL_RESULTS = 100;
 
 /** Registers the local syntax declaration projection as one Workspace Symbol provider. */
 export function registerSymbolIndexWorkspaceSymbolProvider(languageFeatures: ILanguageFeaturesService, symbols: ISymbolIndexService, workspace: IWorkspaceContextService) {
-	return languageFeatures.registerWorkspaceSymbolProvider(new SymbolIndexWorkspaceSymbolProvider(symbols, workspace));
+	return languageFeatures.workspaceSymbolProvider.register(new SymbolIndexWorkspaceSymbolProvider(symbols, workspace));
 }
 
 class SymbolIndexWorkspaceSymbolProvider implements LanguageWorkspaceSymbolProvider {

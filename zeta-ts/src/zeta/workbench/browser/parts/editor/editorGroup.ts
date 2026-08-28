@@ -11,12 +11,12 @@ import type { IConfigurationService } from "../../../../platform/configuration/c
 import { TextFileBinaryError, type ITextFileService } from "../../../services/textfile/common/textFileService.js";
 import type { IFileService } from "../../../../platform/files/common/files.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
-import { type ILanguageFeaturesService } from "../../../services/language/common/languageFeaturesService.js";
+import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
+import type { ILanguageConfigurationService } from '../../../../editor/common/services/languageConfigurationService.js';
 import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
-import type { IDiffApi } from "../../../../platform/diff/common/diffApi.js";
+import type { IDiffService } from "../../../services/diff/common/diffService.js";
 import type { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
-import type { ISyntaxApi } from "../../../../platform/syntax/common/syntaxApi.js";
 import type { IDocumentCollaborationApi } from "../../../../platform/collaboration/common/documentCollaborationApi.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { EditorInput, EditorOpenOptions } from "./editorInput.js";
@@ -92,11 +92,11 @@ export interface EditorGroupOptions {
 	readonly textFileService?: ITextFileService;
 	readonly textMateService?: ITextMateService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
+	readonly languageConfigurationService?: ILanguageConfigurationService;
 	readonly languageResolver?: TextResourceLanguageResolver;
-	readonly diffApi?: IDiffApi;
+	readonly diffService?: IDiffService;
 	readonly instantiationService?: IInstantiationService;
 	readonly accessibilityService?: IAccessibilityService;
-	readonly syntaxApi?: ISyntaxApi;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
 	readonly documentCollaborationApi?: IDocumentCollaborationApi;
 	readonly serverEvents?: IServerEventApi;
@@ -143,11 +143,11 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 	private readonly textFileService: ITextFileService | undefined;
 	private readonly textMateService: ITextMateService | undefined;
 	private readonly languageFeaturesService: ILanguageFeaturesService | undefined;
+	private readonly languageConfigurationService: ILanguageConfigurationService | undefined;
 	private readonly languageResolver: TextResourceLanguageResolver | undefined;
-	private readonly diffApi: IDiffApi | undefined;
+	private readonly diffService: IDiffService | undefined;
 	private readonly instantiationService: IInstantiationService | undefined;
 	private readonly accessibilityService: IAccessibilityService | undefined;
-	private readonly syntaxApi: ISyntaxApi | undefined;
 	private readonly languageDiagnosticsService: ILanguageDiagnosticsService | undefined;
 	private readonly documentCollaborationApi: IDocumentCollaborationApi | undefined;
 	private readonly serverEvents: IServerEventApi | undefined;
@@ -186,11 +186,11 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 		this.textFileService = options.textFileService;
 		this.textMateService = options.textMateService;
 		this.languageFeaturesService = options.languageFeaturesService;
+		this.languageConfigurationService = options.languageConfigurationService;
 		this.languageResolver = options.languageResolver;
-		this.diffApi = options.diffApi;
+		this.diffService = options.diffService;
 		this.instantiationService = options.instantiationService;
 		this.accessibilityService = options.accessibilityService;
-		this.syntaxApi = options.syntaxApi;
 		this.languageDiagnosticsService = options.languageDiagnosticsService;
 		this.documentCollaborationApi = options.documentCollaborationApi;
 		this.serverEvents = options.serverEvents;
@@ -394,10 +394,11 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 				textFileService: this.textFileService,
 				textMateService: this.textMateService,
 				languageFeaturesService: this.languageFeaturesService,
-				diffApi: this.diffApi,
+				languageConfigurationService: this.languageConfigurationService,
+				languageResolver: this.languageResolver,
+				diffService: this.diffService,
 				instantiationService: this.instantiationService,
 				accessibilityService: this.accessibilityService,
-				syntaxApi: this.syntaxApi,
 				languageDiagnosticsService: this.languageDiagnosticsService,
 				documentCollaborationApi: this.documentCollaborationApi,
 				serverEvents: this.serverEvents,

@@ -3,9 +3,9 @@ import { DisposableStore } from "../../../../base/common/lifecycle.js";
 import { Action2, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import { type ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService, type IQuickPickItem } from "../../../../platform/quickinput/common/quickInput.js";
-import { type LanguageWorkspaceSymbol } from "../../../../editor/common/languages/workspaceSymbols.js";
+import { WorkspaceSymbolService, type LanguageWorkspaceSymbol } from '../../../../editor/common/languages/workspaceSymbols.js';
+import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import { IEditorService } from "../../../services/editor/common/editorService.js";
-import { ILanguageFeaturesService } from "../../../services/language/common/languageFeaturesService.js";
 import { IFileService } from "../../../../platform/files/common/files.js";
 import { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import { acceptWorkspaceSymbol } from "./workspaceSymbolNavigation.js";
@@ -27,7 +27,7 @@ registerAction2(class ShowAllSymbolsAction extends Action2 {
 	}
 
 	override run(accessor: ServicesAccessor): void {
-		const service = accessor.get(ILanguageFeaturesService).createWorkspaceSymbolService();
+		const service = new WorkspaceSymbolService(accessor.get(ILanguageFeaturesService).workspaceSymbolProvider);
 		const editor = accessor.get(IEditorService);
 		const files = accessor.get(IFileService);
 		const workingCopies = accessor.get(IWorkingCopyService);

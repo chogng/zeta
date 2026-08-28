@@ -18,9 +18,7 @@ export class QuickDiffEditorController extends Disposable implements TextEditorR
 
 	constructor(private readonly context: TextEditorContributionContext, private readonly configurationService: IConfigurationService, modelService: IQuickDiffModelService, controllerService: IQuickDiffEditorControllerService) {
 		super();
-		const diffApi = context.options.diffApi;
-		if (!diffApi) return;
-		this.modelReference = this._register(modelService.createModelReference(context.options.input.resource, context.model, diffApi));
+		this.modelReference = this._register(modelService.createModelReference(context.options.input.resource, context.model));
 		this._register(controllerService.register(this));
 		this._register(addDisposableListener<FocusEvent>(context.viewport.element, 'focusin', () => controllerService.activate(this)));
 		if (context.viewport.element.contains(context.viewport.element.ownerDocument.activeElement)) controllerService.activate(this);

@@ -1,5 +1,4 @@
-import { RustDiffComputationService } from '../../../../editor/browser/services/rustDiffComputationService.js';
-import { getBrowserTextModelService } from '../../../../editor/browser/services/browserTextModelService.js';
+import { getBrowserTextModelService } from '../../../services/textmodelResolver/browser/browserTextModelService.js';
 import { registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { registerEditorPane } from '../../../browser/parts/editor/editorRegistry.js';
 import { getBrowserTextResourceStore } from '../../codeEditor/browser/browserTextResourceStore.js';
@@ -22,13 +21,13 @@ registerEditorPane({
 	canOpen: matchMultiDiffEditor,
 	create: options => {
 		if (!options.textFileService) throw new Error('Stanza Multi Diff requires the Workbench text file service');
-		if (!options.diffApi) throw new Error('Stanza Multi Diff requires the Rust diff API');
-		const diffApi = options.diffApi;
+		if (!options.diffService) throw new Error('Stanza Multi Diff requires the Workbench diff service');
+		const diffService = options.diffService;
 		const resourceStore = getBrowserTextResourceStore(options.textFileService);
 		const configuration = options.configurationService;
 		return new MultiDiffEditorPane({
 			modelService: getBrowserTextModelService(resourceStore),
-			createComputationService: () => new RustDiffComputationService(diffApi),
+			createComputationService: () => diffService.createComputationService(),
 			lineHeight: configuration?.getValue(CodeEditorConfiguration.lineHeight),
 			fontFamily: configuration?.getValue(CodeEditorConfiguration.fontFamily) || undefined,
 			fontSize: configuration?.getValue(CodeEditorConfiguration.fontSize),

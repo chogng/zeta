@@ -19,7 +19,17 @@ test("Editor production code does not depend on Workbench or generated transport
 		const source = readFileSync(file, "utf8");
 		assert.doesNotMatch(source, /from\s+["'][^"']*workbench[^"']*["']|import\s+["'][^"']*workbench[^"']*["']/u, relative(editorRoot, file));
 		assert.doesNotMatch(source, /from\s+["'][^"']*generated\/app-server[^"']*["']/u, relative(editorRoot, file));
+		assert.doesNotMatch(source, /from\s+["'][^"']*platform\/(?:syntax|diff)\/[^"']*["']/u, relative(editorRoot, file));
 	}
+});
+
+test("Workbench owns App Server language, diff, and text-model adapters", () => {
+	for (const file of [
+		"services/language/browser/appServerSyntaxProviders.ts",
+		"services/diff/browser/appServerDiffService.ts",
+		"services/diff/browser/appServerDiffComputationService.ts",
+		"services/textmodelResolver/browser/browserTextModelService.ts",
+	]) assert.equal(statSafe(join(workbenchRoot, file)), true, file);
 });
 
 test("Editor synchronous layers do not import Electron or generated DTOs", () => {
@@ -79,7 +89,9 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/controller/editContext/native/screenReaderContentSimple.ts",
 		"browser/controller/editContext/native/screenReaderContentRich.ts",
 		"browser/controller/editContext/native/screenReaderUtils.ts",
-		"browser/services/rustDiffComputationService.ts",
+		"browser/services/editorWorkerService.ts",
+		"common/services/syntaxWorkerMain.ts",
+		"common/services/languageCompletionWorkerMain.ts",
 		"common/core/position.ts",
 		"common/config/diffEditor.ts",
 		"common/config/diffEditorOptions.ts",
@@ -92,6 +104,10 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"common/model/decorationCollection.ts",
 		"common/model/textModel.ts",
 		"common/cursor/editorSelectionController.ts",
+		"common/services/editorBaseApi.ts",
+		"common/services/languageConfigurationService.ts",
+		"common/services/languageFeatures.ts",
+		"common/services/languageFeaturesService.ts",
 		"common/services/languageService.ts",
 		"contrib/gotoError/browser/gotoError.ts",
 		"browser/view/viewPart.ts",
@@ -101,6 +117,7 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/viewparts/viewLinesGpu/viewLinesGpu.ts",
 		"contrib/folding/browser/foldingDecorations.ts",
 		"contrib/folding/browser/folding.css",
+		"contrib/smartSelect/common/selectionRanges.ts",
 		"contrib/symbolIcons/browser/symbolIcons.ts",
 		"contrib/symbolIcons/browser/symbolIcons.css",
 		"browser/viewparts/margin/marginPart.ts",
@@ -170,6 +187,7 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"editor.main.ts",
 		"standalone/browser/standaloneServices.ts",
 		"standalone/browser/standaloneEditor.ts",
+		"standalone/browser/standaloneLanguages.ts",
 		"standalone/browser/standaloneModelService.ts",
 		"README.md",
 		"text-engine.md",
@@ -253,6 +271,10 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"common/model/textModelBlockSnapshot.ts",
 		"common/viewLayout/editorViewportModel.ts",
 		"contrib/academic/browser/academicCodeBlockEditor.ts",
+		"browser/services/browserTextModelService.ts",
+		"browser/services/rustDiffComputationService.ts",
+		"browser/services/rustSyntaxFactsService.ts",
+		"browser/services/rustSyntaxFoldingService.ts",
 	];
 	for (const file of removedLegacyNames) assert.equal(statSafe(join(editorRoot, file)), false, file);
 	assert.equal(existsSync(join(editorRoot, "browser/input")), false, "legacy browser input directory");

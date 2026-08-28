@@ -2,7 +2,7 @@ import "./media/codelens.css";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type EditorViewport } from "../../../browser/view.js";
-import { type CodeLensService, type LanguageCodeLens } from "../common/codelens.js";
+import { CodeLensService, type LanguageCodeLens } from "../common/codelens.js";
 import { h } from "../../../../base/browser/dom.js";
 
 export type ExecuteCodeLensCommand = (id: string, args: readonly unknown[] | undefined) => void | Promise<void>;
@@ -59,6 +59,6 @@ export class CodeLensController extends Disposable {
 
 registerEditorContribution({ id: "editor.contrib.codelens", install: context => {
 	if (context.kind !== "text" || context.options.codeLens === false || context.model.largeFile.tooLargeForTokenization) return;
-	const service = context.register(context.languageFeaturesService.createCodeLensService(context.model, context.options.input.resource));
+	const service = context.register(new CodeLensService(context.model, context.languageFeaturesService.codeLensProvider, context.options.input.resource));
 	context.register(new CodeLensController(context.viewport, service, context.languageId, context.options.onExecuteEditorCommand, context.onLanguageError));
 } });

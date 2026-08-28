@@ -7,7 +7,7 @@ import { getWordSelectionRange } from '../../../common/cursor/wordBoundary.js';
 import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
 import { findTextMatches } from '../../../common/model/textModelSearch.js';
 import { TrackedRangeStickiness } from '../../../common/model/trackedRange.js';
-import { type ILanguageFeaturesService } from '../../../common/services/languageService.js';
+import type { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 
 const MAX_SELECTION_HIGHLIGHTS = 10_000;
 

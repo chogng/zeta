@@ -42,7 +42,7 @@ declare global {
 
 class BrowserDocumentCollaborationService extends Disposable implements IDocumentCollaborationService {
 	async open(input: DocumentCollaborationOpenInput, _signal: AbortSignal): Promise<DocumentCollaborationConnection> {
-		return new BrowserDocumentCollaborationConnection(input.schema, input.clientId, input.document, input.roomId ?? "editor-browser-room", input.target?.kind === "remote");
+		return new BrowserDocumentCollaborationConnection(input.schema, input.clientId, input.document, input.roomId ?? "editor-browser-room", true);
 	}
 }
 
@@ -120,7 +120,7 @@ const codeBlockDocument = schema.createDocument([schema.createNode("codeBlock", 
 const codeBlockFiles = new MemoryTextFiles(codeBlockResource, serializeDocument(codeBlockDocument, schema));
 const structuredFiles = new MemoryTextFiles(structuredResource, "Title\nBody");
 const codeBlockPane = new DocumentEditorPane(codeBlockFiles);
-const structuredPane = new DocumentEditorPane(structuredFiles, { documentCollaborationService: new BrowserDocumentCollaborationService() });
+const structuredPane = new DocumentEditorPane(structuredFiles, { createDocumentCollaborationService: () => new BrowserDocumentCollaborationService() });
 
 codeBlockPane.create(requiredElement("#code-block"));
 structuredPane.create(requiredElement("#document-editor"));

@@ -27,7 +27,6 @@ import { DocumentCollaborationController } from '../../../contrib/collaboration/
 import { createDocumentFragmentFromHtml } from '../../../contrib/clipboard/browser/htmlDocumentFragment.js';
 import type { ITextModelService, TextModelBlockInput, TextModelWorkingCopyReference } from '../../../common/services/textModelService.js';
 import type { IDocumentCollaborationService } from '../../../common/services/documentCollaborationService.js';
-import type { DocumentCollaborationTarget } from '../../../common/services/documentCollaborationService.js';
 import type { DocumentCollaborationPresence } from '../../../common/services/documentCollaborationService.js';
 import type { DocumentCollaborationInvite } from '../../../common/services/documentCollaborationService.js';
 import type { DocumentCollaborationMember } from '../../../common/services/documentCollaborationService.js';
@@ -167,7 +166,7 @@ export class RichTextEditorWidget extends Disposable {
 				onSetTextStyle: attrs => this.handleTextStyleAction(attrs),
 				onClearTextStyle: () => this.handleClearTextStyleAction(),
 				onRunDocumentAction: actionId => this.handleToolbarAction(actionId),
-				onStartCollaboration: (roomId, target) => this.startCollaboration(roomId, target),
+				onStartCollaboration: roomId => this.startCollaboration(roomId),
 				onStopCollaboration: () => this.stopCollaboration(),
 				onInviteCollaborator: (displayName, role) => this.createCollaborationInvite(displayName, role),
 				onListCollaborators: () => this.listCollaborationMembers(),
@@ -1360,7 +1359,7 @@ export class RichTextEditorWidget extends Disposable {
 		return model;
 	}
 
-	private async startCollaboration(roomId: string | undefined, target: DocumentCollaborationTarget): Promise<DocumentCollaborationStartResult> {
+	private async startCollaboration(roomId: string | undefined): Promise<DocumentCollaborationStartResult> {
 		const service = this.options.documentCollaborationService;
 		if (!service) throw new Error("Document collaboration is unavailable in this renderer");
 		const model = this.requireModel();
@@ -1379,7 +1378,6 @@ export class RichTextEditorWidget extends Disposable {
 				schemaId: this.options.collaborationSchemaId ?? "stanza-document-v1",
 				schema: model.schema,
 				document: model.document,
-				target,
 			}, start.signal);
 			if (start.signal.aborted || this.modelReferenceSlot.value?.model !== model) {
 				connection.dispose();
@@ -1391,7 +1389,7 @@ export class RichTextEditorWidget extends Disposable {
 			this.remotePresences = controller.presences;
 			this.collaborationStateListenerSlot.value = controller.onDidChangeState(change => {
 				if (this.collaborationControllerSlot.value !== controller) return;
-				this.collaborationContribution?.setState(change.state, { roomId: change.roomId, target, principalId: controller.principalId, canManageMembers: controller.canManageMembers, ...(change.message === undefined ? {} : { message: change.message }) });
+				this.collaborationContribution?.setState(change.state, { roomId: change.roomId, principalId: controller.principalId, canManageMembers: controller.canManageMembers, ...(change.message === undefined ? {} : { message: change.message }) });
 			});
 			this.collaborationPresenceListenerSlot.value = controller.onDidChangePresence(change => {
 				if (this.collaborationControllerSlot.value !== controller) return;

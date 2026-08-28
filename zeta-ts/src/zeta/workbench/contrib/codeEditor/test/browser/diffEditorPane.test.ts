@@ -20,12 +20,12 @@ for (const [name, value] of Object.entries({
 }
 
 const { DiffEditorPane } = await import("../../browser/diffEditorPane.js");
-const { BrowserTextModelService } = await import("../../../../../editor/browser/services/browserTextModelService.js");
+const { BrowserTextModelService } = await import("../../../../services/textmodelResolver/browser/browserTextModelService.js");
 const { BrowserTextResourceStore } = await import("../../browser/browserTextResourceStore.js");
 const { createDiffEditorInput } = await import("../../browser/diffEditorInput.js");
 
-test("Stanza diff pane rejects a missing Rust diff computation service", () => {
-	assert.throws(() => new DiffEditorPane(new BrowserTextResourceStore(new BootstrapTextFiles()), undefined as never), /requires the Rust diff computation service/);
+test("Stanza diff pane rejects a missing Workbench diff computation service", () => {
+	assert.throws(() => new DiffEditorPane(new BrowserTextResourceStore(new BootstrapTextFiles()), undefined as never), /requires a Workbench diff computation service/);
 });
 
 test("Stanza diff pane acquires both models, lays out the review view, and releases both references", async () => {

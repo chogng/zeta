@@ -10,9 +10,9 @@ test("Stanza worker bootstrap owns one structured-clone port lifecycle", () => {
 
 	start(context => {
 		resources = context.resources;
-		context.port.onDidReceiveMessage(message => {
+		context.port.onMessage(message => {
 			received = message;
-			context.port.postMessage({ kind: "ack", message });
+			context.port.send({ kind: "ack", message });
 		});
 	}, () => port);
 
@@ -30,19 +30,18 @@ class FakeWorkerPort implements StanzaWorkerPort {
 	private readonly listeners = new Set<(message: unknown) => void>();
 	readonly sent: unknown[] = [];
 	disposed = false;
-
-	postMessage(message: unknown): void {
-		if (this.disposed) throw new ReferenceError("Fake worker port is disposed");
-		this.sent.push(message);
-	}
-
-	onDidReceiveMessage(listener: (message: unknown) => void): IDisposable {
+	readonly onMessage = (listener: (message: unknown) => void): IDisposable => {
 		if (this.disposed) throw new ReferenceError("Fake worker port is disposed");
 		this.listeners.add(listener);
 		const dispose = (): void => {
 			this.listeners.delete(listener);
 		};
 		return { dispose, [Symbol.dispose]: dispose };
+	};
+
+	send(message: unknown): void {
+		if (this.disposed) throw new ReferenceError("Fake worker port is disposed");
+		this.sent.push(message);
 	}
 
 	receive(message: unknown): void {

@@ -21,11 +21,11 @@ import { DialogResult, type IDialogService } from "../../../../platform/dialogs/
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
 import type { IFileService } from "../../../../platform/files/common/files.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
-import { type ILanguageFeaturesService } from "../../../services/language/common/languageFeaturesService.js";
-import type { IDiffApi } from "../../../../platform/diff/common/diffApi.js";
+import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
+import type { ILanguageConfigurationService } from '../../../../editor/common/services/languageConfigurationService.js';
+import type { IDiffService } from "../../../services/diff/common/diffService.js";
 import type { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
-import type { ISyntaxApi } from "../../../../platform/syntax/common/syntaxApi.js";
 import type { IDocumentCollaborationApi } from "../../../../platform/collaboration/common/documentCollaborationApi.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import { WorkbenchPart } from "../../part.js";
@@ -110,11 +110,11 @@ export interface IEditorPartOptions {
 	readonly textFileService?: ITextFileService;
 	readonly textMateService?: ITextMateService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
+	readonly languageConfigurationService?: ILanguageConfigurationService;
 	readonly languageResolver?: TextResourceLanguageResolver;
-	readonly diffApi?: IDiffApi;
+	readonly diffService?: IDiffService;
 	readonly instantiationService?: IInstantiationService;
 	readonly accessibilityService?: IAccessibilityService;
-	readonly syntaxApi?: ISyntaxApi;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
 	readonly documentCollaborationApi?: IDocumentCollaborationApi;
 	readonly serverEvents?: IServerEventApi;
@@ -174,11 +174,11 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 			textFileService: options.textFileService,
 			textMateService: options.textMateService,
 			languageFeaturesService: options.languageFeaturesService,
+			languageConfigurationService: options.languageConfigurationService,
 			languageResolver: options.languageResolver,
-			diffApi: options.diffApi,
+			diffService: options.diffService,
 			instantiationService: options.instantiationService,
 			accessibilityService: options.accessibilityService,
-			syntaxApi: options.syntaxApi,
 			languageDiagnosticsService: options.languageDiagnosticsService,
 			documentCollaborationApi: options.documentCollaborationApi,
 			serverEvents: options.serverEvents,
@@ -222,10 +222,11 @@ export class EditorPart extends WorkbenchPart implements IEditorPart {
 				textFileService: options.textFileService,
 				textMateService: options.textMateService,
 				languageFeaturesService: options.languageFeaturesService,
-				diffApi: options.diffApi,
+				languageConfigurationService: options.languageConfigurationService,
+				languageResolver: options.languageResolver,
+				diffService: options.diffService,
 				instantiationService: options.instantiationService,
 				accessibilityService: options.accessibilityService,
-				syntaxApi: options.syntaxApi,
 				languageDiagnosticsService: options.languageDiagnosticsService,
 				documentCollaborationApi: options.documentCollaborationApi,
 				serverEvents: options.serverEvents,

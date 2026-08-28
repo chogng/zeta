@@ -18,6 +18,7 @@ export interface SyntaxProvider {
 	readonly id: string;
 	readonly languageIds: readonly string[];
 	readonly tokenPriority?: number;
+	readonly diagnosticPriority?: number;
 	provideTokens?(request: SyntaxProviderRequest, signal: AbortSignal): LanguageTokenResult | undefined | PromiseLike<LanguageTokenResult | undefined>;
 	provideDiagnostics?(request: SyntaxProviderRequest, signal: AbortSignal): LanguageDiagnosticResult | undefined | PromiseLike<LanguageDiagnosticResult | undefined>;
 	synchronizeDocument?(synchronization: LanguageWorkerDocumentSynchronization): void;
@@ -27,6 +28,7 @@ export interface RegisteredSyntaxProvider {
 	readonly id: string;
 	readonly languageIds: readonly string[];
 	readonly tokenPriority: number;
+	readonly diagnosticPriority: number;
 	readonly provideTokens?: NonNullable<SyntaxProvider["provideTokens"]>;
 	readonly provideDiagnostics?: NonNullable<SyntaxProvider["provideDiagnostics"]>;
 	readonly synchronizeDocument?: NonNullable<SyntaxProvider["synchronizeDocument"]>;
@@ -88,7 +90,12 @@ export class SyntaxProviderRegistry extends Disposable {
 	getDiagnosticProviders(languageId: string): readonly RegisteredSyntaxProvider[] {
 		this.assertNotDisposed();
 		assertLanguageId(languageId);
-		return Object.freeze([...this.providers.values()].filter(provider => provider.provideDiagnostics && matchesLanguage(provider, languageId)));
+		const selected = [...this.providers.values()]
+			.filter(provider => provider.provideDiagnostics && matchesLanguage(provider, languageId))
+			.sort((left, right) => right.diagnosticPriority - left.diagnosticPriority);
+		if (selected.length === 0) return Object.freeze([]);
+		const priority = selected[0]!.diagnosticPriority;
+		return Object.freeze(selected.filter(provider => provider.diagnosticPriority === priority));
 	}
 
 	getDocumentSynchronizers(): readonly RegisteredSyntaxProvider[] {
@@ -129,6 +136,9 @@ function normalizeProvider(provider: SyntaxProvider): RegisteredSyntaxProvider {
 	if (provider.provideDiagnostics !== undefined && typeof provider.provideDiagnostics !== "function") {
 		throw new TypeError("Syntax provider provideDiagnostics must be a function");
 	}
+	if (provider.diagnosticPriority !== undefined && (!Number.isSafeInteger(provider.diagnosticPriority) || !provider.provideDiagnostics)) {
+		throw new TypeError("Syntax provider diagnostic priority requires a diagnostic provider and must be a safe integer");
+	}
 	if (provider.synchronizeDocument !== undefined && typeof provider.synchronizeDocument !== "function") {
 		throw new TypeError("Syntax provider synchronizeDocument must be a function");
 	}
@@ -139,6 +149,7 @@ function normalizeProvider(provider: SyntaxProvider): RegisteredSyntaxProvider {
 		id: provider.id,
 		languageIds: Object.freeze(languageIds),
 		tokenPriority: provider.tokenPriority ?? 0,
+		diagnosticPriority: provider.diagnosticPriority ?? 0,
 		...(provider.provideTokens === undefined ? {} : { provideTokens: provider.provideTokens.bind(provider) }),
 		...(provider.provideDiagnostics === undefined ? {} : { provideDiagnostics: provider.provideDiagnostics.bind(provider) }),
 		...(provider.synchronizeDocument === undefined ? {} : { synchronizeDocument: provider.synchronizeDocument.bind(provider) }),

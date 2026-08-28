@@ -10,7 +10,7 @@ import { EditorSelectionController } from '../../../../common/cursor/editorSelec
 import { DocumentHighlightKind } from '../../../../common/languages/documentHighlights.js';
 import { TextDecorationCollection } from '../../../../common/model/decorationCollection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
-import { LanguageFeaturesService } from '../../../../common/services/languageService.js';
+import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../test/common/testLanguageFeaturesService.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({

@@ -23,7 +23,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { BrowserTextModelService } = await import('../../../../../editor/browser/services/browserTextModelService.js');
+const { BrowserTextModelService } = await import('../../../../services/textmodelResolver/browser/browserTextModelService.js');
 const { BrowserTextResourceStore } = await import('../../../codeEditor/browser/browserTextResourceStore.js');
 const { createMultiDiffEditorInput } = await import('../../browser/multiDiffEditorInput.js');
 const { MultiDiffEditorPane } = await import('../../browser/multiDiffEditorPane.js');

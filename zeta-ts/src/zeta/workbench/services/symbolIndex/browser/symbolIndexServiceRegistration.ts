@@ -2,7 +2,7 @@ import { ISymbolIndexApi } from "../../../../platform/symbolIndex/common/symbolI
 import { ISymbolIndexService } from "../../../../platform/symbolIndex/common/symbolIndexService.js";
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { registerWorkbenchServiceContribution } from "../../../browser/workbenchServiceContributions.js";
-import { ILanguageFeaturesService } from "../../language/common/languageFeaturesService.js";
+import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import { AppServerSymbolIndexService } from "./appServerSymbolIndexService.js";
 import { registerSymbolIndexWorkspaceSymbolProvider } from "./symbolIndexWorkspaceSymbolProvider.js";
 

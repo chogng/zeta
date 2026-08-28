@@ -7,7 +7,9 @@ import { Emitter, type Event } from "../../../../base/common/event.js";
 import { assertDefined } from "../../../../base/common/types.js";
 import type { URI } from "../../../../base/common/uri.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
-import { type ILanguageFeaturesService } from "../../../../editor/common/services/languageService.js";
+import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
+import type { ILanguageConfigurationService } from '../../../../editor/common/services/languageConfigurationService.js';
+import type { TextResourceLanguageResolver } from '../../../../platform/language/common/textResourceLanguage.js';
 import { type EditorInput } from "../../../browser/parts/editor/editorInput.js";
 import { type IEditorPane } from "../../../browser/parts/editor/editorPane.js";
 import { EditorPaneVisibility } from "../../../browser/parts/editor/editorPane.js";
@@ -18,7 +20,6 @@ import { type ITextModelService, type TextModelReference } from "../../../../edi
 import { type EditorTextDirection } from "../../../../editor/browser/view.js";
 import { type EditorLineWrapping, type WrappingIndent } from "../../../../editor/common/config/editorOptions.js";
 import { type IWorkingCopy, type IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
-import { type ISyntaxApi } from "../../../../platform/syntax/common/syntaxApi.js";
 import { type TextRange } from "../../../../editor/common/core/text.js";
 import { type LanguageLocation } from "../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
 import { type LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
@@ -45,9 +46,9 @@ export interface EditorPanePart extends IDisposable {
 export interface EditorPanePartOptions extends EditorBrowserOptions {
 	readonly textMateService?: ITextMateService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
-	readonly syntaxApi?: ISyntaxApi;
+	readonly languageConfigurationService?: ILanguageConfigurationService;
+	readonly languageResolver?: TextResourceLanguageResolver;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
-	readonly diffApi?: EditorBrowserOptions["diffApi"];
 	readonly instantiationService?: EditorBrowserOptions["instantiationService"];
 	readonly accessibilityService?: IAccessibilityService;
 }
@@ -58,9 +59,9 @@ export interface EditorPaneOptions {
 	readonly createPart?: (options: EditorPanePartOptions) => EditorPanePart;
 	readonly textMateService?: ITextMateService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
-	readonly syntaxApi?: ISyntaxApi;
+	readonly languageConfigurationService?: ILanguageConfigurationService;
+	readonly languageResolver?: TextResourceLanguageResolver;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
-	readonly diffApi?: EditorBrowserOptions["diffApi"];
 	readonly instantiationService?: EditorBrowserOptions["instantiationService"];
 	readonly accessibilityService?: IAccessibilityService;
 	readonly lineWrapping?: EditorLineWrapping;
@@ -155,7 +156,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 		let workingCopy: EditorWorkingCopy | undefined;
 		try {
 			throwIfCancelled(signal, "Code editor input loading was cancelled");
-			const languageId = languageForEditorInput({ ...input, firstLine: modelReference.model.getLineContent(0) }, this.options.languageFeaturesService);
+			const languageId = languageForEditorInput({ ...input, firstLine: modelReference.model.getLineContent(0) }, this.options.languageResolver);
 			part = this.createPart({
 				container,
 				input,
@@ -163,9 +164,8 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 				model: modelReference.model,
 				textMateService: this.options.textMateService,
 				languageFeaturesService: this.options.languageFeaturesService,
-				syntaxApi: this.options.syntaxApi,
+				languageConfigurationService: this.options.languageConfigurationService,
 				languageDiagnosticsService: this.options.languageDiagnosticsService,
-				diffApi: this.options.diffApi,
 				instantiationService: this.options.instantiationService,
 				accessibilityService: this.options.accessibilityService,
 				lineWrapping: this.options.lineWrapping,
@@ -218,7 +218,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 		this.statusListener.clear();
 		this.part.value = part;
 		this.workingCopySlot.value = workingCopy;
-		this.languageId = languageForEditorInput({ ...input, firstLine: modelReference.model.getLineContent(0) }, this.options.languageFeaturesService);
+		this.languageId = languageForEditorInput({ ...input, firstLine: modelReference.model.getLineContent(0) }, this.options.languageResolver);
 		const statusListeners = new DisposableStore();
 		if (part.onDidChange) statusListeners.add(part.onDidChange(() => this.statusChangeEmitter.fire()));
 		statusListeners.add(modelReference.onDidChangeExternalChange(() => {

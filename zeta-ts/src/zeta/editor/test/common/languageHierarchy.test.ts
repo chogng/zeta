@@ -3,16 +3,19 @@ import test from "node:test";
 import { URI } from "../../../base/common/uri.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
-import { LanguageFeaturesService } from "../../common/services/languageService.js";
+import { LanguageFeaturesService } from "../../common/services/languageFeaturesService.js";
+import { LanguageConfigurationService } from '../../common/services/languageConfigurationService.js';
+import { LanguageHierarchyService } from '../../contrib/callHierarchy/common/languageHierarchy.js';
 
 test("language hierarchy keeps prepare and follow-up requests on the same provider", async () => {
-	using languages = new LanguageFeaturesService();
+	using configurations = new LanguageConfigurationService();
+	using languages = new LanguageFeaturesService(configurations);
 	using model = new TextModel("function root() {}\n");
 	const source = URI.file("C:\\project\\main.ts");
 	const root = item("root", source, 0);
 	const caller = item("caller", URI.file("C:\\project\\caller.ts"), 2);
 	let followedData: unknown;
-	languages.registerCallHierarchyProvider({
+	languages.callHierarchyProvider.register({
 		languageIds: ["typescript"],
 		prepareCallHierarchy: request => {
 			assert.equal(request.resource, source);
@@ -24,7 +27,7 @@ test("language hierarchy keeps prepare and follow-up requests on the same provid
 		},
 		provideOutgoingCalls: () => [],
 	});
-	using service = languages.createLanguageHierarchyService(model, source);
+	using service = new LanguageHierarchyService(model, source, languages.callHierarchyProvider, languages.typeHierarchyProvider);
 
 	const prepared = await service.prepareCallHierarchy("typescript", TextPosition.at(0, 10));
 	const incoming = await prepared[0]!.incoming(prepared[0]!.roots[0]!);
@@ -35,18 +38,19 @@ test("language hierarchy keeps prepare and follow-up requests on the same provid
 });
 
 test("language hierarchy discards follow-up results when the source revision changes", async () => {
-	using languages = new LanguageFeaturesService();
+	using configurations = new LanguageConfigurationService();
+	using languages = new LanguageFeaturesService(configurations);
 	using model = new TextModel("class Root {}\n");
 	const source = URI.file("C:\\project\\main.ts");
 	const root = item("Root", source, 0);
 	const pending = deferred<readonly ReturnType<typeof item>[]>();
-	languages.registerTypeHierarchyProvider({
+	languages.typeHierarchyProvider.register({
 		languageIds: ["typescript"],
 		prepareTypeHierarchy: () => [root],
 		provideSupertypes: () => pending.promise,
 		provideSubtypes: () => [],
 	});
-	using service = languages.createLanguageHierarchyService(model, source);
+	using service = new LanguageHierarchyService(model, source, languages.callHierarchyProvider, languages.typeHierarchyProvider);
 	const prepared = await service.prepareTypeHierarchy("typescript", TextPosition.at(0, 7));
 	const result = prepared[0]!.supertypes(root);
 	model.applyEdits([{ range: TextRange.emptyAt(TextPosition.at(0, 13)), text: " " }]);

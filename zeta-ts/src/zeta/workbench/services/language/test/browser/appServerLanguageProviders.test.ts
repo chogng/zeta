@@ -5,7 +5,17 @@ import { TextPosition, TextRange } from "../../../../../editor/common/core/text.
 import { LanguageDiagnosticSeverity } from "../../../../../editor/common/languages/languageResults.js";
 import { createLanguageCompletionInvokeContext } from "../../../../../editor/common/languages/completion/languageCompletionProviders.js";
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
-import { LanguageFeaturesService } from "../../../../../editor/common/services/languageService.js";
+import { LanguageCompletionService } from '../../../../../editor/common/languages/completion/languageCompletionService.js';
+import { WorkspaceSymbolService } from '../../../../../editor/common/languages/workspaceSymbols.js';
+import { CodeActionService } from '../../../../../editor/contrib/codeAction/common/codeAction.js';
+import { FormatService } from '../../../../../editor/contrib/format/common/formatCommands.js';
+import { LanguageNavigationService } from '../../../../../editor/contrib/gotoSymbol/common/languageNavigation.js';
+import { HoverService } from '../../../../../editor/contrib/hover/common/hover.js';
+import { InlayHintsService } from '../../../../../editor/contrib/inlayHints/common/inlayHints.js';
+import { LinkedEditingService } from '../../../../../editor/contrib/linkedEditing/common/linkedEditing.js';
+import { ParameterHintsService } from '../../../../../editor/contrib/parameterHints/common/parameterHints.js';
+import { RenameService } from '../../../../../editor/contrib/rename/common/rename.js';
+import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
 import { type ILanguageApi } from "../../../../../platform/language/common/languageApi.js";
 import { type IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
 import { type IWorkspaceTrustService, type WorkspaceTrustSetting } from "../../../../../platform/workspaceTrust/common/workspaceTrustService.js";
@@ -15,13 +25,23 @@ import { type ServerNotification } from "../../../../../../../generated/app-serv
 
 const DTO_RANGE = Object.freeze({ start: Object.freeze({ lineIndex: 0, columnIndex: 0 }), end: Object.freeze({ lineIndex: 0, columnIndex: 5 }) });
 
+function createNavigationService(languages: LanguageFeaturesService, model: TextModel, resource: URI): LanguageNavigationService {
+	return new LanguageNavigationService(model, resource, {
+		definitions: languages.definitionProvider,
+		declarations: languages.declarationProvider,
+		implementations: languages.implementationProvider,
+		typeDefinitions: languages.typeDefinitionProvider,
+		references: languages.referenceProvider,
+	});
+}
+
 test("App Server language providers map cross-resource locations without double-encoding paths", async () => {
 	using languages = new LanguageFeaturesService();
 	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
 	using model = new TextModel("value");
-	using navigation = languages.createLanguageNavigationService(model, URI.file("C:\\project\\main file.ts"));
+	using navigation = createNavigationService(languages, model, URI.file("C:\\project\\main file.ts"));
 
 	const locations = await navigation.provideDefinition("typescript", TextPosition.at(0, 2));
 
@@ -45,7 +65,7 @@ test("App Server language providers route resources through their owning Workspa
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
 	using model = new TextModel("value");
-	using navigation = languages.createLanguageNavigationService(model, URI.file("C:\\backend\\main.ts"));
+	using navigation = createNavigationService(languages, model, URI.file("C:\\backend\\main.ts"));
 
 	const locations = await navigation.provideDefinition("typescript", TextPosition.at(0, 2));
 
@@ -59,7 +79,7 @@ test("App Server workspace symbols query every supported Code language and dedup
 	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
-	using symbols = languages.createWorkspaceSymbolService();
+	using symbols = new WorkspaceSymbolService(languages.workspaceSymbolProvider);
 
 	const result = await symbols.provideWorkspaceSymbols("answer");
 
@@ -75,11 +95,11 @@ test("App Server hover and completion providers keep revision, resource, and ins
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
 	using model = new TextModel("pri");
 	const resource = URI.file("C:\\project\\main.rs");
-	using hover = languages.createHoverService(model, resource);
-	using completions = languages.createCompletionService(model, { resource });
-	using parameterHints = languages.createParameterHintsService(model, resource);
-	using inlayHints = languages.createInlayHintsService(model, resource);
-	using linkedEditing = languages.createLinkedEditingService(model, resource);
+	using hover = new HoverService(model, languages.hoverProvider, resource);
+	using completions = new LanguageCompletionService(model, languages.completionProvider, { resource });
+	using parameterHints = new ParameterHintsService(model, languages.parameterHintsProvider, resource);
+	using inlayHints = new InlayHintsService(model, languages.inlayHintsProvider, resource);
+	using linkedEditing = new LinkedEditingService(model, languages.linkedEditingProvider, resource);
 
 	const hoverResult = await hover.provideHover("rust", TextPosition.at(0, 1));
 	await completions.request("rust", TextPosition.at(0, 3), createLanguageCompletionInvokeContext());
@@ -114,8 +134,8 @@ test("App Server rename and code actions preserve ordered workspace file operati
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
 	using model = new TextModel("value");
 	const resource = URI.file("C:\\project\\main.ts");
-	using rename = languages.createRenameService(model, resource);
-	using actions = languages.createCodeActionService(model, resource);
+	using rename = new RenameService(model, resource, languages.renameProvider);
+	using actions = new CodeActionService(model, resource, languages.codeActionProvider);
 
 	const preparation = await rename.prepareRename("typescript", TextPosition.at(0, 2));
 	const edit = await rename.provideRenameEdits("typescript", TextPosition.at(0, 2), "renamed");
@@ -134,7 +154,7 @@ test("App Server formatting providers preserve snapshot, options, range, and edi
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
 	using model = new TextModel("value");
-	using formatting = languages.createFormatService(model, URI.file("C:\\project\\main.ts"));
+	using formatting = new FormatService(model, languages.formattingProvider, URI.file("C:\\project\\main.ts"));
 
 	const documentEdits = await formatting.provideDocumentFormattingEdits("typescript", { tabSize: 2, insertSpaces: true });
 	const rangeEdits = await formatting.provideRangeFormattingEdits("typescript", TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 5)), { tabSize: 4, insertSpaces: false, trimTrailingWhitespace: true });
@@ -152,7 +172,7 @@ test("App Server language providers do not send documents above their transport 
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
 	using model = new TextModel("界".repeat(Math.ceil((10 * 1024 * 1024 + 1) / 3)));
-	using navigation = languages.createLanguageNavigationService(model, URI.file("C:\\project\\large.ts"));
+	using navigation = createNavigationService(languages, model, URI.file("C:\\project\\large.ts"));
 
 	assert.deepEqual(await navigation.provideDefinition("typescript", TextPosition.at(0, 0)), []);
 	assert.equal(api.locationRequests.length, 0);
@@ -166,7 +186,7 @@ test("App Server language providers register only while the Workspace is trusted
 	const trust = new FakeWorkspaceTrustService("workspace", "restricted");
 	using providers = new AppServerLanguageProviders(languages, api, workspace, { workspaceTrust: trust, events });
 	using model = new TextModel("value");
-	using navigation = languages.createLanguageNavigationService(model, URI.file("C:\\project\\main.ts"));
+	using navigation = createNavigationService(languages, model, URI.file("C:\\project\\main.ts"));
 
 	await tick();
 	assert.deepEqual(await navigation.provideDefinition("typescript", TextPosition.at(0, 2)), []);

@@ -5,7 +5,7 @@ import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { TextRange } from "../../../common/core/text.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
-import { type InlineCompletionsService, type LanguageInlineCompletionItem } from "../common/inlineCompletions.js";
+import { InlineCompletionsService, type LanguageInlineCompletionItem } from "../common/inlineCompletions.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 /** Owns ghost-text projection and explicit acceptance of one inline completion. */
@@ -88,6 +88,6 @@ export class InlineCompletionsController extends Disposable {
 
 registerEditorContribution({ id: "editor.contrib.inlineCompletions", install: context => {
 	if (context.kind !== "text" || context.options.inlineCompletions === false) return;
-	const service = context.register(context.languageFeaturesService.createInlineCompletionsService(context.model));
+	const service = context.register(new InlineCompletionsService(context.model, context.languageFeaturesService.inlineCompletionsProvider));
 	context.register(new InlineCompletionsController(context.view.element, context.viewport, context.selections, service, context.languageId, context.onLanguageError));
 } });

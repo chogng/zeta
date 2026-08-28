@@ -3,7 +3,7 @@ import { registerEditorContribution } from "../../../browser/editorExtensions.js
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type EditorViewport } from "../../../browser/view.js";
-import { createFormattingCommand, type FormatService, type LanguageFormattingOptions } from "../common/formatCommands.js";
+import { createFormattingCommand, FormatService, type LanguageFormattingOptions } from "../common/formatCommands.js";
 
 export interface FormatControllerOptions {
 	readonly formattingOptions?: LanguageFormattingOptions;
@@ -40,7 +40,7 @@ export class FormatController extends Disposable {
 
 registerEditorContribution({ id: "editor.contrib.format", install: context => {
 	if (context.kind !== "text") return;
-	const service = context.register(context.languageFeaturesService.createFormatService(context.model, context.options.input.resource));
+	const service = context.register(new FormatService(context.model, context.languageFeaturesService.formattingProvider, context.options.input.resource));
 	const controller = context.register(new FormatController(context.view.element, context.viewport, context.selections, service, context.languageId, {
 		formattingOptions: { tabSize: context.options.indentation?.tabSize ?? 4, insertSpaces: context.options.indentation?.kind !== "tabs" },
 		onError: context.onLanguageError,

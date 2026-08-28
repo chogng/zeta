@@ -2,7 +2,7 @@ import "./media/links.css";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type LinkService, type LanguageLink } from "../common/links.js";
+import { LinkService, type LanguageLink } from "../common/links.js";
 import { type TextPosition } from "../../../common/core/text.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
@@ -74,6 +74,6 @@ export class LinksController extends Disposable {
 
 registerEditorContribution({ id: "editor.contrib.links", install: context => {
 	if (context.kind !== "text" || !context.options.onOpenLink) return;
-	const service = context.register(context.languageFeaturesService.createLinkService(context.model, context.options.input.resource));
+	const service = context.register(new LinkService(context.model, context.languageFeaturesService.linkProvider, context.options.input.resource));
 	context.register(new LinksController(context.viewport, service, context.languageId, context.options.onOpenLink, context.onLanguageError));
 } });

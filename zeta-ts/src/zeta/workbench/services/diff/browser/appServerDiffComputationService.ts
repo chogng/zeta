@@ -1,21 +1,21 @@
-import { Disposable } from "../../../base/common/lifecycle.js";
-import type { DiffApiHunk, DiffApiRange, DiffApiResult, DiffApiRow, IDiffApi } from "../../../platform/diff/common/diffApi.js";
-import type { DiffComputationRequest, IDiffComputationService } from "../../common/diff/diffComputationService.js";
-import { LineDiffKind, type DiffRange, type LineDiff, type LineDiffHunk, type LineDiffRow } from "../../common/diff/lineDiff.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
+import type { DiffApiHunk, DiffApiRange, DiffApiResult, DiffApiRow, IDiffApi } from "../../../../platform/diff/common/diffApi.js";
+import type { DiffComputationRequest, IDiffComputationService } from "../../../../editor/common/diff/diffComputationService.js";
+import { LineDiffKind, type DiffRange, type LineDiff, type LineDiffHunk, type LineDiffRow } from "../../../../editor/common/diff/lineDiff.js";
 
-/** Adapts the Rust diff projection to the editor's zero-based UTF-16 line model. */
-export class RustDiffComputationService extends Disposable implements IDiffComputationService {
+/** Adapts App Server diff results to the editor's zero-based UTF-16 line model. */
+export class AppServerDiffComputationService extends Disposable implements IDiffComputationService {
 
 	constructor(private readonly api: IDiffApi) {
 		super();
 		if (!api || typeof api.compute !== "function") {
 			this.dispose();
-			throw new TypeError("Rust diff computation service requires a diff API");
+			throw new TypeError("App Server diff computation service requires a diff API");
 		}
 	}
 
 	async compute(request: DiffComputationRequest, signal: AbortSignal): Promise<LineDiff> {
-		if (this.isDisposed) throw new ReferenceError("Rust diff computation service is already disposed");
+		if (this.isDisposed) throw new ReferenceError("App Server diff computation service is already disposed");
 		signal.throwIfAborted();
 		const original = request.original.text;
 		const modified = request.modified.text;
@@ -32,7 +32,7 @@ function projectResult(result: DiffApiResult, originalText: string, modifiedText
 	const originalLines = originalText.split("\n");
 	const modifiedLines = modifiedText.split("\n");
 	if (result.originalLineCount !== originalLines.length || result.modifiedLineCount !== modifiedLines.length) {
-		throw new Error("Rust diff result does not match the requested line model");
+		throw new Error("App Server diff result does not match the requested line model");
 	}
 	const rows = Object.freeze(result.rows.map(row => projectRow(row, originalLines, modifiedLines)));
 	return Object.freeze({
@@ -60,7 +60,7 @@ function rowKind(kind: DiffApiRow["kind"]): LineDiffKind {
 		case "removed": return LineDiffKind.Removed;
 		case "modified": return LineDiffKind.Modified;
 	}
-	throw new TypeError(`Unknown Rust diff row kind: ${String(kind)}`);
+	throw new TypeError(`Unknown App Server diff row kind: ${String(kind)}`);
 }
 
 function lineIndex(lineIndex: number | null, lineCount: number, side: string): number | undefined {
@@ -87,10 +87,10 @@ function projectHunks(hunks: readonly DiffApiHunk[], rowCount: number, originalL
 	let previousRowEnd = 0;
 	return hunks.map(hunk => {
 		if (!Number.isSafeInteger(hunk.rowStart) || !Number.isSafeInteger(hunk.rowEnd) || hunk.rowStart < previousRowEnd || hunk.rowEnd <= hunk.rowStart || hunk.rowEnd > rowCount) {
-			throw new RangeError("Rust diff hunk row range is invalid");
+			throw new RangeError("App Server diff hunk row range is invalid");
 		}
 		if (!validLineSpan(hunk.originalStartLineIndex, hunk.originalLineCount, originalLineCount) || !validLineSpan(hunk.modifiedStartLineIndex, hunk.modifiedLineCount, modifiedLineCount)) {
-			throw new RangeError("Rust diff hunk line range is invalid");
+			throw new RangeError("App Server diff hunk line range is invalid");
 		}
 		previousRowEnd = hunk.rowEnd;
 		return Object.freeze({

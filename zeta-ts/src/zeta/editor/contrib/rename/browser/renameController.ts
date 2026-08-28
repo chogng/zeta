@@ -6,7 +6,7 @@ import { type URI } from "../../../../base/common/uri.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { type EditorViewport } from "../../../browser/view.js";
-import { type RenameService } from "../common/rename.js";
+import { RenameService } from "../common/rename.js";
 import { type LanguageWorkspaceEdit } from "../../../common/languages/languageWorkspaceEdit.js";
 
 /** Owns the local rename input and applies provider edits through the cursor command contract. */
@@ -116,6 +116,6 @@ export class RenameController extends Disposable {
 
 registerEditorContribution({ id: "editor.contrib.rename", install: context => {
 	if (context.kind !== "text") return;
-	const service = context.register(context.languageFeaturesService.createRenameService(context.model, context.options.input.resource));
+	const service = context.register(new RenameService(context.model, context.options.input.resource, context.languageFeaturesService.renameProvider));
 	context.register(new RenameController(context.view.element, context.viewport, context.selections, service, context.languageId, context.options.input.resource, context.options.onApplyWorkspaceEdit, context.onLanguageError));
 } });

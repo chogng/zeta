@@ -1,5 +1,5 @@
 import { type SyntaxWorkerFactory } from "../../../../editor/common/languages/syntax/syntaxService.js";
-import { BrowserLanguageWorkerPort } from "../../../../editor/browser/language/browserLanguageWorkerPort.js";
+import { BrowserWorkerClientPort } from "../../../../platform/webWorker/browser/browserWorkerClientPort.js";
 import { TextMateSyntaxModuleWorkerClient } from "../common/textMateSyntaxModuleWorkerClient.js";
 import { type TextMateGrammarCatalogSource } from "../common/textMateGrammarCatalog.js";
 import { type TextMateScopeThemeSource } from "../common/textMateScopeTheme.js";
@@ -13,7 +13,7 @@ export function createTextMateSyntaxWorkerFactory(catalogs: TextMateGrammarCatal
 		throw new TypeError("TextMate Syntax Worker factory scope theme must be a theme source");
 	}
 	return () => new TextMateSyntaxModuleWorkerClient(
-		new BrowserLanguageWorkerPort(new Worker(
+		new BrowserWorkerClientPort(new Worker(
 			new URL("./textMateSyntaxWorkerMain.ts", import.meta.url),
 			{ type: "module", name: "zeta-textmate-syntax" },
 		)),

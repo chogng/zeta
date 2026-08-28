@@ -1,9 +1,10 @@
+import { type Event } from "../base/common/event.js";
 import { DisposableStore, toDisposable, type IDisposable } from "../base/common/lifecycle.js";
 
 /** Structured-clone port owned by one Stanza dedicated-worker runtime. */
 export interface StanzaWorkerPort extends IDisposable {
-	postMessage(message: unknown, transfer?: readonly Transferable[]): void;
-	onDidReceiveMessage(listener: (message: unknown) => void): IDisposable;
+	readonly onMessage: Event<unknown>;
+	send(message: unknown, transfer?: readonly Transferable[]): void;
 }
 
 /** Context supplied to one Stanza dedicated-worker bootstrap. */
@@ -49,16 +50,16 @@ function createDedicatedWorkerPort(): StanzaWorkerPort {
 		scope.close();
 	};
 	return {
-		postMessage(message, transfer = []) {
-			if (disposed) throw new ReferenceError("Stanza worker port is disposed");
-			scope.postMessage(message, [...transfer]);
-		},
-		onDidReceiveMessage(listener) {
+		onMessage(listener) {
 			if (disposed) throw new ReferenceError("Stanza worker port is disposed");
 			if (typeof listener !== "function") throw new TypeError("Stanza worker message listener must be a function");
 			const handler = (event: MessageEvent<unknown>) => listener(event.data);
 			scope.addEventListener("message", handler);
 			return toDisposable(() => scope.removeEventListener("message", handler));
+		},
+		send(message, transfer = []) {
+			if (disposed) throw new ReferenceError("Stanza worker port is disposed");
+			scope.postMessage(message, [...transfer]);
 		},
 		dispose,
 		[Symbol.dispose]: dispose,

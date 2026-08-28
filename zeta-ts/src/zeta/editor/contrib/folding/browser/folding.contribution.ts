@@ -7,8 +7,8 @@ import { EditorHiddenRangeModel } from "./hiddenRangeModel.js";
 import { computeEditorIndentFoldingRanges } from "./indentRangeProvider.js";
 import { computeEditorLanguageFoldingRanges, mergeEditorFoldingRanges } from "./syntaxRangeProvider.js";
 import { FoldingDecorationProvider } from "./foldingDecorations.js";
-import { RustSyntaxFoldingService } from "../../../browser/services/rustSyntaxFoldingService.js";
 import { SyncDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
+import { FoldingRangeService } from '../common/folding.js';
 
 registerEditorContribution({
 	id: "editor.contrib.folding",
@@ -16,9 +16,7 @@ registerEditorContribution({
 		const folding = context.register(new EditorFoldingModel(context.model));
 		const largeFile = context.model.largeFile.tooLargeForTokenization;
 		const hiddenRanges = largeFile ? undefined : context.register(new EditorHiddenRangeModel(context.model, folding));
-		const rustSyntaxFacts = largeFile ? undefined : context.getOptionalCapability(TextEditorCapability.rustSyntaxFacts);
-		const languageFolding = largeFile ? undefined : context.register(context.languageFeaturesService.createFoldingRangeService(context.model, context.options.input.resource));
-		let syntaxFolding: RustSyntaxFoldingService | undefined;
+		const languageFolding = largeFile ? undefined : context.register(new FoldingRangeService(context.model, context.languageFeaturesService.foldingRangeProvider, context.options.input.resource));
 		let serverRanges: readonly { readonly startLineIndex: number; readonly endLineIndex: number }[] = [];
 		let requestSerial = 0;
 		let requestController: AbortController | undefined;
@@ -31,7 +29,7 @@ registerEditorContribution({
 		}));
 		const update = () => {
 			if (disposed) return;
-			folding.setProviderRanges(largeFile ? [] : mergeEditorFoldingRanges(serverRanges, syntaxFolding?.ranges ?? [], computeEditorLanguageFoldingRanges(context.model, context.languageId, context.configurations), computeEditorIndentFoldingRanges(context.model)));
+			folding.setProviderRanges(largeFile ? [] : mergeEditorFoldingRanges(serverRanges, computeEditorLanguageFoldingRanges(context.model, context.languageId, context.configurations), computeEditorIndentFoldingRanges(context.model)));
 		};
 		const refresh = () => {
 			if (disposed) return;
@@ -49,7 +47,6 @@ registerEditorContribution({
 				if (!disposed && !controller.signal.aborted && serial === requestSerial) context.onLanguageError(error);
 			});
 		};
-		if (rustSyntaxFacts) syntaxFolding = context.register(new RustSyntaxFoldingService(context.model, context.languageId, rustSyntaxFacts, update, context.onLanguageError));
 		refresh();
 		if (!largeFile) context.register(context.model.onDidChange(refresh));
 		context.provideCapability(TextEditorCapability.folding, folding);

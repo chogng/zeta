@@ -158,7 +158,11 @@ import { AppServerExtensionService } from "../services/extensions/browser/appSer
 import { IExtensionService } from "../services/extensions/common/extensionService.js";
 import { AppServerRemoteAgentService } from "../services/remote/browser/appServerRemoteAgentService.js";
 import { IRemoteAgentService } from "../services/remote/common/remoteAgentService.js";
-import { ILanguageFeaturesService, LanguageFeaturesService } from "../services/language/common/languageFeaturesService.js";
+import { ILanguageFeaturesService } from '../../editor/common/services/languageFeatures.js';
+import { LanguageFeaturesService } from '../../editor/common/services/languageFeaturesService.js';
+import { ILanguageService, LanguageService } from '../../editor/common/services/languageService.js';
+import { ILanguageConfigurationService, LanguageConfigurationService } from '../../editor/common/services/languageConfigurationService.js';
+import { WorkbenchLanguageFeatures } from '../services/language/browser/workbenchLanguageFeatures.js';
 import { GitService } from "../services/git/browser/gitService.js";
 import { IGitService } from "../services/git/common/gitService.js";
 import { ChatService } from "../services/chat/browser/chatService.js";
@@ -201,9 +205,12 @@ import { IWorkspaceEditService } from "../services/language/common/workspaceEdit
 import { ITextModelService } from "../../editor/common/services/textModelService.js";
 import { BrowserBulkEditService } from "../contrib/bulkEdit/browser/bulkEditService.js";
 import { IBulkEditService } from "../contrib/bulkEdit/common/bulkEdit.js";
-import { getBrowserTextModelService } from "../../editor/browser/services/browserTextModelService.js";
+import { getBrowserTextModelService } from "../services/textmodelResolver/browser/browserTextModelService.js";
 import { getBrowserTextResourceStore } from "../contrib/codeEditor/browser/browserTextResourceStore.js";
 import { AppServerLanguageProviders } from "../services/language/browser/appServerLanguageProviders.js";
+import { AppServerSyntaxProviders } from "../services/language/browser/appServerSyntaxProviders.js";
+import { AppServerDiffService } from "../services/diff/browser/appServerDiffService.js";
+import { IDiffService } from "../services/diff/common/diffService.js";
 import { AppServerLanguageDiagnosticsService } from "../services/language/browser/appServerLanguageDiagnosticsService.js";
 import { AppServerCodeIntelligenceDocumentService } from "../services/codeIntelligence/browser/appServerCodeIntelligenceDocumentService.js";
 import { ICodeIntelligenceDocumentService } from "../services/codeIntelligence/common/codeIntelligenceDocumentService.js";
@@ -388,9 +395,17 @@ export class Workbench extends Disposable {
 		services.registerInstance(IBulkEditService, bulkEditService);
 		const textMateService = this._register(new BrowserTextMateService());
 		services.registerInstance(ITextMateService, textMateService);
-		const languageFeaturesService = this._register(new LanguageFeaturesService());
+		const languageService = this._register(new LanguageService());
+		services.registerInstance(ILanguageService, languageService);
+		const languageConfigurationService = this._register(new LanguageConfigurationService());
+		services.registerInstance(ILanguageConfigurationService, languageConfigurationService);
+		const languageFeaturesService = this._register(new LanguageFeaturesService(languageConfigurationService));
 		services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
+		this._register(new WorkbenchLanguageFeatures(languageService, languageConfigurationService, languageFeaturesService));
 		this._register(new AppServerLanguageProviders(languageFeaturesService, api.language, workspaceContext, { workspaceTrust: workspaceTrustService, events: api.events }));
+		this._register(new AppServerSyntaxProviders(languageFeaturesService, api.syntax));
+		const diffService = new AppServerDiffService(api.diff);
+		services.registerInstance(IDiffService, diffService);
 		const codeIntelligenceDocuments = new AppServerCodeIntelligenceDocumentService(api.symbolIndex);
 		services.registerInstance(ICodeIntelligenceDocumentService, codeIntelligenceDocuments);
 		const languageDiagnosticsService = this._register(new AppServerLanguageDiagnosticsService(api.language, api.events, workspaceContext, codeIntelligenceDocuments, workspaceTrustService));
@@ -398,7 +413,7 @@ export class Workbench extends Disposable {
 		const markerService = this._register(new MarkerService());
 		services.registerInstance(IMarkerService, markerService);
 		this._register(new LanguageDiagnosticsMarkerBridge(languageDiagnosticsService, markerService));
-		const extensionService = this._register(new AppServerExtensionService({ api: api.extensions, eventApi: api.events, textMateService, languageFeaturesService }));
+		const extensionService = this._register(new AppServerExtensionService({ api: api.extensions, eventApi: api.events, textMateService, languageService, languageConfigurationService, languageFeaturesService }));
 		services.registerInstance(IExtensionService, extensionService);
 		const extensionReady = extensionService.start();
 		void extensionReady.catch(error => logService.error("extensions", "Declarative extension activation failed", error));
@@ -634,18 +649,18 @@ export class Workbench extends Disposable {
 			textFileService,
 			textMateService,
 			languageFeaturesService,
-			languageResolver: languageFeaturesService,
-			diffApi: api.diff,
+			languageConfigurationService,
+			languageResolver: languageService,
+			diffService,
 			instantiationService,
 			accessibilityService,
-			syntaxApi: api.syntax,
 			languageDiagnosticsService,
 			documentCollaborationApi: api.documentCollaboration,
 			serverEvents: api.events,
 			workingCopyService,
 			dialogService,
 			bulkEditService,
-			createDecorationSources: (resource, model) => createEditorDecorationSources({ accessor: services, diffApi: api.diff, model, resource }),
+			createDecorationSources: (resource, model) => createEditorDecorationSources({ accessor: services, model, resource }),
 			saveAsResource: nativeHostApi
 				? async (defaultName) => {
 					const filePath = await nativeHostApi.saveFile({ defaultName });
@@ -683,7 +698,7 @@ export class Workbench extends Disposable {
 			};
 		}));
 		services.registerInstance(IEditorPartsService, editorParts);
-		this._register(new EditorContextKeyController(contextKeys, editorParts, EditorPanes, languageFeaturesService));
+		this._register(new EditorContextKeyController(contextKeys, editorParts, EditorPanes, languageService));
 		services.registerInstance(IEditorPart, editorParts);
 		const editorService = this._register(new BrowserEditorService(editorParts));
 		services.registerInstance(IEditorService, editorService);

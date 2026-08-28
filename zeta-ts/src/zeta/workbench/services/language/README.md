@@ -1,24 +1,28 @@
 # Workbench language service
 
-`workbench/services/language` owns the shared language-provider composition used
-by editor products. `LanguageFeaturesService` owns the registration lifecycle for
-language configuration, syntax providers, and completion providers, then
-creates caller-owned per-document language services.
+`workbench/services/language` owns product adapters and product-level language
+composition. The shared language identity, editing configuration, and provider
+registries are separate Editor services; Workbench registers App Server and
+product providers into those contracts without subclassing or wrapping them.
 
-`registerLanguageConfiguration`, `registerSyntaxProvider`, and
-`registerCompletionProvider` are the composition seam for extension-host, LSP,
-or Rust-backed adapters. Registrations are disposable and remain independent of
-per-document service lifetimes.
+`WorkbenchLanguageFeatures` installs built-in identities/configurations and JSON
+providers. App Server, extension-host, TextMate, symbol-index, and future LSP
+adapters register directly through `ILanguageFeaturesService` registries. Every
+registration is disposable and independent of per-document service lifetimes.
 
 The filename split is intentional:
 
 | Filename family | Owner | Responsibility |
 | --- | --- | --- |
-| `languageFeaturesService.ts` | Workbench | Shared registration and per-document service composition |
+| `browser/workbenchLanguageFeatures.ts` | Workbench | Product-owned built-in language and JSON provider composition |
+| `browser/appServer*Providers.ts` | Workbench | App Server DTO-to-Editor provider adaptation |
+| `editor/common/services/languageService.ts` | Editor | Language identity and file association |
+| `editor/common/services/languageConfigurationService.ts` | Editor | Composable editing rules |
+| `editor/common/services/languageFeatures*.ts` | Editor | Provider registry contract and implementation |
 | `languageLexical*`, `languagePair*`, `languageBracket*` | Editor language layer | Deterministic editor semantics and editing behavior |
 | `editor/contrib/folding/browser/` | Editor contribution | Folding range providers, tracked fold state, commands, and browser projection; it consumes language configuration but does not own language infrastructure |
 | `languageCompletionSession*`, `languageDiagnostic*`, `languageTokenLineIndex.ts` | Editor language layer | Version gates, session state, and browser-facing result projection |
-| `*Provider*`, `*Worker*`, `*Wire*` | Language contracts/runtime for now | Provider protocol and Worker transport; external adapters enter through this service instead of importing editor internals |
+| `*Provider*`, `*Worker*`, `*Wire*` | Owning Editor or Workbench layer | Editor owns provider/worker contracts; Workbench owns product and transport adapters |
 
 The editor language layer still owns the contracts and editor semantics consumed by those
 providers: lexical fallback, bracket and pair editing, folding state, completion

@@ -4,7 +4,6 @@ import { type URI } from '../../../../base/common/uri.js';
 import { type DiffModel } from '../../../../editor/common/diff/diffModel.js';
 import { type LineDiffKind } from '../../../../editor/common/diff/lineDiff.js';
 import { type TextModel } from '../../../../editor/common/model/textModel.js';
-import { type IDiffApi } from '../../../../platform/diff/common/diffApi.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 
 /** Immutable provider result used as the original side of one live Quick Diff comparison. */
@@ -74,7 +73,7 @@ export interface QuickDiffModelReference extends IDisposable {
 }
 
 export interface IQuickDiffModelService extends IDisposable {
-	createModelReference(resource: URI, model: TextModel, diffApi: IDiffApi): QuickDiffModelReference;
+	createModelReference(resource: URI, model: TextModel): QuickDiffModelReference;
 }
 
 export const IQuickDiffModelService = createServiceIdentifier<IQuickDiffModelService>('quickDiffModelService');

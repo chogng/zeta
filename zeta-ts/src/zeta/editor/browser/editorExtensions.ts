@@ -4,11 +4,10 @@ import { type EditorSelectionController } from "../common/cursor/editorSelection
 import { type LanguageConfigurationSource } from "../common/languages/languageConfiguration.js";
 import { type TextModel } from "../common/model/textModel.js";
 import { type DocumentTextStyleAttributes } from "../common/model/documentSchema.js";
-import { type ILanguageFeaturesService } from "../common/services/languageService.js";
+import type { ILanguageFeaturesService } from '../common/services/languageFeatures.js';
 import { type DocumentCollaborationInvite } from "../common/services/documentCollaborationService.js";
 import { type DocumentCollaborationMember } from "../common/services/documentCollaborationService.js";
 import { type DocumentCollaborationRoomRole } from "../common/services/documentCollaborationService.js";
-import { type DocumentCollaborationTarget } from "../common/services/documentCollaborationService.js";
 import { type EditorBrowserOptions } from "./editorBrowser.js";
 import { type EditorLanguageEditingAdapter, type EditorView } from "./view.js";
 import { type EditorViewport } from "./view.js";
@@ -88,7 +87,7 @@ export interface DocumentCollaborationStartResult {
 
 export interface DocumentCollaborationContribution extends IDisposable {
 	readonly element: HTMLElement;
-	setState(state: "unavailable" | "inactive" | "connecting" | "connected" | "resyncRequired" | "error", options?: { readonly roomId?: string; readonly message?: string; readonly target?: DocumentCollaborationTarget; readonly principalId?: string; readonly canManageMembers?: boolean }): void;
+	setState(state: "unavailable" | "inactive" | "connecting" | "connected" | "resyncRequired" | "error", options?: { readonly roomId?: string; readonly message?: string; readonly principalId?: string; readonly canManageMembers?: boolean }): void;
 }
 
 /** Stable structured-TextModel mount point exposed to the same flat extension registry. */
@@ -100,7 +99,7 @@ export interface DocumentEditorContributionContext {
 	readonly onSetTextStyle: (attrs: DocumentTextStyleAttributes) => void;
 	readonly onClearTextStyle: () => void;
 	readonly onRunDocumentAction: (actionId: string) => void;
-	readonly onStartCollaboration: (roomId: string | undefined, target: DocumentCollaborationTarget) => Promise<DocumentCollaborationStartResult>;
+	readonly onStartCollaboration: (roomId: string | undefined) => Promise<DocumentCollaborationStartResult>;
 	readonly onStopCollaboration: () => void;
 	readonly onInviteCollaborator: (displayName: string, role: DocumentCollaborationRoomRole) => Promise<DocumentCollaborationInvite>;
 	readonly onListCollaborators: () => Promise<readonly DocumentCollaborationMember[]>;

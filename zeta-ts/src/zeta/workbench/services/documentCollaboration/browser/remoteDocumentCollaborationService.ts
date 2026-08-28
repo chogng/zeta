@@ -14,7 +14,6 @@ import type { DocumentCollaborationPresence } from "../../../../editor/common/se
 import type { DocumentCollaborationRoomRole } from "../../../../editor/common/services/documentCollaborationService.js";
 import type { DocumentCollaborationSnapshot } from "../../../../editor/common/services/documentCollaborationService.js";
 import type { DocumentCollaborationSubmitOutcome } from "../../../../editor/common/services/documentCollaborationService.js";
-import type { IDocumentCollaborationService } from "../../../../editor/common/services/documentCollaborationService.js";
 import type { DocumentCollaborationEnvelope } from "../../../../editor/contrib/collaboration/common/protocol.js";
 import type { DocumentCollaborationRemoteEnvelope } from "../../../../editor/contrib/collaboration/common/protocol.js";
 
@@ -29,7 +28,12 @@ class RemoteCollaborationRequestError extends Error {
 }
 
 /** Fetch transport for the independently hosted durable Stanza collaboration service. */
-export class RemoteDocumentCollaborationService extends Disposable implements IDocumentCollaborationService {
+export interface RemoteDocumentCollaborationOptions {
+	readonly endpoint: string;
+	readonly bearerToken: string;
+}
+
+export class RemoteDocumentCollaborationService extends Disposable {
 	private readonly connections = new Set<RemoteDocumentCollaborationConnection>();
 
 	constructor() {
@@ -39,10 +43,9 @@ export class RemoteDocumentCollaborationService extends Disposable implements ID
 		}));
 	}
 
-	async open(input: DocumentCollaborationOpenInput, signal: AbortSignal): Promise<DocumentCollaborationConnection> {
-		if (input.target?.kind !== "remote") throw new TypeError("Remote Stanza collaboration requires a remote target");
+	async open(input: DocumentCollaborationOpenInput, options: RemoteDocumentCollaborationOptions, signal: AbortSignal): Promise<DocumentCollaborationConnection> {
 		throwIfCancelled(signal, "Opening a remote Stanza collaboration room was cancelled");
-		const target = normalizeTarget(input.target.endpoint, input.target.bearerToken);
+		const target = normalizeTarget(options.endpoint, options.bearerToken);
 		const opened = await this.request(target, "rooms/open", {
 			...(input.roomId === undefined ? {} : { roomId: input.roomId }),
 			clientId: input.clientId,

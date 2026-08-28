@@ -17,14 +17,15 @@ for (const profile of profiles) {
 			if (!options.input) throw new Error("Document editor requires its Workbench input during construction");
 			const selectedProfile = findEditorProfile(options.input, [profile]);
 			if (!selectedProfile) throw new Error("Document editor has no profile for " + options.input.resource.toString());
-			const appServerDocumentCollaborationService = options.documentCollaborationApi && options.serverEvents
-				? new AppServerDocumentCollaborationService(options.documentCollaborationApi, options.serverEvents)
-				: undefined;
-			const documentCollaborationService = new DocumentCollaborationService(appServerDocumentCollaborationService);
 			const paneOptions = createDocumentEditorPaneOptions(selectedProfile, {
 				onSave: options.onSave,
 				workingCopyService: options.workingCopyService,
-				documentCollaborationService,
+				createDocumentCollaborationService: ownerWindow => {
+					const appServerDocumentCollaborationService = options.documentCollaborationApi && options.serverEvents
+						? new AppServerDocumentCollaborationService(options.documentCollaborationApi, options.serverEvents)
+						: undefined;
+					return new DocumentCollaborationService(ownerWindow, appServerDocumentCollaborationService);
+				},
 			});
 			return new DocumentEditorPane(options.textFileService, paneOptions);
 		},

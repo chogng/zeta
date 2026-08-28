@@ -13,7 +13,7 @@ Stanza Text Engine 是 Zeta 唯一的行式文本编辑权威。文本、版本�
 | 输入、删除、undo/redo | `TextModel` + `EditorSelectionController` | 一个同步事务，不等待 IPC |
 | 换行、折叠、可见行和滚动 | `common/viewModel` + `common/viewLayout` | DOM-free、版本绑定 |
 | DOM、光标、选区和 decoration | `browser/view` + `browser/viewparts` | 只投影，不创建第二套模型或滚动权威 |
-| token、诊断、补全和 syntax facts | `common/languages` + frontend service | 异步结果必须通过 model identity 与 version gate |
+| token、诊断、补全、折叠、符号和结构选择 | `common/languages`、通用 provider contract 与 frontend service | 异步结果必须通过 model identity 与 version gate；App Server provider 由 Workbench 注册 |
 | 打开、保存、冲突和恢复 | Editor model service + Workbench adapter | 文件传输不拥有 live model |
 | 可选编辑能力 | `contrib/<feature>` | 移除 feature 不破坏基础模型正确性 |
 
@@ -173,10 +173,10 @@ contrib/<feature>/
 
 | 能力 | Editor owner | Host/adapter owner |
 | --- | --- | --- |
-| Live text model reference、dirty、baseline、conflict | `ITextModelService` / `BrowserTextModelService` | Workbench 提供 resource store 与 working-copy registration |
+| Live text model reference、dirty、baseline、conflict | Editor `ITextModelService` contract / Workbench `BrowserTextModelService` | Workbench 提供 resource store 与 working-copy registration |
 | 原始资源读写和 expected revision | editor-owned `ITextResourceStore` contract | Workbench/file service/App Server adapter |
 | Language provider registry 和 version gate | `ILanguageFeaturesService` 与 editor common stores | TextMate、Worker、Rust 或 LSP adapter |
-| Diff request/result 和 `DiffModel` | `common/diff` | `RustDiffComputationService` |
+| Diff request/result 和 `DiffModel` | `common/diff` | Workbench `IDiffService` / `AppServerDiffComputationService` |
 | Pane、tab、save command、notification | 无 | Workbench |
 
 Editor contract 使用领域类型；generated DTO 和 transport error 在 runtime adapter 内终止。强制能力缺失时显式失败，不添加行为不同的 production fallback。
@@ -197,8 +197,8 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 | TextModel、TextBuffer、history、snapshot、tracked range | ✅ Current | Renderer 内同步权威；PieceTree 仅为私有实现 |
 | Multi-selection、IME、clipboard、pointer/keyboard input | ✅ Current | Browser adapter 调用 common command |
 | Virtualized lines、wrapping、folding、selection、decorations、minimap | ✅ Current | `EditorViewport` 同步调度 |
-| Token、diagnostic、completion、TextMate 和 Rust syntax facts | ✅ Current | version-bound async provider path |
-| Diff editor 与 Rust diff | ✅ Current | Rust 计算，Stanza 投影 |
+| Token、diagnostic、completion、TextMate 和 App Server parser provider | ✅ Current | version-bound async provider path；Editor 不接收后端 API |
+| Diff editor 与 App Server diff | ✅ Current | Workbench 创建计算服务，Stanza 消费通用结果 |
 | Stable view context 与 single frame context | ✅ Current | `EditorViewContext` 持有稳定读取入口；`EditorRenderingContext` 绑定单次 render pass |
 | Host-owned Part DOM mounting | ✅ Current | `EditorViewport` 显式挂载 Part 根节点并固定 sibling 顺序 |
 | Per-Part invalidation 与 coordinated frame scheduler | Proposed | 当前 `project` 同步 render 全部 Parts |

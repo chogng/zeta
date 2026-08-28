@@ -22,7 +22,6 @@ test("Stanza collaboration contribution keeps a newly issued invitation availabl
 	environment.window.document.body.append(contribution.element);
 	contribution.setState("connected", {
 		roomId: "stanza-room",
-		target: { kind: "remote", endpoint: "https://collaboration.zeta.example", bearerToken: "0123456789abcdef0123456789abcdef" },
 		canManageMembers: true,
 	});
 
@@ -43,7 +42,7 @@ test("Stanza collaboration contribution keeps a newly issued invitation availabl
 	environment.window.close();
 });
 
-test("Stanza collaboration contribution lets a remote owner inspect, rotate, and revoke other members", async () => {
+test("Stanza collaboration contribution lets a room owner inspect, rotate, and revoke other members", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");
 	Object.defineProperty(environment.window, "confirm", { configurable: true, value: () => true });
 	const rotations: string[] = [];
@@ -67,7 +66,6 @@ test("Stanza collaboration contribution lets a remote owner inspect, rotate, and
 	environment.window.document.body.append(contribution.element);
 	contribution.setState("connected", {
 		roomId: "stanza-room",
-		target: { kind: "remote", endpoint: "https://collaboration.zeta.example", bearerToken: "0123456789abcdef0123456789abcdef" },
 		principalId: "owner-1",
 		canManageMembers: true,
 	});

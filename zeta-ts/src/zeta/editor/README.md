@@ -11,7 +11,7 @@ Stanza 采用与 VS Code `src/vs/editor` 一致的扁平职责分区：`common` 
 | 完整行式实现 | `editor.all.ts` | Code 使用的完整行式 contribution 集合；不注册 Workbench pane |
 | Code 功能实现 | `editor.code.all.ts` | 加载完整行式实现，由 Code Workbench 注册 code/diff pane |
 | Academic 功能实现 | `editor.academic.all.ts` | 只加载 Academic 富文档 contribution；不加载 Code bundle 或 Code pane |
-| 程序化调用 | `editor.api.ts` | `editor.create/createModel`、命名主题注册与选择、standalone model registry、`TextModel`、schema、transaction 和坐标值对象；不注册 pane |
+| 程序化调用 | `editor.api.ts` | `editor.create/createModel`、`languages.register/register*Provider`、命名主题、standalone model registry、`TextModel`、schema、transaction 和坐标值对象；不注册 pane |
 | 完整 standalone 入口 | `editor.main.ts` | 先加载 `editor.all.ts` 的完整行式 contribution，再导出 `editor.api.ts` |
 
 ## 核心文档
@@ -33,6 +33,7 @@ Editor 维护以下核心入口。实现 README 可以补充局部细节，但�
 | --- | --- | --- | --- |
 | `common/core` | `base/common` | 文本坐标、文档坐标、selection、纯变换算法 | DOM、Workbench service、App Server DTO |
 | `common/model` | `common/core`、`base/common` | `TextModel`、`TextBuffer`、有序逻辑行、LineId、mark/atom/facet/region/relation、history、schema、transaction、serialization | 文件传输、浏览器 focus、产品 profile |
+| `common/services` | `common/languages`、`contrib/*/common`、`platform` | 语言身份、语言配置和 provider registry 的独立服务契约，以及公开 API 的基础值对象组合 | App Server DTO、产品 provider、Workbench adapter |
 | `common/cursor`、`common/viewModel`、`common/viewLayout` | 文本内核与 `base/common` | 行式编辑器实例状态和纯布局投影 | DOM 和产品判断 |
 | `browser` | `common`、`base/browser` 和显式前端 service contract | code/document/diff/multi-diff widget、输入、viewport、contribution registry 与 editor-facing runtime adapter | Workbench pane/input、文件/working-copy 生命周期、Workbench 模式选择 |
 | `standalone/common`、`standalone/browser` | `editor/browser`、`editor/common`、`platform` | 单窗口 services、命名主题、URI/language model registry、`editor.create/createModel` 生命周期 | 用户主题持久化、文件 dirty/save/revert、Workbench service 或 pane |
@@ -83,10 +84,12 @@ Code build mode ───────┬→ editor.code.all.ts → editor.all.ts
 Academic build mode ───┬→ editor.academic.all.ts → document contribution only
                        └→ workbench/contrib/academic ──────→ profile + document pane registration
 
-editor.api.ts ─────────────→ editor.create/createModel + TextModel/document APIs
+editor.api.ts ─────────────→ editor.create/createModel + languages.register/register*Provider + TextModel/document APIs
 editor.main.ts ────────────→ editor.all.ts + editor.api.ts
-standalone/{common,browser} ─→ window services + model/editor/theme registries; never Workbench persistence
+standalone/{common,browser} ─→ window services + model/editor/language/theme registries; never Workbench persistence
 ```
+
+`LanguageService` 只管理语言 ID 与文件关联，`LanguageConfigurationService` 只管理括号、注释、缩进等编辑规则，`LanguageFeaturesService` 只管理能力 provider registry。Standalone 的 `languages` API 和 Workbench 的 App Server、TextMate、扩展适配器都写入这组共享 registry；具体 Hover、补全、折叠等 contribution 从 registry 构造自己的 model-level service，Editor 不读取服务器 DTO。
 
 Workbench 模式 contribution 是唯一能力选择点。Code 与 Academic 各自加载一个功能实现 bundle，并与对应 Workbench contribution 配对；Academic 不以 `editor.all.ts` 为基底。共享入口在窗口启动时只加载一个 bundle；切换模式通过 reload 创建新的 Renderer 生命周期。新增模式必须先登记 `WorkbenchModeId` 并补齐 Browser/Electron 的穷尽 loader 映射；不得在共享 Workbench、widget 或 model 内增加模式分支。
 
@@ -98,7 +101,7 @@ Workbench 模式 contribution 是唯一能力选择点。Code 与 Academic 各�
 | `LineDocumentSnapshot` | 有序逻辑行与 mark/atom/facet/region/relation 的单版本只读视图 | schema projection、codec、renderer、model tests |
 | `TextBuffer` | 字符与物理行存储 contract；PieceTree 是当前私有实现 | TextModel edit、snapshot、worker mirror、maintenance |
 | `CodeEditorWidget` | Code 模式的行式 DOM projection 与 input/navigation surface | viewport、accessibility、contributed controllers |
-| `StandaloneServices` | standalone 窗口级 model/language/theme/worker 服务；language 与 worker 只允许首次初始化覆盖，theme 始终由 `StandaloneThemeService` 拥有 | `editor.api.ts`、standalone 生命周期测试、调试入口 |
+| `StandaloneServices` | standalone 窗口级 model/language-identity/language-configuration/language-features/theme/worker 服务；服务与 worker 只允许首次初始化覆盖，theme 始终由 `StandaloneThemeService` 拥有 | `editor.api.ts`、standalone 生命周期测试、调试入口 |
 | `StandaloneThemeService` | 命名主题注册、默认 Light、活动主题切换与系统高对比度投影；不读取 Workbench 配置 | `editor.create` 的 `theme`/`autoDetectHighContrast`、`editor.defineTheme/setTheme`、主题服务测试 |
 | `registerEditorContribution` | 所有 Stanza capability 的进程级静态注册 | `editor.*.all.ts`、text/document 挂载点和 contribution 顺序 |
 | `RichTextEditorWidget` | 结构化节点、marks、selection 与 node-view lifecycle | schema profile、clipboard、collaboration decoration |

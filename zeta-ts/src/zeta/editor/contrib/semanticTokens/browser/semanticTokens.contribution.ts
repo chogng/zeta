@@ -2,11 +2,12 @@ import { registerEditorContribution } from "../../../browser/editorExtensions.js
 import { LanguageTokenLineIndex } from "../../../common/tokens/languageTokenLineIndex.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { SemanticTokensController } from "./semanticTokensController.js";
+import { SemanticTokensService } from '../common/semanticTokens.js';
 
 registerEditorContribution({
 	id: "editor.contrib.semanticTokens",
 	configure: context => {
-		const semanticTokens = context.register(context.languageFeaturesService.createSemanticTokensService(context.model, context.options.input.resource));
+		const semanticTokens = context.register(new SemanticTokensService(context.model, context.languageFeaturesService.semanticTokensProvider, context.options.input.resource));
 		const overlay = context.register(new LanguageTokenLineIndex(semanticTokens.tokens));
 		context.provideCapability(TextEditorCapability.semanticTokens, semanticTokens);
 		context.provideCapability(TextEditorCapability.semanticTokenOverlay, overlay);

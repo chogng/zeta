@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { RustDiffComputationService } from "../../../browser/services/rustDiffComputationService.js";
-import type { IDiffApi } from "../../../../platform/diff/common/diffApi.js";
+import { AppServerDiffComputationService } from "../../browser/appServerDiffComputationService.js";
+import type { IDiffApi } from "../../../../../platform/diff/common/diffApi.js";
 
-test("Rust diff adapter accepts Rust-projected UTF-16 columns for Unicode", async () => {
+test("App Server diff adapter accepts UTF-16 columns for Unicode", async () => {
 	let request: { readonly original: string; readonly modified: string } | undefined;
 	const api: IDiffApi = {
 		compute: async value => {
@@ -29,7 +29,7 @@ test("Rust diff adapter accepts Rust-projected UTF-16 columns for Unicode", asyn
 			};
 		},
 	};
-	using service = new RustDiffComputationService(api);
+	using service = new AppServerDiffComputationService(api);
 	const diff = await service.compute({
 		original: { version: 1, text: "before 😀 after" },
 		modified: { version: 1, text: "before 🤖 after" },
@@ -49,7 +49,7 @@ test("Rust diff adapter accepts Rust-projected UTF-16 columns for Unicode", asyn
 	}]);
 });
 
-test("Rust diff adapter preserves Stanza's trailing empty line", async () => {
+test("App Server diff adapter preserves the editor's trailing empty line", async () => {
 	const api: IDiffApi = {
 		compute: async () => ({
 			rows: [
@@ -61,7 +61,7 @@ test("Rust diff adapter preserves Stanza's trailing empty line", async () => {
 			modifiedLineCount: 1,
 		}),
 	};
-	using service = new RustDiffComputationService(api);
+	using service = new AppServerDiffComputationService(api);
 	const diff = await service.compute({
 		original: { version: 1, text: "same\n" },
 		modified: { version: 1, text: "same" },

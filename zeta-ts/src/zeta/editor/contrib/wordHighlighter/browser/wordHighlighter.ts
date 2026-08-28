@@ -14,7 +14,7 @@ import { type LanguageFeatureProviderMetadata, type LanguageFeatureProviderRegis
 import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { TrackedRangeStickiness } from '../../../common/model/trackedRange.js';
-import { type ILanguageFeaturesService } from '../../../common/services/languageService.js';
+import type { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { getHighlightDecorationOptions } from './highlightDecorations.js';
 import { TextualMultiDocumentHighlightFeature } from './textualHighlightProvider.js';
 

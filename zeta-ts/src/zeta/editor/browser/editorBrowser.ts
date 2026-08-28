@@ -3,14 +3,15 @@ import { isNonEmptyArray } from "../../base/common/arrays.js";
 import { type Event } from "../../base/common/event.js";
 import { Disposable, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { isFiniteNumber, isSafeInteger } from "../../base/common/numbers.js";
-import { type ISyntaxApi } from "../../platform/syntax/common/syntaxApi.js";
 import { type EditorResourceInput } from "../common/editorResource.js";
 import { EditorSelectionController } from "../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../common/core/selection.js";
 import { TextPosition, type TextRange } from "../common/core/text.js";
 import { type LanguageCompletionWorkerFactory } from "../common/languages/completion/languageCompletionService.js";
 import { type SyntaxWorkerFactory } from "../common/languages/syntax/syntaxService.js";
-import { LanguageFeaturesService, type ILanguageFeaturesService } from "../common/services/languageService.js";
+import type { ILanguageFeaturesService } from '../common/services/languageFeatures.js';
+import { LanguageConfigurationService, type ILanguageConfigurationService } from '../common/services/languageConfigurationService.js';
+import { LanguageFeaturesService } from '../common/services/languageFeaturesService.js';
 import { type TextModel } from "../common/model/textModel.js";
 import { type EditorIndentationOptions } from "../common/editorIndentation.js";
 import { type EditorActiveLineHighlight, type EditorLanguageEditingAdapter, type EditorMinimap, type EditorRuler, type EditorTextDirection, type EditorView, type EditorViewport, type EditorViewportPresentation } from "./view.js";
@@ -21,7 +22,6 @@ import { type LanguageLocation } from "../contrib/gotoSymbol/common/languageNavi
 import { type LanguageWorkspaceEdit } from "../common/languages/languageWorkspaceEdit.js";
 import { type ILanguageDiagnosticsService } from "../common/services/languageDiagnosticsService.js";
 import { type DecorationSource, type OwnedDecorationSource } from "./viewparts/decorations/decorationPresentation.js";
-import { type IDiffApi } from "../../platform/diff/common/diffApi.js";
 import { type IInstantiationService } from "../../platform/instantiation/common/instantiation.js";
 import { type IAccessibilityService } from "../../platform/accessibility/common/accessibility.js";
 import { TabFocus } from "./config/tabFocus.js";
@@ -72,10 +72,8 @@ export interface EditorBrowserOptions {
 	readonly tabFocus?: TabFocus;
 	/** Optional shared language registrations and providers for this editor host. */
 	readonly languageFeaturesService?: ILanguageFeaturesService;
-	/** Optional Rust-backed syntax facts used for parser-grade fold ranges. */
-	readonly syntaxApi?: ISyntaxApi;
-	/** Optional Rust-backed line diff API exposed to editor-local contributions. */
-	readonly diffApi?: IDiffApi;
+	/** Optional shared language editing configuration for this editor host. */
+	readonly languageConfigurationService?: ILanguageConfigurationService;
 	/** Window-scoped constructor service for runtime editor contributions. */
 	readonly instantiationService?: IInstantiationService;
 	/** Optional accessibility policy used by native screen-reader content. */
@@ -184,8 +182,12 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 			if (options.languageSupport) this._register(options.languageSupport);
 			const model = options.model;
 			this.onDidChange = listener => model.onDidChange(() => listener());
-			const languageFeaturesService = options.languageFeaturesService ?? this._register(new LanguageFeaturesService());
-			const configurations = languageFeaturesService.configurations;
+			if (options.languageFeaturesService && !options.languageConfigurationService) {
+				throw new TypeError('Editor language features require their language configuration service');
+			}
+			const languageConfigurationService = options.languageConfigurationService ?? this._register(new LanguageConfigurationService());
+			const languageFeaturesService = options.languageFeaturesService ?? this._register(new LanguageFeaturesService(languageConfigurationService));
+			const configurations = languageConfigurationService;
 			this.selections = this._register(new EditorSelectionController(
 				model,
 				TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))),

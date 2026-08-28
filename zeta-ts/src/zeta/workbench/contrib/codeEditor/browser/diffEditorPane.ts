@@ -44,7 +44,7 @@ export class DiffEditorPane extends Disposable implements IEditorPane {
 		}
 		if (!options || typeof options !== "object" || typeof options.createComputationService !== "function") {
 			this.dispose();
-			throw new TypeError("Diff editor pane requires the Rust diff computation service");
+			throw new TypeError("Diff editor pane requires a Workbench diff computation service");
 		}
 		if (!options.modelService || typeof options.modelService.acquire !== "function") {
 			this.dispose();
@@ -126,7 +126,7 @@ class DiffEditorPaneSession extends Disposable {
 		this._register(modified);
 		const computationService = options.createComputationService();
 		if (!computationService || typeof computationService.compute !== "function") {
-			throw new TypeError("Diff editor pane factory returned an invalid Rust diff computation service");
+			throw new TypeError("Diff editor pane factory returned an invalid Workbench diff computation service");
 		}
 		this._register(computationService);
 		const model = this._register(new DiffModel({

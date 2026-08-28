@@ -9,7 +9,7 @@ import { type EditorEditCommand } from "../../../common/commands/editorEditComma
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { TextRange, type TextEdit } from "../../../common/core/text.js";
 import { TrackedRangeStickiness, type TrackedRange } from "../../../common/model/trackedRange.js";
-import { type LinkedEditingService } from "../common/linkedEditing.js";
+import { LinkedEditingService } from "../common/linkedEditing.js";
 
 /** Synchronizes provider-declared linked ranges through one atomic native-input transaction. */
 export class LinkedEditingController extends Disposable {
@@ -119,6 +119,6 @@ function matchesEntirePattern(pattern: RegExp, value: string): boolean {
 
 registerEditorContribution({ id: "editor.contrib.linkedEditing", install: context => {
 	if (context.kind !== "text") return;
-	const service = context.register(context.languageFeaturesService.createLinkedEditingService(context.model, context.options.input.resource));
+	const service = context.register(new LinkedEditingService(context.model, context.languageFeaturesService.linkedEditingProvider, context.options.input.resource));
 	context.register(new LinkedEditingController(context.view, context.view.element, context.viewport, context.selections, service, context.languageId, () => context.configurations.getLanguageConfiguration(context.languageId).wordPattern, context.onLanguageError));
 } });

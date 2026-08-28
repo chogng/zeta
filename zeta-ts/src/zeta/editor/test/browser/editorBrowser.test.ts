@@ -3,7 +3,9 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { DisposableTracker, installDisposableTracker } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
-import { LanguageFeaturesService } from "../../common/services/languageService.js";
+import { registerBuiltinLanguageConfigurations } from "../../common/languages/languageBuiltinConfigurations.js";
+import { LanguageFeaturesService } from "../../common/services/languageFeaturesService.js";
+import { LanguageConfigurationService } from '../../common/services/languageConfigurationService.js';
 import { TextModel } from "../../common/model/textModel.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";
 
@@ -32,6 +34,9 @@ test("Stanza editor browser composes native input, local language syntax, and pr
 	const model = new TextModel("{\"name\": \"alpha\"");
 	const resource = URI.file("C:\\project\\settings.json");
 	const errors: unknown[] = [];
+	using languageConfigurationService = new LanguageConfigurationService();
+	using languageFeaturesService = new LanguageFeaturesService(languageConfigurationService);
+	using languageConfigurations = registerBuiltinLanguageConfigurations(languageConfigurationService.configurations);
 	const editorPart = new EditorBrowser({
 		container,
 		input: {
@@ -40,6 +45,8 @@ test("Stanza editor browser composes native input, local language syntax, and pr
 		},
 		languageId: "json",
 		model,
+		languageFeaturesService,
+		languageConfigurationService,
 		onLanguageError: error => errors.push(error),
 	});
 	editorPart.layout({ width: 500, height: 240 });
@@ -123,10 +130,11 @@ test("Stanza editor disposal cancels an in-flight folding provider before late r
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	const model = new TextModel("root\n  child\nafter");
 	const resource = URI.file("C:\\project\\async-fold.txt");
-	using languageFeatures = new LanguageFeaturesService();
+	using languageConfigurationService = new LanguageConfigurationService();
+	using languageFeatures = new LanguageFeaturesService(languageConfigurationService);
 	let resolveRanges: ((ranges: readonly { readonly startLineIndex: number; readonly endLineIndex: number }[]) => void) | undefined;
 	let providerSignal: AbortSignal | undefined;
-	using registration = languageFeatures.registerFoldingRangeProvider({
+	using registration = languageFeatures.foldingRangeProvider.register({
 		languageIds: ["plaintext"],
 		provideFoldingRanges: (_request, signal) => {
 			providerSignal = signal;
@@ -134,7 +142,7 @@ test("Stanza editor disposal cancels an in-flight folding provider before late r
 		},
 	});
 	const errors: unknown[] = [];
-	const editorPart = new EditorBrowser({ container, input: { resource, label: "async-fold.txt" }, languageId: "plaintext", model, languageFeaturesService: languageFeatures, onLanguageError: error => errors.push(error) });
+	const editorPart = new EditorBrowser({ container, input: { resource, label: "async-fold.txt" }, languageId: "plaintext", model, languageFeaturesService: languageFeatures, languageConfigurationService, onLanguageError: error => errors.push(error) });
 
 	assert.equal(providerSignal?.aborted, false);
 	editorPart.dispose();
@@ -214,8 +222,9 @@ test("Stanza editor browser prepares selected before-save contributions for host
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	const model = new TextModel("alpha");
 	const resource = URI.file("C:\\project\\save.txt");
-	using languageFeatures = new LanguageFeaturesService();
-	using formatting = languageFeatures.registerFormattingProvider({
+	using languageConfigurationService = new LanguageConfigurationService();
+	using languageFeatures = new LanguageFeaturesService(languageConfigurationService);
+	using formatting = languageFeatures.formattingProvider.register({
 		languageIds: ["plaintext"],
 		provideDocumentFormattingEdits: () => [{ range: TextRange.from(TextPosition.at(0, 0), TextPosition.at(0, 5)), text: "formatted" }],
 	});
@@ -224,6 +233,7 @@ test("Stanza editor browser prepares selected before-save contributions for host
 		input: { resource, label: "save.txt" },
 		languageId: "plaintext",
 		languageFeaturesService: languageFeatures,
+		languageConfigurationService,
 		model,
 		formatOnSave: true,
 		insertFinalNewLine: true,

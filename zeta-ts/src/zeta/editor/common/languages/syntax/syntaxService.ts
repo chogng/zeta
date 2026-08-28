@@ -1,6 +1,6 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { assertSyntaxRequest, SyntaxProviderRegistry, type SyntaxProviderRequest, type SyntaxRequest, type RegisteredSyntaxProvider } from "./syntaxProviders.js";
-import { LanguageRequestCoordinator, type LanguageRequestOptions, type LanguageRequestOutcome, type LanguageWorker, type LanguageWorkerRequest } from "../languageRequestCoordinator.js";
+import { LanguageRequestCoordinator, type LanguageRequestOptions, type LanguageRequestOutcome, type LanguageWorker, type LanguageWorkerModelSynchronizer, type LanguageWorkerRequest, type LanguageWorkerResultDisposition, type LanguageWorkerResultSettler } from "../languageRequestCoordinator.js";
 import { LanguageResultAcceptance } from "../languageResultStore.js";
 import { createLanguageDiagnosticSnapshotNormalizer, createLanguageDiagnosticStore, createLanguageTokenSnapshotNormalizer, createLanguageTokenStore, type LanguageDiagnostic, type LanguageDiagnosticResult, type LanguageTokenResult } from "../languageResults.js";
 import { type TextModel } from "../../model/textModel.js";
@@ -75,7 +75,9 @@ export class SyntaxService extends Disposable {
 		}
 		this.tokens = this._register(createLanguageTokenStore(model));
 		this.diagnostics = this._register(createLanguageDiagnosticStore(model));
-		const createFallbackWorker = options.workerFactory ?? (() => new SyntaxProviderWorker(registry, options.onProviderError));
+		const createFallbackWorker = options.workerFactory
+			? () => new SyntaxProviderOverlayWorker(registry, options.workerFactory!())
+			: () => new SyntaxProviderWorker(registry, options.onProviderError);
 		const workerDecorator = options.workerDecorator;
 		const createWorker = workerDecorator
 			? () => workerDecorator(createFallbackWorker())
@@ -120,6 +122,42 @@ export class SyntaxService extends Disposable {
 			this.requestDiagnostics(languageId, options),
 		]);
 		return Object.freeze({ tokens, diagnostics });
+	}
+}
+
+/** Gives explicitly prioritized renderer providers precedence over a host Worker. */
+class SyntaxProviderOverlayWorker implements SyntaxWorker, LanguageWorkerModelSynchronizer, LanguageWorkerResultSettler {
+	private readonly providers: SyntaxProviderWorker;
+
+	constructor(private readonly registry: SyntaxProviderRegistry, private readonly fallback: SyntaxWorker) {
+		this.providers = new SyntaxProviderWorker(registry);
+	}
+
+	run(request: LanguageWorkerRequest<SyntaxLane, SyntaxRequest>, signal: AbortSignal): Promise<SyntaxResult> {
+		const languageId = request.payload.languageId;
+		const preferred = request.lane === SYNTAX_TOKEN_LANE
+			? this.registry.getTokenProviders(languageId).some(provider => provider.tokenPriority > 0)
+			: this.registry.getDiagnosticProviders(languageId).some(provider => provider.diagnosticPriority > 0);
+		return preferred ? this.providers.run(request, signal) : this.fallback.run(request, signal);
+	}
+
+	synchronizeModel(change: Parameters<LanguageWorkerModelSynchronizer["synchronizeModel"]>[0]): void {
+		const synchronizer = this.fallback as Partial<LanguageWorkerModelSynchronizer>;
+		synchronizer.synchronizeModel?.(change);
+	}
+
+	settleResult(requestId: number, disposition: LanguageWorkerResultDisposition): void {
+		const settler = this.fallback as Partial<LanguageWorkerResultSettler>;
+		settler.settleResult?.(requestId, disposition);
+	}
+
+	dispose(): void {
+		this.providers.dispose();
+		this.fallback.dispose();
+	}
+
+	[Symbol.dispose](): void {
+		this.dispose();
 	}
 }
 

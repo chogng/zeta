@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { TextPosition, TextRange } from '../../../../../editor/common/core/text.js';
 import { LanguageCompletionTriggerKind } from '../../../../../editor/common/languages/completion/languageCompletionProviders.js';
-import { BrowserTextModelService } from '../../../../../editor/browser/services/browserTextModelService.js';
+import { BrowserTextModelService } from '../../../../services/textmodelResolver/browser/browserTextModelService.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';

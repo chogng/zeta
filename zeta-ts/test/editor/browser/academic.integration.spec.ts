@@ -76,7 +76,7 @@ test("Academic TextModel editor persists selected font, size, and emphasis forma
 test("Academic TextModel editor exposes collaboration as a separate contribution", async ({ page }) => {
 	await page.goto("/academic.html");
 	await page.evaluate(() => {
-		const responses = ["", "editor-browser-room"];
+		const responses = ["editor-browser-room"];
 		window.prompt = () => responses.shift() ?? null;
 	});
 	const toolbar = page.locator("#document-editor .stanza-document-collaboration-toolbar");
@@ -87,9 +87,9 @@ test("Academic TextModel editor exposes collaboration as a separate contribution
 	await expect(toolbar.locator(".stanza-document-collaboration-status")).toHaveText("Room: editor-browser-room");
 });
 
-test("Academic TextModel editor exposes remote-owner invitations", async ({ page }) => {
+test("Academic TextModel editor exposes room-owner invitations", async ({ page }) => {
 	await page.goto("/academic.html");
-	const prompts = ["https://collaboration.zeta.example", "0123456789abcdef0123456789abcdef", "editor-browser-room", "Writer", "viewer"];
+	const prompts = ["editor-browser-room", "Writer", "viewer"];
 	await page.evaluate(({ prompts }) => {
 		window.prompt = () => prompts.shift() ?? null;
 	}, { prompts });

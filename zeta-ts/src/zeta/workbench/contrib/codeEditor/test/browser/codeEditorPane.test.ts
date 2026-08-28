@@ -6,7 +6,9 @@ import { URI } from "../../../../../base/common/uri.js";
 import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
 import { EditorPaneVisibility } from "../../../../browser/parts/editor/editorPane.js";
 import { TextFileContentSource, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest } from "../../../../services/textfile/common/textFileService.js";
-import { LanguageFeaturesService } from "../../../../services/language/common/languageFeaturesService.js";
+import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
+import { LanguageService } from '../../../../../editor/common/services/languageService.js';
+import { registerBuiltinLanguageDescriptions } from '../../../../../editor/common/languages/languageBuiltinDescriptions.js';
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { type ILanguageDiagnosticsService, type LanguageDiagnosticsPublisher, type LanguageDiagnosticSnapshot } from "../../../../../editor/common/services/languageDiagnosticsService.js";
 import { type TextModel } from "../../../../../editor/common/model/textModel.js";
@@ -27,7 +29,7 @@ for (const [name, value] of Object.entries({
 
 await import("../../../../../editor/editor.code.all.js");
 const { CodeEditorPane: EditorPane } = await import("../../browser/codeEditorPane.js");
-const { BrowserTextModelService } = await import("../../../../../editor/browser/services/browserTextModelService.js");
+const { BrowserTextModelService } = await import("../../../../services/textmodelResolver/browser/browserTextModelService.js");
 const { BrowserTextResourceStore } = await import("../../browser/browserTextResourceStore.js");
 const { EditorTextDirection } = await import("../../../../../editor/browser/view.js");
 const { EditorMinimap } = await import("../../../../../editor/browser/view.js");
@@ -82,9 +84,11 @@ test("Stanza editor pane acquires the Workbench language service for its detecte
 	const textFiles = new ImmediateTextFiles("const value = 1;");
 	const resourceStore = new BrowserTextResourceStore(textFiles);
 	using models = new BrowserTextModelService(resourceStore);
+	using languageService = new LanguageService();
+	using builtinLanguages = registerBuiltinLanguageDescriptions(languageService.languages);
 	using languages = new LanguageFeaturesService();
 	const diagnostics = new RecordingLanguageDiagnosticsService();
-	const pane = new EditorPane(resourceStore, { modelService: models, languageFeaturesService: languages, languageDiagnosticsService: diagnostics });
+	const pane = new EditorPane(resourceStore, { modelService: models, languageFeaturesService: languages, languageConfigurationService: languages.languageConfigurationService, languageResolver: languageService, languageDiagnosticsService: diagnostics });
 	pane.create(parent);
 	const resource = URI.file("C:\\project\\main.ts");
 
@@ -181,12 +185,15 @@ test("Stanza editor pane resolves extension first-line languages after loading a
 	const textFiles = new ImmediateTextFiles("#!/usr/bin/env demo\nprint('ok')");
 	const resourceStore = new BrowserTextResourceStore(textFiles);
 	using models = new BrowserTextModelService(resourceStore);
+	using languageService = new LanguageService();
 	using languages = new LanguageFeaturesService();
-	using registration = languages.registerLanguage({ id: "demo", firstLine: "#!.*\\bdemo" }, { priority: 100 });
+	using registration = languageService.registerLanguage({ id: "demo", firstLine: "#!.*\\bdemo" }, { priority: 100 });
 	let languageId: string | undefined;
 	const pane = new EditorPane(resourceStore, {
 		modelService: models,
 		languageFeaturesService: languages,
+		languageConfigurationService: languages.languageConfigurationService,
+		languageResolver: languageService,
 		createPart: options => {
 			languageId = options.languageId;
 			return { layout: () => {}, focus: () => {}, getValue: () => "", dispose: () => {}, [Symbol.dispose]: () => {} };

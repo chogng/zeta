@@ -1,32 +1,44 @@
-import { strict as assert } from "node:assert";
-import test from "node:test";
-import { TextModel } from "../../../../../editor/common/model/textModel.js";
-import { LanguageRequestStatus } from "../../../../../editor/common/languages/languageRequestCoordinator.js";
-import { LanguageFeaturesService } from "../../common/languageFeaturesService.js";
-import { TextPosition } from "../../../../../editor/common/core/text.js";
+import { strict as assert } from 'node:assert';
+import test from 'node:test';
+import { URI } from '../../../../../base/common/uri.js';
+import { TextPosition } from '../../../../../editor/common/core/text.js';
+import { LanguageCompletionService } from '../../../../../editor/common/languages/completion/languageCompletionService.js';
+import { LanguageRequestStatus } from '../../../../../editor/common/languages/languageRequestCoordinator.js';
+import { SyntaxService } from '../../../../../editor/common/languages/syntax/syntaxService.js';
+import { TextModel } from '../../../../../editor/common/model/textModel.js';
+import { LanguageConfigurationService } from '../../../../../editor/common/services/languageConfigurationService.js';
+import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';
+import { LanguageService } from '../../../../../editor/common/services/languageService.js';
+import { HoverService } from '../../../../../editor/contrib/hover/common/hover.js';
+import { WorkbenchLanguageFeatures } from '../../browser/workbenchLanguageFeatures.js';
 
-test("Language features service owns shared registrations while document services stay caller-owned", async () => {
-	using languageFeatures = new LanguageFeaturesService();
-	using model = new TextModel("const answer = 42;");
-	using syntax = languageFeatures.createSyntaxService(model);
-	using completions = languageFeatures.createCompletionService(model);
+test('Workbench installs product languages while Editor owns provider registries', async () => {
+	using languageService = new LanguageService();
+	using languageConfigurations = new LanguageConfigurationService();
+	using languageFeatures = new LanguageFeaturesService(languageConfigurations);
+	using workbenchLanguages = new WorkbenchLanguageFeatures(languageService, languageConfigurations, languageFeatures);
+	using model = new TextModel('const answer = 42;');
+	using syntax = new SyntaxService(model, languageFeatures.syntaxProvider);
+	using completions = new LanguageCompletionService(model, languageFeatures.completionProvider);
 
-	assert.equal(languageFeatures.configurations.getLanguageConfiguration("typescript").comments.lineComment, "//");
-	assert.equal((await syntax.requestAll("typescript")).tokens.status, LanguageRequestStatus.Applied);
+	assert.equal(languageService.resolveLanguageId({ resource: URI.file('C:\\project\\source.ts') }), 'typescript');
+	assert.equal(languageConfigurations.getLanguageConfiguration('typescript').comments.lineComment, '//');
+	assert.equal((await syntax.requestAll('typescript')).tokens.status, LanguageRequestStatus.Applied);
 	assert.equal(completions.textModel, model);
 });
 
-test("Language features service atomically owns a replaceable cross-kind provider batch", async () => {
-	using languageFeatures = new LanguageFeaturesService();
-	using model = new TextModel("answer");
-	using hover = languageFeatures.createHoverService(model);
-	const registration = languageFeatures.registerProviderBatch({ hovers: [{ providerId: "host.first", languageIds: ["typescript"], provideHover: () => ({ contents: ["first"] }) }] });
+test('Language features service atomically owns a replaceable cross-kind provider batch', async () => {
+	using languageConfigurations = new LanguageConfigurationService();
+	using languageFeatures = new LanguageFeaturesService(languageConfigurations);
+	using model = new TextModel('answer');
+	using hover = new HoverService(model, languageFeatures.hoverProvider);
+	const registration = languageFeatures.registerProviderBatch({ hovers: [{ providerId: 'host.first', languageIds: ['typescript'], provideHover: () => ({ contents: ['first'] }) }] });
 
-	assert.deepEqual(await hover.provideHover("typescript", TextPosition.at(0, 1)), { contents: ["first"] });
-	registration.replace({ hovers: [{ providerId: "host.second", languageIds: ["typescript"], provideHover: () => ({ contents: ["second"] }) }] });
-	assert.deepEqual(await hover.provideHover("typescript", TextPosition.at(0, 1)), { contents: ["second"] });
+	assert.deepEqual(await hover.provideHover('typescript', TextPosition.at(0, 1)), { contents: ['first'] });
+	registration.replace({ hovers: [{ providerId: 'host.second', languageIds: ['typescript'], provideHover: () => ({ contents: ['second'] }) }] });
+	assert.deepEqual(await hover.provideHover('typescript', TextPosition.at(0, 1)), { contents: ['second'] });
 
 	registration.dispose();
-	assert.equal(await hover.provideHover("typescript", TextPosition.at(0, 1)), undefined);
+	assert.equal(await hover.provideHover('typescript', TextPosition.at(0, 1)), undefined);
 	assert.throws(() => registration.replace({}), /disposed/);
 });

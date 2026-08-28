@@ -10,6 +10,7 @@ import { registerEditorDecorationSourceFactory } from '../../../browser/parts/ed
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { ActiveEditorContext } from '../../../common/contextkeys.js';
 import { IGitService } from '../../../services/git/common/gitService.js';
+import { IDiffService } from '../../../services/diff/common/diffService.js';
 import { CODE_EDITOR_ID } from '../../codeEditor/browser/codeEditorInput.js';
 import { IQuickDiffEditorControllerService, IQuickDiffModelService, IQuickDiffService } from '../common/quickDiff.js';
 import { GitQuickDiffProvider } from './gitQuickDiffProvider.js';
@@ -32,8 +33,8 @@ registerWorkbenchServiceContribution({
 
 registerWorkbenchServiceContribution({
 	service: IQuickDiffModelService,
-	dependencies: [IQuickDiffService],
-	install: context => context.register(new QuickDiffModelService(context.container.get(IQuickDiffService))),
+	dependencies: [IQuickDiffService, IDiffService],
+	install: context => context.register(new QuickDiffModelService(context.container.get(IQuickDiffService), context.container.get(IDiffService))),
 });
 
 registerWorkbenchContribution('workbench.contrib.gitQuickDiffProvider', WorkbenchPhase.BlockRestore, accessor => {
@@ -43,9 +44,9 @@ registerWorkbenchContribution('workbench.contrib.gitQuickDiffProvider', Workbenc
 	return resources;
 });
 
-registerEditorDecorationSourceFactory(({ accessor, diffApi, model, resource }) => {
-	if (!diffApi || (resource.scheme !== 'file' && !isRemoteResource(resource))) return undefined;
-	return new QuickDiffDecorator(resource, model, diffApi, accessor.get(IQuickDiffModelService), accessor.get(IConfigurationService));
+registerEditorDecorationSourceFactory(({ accessor, model, resource }) => {
+	if (resource.scheme !== 'file' && !isRemoteResource(resource)) return undefined;
+	return new QuickDiffDecorator(resource, model, accessor.get(IQuickDiffModelService), accessor.get(IConfigurationService));
 });
 
 registerEditorContribution({

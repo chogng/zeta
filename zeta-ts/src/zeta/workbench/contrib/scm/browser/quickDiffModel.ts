@@ -1,12 +1,12 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, MutableDisposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
-import { RustDiffComputationService } from '../../../../editor/browser/services/rustDiffComputationService.js';
+import { type IDiffComputationService } from '../../../../editor/common/diff/diffComputationService.js';
 import { DiffModel } from '../../../../editor/common/diff/diffModel.js';
 import { LineDiffKind, type LineDiff, type LineDiffHunk, type LineDiffRow } from '../../../../editor/common/diff/lineDiff.js';
 import { TextModel } from '../../../../editor/common/model/textModel.js';
-import { type IDiffApi } from '../../../../platform/diff/common/diffApi.js';
 import { type IQuickDiffModel, type IQuickDiffModelService, type IQuickDiffService, type QuickDiffChange, type QuickDiffComparison, type QuickDiffModelReference, type QuickDiffModelState } from '../common/quickDiff.js';
+import { type IDiffService } from '../../../services/diff/common/diffService.js';
 
 interface SharedModelEntry {
 	readonly resource: URI;
@@ -20,7 +20,7 @@ export class QuickDiffModelService extends Disposable implements IQuickDiffModel
 	private readonly entries = new WeakMap<TextModel, SharedModelEntry>();
 	private readonly liveEntries = new Set<SharedModelEntry>();
 
-	constructor(private readonly quickDiffService: IQuickDiffService) {
+	constructor(private readonly quickDiffService: IQuickDiffService, private readonly diffService: IDiffService) {
 		super();
 		this._register(toDisposable(() => {
 			for (const entry of this.liveEntries) entry.quickDiffModel.dispose();
@@ -28,14 +28,14 @@ export class QuickDiffModelService extends Disposable implements IQuickDiffModel
 		}));
 	}
 
-	createModelReference(resource: URI, model: TextModel, diffApi: IDiffApi): QuickDiffModelReference {
+	createModelReference(resource: URI, model: TextModel): QuickDiffModelReference {
 		this.assertNotDisposed();
 		let entry = this.entries.get(model);
 		if (entry && entry.resource.toString() !== resource.toString()) {
 			throw new Error('A text model cannot be shared by different Quick Diff resources');
 		}
 		if (!entry) {
-			entry = { resource, model, quickDiffModel: new QuickDiffModel(resource, model, diffApi, this.quickDiffService), references: 0 };
+			entry = { resource, model, quickDiffModel: new QuickDiffModel(resource, model, this.diffService, this.quickDiffService), references: 0 };
 			this.entries.set(model, entry);
 			this.liveEntries.add(entry);
 		}
@@ -61,7 +61,7 @@ export class QuickDiffModelService extends Disposable implements IQuickDiffModel
 /** Shared resource model that owns provider originals and live DiffModels. */
 export class QuickDiffModel extends Disposable implements IQuickDiffModel {
 	private readonly changeEmitter = this._register(new Emitter<QuickDiffModelState>());
-	private readonly computationService: RustDiffComputationService;
+	private readonly computationService: IDiffComputationService;
 	private readonly comparisonStore = this._register(new MutableDisposable<DisposableStore>());
 	private activeRequest: AbortController | undefined;
 	private requestGeneration = 0;
@@ -69,9 +69,9 @@ export class QuickDiffModel extends Disposable implements IQuickDiffModel {
 
 	readonly onDidChange = this.changeEmitter.event;
 
-	constructor(private readonly resource: URI, private readonly modified: TextModel, diffApi: IDiffApi, private readonly quickDiffService: IQuickDiffService) {
+	constructor(private readonly resource: URI, private readonly modified: TextModel, diffService: IDiffService, private readonly quickDiffService: IQuickDiffService) {
 		super();
-		this.computationService = this._register(new RustDiffComputationService(diffApi));
+		this.computationService = this._register(diffService.createComputationService());
 		this._register(quickDiffService.onDidChange(changedResource => {
 			if (!changedResource || changedResource.toString() === resource.toString()) void this.refresh();
 		}));

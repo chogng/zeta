@@ -6,6 +6,7 @@ import { DecorationPresentation } from '../../../../../editor/browser/viewparts/
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { type IConfigurationService } from '../../../../../platform/configuration/common/configurationService.js';
 import { type IDiffApi } from '../../../../../platform/diff/common/diffApi.js';
+import { AppServerDiffService } from '../../../../services/diff/browser/appServerDiffService.js';
 import { type GitStatus, type IGitService } from '../../../../services/git/common/gitService.js';
 import { GitQuickDiffProvider } from '../../browser/gitQuickDiffProvider.js';
 import { QuickDiffDecorator } from '../../browser/quickDiffDecorator.js';
@@ -29,17 +30,16 @@ test('Quick Diff shares one resource model and projects configurable editor targ
 	using provider = new GitQuickDiffProvider(fixture.gitService);
 	using quickDiffService = new WorkbenchQuickDiffService();
 	using providerRegistration = quickDiffService.addProvider(provider);
-	using modelService = new QuickDiffModelService(quickDiffService);
+	using modelService = new QuickDiffModelService(quickDiffService, new AppServerDiffService(fixture.diffApi));
 	using model = new TextModel('same\nnew\nlast');
-	const firstReference = modelService.createModelReference(URI.file('/workspace/src/file.ts'), model, fixture.diffApi);
-	const secondReference = modelService.createModelReference(URI.file('/workspace/src/file.ts'), model, fixture.diffApi);
+	const firstReference = modelService.createModelReference(URI.file('/workspace/src/file.ts'), model);
+	const secondReference = modelService.createModelReference(URI.file('/workspace/src/file.ts'), model);
 	assert.equal(firstReference.object, secondReference.object);
 	firstReference.dispose();
 
 	using source = new QuickDiffDecorator(
 		URI.file('/workspace/src/file.ts'),
 		model,
-		fixture.diffApi,
 		modelService,
 		configurationService('all'),
 	);

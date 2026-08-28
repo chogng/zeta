@@ -1,12 +1,12 @@
-import { throwIfCancelled } from "../../../base/common/cancellation.js";
-import { Emitter } from "../../../base/common/event.js";
-import { type IDisposable } from "../../../base/common/lifecycle.js";
-import { type URI } from "../../../base/common/uri.js";
-import { runWhenWindowIdle } from "../../../base/browser/scheduler.js";
-import { TextModelConflictError, type TextModelInput, type TextModelReference, type ITextModelService } from "../../common/services/textModelService.js";
-import { TextResourceConflictError, type TextResourceChangeEvent, type ITextResourceStore } from "../../common/services/textResourceStore.js";
-import { normalizeTextLineEndings } from "../../common/core/text.js";
-import { TextModel, type TextModelMaintenanceOptions } from "../../common/model/textModel.js";
+import { throwIfCancelled } from "../../../../base/common/cancellation.js";
+import { Emitter } from "../../../../base/common/event.js";
+import { type IDisposable } from "../../../../base/common/lifecycle.js";
+import { type URI } from "../../../../base/common/uri.js";
+import { runWhenWindowIdle } from "../../../../base/browser/scheduler.js";
+import { TextModelConflictError, type TextModelInput, type TextModelReference, type ITextModelService } from "../../../../editor/common/services/textModelService.js";
+import { TextResourceConflictError, type TextResourceChangeEvent, type ITextResourceStore } from "../../../../editor/common/services/textResourceStore.js";
+import { normalizeTextLineEndings } from "../../../../editor/common/core/text.js";
+import { TextModel, type TextModelMaintenanceOptions } from "../../../../editor/common/model/textModel.js";
 
 interface TextModelEntry {
 	readonly resource: URI;

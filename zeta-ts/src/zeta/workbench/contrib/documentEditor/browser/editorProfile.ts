@@ -3,7 +3,6 @@ import type { DocumentNode } from "../../../../editor/common/model/document.js";
 import type { DocumentOutlineOptions } from "../../../../editor/common/model/documentOutline.js";
 import type { DocumentPlugin } from "../../../../editor/common/model/documentPlugin.js";
 import type { DocumentSchema } from "../../../../editor/common/model/documentSchema.js";
-import type { IDocumentCollaborationService } from "../../../../editor/common/services/documentCollaborationService.js";
 import type { EditorInput } from "../../../browser/parts/editor/editorInput.js";
 import { EditorPaneMatch } from "../../../browser/parts/editor/editorPane.js";
 import type { EditorPaneOptions } from "./documentEditorPane.js";
@@ -30,7 +29,7 @@ export interface EditorProfile {
 export interface EditorRuntimeOptions {
 	readonly onSave?: RichTextEditorOptions["onSave"];
 	readonly workingCopyService?: EditorPaneOptions["workingCopyService"];
-	readonly documentCollaborationService?: IDocumentCollaborationService;
+	readonly createDocumentCollaborationService?: EditorPaneOptions["createDocumentCollaborationService"];
 }
 
 /** Selects the first profile that claims one Workbench input. */

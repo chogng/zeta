@@ -9,9 +9,9 @@ const editorRoot = resolve(desktopRoot, "src/zeta/editor");
 const workbenchRoot = resolve(desktopRoot, "src/zeta/workbench");
 
 test("editor exposes one flat VS Code-shaped domain for both feature implementations", () => {
-	assert.deepEqual(directoryNames(editorRoot), ["browser", "common", "contrib", "test"]);
-	assert.deepEqual(directoryNames(join(editorRoot, "common")), ["commands", "core", "cursor", "diff", "languages", "model", "services", "tokens", "viewLayout", "viewModel"]);
-	assert.deepEqual(directoryNames(join(editorRoot, "browser")), ["input", "language", "measurement", "media", "services", "view", "viewModel", "viewparts", "widget"]);
+	assert.deepEqual(directoryNames(editorRoot), ["browser", "common", "contrib", "standalone", "test"]);
+	assert.deepEqual(directoryNames(join(editorRoot, "common")), ["commands", "config", "core", "cursor", "diff", "languages", "model", "services", "tokens", "viewLayout", "viewModel"]);
+	assert.deepEqual(directoryNames(join(editorRoot, "browser")), ["config", "controller", "gpu", "measurement", "media", "services", "view", "viewparts", "widget"]);
 	assert.equal(statSafe(join(editorRoot, "contrib", "academic")), true);
 	assert.equal(statSafe(join(editorRoot, "editor.academic.all.ts")), true);
 	assert.deepEqual(collectFiles(editorRoot).filter(file => /[\\/]index\.ts$/u.test(file)), []);
@@ -51,6 +51,8 @@ test("document editing separates editor capabilities from Workbench hosting", ()
 		"services/documentEditor/browser/documentWorkingCopy.ts",
 		"services/documentEditor/browser/documentEditorTextModelService.ts",
 		"services/documentCollaboration/browser/appServerDocumentCollaborationService.ts",
+		"services/documentCollaboration/browser/documentCollaborationService.ts",
+		"services/documentCollaboration/browser/remoteDocumentCollaborationService.ts",
 	]) assert.equal(statSafe(join(workbenchRoot, file)), true, file);
 	for (const file of [
 		"common/model/documentModel.ts",
@@ -69,6 +71,11 @@ test("document editing separates editor capabilities from Workbench hosting", ()
 		if (!file.endsWith(".ts")) continue;
 		const source = readFileSync(file, "utf8");
 		assert.doesNotMatch(source, /from\s+["'][^"']*(?:workbench|electron)[^"']*["']/u, relative(editorRoot, file));
+	}
+	for (const file of collectFiles(editorRoot)) {
+		const editorRelativePath = relative(editorRoot, file);
+		if (!file.endsWith(".ts") || /(?:^|[\\/])test(?:[\\/]|$)/u.test(editorRelativePath)) continue;
+		assert.doesNotMatch(readFileSync(file, "utf8"), /app[ -]?server/iu, editorRelativePath);
 	}
 });
 
@@ -125,10 +132,16 @@ test("document editing keeps lines and orthogonal rich semantics in one TextMode
 	assert.match(formatting, /new ToolBar\(/u);
 	const collaborationService = readFileSync(join(editorRoot, "common/services/documentCollaborationService.ts"), "utf8");
 	const collaborationWidget = readFileSync(join(editorRoot, "browser/widget/richTextEditor/richTextEditorWidget.ts"), "utf8");
+	const collaborationRouter = readFileSync(join(workbenchRoot, "services/documentCollaboration/browser/documentCollaborationService.ts"), "utf8");
+	const documentPane = readFileSync(join(workbenchRoot, "contrib/documentEditor/browser/documentEditorPane.ts"), "utf8");
 	assert.match(collaborationService, /export interface IDocumentCollaborationService/u);
 	assert.doesNotMatch(collaborationService, /from\s+["'][^"']*(?:platform|workbench|electron|generated)[^"']*["']/u);
+	assert.doesNotMatch(collaborationService, /DocumentCollaborationTarget|endpoint|bearerToken/u);
 	assert.match(collaborationWidget, /CollaborationContribution/u);
-	assert.doesNotMatch(collaborationWidget, /AppServerDocumentCollaborationService/u);
+	assert.doesNotMatch(collaborationWidget, /AppServerDocumentCollaborationService|endpoint|bearerToken/u);
+	assert.match(collaborationRouter, /ownerWindow\.prompt/u);
+	assert.match(collaborationRouter, /RemoteDocumentCollaborationService/u);
+	assert.match(documentPane, /createDocumentCollaborationService\(ownerWindow\)/u);
 	assert.doesNotMatch(editor, /Session/u);
 	assert.doesNotMatch(editorAll, /academicEditor\.contribution|workbench/u);
 });

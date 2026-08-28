@@ -2,7 +2,7 @@
 
 > 状态：Rust `CodeEditor` 已内部接入 Rust、JSON、JSONC 与 Shell 的增量 tree-sitter
 > 分析；Rust `DiffEditor` 已通过 retained `DiffEditorDocument` 内部维护两侧语法状态；Desktop
-> Stanza Text Engine 通过 TextMate 与有界 Rust syntax facts 提供语法能力。本文拥有跨编辑器的语法能力边界；底层解析契约见
+> Stanza Text Engine 通过 TextMate 与有界 App Server syntax facts 提供语法能力。本文拥有跨编辑器的语法能力边界；底层解析契约见
 > [`zeta-syntax` README](../zeta-rs/syntax/README.md)，符号索引、Language Server、代码检索与未来代码图
 > 的跨系统演进见 [`code-intelligence.md`](code-intelligence.md)，Native 编辑器 API 见
 > [`zeta-editor` README](../app/editor/README.md)。
@@ -76,9 +76,7 @@ tree-sitter 的输出是 concrete syntax facts，不是统一 AST，也不是 co
 ## Desktop Stanza
 
 Stanza 只对外暴露编辑器与 versioned language-provider contract。声明式 grammar 在专用 TextMate
-Worker 中运行；受支持语言还可通过 `RustSyntaxFactsService` 请求 App Server 的有界、无状态 syntax
-facts。该 adapter 不建立远端 shadow document，不参与键盘、IME、selection 或同步 transaction；
-返回结果仍经过 Stanza 的 model-version gate 后进入 token、diagnostic、symbol 与 folding owner。
+Worker 中运行；Workbench 的 `AppServerSyntaxProviders` 把 App Server 的有界、无状态 syntax facts 注册为普通 token、diagnostic、symbol、folding 与 selection-range provider。该 adapter 不建立远端 shadow document，不参与键盘、IME、selection 或同步 transaction；Editor 只消费通用 provider contract，并在 model-version gate 后接收结果。
 
 Smart Select 是一条按需路径：快捷键捕获当前 snapshot 与所有 selection，调用
 `syntax/selectionRanges`，每个 selection 只沿 parser named ancestors 返回默认最多 64 层；普通

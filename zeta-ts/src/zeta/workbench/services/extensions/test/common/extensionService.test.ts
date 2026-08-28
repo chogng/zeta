@@ -15,7 +15,8 @@ import { DebugAdapterFactoriesRegistry } from "../../../debug/common/debugAdapte
 import type { ITextMateService } from "../../../textMate/common/textMateService.js";
 import type { TextMateGrammarDefinition } from "../../../textMate/common/textMateGrammarRegistry.js";
 import { TextMateGrammarService } from "../../../textMate/common/textMateGrammarService.js";
-import { LanguageFeaturesService } from "../../../language/common/languageFeaturesService.js";
+import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
+import { LanguageService } from '../../../../../editor/common/services/languageService.js';
 import { URI } from "../../../../../base/common/uri.js";
 
 const descriptorManifest = JSON.stringify({
@@ -388,10 +389,11 @@ test("publishes one coherent contribution generation to registry listeners", asy
 		list: async () => catalog,
 		readResource: async () => new TextEncoder().encode('{"colors":{},"tokenColors":[]}'),
 	};
+	using languageService = new LanguageService();
 	using languages = new LanguageFeaturesService();
-	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService(), languageFeaturesService: languages });
+	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService(), languageService, languageConfigurationService: languages.languageConfigurationService, languageFeaturesService: languages });
 	const observations: Array<{ readonly themeCount: number; readonly adapterCount: number; readonly generation: number }> = [];
-	using listener = languages.languages.onDidChange(() => observations.push({
+	using listener = languageService.languages.onDidChange(() => observations.push({
 		themeCount: service.themes.currentCatalog.themes.length,
 		adapterCount: service.debugAdapters.definitions.length,
 		generation: service.currentCatalog.generation,
@@ -403,7 +405,7 @@ test("publishes one coherent contribution generation to registry listeners", asy
 });
 
 test("resolves extension language first-line patterns after file content is available", () => {
-	using languages = new LanguageFeaturesService();
+	using languages = new LanguageService();
 	using registration = languages.registerLanguage({ id: "demo", firstLine: "^#!.*\\bdemo" }, { priority: 100 });
 
 	assert.equal(languages.resolveLanguageId({ resource: URI.file("C:\\workspace\\script"), firstLine: "#!/usr/bin/env demo" }), "demo");

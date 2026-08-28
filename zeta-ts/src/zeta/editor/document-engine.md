@@ -124,6 +124,8 @@ Academic `codeBlock` 当前投影为父 `TextModel` 中的连续 code region。�
 
 Workbench `EditorProfile` 组合 resource matcher、schema/semantic vocabulary、empty document factory、node/atom views、toolbar actions、plugins 与 collaboration schema identity。Profile 在 pane 生命周期内固定。
 
+协作边界与 VS Code 的 Editor/Workbench 分层一致：Editor 只定义房间输入、连接能力和状态投影，不知道服务地址、凭据或产品通信方式；Workbench 创建具体服务、选择连接方式并把通用 `IDocumentCollaborationService` 注入 pane。
+
 Code codec 只读写 LF/CRLF 文本，并把 `languageId` 等信息放在文档 metadata 或宿主资源状态中。Academic codec 必须保存 lines、marks、atoms、facets、regions、relations、assets、references 与 document metadata；当前 production codec 仍使用 versioned schema serialization envelope，迁移到直接 line serialization 时必须提供兼容 migration。
 
 `DocumentEditorTextModelService` 解析 resource 为 caller-owned `TextModelWorkingCopyReference`。`DocumentWorkingCopy` 适配 dirty/revert/conflict、expected-revision save 和 untitled Save As；Workbench transport 不拥有 model mutation。

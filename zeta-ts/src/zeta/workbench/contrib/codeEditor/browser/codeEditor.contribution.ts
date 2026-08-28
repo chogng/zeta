@@ -1,5 +1,4 @@
-import { RustDiffComputationService } from "../../../../editor/browser/services/rustDiffComputationService.js";
-import { getBrowserTextModelService } from "../../../../editor/browser/services/browserTextModelService.js";
+import { getBrowserTextModelService } from "../../../services/textmodelResolver/browser/browserTextModelService.js";
 import { registerEditorPane } from "../../../browser/parts/editor/editorRegistry.js";
 import { getBrowserTextResourceStore } from "./browserTextResourceStore.js";
 import { createBrowserEditorPart } from "./browserEditorPart.js";
@@ -24,9 +23,7 @@ registerEditorPane({
 			createPart: createBrowserEditorPart,
 			textMateService: options.textMateService,
 			languageFeaturesService: options.languageFeaturesService,
-			syntaxApi: options.syntaxApi,
 			languageDiagnosticsService: options.languageDiagnosticsService,
-			diffApi: options.diffApi,
 			instantiationService: options.instantiationService,
 			accessibilityService: options.accessibilityService,
 			workingCopyService: options.workingCopyService,
@@ -87,13 +84,13 @@ registerEditorPane({
 	canOpen: matchDiffEditor,
 	create: options => {
 		if (!options.textFileService) throw new Error("Stanza Diff requires the Workbench text file service");
-		const diffApi = options.diffApi;
-		if (!diffApi) throw new Error("Stanza Diff requires the Rust diff API");
+		const diffService = options.diffService;
+		if (!diffService) throw new Error("Stanza Diff requires the Workbench diff service");
 		const resourceStore = getBrowserTextResourceStore(options.textFileService);
 		const configuration = options.configurationService;
 		return new DiffEditorPane(resourceStore, {
 			modelService: getBrowserTextModelService(resourceStore),
-			createComputationService: () => new RustDiffComputationService(diffApi),
+			createComputationService: () => diffService.createComputationService(),
 			lineHeight: configuration?.getValue(CodeEditorConfiguration.lineHeight),
 			fontFamily: configuration?.getValue(CodeEditorConfiguration.fontFamily) || undefined,
 			fontSize: configuration?.getValue(CodeEditorConfiguration.fontSize),

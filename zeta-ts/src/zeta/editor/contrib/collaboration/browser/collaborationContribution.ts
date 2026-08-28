@@ -2,12 +2,12 @@ import "./media/collaborationContribution.css";
 import { ToolBar } from "../../../../base/browser/ui/toolbar/toolbar.js";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import type { IAction } from "../../../../base/common/actions.js";
+import { isCancellationError } from "../../../../base/common/errors.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { DocumentCollaborationInvite } from "../../../common/services/documentCollaborationService.js";
 import type { DocumentCollaborationMember } from "../../../common/services/documentCollaborationService.js";
 import type { DocumentCollaborationRoomRole } from "../../../common/services/documentCollaborationService.js";
-import type { DocumentCollaborationTarget } from "../../../common/services/documentCollaborationService.js";
 import { h, fragment as createFragment } from "../../../../base/browser/dom.js";
 
 export type CollaborationToolbarState = "unavailable" | "inactive" | "connecting" | "connected" | "resyncRequired" | "error";
@@ -19,7 +19,7 @@ export interface CollaborationStartResult {
 }
 
 export interface CollaborationContributionOptions {
-	readonly onStart: (roomId: string | undefined, target: DocumentCollaborationTarget) => Promise<CollaborationStartResult>;
+	readonly onStart: (roomId: string | undefined) => Promise<CollaborationStartResult>;
 	readonly onStop: () => void;
 	readonly onInvite: (displayName: string, role: DocumentCollaborationRoomRole) => Promise<DocumentCollaborationInvite>;
 	readonly onListMembers: () => Promise<readonly DocumentCollaborationMember[]>;
@@ -39,7 +39,6 @@ export class CollaborationContribution extends Disposable {
 	private _state: CollaborationToolbarState = "unavailable";
 	private roomId: string | undefined;
 	private message: string | undefined;
-	private target: DocumentCollaborationTarget | undefined;
 	private principalId: string | undefined;
 	private canManageMembers = false;
 
@@ -97,7 +96,7 @@ export class CollaborationContribution extends Disposable {
 		this.render();
 	}
 
-	setState(state: CollaborationToolbarState, options: { readonly roomId?: string; readonly message?: string; readonly target?: DocumentCollaborationTarget; readonly principalId?: string; readonly canManageMembers?: boolean } = {}): void {
+	setState(state: CollaborationToolbarState, options: { readonly roomId?: string; readonly message?: string; readonly principalId?: string; readonly canManageMembers?: boolean } = {}): void {
 		this._state = state;
 		this.roomId = options.roomId;
 		this.message = options.message;
@@ -106,7 +105,6 @@ export class CollaborationContribution extends Disposable {
 			this.clearMembers();
 			this.principalId = undefined;
 		}
-		if (options.target !== undefined) this.target = options.target;
 		if (options.principalId !== undefined) this.principalId = options.principalId;
 		if (options.canManageMembers !== undefined) this.canManageMembers = options.canManageMembers;
 		else if (state !== "connected") this.canManageMembers = false;
@@ -126,7 +124,7 @@ export class CollaborationContribution extends Disposable {
 			connected,
 			() => this.toggle(),
 		)];
-		if (connected && this.target?.kind === "remote" && this.canManageMembers) {
+		if (connected && this.canManageMembers) {
 			actions.push(createAction("inviteCollaborator", "Invite collaborator", "Create a room invitation", true, false, () => this.createInvite()));
 			actions.push(createAction("manageCollaborators", "Manage collaborators", "View, rotate, or revoke active room members", true, false, () => this.manageCollaborators()));
 		}
@@ -140,7 +138,7 @@ export class CollaborationContribution extends Disposable {
 			case "inactive": return "Share a room ID to collaborate";
 			case "connecting": return "Connecting…";
 			case "connected": {
-				const connected = this.roomId ? `${this.target?.kind === "remote" ? "Remote room" : "Room"}: ${this.roomId}` : "Connected";
+				const connected = this.roomId ? `Room: ${this.roomId}` : "Connected";
 				return this.message ? `${connected} — ${this.message}` : connected;
 			}
 			case "resyncRequired": return this.roomId ? `Room ${this.roomId}: ${this.message ?? "rejoin required"}` : this.message ?? "Collaboration requires a resync";
@@ -153,68 +151,59 @@ export class CollaborationContribution extends Disposable {
 			this.options.onStop();
 			return;
 		}
-		const target = this.requestTarget();
-		if (!target) return;
 		const entered = this.element.ownerDocument.defaultView?.prompt("Enter a collaboration room ID to join, or leave it blank to create one.", "");
 		if (entered == null) return;
 		this.setState("connecting");
-		void this.options.onStart(entered.trim() || undefined, target).then(
+		void this.options.onStart(entered.trim() || undefined).then(
 			result => {
-				if (this._state === "connecting") this.setState("connected", { roomId: result.roomId, target, canManageMembers: result.canManageMembers });
+				if (this._state === "connecting") this.setState("connected", { roomId: result.roomId, principalId: result.principalId, canManageMembers: result.canManageMembers });
 			},
 			error => {
-				if (this._state === "connecting") this.setState("error", { message: error instanceof Error ? error.message : "Collaboration could not be started" });
+				if (this._state !== "connecting") return;
+				if (isCancellationError(error)) this.setState("inactive");
+				else this.setState("error", { message: error instanceof Error ? error.message : "Collaboration could not be started" });
 			},
 		);
 	}
 
-	private requestTarget(): DocumentCollaborationTarget | undefined {
-		const endpoint = this.element.ownerDocument.defaultView?.prompt("Enter a remote collaboration server URL, or leave it blank to use this renderer's App Server.", "");
-		if (endpoint == null) return undefined;
-		if (!endpoint.trim()) return { kind: "appServer" };
-		const bearerToken = this.element.ownerDocument.defaultView?.prompt("Enter the remote collaboration server bearer token.", "");
-		if (bearerToken == null) return undefined;
-		return { kind: "remote", endpoint: endpoint.trim(), bearerToken: bearerToken.trim() };
-	}
-
 	private createInvite(): void {
-		if (this._state !== "connected" || !this.roomId || this.target?.kind !== "remote" || !this.canManageMembers) return;
+		if (this._state !== "connected" || !this.roomId || !this.canManageMembers) return;
 		const displayName = this.element.ownerDocument.defaultView?.prompt("Enter a collaborator name.", "");
 		if (displayName == null) return;
 		const role = this.requestInviteRole();
 		if (!role) return;
 		const roomId = this.roomId;
-		const target = this.target;
+		const principalId = this.principalId;
 		void this.options.onInvite(displayName, role).then(
 			invite => {
-				if (this._state !== "connected" || this.roomId !== roomId) return;
-				this.setState("connected", { roomId, target, canManageMembers: true, message: `Invitation created for ${invite.displayName}` });
+				if (this._state !== "connected" || this.roomId !== roomId || this.principalId !== principalId) return;
+				this.setState("connected", { roomId, principalId, canManageMembers: true, message: `Invitation created for ${invite.displayName}` });
 				this.showInvitation(invite);
 			},
 			error => {
-				if (this._state === "connected" && this.roomId === roomId) this.setState("connected", { roomId, target, canManageMembers: true, message: error instanceof Error ? error.message : "Collaboration invitation could not be created" });
+				if (this._state === "connected" && this.roomId === roomId && this.principalId === principalId) this.setState("connected", { roomId, principalId, canManageMembers: true, message: error instanceof Error ? error.message : "Collaboration invitation could not be created" });
 			},
 		);
 	}
 
 	private manageCollaborators(): void {
-		if (this._state !== "connected" || !this.roomId || this.target?.kind !== "remote" || !this.canManageMembers) return;
+		if (this._state !== "connected" || !this.roomId || !this.canManageMembers) return;
 		this.refreshMembers();
 	}
 
 	private refreshMembers(): void {
-		if (this._state !== "connected" || !this.roomId || this.target?.kind !== "remote" || !this.canManageMembers) return;
+		if (this._state !== "connected" || !this.roomId || !this.canManageMembers) return;
 		const roomId = this.roomId;
-		const target = this.target;
+		const principalId = this.principalId;
 		this.members.hidden = false;
 		this.memberList.replaceChildren("Loading collaborators…");
 		void this.options.onListMembers().then(
 			members => {
-				if (this._state !== "connected" || this.roomId !== roomId || this.target !== target) return;
+				if (this._state !== "connected" || this.roomId !== roomId || this.principalId !== principalId) return;
 				this.renderMembers(members);
 			},
 			error => {
-				if (this._state === "connected" && this.roomId === roomId) this.setState("connected", { roomId, target, principalId: this.principalId, canManageMembers: true, message: error instanceof Error ? error.message : "Collaboration members could not be read" });
+				if (this._state === "connected" && this.roomId === roomId && this.principalId === principalId) this.setState("connected", { roomId, principalId, canManageMembers: true, message: error instanceof Error ? error.message : "Collaboration members could not be read" });
 			},
 		);
 	}
@@ -263,35 +252,35 @@ export class CollaborationContribution extends Disposable {
 	}
 
 	private rotateMemberAccessToken(member: DocumentCollaborationMember): void {
-		if (this._state !== "connected" || !this.roomId || this.target?.kind !== "remote" || !this.canManageMembers) return;
+		if (this._state !== "connected" || !this.roomId || !this.canManageMembers) return;
 		const roomId = this.roomId;
-		const target = this.target;
+		const principalId = this.principalId;
 		void this.options.onRotateMemberAccessToken(member.principalId).then(
 			invite => {
-				if (this._state !== "connected" || this.roomId !== roomId || this.target !== target) return;
-				this.setState("connected", { roomId, target, principalId: this.principalId, canManageMembers: true, message: `Access token rotated for ${invite.displayName}` });
+				if (this._state !== "connected" || this.roomId !== roomId || this.principalId !== principalId) return;
+				this.setState("connected", { roomId, principalId, canManageMembers: true, message: `Access token rotated for ${invite.displayName}` });
 				this.showInvitation(invite);
 				this.refreshMembers();
 			},
 			error => {
-				if (this._state === "connected" && this.roomId === roomId) this.setState("connected", { roomId, target, principalId: this.principalId, canManageMembers: true, message: error instanceof Error ? error.message : "Collaboration credential could not be rotated" });
+				if (this._state === "connected" && this.roomId === roomId && this.principalId === principalId) this.setState("connected", { roomId, principalId, canManageMembers: true, message: error instanceof Error ? error.message : "Collaboration credential could not be rotated" });
 			},
 		);
 	}
 
 	private revokeMember(member: DocumentCollaborationMember): void {
-		if (this._state !== "connected" || !this.roomId || this.target?.kind !== "remote" || !this.canManageMembers || member.principalId === this.principalId) return;
+		if (this._state !== "connected" || !this.roomId || !this.canManageMembers || member.principalId === this.principalId) return;
 		if (this.element.ownerDocument.defaultView?.confirm(`Revoke ${member.displayName}'s room access?`) !== true) return;
 		const roomId = this.roomId;
-		const target = this.target;
+		const principalId = this.principalId;
 		void this.options.onRevokeMember(member.principalId).then(
 			() => {
-				if (this._state !== "connected" || this.roomId !== roomId || this.target !== target) return;
-				this.setState("connected", { roomId, target, principalId: this.principalId, canManageMembers: true, message: `Access revoked for ${member.displayName}` });
+				if (this._state !== "connected" || this.roomId !== roomId || this.principalId !== principalId) return;
+				this.setState("connected", { roomId, principalId, canManageMembers: true, message: `Access revoked for ${member.displayName}` });
 				this.refreshMembers();
 			},
 			error => {
-				if (this._state === "connected" && this.roomId === roomId) this.setState("connected", { roomId, target, principalId: this.principalId, canManageMembers: true, message: error instanceof Error ? error.message : "Collaboration member could not be revoked" });
+				if (this._state === "connected" && this.roomId === roomId && this.principalId === principalId) this.setState("connected", { roomId, principalId, canManageMembers: true, message: error instanceof Error ? error.message : "Collaboration member could not be revoked" });
 			},
 		);
 	}
@@ -301,7 +290,7 @@ export class CollaborationContribution extends Disposable {
 		if (entered == null) return undefined;
 		const role = entered.trim().toLowerCase();
 		if (role === "owner" || role === "editor" || role === "viewer") return role;
-		if (this.roomId) this.setState("connected", { roomId: this.roomId, target: this.target, canManageMembers: true, message: "Collaboration role must be owner, editor, or viewer" });
+		if (this.roomId) this.setState("connected", { roomId: this.roomId, principalId: this.principalId, canManageMembers: true, message: "Collaboration role must be owner, editor, or viewer" });
 		return undefined;
 	}
 

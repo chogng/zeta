@@ -5,7 +5,9 @@ import type { LanguageCompletionProvider, LanguageCompletionProviderRegistration
 import type { LanguageConfigurationContributionInput, LanguageConfigurationRegistration } from "../../../../editor/common/languages/languageConfiguration.js";
 import { parseLanguageConfiguration } from "../../../../editor/common/languages/languageConfigurationParser.js";
 import type { LanguageDescriptionContribution, LanguageDescriptionRegistration } from "../../../../editor/common/languages/languageRegistry.js";
-import type { ILanguageFeaturesService } from "../../../../editor/common/services/languageService.js";
+import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
+import type { ILanguageService } from '../../../../editor/common/services/languageService.js';
+import type { ILanguageConfigurationService } from '../../../../editor/common/services/languageConfigurationService.js';
 import type { IExtensionApi, ExtensionCatalog as TransportExtensionCatalog, ExtensionDescriptor as TransportExtensionDescriptor } from "../../../../platform/extensions/common/extensionApi.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { IColorTheme } from "../../../../platform/theme/common/colorTheme.js";
@@ -29,6 +31,8 @@ export interface AppServerExtensionServiceOptions {
 	readonly api: IExtensionApi;
 	readonly eventApi?: IServerEventApi;
 	readonly textMateService: ITextMateService;
+	readonly languageService?: ILanguageService;
+	readonly languageConfigurationService?: ILanguageConfigurationService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
 }
 
@@ -92,9 +96,14 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		}
 		this.grammarRegistration = options.textMateService.grammars.registerGrammars([]);
 		this._register(toDisposable(() => this.grammarRegistration.dispose()));
-		this.languageRegistration = options.languageFeaturesService ? this._register(options.languageFeaturesService.registerLanguages([])) : undefined;
-		this.languageConfigurationRegistration = options.languageFeaturesService ? this._register(options.languageFeaturesService.registerLanguageConfigurations([])) : undefined;
-		this.completionRegistration = options.languageFeaturesService ? this._register(options.languageFeaturesService.registerCompletionProviders([])) : undefined;
+		const hasLanguageServices = options.languageService !== undefined || options.languageConfigurationService !== undefined || options.languageFeaturesService !== undefined;
+		if (hasLanguageServices && (!options.languageService || !options.languageConfigurationService || !options.languageFeaturesService)) {
+			this.dispose();
+			throw new TypeError('App Server extension language contributions require language, configuration, and feature services');
+		}
+		this.languageRegistration = options.languageService ? this._register(options.languageService.registerLanguages([])) : undefined;
+		this.languageConfigurationRegistration = options.languageConfigurationService ? this._register(options.languageConfigurationService.registerMany([])) : undefined;
+		this.completionRegistration = options.languageFeaturesService ? this._register(options.languageFeaturesService.completionProvider.registerGroup([])) : undefined;
 		this.workbenchThemeRegistration = this._register(WorkbenchThemesRegistry.registerColorThemes([]));
 		this.debugAdapterFactoryRegistration = this._register(DebugAdapterFactoriesRegistry.registerFactories([]));
 		if (options.eventApi) {
@@ -167,7 +176,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 				await verifyManifestDigest(extension);
 				if (this.isDisposed) return;
 				const manifest = parseExtensionManifest(extension.manifestJson, extension);
-				if ((manifest.contributes.languages.length > 0 || manifest.contributes.snippets.length > 0) && !this.options.languageFeaturesService) {
+				if ((manifest.contributes.languages.length > 0 || manifest.contributes.snippets.length > 0) && !this.options.languageService) {
 					throw new Error(`Extension '${extension.id}' contributes language features but no editor language service is available`);
 				}
 				for (const language of manifest.contributes.languages) {

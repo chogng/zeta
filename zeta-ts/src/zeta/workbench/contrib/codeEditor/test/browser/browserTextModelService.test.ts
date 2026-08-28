@@ -3,7 +3,7 @@ import test from "node:test";
 import { isCancellationError } from "../../../../../base/common/errors.js";
 import { Emitter } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
-import { BrowserTextModelService } from "../../../../../editor/browser/services/browserTextModelService.js";
+import { BrowserTextModelService } from "../../../../services/textmodelResolver/browser/browserTextModelService.js";
 import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
 import { TextModelConflictError } from "../../../../../editor/common/services/textModelService.js";
 import { type IFileChangeEvent } from "../../../../../platform/files/common/files.js";

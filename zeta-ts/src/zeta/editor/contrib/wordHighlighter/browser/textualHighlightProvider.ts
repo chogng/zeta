@@ -7,7 +7,7 @@ import { getWordSelectionRange } from '../../../common/cursor/wordBoundary.js';
 import { DocumentHighlightKind, type DocumentHighlight, type DocumentHighlightProvider, type DocumentHighlightRequest, type DocumentHighlightTarget, type MultiDocumentHighlightProvider } from '../../../common/languages/documentHighlights.js';
 import { findTextMatches } from '../../../common/model/textModelSearch.js';
 import { type TextModel } from '../../../common/model/textModel.js';
-import { type ILanguageFeaturesService } from '../../../common/services/languageService.js';
+import type { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 
 const MAX_TEXTUAL_HIGHLIGHTS = 10_000;
 const registrations = new WeakMap<ILanguageFeaturesService, TextualProviderRegistration>();

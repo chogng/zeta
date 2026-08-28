@@ -6,11 +6,6 @@ import type { DocumentSelection } from "../core/documentSelection.js";
 import type { DocumentCollaborationEnvelope } from "../../contrib/collaboration/common/protocol.js";
 import type { DocumentCollaborationRemoteEnvelope } from "../../contrib/collaboration/common/protocol.js";
 
-/** Selects an editor-local App Server room or one explicitly configured remote host. */
-export type DocumentCollaborationTarget =
-	| { readonly kind: "appServer" }
-	| { readonly kind: "remote"; readonly endpoint: string; readonly bearerToken: string };
-
 /** Inputs needed to create or join one server-ordered Stanza collaboration room. */
 export interface DocumentCollaborationOpenInput {
 	readonly roomId?: string;
@@ -18,8 +13,6 @@ export interface DocumentCollaborationOpenInput {
 	readonly schemaId: string;
 	readonly schema: DocumentSchema;
 	readonly document: DocumentNode;
-	/** Omitting a target preserves the App Server transport used by existing hosts. */
-	readonly target?: DocumentCollaborationTarget;
 }
 
 /** Canonical room snapshot supplied after joining or resynchronizing. */
@@ -35,7 +28,7 @@ export interface DocumentCollaborationPresence {
 	readonly selection: DocumentSelection;
 }
 
-/** Role assigned to a member invited into an authenticated remote room. */
+/** Role assigned to a member invited into a collaboration room. */
 export type DocumentCollaborationRoomRole = "owner" | "editor" | "viewer";
 
 /** A newly issued room credential, exposed once to the inviting owner. */
@@ -47,7 +40,7 @@ export interface DocumentCollaborationInvite {
 	readonly accessToken: string;
 }
 
-/** One active remote collaboration member visible to an authenticated room owner. */
+/** One active collaboration member visible to a room owner. */
 export interface DocumentCollaborationMember {
 	readonly principalId: string;
 	readonly displayName: string;
@@ -59,15 +52,15 @@ export type DocumentCollaborationSubmitOutcome =
 	| { readonly kind: "conflict"; readonly updates: readonly DocumentCollaborationRemoteEnvelope[] }
 	| { readonly kind: "resync"; readonly snapshot: DocumentCollaborationSnapshot };
 
-/** One lifetime-bound room connection independent of browser or App Server transports. */
+/** One lifetime-bound room connection independent of its host transport. */
 export interface DocumentCollaborationConnection extends IDisposable {
 	readonly roomId: string;
 	readonly clientId: string;
-	/** Persistent member identity for authenticated remote rooms; absent for local App Server rooms. */
+	/** Persistent member identity when the host supports room membership. */
 	readonly principalId: string | undefined;
-	/** Whether this authenticated room connection may create document updates. */
+	/** Whether this room connection may create document updates. */
 	readonly canEdit: boolean;
-	/** Whether this authenticated room connection may create member credentials. */
+	/** Whether this room connection may create member credentials. */
 	readonly canManageMembers: boolean;
 	readonly schema: DocumentSchema;
 	readonly initialSnapshot: DocumentCollaborationSnapshot;

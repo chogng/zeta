@@ -2,7 +2,7 @@ import { encodeHex, VSBuffer } from "../../../../base/common/buffer.js";
 import { TextPosition, TextRange, type TextEdit, type TextSnapshot } from "../../../../editor/common/core/text.js";
 import { type LanguageCompletionProvider, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../../../editor/common/languages/completion/languageCompletionProviders.js";
 import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind } from "../../../../editor/common/languages/completion/languageCompletions.js";
-import type { LanguageProviderBatch } from "../../../../editor/common/services/languageService.js";
+import type { LanguageProviderBatch } from '../../../../editor/common/services/languageFeatures.js';
 import type { LanguageFormattingOptions, LanguageFormattingProvider, LanguageFormattingRequest } from "../../../../editor/contrib/format/common/formatCommands.js";
 import type { LanguageHover, LanguageHoverContent, LanguageHoverProvider, LanguageHoverRequest } from "../../../../editor/contrib/hover/common/hover.js";
 import type { LanguageInlayHint, LanguageInlayHintLabel, LanguageInlayHintsProvider, LanguageInlayHintsRequest } from "../../../../editor/contrib/inlayHints/common/inlayHints.js";

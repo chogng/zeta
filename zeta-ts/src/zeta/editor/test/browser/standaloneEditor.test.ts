@@ -3,8 +3,10 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../base/common/uri.js";
 import { lightColorTheme } from "../../../platform/theme/common/colorTheme.js";
-import { LanguageFeaturesService } from "../../common/services/languageService.js";
-import { StandaloneServiceCollection } from "../../standalone/browser/standaloneServices.js";
+import { LanguageFeaturesService } from "../../common/services/languageFeaturesService.js";
+import { LanguageConfigurationService } from '../../common/services/languageConfigurationService.js';
+import { HoverService } from '../../contrib/hover/common/hover.js';
+import { StandaloneServiceCollection, StandaloneServices } from "../../standalone/browser/standaloneServices.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 const forcedColors = new browserEnvironment.window.EventTarget();
@@ -45,13 +47,15 @@ const stanza = await import("../../editor.main.js");
 test.after(() => browserEnvironment.window.close());
 
 test("standalone service collection honors explicit first-scope overrides", () => {
-	const languages = new LanguageFeaturesService();
-	const services = new StandaloneServiceCollection({ languageFeaturesService: languages });
+	const languageConfigurations = new LanguageConfigurationService();
+	const languages = new LanguageFeaturesService(languageConfigurations);
+	const services = new StandaloneServiceCollection({ languageConfigurationService: languageConfigurations, languageFeaturesService: languages });
 	assert.equal(services.languageFeaturesService, languages);
 	assert.equal(services.themeService.getColorTheme(), lightColorTheme);
 	services.dispose();
 	assert.equal(languages.isDisposed, false);
 	languages.dispose();
+	languageConfigurations.dispose();
 });
 
 test("standalone theme APIs register, select, and project a named theme", () => {
@@ -77,6 +81,21 @@ test("standalone public API keeps compiled theme snapshots internal", () => {
 	for (const exportName of ["lightColorTheme", "darkColorTheme", "highContrastLightColorTheme", "highContrastDarkColorTheme"]) {
 		assert.equal(exportName in stanza, false);
 	}
+});
+
+test("standalone languages API feeds the shared editor registries", async () => {
+	using language = stanza.languages.register({ id: 'stanza-public-test', extensions: ['.stanza-public'] });
+	using configuration = stanza.languages.setLanguageConfiguration('stanza-public-test', { comments: { lineComment: '//' } });
+	using provider = stanza.languages.registerHoverProvider({
+		languageIds: ['stanza-public-test'],
+		provideHover: () => ({ contents: ['Public hover'] }),
+	});
+	const services = StandaloneServices.get();
+	assert.equal(services.languageService.resolveLanguageId({ resource: URI.parse('file:///sample.stanza-public') }), 'stanza-public-test');
+	assert.equal(services.languageConfigurationService.getLanguageConfiguration('stanza-public-test').comments.lineComment, '//');
+	using model = stanza.editor.createModel('answer', 'stanza-public-test', URI.parse('inmemory://stanza/public-api.stanza-public'));
+	using hover = new HoverService(model, services.languageFeaturesService.hoverProvider);
+	assert.deepEqual(await hover.provideHover('stanza-public-test', stanza.TextPosition.at(0, 1)), { contents: ['Public hover'] });
 });
 
 test("standalone API registers URI and language identity with model lifecycle events", () => {
@@ -150,8 +169,10 @@ test("standalone editor rejects unregistered models and conflicting model option
 	const registered = stanza.editor.createModel("registered", "plaintext", URI.parse("inmemory://stanza/conflict.txt"));
 	assert.throws(() => stanza.editor.create(dom.window.document.querySelector<HTMLElement>("main")!, { model: registered, value: "conflict" }), /cannot be combined/);
 	registered.dispose();
-	const lateOverride = new LanguageFeaturesService();
+	const lateConfigurations = new LanguageConfigurationService();
+	const lateOverride = new LanguageFeaturesService(lateConfigurations);
 	assert.throws(() => stanza.editor.create(dom.window.document.querySelector<HTMLElement>("main")!, {}, { languageFeaturesService: lateOverride }), /already initialized/);
 	lateOverride.dispose();
+	lateConfigurations.dispose();
 	dom.window.close();
 });

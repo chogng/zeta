@@ -11,11 +11,11 @@ import type {
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
 import type { IFileService } from "../../../../platform/files/common/files.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
-import { type ILanguageFeaturesService } from "../../../services/language/common/languageFeaturesService.js";
+import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
+import type { ILanguageConfigurationService } from '../../../../editor/common/services/languageConfigurationService.js';
 import type { EditorInput } from "./editorInput.js";
-import type { IDiffApi } from "../../../../platform/diff/common/diffApi.js";
+import type { IDiffService } from "../../../services/diff/common/diffService.js";
 import type { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
-import type { ISyntaxApi } from "../../../../platform/syntax/common/syntaxApi.js";
 import type { IWorkingCopyService, IWorkingCopy } from "../../../services/workingCopy/common/workingCopyService.js";
 import type { IDocumentCollaborationApi } from "../../../../platform/collaboration/common/documentCollaborationApi.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
@@ -33,6 +33,7 @@ import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.
 import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
 import type { Event } from "../../../../base/common/event.js";
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
+import type { TextResourceLanguageResolver } from '../../../../platform/language/common/textResourceLanguage.js';
 
 export enum EditorPaneVisibility {
 	Hidden,
@@ -116,10 +117,11 @@ export interface EditorPaneCreationOptions {
 	readonly textFileService?: ITextFileService;
 	readonly textMateService?: ITextMateService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
-	readonly diffApi?: IDiffApi;
+	readonly languageConfigurationService?: ILanguageConfigurationService;
+	readonly languageResolver?: TextResourceLanguageResolver;
+	readonly diffService?: IDiffService;
 	readonly instantiationService?: IInstantiationService;
 	readonly accessibilityService?: IAccessibilityService;
-	readonly syntaxApi?: ISyntaxApi;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
 	readonly documentCollaborationApi?: IDocumentCollaborationApi;
 	readonly serverEvents?: IServerEventApi;

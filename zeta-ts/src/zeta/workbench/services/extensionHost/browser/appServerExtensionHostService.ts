@@ -5,8 +5,8 @@ import { CommandsRegistry, type CommandDefinition, type CommandRegistration, typ
 import type { ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { normalizeExtensionHostPayload, type ExtensionHostFleetSnapshot, type ExtensionHostLanguageRegistration, type ExtensionHostRegistration, type ExtensionHostRuntime, type IExtensionHostApi, type JsonValue } from "../../../../platform/extensionHost/common/extensionHostApi.js";
 import type { AppServerConnectionState } from "../../../../platform/app-server/common/appServerApi.js";
-import type { LanguageProviderBatch, LanguageProviderBatchRegistration } from "../../../../editor/common/services/languageService.js";
-import type { ILanguageFeaturesService } from "../../language/common/languageFeaturesService.js";
+import type { LanguageProviderBatch, LanguageProviderBatchRegistration } from '../../../../editor/common/services/languageFeatures.js';
+import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import type { ITaskService, TaskProvider, TaskProviderRegistration } from "../../tasks/common/taskService.js";
 import type { ITestingService, TestProfileProvider, TestProfileProviderRegistration } from "../../testing/common/testingService.js";
 import type { IOutputChannel, IOutputService, OutputEntrySeverity } from "../../output/common/outputService.js";
