@@ -21,7 +21,6 @@ use crate::shell_scene::{
     terminal_pane_bounds_for_viewport, terminal_pane_sash_for_viewport,
 };
 use crate::shell_style::{SHELL_PALETTE, ShellPalette, code_editor_style};
-use crate::tab_context_menu::TabContextMenuState;
 use crate::terminal_pane_view::TerminalPaneViewState;
 use crate::terminal_session::{TerminalSession, TerminalSessionEvent, TerminalSessionKey};
 use crate::workspace_context::WorkspaceContext;

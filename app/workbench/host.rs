@@ -13,6 +13,8 @@ use crate::PanePart;
 use crate::PaneResizeState;
 use crate::PaneSplitDirection;
 use crate::PaneSplitId;
+use crate::TabContextMenuActivation;
+use crate::TabContextMenuState;
 use crate::TabInput;
 use crate::TabInputChange;
 use crate::TabInputKey;
@@ -24,8 +26,11 @@ use std::time::Instant;
 use zeta_ui_components::SashOrientation;
 use zeta_ui_components::SashPointerPresence;
 use zeta_ui_components::SashState;
+use zui::ui::ElementId;
 use zui::ui::Point;
 use zui::ui::SplitViewResizeSnapshot;
+use zui::ui::TextInputCommand;
+use zui::ui::TextInputCompositionEvent;
 
 /// Stable identity of one content input mounted in a Workbench pane.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -275,6 +280,16 @@ pub struct WorkbenchHost<B> {
     pane_host: PaneHost<B>,
     layout: WorkbenchLayoutState,
     pane_resize: Option<PaneResizeState>,
+    tab_context_menu: TabContextMenuState,
+}
+
+/// Product-facing result of activating a Workbench-owned tab menu item.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TabContextMenuOutcome {
+    Ignored,
+    Changed,
+    Close(TabInputKey),
+    Focus(ElementId),
 }
 
 impl<B> Default for WorkbenchHost<B> {
@@ -291,12 +306,136 @@ impl<B> WorkbenchHost<B> {
             pane_host: PaneHost::new(),
             layout: WorkbenchLayoutState::default(),
             pane_resize: None,
+            tab_context_menu: TabContextMenuState::default(),
         }
     }
 
     /// Returns the immutable Workbench model used for presentation queries.
     pub const fn workbench(&self) -> &Workbench {
         &self.workbench
+    }
+
+    /// Returns the Workbench-owned tab menu presentation state.
+    pub const fn tab_context_menu(&self) -> &TabContextMenuState {
+        &self.tab_context_menu
+    }
+
+    /// Opens the actions menu for one known tab.
+    pub fn open_tab_context_menu(
+        &mut self,
+        tab: TabInputKey,
+        position: Point,
+        restore_focus: Option<ElementId>,
+    ) -> bool {
+        if self.workbench.tab_part().input(&tab).is_none() {
+            return false;
+        }
+        if self.workbench.tab_part().is_tab_pinned(&tab) {
+            self.tab_context_menu
+                .open_pinned(tab, position, restore_focus);
+        } else {
+            self.tab_context_menu
+                .open_unpinned(tab, position, restore_focus);
+        }
+        true
+    }
+
+    /// Dismisses the tab menu and returns the element that previously owned focus.
+    pub fn dismiss_tab_context_menu(&mut self) -> Option<ElementId> {
+        self.tab_context_menu.dismiss()
+    }
+
+    /// Applies one tab-menu item to Workbench-owned state.
+    pub fn activate_tab_context_menu(&mut self, id: ElementId) -> TabContextMenuOutcome {
+        match self.tab_context_menu.activate(id) {
+            TabContextMenuActivation::Ignored => TabContextMenuOutcome::Ignored,
+            TabContextMenuActivation::OpenGroupMenu => {
+                let target = self.tab_context_menu.target_tab();
+                let source =
+                    target.and_then(|target| self.workbench.tab_part().input_group(target));
+                let focus = self
+                    .workbench
+                    .tab_part()
+                    .groups()
+                    .iter()
+                    .find(|group| Some(group.id()) != source)
+                    .map(|group| crate::tab_group_menu_element_id(group.id()))
+                    .unwrap_or(crate::TAB_CONTEXT_MENU_MOVE_TO_NEW_GROUP);
+                TabContextMenuOutcome::Focus(focus)
+            }
+            TabContextMenuActivation::TogglePin(tab) => {
+                let changed = self.workbench.toggle_tab_pin(&tab).is_some();
+                self.tab_context_menu.dismiss();
+                if changed {
+                    TabContextMenuOutcome::Changed
+                } else {
+                    TabContextMenuOutcome::Ignored
+                }
+            }
+            TabContextMenuActivation::Close(tab) => {
+                self.tab_context_menu.dismiss();
+                TabContextMenuOutcome::Close(tab)
+            }
+            TabContextMenuActivation::MoveToGroup(tab, group) => {
+                let index = self
+                    .workbench
+                    .tab_part()
+                    .group(group)
+                    .map(|group| group.inputs().len())
+                    .unwrap_or(0);
+                let changed = self.workbench.move_tab_to_group(&tab, group, index);
+                self.tab_context_menu.dismiss();
+                if changed {
+                    TabContextMenuOutcome::Changed
+                } else {
+                    TabContextMenuOutcome::Ignored
+                }
+            }
+            TabContextMenuActivation::MoveToNewGroup(tab) => {
+                let changed = self
+                    .workbench
+                    .move_tab_to_new_group(&tab, "New group")
+                    .is_some();
+                self.tab_context_menu.dismiss();
+                if changed {
+                    TabContextMenuOutcome::Changed
+                } else {
+                    TabContextMenuOutcome::Ignored
+                }
+            }
+            TabContextMenuActivation::BeginRename(tab) => {
+                let title = self
+                    .workbench
+                    .tab_part()
+                    .input(&tab)
+                    .map(|input| self.workbench.tab_part().tab_name(input).to_owned());
+                if let Some(title) = title {
+                    self.tab_context_menu.set_rename_text(&title);
+                    TabContextMenuOutcome::Focus(crate::TAB_RENAME_INPUT)
+                } else {
+                    TabContextMenuOutcome::Ignored
+                }
+            }
+        }
+    }
+
+    pub fn apply_tab_rename(&mut self, command: TextInputCommand) -> bool {
+        self.tab_context_menu.apply_rename(command)
+    }
+
+    pub fn apply_tab_rename_composition(&mut self, event: TextInputCompositionEvent) -> bool {
+        self.tab_context_menu.apply_rename_composition(event)
+    }
+
+    pub fn commit_tab_rename(&mut self) -> bool {
+        let Some((tab, title)) = self.tab_context_menu.take_rename() else {
+            return false;
+        };
+        let changed = self.workbench.rename_tab(&tab, title);
+        if changed {
+            self.tab_context_menu.dismiss();
+        }
+        changed
     }
 
     /// Returns the body-mounted Tab Container presentation state.

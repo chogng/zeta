@@ -723,8 +723,11 @@ fn draw_shell_overlays(
     let mut remote_tunnel_manager_list_viewport = None;
     if let Some(context_menu) = TabContextMenu::new(
         Rect::from_xywh(0.0, 0.0, viewport.width, viewport.height),
+        model.tab_part,
         &model.tab_context_menu,
+        model.caret_visibility,
         palette,
+        text_layout,
         model.dispatch,
     ) {
         frame.draw_component(&context_menu);
@@ -1157,6 +1160,7 @@ fn draw_tab_container(
     if !has_session_input && view.search.matches_session_name(view.title) {
         let fallback = WorkbenchTab::new(
             FIRST_TAB_CONTAINER_SESSION_TAB,
+            zeta_workbench::FIRST_TAB_CONTAINER_SESSION_ACTION,
             zeta_workbench::FIRST_TAB_CONTAINER_SESSION_CLOSE,
             view.title,
             view.context.working_directory_label(),

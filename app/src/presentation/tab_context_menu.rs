@@ -1,38 +1,48 @@
-//! Host event adapter for the Workbench tab context menu.
+//! Native input adapter for the Workbench-owned tab context menu.
 
 use crate::NativeApp;
-use crate::shell_interaction::{TabContextMenuAction, WINDOW};
+use crate::shell_interaction::TabContextMenuAction;
+use crate::shell_interaction::WINDOW;
 use crate::shell_style::ShellPalette;
+use crate::terminal_input::text_input_command;
 use zui::input::ElementState;
 use zui::input::Key;
 use zui::input::KeyEvent;
 use zui::input::MouseButton;
 use zui::input::NamedKey;
+use zui::ui::CaretVisibility;
 use zui::ui::Component;
 use zui::ui::ComponentContext;
 use zui::ui::ComponentElement;
 use zui::ui::ComputedElement;
 use zui::ui::DispatchInvalidation;
 use zui::ui::DispatchOutcome;
+use zui::ui::ElementId;
 use zui::ui::FocusDirection;
 use zui::ui::InteractionFrame;
 use zui::ui::NavigationAxis;
 use zui::ui::Point;
+use zui::ui::Rect;
+use zui::ui::TextInputLayoutEngine;
 use zui::ui::UiDispatch;
 use zui::ui::UiNode;
 
 pub(crate) use zeta_workbench::TabContextMenuState;
 
-/// Adapts the product palette and host parent to the Workbench tab menu.
+/// Adapts product colors and native text layout to the Workbench tab menu.
 pub(crate) struct TabContextMenu {
     inner: zeta_workbench::TabContextMenu,
 }
 
 impl TabContextMenu {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
-        viewport: zui::ui::Rect,
+        viewport: Rect,
+        tab_part: &zeta_workbench::TabPart,
         state: &TabContextMenuState,
+        caret_visibility: CaretVisibility,
         palette: ShellPalette,
+        text_layout: &mut TextInputLayoutEngine,
         dispatch: &UiDispatch,
     ) -> Option<Self> {
         let style = zeta_workbench::TabContextMenuStyle::new(
@@ -42,7 +52,16 @@ impl TabContextMenu {
             palette.session_tab_highlight,
         );
         Some(Self {
-            inner: zeta_workbench::TabContextMenu::new(viewport, state, style, WINDOW, dispatch)?,
+            inner: zeta_workbench::TabContextMenu::new(
+                viewport,
+                tab_part,
+                state,
+                caret_visibility,
+                style,
+                WINDOW,
+                text_layout,
+                dispatch,
+            )?,
         })
     }
 }
@@ -63,7 +82,7 @@ impl Component for TabContextMenu {
 
 impl NativeApp {
     pub(crate) fn route_tab_context_menu_pointer_move(&mut self, point: Point) -> bool {
-        if !self.tab_context_menu.is_open() {
+        if !self.workbench.tab_context_menu().is_open() {
             return false;
         }
         let outcome =
@@ -89,7 +108,7 @@ impl NativeApp {
         if button == MouseButton::Right {
             return self.route_tab_context_menu_secondary_button(state);
         }
-        if button != MouseButton::Left || !self.tab_context_menu.is_open() {
+        if button != MouseButton::Left || !self.workbench.tab_context_menu().is_open() {
             return false;
         }
         let target = self
@@ -103,16 +122,37 @@ impl NativeApp {
             ElementState::Pressed => {
                 self.dismiss_tab_context_menu();
             }
-            ElementState::Released => {
-                self.primary_button_changed(state);
-            }
+            ElementState::Released => self.primary_button_changed(state),
         }
         true
     }
 
     pub(crate) fn route_tab_context_menu_keyboard(&mut self, event: &KeyEvent) -> bool {
-        if !self.tab_context_menu.is_open() {
+        if !self.workbench.tab_context_menu().is_open() {
             return false;
+        }
+        if self.workbench.tab_context_menu().is_renaming() {
+            match event.logical_key {
+                Key::Named(NamedKey::Escape) => {
+                    self.dismiss_tab_context_menu();
+                }
+                Key::Named(NamedKey::Enter) => {
+                    if self.workbench.commit_tab_rename() {
+                        self.rebuild_presentation();
+                        self.request_redraw();
+                    }
+                }
+                _ => {
+                    if let Some(command) = text_input_command(event, self.modifiers)
+                        && self.workbench.apply_tab_rename(command)
+                    {
+                        self.caret_blink.activity(std::time::Instant::now());
+                        self.rebuild_presentation();
+                        self.request_redraw();
+                    }
+                }
+            }
+            return true;
         }
         let Some(presentation) = self.presentation.as_ref() else {
             return true;
@@ -128,21 +168,12 @@ impl NativeApp {
                 FocusDirection::Previous,
                 NavigationAxis::Vertical,
             ),
-            Key::Named(NamedKey::ArrowDown) => self.ui_dispatch.focus_within_group(
-                frame,
-                FocusDirection::Next,
-                NavigationAxis::Vertical,
-            ),
-            Key::Named(NamedKey::Tab) => {
-                let direction = if self.modifiers.shift_key() {
-                    FocusDirection::Previous
-                } else {
-                    FocusDirection::Next
-                };
-                self.ui_dispatch
-                    .focus_within_group(frame, direction, NavigationAxis::Vertical)
+            Key::Named(NamedKey::ArrowDown) | Key::Named(NamedKey::Tab) => self
+                .ui_dispatch
+                .focus_within_group(frame, FocusDirection::Next, NavigationAxis::Vertical),
+            Key::Named(NamedKey::Enter) | Key::Named(NamedKey::ArrowRight) => {
+                self.ui_dispatch.activate_focused(frame)
             }
-            Key::Named(NamedKey::Enter) => self.ui_dispatch.activate_focused(frame),
             Key::Character(text) if text == " " => self.ui_dispatch.activate_focused(frame),
             _ => Default::default(),
         };
@@ -150,24 +181,57 @@ impl NativeApp {
         true
     }
 
-    pub(crate) fn dismiss_tab_context_menu(&mut self) -> bool {
-        if !self.tab_context_menu.is_open() {
+    pub(crate) fn open_tab_context_menu(
+        &mut self,
+        tab: zeta_workbench::TabInputKey,
+        position: Point,
+    ) -> bool {
+        let restore_focus = self.ui_dispatch.focused();
+        if !self
+            .workbench
+            .open_tab_context_menu(tab.clone(), position, restore_focus)
+        {
             return false;
         }
-        let restore_focus = self.tab_context_menu.dismiss();
+        self.rebuild_presentation();
+        self.focus_tab_context_menu_element(TabContextMenuAction::TogglePin.element_id());
+        self.update_cursor();
+        self.request_redraw();
+        true
+    }
+
+    pub(crate) fn activate_tab_context_menu_element(&mut self, id: ElementId) -> bool {
+        if !self.workbench.tab_context_menu().is_open()
+            || !TabContextMenuAction::is_menu_element(id)
+        {
+            return false;
+        }
+        match self.workbench.activate_tab_context_menu(id) {
+            zeta_workbench::TabContextMenuOutcome::Ignored => {}
+            zeta_workbench::TabContextMenuOutcome::Changed => {
+                self.rebuild_presentation();
+                self.request_redraw();
+            }
+            zeta_workbench::TabContextMenuOutcome::Close(tab) => {
+                let _ = self.close_workbench_tab(&tab);
+            }
+            zeta_workbench::TabContextMenuOutcome::Focus(element) => {
+                self.rebuild_presentation();
+                self.focus_tab_context_menu_element(element);
+                self.request_redraw();
+            }
+        }
+        true
+    }
+
+    pub(crate) fn dismiss_tab_context_menu(&mut self) -> bool {
+        if !self.workbench.tab_context_menu().is_open() {
+            return false;
+        }
+        let restore_focus = self.workbench.dismiss_tab_context_menu();
         self.rebuild_presentation();
         if let Some(restore_focus) = restore_focus {
-            let focus_outcome = self
-                .presentation
-                .as_ref()
-                .map(|presentation| {
-                    self.ui_dispatch
-                        .focus_element(presentation.interaction_frame(), restore_focus)
-                })
-                .unwrap_or_default();
-            if focus_outcome.invalidation == DispatchInvalidation::Paint {
-                self.rebuild_presentation();
-            }
+            self.focus_tab_context_menu_element(restore_focus);
         }
         self.update_cursor();
         self.request_redraw();
@@ -176,7 +240,7 @@ impl NativeApp {
 
     fn route_tab_context_menu_secondary_button(&mut self, state: ElementState) -> bool {
         if state == ElementState::Released {
-            return self.tab_context_menu.is_open();
+            return self.workbench.tab_context_menu().is_open();
         }
         let Some((point, target)) =
             self.cursor_position
@@ -187,42 +251,29 @@ impl NativeApp {
         else {
             return false;
         };
-        let Some(target_tab) = target.and_then(|target| {
-            zeta_workbench::tab_key_for_element(self.workbench.workbench().tab_part(), target)
-        }) else {
-            return self.dismiss_tab_context_menu();
-        };
-        let target_tab = target_tab.clone();
-        let restore_focus = self.ui_dispatch.focused();
-        if self
-            .workbench
-            .workbench()
-            .tab_part()
-            .is_tab_pinned(&target_tab)
-        {
-            self.tab_context_menu
-                .open_pinned(target_tab, point, restore_focus);
-        } else {
-            self.tab_context_menu
-                .open_unpinned(target_tab, point, restore_focus);
+        let target_tab = target
+            .and_then(|target| {
+                zeta_workbench::tab_key_for_element(self.workbench.workbench().tab_part(), target)
+            })
+            .cloned();
+        match target_tab {
+            Some(tab) => self.open_tab_context_menu(tab, point),
+            None => self.dismiss_tab_context_menu(),
         }
-        self.rebuild_presentation();
-        let focus_outcome = self
+    }
+
+    fn focus_tab_context_menu_element(&mut self, id: ElementId) {
+        let outcome = self
             .presentation
             .as_ref()
             .map(|presentation| {
-                self.ui_dispatch.focus_element(
-                    presentation.interaction_frame(),
-                    TabContextMenuAction::TogglePin.element_id(),
-                )
+                self.ui_dispatch
+                    .focus_element(presentation.interaction_frame(), id)
             })
             .unwrap_or_default();
-        if focus_outcome.invalidation == DispatchInvalidation::Paint {
+        if outcome.invalidation == DispatchInvalidation::Paint {
             self.rebuild_presentation();
         }
-        self.update_cursor();
-        self.request_redraw();
-        true
     }
 }
 

@@ -1,9 +1,11 @@
 //! Workbench tabs rendered in the body or titlebar.
 
 use crate::{
-    Color, Component, ComponentContext, ComponentElement, ComputedElement, CornerRadii, Element,
-    FontWeight, InteractionRegion, PaintIcon, PaintRect, Point, Rect, Size, Tab, TabBackgrounds,
-    TabList, TabListStyle, TabSelection, TabState, TabStyle, TextBlock, TextStyle, UiScene,
+    ActionBar, ActionBarItem, ActionBarOrientation, ActionBarStyle, ActionViewItem,
+    ButtonBackgrounds, ButtonState, ButtonStyle, Color, Component, ComponentContext,
+    ComponentElement, ComputedElement, CornerRadii, Edges, Element, FontWeight, InteractionRegion,
+    PaintIcon, PaintRect, Point, Rect, Size, Tab, TabBackgrounds, TabList, TabListStyle,
+    TabSelection, TabState, TabStyle, TextBlock, TextStyle, UiScene,
 };
 use zui::ui::AccessibilityRole;
 use zui::ui::AccessibilitySelection;
@@ -45,6 +47,7 @@ const STATUS_CONTENT_GAP: f32 = 10.0;
 const STATUS_DOT_SIZE: f32 = 10.0;
 const BODY_CLOSE_SIZE: f32 = 24.0;
 const TITLEBAR_CLOSE_SIZE: f32 = 18.0;
+const TAB_ACTION_GAP: f32 = 2.0;
 const TITLEBAR_PIN_SIZE: f32 = 12.0;
 
 struct GroupLayout<'a> {
@@ -272,7 +275,11 @@ impl<'a> TabContainer<'a> {
                         continue;
                     }
                     context.draw_component(&self.tab_region(tab, tab_bounds, layout.list_id));
-                    context.draw_component(&self.close_region(tab, tab_bounds));
+                    if self.tab_action_bar_visible(tab) {
+                        for region in self.action_regions(tab, tab_bounds) {
+                            context.draw_component(&region);
+                        }
+                    }
                 }
             }
             context.scene_mut().with_clip(self.content_bounds, |scene| {
@@ -315,31 +322,103 @@ impl<'a> TabContainer<'a> {
         })
     }
 
-    fn close_region(&self, tab: &WorkbenchTab<'_>, tab_bounds: Rect) -> InteractionRegion {
-        InteractionRegion::new(
-            "WorkbenchTabClose",
-            tab.close_id,
-            self.close_bounds(tab_bounds),
-            AccessibilityRole::Button,
-            format!("Close {}", tab.name),
-        )
-        .with_parent(tab.id)
-        .with_cursor(CursorFeedback::Pointer)
-        .with_focus(FocusBehavior::TabStop)
-        .with_action(NodeAction::Activate)
+    fn action_regions(&self, tab: &WorkbenchTab<'_>, tab_bounds: Rect) -> [InteractionRegion; 2] {
+        let action_bar = self.tab_action_bar(tab, tab_bounds);
+        [
+            InteractionRegion::new(
+                "WorkbenchTabActionsButton",
+                tab.action_id,
+                action_bar
+                    .interactive_item_bounds(0)
+                    .expect("tab actions button is enabled"),
+                AccessibilityRole::Button,
+                format!("Actions for {}", tab.name),
+            )
+            .with_parent(tab.id)
+            .with_cursor(CursorFeedback::Pointer)
+            .with_focus(FocusBehavior::TabStop)
+            .with_action(NodeAction::Activate),
+            InteractionRegion::new(
+                "WorkbenchTabClose",
+                tab.close_id,
+                action_bar
+                    .interactive_item_bounds(1)
+                    .expect("tab close button is enabled"),
+                AccessibilityRole::Button,
+                format!("Close {}", tab.name),
+            )
+            .with_parent(tab.id)
+            .with_cursor(CursorFeedback::Pointer)
+            .with_focus(FocusBehavior::TabStop)
+            .with_action(NodeAction::Activate),
+        ]
     }
 
-    fn close_bounds(&self, tab_bounds: Rect) -> Rect {
+    fn tab_action_bar(&self, tab: &WorkbenchTab<'_>, tab_bounds: Rect) -> ActionBar {
         let size = match self.placement {
             TabContainerPlacement::Body => BODY_CLOSE_SIZE,
             TabContainerPlacement::Titlebar => TITLEBAR_CLOSE_SIZE,
         };
-        Rect::from_xywh(
-            tab_bounds.right() - TAB_CONTENT_PADDING - size,
+        let width = size * 2.0 + TAB_ACTION_GAP;
+        let bounds = Rect::from_xywh(
+            tab_bounds.right() - TAB_CONTENT_PADDING - width,
             tab_bounds.origin.y + (tab_bounds.size.height - size) * 0.5,
+            width,
             size,
-            size,
+        );
+        let icon_size = match self.placement {
+            TabContainerPlacement::Body => 16.0,
+            TabContainerPlacement::Titlebar => 12.0,
+        };
+        let button_style = ButtonStyle::new(
+            ButtonBackgrounds::new(Color::TRANSPARENT)
+                .with_hovered(self.style.surface_hovered)
+                .with_focused(self.style.surface_hovered)
+                .with_pressed(self.style.border),
+            TextStyle::new(12.0, self.style.text_muted),
         )
+        .with_corner_radii(CornerRadii::uniform(4.0))
+        .with_padding(Edges::uniform(3.0))
+        .with_icon_size(icon_size);
+        ActionBar::new(
+            bounds,
+            ActionBarOrientation::Horizontal,
+            vec![
+                ActionBarItem::Action(ActionViewItem::icon(
+                    self.style.settings_icon,
+                    format!("Actions for {}", tab.name),
+                    self.button_state(tab.action_id),
+                )),
+                ActionBarItem::Action(ActionViewItem::icon(
+                    self.style.close_icon,
+                    format!("Close {}", tab.name),
+                    self.button_state(tab.close_id),
+                )),
+            ],
+            ActionBarStyle::new(button_style, Size::new(size, size)).with_gap(TAB_ACTION_GAP),
+        )
+    }
+
+    fn tab_action_bar_visible(&self, tab: &WorkbenchTab<'_>) -> bool {
+        self.dispatch.is_hovered(tab.id)
+            || self.dispatch.is_hovered(tab.action_id)
+            || self.dispatch.is_hovered(tab.close_id)
+            || self.dispatch.is_focused(tab.action_id)
+            || self.dispatch.is_focused(tab.close_id)
+            || self.dispatch.is_pressed(tab.action_id)
+            || self.dispatch.is_pressed(tab.close_id)
+    }
+
+    fn button_state(&self, id: ElementId) -> ButtonState {
+        if self.dispatch.is_pressed(id) {
+            ButtonState::Pressed
+        } else if self.dispatch.is_focused(id) {
+            ButtonState::Focused
+        } else if self.dispatch.is_hovered(id) {
+            ButtonState::Hovered
+        } else {
+            ButtonState::Resting
+        }
     }
 
     fn paint_group(&self, scene: &mut UiScene, layout: &GroupLayout<'_>) {
@@ -388,7 +467,11 @@ impl<'a> TabContainer<'a> {
             self.paint_status_dot(scene, tab, status_bounds);
         }
         let text_x = status_bounds.right() + STATUS_CONTENT_GAP;
-        let text_right = self.close_bounds(tab_bounds).origin.x - 6.0;
+        let text_right = if self.tab_action_bar_visible(tab) {
+            self.tab_action_bar(tab, tab_bounds).bounds().origin.x - 6.0
+        } else {
+            tab_bounds.right() - TAB_CONTENT_PADDING
+        };
         let text_width = (text_right - text_x).max(1.0);
         scene.draw_text(TextBlock::new(
             tab.name,
@@ -402,7 +485,9 @@ impl<'a> TabContainer<'a> {
             Size::new(text_width, 15.0),
             TextStyle::new(11.0, self.style.text_muted).with_line_height(15.0),
         ));
-        self.paint_close_icon(scene, tab_bounds);
+        if self.tab_action_bar_visible(tab) {
+            scene.draw_component(&self.tab_action_bar(tab, tab_bounds));
+        }
     }
 
     fn paint_titlebar_tab(&self, scene: &mut UiScene, tab: &WorkbenchTab<'_>, tab_bounds: Rect) {
@@ -440,14 +525,20 @@ impl<'a> TabContainer<'a> {
                 text_x = pin_bounds.right() + 4.0;
             }
         }
-        let text_right = self.close_bounds(tab_bounds).origin.x - 4.0;
+        let text_right = if self.tab_action_bar_visible(tab) {
+            self.tab_action_bar(tab, tab_bounds).bounds().origin.x - 4.0
+        } else {
+            tab_bounds.right() - TAB_CONTENT_PADDING
+        };
         scene.draw_text(TextBlock::new(
             tab.name,
             Point::new(text_x, tab_bounds.origin.y + 3.0),
             Size::new((text_right - text_x).max(1.0), 18.0),
             TextStyle::new(12.0, self.style.text).with_line_height(18.0),
         ));
-        self.paint_close_icon(scene, tab_bounds);
+        if self.tab_action_bar_visible(tab) {
+            scene.draw_component(&self.tab_action_bar(tab, tab_bounds));
+        }
     }
 
     fn paint_pinned_status(&self, scene: &mut UiScene, tab: &WorkbenchTab<'_>, bounds: Rect) {
@@ -493,25 +584,6 @@ impl<'a> TabContainer<'a> {
             TabStatusKind::Success => self.style.success,
             TabStatusKind::Error => self.style.error,
         }
-    }
-
-    fn paint_close_icon(&self, scene: &mut UiScene, tab_bounds: Rect) {
-        let bounds = self.close_bounds(tab_bounds);
-        let size = match self.placement {
-            TabContainerPlacement::Body => 16.0,
-            TabContainerPlacement::Titlebar => 14.0,
-        };
-        let icon_bounds = Rect::from_xywh(
-            bounds.origin.x + (bounds.size.width - size) * 0.5,
-            bounds.origin.y + (bounds.size.height - size) * 0.5,
-            size,
-            size,
-        );
-        scene.draw_icon(PaintIcon::new(
-            self.style.close_icon,
-            icon_bounds,
-            self.style.text_muted,
-        ));
     }
 
     fn paint_settings_icon(&self, scene: &mut UiScene, bounds: Rect, icon_size: f32) {

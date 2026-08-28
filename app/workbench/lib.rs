@@ -13,7 +13,10 @@ mod panepart;
 mod tabpart;
 mod workbench;
 
-pub use host::{ClosedPane, PaneActivation, PaneBindingId, PaneKey, PaneMount, WorkbenchHost};
+pub use host::{
+    ClosedPane, PaneActivation, PaneBindingId, PaneKey, PaneMount, TabContextMenuOutcome,
+    WorkbenchHost,
+};
 pub use keybinding_hint::paint_chord_hint;
 pub use layout::{
     InspectorLayoutSpec, InspectorPartState, LogicalViewport, PartVisibility, TabContainerLayout,

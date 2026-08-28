@@ -370,7 +370,7 @@ fn settings_tab_input_renders_settings_and_selects_the_tab_container_entry() {
             .iter()
             .find(|node| node.id == TAB_CONTAINER_SETTINGS_CLOSE)
             .map(|node| node.role),
-        Some(AccessibilityRole::Button)
+        None
     );
 }
 
@@ -643,7 +643,7 @@ fn primary_presentation_has_an_agent_timeline_and_fixed_composer() {
     assert!(visible_text.contains(&"Local"));
     assert!(!visible_text.contains(&"Agent"));
     assert!(!visible_text.contains(&"SESSIONS"));
-    assert_eq!(presentation.frame().scene().icons().len(), 8);
+    assert_eq!(presentation.frame().scene().icons().len(), 7);
 }
 
 #[test]
@@ -1072,7 +1072,10 @@ fn open_tab_context_menu_is_topmost_and_exposes_generic_actions() {
         })
         .unwrap();
 
-    assert_eq!(labels, ["Pin", "Close", "Move to new group"]);
+    assert_eq!(
+        labels,
+        ["Pin tab", "Close tab", "Move to group  ›", "Rename tab"]
+    );
     assert_eq!(
         presentation.interaction_frame().target_at(Point::new(
             first_item.bounds.origin.x + 2.0,
@@ -1086,7 +1089,7 @@ fn open_tab_context_menu_is_topmost_and_exposes_generic_actions() {
             .scene()
             .text_blocks()
             .iter()
-            .any(|text| text.text() == "Move to new group")
+            .any(|text| text.text() == "Move to group  ›")
     );
 }
 

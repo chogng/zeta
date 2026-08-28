@@ -84,6 +84,23 @@ fn session_upsert_updates_an_existing_input_without_replacing_its_identity() {
 }
 
 #[test]
+fn tab_rename_is_a_shell_label_override_and_survives_session_refresh() {
+    let original = session("session-1", "Original title");
+    let key = TabInputKey::session(original.session_id.clone());
+    let mut part = TabPart::default();
+    upsert_session(&mut part, &original, "~/first");
+
+    assert!(part.rename_tab(&key, "Local tab name"));
+    let mut refreshed = original.clone();
+    refreshed.title = "Server title".to_owned();
+    upsert_session(&mut part, &refreshed, "~/first");
+
+    let input = part.input(&key).unwrap();
+    assert_eq!(input.title(), "Server title");
+    assert_eq!(part.tab_name(input), "Local tab name");
+}
+
+#[test]
 fn catalog_upsert_does_not_change_the_active_input() {
     let active = session("session-active", "Active");
     let saved = session("session-saved", "Saved");
@@ -162,6 +179,20 @@ fn pinning_reorders_within_the_group_without_changing_tab_identity() {
     assert_eq!(part.toggle_tab_pin(&second_key), Some(false));
     assert!(!part.is_tab_pinned(&second_key));
     assert_eq!(part.tab_id(&second_key), Some(second_id));
+}
+
+#[test]
+fn settings_uses_the_same_pinning_contract_as_other_tabs() {
+    let first = session("session-1", "First");
+    let mut part = TabPart::default();
+    upsert_session(&mut part, &first, "~/first");
+
+    assert_eq!(part.toggle_tab_pin(&TabInputKey::Settings), Some(true));
+    assert!(part.is_tab_pinned(&TabInputKey::Settings));
+    assert_eq!(part.inputs().next().unwrap().key(), &TabInputKey::Settings);
+
+    assert_eq!(part.toggle_tab_pin(&TabInputKey::Settings), Some(false));
+    assert!(!part.is_tab_pinned(&TabInputKey::Settings));
 }
 
 #[test]

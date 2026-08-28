@@ -178,6 +178,9 @@ impl NativeApp {
         if self.activate_workspace_path_picker_element(id) {
             return;
         }
+        if self.activate_tab_context_menu_element(id) {
+            return;
+        }
         if let Some(intent) =
             zeta_workbench::tab_intent_for_element(self.workbench.workbench().tab_part(), id)
         {
@@ -188,6 +191,16 @@ impl NativeApp {
                 zeta_workbench::TabIntent::Activate(tab @ TabInputKey::Session(_)) => {
                     if self.workbench.activate_tab(tab.clone()) {
                         self.mount_session_pane(&tab);
+                    }
+                }
+                zeta_workbench::TabIntent::OpenActions(tab) => {
+                    if let Some(bounds) = self
+                        .presentation
+                        .as_ref()
+                        .and_then(|presentation| presentation.element_bounds(id))
+                    {
+                        let point = Point::new(bounds.origin.x, bounds.bottom());
+                        let _ = self.open_tab_context_menu(tab, point);
                     }
                 }
                 zeta_workbench::TabIntent::Close(tab) => {

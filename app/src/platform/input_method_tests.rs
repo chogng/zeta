@@ -17,6 +17,7 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
         file_editor_find_focused: false,
         file_editor_replace_focused: false,
         session_search_focused: false,
+        tab_rename_focused: false,
         file_search_focused: false,
         git_branch_search_focused: false,
         workspace_path_search_focused: false,
@@ -54,6 +55,10 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
     };
     let session_search = InputMethodContext {
         session_search_focused: true,
+        ..terminal_grid
+    };
+    let tab_rename = InputMethodContext {
+        tab_rename_focused: true,
         ..terminal_grid
     };
     let file_search = InputMethodContext {
@@ -116,6 +121,10 @@ fn target_requires_an_active_window_and_the_appropriate_editable_surface() {
     assert_eq!(
         InputMethodTarget::for_context(session_search),
         InputMethodTarget::SessionSearch
+    );
+    assert_eq!(
+        InputMethodTarget::for_context(tab_rename),
+        InputMethodTarget::TabRename
     );
     assert_eq!(
         InputMethodTarget::for_context(file_search),

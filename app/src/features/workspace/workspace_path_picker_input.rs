@@ -43,7 +43,7 @@ impl NativeApp {
             eprintln!("could not open workspace path picker: {error}");
             return;
         }
-        self.tab_context_menu.dismiss();
+        self.workbench.dismiss_tab_context_menu();
         self.git_branch_context_menu.dismiss();
         self.remote_connection_picker.dismiss();
         self.dismiss_remote_connection_manager();

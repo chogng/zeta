@@ -142,7 +142,7 @@ impl App<NativeEvent> for NativeApp {
                 }
                 self.workspace_pane_host.cancel_multi_diff_scrollbar();
                 self.terminal_view_mut().scroll.cancel_scrollbar();
-                self.tab_context_menu.dismiss();
+                self.workbench.dismiss_tab_context_menu();
                 self.git_branch_context_menu.dismiss();
                 self.workspace_path_picker.dismiss();
                 self.ui_dispatch.window_blurred();

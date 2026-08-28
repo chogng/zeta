@@ -17,12 +17,14 @@ use crate::shell_interaction::{
 use crate::workspace_path_picker::WORKSPACE_PATH_SEARCH_INPUT;
 use crate::workspace_surface::WorkspaceSurfaceKind;
 use zeta_settings::SETTINGS_SEARCH_INPUT;
+use zeta_workbench::TAB_RENAME_INPUT;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum InputMethodTarget {
     Disabled,
     Composer,
     SessionSearch,
+    TabRename,
     FileSearch,
     GitBranchSearch,
     WorkspacePathSearch,
@@ -47,6 +49,7 @@ struct InputMethodContext {
     file_editor_find_focused: bool,
     file_editor_replace_focused: bool,
     session_search_focused: bool,
+    tab_rename_focused: bool,
     file_search_focused: bool,
     git_branch_search_focused: bool,
     workspace_path_search_focused: bool,
@@ -63,6 +66,9 @@ impl InputMethodTarget {
         }
         if context.session_search_focused {
             return Self::SessionSearch;
+        }
+        if context.tab_rename_focused {
+            return Self::TabRename;
         }
         if context.file_search_focused {
             return Self::FileSearch;
@@ -136,6 +142,15 @@ impl NativeApp {
                 };
                 self.caret_blink.activity(Instant::now());
                 self.session_search.apply_composition(composition);
+                self.rebuild_presentation();
+                self.request_redraw();
+            }
+            InputMethodTarget::TabRename => {
+                let Some(composition) = text_input_composition_event(event) else {
+                    return;
+                };
+                self.caret_blink.activity(Instant::now());
+                self.workbench.apply_tab_rename_composition(composition);
                 self.rebuild_presentation();
                 self.request_redraw();
             }
@@ -347,6 +362,7 @@ impl NativeApp {
             file_editor_find_focused: self.ui_dispatch.is_focused(FILE_EDITOR_FIND_INPUT),
             file_editor_replace_focused: self.ui_dispatch.is_focused(FILE_EDITOR_REPLACE_INPUT),
             session_search_focused: self.ui_dispatch.is_focused(SESSION_SEARCH_INPUT),
+            tab_rename_focused: self.ui_dispatch.is_focused(TAB_RENAME_INPUT),
             file_search_focused: self.ui_dispatch.is_focused(AGENT_FILE_SEARCH_INPUT),
             git_branch_search_focused: self.ui_dispatch.is_focused(GIT_BRANCH_SEARCH_INPUT),
             workspace_path_search_focused: self.ui_dispatch.is_focused(WORKSPACE_PATH_SEARCH_INPUT),

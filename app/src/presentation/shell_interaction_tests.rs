@@ -84,16 +84,19 @@ fn tab_context_menu_actions_have_stable_labels_and_identities() {
     let ids = TabContextMenuAction::ALL.map(TabContextMenuAction::element_id);
     let labels = TabContextMenuAction::ALL.map(|action| action.label(false));
 
-    assert_eq!(labels, ["Pin", "Close", "Move to new group"]);
+    assert_eq!(
+        labels,
+        ["Pin tab", "Close tab", "Move to group  ›", "Rename tab"]
+    );
     assert_eq!(
         ids.into_iter()
             .collect::<std::collections::HashSet<_>>()
             .len(),
-        3
+        4
     );
     assert_eq!(
         TabContextMenuAction::from_element_id(ids[2]),
-        Some(TabContextMenuAction::MoveToNewGroup)
+        Some(TabContextMenuAction::MoveToGroup)
     );
     assert!(TabContextMenuAction::is_menu_element(TAB_CONTEXT_MENU));
 }

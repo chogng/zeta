@@ -10,6 +10,8 @@ const TITLEBAR_TAB_GROUP_SCOPE: u32 = 19;
 const TAB_CONTAINER_CLOSE_SCOPE: u32 = 20;
 const TITLEBAR_TAB_CLOSE_SCOPE: u32 = 21;
 const TAB_LAYOUT_MENU_SCOPE: u32 = 23;
+const TAB_CONTAINER_ACTION_SCOPE: u32 = 24;
+const TITLEBAR_TAB_ACTION_SCOPE: u32 = 25;
 const FIRST_SESSION_TAB: u32 = 100;
 
 pub const WINDOW: ElementId = ElementId::scoped(SHELL_SCOPE, 1);
@@ -18,9 +20,12 @@ pub const TAB_CONTAINER_TOGGLE: ElementId = ElementId::scoped(SHELL_SCOPE, 12);
 pub const TAB_CONTAINER: ElementId = ElementId::scoped(SHELL_SCOPE, 13);
 pub const TAB_CONTAINER_SETTINGS_TAB: ElementId = ElementId::scoped(TAB_CONTAINER_SCOPE, 4);
 pub const TAB_CONTAINER_SETTINGS_CLOSE: ElementId = ElementId::scoped(TAB_CONTAINER_CLOSE_SCOPE, 4);
+pub const TAB_CONTAINER_SETTINGS_ACTION: ElementId =
+    ElementId::scoped(TAB_CONTAINER_ACTION_SCOPE, 4);
 pub const TITLEBAR_TAB_CONTAINER: ElementId = ElementId::scoped(SHELL_SCOPE, 53);
 pub const TITLEBAR_SETTINGS_TAB: ElementId = ElementId::scoped(TITLEBAR_TAB_SCOPE, 4);
 pub const TITLEBAR_SETTINGS_CLOSE: ElementId = ElementId::scoped(TITLEBAR_TAB_CLOSE_SCOPE, 4);
+pub const TITLEBAR_SETTINGS_ACTION: ElementId = ElementId::scoped(TITLEBAR_TAB_ACTION_SCOPE, 4);
 pub const WORKSPACE_PANE_TOGGLE: ElementId = ElementId::scoped(SHELL_SCOPE, 22);
 pub const TAB_CONTAINER_TOOLBAR: ElementId = ElementId::scoped(SHELL_SCOPE, 24);
 pub const SESSION_SEARCH_INPUT: ElementId = ElementId::scoped(SHELL_SCOPE, 25);
@@ -32,6 +37,10 @@ pub const FIRST_TAB_CONTAINER_SESSION_TAB: ElementId = ElementId::scoped(TAB_CON
 pub const FIRST_TITLEBAR_SESSION_TAB: ElementId = ElementId::scoped(TITLEBAR_TAB_SCOPE, 2);
 pub const FIRST_TAB_CONTAINER_SESSION_CLOSE: ElementId =
     ElementId::scoped(TAB_CONTAINER_CLOSE_SCOPE, FIRST_SESSION_TAB);
+pub const FIRST_TAB_CONTAINER_SESSION_ACTION: ElementId =
+    ElementId::scoped(TAB_CONTAINER_ACTION_SCOPE, FIRST_SESSION_TAB);
+pub const FIRST_TITLEBAR_SESSION_ACTION: ElementId =
+    ElementId::scoped(TITLEBAR_TAB_ACTION_SCOPE, FIRST_SESSION_TAB);
 pub const TAB_CONTAINER_LIST: ElementId = ElementId::scoped(TAB_CONTAINER_GROUP_SCOPE, 1);
 pub const TITLEBAR_TAB_LIST: ElementId = ElementId::scoped(TITLEBAR_TAB_GROUP_SCOPE, 1);
 
@@ -69,6 +78,24 @@ pub fn titlebar_session_tab_close_id(id: TabId) -> ElementId {
         FIRST_SESSION_TAB,
         id,
         "titlebar session tab close button",
+    )
+}
+
+pub fn session_tab_action_id(id: TabId) -> ElementId {
+    tab_element_id(
+        TAB_CONTAINER_ACTION_SCOPE,
+        FIRST_SESSION_TAB,
+        id,
+        "session tab action button",
+    )
+}
+
+pub fn titlebar_session_tab_action_id(id: TabId) -> ElementId {
+    tab_element_id(
+        TITLEBAR_TAB_ACTION_SCOPE,
+        FIRST_SESSION_TAB,
+        id,
+        "titlebar session tab action button",
     )
 }
 

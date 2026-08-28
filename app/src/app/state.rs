@@ -14,7 +14,6 @@ pub(crate) struct NativeApp {
     pub(super) workbench: WorkbenchHost<PaneBinding>,
     pub(super) terminal_workspace: TerminalWorkspace,
     pub(super) terminal_pane_views: TerminalPaneViews<PaneKey, TerminalPaneViewState>,
-    pub(super) tab_context_menu: TabContextMenuState,
     pub(super) git_branch_context_menu: GitBranchContextMenuState,
     pub(super) workspace_path_picker: WorkspacePathPickerState,
     pub(super) remote_connection_picker: RemoteConnectionPickerState,
@@ -118,7 +117,6 @@ impl NativeApp {
                 )
             },
             terminal_pane_views: TerminalPaneViews::default(),
-            tab_context_menu: TabContextMenuState::default(),
             git_branch_context_menu: GitBranchContextMenuState::default(),
             workspace_path_picker: WorkspacePathPickerState::default(),
             remote_connection_picker: RemoteConnectionPickerState::default(),

@@ -37,7 +37,7 @@ impl NativeApp {
         let restore_focus = self.ui_dispatch.focused();
         self.git_branch_context_menu
             .open(anchor, branches, restore_focus);
-        self.tab_context_menu.dismiss();
+        self.workbench.dismiss_tab_context_menu();
         self.workspace_path_picker.dismiss();
         self.remote_connection_picker.dismiss();
         self.dismiss_remote_connection_manager();

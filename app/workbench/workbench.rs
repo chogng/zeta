@@ -200,9 +200,14 @@ impl Workbench {
         self.tab_part.update_status(session_id, status);
     }
 
-    /// Toggles one Session tab's Workbench-owned pinned state.
+    /// Toggles one tab's Workbench-owned pinned state.
     pub fn toggle_tab_pin(&mut self, key: &TabInputKey) -> Option<bool> {
         self.tab_part.toggle_tab_pin(key)
+    }
+
+    /// Renames one Workbench tab without changing its Session-owned title.
+    pub fn rename_tab(&mut self, key: &TabInputKey, title: impl Into<String>) -> bool {
+        self.tab_part.rename_tab(key, title)
     }
 
     /// Moves one tab to an existing Workbench group.

@@ -16,10 +16,11 @@ use crate::TabIntent;
 use crate::TabPart;
 use crate::TabStatus;
 use crate::tabpart::identity::{
-    FIRST_TAB_CONTAINER_SESSION_TAB, FIRST_TITLEBAR_SESSION_TAB, TAB_CONTAINER_SETTINGS_CLOSE,
-    TAB_CONTAINER_SETTINGS_TAB, TITLEBAR_SETTINGS_CLOSE, TITLEBAR_SETTINGS_TAB,
-    session_tab_close_id, session_tab_id, tab_group_list_id, titlebar_session_tab_close_id,
-    titlebar_session_tab_id,
+    FIRST_TAB_CONTAINER_SESSION_TAB, FIRST_TITLEBAR_SESSION_TAB, TAB_CONTAINER_SETTINGS_ACTION,
+    TAB_CONTAINER_SETTINGS_CLOSE, TAB_CONTAINER_SETTINGS_TAB, TITLEBAR_SETTINGS_ACTION,
+    TITLEBAR_SETTINGS_CLOSE, TITLEBAR_SETTINGS_TAB, session_tab_action_id, session_tab_close_id,
+    session_tab_id, tab_group_list_id, titlebar_session_tab_action_id,
+    titlebar_session_tab_close_id, titlebar_session_tab_id,
 };
 use crate::tabpart::test_style;
 use zeta_protocol::Session;
@@ -204,6 +205,28 @@ fn close_button_is_a_child_action_and_resolves_to_the_stable_tab_key() {
     );
     let mut frame = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
     frame.draw_component(&container);
+    let tab_bounds = frame
+        .interaction()
+        .node(titlebar_session_tab_id(part.tab_id(&first_key).unwrap()))
+        .unwrap()
+        .bounds();
+    drop(container);
+    dispatch.pointer_moved(
+        Point::new(tab_bounds.origin.x + 2.0, tab_bounds.origin.y + 2.0),
+        frame.interaction(),
+    );
+    drop(frame);
+    let container = TabContainer::from_tab_part(
+        bounds,
+        bounds,
+        &part,
+        Some(&first_key),
+        TabContainerPlacement::Titlebar,
+        test_style(),
+        &dispatch,
+    );
+    let mut frame = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
+    frame.draw_component(&container);
     let tab_id = part.tab_id(&first_key).unwrap();
     let close_id = titlebar_session_tab_close_id(tab_id);
     let close_node = frame
@@ -231,9 +254,78 @@ fn close_button_is_a_child_action_and_resolves_to_the_stable_tab_key() {
 }
 
 #[test]
-fn every_tab_has_a_close_button_in_each_mount() {
+fn settings_button_is_hover_only_and_opens_actions_for_the_stable_tab_key() {
+    let (part, first_key, _) = part_with_two_sessions();
+    let tab_id = part.tab_id(&first_key).unwrap();
+    let mounts = [
+        (
+            TabContainerPlacement::Body,
+            Rect::from_xywh(0.0, 36.0, 220.0, 664.0),
+            session_tab_id(tab_id),
+            session_tab_action_id(tab_id),
+            TAB_CONTAINER_SETTINGS_ACTION,
+        ),
+        (
+            TabContainerPlacement::Titlebar,
+            Rect::from_xywh(40.0, 0.0, 700.0, 32.0),
+            titlebar_session_tab_id(tab_id),
+            titlebar_session_tab_action_id(tab_id),
+            TITLEBAR_SETTINGS_ACTION,
+        ),
+    ];
+
+    for (placement, bounds, tab_element, action_element, settings_action) in mounts {
+        let mut dispatch = UiDispatch::default();
+        let container = TabContainer::from_tab_part(
+            bounds,
+            bounds,
+            &part,
+            Some(&first_key),
+            placement,
+            test_style(),
+            &dispatch,
+        );
+        let mut initial = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
+        initial.draw_component(&container);
+        assert!(initial.interaction().node(action_element).is_none());
+        assert!(initial.interaction().node(settings_action).is_none());
+        let tab_bounds = initial.interaction().node(tab_element).unwrap().bounds();
+        drop(container);
+
+        dispatch.pointer_moved(
+            Point::new(tab_bounds.origin.x + 2.0, tab_bounds.origin.y + 2.0),
+            initial.interaction(),
+        );
+        let container = TabContainer::from_tab_part(
+            bounds,
+            bounds,
+            &part,
+            Some(&first_key),
+            placement,
+            test_style(),
+            &dispatch,
+        );
+        let mut hovered = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
+        hovered.draw_component(&container);
+
+        assert_eq!(
+            hovered.interaction().node(action_element).unwrap().role(),
+            AccessibilityRole::Button
+        );
+        assert_eq!(
+            tab_intent_for_element(&part, action_element),
+            Some(TabIntent::OpenActions(first_key.clone()))
+        );
+        assert_eq!(
+            tab_intent_for_element(&part, settings_action),
+            Some(TabIntent::OpenActions(TabInputKey::Settings))
+        );
+    }
+}
+
+#[test]
+fn every_hovered_tab_has_an_action_bar_in_each_mount() {
     let (part, first_key, second_key) = part_with_two_sessions();
-    let dispatch = UiDispatch::default();
     let first_id = part.tab_id(&first_key).unwrap();
     let second_id = part.tab_id(&second_key).unwrap();
     let mounts = [
@@ -258,48 +350,67 @@ fn every_tab_has_a_close_button_in_each_mount() {
     ];
 
     for (placement, bounds, close_ids) in mounts {
-        let container = TabContainer::from_tab_part(
-            bounds,
-            bounds,
-            &part,
-            Some(&first_key),
-            placement,
-            test_style(),
-            &dispatch,
-        );
-        let mut frame = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
-        frame.draw_component(&container);
-        let nodes = frame.interaction().accessibility_nodes(&dispatch);
-
-        assert_eq!(
-            close_ids.map(|id| {
-                let node = nodes.iter().find(|node| node.id == id).unwrap();
-                (node.role, tab_intent_for_element(&part, id))
-            }),
-            [
-                (
-                    AccessibilityRole::Button,
-                    Some(TabIntent::Close(first_key.clone())),
-                ),
-                (
-                    AccessibilityRole::Button,
-                    Some(TabIntent::Close(second_key.clone())),
-                ),
-                (
-                    AccessibilityRole::Button,
-                    Some(TabIntent::Close(TabInputKey::Settings)),
-                ),
-            ]
-        );
-        assert_eq!(
-            frame
-                .scene()
-                .icons()
-                .iter()
-                .filter(|icon| icon.icon() == zeta_icons::icons::CLOSE)
-                .count(),
-            3
-        );
+        let tab_ids = match placement {
+            TabContainerPlacement::Body => [
+                session_tab_id(first_id),
+                session_tab_id(second_id),
+                TAB_CONTAINER_SETTINGS_TAB,
+            ],
+            TabContainerPlacement::Titlebar => [
+                titlebar_session_tab_id(first_id),
+                titlebar_session_tab_id(second_id),
+                TITLEBAR_SETTINGS_TAB,
+            ],
+        };
+        let expected = [
+            TabIntent::Close(first_key.clone()),
+            TabIntent::Close(second_key.clone()),
+            TabIntent::Close(TabInputKey::Settings),
+        ];
+        for ((tab_id, close_id), expected) in tab_ids.into_iter().zip(close_ids).zip(expected) {
+            let mut dispatch = UiDispatch::default();
+            let container = TabContainer::from_tab_part(
+                bounds,
+                bounds,
+                &part,
+                Some(&first_key),
+                placement,
+                test_style(),
+                &dispatch,
+            );
+            let mut initial = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
+            initial.draw_component(&container);
+            let tab_bounds = initial.interaction().node(tab_id).unwrap().bounds();
+            drop(container);
+            dispatch.pointer_moved(
+                Point::new(tab_bounds.origin.x + 2.0, tab_bounds.origin.y + 2.0),
+                initial.interaction(),
+            );
+            drop(initial);
+            let container = TabContainer::from_tab_part(
+                bounds,
+                bounds,
+                &part,
+                Some(&first_key),
+                placement,
+                test_style(),
+                &dispatch,
+            );
+            let mut frame = UiFrame::<InteractionFrame>::new(Color::TRANSPARENT);
+            frame.draw_component(&container);
+            let node = frame.interaction().node(close_id).unwrap();
+            assert_eq!(node.role(), AccessibilityRole::Button);
+            assert_eq!(tab_intent_for_element(&part, close_id), Some(expected));
+            assert_eq!(
+                frame
+                    .scene()
+                    .icons()
+                    .iter()
+                    .filter(|icon| icon.icon() == zeta_icons::icons::CLOSE)
+                    .count(),
+                1
+            );
+        }
     }
 }
 

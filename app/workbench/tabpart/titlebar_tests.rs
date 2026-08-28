@@ -34,18 +34,17 @@ fn titlebar_mounts_tabs_between_window_controls_and_actions() {
     );
     frame.draw_component(&titlebar);
 
-    assert_eq!(frame.scene().icons().len(), 4);
+    assert_eq!(frame.scene().icons().len(), 3);
     assert_eq!(frame.scene().icons()[0].icon(), icons::GEAR);
     assert_eq!(
-        frame.scene().icons()[2].icon(),
+        frame.scene().icons()[1].icon(),
         icons::LAYOUT_SIDEBAR_LEFT_OFF_EMPTY
     );
     assert_eq!(
-        frame.scene().icons()[3].icon(),
+        frame.scene().icons()[2].icon(),
         icons::LAYOUT_SIDEBAR_RIGHT_OFF_EMPTY
     );
-    assert_eq!(frame.scene().icons()[1].icon(), icons::CLOSE);
-    assert!(frame.interaction().node(TITLEBAR_SETTINGS_CLOSE).is_some());
+    assert!(frame.interaction().node(TITLEBAR_SETTINGS_CLOSE).is_none());
     assert!(
         frame
             .scene()

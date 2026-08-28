@@ -34,6 +34,7 @@ pub struct TabPart {
     next_group_id: u64,
     tab_ids: HashMap<TabInputKey, TabId>,
     pinned_tabs: HashSet<TabInputKey>,
+    renamed_tabs: HashMap<TabInputKey, String>,
     next_tab_id: u32,
 }
 
@@ -48,6 +49,7 @@ impl Default for TabPart {
             next_group_id: TabGroupId::DEFAULT.value() + 1,
             tab_ids: HashMap::new(),
             pinned_tabs: HashSet::new(),
+            renamed_tabs: HashMap::new(),
             next_tab_id: TabId::FIRST.value(),
         }
     }
@@ -102,14 +104,36 @@ impl TabPart {
         self.tab_ids.get(key).copied()
     }
 
-    /// Returns whether one Session tab is pinned in its current group.
+    /// Returns whether one tab is pinned in its current group.
     pub fn is_tab_pinned(&self, key: &TabInputKey) -> bool {
         self.pinned_tabs.contains(key)
     }
 
-    /// Pins one Session tab and moves it to the start of its current group.
+    /// Returns the Workbench-owned display name for one tab.
+    pub fn tab_name<'a>(&'a self, input: &'a TabInput) -> &'a str {
+        self.renamed_tabs
+            .get(input.key())
+            .map(String::as_str)
+            .unwrap_or_else(|| input.title())
+    }
+
+    /// Renames one known tab without changing its Session-owned title metadata.
+    pub fn rename_tab(&mut self, key: &TabInputKey, title: impl Into<String>) -> bool {
+        if self.input(key).is_none() {
+            return false;
+        }
+        let title = title.into();
+        let title = title.trim();
+        if title.is_empty() {
+            return false;
+        }
+        self.renamed_tabs.insert(key.clone(), title.to_owned());
+        true
+    }
+
+    /// Pins one tab and moves it to the start of its current group.
     pub fn pin_tab(&mut self, key: &TabInputKey) -> bool {
-        if !key.is_session() || self.input(key).is_none() || !self.pinned_tabs.insert(key.clone()) {
+        if self.input(key).is_none() || !self.pinned_tabs.insert(key.clone()) {
             return false;
         }
         let group = self
@@ -120,7 +144,7 @@ impl TabPart {
             .move_input(key, 0)
     }
 
-    /// Unpins one Session tab and places it after the group's pinned prefix.
+    /// Unpins one tab and places it after the group's pinned prefix.
     pub fn unpin_tab(&mut self, key: &TabInputKey) -> bool {
         if !self.pinned_tabs.remove(key) {
             return false;
@@ -134,7 +158,7 @@ impl TabPart {
             .move_input(key, index)
     }
 
-    /// Toggles one Session tab's pinned state and returns the new state.
+    /// Toggles one tab's pinned state and returns the new state.
     pub fn toggle_tab_pin(&mut self, key: &TabInputKey) -> Option<bool> {
         if self.is_tab_pinned(key) {
             self.unpin_tab(key).then_some(false)
@@ -318,6 +342,7 @@ impl TabPart {
         let removed = self.group_mut(source_group)?.remove_input(key)?;
         self.tab_ids.remove(key);
         self.pinned_tabs.remove(key);
+        self.renamed_tabs.remove(key);
         self.remove_empty_non_default_group(source_group);
 
         if was_active {

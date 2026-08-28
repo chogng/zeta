@@ -4,7 +4,7 @@ use zeta_commands::CommandRequest;
 use zui::ui::ElementId;
 
 use crate::NativeApp;
-use crate::shell_interaction::{self, ContextAction, TabContextMenuAction, WorkspacePaneSelection};
+use crate::shell_interaction::{self, ContextAction, WorkspacePaneSelection};
 use zeta_workbench::PaneSplitDirection;
 
 pub(crate) type NativeCommandRegistry = CommandRegistry<NativeApp>;
@@ -34,16 +34,6 @@ pub(crate) fn command_request_for_element(id: ElementId) -> Option<CommandReques
     }
     if id == shell_interaction::AGENT_FILES_SEARCH {
         return Some(AppCommandId::ToggleAgentFileSearch.into());
-    }
-    if let Some(action) = TabContextMenuAction::from_element_id(id) {
-        return Some(
-            match action {
-                TabContextMenuAction::TogglePin => AppCommandId::PinSession,
-                TabContextMenuAction::Close => AppCommandId::CloseSession,
-                TabContextMenuAction::MoveToNewGroup => AppCommandId::GroupSession,
-            }
-            .into(),
-        );
     }
     ContextAction::from_element_id(id).map(|action| {
         match action {
@@ -305,7 +295,18 @@ fn execute_tab_context_menu_action(app: &mut NativeApp, request: &CommandRequest
             | AppCommandId::GroupSession
             | AppCommandId::ForkSession
     ));
-    let target_tab = app.tab_context_menu.target_tab().cloned();
+    let target_tab = app
+        .workbench
+        .tab_context_menu()
+        .target_tab()
+        .cloned()
+        .or_else(|| {
+            app.workbench
+                .workbench()
+                .tab_part()
+                .active_tab_key()
+                .cloned()
+        });
     let command_id = request.command_id();
     app.dismiss_tab_context_menu();
     if command_id == AppCommandId::CloseSession {

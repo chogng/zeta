@@ -1,4 +1,5 @@
 use super::PaneKey;
+use super::TabContextMenuOutcome;
 use super::WorkbenchHost;
 use crate::LogicalViewport;
 use crate::PaneInput;
@@ -7,6 +8,8 @@ use crate::TabInput;
 use crate::TabInputKey;
 use crate::TabInputMetadata;
 use crate::TabStatus;
+use zui::ui::Point;
+use zui::ui::TextInputCommand;
 
 fn session_id(value: &str) -> zeta_protocol::SessionId {
     zeta_protocol::SessionId::new(value).expect("valid session id")
@@ -196,4 +199,50 @@ fn pane_key_keeps_input_identity_distinct_inside_one_group() {
     );
 
     assert_ne!(first, second);
+}
+
+#[test]
+fn tab_menu_routes_group_selection_and_rename_through_the_workbench_host() {
+    let first = session_id("session-1");
+    let second = session_id("session-2");
+    let first_tab = TabInputKey::session(first.clone());
+    let second_tab = TabInputKey::session(second.clone());
+    let mut host = WorkbenchHost::new();
+    host.upsert_session_input_with(
+        session_input(first.clone()),
+        PaneInput::terminal(first),
+        || (),
+    );
+    host.upsert_session_input_with(
+        session_input(second.clone()),
+        PaneInput::terminal(second),
+        || (),
+    );
+    let group = host
+        .move_tab_to_new_group(&second_tab, "Review")
+        .expect("second tab group");
+
+    assert!(host.open_tab_context_menu(first_tab.clone(), Point::new(20.0, 30.0), None));
+    assert_eq!(
+        host.activate_tab_context_menu(crate::TabContextMenuAction::MoveToGroup.element_id()),
+        TabContextMenuOutcome::Focus(crate::tab_group_menu_element_id(group))
+    );
+    assert_eq!(
+        host.activate_tab_context_menu(crate::tab_group_menu_element_id(group)),
+        TabContextMenuOutcome::Changed
+    );
+    assert_eq!(
+        host.workbench().tab_part().input_group(&first_tab),
+        Some(group)
+    );
+
+    assert!(host.open_tab_context_menu(first_tab.clone(), Point::new(20.0, 30.0), None));
+    assert_eq!(
+        host.activate_tab_context_menu(crate::TabContextMenuAction::Rename.element_id()),
+        TabContextMenuOutcome::Focus(crate::TAB_RENAME_INPUT)
+    );
+    assert!(host.apply_tab_rename(TextInputCommand::Insert("Build fixes".to_owned())));
+    assert!(host.commit_tab_rename());
+    let input = host.workbench().tab_part().input(&first_tab).unwrap();
+    assert_eq!(host.workbench().tab_part().tab_name(input), "Build fixes");
 }

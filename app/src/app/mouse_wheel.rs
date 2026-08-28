@@ -27,7 +27,7 @@ impl NativeApp {
         if self.route_workspace_path_picker_wheel(delta) {
             return;
         }
-        if self.tab_context_menu.is_open() {
+        if self.workbench.tab_context_menu().is_open() {
             return;
         }
         if self.route_settings_wheel(delta) {
