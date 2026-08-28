@@ -1,0 +1,22 @@
+[package]
+name = "zeta-utils-cache"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_utils_cache"
+path = "src/lib.rs"
+
+[dependencies]
+lru = { workspace = true }
+sha1 = { workspace = true }
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
+
+[lints]
+workspace = true

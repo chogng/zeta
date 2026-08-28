@@ -15,9 +15,11 @@ base64 = { workspace = true }
 image = { workspace = true, features = ["gif", "jpeg", "png", "webp"] }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
+zeta-utils-cache = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [lints]
 workspace = true

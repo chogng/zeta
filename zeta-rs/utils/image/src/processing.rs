@@ -1,6 +1,7 @@
 use std::fmt;
 use std::io::BufReader;
 use std::io::Cursor;
+use std::num::NonZeroUsize;
 use std::path::Path;
 use std::sync::Arc;
 use std::sync::LazyLock;
@@ -21,11 +22,11 @@ use image::codecs::webp::WebPEncoder;
 use image::imageops::FilterType;
 use sha2::Digest;
 use sha2::Sha256;
+use zeta_utils_cache::BlockingLruCache;
 
 use crate::MAX_DIMENSION;
 use crate::MAX_PROMPT_IMAGE_INPUT_BYTES;
 use crate::PROMPT_IMAGE_PATCH_SIZE;
-use crate::cache::BoundedLruCache;
 use crate::error::ImageProcessingError;
 
 const MAX_IMAGE_CACHE_ENTRIES: usize = 32;
@@ -200,8 +201,13 @@ struct ImageCacheKey {
     policy: PromptImagePolicy,
 }
 
-static IMAGE_CACHE: LazyLock<BoundedLruCache<ImageCacheKey, EncodedImage>> =
-    LazyLock::new(|| BoundedLruCache::new(MAX_IMAGE_CACHE_ENTRIES, MAX_IMAGE_CACHE_BYTES));
+type ImageCache = BlockingLruCache<ImageCacheKey, EncodedImage>;
+
+static IMAGE_CACHE: LazyLock<ImageCache> = LazyLock::new(|| {
+    ImageCache::new(
+        NonZeroUsize::new(MAX_IMAGE_CACHE_ENTRIES).expect("image cache capacity is non-zero"),
+    )
+});
 
 /// Validates, decodes, optionally resizes, and encodes image bytes for a prompt.
 pub fn load_for_prompt_bytes(
@@ -309,8 +315,28 @@ pub fn load_for_prompt_bytes(
             max: policy.safety_limits.max_output_bytes,
         });
     }
-    IMAGE_CACHE.insert(key, encoded.clone(), encoded.bytes.len());
+    cache_image(&IMAGE_CACHE, key, encoded.clone(), MAX_IMAGE_CACHE_BYTES);
     Ok(encoded)
+}
+
+fn cache_image(cache: &ImageCache, key: ImageCacheKey, image: EncodedImage, byte_capacity: usize) {
+    if image.bytes.len() > byte_capacity {
+        return;
+    }
+
+    cache.with_mut(|cache| {
+        cache.put(key, image);
+        let mut cached_bytes = cache
+            .iter()
+            .map(|(_, image)| image.bytes.len())
+            .sum::<usize>();
+        while cached_bytes > byte_capacity {
+            let Some((_, evicted)) = cache.pop_lru() else {
+                break;
+            };
+            cached_bytes -= evicted.bytes.len();
+        }
+    });
 }
 
 fn validate_policy(policy: PromptImagePolicy) -> Result<(), ImageProcessingError> {
@@ -571,3 +597,7 @@ fn apply_metadata(
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "processing_cache_tests.rs"]
+mod cache_tests;

@@ -52,8 +52,7 @@ load_data_url_for_prompt
 `apply_metadata` 是唯一转码路径。若这些 symbol 开始检查模型 capability、抓取远程资源、读取
 filesystem 或保存 durable 数据，即表示实现所有权已经漂移。
 
-Cache key 对源 bytes 和完整 `PromptImagePolicy` 计算 hash；cache 同时受 entry 数和编码 byte 数
-约束。它只是一项优化，不能改变校验结果或失败行为。
+Cache key 对源 bytes 和完整 `PromptImagePolicy` 计算 hash。`zeta-utils-cache` 拥有通用 LRU 与锁；本 crate 通过 `cache_image` 拥有 32 条和 64 MiB 编码 byte 的双重约束。缓存只是一项优化，不能改变校验结果或失败行为。
 
 ## 失败与限制
 
@@ -68,6 +67,6 @@ crate 的默认输入上限只是绝对 sanity guard，不是产品上传额度�
 
 ## 测试
 
-运行 `cargo test -p zeta-utils-image`。单元测试覆盖源 bytes 透传、缩放、patch budget、`Original`
+运行 `just test zeta-utils-image`。单元测试覆盖源 bytes 透传、缩放、patch budget、`Original`
 安全语义、data URL 校验、资源限制、animation policy、metadata 保留/清理和输出编码。Bazel target
 为 `//zeta-rs/utils/image:image-unit-tests`。

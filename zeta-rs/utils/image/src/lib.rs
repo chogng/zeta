@@ -1,6 +1,5 @@
 //! Provider-neutral preparation of untrusted images for model prompts.
 
-mod cache;
 mod data_url;
 mod error;
 mod processing;
