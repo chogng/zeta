@@ -1,9 +1,11 @@
 .stanza-editor-placeholder-text {
   position: absolute;
   z-index: 7;
+  overflow: hidden;
   color: var(--zeta-description-foreground);
+  text-overflow: ellipsis;
+  white-space: nowrap;
   pointer-events: none;
-  white-space: pre-wrap;
 }
 
 .stanza-editor-embedded .stanza-editor-placeholder-text {

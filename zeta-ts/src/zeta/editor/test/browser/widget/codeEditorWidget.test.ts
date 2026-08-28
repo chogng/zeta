@@ -25,7 +25,8 @@ for (const [name, value] of Object.entries({
 const { CodeEditorWidget } = await import("../../../browser/widget/codeEditor/codeEditorWidget.js");
 const { CodeEditorContributionInstantiation } = await import("../../../browser/widget/codeEditor/codeEditorContributions.js");
 const { createServiceIdentifier, IInstantiationService, ServiceContainer, SyncDescriptor } = await import("../../../../platform/instantiation/common/instantiation.js");
-await import("../../../contrib/placeholderText/browser/placeholderTextController.js");
+const { PlaceholderTextContribution } = await import("../../../contrib/placeholderText/browser/placeholderTextContribution.js");
+await import("../../../contrib/placeholderText/browser/placeholderText.contribution.js");
 
 test.after(() => browserEnvironment.window.close());
 
@@ -76,6 +77,45 @@ test("CodeEditorWidget owns padding, placeholder, and current-line presentation 
 	assert.equal(editor.element.style.getPropertyValue("--stanza-editor-padding-right"), "20px");
 	assert.equal(requiredElement<HTMLElement>(editor.element, ".stanza-editor-placeholder-text").style.top, "20px");
 	assert.equal(editor.viewport.viewportLayout.contentSize.height, 60);
+	dom.window.close();
+});
+
+test("PlaceholderTextContribution follows model emptiness and editor layout", () => {
+	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = requiredElement(dom.window.document, "main");
+	using model = new TextModel();
+	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using editor = new CodeEditorWidget({
+		container,
+		model,
+		selectionController: selections,
+		lineHeight: 20,
+		placeholder: "Ask Zeta",
+		viewport: { padding: { top: 8, right: 12, bottom: 8, left: 12 } },
+	});
+
+	editor.layout({ width: 320, height: 80 });
+	const placeholder = requiredElement<HTMLElement>(editor.element, ".stanza-editor-placeholder-text");
+	assert.strictEqual(PlaceholderTextContribution.get(editor), editor.getContribution(PlaceholderTextContribution.ID));
+	assert.deepEqual({
+		display: placeholder.style.display,
+		left: placeholder.style.left,
+		top: placeholder.style.top,
+		width: placeholder.style.width,
+		lineHeight: placeholder.style.lineHeight,
+	}, {
+		display: "block",
+		left: "45px",
+		top: "8px",
+		width: "275px",
+		lineHeight: "20px",
+	});
+
+	model.reset("alpha");
+	assert.equal(placeholder.style.display, "none");
+	model.reset("");
+	assert.equal(placeholder.style.display, "block");
 	dom.window.close();
 });
 

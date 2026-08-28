@@ -275,6 +275,7 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 				lineHeight: configuration.lineHeight,
 				ariaLabel,
 				ownerId: options.ownerId,
+				placeholder: options.placeholder,
 				instantiationService: options.instantiationService,
 				onContributionError: onLanguageError,
 				viewport: {

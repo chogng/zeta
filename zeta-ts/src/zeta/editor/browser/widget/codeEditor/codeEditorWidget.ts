@@ -11,7 +11,7 @@ import { type EditorViewport } from "../../view.js";
 import { KeyboardNavigationController, type KeyboardNavigationControllerOptions } from "../../controller/keyboardNavigationController.js";
 import { MouseHandler, type MouseHandlerOptions } from "../../controller/mouseHandler.js";
 import { ServiceContainer, type IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
-import { CodeEditorContributions, type CodeEditorContributionDescription } from "./codeEditorContributions.js";
+import { CodeEditorContributions, type CodeEditorContribution, type CodeEditorContributionDescription } from "./codeEditorContributions.js";
 
 export type CodeEditorWidgetViewportOptions = EditorViewViewportOptions;
 
@@ -160,6 +160,10 @@ export class CodeEditorWidget extends Disposable {
 
 	getId(): string {
 		return this.ownerId;
+	}
+
+	public getContribution<T extends CodeEditorContribution>(id: string): T | undefined {
+		return this.contributions.get(id) as T | undefined;
 	}
 }
 
