@@ -15,6 +15,7 @@ fn session(id: &str, title: &str) -> Session {
         status: SessionStatus::Active,
         model: None,
         workspace: None,
+        next_approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
         sequence: 1,
         threads: Vec::new(),
     }

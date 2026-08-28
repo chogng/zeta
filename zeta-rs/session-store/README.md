@@ -93,8 +93,7 @@ ThreadStore 的共同原则应保持一致，但不要抽象掉各自的 ID、ev
 
 ## 当前限制与演进
 
-当前新写入使用 schema version `2`，reader 仍接受 minimum version `1`；version 2 覆盖 Agent
-child Thread plan/context seed contract。migration registry、compaction、snapshot/checkpoint 与
+当前新写入使用 schema version `4`，reader 仍接受 minimum version `1`；version 4 包含 Session 的下一次批准模式变更事件。migration registry、compaction、snapshot/checkpoint 与
 corruption diagnostics 尚不属于本 crate 的已实现能力。未来可以增加 versioned
 reader/migration policy，但不能削弱 append atomicity、exact command receipt 或 per-Session
 sequence。

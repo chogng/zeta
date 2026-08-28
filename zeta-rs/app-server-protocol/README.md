@@ -130,6 +130,7 @@ Turns；客户端不得用旧页确认 durable update cursor，也不得用旧�
 `SessionRequestParams` / `SessionRequest` 是 mutation 的 canonical Session contract：公共请求统一
 携带 `CommandId`、Session sequence 和 typed operation，结果通过 `SessionRequestResult` 的 tagged
 union 返回。旧的独立 Session/Thread/Turn mutation methods 不在 registry 中。
+`SessionRequest::SetNextApprovalMode` 修改 Session 保存的下一次批准模式；`StartTurn` 和 `StartShellTurn` 不接收批准模式。App Server 接受新 Turn 时读取该 Session 字段，并把结果冻结到 canonical `Turn.approvalMode`，因此同一 Session 的多个 Thread 各自保留准确的当前模式。
 
 `ClientCapabilities.agentInteractions` 用 version + explicit kinds 声明 connection 能实际处理的
 Agent interaction；当前 App Server version 为 1。普通 Thread snapshot 只公开
@@ -255,6 +256,7 @@ FIFO/shared-read 调度；connection-resource key 由 runtime 再加入 connecti
   `image { url }` 或 `skill { skill: SkillRef }`；图片在进入 wire contract 前必须已经从本地路径
   规范化为 HTTP(S)/data URL，Skill 只能携带 source-qualified ID 与 version selector，不能携带
   raw filesystem path。
+- canonical `Session.nextApprovalMode` 表示下一次 Turn 使用的模式，canonical `Turn.approvalMode` 表示该 Turn 接受时冻结的模式；客户端内部名称和显示文案可以不同，但不得重新从本地设置推导这两个值。
 - `SessionRequest::CompactContext` 创建独立的压缩 Turn，并携带可选 retention prompt；它不是
   `StartTurn.input`，也不能与 Thread 上的非终态 Turn 并发。prompt 在 Core command receipt 中冻结，
   command replay 不得重新触发压缩后端。

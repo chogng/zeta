@@ -37,6 +37,7 @@ use crate::features::shortcuts::ShortcutView;
 use crate::features::shortcuts::action_menu;
 use crate::features::shortcuts::capture_view;
 use crate::features::skills::{SkillSelectionAction, SkillSelectionView};
+use crate::features::status_line::ApprovalModeStatus;
 use crate::features::status_line::StatusLineModel;
 use crate::features::status_line::StatusLineSelectionAction;
 use crate::features::status_line::StatusLineSelectionView;
@@ -90,7 +91,7 @@ pub(crate) struct App {
     status: Status,
     status_line: StatusLineModel,
     terminal_settings: TerminalSettings,
-    approval_mode: ApprovalMode,
+    approval_mode_status: ApprovalModeStatus,
 }
 
 #[derive(Debug)]
@@ -126,7 +127,7 @@ impl App {
             status: Status::Ready,
             status_line: StatusLineModel::new(),
             terminal_settings: TerminalSettings::default(),
-            approval_mode: ApprovalMode::AskPermissions,
+            approval_mode_status: ApprovalModeStatus::default(),
         }
     }
 
@@ -153,7 +154,7 @@ impl App {
             status: Status::Ready,
             status_line: StatusLineModel::new(),
             terminal_settings: TerminalSettings::default(),
-            approval_mode: ApprovalMode::AskPermissions,
+            approval_mode_status: ApprovalModeStatus::default(),
         }
     }
 
@@ -227,10 +228,7 @@ impl App {
                     submission.display_text.clone(),
                 ));
                 self.status = Status::Working;
-                Some(AppCommand::SubmitTurn {
-                    submission,
-                    approval_mode: self.approval_mode,
-                })
+                Some(AppCommand::SubmitTurn { submission })
             }
             InteractionPaneOutcome::Consumed => None,
             InteractionPaneOutcome::Unhandled => None,
@@ -720,8 +718,21 @@ impl App {
         &self.status
     }
 
+    pub(crate) fn approval_mode_status(&self) -> ApprovalModeStatus {
+        self.approval_mode_status
+    }
+
+    #[cfg(test)]
     pub(crate) fn approval_mode(&self) -> ApprovalMode {
-        self.approval_mode
+        self.approval_mode_status.next
+    }
+
+    pub(crate) fn set_next_approval_mode(&mut self, approval_mode: ApprovalMode) {
+        self.approval_mode_status.next = approval_mode;
+    }
+
+    pub(crate) fn set_current_approval_mode(&mut self, approval_mode: Option<ApprovalMode>) {
+        self.approval_mode_status.current = approval_mode;
     }
 
     pub(crate) fn status_line(&self) -> &StatusLineModel {
@@ -883,14 +894,7 @@ impl App {
         now: Instant,
     ) -> Option<AppCommand> {
         match action {
-            AppKeymapAction::CycleApprovalMode => {
-                self.approval_mode = match self.approval_mode {
-                    ApprovalMode::AskPermissions => ApprovalMode::AutoReview,
-                    ApprovalMode::AutoReview => ApprovalMode::BypassPermissions,
-                    ApprovalMode::BypassPermissions => ApprovalMode::AskPermissions,
-                };
-                None
-            }
+            AppKeymapAction::CycleApprovalMode => Some(AppCommand::CycleNextApprovalMode),
             AppKeymapAction::RootEscape => {
                 if self
                     .last_root_escape
@@ -994,10 +998,7 @@ impl App {
                     submission.display_text.clone(),
                 ));
                 self.status = Status::Working;
-                Some(AppCommand::SubmitTurn {
-                    submission,
-                    approval_mode: self.approval_mode,
-                })
+                Some(AppCommand::SubmitTurn { submission })
             }
             (SlashCommandOrigin::Skill, _) => None,
             (SlashCommandOrigin::Local, Some(_)) => {

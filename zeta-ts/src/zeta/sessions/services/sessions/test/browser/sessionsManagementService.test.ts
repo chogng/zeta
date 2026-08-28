@@ -26,6 +26,7 @@ test("AppServerSessionsManagementService refreshes subscribed Sessions from cano
 		async archive() { throw new Error("Not used"); },
 		async stop() { throw new Error("Not used"); },
 		async setModel() { throw new Error("Not used"); },
+		async setNextApprovalMode() { throw new Error("Not used"); },
 	};
 	const events: IServerEventApi = {
 		subscribe(listener) {
@@ -71,6 +72,7 @@ test("AppServerSessionsManagementService stops refreshing when the canonical sna
 		async archive() { throw new Error("Not used"); },
 		async stop() { throw new Error("Not used"); },
 		async setModel() { throw new Error("Not used"); },
+		async setNextApprovalMode() { throw new Error("Not used"); },
 	};
 	const events: IServerEventApi = {
 		subscribe(listener) {
@@ -109,6 +111,7 @@ test("AppServerSessionsManagementService refreshes the canonical Agent tree afte
 		async archive() { throw new Error("Not used"); },
 		async stop() { throw new Error("Not used"); },
 		async setModel() { throw new Error("Not used"); },
+		async setNextApprovalMode() { throw new Error("Not used"); },
 	};
 	const events: IServerEventApi = {
 		subscribe(listener) {
@@ -173,6 +176,7 @@ test("AppServerSessionsManagementService reopens a foreign Session Workspace bef
 		async archive() { throw new Error("Not used"); },
 		async stop() { throw new Error("Not used"); },
 		async setModel() { throw new Error("Not used"); },
+		async setNextApprovalMode() { throw new Error("Not used"); },
 	};
 	using service = new AppServerSessionsManagementService({
 		session: api,
@@ -217,6 +221,7 @@ test("AppServerSessionsManagementService interrupts the exact canonical Agent Tu
 		async archive() { throw new Error("Not used"); },
 		async stop() { throw new Error("Not used"); },
 		async setModel() { throw new Error("Not used"); },
+		async setNextApprovalMode() { throw new Error("Not used"); },
 	};
 	const turn: ITurnApi = {
 		async start() { throw new Error("Not used"); },
@@ -244,6 +249,7 @@ function session(sequence: number): SessionDto {
 		sessionId: "session-1",
 		title: "Session 1",
 		status: "active",
+		nextApprovalMode: "askPermissions",
 		sequence,
 		threads: [{ threadId: "thread-1", origin: { type: "root" }, status: "active" }],
 	};

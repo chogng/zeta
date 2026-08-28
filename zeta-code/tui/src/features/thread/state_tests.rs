@@ -202,6 +202,7 @@ fn thread_snapshot() -> Thread {
             model: None,
             tool_profile: None,
             tool_mode: zeta_protocol::ToolMode::Direct,
+            approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
             usage: zeta_protocol::ModelUsageSummary::default(),
             items: vec![
                 ThreadItem::UserMessage {
@@ -236,6 +237,7 @@ fn thread_with_item(turn: &str, item: &str, text: &str) -> Thread {
             model: None,
             tool_profile: None,
             tool_mode: zeta_protocol::ToolMode::Direct,
+            approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
             usage: zeta_protocol::ModelUsageSummary::default(),
             items: vec![ThreadItem::UserMessage {
                 item_id: ItemId::new(item).unwrap(),

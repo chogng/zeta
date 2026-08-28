@@ -112,6 +112,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         &display_workspace_root,
         slash_registry.catalog.clone(),
     );
+    app.set_next_approval_mode(conversation.next_approval_mode());
     let now = Instant::now();
     let mut keybindings_resource = keybindings_path.map(|path| ShortcutResource::new(path, now));
     let mut status_line_resource = status_line_path.map(StatusLineResource::new);
@@ -783,10 +784,34 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             );
                         }
                     }
-                    AppCommand::SubmitTurn {
-                        submission,
-                        approval_mode,
-                    } => {
+                    AppCommand::CycleNextApprovalMode => {
+                        if pending_request.is_none() {
+                            let approval_mode = match conversation.next_approval_mode() {
+                                zeta_protocol::ApprovalMode::AskPermissions => {
+                                    zeta_protocol::ApprovalMode::AutoReview
+                                }
+                                zeta_protocol::ApprovalMode::AutoReview => {
+                                    zeta_protocol::ApprovalMode::BypassPermissions
+                                }
+                                zeta_protocol::ApprovalMode::BypassPermissions => {
+                                    zeta_protocol::ApprovalMode::AskPermissions
+                                }
+                            };
+                            let mut next_conversation = conversation.clone();
+                            let mut request_client = client.clone();
+                            pending_request = spawn_request(
+                                "zeta-tui-set-approval-mode",
+                                move || {
+                                    let result = next_conversation
+                                        .set_next_approval_mode(&mut request_client, approval_mode)
+                                        .map(|()| next_conversation);
+                                    RequestCompletion::ApprovalModeChanged(result)
+                                },
+                                &mut app,
+                            );
+                        }
+                    }
+                    AppCommand::SubmitTurn { submission } => {
                         draw_terminal(&mut terminal, &app)?;
                         if pending_request.is_none() {
                             let request_client = client.clone();
@@ -799,7 +824,6 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                         request_client,
                                         scope,
                                         submission,
-                                        approval_mode,
                                         history,
                                     ))
                                 },
@@ -1033,6 +1057,11 @@ fn refresh_server_event(
         }
         client::ClientEvent::GitStatusChanged(status) => {
             app.update(AppEvent::GitStatusReceived(status));
+            ServerRefresh::default()
+        }
+        client::ClientEvent::SessionUpdated(update) => {
+            conversation.apply_session_update(&update);
+            app.set_next_approval_mode(conversation.next_approval_mode());
             ServerRefresh::default()
         }
         client::ClientEvent::ThreadUpdated(update) => {

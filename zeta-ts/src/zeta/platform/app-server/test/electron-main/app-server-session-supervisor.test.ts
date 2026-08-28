@@ -325,7 +325,6 @@ test("crash rejects an unknown-outcome side effect without replaying it", async 
 		request: {
 			type: "startTurn",
 			threadId: "thread_1",
-			approvalMode: "askPermissions",
 			input: [{ type: "text", text: "hello" }],
 		},
 	});

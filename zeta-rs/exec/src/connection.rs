@@ -296,6 +296,26 @@ impl ExecConnection for EmbeddedConnection {
         approval_mode: ApprovalMode,
         input: Vec<InputItem>,
     ) -> Result<TurnStartResult, ConnectionError> {
+        let session = self.read_session(session_id.clone())?;
+        let approval_command_id = CommandId::new(format!("{command_id}:approval-mode"))
+            .map_err(|error| ConnectionError::new(error.to_string()))?;
+        match self
+            .client
+            .request_session(SessionRequestParams {
+                command_id: approval_command_id,
+                session_id: session_id.clone(),
+                expected_sequence: session.sequence,
+                request: SessionRequest::SetNextApprovalMode { approval_mode },
+            })
+            .map_err(|error| ConnectionError::new(error.to_string()))?
+        {
+            SessionRequestResult::Session(_) => {}
+            _ => {
+                return Err(ConnectionError::new(
+                    "App Server returned an unexpected result for SetNextApprovalMode",
+                ));
+            }
+        }
         match self
             .client
             .request_session(SessionRequestParams {
@@ -304,7 +324,6 @@ impl ExecConnection for EmbeddedConnection {
                 expected_sequence,
                 request: SessionRequest::StartTurn {
                     thread_id,
-                    approval_mode,
                     tool_mode: None,
                     input,
                 },

@@ -6,7 +6,15 @@ use zeta_app_server_protocol::protocol::git::{GitHeadDto, GitStatusChanged, GitS
 use zeta_app_server_protocol::protocol::marketplace::MarketplaceChanged;
 use zeta_app_server_protocol::protocol::notification::{SkillsChanged, ThreadUpdateEnvelope};
 use zeta_app_server_protocol::protocol::plugins::PluginsChanged;
-use zeta_protocol::{SessionId, StreamInstanceId, ThreadEvent, ThreadId, ThreadUpdate};
+use zeta_protocol::ApprovalMode;
+use zeta_protocol::SessionEvent;
+use zeta_protocol::SessionId;
+use zeta_protocol::SessionUpdate;
+use zeta_protocol::SessionUpdateEnvelope;
+use zeta_protocol::StreamInstanceId;
+use zeta_protocol::ThreadEvent;
+use zeta_protocol::ThreadId;
+use zeta_protocol::ThreadUpdate;
 
 #[test]
 fn skills_changed_is_mapped_without_exposing_the_wire_notification() {
@@ -72,6 +80,37 @@ fn thread_update_preserves_typed_scope_and_sequence() {
     assert_eq!(update.session_id.as_str(), "session-1");
     assert_eq!(update.thread_id.as_str(), "thread-1");
     assert_eq!(update.durable_sequence, 1);
+}
+
+#[test]
+fn session_update_preserves_the_backend_owned_next_approval_mode() {
+    let session_id = SessionId::new("session-1").unwrap();
+    let update = SessionUpdateEnvelope {
+        session_id: session_id.clone(),
+        durable_sequence: 2,
+        update: SessionUpdate::Committed {
+            event: SessionEvent::SessionNextApprovalModeChanged {
+                session_id,
+                approval_mode: ApprovalMode::AutoReview,
+            },
+        },
+    };
+
+    let Some(ClientEvent::SessionUpdated(update)) = map_event(AppServerEvent::Notification(
+        ServerNotification::SessionUpdate(update),
+    )) else {
+        panic!("typed Session update should be preserved");
+    };
+    assert_eq!(update.durable_sequence, 2);
+    assert!(matches!(
+        update.update,
+        SessionUpdate::Committed {
+            event: SessionEvent::SessionNextApprovalModeChanged {
+                approval_mode: ApprovalMode::AutoReview,
+                ..
+            }
+        }
+    ));
 }
 
 #[test]

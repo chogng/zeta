@@ -11,9 +11,12 @@ use crate::components::selection::SelectionTab;
 use crate::components::selection::SelectionViewModel;
 use crate::features::thread::TurnActivity;
 use crate::features::workspace_files::FileSearchManager;
+use crate::ui::accent;
 use crate::ui::composer_chrome;
+use crate::ui::danger;
 use crate::ui::highlight;
 use crate::ui::muted;
+use crate::ui::warning;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -29,6 +32,7 @@ use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
+use unicode_width::UnicodeWidthStr;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
 
 #[test]
@@ -43,7 +47,7 @@ fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
     assert!(!rendered.contains("enter send"));
     assert!(!rendered.contains("ctrl-v image"));
     let footer = rendered.lines().last().unwrap();
-    assert_eq!(footer.trim_end(), "◉ ask permissions on");
+    assert_eq!(footer.trim_end(), "⏸ ask permissions on");
 }
 
 #[test]
@@ -56,7 +60,7 @@ fn footer_uses_a_distinct_symbol_for_each_approval_mode() {
         .trim_end()
         .to_owned();
 
-    app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
+    app.set_next_approval_mode(zeta_protocol::ApprovalMode::AutoReview);
     let auto_review = render(&app, 80, 20)
         .lines()
         .last()
@@ -64,7 +68,7 @@ fn footer_uses_a_distinct_symbol_for_each_approval_mode() {
         .trim_end()
         .to_owned();
 
-    app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
+    app.set_next_approval_mode(zeta_protocol::ApprovalMode::BypassPermissions);
     let bypass_permissions = render(&app, 80, 20)
         .lines()
         .last()
@@ -75,11 +79,47 @@ fn footer_uses_a_distinct_symbol_for_each_approval_mode() {
     assert_eq!(
         [ask_permissions, auto_review, bypass_permissions],
         [
-            "◉ ask permissions on",
-            "◎ auto review on",
-            "⊘ bypass permissions on",
+            "⏸ ask permissions on",
+            "⏩  auto review on",
+            "▶ bypass permissions on",
         ]
     );
+}
+
+#[test]
+fn footer_uses_a_distinct_color_for_each_approval_mode_symbol() {
+    let mut app = App::new();
+    let ask_permissions = render_buffer(&app, 80, 20);
+    assert_eq!(ask_permissions[(0, 19)].fg, warning());
+    assert_eq!(
+        ask_permissions[("⏸".width() as u16, 19)].fg,
+        composer_chrome()
+    );
+
+    app.set_next_approval_mode(zeta_protocol::ApprovalMode::AutoReview);
+    let auto_review = render_buffer(&app, 80, 20);
+    assert_eq!(auto_review[(0, 19)].fg, accent());
+    assert_eq!(auto_review[("⏩".width() as u16, 19)].fg, composer_chrome());
+
+    app.set_next_approval_mode(zeta_protocol::ApprovalMode::BypassPermissions);
+    let bypass_permissions = render_buffer(&app, 80, 20);
+    assert_eq!(bypass_permissions[(0, 19)].fg, danger());
+    assert_eq!(
+        bypass_permissions[("▶".width() as u16, 19)].fg,
+        composer_chrome()
+    );
+}
+
+#[test]
+fn footer_colors_current_and_next_modes_independently() {
+    let mut app = App::new();
+    app.set_current_approval_mode(Some(zeta_protocol::ApprovalMode::AskPermissions));
+    app.set_next_approval_mode(zeta_protocol::ApprovalMode::AutoReview);
+
+    let buffer = render_buffer(&app, 80, 20);
+    let next_icon_column = "⏸ current: ask permissions on · ".width() as u16;
+    assert_eq!(buffer[(0, 19)].fg, warning());
+    assert_eq!(buffer[(next_icon_column, 19)].fg, accent());
 }
 
 #[test]
@@ -107,9 +147,9 @@ fn status_line_renders_model_in_the_footer() {
         .map(|x| buffer[(x, 19)].symbol())
         .collect::<String>();
 
-    assert!(footer.starts_with("◉ ask permissions on"));
+    assert!(footer.starts_with("⏸ ask permissions on"));
     assert!(footer.trim_end().ends_with("anthropic/claude-sonnet"));
-    assert_eq!(buffer[(0, 19)].fg, composer_chrome());
+    assert_eq!(buffer[(0, 19)].fg, warning());
 }
 
 #[test]
@@ -123,7 +163,7 @@ fn narrow_footer_keeps_the_first_configured_item() {
     let rendered = render(&app, 24, 20);
     let footer = rendered.lines().last().unwrap();
 
-    assert_eq!(footer.trim_end(), "◉ ask permissions on");
+    assert_eq!(footer.trim_end(), "⏸ ask permissions on");
     assert!(!footer.contains("claude"));
 }
 
@@ -153,7 +193,7 @@ fn multiline_composer_grows_upward_and_keeps_all_lines_visible() {
     assert!(rows[15].contains("first"));
     assert!(rows[16].contains("second"));
     assert!(rows[17].contains("third"));
-    assert_eq!(rows[19].trim_end(), "◉ ask permissions on");
+    assert_eq!(rows[19].trim_end(), "⏸ ask permissions on");
 }
 
 #[test]
@@ -164,7 +204,7 @@ fn working_footer_keeps_the_configured_context_without_runtime_text() {
     let rendered = render(&app, 80, 20);
     let footer = rendered.lines().last().unwrap();
 
-    assert_eq!(footer.trim_end(), "◉ ask permissions on");
+    assert_eq!(footer.trim_end(), "⏸ ask permissions on");
     assert!(!footer.contains("enter queue"));
     assert!(!footer.contains("ctrl-c interrupt"));
 }

@@ -17,5 +17,5 @@ pub(super) fn draw(frame: &mut Frame<'_>, area: Rect, app: &App) {
         );
         return;
     }
-    status_line::draw(frame, area, app.status_line(), app.approval_mode());
+    status_line::draw(frame, area, app.status_line(), app.approval_mode_status());
 }

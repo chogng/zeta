@@ -70,13 +70,13 @@ fn unsupported_required_capability_version_is_fatal() {
     initialized
         .capabilities
         .contracts
-        .insert("turns".into(), CapabilityContract { version: 2 });
+        .insert("turns".into(), CapabilityContract { version: 3 });
 
     assert!(matches!(
         ensure_protocol_compatible(&initialized, REQUIRED_SESSION_CAPABILITIES),
         Err(ProtocolCompatibilityError::CapabilityVersion {
             name: "turns",
-            received: 2,
+            received: 3,
             ..
         })
     ));

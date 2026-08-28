@@ -39,12 +39,12 @@ use zeta_core::{
     ArchiveSessionThreadRequest, CreateSessionRequest, CreateSessionThreadRequest,
     ForkSessionThreadRequest, InterruptTurnRequest, ResolveTurnInteractionRequest,
     RewindSessionThreadRequest, SequenceExpectation, SessionLifecycleRequest,
-    SetSessionModelRequest, ShellTurnInvocation, StartContextCompactionRequest,
-    StartShellTurnRequest, StartTurnDisposition, StartTurnRequest, SteerTurnDisposition,
-    SteerTurnRequest, ThreadSnapshot, TurnExecutionBackend, TurnStatus,
+    SetSessionModelRequest, SetSessionNextApprovalModeRequest, ShellTurnInvocation,
+    StartContextCompactionRequest, StartSessionShellTurnRequest, StartSessionTurnRequest,
+    StartTurnDisposition, SteerTurnDisposition, SteerTurnRequest, ThreadSnapshot,
+    TurnExecutionBackend, TurnStatus,
 };
 use zeta_protocol::AgentRequestEnvelope;
-use zeta_protocol::ApprovalMode;
 use zeta_protocol::ModelAccess;
 use zeta_protocol::ModelRef;
 use zeta_protocol::SessionStatus;
@@ -285,6 +285,29 @@ impl AppServer {
         })
     }
 
+    fn set_session_next_approval_mode_request(
+        &self,
+        mutation: SessionMutation,
+        approval_mode: zeta_protocol::ApprovalMode,
+    ) -> Result<SessionResult, RpcError> {
+        self.sessions
+            .set_next_approval_mode(SetSessionNextApprovalModeRequest {
+                command_id: mutation.command_id,
+                session_id: mutation.session_id.clone(),
+                expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
+                approval_mode,
+            })
+            .map_err(core_error)?;
+        self.notify_session_updates(&mutation.session_id, mutation.expected_sequence)?;
+        Ok(SessionResult {
+            session: self
+                .sessions
+                .read_session(&mutation.session_id)
+                .map_err(core_error)?
+                .public_session(),
+        })
+    }
+
     pub(super) fn session_subscribe(
         &self,
         connection: &mut ConnectionState,
@@ -405,6 +428,11 @@ impl AppServer {
             SessionRequest::SetModel { model } => result(&SessionRequestResult::Session(
                 self.set_session_model_request(mutation, model)?,
             )),
+            SessionRequest::SetNextApprovalMode { approval_mode } => {
+                result(&SessionRequestResult::Session(
+                    self.set_session_next_approval_mode_request(mutation, approval_mode)?,
+                ))
+            }
             SessionRequest::CreateThread { title } => result(&SessionRequestResult::Thread(
                 self.create_session_thread_request(connection.connection_id, mutation, title)?,
             )),
@@ -437,25 +465,18 @@ impl AppServer {
             )),
             SessionRequest::StartTurn {
                 thread_id,
-                approval_mode,
                 tool_mode,
                 input,
-            } => result(&SessionRequestResult::Turn(self.start_turn_request(
-                mutation,
-                thread_id,
-                approval_mode,
-                tool_mode,
-                input,
-            )?)),
+            } => result(&SessionRequestResult::Turn(
+                self.start_turn_request(mutation, thread_id, tool_mode, input)?,
+            )),
             SessionRequest::StartShellTurn {
                 thread_id,
-                approval_mode,
                 command,
                 working_directory,
             } => result(&SessionRequestResult::Turn(self.start_shell_turn_request(
                 mutation,
                 thread_id,
-                approval_mode,
                 command,
                 working_directory,
             )?)),
@@ -927,7 +948,6 @@ impl AppServer {
         &self,
         mutation: SessionMutation,
         thread_id: zeta_protocol::ThreadId,
-        approval_mode: ApprovalMode,
         requested_tool_mode: Option<zeta_protocol::ToolMode>,
         input: Vec<InputItem>,
     ) -> Result<TurnStartResult, RpcError> {
@@ -980,7 +1000,6 @@ impl AppServer {
         if let Some(replayed) = super::start_turn::replayed_result(
             &thread_before,
             &mutation.command_id,
-            approval_mode,
             tool_mode,
             &input,
         )? {
@@ -1007,12 +1026,11 @@ impl AppServer {
             .start_turn(
                 &mutation.session_id,
                 &thread_id,
-                StartTurnRequest {
+                StartSessionTurnRequest {
                     command_id: mutation.command_id,
                     expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
                     model,
                     policy_revision,
-                    approval_mode,
                     tool_mode,
                     tool_profile: Some(tool_profile),
                     activated_skills: Vec::new(),
@@ -1030,7 +1048,6 @@ impl AppServer {
             return super::start_turn::replayed_result(
                 &snapshot,
                 &command_id,
-                approval_mode,
                 tool_mode,
                 &replay_input,
             )?
@@ -1050,7 +1067,6 @@ impl AppServer {
         &self,
         mutation: SessionMutation,
         thread_id: zeta_protocol::ThreadId,
-        approval_mode: ApprovalMode,
         command: String,
         working_directory: String,
     ) -> Result<TurnStartResult, RpcError> {
@@ -1090,11 +1106,10 @@ impl AppServer {
             .start_shell_turn(
                 &mutation.session_id,
                 &thread_id,
-                StartShellTurnRequest {
+                StartSessionShellTurnRequest {
                     command_id: mutation.command_id,
                     expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
                     policy_revision,
-                    approval_mode,
                     tool_call_id,
                     binding,
                     invocation: ShellTurnInvocation {

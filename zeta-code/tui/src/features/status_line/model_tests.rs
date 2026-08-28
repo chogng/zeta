@@ -13,7 +13,41 @@ fn status_line_orders_permissions_model_branch_and_changes() {
 
     assert_eq!(
         status_line.text_for_width(100, ApprovalMode::AskPermissions),
-        "◉ ask permissions on · anthropic/claude-sonnet · main · 1 change"
+        "⏸ ask permissions on · anthropic/claude-sonnet · main · 1 change"
+    );
+}
+
+#[test]
+fn approval_modes_use_pause_fast_forward_and_play_symbols() {
+    let status_line = StatusLineModel::new();
+
+    assert_eq!(
+        status_line.text_for_width(80, ApprovalMode::AskPermissions),
+        "⏸ ask permissions on"
+    );
+    assert_eq!(
+        status_line.text_for_width(80, ApprovalMode::AutoReview),
+        "⏩ auto review on"
+    );
+    assert_eq!(
+        status_line.text_for_width(80, ApprovalMode::BypassPermissions),
+        "▶ bypass permissions on"
+    );
+}
+
+#[test]
+fn running_turn_and_next_turn_are_both_explicit_when_the_modes_differ() {
+    let status_line = StatusLineModel::new();
+
+    assert_eq!(
+        status_line.text_for_width(
+            100,
+            ApprovalModeStatus {
+                current: Some(ApprovalMode::AskPermissions),
+                next: ApprovalMode::AutoReview,
+            },
+        ),
+        "⏸ current: ask permissions on · ⏩ next: auto review on"
     );
 }
 

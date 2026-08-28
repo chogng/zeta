@@ -10,6 +10,7 @@ use zeta_app_server_protocol::protocol::model::ModelCatalogEntry;
 use zeta_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptUpdateEnvelope;
+use zeta_protocol::ApprovalMode;
 use zeta_protocol::ModelRef;
 use zeta_protocol::Session;
 use zeta_protocol::SessionId;
@@ -97,6 +98,8 @@ pub enum SessionRuntimeCommand {
     SubmitShellCommand(String),
     /// Change the model for the active Session.
     SelectModel(ModelRef),
+    /// Change the approval mode frozen by the next Turn in the active Session.
+    SelectNextApprovalMode(ApprovalMode),
     /// Refresh the active Session and Thread snapshot.
     Refresh,
     /// Prepare a connection to another workspace.
@@ -159,6 +162,7 @@ pub fn reject_disconnected_command(command: SessionRuntimeCommand) -> bool {
         | SessionRuntimeCommand::SubmitAgentMessage(_)
         | SessionRuntimeCommand::SubmitShellCommand(_)
         | SessionRuntimeCommand::SelectModel(_)
+        | SessionRuntimeCommand::SelectNextApprovalMode(_)
         | SessionRuntimeCommand::Refresh => {}
     }
     false

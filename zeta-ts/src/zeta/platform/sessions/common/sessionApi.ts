@@ -52,6 +52,7 @@ export interface ISessionApi {
 	archive(params: SessionOperationInput<"archive">): Promise<SessionResult>;
 	stop(params: SessionOperationInput<"stop">): Promise<SessionResult>;
 	setModel(params: SessionOperationInput<"setModel">): Promise<SessionResult>;
+	setNextApprovalMode(params: SessionOperationInput<"setNextApprovalMode">): Promise<SessionResult>;
 }
 
 export interface IModelApi {

@@ -4,6 +4,7 @@ mod settings;
 mod setup;
 mod view;
 
+pub(crate) use model::ApprovalModeStatus;
 pub(crate) use model::StatusLineModel;
 pub(crate) use resource::StatusLineEdit;
 pub(crate) use resource::StatusLineResource;

@@ -482,7 +482,7 @@ fn dto_driven_schema_contains_registered_rpc_envelopes() {
     assert_eq!(definitions["SessionId"]["minLength"], 1);
     assert_eq!(definitions["CommandId"]["minLength"], 1);
     assert_eq!(
-        definitions["SessionRequest"]["oneOf"][8]["properties"]["input"]["minItems"],
+        definitions["SessionRequest"]["oneOf"][9]["properties"]["input"]["minItems"],
         1
     );
     assert_eq!(

@@ -61,6 +61,7 @@ fn bound_session(id: &str, root: &str, digest: char) -> Session {
                 .unwrap(),
             root: root.into(),
         }),
+        next_approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
         sequence: 1,
         threads: Vec::new(),
     }

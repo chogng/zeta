@@ -14,7 +14,6 @@ use crate::InMemorySessionStore;
 use crate::InMemoryThreadStore;
 use crate::SequenceExpectation;
 use crate::SessionCoordinator;
-use crate::StartTurnRequest;
 use crate::ThreadController;
 use crate::ToolExecutionFacts;
 use crate::context::ModelInvocationPreparation;
@@ -451,12 +450,11 @@ fn later_child_turns_cannot_expand_the_spawned_skill_ceiling() {
         .start_turn(
             &fixture.session_id,
             &spawned.child_thread_id,
-            StartTurnRequest {
+            crate::StartSessionTurnRequest {
                 command_id: CommandId::new("child-second-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
                 policy_revision: "policy-v1".into(),
-                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 tool_mode: zeta_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),
@@ -495,12 +493,11 @@ fn later_child_turns_cannot_expand_the_spawned_skill_ceiling() {
     let result = fixture.sessions.start_turn(
         &fixture.session_id,
         &spawned.child_thread_id,
-        StartTurnRequest {
+        crate::StartSessionTurnRequest {
             command_id: CommandId::new("child-third-turn").unwrap(),
             expected_sequence: SequenceExpectation::Any,
             model: None,
             policy_revision: "policy-v1".into(),
-            approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
             tool_mode: zeta_protocol::ToolMode::Direct,
             tool_profile: None,
             activated_skills: Vec::new(),
@@ -963,12 +960,11 @@ fn fixture() -> Fixture {
         .start_turn(
             &session.session_id,
             &parent.thread_id,
-            StartTurnRequest {
+            crate::StartSessionTurnRequest {
                 command_id: CommandId::new("start-parent").unwrap(),
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,
                 policy_revision: "policy-v1".into(),
-                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 tool_mode: zeta_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),

@@ -17,6 +17,7 @@ use std::thread::JoinHandle;
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::anyhow;
+use zeta_protocol::ApprovalMode;
 use zeta_protocol::ModelRef;
 use zeta_protocol::SessionId;
 
@@ -152,6 +153,14 @@ impl SessionRuntime {
         self.try_send(
             SessionRuntimeCommand::SelectModel(model),
             "Session model selection queue is unavailable",
+        )
+    }
+
+    /// Selects the approval mode used by the next Turn in the active Session.
+    pub fn select_next_approval_mode(&self, approval_mode: ApprovalMode) -> Result<()> {
+        self.try_send(
+            SessionRuntimeCommand::SelectNextApprovalMode(approval_mode),
+            "Session approval mode selection queue is unavailable",
         )
     }
 

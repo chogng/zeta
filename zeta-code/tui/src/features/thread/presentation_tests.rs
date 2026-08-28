@@ -56,6 +56,7 @@ fn turn(id: &str, status: TurnStatus) -> Turn {
         model: None,
         tool_profile: None,
         tool_mode: zeta_protocol::ToolMode::Direct,
+        approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
         usage: zeta_protocol::ModelUsageSummary::default(),
         items: Vec::<ThreadItem>::new(),
         plan: None,

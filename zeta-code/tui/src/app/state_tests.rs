@@ -162,6 +162,7 @@ fn selected_rewind_checkpoint_emits_a_typed_rewind_action() {
             model: None,
             tool_profile: None,
             tool_mode: zeta_protocol::ToolMode::Direct,
+            approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
             usage: zeta_protocol::ModelUsageSummary::default(),
             items: vec![ThreadItem::UserMessage {
                 item_id: ItemId::new("item-1").unwrap(),
@@ -682,7 +683,6 @@ fn runtime_command_registry_drives_popup_and_submission_consistently() {
                 display_text: "/diagnose logs".into(),
                 input: vec![ComposerInput::Text("/diagnose logs".into())],
             },
-            approval_mode: ApprovalMode::AskPermissions,
         })
     );
     assert_eq!(app.status(), &Status::Working);
@@ -730,7 +730,6 @@ fn direct_skill_slash_command_submits_exact_skill_ref_with_visible_intent() {
                     ComposerInput::Text("/commit staged changes".into()),
                 ],
             },
-            approval_mode: ApprovalMode::AskPermissions,
         })
     );
     assert_eq!(app.messages()[0].text, "/commit staged changes");
@@ -1003,14 +1002,9 @@ fn interrupted_turn_returns_to_ready_with_a_notice() {
 }
 
 fn assert_text_submission(action: Option<AppCommand>, expected: &str) {
-    let Some(AppCommand::SubmitTurn {
-        submission,
-        approval_mode,
-    }) = action
-    else {
+    let Some(AppCommand::SubmitTurn { submission }) = action else {
         panic!("expected text submission");
     };
-    assert_eq!(approval_mode, ApprovalMode::AskPermissions);
     assert_eq!(submission.display_text, expected);
     assert_eq!(
         submission.input,
@@ -1019,26 +1013,16 @@ fn assert_text_submission(action: Option<AppCommand>, expected: &str) {
 }
 
 #[test]
-fn backtab_cycles_approval_mode_and_submission_freezes_the_selected_mode() {
+fn backtab_requests_the_next_backend_owned_approval_mode() {
     let mut app = App::new();
 
-    app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
-    assert_eq!(app.approval_mode(), ApprovalMode::AutoReview);
-    app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
-    assert_eq!(app.approval_mode(), ApprovalMode::BypassPermissions);
-    app.insert_text("run it");
-
-    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-    assert!(matches!(
-        action,
-        Some(AppCommand::SubmitTurn {
-            approval_mode: ApprovalMode::BypassPermissions,
-            ..
-        })
-    ));
-
-    app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
+    let action = app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
+    assert_eq!(action, Some(AppCommand::CycleNextApprovalMode));
     assert_eq!(app.approval_mode(), ApprovalMode::AskPermissions);
+
+    app.set_next_approval_mode(ApprovalMode::AutoReview);
+    let action = app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
+    assert_eq!(action, Some(AppCommand::CycleNextApprovalMode));
 }
 
 fn wait_for_mention_results(app: &mut App, workspace: &Path) {

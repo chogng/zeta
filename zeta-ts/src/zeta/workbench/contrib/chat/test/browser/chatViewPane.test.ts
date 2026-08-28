@@ -8,7 +8,7 @@ import type { ICommandService } from "../../../../../platform/commands/common/co
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextMenu.js";
 import type { IChatService, ModelCatalogEntry, SkillCommandDefinition, SlashCommandDefinition, ThreadRead, ThreadSubscription, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope } from "../../../../services/chat/common/chatService.js";
 import type { IWorkbenchLayoutService, WorkbenchPartId, WorkbenchPartVisibilityChangeEvent } from "../../../../services/layout/browser/layoutService.js";
-import type { IActiveSessionThread, IUntitledChatSession, ModelRef, Session, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
+import type { ApprovalMode, IActiveSessionThread, IUntitledChatSession, ModelRef, Session, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
 import type { ISessionsManagementService, SessionsManagementState } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
 import type { IChatContextPickService } from "../../../../services/chat/common/chatContextService.js";
 import type { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
@@ -96,6 +96,7 @@ class PendingSessionService implements ISessionsManagementService {
 	stopSession(_sessionId: SessionId): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
 	archiveSession(_sessionId: SessionId): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
 	setModel(_sessionId: SessionId, _model: ModelRef): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
+	setNextApprovalMode(_sessionId: SessionId, _approvalMode: ApprovalMode): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
 }
 
 class VisibleAuxiliarybarLayoutService implements IWorkbenchLayoutService {

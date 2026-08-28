@@ -326,6 +326,7 @@ fn canonical_session_contains_thread_lineage_without_embedding_thread_history() 
         status: SessionStatus::Active,
         model: None,
         workspace: None,
+        next_approval_mode: ApprovalMode::AskPermissions,
         sequence: 2,
         threads: vec![
             SessionThread {

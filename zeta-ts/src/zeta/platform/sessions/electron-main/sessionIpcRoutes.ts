@@ -69,6 +69,11 @@ export function sessionIpcRoutes(supervisor: AppServerSupervisor): readonly IpcR
 			invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/request"], sessionRequest(params, { type: "setModel", model: params.model })).then(sessionResult),
 		}),
 		route({
+			channel: "zeta:session:approval-mode:set-next",
+			validate: sessionNextApprovalModeParams,
+			invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/request"], sessionRequest(params, { type: "setNextApprovalMode", approvalMode: params.approvalMode })).then(sessionResult),
+		}),
+		route({
 			channel: "zeta:model:list",
 			validate: emptyParams,
 			invoke: () => supervisor.request(APP_SERVER_METHODS["model/list"], {}),
@@ -106,7 +111,7 @@ export function sessionIpcRoutes(supervisor: AppServerSupervisor): readonly IpcR
 		route({
 			channel: "zeta:turn:start",
 			validate: turnStartParams,
-			invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/request"], sessionRequest({ commandId: params.commandId, sessionId: params.sessionId, expectedSequence: params.expectedSequence }, { type: "startTurn", threadId: params.threadId, approvalMode: params.approvalMode, input: params.input })).then(turnStartResult),
+			invoke: (params) => supervisor.request(APP_SERVER_METHODS["session/request"], sessionRequest({ commandId: params.commandId, sessionId: params.sessionId, expectedSequence: params.expectedSequence }, { type: "startTurn", threadId: params.threadId, input: params.input })).then(turnStartResult),
 		}),
 		route({
 			channel: "zeta:turn:compact",
@@ -192,6 +197,16 @@ function sessionModelSetParams(value: unknown): SessionOperationInput<"setModel"
 	};
 }
 
+function sessionNextApprovalModeParams(value: unknown): SessionOperationInput<"setNextApprovalMode"> {
+	const params = record(value, ["commandId", "sessionId", "expectedSequence", "approvalMode"]);
+	return {
+		commandId: nonEmptyString(params.commandId, "commandId"),
+		sessionId: nonEmptyString(params.sessionId, "sessionId"),
+		expectedSequence: nonNegativeInteger(params.expectedSequence, "expectedSequence"),
+		approvalMode: stringEnum(params.approvalMode, "approvalMode", ["askPermissions", "autoReview", "bypassPermissions"] as const),
+	};
+}
+
 function sessionThreadCreateParams(value: unknown): SessionOperationInput<"createThread"> {
 	const params = record(value, ["commandId", "sessionId", "expectedSequence", "title"]);
 	return {
@@ -265,7 +280,7 @@ function threadGoalClearParams(value: unknown): ThreadGoalClearParams {
 }
 
 function turnStartParams(value: unknown): SessionOperationInput<"startTurn"> {
-	const params = record(value, ["commandId", "sessionId", "threadId", "expectedSequence", "approvalMode", "input"]);
+	const params = record(value, ["commandId", "sessionId", "threadId", "expectedSequence", "input"]);
 	if (!Array.isArray(params.input) || params.input.length === 0) {
 		throw new Error("input must be a non-empty array");
 	}
@@ -274,7 +289,6 @@ function turnStartParams(value: unknown): SessionOperationInput<"startTurn"> {
 		sessionId: nonEmptyString(params.sessionId, "sessionId"),
 		threadId: nonEmptyString(params.threadId, "threadId"),
 		expectedSequence: nonNegativeInteger(params.expectedSequence, "expectedSequence"),
-		approvalMode: stringEnum(params.approvalMode, "approvalMode", ["askPermissions", "autoReview", "bypassPermissions"] as const),
 		input: params.input.map((value, index) => {
 			const item = record(value, ["type", "text"]);
 			if (item.type !== "text") throw new Error(`input[${index}].type must be text`);

@@ -20,6 +20,7 @@ use zeta_app_server_protocol::protocol::session::SessionSubscribeResult;
 use zeta_app_server_protocol::protocol::session::SessionThreadProjection;
 use zeta_app_server_protocol::protocol::session::SessionUnsubscribeParams;
 use zeta_app_server_protocol::protocol::turn::InputItem;
+use zeta_protocol::ApprovalMode;
 use zeta_protocol::ModelRef;
 use zeta_protocol::Session;
 use zeta_protocol::SessionId;
@@ -312,7 +313,6 @@ pub(super) fn submit_agent_message(
             expected_sequence: active.sequence,
             request: SessionRequest::StartTurn {
                 thread_id: active.thread_id.clone(),
-                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 tool_mode: None,
                 input: vec![InputItem::Text { text }],
             },
@@ -342,7 +342,6 @@ pub(super) fn submit_shell_command(
             expected_sequence: active.sequence,
             request: SessionRequest::StartShellTurn {
                 thread_id: active.thread_id.clone(),
-                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 command,
                 working_directory: ".".into(),
             },
@@ -376,6 +375,30 @@ pub(super) fn select_model(
         ));
     };
     active.session_sequence = result.session.sequence;
+    active.subscription.session = result.session;
+    Ok(())
+}
+
+pub(super) fn select_next_approval_mode(
+    client: &mut AppServerRequestHandle,
+    active: &mut ActiveSession,
+    approval_mode: ApprovalMode,
+) -> Result<()> {
+    let result = client
+        .request_session(SessionRequestParams {
+            command_id: next_command_id("approval-mode"),
+            session_id: active.session_id.clone(),
+            expected_sequence: active.session_sequence,
+            request: SessionRequest::SetNextApprovalMode { approval_mode },
+        })
+        .map_err(client_error)?;
+    let SessionRequestResult::Session(result) = result else {
+        return Err(anyhow!(
+            "Session request returned an unexpected Session result"
+        ));
+    };
+    active.session_sequence = result.session.sequence;
+    active.subscription.session = result.session;
     Ok(())
 }
 

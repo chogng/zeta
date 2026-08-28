@@ -12,9 +12,13 @@ use zeta_app_server_protocol::protocol::session::SessionRequestParams;
 use zeta_app_server_protocol::protocol::session::SessionRequestResult;
 use zeta_app_server_protocol::protocol::session::SessionThreadReadParams;
 use zeta_app_server_protocol::protocol::session::SessionThreadResult;
+use zeta_protocol::ApprovalMode;
 use zeta_protocol::Session;
+use zeta_protocol::SessionEvent;
 use zeta_protocol::SessionId;
 use zeta_protocol::SessionThreadStatus;
+use zeta_protocol::SessionUpdate;
+use zeta_protocol::SessionUpdateEnvelope;
 use zeta_protocol::Thread;
 use zeta_protocol::ThreadId;
 use zeta_protocol::TurnId;
@@ -119,6 +123,49 @@ impl ActiveConversation {
 
     pub(crate) fn set_thread_sequence(&mut self, sequence: u64) {
         self.thread_sequence = sequence;
+    }
+
+    pub(crate) fn next_approval_mode(&self) -> ApprovalMode {
+        self.session.next_approval_mode
+    }
+
+    pub(crate) fn set_next_approval_mode<T>(
+        &mut self,
+        client: &mut AppServerClient<T>,
+        approval_mode: ApprovalMode,
+    ) -> Result<(), ClientError>
+    where
+        T: JsonRpcTransport,
+    {
+        let result = client.request_session(SessionRequestParams {
+            command_id: new_command_id("approval-mode"),
+            session_id: self.session.session_id.clone(),
+            expected_sequence: self.session.sequence,
+            request: SessionRequest::SetNextApprovalMode { approval_mode },
+        })?;
+        self.session = expect_session_result(result)?.session;
+        Ok(())
+    }
+
+    pub(crate) fn apply_session_update(&mut self, update: &SessionUpdateEnvelope) {
+        if update.session_id != self.session.session_id
+            || update.durable_sequence <= self.session.sequence
+        {
+            return;
+        }
+        let SessionUpdate::Committed { event } = &update.update;
+        if let SessionEvent::SessionNextApprovalModeChanged { approval_mode, .. } = event {
+            self.session.next_approval_mode = *approval_mode;
+        }
+        self.session.sequence = update.durable_sequence;
+    }
+
+    pub(crate) fn merge_session_from(&mut self, next: Self) {
+        if next.session.session_id == self.session.session_id
+            && next.session.sequence >= self.session.sequence
+        {
+            self.session = next.session;
+        }
     }
 
     pub(crate) fn switch_thread<T>(

@@ -343,6 +343,11 @@ fn drive(
                 }
                 Ok(SessionRuntimeCommand::SelectModel(model)) => {
                     select_model(client, active, model)?;
+                    publish_subscription(event_sink, &active.subscription, &active.thread_id)?;
+                }
+                Ok(SessionRuntimeCommand::SelectNextApprovalMode(approval_mode)) => {
+                    select_next_approval_mode(client, active, approval_mode)?;
+                    publish_subscription(event_sink, &active.subscription, &active.thread_id)?;
                 }
                 Ok(SessionRuntimeCommand::Refresh) => {
                     active.subscription =
@@ -376,8 +381,13 @@ fn drive(
 
         match events.recv_timeout(EVENT_POLL_INTERVAL) {
             Ok(AppServerEvent::Notification(ServerNotification::SessionUpdate(update))) => {
-                if update.session_id == active.session_id {
-                    active.session_sequence = active.session_sequence.max(update.durable_sequence);
+                if update.session_id == active.session_id
+                    && update.durable_sequence > active.session_sequence
+                {
+                    active.subscription =
+                        subscribe_session(client, &active.session_id, active.session_sequence)?;
+                    active.session_sequence = active.subscription.session.sequence;
+                    publish_subscription(event_sink, &active.subscription, &active.thread_id)?;
                 }
             }
             Ok(AppServerEvent::Notification(ServerNotification::SessionThreadUpdate(update))) => {

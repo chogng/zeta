@@ -10,9 +10,10 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use zeta_protocol::TurnId;
 use zeta_protocol::{
-    CommandId, ModelRef, SessionCommand, SessionEvent, SessionId, SessionStatus, SessionThread,
-    SessionThreadStatus, SessionUpdate, SessionUpdateEnvelope, ThreadId, ThreadOrigin, TurnStatus,
-    WorkspaceBinding,
+    ApprovalMode, CommandId, FrozenSkillActivation, ModelRef, SessionCommand, SessionEvent,
+    SessionId, SessionStatus, SessionThread, SessionThreadStatus, SessionUpdate,
+    SessionUpdateEnvelope, ThreadId, ThreadOrigin, ToolMode, ToolProfileSnapshot, TurnStatus,
+    UserInput, WorkspaceBinding,
 };
 use zeta_session_store::{
     AppendSessionBatchResult, CURRENT_SESSION_EVENT_SCHEMA_VERSION, SessionCommandReceipt,
@@ -48,6 +49,33 @@ pub struct SetSessionModelRequest {
     pub session_id: SessionId,
     pub expected_sequence: SequenceExpectation,
     pub model: ModelRef,
+}
+
+pub struct SetSessionNextApprovalModeRequest {
+    pub command_id: CommandId,
+    pub session_id: SessionId,
+    pub expected_sequence: SequenceExpectation,
+    pub approval_mode: ApprovalMode,
+}
+
+pub struct StartSessionTurnRequest {
+    pub command_id: CommandId,
+    pub expected_sequence: SequenceExpectation,
+    pub model: Option<ModelRef>,
+    pub policy_revision: String,
+    pub tool_mode: ToolMode,
+    pub tool_profile: Option<ToolProfileSnapshot>,
+    pub activated_skills: Vec<FrozenSkillActivation>,
+    pub input: Vec<UserInput>,
+}
+
+pub struct StartSessionShellTurnRequest {
+    pub command_id: CommandId,
+    pub expected_sequence: SequenceExpectation,
+    pub policy_revision: String,
+    pub tool_call_id: zeta_protocol::ToolCallId,
+    pub binding: zeta_protocol::ToolCallBinding,
+    pub invocation: crate::ShellTurnInvocation,
 }
 
 pub struct CreateSessionResult {
@@ -149,20 +177,37 @@ impl SessionCoordinator {
 
     /// Starts a model Turn only while the owning Session and membership are active.
     ///
-    /// The Session lock is held across validation and the child mutation so an App Server
-    /// The canonical Session stop operation cannot commit after this check and still accept a new Turn.
+    /// The Session lock is held across validation and the child mutation so the canonical Session
+    /// stop operation cannot commit after this check and still accept a new Turn.
     pub fn start_turn(
         &self,
         session_id: &SessionId,
         thread_id: &ThreadId,
-        request: StartTurnRequest,
+        request: StartSessionTurnRequest,
     ) -> Result<StartTurnResult, CoreError> {
         let sessions = self
             .sessions
             .lock()
             .map_err(|_| CoreError::Journal("Session state lock poisoned".into()))?;
         self.validate_active_thread(&sessions, session_id, thread_id)?;
-        self.threads.start_turn(thread_id, request)
+        let approval_mode = sessions
+            .get(session_id)
+            .ok_or_else(|| CoreError::NotFound(session_id.to_string()))?
+            .next_approval_mode;
+        self.threads.start_turn(
+            thread_id,
+            StartTurnRequest {
+                command_id: request.command_id,
+                expected_sequence: request.expected_sequence,
+                model: request.model,
+                policy_revision: request.policy_revision,
+                approval_mode,
+                tool_mode: request.tool_mode,
+                tool_profile: request.tool_profile,
+                activated_skills: request.activated_skills,
+                input: request.input,
+            },
+        )
     }
 
     /// Starts standalone context compaction while the owning Session and membership are active.
@@ -188,14 +233,29 @@ impl SessionCoordinator {
         &self,
         session_id: &SessionId,
         thread_id: &ThreadId,
-        request: StartShellTurnRequest,
+        request: StartSessionShellTurnRequest,
     ) -> Result<StartTurnResult, CoreError> {
         let sessions = self
             .sessions
             .lock()
             .map_err(|_| CoreError::Journal("Session state lock poisoned".into()))?;
         self.validate_active_thread(&sessions, session_id, thread_id)?;
-        self.threads.start_shell_turn(thread_id, request)
+        let approval_mode = sessions
+            .get(session_id)
+            .ok_or_else(|| CoreError::NotFound(session_id.to_string()))?
+            .next_approval_mode;
+        self.threads.start_shell_turn(
+            thread_id,
+            StartShellTurnRequest {
+                command_id: request.command_id,
+                expected_sequence: request.expected_sequence,
+                policy_revision: request.policy_revision,
+                approval_mode,
+                tool_call_id: request.tool_call_id,
+                binding: request.binding,
+                invocation: request.invocation,
+            },
+        )
     }
 
     /// Appends user input to an active product Turn while its Session membership remains active.
@@ -322,6 +382,27 @@ impl SessionCoordinator {
             SessionCommandResult::SessionModelChanged {
                 model: model.clone(),
             },
+        )
+    }
+
+    pub fn set_next_approval_mode(
+        &self,
+        request: SetSessionNextApprovalModeRequest,
+    ) -> Result<SessionMutationResult, CoreError> {
+        validate_command_id(&request.command_id)?;
+        let approval_mode = request.approval_mode;
+        self.apply_single_command(
+            request.session_id,
+            request.expected_sequence,
+            SessionCommandReceipt {
+                command_id: request.command_id,
+                command: SessionCommand::SetNextApprovalMode { approval_mode },
+            },
+            |session_id| SessionEvent::SessionNextApprovalModeChanged {
+                session_id,
+                approval_mode,
+            },
+            SessionCommandResult::SessionNextApprovalModeChanged { approval_mode },
         )
     }
 

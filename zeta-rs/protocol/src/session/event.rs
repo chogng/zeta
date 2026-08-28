@@ -1,4 +1,5 @@
 use crate::AgentContextSeed;
+use crate::ApprovalMode;
 use crate::ModelRef;
 use crate::SessionId;
 use crate::SessionThread;
@@ -29,6 +30,10 @@ pub enum SessionEvent {
     SessionModelChanged {
         session_id: SessionId,
         model: ModelRef,
+    },
+    SessionNextApprovalModeChanged {
+        session_id: SessionId,
+        approval_mode: ApprovalMode,
     },
     ThreadCreationPlanned {
         session_id: SessionId,
@@ -62,6 +67,7 @@ impl SessionEvent {
         match self {
             Self::SessionCreated { session_id, .. }
             | Self::SessionModelChanged { session_id, .. }
+            | Self::SessionNextApprovalModeChanged { session_id, .. }
             | Self::ThreadCreationPlanned { session_id, .. }
             | Self::AgentThreadCreationPlanned { session_id, .. }
             | Self::ThreadAttached { session_id, .. }

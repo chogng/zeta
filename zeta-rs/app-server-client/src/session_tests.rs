@@ -81,7 +81,6 @@ fn embedded_session_delivers_idle_notifications_without_a_polling_request() {
             expected_sequence: 1,
             request: SessionRequest::StartTurn {
                 thread_id: created_thread.thread_id,
-                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 tool_mode: None,
                 input: vec![InputItem::Text {
                     text: "hello".into(),

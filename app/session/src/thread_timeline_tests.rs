@@ -23,6 +23,7 @@ fn timeline_groups_shell_result_under_its_tool_call() {
             model: None,
             tool_profile: None,
             tool_mode: Default::default(),
+            approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
             usage: Default::default(),
             items: vec![
                 ThreadItem::UserMessage {

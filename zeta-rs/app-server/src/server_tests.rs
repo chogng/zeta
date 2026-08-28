@@ -2232,13 +2232,36 @@ fn session_request_routes_typed_mutations_through_the_session_boundary() {
     );
     assert_eq!(thread["result"]["type"], "thread");
     let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+    let session_sequence = thread["result"]["value"]["session"]["sequence"]
+        .as_u64()
+        .unwrap();
+
+    let approval_mode = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0",
+            "id":4,
+            "method":"session/request",
+            "params":{
+                "commandId":"set-next-approval-mode",
+                "sessionId":session_id,
+                "expectedSequence":session_sequence,
+                "request":{"type":"setNextApprovalMode","approvalMode":"autoReview"}
+            }
+        }),
+    );
+    assert_eq!(
+        approval_mode["result"]["value"]["session"]["nextApprovalMode"],
+        "autoReview"
+    );
 
     let turn = call(
         &server,
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0",
-            "id":4,
+            "id":5,
             "method":"session/request",
             "params":{
                 "commandId":"start-turn",
@@ -2255,6 +2278,15 @@ fn session_request_routes_typed_mutations_through_the_session_boundary() {
     assert_eq!(turn["result"]["type"], "turn");
     assert!(turn["result"]["value"]["turnId"].is_string());
     wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
+    let snapshot = server
+        .sessions()
+        .threads()
+        .read_thread(&zeta_protocol::ThreadId::new(thread_id).unwrap())
+        .unwrap();
+    assert_eq!(
+        snapshot.turns.last().unwrap().approval_mode,
+        zeta_protocol::ApprovalMode::AutoReview
+    );
 }
 
 #[test]

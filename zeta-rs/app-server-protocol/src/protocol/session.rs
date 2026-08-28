@@ -65,6 +65,9 @@ pub enum SessionRequest {
     SetModel {
         model: ModelRef,
     },
+    SetNextApprovalMode {
+        approval_mode: ApprovalMode,
+    },
     CreateThread {
         title: String,
     },
@@ -82,8 +85,6 @@ pub enum SessionRequest {
     },
     StartTurn {
         thread_id: ThreadId,
-        #[serde(default)]
-        approval_mode: ApprovalMode,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         tool_mode: Option<ToolMode>,
@@ -92,8 +93,6 @@ pub enum SessionRequest {
     },
     StartShellTurn {
         thread_id: ThreadId,
-        #[serde(default)]
-        approval_mode: ApprovalMode,
         command: String,
         working_directory: String,
     },

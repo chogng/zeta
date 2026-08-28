@@ -3,7 +3,6 @@ use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_app_server_protocol::protocol::turn::TurnStartResult;
 use zeta_core::ThreadCommandResult;
 use zeta_core::ThreadSnapshot;
-use zeta_protocol::ApprovalMode;
 use zeta_protocol::CommandId;
 use zeta_protocol::ThreadCommand;
 use zeta_protocol::ToolMode;
@@ -14,7 +13,6 @@ use zeta_protocol::UserInput;
 pub(super) fn replayed_result(
     snapshot: &ThreadSnapshot,
     command_id: &CommandId,
-    approval_mode: ApprovalMode,
     tool_mode: ToolMode,
     input: &[UserInput],
 ) -> Result<Option<TurnStartResult>, RpcError> {
@@ -26,7 +24,6 @@ pub(super) fn replayed_result(
         return Ok(None);
     };
     let ThreadCommand::StartTurn {
-        approval_mode: accepted_approval_mode,
         tool_mode: accepted_tool_mode,
         input: accepted_input,
         ..
@@ -34,10 +31,7 @@ pub(super) fn replayed_result(
     else {
         return Err(RpcError::new(-32004, AppServerErrorName::CommandConflict));
     };
-    if *accepted_approval_mode != approval_mode
-        || *accepted_tool_mode != tool_mode
-        || accepted_input != input
-    {
+    if *accepted_tool_mode != tool_mode || accepted_input != input {
         return Err(RpcError::new(-32004, AppServerErrorName::CommandConflict));
     }
     let ThreadCommandResult::TurnAccepted { turn_id } = &command.result else {

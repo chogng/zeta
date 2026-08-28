@@ -317,6 +317,7 @@ fn turn(turn_id: &str) -> Turn {
         model: None,
         tool_profile: None,
         tool_mode: zeta_protocol::ToolMode::Direct,
+        approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
         usage: zeta_protocol::ModelUsageSummary::default(),
         items: Vec::new(),
         plan: None,

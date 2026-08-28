@@ -1086,6 +1086,7 @@ test("ChatPaneModel projects and refreshes the canonical durable Turn plan", asy
 			turnId: "turn-1",
 			status: "running",
 			toolMode: "direct",
+			approvalMode: "askPermissions",
 			usage: emptyUsage(),
 			items: [],
 			plan: {
@@ -1206,6 +1207,7 @@ test("ChatPaneModel projects a durable Turn failure into the conversation", asyn
 			turnId: "turn-1",
 			status: "failed",
 			toolMode: "direct",
+			approvalMode: "askPermissions",
 			usage: emptyUsage(),
 			items: [],
 			error: {
@@ -1455,6 +1457,7 @@ test("ChatPaneModel steers an active Turn instead of starting another Turn", asy
 			turnId: "turn-running",
 			status: "running",
 			toolMode: "direct",
+			approvalMode: "askPermissions",
 			usage: emptyUsage(),
 			items: [{
 				type: "userMessage",
@@ -1616,6 +1619,10 @@ function fakeApi(options: FakeOptions = {}): {
 				const current = options.sessions?.find(({ sessionId }) => sessionId === params.sessionId) ?? session(params.sessionId);
 				return { session: { ...current, model: params.model, sequence: current.sequence + 1 } };
 			},
+			setNextApprovalMode: async (params: SessionOperationInput<"setNextApprovalMode">) => {
+				const current = options.sessions?.find(({ sessionId }) => sessionId === params.sessionId) ?? session(params.sessionId);
+				return { session: { ...current, nextApprovalMode: params.approvalMode, sequence: current.sequence + 1 } };
+			},
 		},
 		model: {
 			list: async () => {
@@ -1690,6 +1697,7 @@ function session(
 		sessionId: id,
 		title,
 		status: "active",
+		nextApprovalMode: "askPermissions",
 		sequence: threadId ? 2 : 1,
 		threads: threadId
 			? [{ threadId, origin: { type: "root" }, status: "active" }]
@@ -1710,6 +1718,7 @@ function thread(agentText?: string): Thread {
 				turnId: "turn-1",
 				status: "completed",
 				toolMode: "direct",
+				approvalMode: "askPermissions",
 				usage: emptyUsage(),
 				items: [{
 					type: "agentMessage",
@@ -1740,6 +1749,7 @@ function failedTurn(code: TurnError["code"], retryable: boolean, message = "Turn
 		turnId: "turn-1",
 		status: "failed",
 		toolMode: "direct",
+		approvalMode: "askPermissions",
 		usage: emptyUsage(),
 		items: [],
 		error: { code, message, retryable },

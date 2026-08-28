@@ -1,6 +1,6 @@
 import type { Event } from "../../../../base/common/event.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-import type { IActiveSessionThread, IUntitledChatSession, ModelRef, Session, SessionId, ThreadId } from "./session.js";
+import type { ApprovalMode, IActiveSessionThread, IUntitledChatSession, ModelRef, Session, SessionId, ThreadId } from "./session.js";
 
 export type SessionsManagementState = "loading" | "ready" | "creating" | "stopping" | "archiving" | "error";
 
@@ -27,6 +27,7 @@ export interface ISessionsManagementService {
 	stopSession(sessionId: SessionId): Promise<void>;
 	archiveSession(sessionId: SessionId): Promise<void>;
 	setModel(sessionId: SessionId, model: ModelRef): Promise<void>;
+	setNextApprovalMode(sessionId: SessionId, approvalMode: ApprovalMode): Promise<void>;
 }
 
 export const ISessionsManagementService = createServiceIdentifier<ISessionsManagementService>("sessionsManagementService");

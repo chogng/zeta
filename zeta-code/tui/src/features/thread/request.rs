@@ -23,7 +23,6 @@ use zeta_app_server_protocol::protocol::turn::TurnInteractionResolveResult;
 use zeta_app_server_protocol::protocol::turn::TurnInterruptResult;
 use zeta_app_server_protocol::protocol::turn::TurnStartResult;
 use zeta_protocol::AgentResponse;
-use zeta_protocol::ApprovalMode;
 use zeta_protocol::ImageAttachmentRef;
 use zeta_protocol::ImageDetail;
 use zeta_protocol::ImageMediaType;
@@ -66,7 +65,6 @@ pub(crate) fn submit_prompt<T>(
     client: &mut AppServerClient<T>,
     scope: ThreadRequestScope,
     submission: ComposerSubmission,
-    approval_mode: ApprovalMode,
 ) -> Result<TurnStartResult, ClientError>
 where
     T: JsonRpcTransport,
@@ -87,7 +85,6 @@ where
         expected_sequence: scope.expected_sequence,
         request: SessionRequest::StartTurn {
             thread_id: scope.thread_id,
-            approval_mode,
             tool_mode: None,
             input,
         },

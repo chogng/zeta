@@ -80,6 +80,9 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
 		async setModel() {
 			throw new Error("Model selection is unavailable");
 		},
+		async setNextApprovalMode() {
+			throw new Error("Approval mode selection is unavailable");
+		},
 		async archiveSession() {
 			throw new Error("Session archiving is unavailable");
 		},

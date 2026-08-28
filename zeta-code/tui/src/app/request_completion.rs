@@ -34,7 +34,6 @@ use zeta_app_server_protocol::protocol::skills::SkillListParams;
 use zeta_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
 use zeta_app_server_protocol::protocol::turn::TurnStartResult;
-use zeta_protocol::ApprovalMode;
 use zeta_protocol::SkillRef;
 use zeta_protocol::Thread;
 #[cfg(test)]
@@ -53,6 +52,7 @@ pub(super) enum RequestCompletion {
         command: String,
         result: Result<config::PreferredModelUpdate, String>,
     },
+    ApprovalModeChanged(Result<ActiveConversation, ClientError>),
     SkillsRefreshed(Result<SkillRequestCompletion, String>),
     InteractionResolved(Result<LatestThreadSnapshot, ClientError>),
     ThreadRefreshed(Result<LatestThreadSnapshot, ClientError>),
@@ -131,12 +131,11 @@ pub(super) fn start_turn_and_read(
     mut client: AppServerRequestHandle,
     scope: ThreadRequestScope,
     submission: ComposerSubmission,
-    approval_mode: ApprovalMode,
     history: ThreadSnapshotHistory,
 ) -> Result<(TurnStartResult, LatestThreadSnapshot), ClientError> {
     let session_id = scope.session_id().clone();
     let thread_id = scope.thread_id().clone();
-    let start = submit_prompt(&mut client, scope, submission, approval_mode)?;
+    let start = submit_prompt(&mut client, scope, submission)?;
     let snapshot = read_thread_history(&mut client, &session_id, &thread_id, history)?;
     Ok((start, snapshot))
 }
@@ -252,6 +251,13 @@ pub(super) fn apply_request_completion(
             }
         }
         RequestCompletion::Presentation(Ok(event)) => app.update(event),
+        RequestCompletion::ApprovalModeChanged(Ok(next_conversation)) => {
+            conversation.merge_session_from(next_conversation);
+            app.set_next_approval_mode(conversation.next_approval_mode());
+        }
+        RequestCompletion::ApprovalModeChanged(Err(error)) => {
+            app.update(AppEvent::FailureReported(error.to_string()));
+        }
         RequestCompletion::PreferredModelUpdated {
             command,
             result: Ok(update),
@@ -418,6 +424,14 @@ pub(super) fn apply_thread_snapshot(
     if let Some(next_active_turn_update) = next_active_turn_update {
         apply_active_turn_update(app, next_active_turn_update);
     }
+    let current_approval_mode = active_turn.as_ref().and_then(|turn_id| {
+        snapshot
+            .turns
+            .iter()
+            .find(|turn| turn.turn_id == *turn_id)
+            .map(|turn| turn.approval_mode)
+    });
+    app.set_current_approval_mode(current_approval_mode);
 }
 
 enum ConversationCompletionPresentation {
@@ -433,6 +447,7 @@ fn finish_conversation_change(
     switch: ThreadSwitch,
     presentation: ConversationCompletionPresentation,
 ) {
+    app.set_next_approval_mode(conversation.next_approval_mode());
     if matches!(presentation, ConversationCompletionPresentation::Command(_)) {
         app.update(AppEvent::SelectionViewClosed);
     }

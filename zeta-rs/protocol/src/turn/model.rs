@@ -1,6 +1,6 @@
 use crate::{
-    ModelRef, ModelUsageSummary, PendingInteraction, PlanUpdate, StableTurnError, ThreadItem,
-    ToolMode, ToolProfileSnapshot, TurnId, TurnStatus,
+    ApprovalMode, ModelRef, ModelUsageSummary, PendingInteraction, PlanUpdate, StableTurnError,
+    ThreadItem, ToolMode, ToolProfileSnapshot, TurnId, TurnStatus,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -20,6 +20,8 @@ pub struct Turn {
     pub tool_profile: Option<ToolProfileSnapshot>,
     #[serde(default)]
     pub tool_mode: ToolMode,
+    #[serde(default)]
+    pub approval_mode: ApprovalMode,
     #[serde(default)]
     pub usage: ModelUsageSummary,
     pub items: Vec<ThreadItem>,

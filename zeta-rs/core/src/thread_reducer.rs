@@ -143,6 +143,7 @@ impl ThreadSnapshot {
                     model: turn.model.clone(),
                     tool_profile: turn.tool_profile.clone(),
                     tool_mode: turn.tool_mode,
+                    approval_mode: turn.approval_mode,
                     usage: turn.usage.clone(),
                     items: self
                         .items

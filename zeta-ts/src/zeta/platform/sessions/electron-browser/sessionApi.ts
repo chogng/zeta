@@ -16,6 +16,7 @@ export function createSessionApi(): ISessionApi {
 		archive: (params) => invoke<SessionResult>("zeta:session:archive", params),
 		stop: (params) => invoke<SessionResult>("zeta:session:stop", params),
 		setModel: (params) => invoke<SessionResult>("zeta:session:model:set", params),
+		setNextApprovalMode: (params) => invoke<SessionResult>("zeta:session:approval-mode:set-next", params),
 	};
 }
 

@@ -1,8 +1,8 @@
 use crate::CoreError;
 use crate::multi_agent::validate_context_seed_digest;
 use zeta_protocol::{
-    AgentContextSeed, ModelRef, Session, SessionCommand, SessionEvent, SessionId, SessionStatus,
-    SessionThread, SessionThreadStatus, ThreadId, ThreadOrigin, WorkspaceBinding,
+    AgentContextSeed, ApprovalMode, ModelRef, Session, SessionCommand, SessionEvent, SessionId,
+    SessionStatus, SessionThread, SessionThreadStatus, ThreadId, ThreadOrigin, WorkspaceBinding,
 };
 use zeta_session_store::{
     CURRENT_SESSION_EVENT_SCHEMA_VERSION, MINIMUM_SUPPORTED_SESSION_EVENT_SCHEMA_VERSION,
@@ -16,6 +16,7 @@ pub struct SessionSnapshot {
     pub status: SessionStatus,
     pub model: Option<ModelRef>,
     pub workspace: Option<WorkspaceBinding>,
+    pub next_approval_mode: ApprovalMode,
     /// True only for Session streams created before durable Workspace binding existed.
     pub workspace_binding_is_legacy: bool,
     pub sequence: u64,
@@ -32,6 +33,7 @@ impl SessionSnapshot {
             status: self.status,
             model: self.model.clone(),
             workspace: self.workspace.clone(),
+            next_approval_mode: self.next_approval_mode,
             sequence: self.sequence,
             threads: self
                 .threads
@@ -60,6 +62,7 @@ pub struct SessionCommandSnapshot {
 pub enum SessionCommandResult {
     SessionCreated,
     SessionModelChanged { model: ModelRef },
+    SessionNextApprovalModeChanged { approval_mode: ApprovalMode },
     ThreadCreated { thread_id: ThreadId },
     ThreadArchived { thread_id: ThreadId },
     SessionCompleted,
@@ -115,6 +118,7 @@ pub fn reduce_session_event(
             status: SessionStatus::Active,
             model: model.clone(),
             workspace: workspace.clone(),
+            next_approval_mode: ApprovalMode::AskPermissions,
             workspace_binding_is_legacy: envelope.schema_version < 3,
             sequence: 1,
             threads: Vec::new(),
@@ -162,6 +166,26 @@ pub fn reduce_session_event(
                 receipt: receipt.clone(),
                 result: SessionCommandResult::SessionModelChanged {
                     model: model.clone(),
+                },
+                response_sequence: envelope.sequence,
+            });
+        }
+        SessionEvent::SessionNextApprovalModeChanged { approval_mode, .. } => {
+            let receipt = require_new_session_command(&snapshot, envelope)?;
+            if receipt.command
+                != (SessionCommand::SetNextApprovalMode {
+                    approval_mode: *approval_mode,
+                })
+            {
+                return Err(CoreError::Journal(
+                    "Session approval mode command does not match its event".into(),
+                ));
+            }
+            snapshot.next_approval_mode = *approval_mode;
+            snapshot.commands.push(SessionCommandSnapshot {
+                receipt: receipt.clone(),
+                result: SessionCommandResult::SessionNextApprovalModeChanged {
+                    approval_mode: *approval_mode,
                 },
                 response_sequence: envelope.sequence,
             });

@@ -7,7 +7,6 @@ use crate::SequenceExpectation;
 use crate::SessionCoordinator;
 use crate::SpawnAgentThreadRequest;
 use crate::StartTurnDisposition;
-use crate::StartTurnRequest;
 use crate::ThreadSnapshot;
 use crate::thread_reducer::satisfied_agent_join;
 use serde::Serialize;
@@ -491,12 +490,11 @@ impl MultiAgentCoordinator {
         let initial_turn = self.sessions.start_turn(
             &session.session_id,
             &spawned.thread_id,
-            StartTurnRequest {
+            crate::StartSessionTurnRequest {
                 command_id: initial_turn_command_id(&seed.delegation_id)?,
                 expected_sequence: SequenceExpectation::Any,
                 model: seed.role.model.clone(),
                 policy_revision: seed.policy_ceiling.policy_revision.clone(),
-                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 tool_mode: parent_tool_mode,
                 tool_profile: parent_tool_profile,
                 activated_skills: seed.capability_scope.skills.clone(),

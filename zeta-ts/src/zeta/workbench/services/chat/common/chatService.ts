@@ -1,6 +1,6 @@
 import type { Event } from "../../../../base/common/event.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-import type { ModelRef, SessionId, ThreadId } from "../../../../sessions/services/sessions/common/session.js";
+import type { ApprovalMode, ModelRef, SessionId, ThreadId } from "../../../../sessions/services/sessions/common/session.js";
 import type { ThreadGoal as ThreadGoalDto } from "../../../../../../generated/app-server/types.js";
 import type { SkillReference } from "../../../../platform/skills/common/skillApi.js";
 import type { ModelCatalogEntry } from "./modelCatalog.js";
@@ -63,6 +63,7 @@ export interface PlanUpdate {
 export interface Turn {
 	readonly turnId: string;
 	readonly status: TurnStatus;
+	readonly approvalMode: ApprovalMode;
 	readonly model?: ModelRef | null;
 	readonly plan?: PlanUpdate | null;
 	readonly usage: ModelUsageSummary;

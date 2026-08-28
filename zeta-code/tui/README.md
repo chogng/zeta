@@ -77,9 +77,7 @@ Tool、approval policy 或 persistence。
 - owner-directed `agent/request` 支持 approval（approve once/decline）和多问题 user input；只有
   App Server 选中的、声明对应 capability 且订阅该 Thread 的 connection 能 resolve。交互不可用
   Esc 关闭，但可 Ctrl-C interrupt；deadline 由 App Server 执行并投影为稳定 Turn failure；
-- footer 按“权限模式、模型、Git 分支、Git 变更”的固定顺序显示 `/statusline` 启用的项目，不显示 Turn 运行状态，也不常驻展示快捷键；Shift-Tab 在 `ask permissions on`、`auto review on` 与
-  `bypass permissions on` 之间循环。提交时把当前模式写入 typed `StartTurn`，因此切换只影响之后
-  提交的 Turn；TUI 不解释策略结果，也不自行签发执行授权；
+- footer 按“权限模式、模型、Git 分支、Git 变更”的固定顺序显示 `/statusline` 启用的项目，不显示 Turn 运行状态，也不常驻展示快捷键；Shift-Tab 通过 typed Session mutation 在 `ask permissions on`、`auto review on` 与 `bypass permissions on` 之间切换后端保存的下一次模式。运行中 Turn 的冻结模式与下一次模式不同时，footer 同时标出 `current` 和 `next`；TUI 不解释策略结果，也不自行签发执行授权；
 - 根级 `keymap.rs` 只保留运行时入口和 `AppKeymap`，`keymap/bindings.rs`、`keymap/chords.rs` 与 `keymap/input.rs` 分别拥有动作绑定、Chord 生命周期和 Crossterm 转换；共享 Resolver 处理 Shift-Tab、根级 Esc 与 Ctrl-C/D/O/V/Z，并生成设置界面只读快照。`features/shortcuts.rs` 读取 `<profile>/zeta-code/keybindings.json`，每秒热重载 User command/blocker、平台覆盖与 `when`，并为 `/shortcuts` 汇总可配置绑定和固定操作键，提供搜索、诊断、单键/两段 Chord 录制、revision 校验和原子保存；坏更新或保存失败保留上一份有效规则。composer 编辑、selection 导航和 transcript 滚动仍由各 component 拥有；
 - composer 保存最近 100 条纯文本提交，Up/Down 可召回并恢复原 draft；transcript 支持
   PageUp/PageDown 与 Ctrl-Home/Ctrl-End。初始 Thread snapshot 只读取最近 50 个 Turn，Ctrl-Home
@@ -256,10 +254,10 @@ src/
 | `zeta_slash_commands::SlashCommandsState` | shared public type | 拥有 cursor query、matches、selection、dismissal 与 completion | TUI 不保存第二份 Slash query/selection authority；可见范围与滚动仍由 Ratatui renderer 负责 |
 | `zeta_slash_commands::{SlashCommandInput,SlashCommandCatalog}` | shared public types | 统一输入 grammar，并合并 built-in 与 server metadata | TUI 不重新校验名称、不执行 App Server operation |
 | `SlashCommandInvocation` | crate-private | command identity、trimmed display arguments 与有序 text/image argument items | 不执行 RPC |
-| `features::sessions::ActiveConversation` | crate-private | 当前 Session/Thread identity、sequence 与 typed create/fork/resume/rewind/archive lifecycle | 不解析 composer text、不更新 `App`、不拥有 App Server |
+| `features::sessions::ActiveConversation` | crate-private | 当前 Session/Thread identity、sequence、后端保存的下一次批准模式与 typed create/fork/resume/rewind/archive lifecycle | 不解析 composer text、不拥有批准策略或 App Server |
 | `TextArea` | private | UTF-8 多行 buffer、byte-safe line/cursor movement、原子元素 insert/delete 与局部 keymap 扩展边界 | 不保存 paste payload，不解释 Enter submission 或 slash command；当前不承诺 Vim mode |
 | `features::thread::submit_prompt` | private | 从显式 `ThreadRequestScope` build typed `session/request` `StartTurn` operation 并返回 typed result | 不引用或更新 `App`、不手写 method string/JSON |
-| `App::approval_mode` | crate-private | 持有 connection-local 的下一次提交模式；Shift-Tab 循环并在 submit command 中冻结 | 不回写运行中 Turn、不判断或绕过 policy |
+| `App::approval_mode_status` | crate-private | 缓存 Session 的下一次模式与 active Turn 的冻结模式，供 footer 展示；Shift-Tab 只产生 Session mutation intent | 不成为权威状态、不判断或绕过批准策略 |
 | `app::request_completion::apply_thread_snapshot` | private | 安装 canonical snapshot、恢复最早 nonterminal Turn 作为执行队首并协调 presentation mapping | 不 drain notification；snapshot 是 authoritative UI source |
 | `features::thread::interrupt_turn` | private | 从显式 scope 执行 typed Turn interrupt 并返回结果 | 不引用或更新 `App` |
 | `app::apply_active_turn_snapshot` | test-visible | canonical Turn presentation outcome → `AppEvent` | 不从 log/text 猜 terminal state |
@@ -327,9 +325,7 @@ run(session, options)
          └─ text → PendingPastes + TextArea
 ```
 
-Session create 和 Thread create 使用独立 `CommandId`。Turn start/interrupt 使用当前
-`thread_sequence` 作为 expected sequence；client error 会进入 visible error message/status，不退出
-terminal session。
+Session create、Thread create 和下一次批准模式变更使用独立 `CommandId`。Turn start/interrupt 使用当前 `thread_sequence` 作为 expected sequence；批准模式变更使用 Session sequence。client error 会进入 visible error message/status，不退出 terminal session。
 
 创建后通过 `session/thread/read`/`session/thread/subscribe` 返回的 canonical snapshot 设置 initial sequence，
 不存在硬编码的初始 sequence。所有可能等待 App Server 的 product command、Turn mutation、文件

@@ -1,3 +1,4 @@
+use crate::ApprovalMode;
 use crate::ContextSeedDigest;
 use crate::DelegationId;
 use crate::ModelRef;
@@ -26,6 +27,9 @@ pub enum SessionCommand {
     },
     SetModel {
         model: ModelRef,
+    },
+    SetNextApprovalMode {
+        approval_mode: ApprovalMode,
     },
     CreateThread {
         title: String,

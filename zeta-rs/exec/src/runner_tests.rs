@@ -281,6 +281,8 @@ fn session(ids: &TestIds) -> Session {
         title: "test run".into(),
         status: SessionStatus::Active,
         model: None,
+        workspace: None,
+        next_approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
         sequence: 0,
         threads: vec![],
     }
@@ -294,6 +296,7 @@ fn thread(ids: &TestIds, sequence: u64, turns: Vec<Turn>) -> Thread {
         status: ThreadStatus::Active,
         sequence,
         usage: zeta_protocol::ModelUsageSummary::default(),
+        goal: None,
         turns,
     }
 }
@@ -303,7 +306,12 @@ fn turn(ids: &TestIds, status: TurnStatus, items: Vec<ThreadItem>) -> Turn {
         turn_id: ids.turn_id.clone(),
         status,
         model: None,
+        tool_profile: None,
+        tool_mode: zeta_protocol::ToolMode::Direct,
+        approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+        usage: zeta_protocol::ModelUsageSummary::default(),
         items,
+        plan: None,
         pending_interaction: None,
         error: None,
     }

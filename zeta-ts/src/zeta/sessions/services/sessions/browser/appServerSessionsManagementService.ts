@@ -4,7 +4,7 @@ import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../base/common/uuid.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { ISessionApi, ITurnApi } from "../../../../platform/sessions/common/sessionApi.js";
-import type { AgentThreadExecutionStatus, AgentTreeNode, IActiveSessionThread, IUntitledChatSession, ModelRef, Session, SessionId, ThreadId } from "../common/session.js";
+import type { AgentThreadExecutionStatus, AgentTreeNode, ApprovalMode, IActiveSessionThread, IUntitledChatSession, ModelRef, Session, SessionId, ThreadId } from "../common/session.js";
 import type { ISessionsManagementService, SessionsManagementState } from "../common/sessionsManagementService.js";
 
 export interface ISessionWorkspaceRouter {
@@ -242,6 +242,23 @@ export class AppServerSessionsManagementService extends Disposable implements IS
 		}
 	}
 
+	async setNextApprovalMode(sessionId: SessionId, approvalMode: ApprovalMode): Promise<void> {
+		await this.initialize();
+		const session = this._sessions.find((candidate) => candidate.sessionId === sessionId && candidate.status === "active");
+		if (!session) throw new Error(`Active Session is not available: ${sessionId}`);
+		try {
+			const result = await this.api.setNextApprovalMode({ commandId: commandId("session-approval-mode"), sessionId, expectedSequence: session.sequence, approvalMode });
+			const updated = toSession(result.session, [], session);
+			this.replaceSession(updated);
+			if (this._active?.session.sessionId === sessionId) this._active = { session: updated, threadId: this._active.threadId };
+			this._error = undefined;
+			this._onDidChange.fire();
+		} catch (error) {
+			this.setError(error);
+			throw error;
+		}
+	}
+
 	private async createSession(title: string, model: ModelRef | undefined = undefined): Promise<IActiveSessionThread> {
 		this.setState("creating");
 		try {
@@ -411,6 +428,7 @@ function toSession(
 		status: session.status,
 		model: session.model ? toModelRef(session.model) : session.model,
 		workspace: session.workspace ? { ...session.workspace } : session.workspace,
+		nextApprovalMode: session.nextApprovalMode,
 		sequence: session.sequence,
 		threads: session.threads.map((thread) => {
 			const projection = projectionByThread.get(thread.threadId);

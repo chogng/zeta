@@ -81,7 +81,9 @@ pub use session_coordinator::{
     ArchiveSessionThreadRequest, CommandDisposition, CreateSessionRequest, CreateSessionResult,
     CreateSessionThreadRequest, ForkSessionThreadRequest, InMemorySessionStore,
     RewindSessionThreadRequest, SequenceExpectation, SessionCoordinator, SessionLifecycleRequest,
-    SessionMutationResult, SessionThreadResult, SetSessionModelRequest, SpawnAgentThreadRequest,
+    SessionMutationResult, SessionThreadResult, SetSessionModelRequest,
+    SetSessionNextApprovalModeRequest, SpawnAgentThreadRequest, StartSessionShellTurnRequest,
+    StartSessionTurnRequest,
 };
 pub use session_reducer::{
     SessionCommandResult, SessionCommandSnapshot, SessionSnapshot, SessionThreadSnapshot,

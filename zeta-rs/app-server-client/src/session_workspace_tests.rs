@@ -15,6 +15,7 @@ fn session(workspace: Option<WorkspaceBinding>) -> Session {
         status: SessionStatus::Active,
         model: None,
         workspace,
+        next_approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
         sequence: 1,
         threads: Vec::new(),
     }

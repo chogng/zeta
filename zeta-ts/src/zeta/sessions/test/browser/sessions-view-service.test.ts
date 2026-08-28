@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Emitter } from "../../../base/common/event.js";
-import type { IActiveSessionThread, IUntitledChatSession, ModelRef, Session, SessionId, ThreadId } from "../../services/sessions/common/session.js";
+import type { ApprovalMode, IActiveSessionThread, IUntitledChatSession, ModelRef, Session, SessionId, ThreadId } from "../../services/sessions/common/session.js";
 import type { ISessionsManagementService, SessionsManagementState } from "../../services/sessions/common/sessionsManagementService.js";
 import { SessionsViewService } from "../../../sessions/services/view/browser/sessionsViewService.js";
 import type { SessionsViewSelection } from "../../../sessions/services/view/common/sessionsViewService.js";
@@ -161,6 +161,7 @@ class FakeSessionService implements ISessionsManagementService {
 	async stopSession(): Promise<void> {}
 	async archiveSession(): Promise<void> {}
 	async setModel(): Promise<void> {}
+	async setNextApprovalMode(_sessionId: SessionId, _approvalMode: ApprovalMode): Promise<void> {}
 
 	removeSession(sessionId: SessionId): void {
 		this._sessions = this._sessions.filter(session => session.sessionId !== sessionId);
@@ -177,6 +178,7 @@ function session(sessionId: SessionId, threadId: ThreadId): Session {
 		sessionId,
 		title: sessionId,
 		status: "active",
+		nextApprovalMode: "askPermissions",
 		sequence: 1,
 		threads: [{ threadId, origin: { type: "root" }, status: "active" }],
 	};

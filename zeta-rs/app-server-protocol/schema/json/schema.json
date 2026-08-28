@@ -19322,6 +19322,10 @@
             }
           ]
         },
+        "nextApprovalMode": {
+          "$ref": "#/$defs/ApprovalMode",
+          "default": "askPermissions"
+        },
         "sequence": {
           "format": "uint64",
           "minimum": 0,
@@ -19437,6 +19441,26 @@
             "type",
             "sessionId",
             "model"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "approvalMode": {
+              "$ref": "#/$defs/ApprovalMode"
+            },
+            "sessionId": {
+              "$ref": "#/$defs/SessionId"
+            },
+            "type": {
+              "const": "sessionNextApprovalModeChanged",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "sessionId",
+            "approvalMode"
           ],
           "type": "object"
         },
@@ -19653,6 +19677,22 @@
         },
         {
           "properties": {
+            "approvalMode": {
+              "$ref": "#/$defs/ApprovalMode"
+            },
+            "type": {
+              "const": "setNextApprovalMode",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "approvalMode"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
             "title": {
               "type": "string"
             },
@@ -19729,10 +19769,6 @@
         },
         {
           "properties": {
-            "approvalMode": {
-              "$ref": "#/$defs/ApprovalMode",
-              "default": "askPermissions"
-            },
             "input": {
               "items": {
                 "$ref": "#/$defs/InputItem"
@@ -19767,10 +19803,6 @@
         },
         {
           "properties": {
-            "approvalMode": {
-              "$ref": "#/$defs/ApprovalMode",
-              "default": "askPermissions"
-            },
             "command": {
               "type": "string"
             },
@@ -24273,6 +24305,10 @@
     "Turn": {
       "description": "Canonical readable state for one user-intent-driven Agent execution.",
       "properties": {
+        "approvalMode": {
+          "$ref": "#/$defs/ApprovalMode",
+          "default": "askPermissions"
+        },
         "error": {
           "anyOf": [
             {

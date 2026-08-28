@@ -31,6 +31,8 @@ fn snapshot_preserves_items_and_turn_plans_in_order() {
             status: zeta_protocol::TurnStatus::Completed,
             model: None,
             tool_profile: None,
+            tool_mode: zeta_protocol::ToolMode::Direct,
+            approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
             usage: ModelUsageSummary::default(),
             items: vec![agent_item("item-1", "done")],
             plan: Some(zeta_protocol::PlanUpdate {

@@ -1,5 +1,5 @@
 use crate::{
-    ModelRef, SessionId, SessionStatus, SessionThreadStatus, ThreadId, ThreadOrigin,
+    ApprovalMode, ModelRef, SessionId, SessionStatus, SessionThreadStatus, ThreadId, ThreadOrigin,
     WorkspaceBinding,
 };
 use schemars::JsonSchema;
@@ -22,6 +22,8 @@ pub struct Session {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub workspace: Option<WorkspaceBinding>,
+    #[serde(default)]
+    pub next_approval_mode: ApprovalMode,
     #[ts(type = "number")]
     pub sequence: u64,
     pub threads: Vec<SessionThread>,

@@ -56,6 +56,7 @@ export interface SessionThread {
 }
 
 export type SessionStatus = "active" | "completed" | "archived";
+export type ApprovalMode = "askPermissions" | "autoReview" | "bypassPermissions";
 
 /** Canonical frontend projection of one App Server Session aggregate. */
 export interface Session {
@@ -67,6 +68,7 @@ export interface Session {
 		readonly authorityId: string;
 		readonly root: string;
 	} | null;
+	readonly nextApprovalMode: ApprovalMode;
 	readonly sequence: number;
 	readonly threads: readonly SessionThread[];
 	/** Server-owned projection; absent only before an active Session has been subscribed. */

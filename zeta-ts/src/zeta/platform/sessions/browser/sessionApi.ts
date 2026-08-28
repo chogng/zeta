@@ -18,6 +18,7 @@ export function createDisconnectedSessionApi(unavailable: UnavailableOperation):
 		archive: () => unavailable("session.archive"),
 		stop: () => unavailable("session.stop"),
 		setModel: () => unavailable("session.setModel"),
+		setNextApprovalMode: () => unavailable("session.setNextApprovalMode"),
 	};
 }
 
@@ -60,6 +61,7 @@ export function createViteDevSessionApi(connection: ViteDevAppServerConnection):
 		archive: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "archive" })).then(sessionResult),
 		stop: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "stop" })).then(sessionResult),
 		setModel: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "setModel", model: params.model })).then(sessionResult),
+		setNextApprovalMode: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "setNextApprovalMode", approvalMode: params.approvalMode })).then(sessionResult),
 	};
 }
 
@@ -80,7 +82,7 @@ export function createViteDevThreadApi(connection: ViteDevAppServerConnection): 
 
 export function createViteDevTurnApi(connection: ViteDevAppServerConnection): ITurnApi {
 	return {
-		start: (params) => viteDevRequest(connection, "session/request", sessionRequest({ commandId: params.commandId, sessionId: params.sessionId, expectedSequence: params.expectedSequence }, { type: "startTurn", threadId: params.threadId, approvalMode: params.approvalMode, input: params.input })).then(turnStartResult),
+		start: (params) => viteDevRequest(connection, "session/request", sessionRequest({ commandId: params.commandId, sessionId: params.sessionId, expectedSequence: params.expectedSequence }, { type: "startTurn", threadId: params.threadId, input: params.input })).then(turnStartResult),
 		compact: (params) => viteDevRequest(connection, "session/request", sessionRequest({ commandId: params.commandId, sessionId: params.sessionId, expectedSequence: params.expectedSequence }, { type: "compactContext", threadId: params.threadId, retentionPrompt: params.retentionPrompt })).then(turnStartResult),
 		steer: (params) => viteDevRequest(connection, "session/request", sessionRequest({ commandId: params.commandId, sessionId: params.sessionId, expectedSequence: params.expectedSequence }, { type: "steerTurn", threadId: params.threadId, turnId: params.turnId, input: params.input })).then(turnSteerResult),
 		interrupt: (params) => viteDevRequest(connection, "session/request", sessionRequest(params, { type: "interruptTurn", threadId: params.threadId, turnId: params.turnId })).then(turnInterruptResult),

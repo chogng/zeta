@@ -9,7 +9,7 @@ use zeta_core::InMemoryThreadStore;
 use zeta_core::ModelSelection;
 use zeta_core::ModelService;
 use zeta_core::SequenceExpectation;
-use zeta_core::StartTurnRequest;
+use zeta_core::StartSessionTurnRequest;
 use zeta_core::ThreadController;
 use zeta_core::TurnExecutionBackend;
 use zeta_protocol::AgentRoleSnapshot;
@@ -184,12 +184,11 @@ fn wait_timeout_returns_a_durable_waiting_join_without_losing_the_delegation() {
         .start_turn(
             &session.session_id,
             &parent.thread_id,
-            StartTurnRequest {
+            StartSessionTurnRequest {
                 command_id: CommandId::new("timeout-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,
                 policy_revision: "test-policy-v1".into(),
-                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 tool_mode: zeta_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),
@@ -285,12 +284,11 @@ fn recovered_spawn_starts_a_new_child_turn_once() {
         .start_turn(
             &session.session_id,
             &parent.thread_id,
-            StartTurnRequest {
+            StartSessionTurnRequest {
                 command_id: CommandId::new("start-parent").unwrap(),
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,
                 policy_revision: "test-policy-v1".into(),
-                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
                 tool_mode: zeta_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),

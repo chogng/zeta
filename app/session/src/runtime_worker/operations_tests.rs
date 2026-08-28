@@ -30,6 +30,7 @@ fn subscription_publishes_the_authoritative_thread_snapshot() {
             status: SessionStatus::Active,
             model: None,
             workspace: None,
+            next_approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
             sequence: 3,
             threads: vec![SessionThread {
                 thread_id: thread_id.clone(),

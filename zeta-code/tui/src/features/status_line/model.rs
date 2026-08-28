@@ -10,6 +10,36 @@ use super::StatusLineSettings;
 
 const SEPARATOR: &str = " · ";
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct ApprovalModeDisplay {
+    pub(super) icon: &'static str,
+    pub(super) label: &'static str,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct ApprovalModeStatus {
+    pub(crate) current: Option<ApprovalMode>,
+    pub(crate) next: ApprovalMode,
+}
+
+impl Default for ApprovalModeStatus {
+    fn default() -> Self {
+        Self {
+            current: None,
+            next: ApprovalMode::AskPermissions,
+        }
+    }
+}
+
+impl From<ApprovalMode> for ApprovalModeStatus {
+    fn from(next: ApprovalMode) -> Self {
+        Self {
+            current: None,
+            next,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct DisplayValue {
     full: String,
@@ -67,12 +97,16 @@ impl StatusLineModel {
         });
     }
 
-    pub(crate) fn text_for_width(&self, width: usize, approval_mode: ApprovalMode) -> String {
+    pub(crate) fn text_for_width(
+        &self,
+        width: usize,
+        approval: impl Into<ApprovalModeStatus>,
+    ) -> String {
         if width == 0 {
             return String::new();
         }
 
-        let values = self.configured_values(approval_mode);
+        let values = self.configured_values(approval.into());
         if values.is_empty() {
             return String::new();
         }
@@ -109,17 +143,13 @@ impl StatusLineModel {
         truncate_with_ellipsis(&values[0].compact, width)
     }
 
-    fn configured_values(&self, approval_mode: ApprovalMode) -> Vec<DisplayValue> {
+    fn configured_values(&self, approval: ApprovalModeStatus) -> Vec<DisplayValue> {
         let mut values = Vec::new();
         if self.settings.enabled(StatusLineItem::Permissions) {
-            let permission = match approval_mode {
-                ApprovalMode::AskPermissions => "◉ ask permissions on",
-                ApprovalMode::AutoReview => "◎ auto review on",
-                ApprovalMode::BypassPermissions => "⊘ bypass permissions on",
-            };
+            let permission = approval_mode_text(approval);
             values.push(DisplayValue {
-                full: permission.into(),
-                compact: permission.into(),
+                full: permission.clone(),
+                compact: permission,
             });
         }
         if self.settings.enabled(StatusLineItem::Model)
@@ -138,6 +168,37 @@ impl StatusLineModel {
             values.push(changes.clone());
         }
         values
+    }
+}
+
+pub(super) fn approval_mode_text(approval: ApprovalModeStatus) -> String {
+    let next = approval_mode_display(approval.next);
+    match approval.current {
+        Some(current) if current != approval.next => {
+            let current = approval_mode_display(current);
+            format!(
+                "{} current: {} · {} next: {}",
+                current.icon, current.label, next.icon, next.label
+            )
+        }
+        _ => format!("{} {}", next.icon, next.label),
+    }
+}
+
+pub(super) fn approval_mode_display(approval_mode: ApprovalMode) -> ApprovalModeDisplay {
+    match approval_mode {
+        ApprovalMode::AskPermissions => ApprovalModeDisplay {
+            icon: "⏸",
+            label: "ask permissions on",
+        },
+        ApprovalMode::AutoReview => ApprovalModeDisplay {
+            icon: "⏩",
+            label: "auto review on",
+        },
+        ApprovalMode::BypassPermissions => ApprovalModeDisplay {
+            icon: "▶",
+            label: "bypass permissions on",
+        },
     }
 }
 

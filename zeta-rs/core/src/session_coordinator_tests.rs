@@ -176,6 +176,65 @@ fn model_selection_is_durable_and_isolated_per_session() {
 }
 
 #[test]
+fn next_approval_mode_is_durable_and_is_frozen_by_each_new_turn() {
+    let coordinator = coordinator();
+    let session = create_session(&coordinator);
+    let thread = coordinator
+        .create_thread(CreateSessionThreadRequest {
+            command_id: CommandId::new("create-thread").unwrap(),
+            session_id: session.session_id.clone(),
+            expected_sequence: SequenceExpectation::Exact(session.sequence),
+            title: "root".into(),
+        })
+        .unwrap();
+
+    coordinator
+        .set_next_approval_mode(SetSessionNextApprovalModeRequest {
+            command_id: CommandId::new("set-next-approval-mode").unwrap(),
+            session_id: session.session_id.clone(),
+            expected_sequence: SequenceExpectation::Exact(thread.sequence),
+            approval_mode: zeta_protocol::ApprovalMode::BypassPermissions,
+        })
+        .unwrap();
+    let started = coordinator
+        .start_turn(
+            &session.session_id,
+            &thread.thread_id,
+            StartSessionTurnRequest {
+                command_id: CommandId::new("start-turn").unwrap(),
+                expected_sequence: SequenceExpectation::Exact(1),
+                model: None,
+                policy_revision: "test-policy-v1".into(),
+                tool_mode: zeta_protocol::ToolMode::Direct,
+                tool_profile: None,
+                activated_skills: Vec::new(),
+                input: vec![zeta_protocol::UserInput::Text {
+                    text: "hello".into(),
+                }],
+            },
+        )
+        .unwrap();
+
+    let session = coordinator.read_session(&session.session_id).unwrap();
+    let turn = coordinator
+        .threads()
+        .read_thread(&thread.thread_id)
+        .unwrap()
+        .turns
+        .into_iter()
+        .find(|turn| turn.turn_id == started.turn_id)
+        .unwrap();
+    assert_eq!(
+        session.next_approval_mode,
+        zeta_protocol::ApprovalMode::BypassPermissions
+    );
+    assert_eq!(
+        turn.approval_mode,
+        zeta_protocol::ApprovalMode::BypassPermissions
+    );
+}
+
+#[test]
 fn fork_captures_the_parent_sequence_in_session_lineage() {
     let coordinator = coordinator();
     let session = create_session(&coordinator);
