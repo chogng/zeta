@@ -2,10 +2,11 @@ use crate::SemanticCodeIndexAutomaticContext;
 use crate::SemanticCodeIndexSelection;
 use crate::ToolSearchConfig;
 use crate::{
-    ApprovalReviewModelSelection, ConfigGeneration, ConfigRevision, HookConfig, HookEnablement,
-    HookId, LanguageServerConfig, LanguageServerId, McpServerConfig, McpServerEnablement,
-    McpServerId, ModelRef, PluginId, PluginRequest, PluginRequestEnablement, SkillEnablement,
-    SkillId, SkillSourceConfig, SkillSourceEnablement, SkillSourceId, WorkspaceTrustSetting,
+    AgentGrepBackend, ApprovalReviewModelSelection, ConfigGeneration, ConfigRevision, HookConfig,
+    HookEnablement, HookId, LanguageServerConfig, LanguageServerId, McpServerConfig,
+    McpServerEnablement, McpServerId, ModelRef, PluginId, PluginRequest, PluginRequestEnablement,
+    SkillEnablement, SkillId, SkillSourceConfig, SkillSourceEnablement, SkillSourceId,
+    WorkspaceTrustSetting,
 };
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -28,6 +29,8 @@ pub struct PreferencesUpdate {
     pub approval_review_model: Patch<ApprovalReviewModelSelection>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub tool_mode: Patch<ToolMode>,
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    pub grep_backend: Patch<AgentGrepBackend>,
 }
 
 /// Typed mutations accepted by the user configuration authority.

@@ -734,6 +734,14 @@
       ],
       "type": "string"
     },
+    "AgentGrepBackendDto": {
+      "description": "Selects the implementation behind the Agent-only `grep` Tool.",
+      "enum": [
+        "ripgrep",
+        "fastRegex"
+      ],
+      "type": "string"
+    },
     "AgentInteractionCapability": {
       "description": "Agent interaction kinds that one client connection can present and resolve.\n\nApp Server uses this declaration only for ephemeral owner selection. It never persists the\nconnection capability in Session or Thread state, and clients must still subscribe to the\ntarget Thread before they can become an interaction owner.",
       "properties": {
@@ -9062,6 +9070,9 @@
     "ConfigReadResult": {
       "description": "Current user configuration snapshot returned by `config/read`.",
       "properties": {
+        "agentGrepBackend": {
+          "$ref": "#/$defs/AgentGrepBackendDto"
+        },
         "approvalReviewModel": {
           "$ref": "#/$defs/ApprovalReviewModelSelectionDto"
         },
@@ -9142,6 +9153,7 @@
         "generation",
         "approvalReviewModel",
         "toolMode",
+        "agentGrepBackend",
         "providers",
         "mcpServers",
         "skillSources",
@@ -9157,6 +9169,16 @@
     "ConfigUpdateParams": {
       "description": "Patch for user preferences at one expected Config revision.",
       "properties": {
+        "agentGrepBackend": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentGrepBackendDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "approvalReviewModel": {
           "anyOf": [
             {

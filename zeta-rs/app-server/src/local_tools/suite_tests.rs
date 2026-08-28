@@ -61,7 +61,12 @@ fn additional_root_resolution_is_bound_to_the_exact_session_and_lease() {
         ActionPolicyRevision::new("test-policy-v1"),
     )
     .unwrap();
-    let suite = LocalToolSuite::new(shell, ripgrep, Arc::clone(&access));
+    let agent_grep = Arc::new(AgentGrepService::new(
+        zeta_config::AgentGrepBackend::Ripgrep,
+        ripgrep.clone(),
+        None,
+    ));
+    let suite = LocalToolSuite::new(shell, ripgrep, agent_grep, Arc::clone(&access));
 
     let resolved = suite
         .resolve(

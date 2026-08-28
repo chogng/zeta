@@ -1,8 +1,8 @@
 use super::*;
 use crate::protocol::config::ExecPolicyRuleUpsertParams;
 use crate::protocol::config::{
-    ApprovalReviewModelSelectionDto, ConfigUpdateParams, McpServerUpsertParams,
-    SkillSourceAddParams,
+    AgentGrepBackendDto, ApprovalReviewModelSelectionDto, ConfigUpdateParams,
+    McpServerUpsertParams, SkillSourceAddParams,
 };
 use crate::protocol::fs::FsChanged;
 use crate::protocol::registry::{CLIENT_METHODS, HOST_METHODS, SERVER_NOTIFICATIONS};
@@ -521,7 +521,8 @@ fn config_patch_fixture_round_trips_the_provider_scoped_model() {
                 "provider": "openai",
                 "model": "codex-auto-review"
             }
-        }
+        },
+        "agentGrepBackend": "fastRegex"
     });
     let params: ConfigUpdateParams = serde_json::from_value(fixture.clone()).unwrap();
 
@@ -535,6 +536,10 @@ fn config_patch_fixture_round_trips_the_provider_scoped_model() {
             if model.model == "codex-auto-review"
     ));
     assert_eq!(params.expected_revision, 4);
+    assert_eq!(
+        params.agent_grep_backend,
+        Patch::Value(AgentGrepBackendDto::FastRegex)
+    );
     assert_eq!(serde_json::to_value(params).unwrap(), fixture);
 }
 
@@ -549,15 +554,18 @@ fn config_patch_distinguishes_missing_null_and_value() {
         "commandId": "null",
         "expectedRevision": 3,
         "preferredModel": null,
-        "approvalReviewModel": null
+        "approvalReviewModel": null,
+        "agentGrepBackend": null
     }))
     .unwrap();
 
     assert_eq!(missing.preferred_model, Patch::Missing);
     assert_eq!(missing.approval_review_model, Patch::Missing);
+    assert_eq!(missing.agent_grep_backend, Patch::Missing);
     assert_eq!(missing.expected_revision, 0);
     assert_eq!(null.preferred_model, Patch::Null);
     assert_eq!(null.approval_review_model, Patch::Null);
+    assert_eq!(null.agent_grep_backend, Patch::Null);
     assert_eq!(
         serde_json::to_value(missing).unwrap(),
         serde_json::json!({"commandId": "missing", "expectedRevision": 0})
@@ -568,7 +576,8 @@ fn config_patch_distinguishes_missing_null_and_value() {
             "commandId": "null",
             "expectedRevision": 3,
             "preferredModel": null,
-            "approvalReviewModel": null
+            "approvalReviewModel": null,
+            "agentGrepBackend": null
         })
     );
 }

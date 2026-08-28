@@ -683,6 +683,7 @@ fn select_model(
                 preferred_model: Patch::Value(model_ref(model)),
                 approval_review_model: Patch::Missing,
                 tool_mode: Patch::Missing,
+                grep_backend: Patch::Missing,
             }),
         })
         .unwrap()

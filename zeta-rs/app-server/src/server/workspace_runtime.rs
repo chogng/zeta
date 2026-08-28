@@ -14,7 +14,8 @@ use crate::code_retrieval_context::CodeRetrievalContextSource;
 use crate::code_retrieval_tool::CodeRetrievalTool;
 use crate::dynamic_tools::DynamicToolCompositionError;
 use crate::dynamic_tools::compose_dynamic_tools;
-use crate::local_tools::LocalExecPolicyConfig;
+use crate::local_tools::AgentGrepService;
+use crate::local_tools::LocalToolConfig;
 use crate::local_tools::append_local_tool;
 use crate::local_tools::compose_local_tools_with_config;
 use crate::review::ApprovalModeActionPolicyService;
@@ -88,6 +89,7 @@ pub(super) struct WorkspaceRuntime {
     pub(super) session_additional_directory_search:
         BTreeMap<(SessionId, PathBuf), Arc<SearchService>>,
     pub(super) ripgrep: Option<RipgrepExecutable>,
+    pub(super) agent_grep: Option<Arc<AgentGrepService>>,
     pub(super) code_index: Option<Arc<CodeIndexRuntime>>,
     pub(super) symbol_index: Option<Arc<SymbolIndexRuntime>>,
     pub(super) code_index_semantic: Option<Arc<CodeIndexSemanticService>>,
@@ -135,6 +137,7 @@ impl WorkspaceRuntime {
             folder_workspace_search: BTreeMap::new(),
             session_additional_directory_search: BTreeMap::new(),
             ripgrep: None,
+            agent_grep: None,
             code_index: None,
             symbol_index: None,
             code_index_semantic: None,
@@ -183,7 +186,8 @@ pub(crate) struct WorkspaceRuntimeControl {
     hooks: Arc<DeclarativeHookRuntime>,
     mcp_status: Arc<RwLock<zeta_mcp_extension::McpRuntimeStatusSnapshot>>,
     config: Option<Arc<ConfigStore>>,
-    exec_policy_config: Arc<RwLock<LocalExecPolicyConfig>>,
+    local_tool_config: Arc<RwLock<LocalToolConfig>>,
+    fast_regex_search_storage_root: Option<PathBuf>,
     code_index_semantic_storage_root: Option<PathBuf>,
     code_index_semantic_models: Option<CodeIndexSemanticModels>,
     semantic_model_provider: Option<Arc<dyn SemanticModelProvider>>,
@@ -191,14 +195,14 @@ pub(crate) struct WorkspaceRuntimeControl {
 }
 
 impl WorkspaceRuntimeControl {
-    pub(crate) fn reconcile_exec_policy_config(
+    pub(crate) fn reconcile_local_tool_config(
         &self,
         config: &zeta_config::ResolvedConfig,
     ) -> Result<(), WorkspaceRuntimeError> {
         let _authority = self.authority_gate.lock().map_err(|_| {
             WorkspaceRuntimeError::Failed("Workspace authority gate poisoned".into())
         })?;
-        let policy_config = LocalExecPolicyConfig::from_resolved(config);
+        let local_tool_config = LocalToolConfig::from_resolved(config);
         let (
             authorization,
             code_index,
@@ -207,6 +211,7 @@ impl WorkspaceRuntimeControl {
             cloud,
             customizations,
             session_workspace_access,
+            agent_grep,
         ) = {
             let runtime = self
                 .runtime
@@ -220,20 +225,21 @@ impl WorkspaceRuntimeControl {
                 runtime.cloud_code_index.clone(),
                 runtime._customizations.clone(),
                 Arc::clone(&runtime.session_workspace_access),
+                runtime.agent_grep.clone(),
             )
         };
         let Some(authorization) = authorization else {
             *self
-                .exec_policy_config
+                .local_tool_config
                 .write()
-                .unwrap_or_else(|poisoned| poisoned.into_inner()) = policy_config;
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = local_tool_config;
             return Ok(());
         };
         if authorization.decision() == WorkspaceTrustDecision::Restricted {
             *self
-                .exec_policy_config
+                .local_tool_config
                 .write()
-                .unwrap_or_else(|poisoned| poisoned.into_inner()) = policy_config;
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = local_tool_config;
             return Ok(());
         }
         let execution = authorization
@@ -241,8 +247,10 @@ impl WorkspaceRuntimeControl {
             .map_err(|_| WorkspaceRuntimeError::TrustRequired)?;
         let mut local = compose_local_tools_with_config(
             execution.clone(),
-            &policy_config,
+            &local_tool_config,
             session_workspace_access,
+            agent_grep,
+            self.fast_regex_search_storage_root.as_deref(),
         )
         .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
         if let Some(code_index) = code_index {
@@ -268,14 +276,19 @@ impl WorkspaceRuntimeControl {
             &self.turn_backend,
             customizations.as_ref(),
         );
+        let agent_grep = Arc::clone(&local.agent_grep);
         let local_port = local
             .tool_port()
             .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
         self.tools.replace_local(Some(local_port))?;
-        *self
-            .exec_policy_config
+        self.runtime
             .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = policy_config;
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .agent_grep = Some(agent_grep);
+        *self
+            .local_tool_config
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = local_tool_config;
         Ok(())
     }
 
@@ -387,8 +400,8 @@ impl WorkspaceRuntimeControl {
         let execution = authorization
             .require(WorkspaceCapability::ExecuteProcess)
             .map_err(|_| WorkspaceRuntimeError::TrustRequired)?;
-        let policy_config = self
-            .exec_policy_config
+        let local_tool_config = self
+            .local_tool_config
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clone();
@@ -400,8 +413,14 @@ impl WorkspaceRuntimeControl {
             .clone();
         let local = compose_local_tools_with_config(
             execution.clone(),
-            &policy_config,
+            &local_tool_config,
             session_workspace_access,
+            self.runtime
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .agent_grep
+                .clone(),
+            self.fast_regex_search_storage_root.as_deref(),
         )
         .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
         let action_policy_revision = local.action_policy_revision().clone();
@@ -433,6 +452,7 @@ impl WorkspaceRuntimeControl {
             Arc::clone(&symbol_index),
             semantic_job.clone(),
             customizations,
+            Some(Arc::clone(&local.agent_grep)),
         )
         .map_err(|error| {
             WorkspaceRuntimeError::Failed(format!(
@@ -557,6 +577,7 @@ impl WorkspaceRuntimeControl {
                     symbol_index,
                     None,
                     customizations,
+                    None,
                 ) {
                     Ok(watcher) => (Some(watcher), None),
                     Err(error) => (None, Some(error)),
@@ -1118,9 +1139,9 @@ impl AppServer {
         Ok(self)
     }
 
-    pub(crate) fn with_local_exec_policy_config(self, config: LocalExecPolicyConfig) -> Self {
+    pub(crate) fn with_local_tool_config(self, config: LocalToolConfig) -> Self {
         *self
-            .local_exec_policy_config
+            .local_tool_config
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = config;
         self
@@ -1147,7 +1168,8 @@ impl AppServer {
                 hooks: Arc::clone(&host.hooks),
                 mcp_status: Arc::clone(&self.mcp_status),
                 config: self.config.clone(),
-                exec_policy_config: Arc::clone(&self.local_exec_policy_config),
+                local_tool_config: Arc::clone(&self.local_tool_config),
+                fast_regex_search_storage_root: self.fast_regex_search_storage_root.clone(),
                 code_index_semantic_storage_root: self.code_index_semantic_storage_root.clone(),
                 code_index_semantic_models: self.code_index_semantic_models.clone(),
                 semantic_model_provider: self.semantic_model_provider.clone(),
@@ -1278,6 +1300,20 @@ impl AppServer {
                 (id.clone(), file_system)
             })
             .collect::<BTreeMap<_, _>>();
+        self.activate_local_workspace(primary.clone(), host)?;
+        let (ripgrep, agent_grep, primary_search, primary_terminals, primary_debug_adapters) = {
+            let runtime = self
+                .workspace_runtime
+                .read()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            (
+                runtime.ripgrep.clone(),
+                runtime.agent_grep.clone(),
+                runtime.workspace_search.clone(),
+                runtime.terminals.clone(),
+                runtime.debug_adapters.clone(),
+            )
+        };
         let folder_file_system_watchers = folders
             .iter()
             .skip(1)
@@ -1286,6 +1322,7 @@ impl AppServer {
                     authorization.root().clone(),
                     Arc::clone(&self.updates),
                     id.clone(),
+                    agent_grep.clone(),
                 )
                 .map_err(|error| {
                     WorkspaceRuntimeError::Failed(format!(
@@ -1294,19 +1331,6 @@ impl AppServer {
                 })
             })
             .collect::<Result<Vec<_>, _>>()?;
-        self.activate_local_workspace(primary.clone(), host)?;
-        let (ripgrep, primary_search, primary_terminals, primary_debug_adapters) = {
-            let runtime = self
-                .workspace_runtime
-                .read()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            (
-                runtime.ripgrep.clone(),
-                runtime.workspace_search.clone(),
-                runtime.terminals.clone(),
-                runtime.debug_adapters.clone(),
-            )
-        };
         let folder_workspace_search = folders
             .iter()
             .enumerate()
@@ -1655,6 +1679,7 @@ impl AppServer {
                     .flatten()
                     .is_some()
             });
+        let agent_grep = runtime.agent_grep.clone();
         let Some(customizations) = customizations else {
             return Ok(());
         };
@@ -1669,6 +1694,7 @@ impl AppServer {
                 Arc::clone(&self.updates),
                 session_id.clone(),
                 customizations.clone(),
+                agent_grep.clone(),
             )
             .map_err(|error| {
                 WorkspaceRuntimeError::Failed(format!(
@@ -1737,8 +1763,8 @@ impl AppServer {
             let execution = authorization
                 .require(WorkspaceCapability::ExecuteProcess)
                 .map_err(|_| WorkspaceRuntimeError::TrustRequired)?;
-            let policy_config = self
-                .local_exec_policy_config
+            let local_tool_config = self
+                .local_tool_config
                 .read()
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .clone();
@@ -1750,8 +1776,10 @@ impl AppServer {
                 .clone();
             let local = compose_local_tools_with_config(
                 execution,
-                &policy_config,
+                &local_tool_config,
                 session_workspace_access,
+                None,
+                self.fast_regex_search_storage_root.as_deref(),
             )
             .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
             self.commit_trusted_workspace_runtime(authorization, local, host)
@@ -1806,6 +1834,7 @@ impl AppServer {
             Arc::clone(&symbol_index),
             None,
             customizations.clone(),
+            None,
         )
         .map_err(|error| {
             WorkspaceRuntimeError::Failed(format!(
@@ -1838,6 +1867,7 @@ impl AppServer {
             folder_workspace_search: BTreeMap::new(),
             session_additional_directory_search: BTreeMap::new(),
             ripgrep: None,
+            agent_grep: None,
             code_index: Some(code_index),
             symbol_index: Some(symbol_index),
             code_index_semantic: None,
@@ -1901,6 +1931,7 @@ impl AppServer {
             GitRuntime::new(repository_mutation, Arc::clone(&self.updates)).map_err(|_| {
                 WorkspaceRuntimeError::Failed("failed to initialize Git runtime".into())
             })?;
+        let agent_grep = Arc::clone(&local.agent_grep);
         let file_system_watcher = FileSystemWatcher::start_with_observers(
             workspace.clone(),
             Arc::clone(&self.updates),
@@ -1908,6 +1939,7 @@ impl AppServer {
             Arc::clone(&symbol_index),
             code_index_semantic_job.clone(),
             customizations.clone(),
+            Some(Arc::clone(&agent_grep)),
         )
         .map_err(|error| {
             WorkspaceRuntimeError::Failed(format!(
@@ -2031,6 +2063,7 @@ impl AppServer {
             folder_workspace_search: BTreeMap::new(),
             session_additional_directory_search: BTreeMap::new(),
             ripgrep: Some(ripgrep),
+            agent_grep: Some(agent_grep),
             code_index: Some(code_index),
             symbol_index: Some(symbol_index),
             code_index_semantic,

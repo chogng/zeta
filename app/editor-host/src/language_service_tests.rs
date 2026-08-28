@@ -2,10 +2,10 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use zeta_app_server_protocol::protocol::config::{
-    ApprovalReviewModelSelectionDto, ConfigReadResult, LanguageServerConfigDto,
-    LanguageServerModeDto, SemanticCodeIndexAutomaticContextDto, SemanticCodeIndexConfigDto,
-    SemanticCodeIndexSelectionDto, ToolSearchConfigDto, ToolSearchEmbeddingStatusDto,
-    ToolSearchModeDto,
+    AgentGrepBackendDto, ApprovalReviewModelSelectionDto, ConfigReadResult,
+    LanguageServerConfigDto, LanguageServerModeDto, SemanticCodeIndexAutomaticContextDto,
+    SemanticCodeIndexConfigDto, SemanticCodeIndexSelectionDto, ToolSearchConfigDto,
+    ToolSearchEmbeddingStatusDto, ToolSearchModeDto,
 };
 use zeta_lsp_server_provider::{LanguageServerCatalogState, LanguageServerExecutionPolicy};
 use zeta_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSnapshot};
@@ -52,6 +52,7 @@ fn desktop_configuration_maps_persisted_mode_into_catalog_policy() {
         preferred_model: None,
         approval_review_model: ApprovalReviewModelSelectionDto::Automatic,
         tool_mode: Default::default(),
+        agent_grep_backend: AgentGrepBackendDto::Ripgrep,
         providers: BTreeMap::new(),
         mcp_servers: BTreeMap::new(),
         skill_sources: BTreeMap::new(),
@@ -95,6 +96,7 @@ fn desktop_configuration_does_not_start_unconfigured_language_servers() {
         preferred_model: None,
         approval_review_model: ApprovalReviewModelSelectionDto::Automatic,
         tool_mode: Default::default(),
+        agent_grep_backend: AgentGrepBackendDto::Ripgrep,
         providers: BTreeMap::new(),
         mcp_servers: BTreeMap::new(),
         skill_sources: BTreeMap::new(),

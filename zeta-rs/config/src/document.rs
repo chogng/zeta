@@ -90,6 +90,15 @@ impl ConfigGeneration {
     }
 }
 
+/// Selects the implementation behind the Agent-only `grep` Tool.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AgentGrepBackend {
+    #[default]
+    Ripgrep,
+    FastRegex,
+}
+
 /// Agent defaults that may be resolved into future model invocations.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -100,6 +109,8 @@ pub struct AgentConfig {
     pub approval_review_model: ApprovalReviewModelSelection,
     #[serde(default)]
     pub tool_mode: zeta_protocol::ToolMode,
+    #[serde(default)]
+    pub grep_backend: AgentGrepBackend,
 }
 
 /// Durable, non-secret user intent for ordinary Zeta configuration.
@@ -218,6 +229,7 @@ pub struct ResolvedConfig {
     pub preferred_model: Option<ModelRef>,
     pub approval_review_model: ApprovalReviewModelSelection,
     pub tool_mode: zeta_protocol::ToolMode,
+    pub agent_grep_backend: AgentGrepBackend,
     pub providers: BTreeMap<ProviderId, ModelProviderConfig>,
     pub mcp: McpConfig,
     pub skills: SkillsConfig,
@@ -293,6 +305,7 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             preferred_model: document.agent.preferred_model.clone(),
             approval_review_model: document.agent.approval_review_model.clone(),
             tool_mode: document.agent.tool_mode,
+            agent_grep_backend: document.agent.grep_backend,
             providers: document.providers.clone(),
             mcp: document.mcp.clone(),
             skills: document.skills.clone(),

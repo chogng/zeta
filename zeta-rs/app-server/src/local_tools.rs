@@ -13,6 +13,7 @@ use zeta_action_policy::{
 use zeta_apply_patch::ApplyPatchLimits;
 use zeta_apply_patch::ApplyPatchTool;
 use zeta_async_utils::CancellationToken;
+use zeta_config::AgentGrepBackend;
 use zeta_config::ResolvedConfig;
 use zeta_config::UserExecPolicyConfig;
 use zeta_config::WorkspaceExecPolicyConfig;
@@ -48,8 +49,10 @@ use crate::tool_composition::ToolPort;
 use crate::tool_executor_adapter::PreparedToolExecution;
 use crate::tool_executor_adapter::ToolExecutorReviewer;
 
+mod agent_grep;
 mod suite;
 
+pub(crate) use agent_grep::AgentGrepService;
 pub(crate) use suite::LocalToolSuite;
 
 const LOCAL_GRANT_SNAPSHOT_REVISION: &str = "local-static-grants-v1";
@@ -61,18 +64,20 @@ pub(crate) struct LocalToolComposition {
     pub(crate) tools: Arc<dyn ToolService>,
     pub(crate) policy: Arc<dyn ActionPolicyService>,
     pub(crate) ripgrep: RipgrepExecutable,
+    pub(crate) agent_grep: Arc<AgentGrepService>,
     action_policy_revision: ActionPolicyRevision,
     executors: Vec<LocalExecutorContribution>,
 }
 
-/// Durable configuration inputs used to compose one immutable local execution-policy snapshot.
+/// Durable configuration inputs used to compose the local Agent Tool suite.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub(crate) struct LocalExecPolicyConfig {
+pub(crate) struct LocalToolConfig {
     user: UserExecPolicyConfig,
     workspace: Option<(WorkspaceId, WorkspaceExecPolicyConfig)>,
+    agent_grep_backend: AgentGrepBackend,
 }
 
-impl LocalExecPolicyConfig {
+impl LocalToolConfig {
     pub(crate) fn from_resolved(config: &ResolvedConfig) -> Self {
         Self {
             user: config.exec_policy.clone(),
@@ -82,6 +87,7 @@ impl LocalExecPolicyConfig {
                     workspace.exec_policy.clone(),
                 )
             }),
+            agent_grep_backend: config.agent_grep_backend,
         }
     }
 
@@ -106,8 +112,10 @@ struct LocalExecutorContribution {
 
 pub(crate) fn compose_local_tools_with_config(
     workspace: TrustedWorkspace,
-    policy_config: &LocalExecPolicyConfig,
+    config: &LocalToolConfig,
     session_workspace_access: Arc<SessionWorkspaceAccess>,
+    existing_agent_grep: Option<Arc<AgentGrepService>>,
+    fast_regex_storage_root: Option<&Path>,
 ) -> Result<LocalToolComposition, LocalToolError> {
     if workspace.capability() != WorkspaceCapability::ExecuteProcess {
         return Err(LocalToolError::trust(
@@ -118,7 +126,7 @@ pub(crate) fn compose_local_tools_with_config(
     let ripgrep = resolve_ripgrep(&install_context).map_err(LocalToolError::ripgrep)?;
     let environment_id = zeta_tools::ToolEnvironmentId::new("local-workspace")
         .map_err(LocalToolError::definition)?;
-    let exec_policy = policy_config.snapshot()?;
+    let exec_policy = config.snapshot()?;
     let action_policy_revision = ActionPolicyRevision::from_components(
         exec_policy.revision(),
         LOCAL_GRANT_SNAPSHOT_REVISION,
@@ -161,11 +169,25 @@ pub(crate) fn compose_local_tools_with_config(
         native_sandbox(&install_context)?,
         action_policy_revision.clone(),
     )?;
-    let service = LocalToolSuite::new(shell, ripgrep.clone(), session_workspace_access);
+    let agent_grep = Arc::new(match existing_agent_grep {
+        Some(existing) => existing.reconfigured(config.agent_grep_backend, ripgrep.clone()),
+        None => AgentGrepService::new(
+            config.agent_grep_backend,
+            ripgrep.clone(),
+            fast_regex_storage_root.map(Path::to_path_buf),
+        ),
+    });
+    let service = LocalToolSuite::new(
+        shell,
+        ripgrep.clone(),
+        Arc::clone(&agent_grep),
+        session_workspace_access,
+    );
     Ok(LocalToolComposition {
         tools: Arc::new(service),
         policy: Arc::new(policy),
         ripgrep,
+        agent_grep,
         action_policy_revision,
         executors: vec![
             LocalExecutorContribution {
@@ -189,10 +211,16 @@ impl LocalToolComposition {
         policy: Arc<dyn ActionPolicyService>,
         ripgrep: RipgrepExecutable,
     ) -> Self {
+        let agent_grep = Arc::new(AgentGrepService::new(
+            AgentGrepBackend::Ripgrep,
+            ripgrep.clone(),
+            None,
+        ));
         Self {
             tools,
             policy,
             ripgrep,
+            agent_grep,
             action_policy_revision: local_policy_revision(),
             executors: Vec::new(),
         }
@@ -235,6 +263,7 @@ pub(crate) fn append_local_tool(
         }),
         policy: composition.policy,
         ripgrep: composition.ripgrep,
+        agent_grep: composition.agent_grep,
         action_policy_revision: composition.action_policy_revision,
         executors: composition.executors,
     }
@@ -978,7 +1007,7 @@ struct LocalShellPolicy {
 
 impl Default for LocalShellPolicy {
     fn default() -> Self {
-        let exec_policy = LocalExecPolicyConfig::default()
+        let exec_policy = LocalToolConfig::default()
             .snapshot()
             .expect("static local execution policy is valid");
         Self {
@@ -1089,7 +1118,7 @@ static LOCAL_EXEC_POLICY_HOST_LAYER: LazyLock<ExecPolicyLayer> = LazyLock::new(|
 });
 
 static LOCAL_ACTION_POLICY_REVISION: LazyLock<ActionPolicyRevision> = LazyLock::new(|| {
-    let exec_policy = LocalExecPolicyConfig::default()
+    let exec_policy = LocalToolConfig::default()
         .snapshot()
         .expect("static local execution policy is valid");
     ActionPolicyRevision::from_components(

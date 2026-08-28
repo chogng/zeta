@@ -2,6 +2,7 @@ use super::code_index_runtime::CodeIndexRuntime;
 use super::semantic_index_job::SemanticIndexJobController;
 use super::symbol_index_runtime::SymbolIndexRuntime;
 use super::update_broker::UpdateBroker;
+use crate::local_tools::AgentGrepService;
 use std::collections::BTreeSet;
 use std::fmt;
 use std::path::PathBuf;
@@ -46,23 +47,28 @@ enum FileSystemWatcherObservers {
         symbol_index: Arc<SymbolIndexRuntime>,
         code_index_semantic: Option<Arc<SemanticIndexJobController>>,
         changes: Arc<dyn WorkspaceFileChangeSink>,
+        agent_grep: Option<Arc<AgentGrepService>>,
+    },
+    WorkspaceFolder {
+        agent_grep: Option<Arc<AgentGrepService>>,
     },
     SessionDirectory {
         session_id: SessionId,
         root: PathBuf,
         changes: Arc<dyn SessionDirectoryFileChangeSink>,
+        agent_grep: Option<Arc<AgentGrepService>>,
     },
 }
 
 #[derive(Default)]
-enum PendingCodeIndexRefresh {
+enum PendingIndexRefresh {
     #[default]
     None,
     Paths(BTreeSet<PathBuf>),
     Rebuild,
 }
 
-impl PendingCodeIndexRefresh {
+impl PendingIndexRefresh {
     fn merge(&mut self, event: FileWatcherEvent) {
         match event {
             FileWatcherEvent::RescanRequired { .. } => *self = Self::Rebuild,
@@ -88,7 +94,7 @@ impl PendingCodeIndexRefresh {
 }
 
 struct CodeIndexRefreshWorker {
-    pending: Arc<Mutex<PendingCodeIndexRefresh>>,
+    pending: Arc<Mutex<PendingIndexRefresh>>,
     wake: Option<SyncSender<()>>,
     thread: Option<JoinHandle<()>>,
 }
@@ -99,7 +105,7 @@ impl CodeIndexRefreshWorker {
         symbol_index: Arc<SymbolIndexRuntime>,
         semantic: Option<Arc<SemanticIndexJobController>>,
     ) -> Result<Self, String> {
-        let pending = Arc::new(Mutex::new(PendingCodeIndexRefresh::None));
+        let pending = Arc::new(Mutex::new(PendingIndexRefresh::None));
         let (wake, receiver) = std::sync::mpsc::sync_channel(1);
         let worker_runtime = Arc::clone(&runtime);
         let worker_pending = Arc::clone(&pending);
@@ -175,6 +181,63 @@ impl Drop for CodeIndexRefreshWorker {
     }
 }
 
+struct AgentGrepRefreshWorker {
+    pending: Arc<Mutex<PendingIndexRefresh>>,
+    wake: Option<SyncSender<()>>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl AgentGrepRefreshWorker {
+    fn start(service: Arc<AgentGrepService>, workspace: WorkspaceRoot) -> Result<Self, String> {
+        let pending = Arc::new(Mutex::new(PendingIndexRefresh::None));
+        let (wake, receiver) = std::sync::mpsc::sync_channel(1);
+        let worker_pending = Arc::clone(&pending);
+        let thread = std::thread::Builder::new()
+            .name("zeta-agent-grep-refresh".into())
+            .spawn(move || {
+                while receiver.recv().is_ok() {
+                    let event = worker_pending
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .take_event();
+                    if let Some(event) = event {
+                        service.apply_watcher_event(&workspace, &event);
+                    }
+                }
+            })
+            .map_err(|error| format!("failed to initialize Agent grep refresh worker: {error}"))?;
+        Ok(Self {
+            pending,
+            wake: Some(wake),
+            thread: Some(thread),
+        })
+    }
+
+    fn schedule(&self, event: FileWatcherEvent) {
+        self.pending
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .merge(event);
+        if let Some(wake) = &self.wake {
+            match wake.try_send(()) {
+                Ok(()) | Err(std::sync::mpsc::TrySendError::Full(())) => {}
+                Err(std::sync::mpsc::TrySendError::Disconnected(())) => {
+                    log::warn!("Agent grep refresh worker stopped unexpectedly");
+                }
+            }
+        }
+    }
+}
+
+impl Drop for AgentGrepRefreshWorker {
+    fn drop(&mut self) {
+        self.wake.take();
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
+
 #[derive(Default)]
 pub(super) struct FileSystemWatcher {
     shutdown: Option<tokio::sync::oneshot::Sender<()>>,
@@ -193,12 +256,13 @@ impl FileSystemWatcher {
         workspace: WorkspaceRoot,
         updates: Arc<UpdateBroker>,
         workspace_folder_id: String,
+        agent_grep: Option<Arc<AgentGrepService>>,
     ) -> Result<Self, FileSystemWatcherError> {
         Self::start_inner(
             workspace,
             updates,
             Some(workspace_folder_id),
-            FileSystemWatcherObservers::None,
+            FileSystemWatcherObservers::WorkspaceFolder { agent_grep },
         )
     }
 
@@ -209,6 +273,7 @@ impl FileSystemWatcher {
         symbol_index: Arc<SymbolIndexRuntime>,
         code_index_semantic: Option<Arc<SemanticIndexJobController>>,
         changes: Arc<dyn WorkspaceFileChangeSink>,
+        agent_grep: Option<Arc<AgentGrepService>>,
     ) -> Result<Self, FileSystemWatcherError> {
         Self::start_inner(
             workspace,
@@ -219,6 +284,7 @@ impl FileSystemWatcher {
                 symbol_index,
                 code_index_semantic,
                 changes,
+                agent_grep,
             },
         )
     }
@@ -228,6 +294,7 @@ impl FileSystemWatcher {
         updates: Arc<UpdateBroker>,
         session_id: SessionId,
         changes: Arc<dyn SessionDirectoryFileChangeSink>,
+        agent_grep: Option<Arc<AgentGrepService>>,
     ) -> Result<Self, FileSystemWatcherError> {
         let root = workspace.canonical_path().to_path_buf();
         Self::start_inner(
@@ -238,6 +305,7 @@ impl FileSystemWatcher {
                 session_id,
                 root,
                 changes,
+                agent_grep,
             },
         )
     }
@@ -315,27 +383,40 @@ fn watch_workspace(
     mut shutdown: tokio::sync::oneshot::Receiver<()>,
     startup: std::sync::mpsc::SyncSender<Result<(), String>>,
 ) {
-    let (code_index, symbol_index, code_index_semantic, changes, session_changes) = match observers
-    {
-        FileSystemWatcherObservers::None => (None, None, None, None, None),
-        FileSystemWatcherObservers::WorkspaceRuntime {
-            code_index,
-            symbol_index,
-            code_index_semantic,
-            changes,
-        } => (
-            Some(code_index),
-            Some(symbol_index),
-            code_index_semantic,
-            Some(changes),
-            None,
-        ),
-        FileSystemWatcherObservers::SessionDirectory {
-            session_id,
-            root,
-            changes,
-        } => (None, None, None, None, Some((session_id, root, changes))),
-    };
+    let (code_index, symbol_index, code_index_semantic, changes, session_changes, agent_grep) =
+        match observers {
+            FileSystemWatcherObservers::None => (None, None, None, None, None, None),
+            FileSystemWatcherObservers::WorkspaceFolder { agent_grep } => {
+                (None, None, None, None, None, agent_grep)
+            }
+            FileSystemWatcherObservers::WorkspaceRuntime {
+                code_index,
+                symbol_index,
+                code_index_semantic,
+                changes,
+                agent_grep,
+            } => (
+                Some(code_index),
+                Some(symbol_index),
+                code_index_semantic,
+                Some(changes),
+                None,
+                agent_grep,
+            ),
+            FileSystemWatcherObservers::SessionDirectory {
+                session_id,
+                root,
+                changes,
+                agent_grep,
+            } => (
+                None,
+                None,
+                None,
+                None,
+                Some((session_id, root, changes)),
+                agent_grep,
+            ),
+        };
     let Ok(tokio_runtime) = tokio::runtime::Builder::new_current_thread()
         .enable_time()
         .build()
@@ -393,6 +474,18 @@ fn watch_workspace(
                 return;
             }
         };
+        let mut agent_grep_worker = match agent_grep.as_ref() {
+            Some(agent_grep) if agent_grep.watches_fast_regex() => {
+                match AgentGrepRefreshWorker::start(Arc::clone(agent_grep), workspace.clone()) {
+                    Ok(worker) => Some(worker),
+                    Err(error) => {
+                        let _ = startup.send(Err(error));
+                        return;
+                    }
+                }
+            }
+            Some(_) | None => None,
+        };
         if startup.send(Ok(())).is_err() {
             return;
         }
@@ -415,6 +508,11 @@ fn watch_workspace(
                 watched_paths: vec![workspace.canonical_path().to_path_buf()],
             });
         }
+        if let Some(agent_grep_worker) = &agent_grep_worker {
+            agent_grep_worker.schedule(FileWatcherEvent::RescanRequired {
+                watched_paths: vec![workspace.canonical_path().to_path_buf()],
+            });
+        }
         let mut receiver = DebouncedWatchReceiver::new(receiver, FILE_SYSTEM_WATCH_DEBOUNCE);
         loop {
             tokio::select! {
@@ -425,6 +523,24 @@ fn watch_workspace(
                     };
                     if let Some(code_index_worker) = &code_index_worker {
                         code_index_worker.schedule(event.clone());
+                    }
+                    if agent_grep_worker.is_none()
+                        && let Some(agent_grep) = &agent_grep
+                        && agent_grep.watches_fast_regex()
+                    {
+                        match AgentGrepRefreshWorker::start(
+                            Arc::clone(agent_grep),
+                            workspace.clone(),
+                        ) {
+                            Ok(worker) => agent_grep_worker = Some(worker),
+                            Err(error) => {
+                                agent_grep.invalidate_index(&workspace);
+                                log::warn!("{error}; invalidated the fast regex index");
+                            }
+                        }
+                    }
+                    if let Some(agent_grep_worker) = &agent_grep_worker {
+                        agent_grep_worker.schedule(event.clone());
                     }
                     if let Some(changed) = project_event(&workspace, workspace_folder_id.as_deref(), event) {
                         if let Some(changes) = &changes {

@@ -1098,6 +1098,7 @@ pub fn open_local_app_server_with_code_index_providers(
     .with_language_server_providers(options.language_server_providers)
     .with_slash_command_catalog(options.slash_commands)
     .with_code_index_storage_root(options.profile_root.join("code-index"))
+    .with_fast_regex_search_storage_root(options.profile_root.join("fast-regex-search"))
     .with_symbol_index_storage_root(options.profile_root.join("symbol-index"))
     .with_code_index_semantic_storage_root(options.profile_root.join("code-index-semantic"))
     .with_semantic_model_provider(model_provider)
@@ -1175,7 +1176,7 @@ pub fn open_local_app_server_with_code_index_providers(
         }
     }
     server = server
-        .with_local_exec_policy_config(crate::local_tools::LocalExecPolicyConfig::from_resolved(
+        .with_local_tool_config(crate::local_tools::LocalToolConfig::from_resolved(
             &runtime_config,
         ))
         .with_local_workspace_host(
@@ -1423,7 +1424,7 @@ impl ToolConfigWatcher {
                                 }
                             };
                         if let Err(error) =
-                            workspace_runtime.reconcile_exec_policy_config(&runtime_config)
+                            workspace_runtime.reconcile_local_tool_config(&runtime_config)
                         {
                             workspace_tools.record_reconcile_failure(error.to_string());
                             continue;

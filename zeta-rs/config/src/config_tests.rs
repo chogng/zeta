@@ -139,6 +139,7 @@ fn update_preferences(
             preferred_model,
             approval_review_model: Patch::Missing,
             tool_mode: Patch::Missing,
+            grep_backend: Patch::Missing,
         }),
     }
 }
@@ -149,10 +150,14 @@ fn workspace_trust_id() -> WorkspaceTrustId {
 
 #[test]
 fn tool_mode_defaults_to_direct_and_updates_durably() {
-    let store = ConfigStore::open(&config_path("tool-mode")).unwrap();
+    let store = ConfigStore::open(config_path("tool-mode")).unwrap();
     assert_eq!(
         store.read_snapshot().unwrap().values.tool_mode,
         zeta_protocol::ToolMode::Direct
+    );
+    assert_eq!(
+        store.read_snapshot().unwrap().values.agent_grep_backend,
+        AgentGrepBackend::Ripgrep
     );
 
     store
@@ -163,6 +168,7 @@ fn tool_mode_defaults_to_direct_and_updates_durably() {
                 preferred_model: Patch::Missing,
                 approval_review_model: Patch::Missing,
                 tool_mode: Patch::Value(zeta_protocol::ToolMode::CodeModeOnly),
+                grep_backend: Patch::Value(AgentGrepBackend::FastRegex),
             }),
         })
         .unwrap();
@@ -170,6 +176,10 @@ fn tool_mode_defaults_to_direct_and_updates_durably() {
     assert_eq!(
         store.read_snapshot().unwrap().values.tool_mode,
         zeta_protocol::ToolMode::CodeModeOnly
+    );
+    assert_eq!(
+        store.read_snapshot().unwrap().values.agent_grep_backend,
+        AgentGrepBackend::FastRegex
     );
 }
 
@@ -699,6 +709,7 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                 preferred_model: Patch::Missing,
                 tool_mode: Patch::Missing,
+                grep_backend: Patch::Missing,
                 approval_review_model: Patch::Value(ApprovalReviewModelSelection::Explicit {
                     model: model_ref("openai", "codex-auto-review"),
                 }),
@@ -715,6 +726,7 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                 preferred_model: Patch::Missing,
                 tool_mode: Patch::Missing,
+                grep_backend: Patch::Missing,
                 approval_review_model: Patch::Value(ApprovalReviewModelSelection::Explicit {
                     model: model_ref("openai", "codex-auto-review"),
                 }),

@@ -323,7 +323,7 @@ local replacement.
 
 | | |
 | --- | --- |
-| 状态 | 已实现；canonical direct `LocalToolSuite` 使用受控 `RipgrepExecutable` |
+| 状态 | 已实现；`LocalToolSuite` 委托 `AgentGrepService`，由 `agent.grepBackend` 选择 `ripgrep` 或 `fastRegex` |
 | 限幅 | 100 条，按修改时间降序 |
 
 **description：**
@@ -369,7 +369,7 @@ Finds files by glob pattern, sorted by most recently modified.
 **description：**
 
 ```text
-Searches file contents with a regular expression (ripgrep syntax).
+Searches file contents with a regular expression.
 
 - Full regex support, e.g. "fn\\s+resolve" or "TODO|FIXME".
 - Results are file:line:content, capped at 100 matches; narrow with `glob`
@@ -386,7 +386,7 @@ Searches file contents with a regular expression (ripgrep syntax).
   "properties": {
     "pattern": {
       "type": "string",
-      "description": "Regular expression to search for (ripgrep syntax)."
+      "description": "Regular expression to search for."
     },
     "path": {
       "type": ["string", "null"],
@@ -406,8 +406,9 @@ Searches file contents with a regular expression (ripgrep syntax).
 }
 ```
 
-**错误文案：**正则非法 → 透传 rg 的错误信息 + `escape literal characters like . ( ) { } with a backslash`；
-无命中 → 正常结果 `no matches`。默认遵守 .gitignore（rg 行为）。
+**执行选择：**`ripgrep` 直接运行冻结的 `rg`；`fastRegex` 从正则提取必需文字，交叉稀疏 n-gram posting 后读取当前候选文件执行精确验证。开关只影响 Agent `grep`，不影响 `glob` 或编辑器 Search；一次 Tool generation 内不会根据查询内容暗中切换执行方式。无法提取至少三字节必需文字时，`fastRegex` 精确扫描全部已索引文件；性能基准把这种全量扫描也列为必须快于等价 `rg` 输出的底线。
+
+**错误文案：**正则非法 → 返回所选执行方式的稳定错误；无命中 → 正常结果 `no matches`。两种方式都遵守工作区 ignore 规则。
 
 ## 9. update_plan
 

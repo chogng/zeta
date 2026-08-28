@@ -3,7 +3,8 @@
 > 本 README 拥有跨文件内容搜索的实现契约：查询校验、冻结 `rg` 执行、结果解析、分页作业和
 > owner 隔离。产品语义与跨进程所有权由 [`docs/search.md`](../../docs/search.md) canonical
 > 维护；App Server 的 RPC DTO 转换见
-> [`zeta-rs/app-server/README.md`](../app-server/README.md)。
+> [`zeta-rs/app-server/README.md`](../app-server/README.md)。Agent 专用的索引正则实现见
+> [`zeta-rs/fast-regex-search/README.md`](../fast-regex-search/README.md)。
 
 `zeta-search` 在 host 提供的已授权搜索作用域内检索文件内容；当前默认且唯一的作用域是主工作
 目录。它支持文字、正则、大小写策略和文件 glob。
@@ -104,6 +105,4 @@ App Server `search_operations.rs` 的 DTO 映射、[`docs/search.md`](../../docs
 
 当前实现每次查询启动冻结的 `rg`，只搜索一个受信 `WorkspaceRoot` 的磁盘内容；未保存 Editor buffer、replace、持久化索引和 watcher 驱动失效均尚未实现。本 crate 不依赖 `zeta-workspace-access`，也不消费 Session 的 `/add-dir` 权限；Agent 对附加目录的内容搜索由本地 `grep` / `glob` 工具负责。产品若需要聚合多个 Workspace folder，必须由 App Server 根据产品级 folder identity 协调多个单 root 搜索，不能把多个 absolute path flatten 成一个伪 Workspace。
 
-潜在方向是在本 crate 内部加入索引实现，但只有先定义 ignore、一致性、watcher、持久化和隐私
-语义后才可以进行。当前不预先引入 `Engine` 或 `Backend` trait；出现第二种真实执行实现时，再以
-实际调用方需要的最小接口抽象。
+持久化索引不会加入本 crate。Agent `grep` 的 `fastRegex` 方式由 App Server 单独调用 `zeta-fast-regex-search`；编辑器 Search 无论该配置如何变化都继续执行冻结的 `rg`。

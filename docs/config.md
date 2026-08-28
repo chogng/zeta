@@ -128,6 +128,7 @@ ResolvedConfigSnapshot
 | 产品 Theme/UI preference | profile `configuration.json` | 使用产品命名的 typed key；不进入 App Server Config、Workspace、Session 或 Agent runtime snapshot |
 | Preferred model | User、Workspace、Session、launch | 只影响下一个 model safe point |
 | Tool Mode | User、StartTurn override | 默认 Direct；最终值在 Turn 接受时冻结，运行中不随配置变化 |
+| Agent grep backend | User | 默认 `ripgrep`；`fastRegex` 只替换 Agent `grep`，不改变编辑器 Search 或 `glob` |
 | Provider endpoint/profile | User、host | Workspace 不能静默替换认证或网络边界 |
 | Standalone MCP server | User、Workspace | Workspace declaration 需要 trust/grant 后才能启动 |
 | Plugin request | User、Workspace | 只能请求 exact package/version 与 desired enablement，不能证明已安装、激活或授权 |
@@ -285,6 +286,8 @@ default。审批模型始终来自 User/managed configuration，Workspace 无权
 `ResolvedConfig.tool_mode` 是后续 Turn 的全局默认值。`session/request.startTurn.toolMode` 若存在则
 只覆盖该轮；不存在时读取当前 resolved snapshot。Core 在 `StartTurn` command、`TurnAccepted`
 event 和 Turn snapshot 中保存最终模式，因此 command replay 和进程恢复不会重新读取可变配置。
+
+`ResolvedConfig.agent_grep_backend` 由 App Server 的本地工具安全点读取。配置变化会重组后续 Agent 调用所使用的 `grep` 执行方式；已经开始的 Tool Call 保留原绑定。`ripgrep` 与 `fastRegex` 都不改变 `zeta-search` 的工作区 Search RPC。
 
 `ConfigGeneration` 只在 consumer-visible resolved value 或 diagnostics gate 发生变化时递增。
 snapshot 不包含：

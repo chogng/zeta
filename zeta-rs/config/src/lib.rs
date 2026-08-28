@@ -31,8 +31,8 @@ pub use command::{
     PreferencesUpdate, UserConfigCommand,
 };
 pub use document::{
-    AgentConfig, ApprovalReviewModelSelection, ConfigGeneration, ConfigRevision, ResolvedConfig,
-    ResolvedConfigSnapshot, UserConfigDocument,
+    AgentConfig, AgentGrepBackend, ApprovalReviewModelSelection, ConfigGeneration, ConfigRevision,
+    ResolvedConfig, ResolvedConfigSnapshot, UserConfigDocument,
 };
 pub use exec_policy::{UserExecPolicyConfig, WorkspaceExecPolicyConfig, compose_exec_policy};
 pub use hooks::{

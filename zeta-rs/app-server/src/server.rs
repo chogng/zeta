@@ -166,7 +166,7 @@ pub struct AppServer {
     pub(super) extensions: Mutex<ExtensionCatalog>,
     pub(super) config: Option<Arc<ConfigStore>>,
     pub(super) provider_credentials: Option<Arc<ProviderCredentialService>>,
-    pub(super) local_exec_policy_config: Arc<RwLock<crate::local_tools::LocalExecPolicyConfig>>,
+    pub(super) local_tool_config: Arc<RwLock<crate::local_tools::LocalToolConfig>>,
     pub(super) connectors: Option<Arc<zeta_connectors_extension::ConnectorCredentialService>>,
     pub(super) connector_oauth: Option<Arc<zeta_connectors_extension::ConnectorOAuthService>>,
     pub(super) connector_device_oauth:
@@ -198,6 +198,7 @@ pub struct AppServer {
     browser_host: Arc<BrowserHost>,
     browser_tool_port: crate::tool_composition::ToolPort,
     code_index_storage_root: Option<std::path::PathBuf>,
+    fast_regex_search_storage_root: Option<std::path::PathBuf>,
     symbol_index_storage_root: Option<std::path::PathBuf>,
     code_index_semantic_storage_root: Option<std::path::PathBuf>,
     code_index_semantic_models: Option<CodeIndexSemanticModels>,
@@ -441,9 +442,9 @@ impl AppServer {
             extensions: Mutex::new(ExtensionCatalog::default()),
             config: None,
             provider_credentials: None,
-            local_exec_policy_config: Arc::new(RwLock::new(
-                crate::local_tools::LocalExecPolicyConfig::default(),
-            )),
+            local_tool_config: Arc::new(
+                RwLock::new(crate::local_tools::LocalToolConfig::default()),
+            ),
             connectors: None,
             connector_oauth: None,
             connector_device_oauth: None,
@@ -476,6 +477,7 @@ impl AppServer {
             browser_host,
             browser_tool_port,
             code_index_storage_root: None,
+            fast_regex_search_storage_root: None,
             symbol_index_storage_root: None,
             code_index_semantic_storage_root: None,
             code_index_semantic_models: None,
@@ -988,6 +990,14 @@ impl AppServer {
         storage_root: impl Into<std::path::PathBuf>,
     ) -> Self {
         self.code_index_storage_root = Some(storage_root.into());
+        self
+    }
+
+    pub(crate) fn with_fast_regex_search_storage_root(
+        mut self,
+        storage_root: impl Into<std::path::PathBuf>,
+    ) -> Self {
+        self.fast_regex_search_storage_root = Some(storage_root.into());
         self
     }
 

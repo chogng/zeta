@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use zeta_app_server_protocol::protocol::config::AgentGrepBackendDto;
 use zeta_app_server_protocol::protocol::config::ApprovalReviewModelSelectionDto;
 use zeta_app_server_protocol::protocol::config::ConfigReadResult;
 use zeta_app_server_protocol::protocol::config::SemanticCodeIndexAutomaticContextDto;
@@ -15,6 +16,7 @@ pub(crate) fn empty_config_snapshot() -> ConfigReadResult {
         preferred_model: None,
         approval_review_model: ApprovalReviewModelSelectionDto::Automatic,
         tool_mode: zeta_protocol::ToolMode::Direct,
+        agent_grep_backend: AgentGrepBackendDto::Ripgrep,
         providers: BTreeMap::new(),
         mcp_servers: BTreeMap::new(),
         skill_sources: BTreeMap::new(),

@@ -17,12 +17,15 @@ use zeta_action_policy::{
 use zeta_async_utils::CancellationToken;
 use zeta_core::{CoreError, ToolAuthorization, ToolExecutionFacts, ToolOutputSink, ToolService};
 use zeta_file_system::{FileWriteCondition, LocalFileSystem, WorkspaceFileSystem};
+use zeta_file_watcher::FileWatcherEvent;
 use zeta_protocol::SessionId;
 use zeta_protocol::{ToolCall, ToolDefinition, ToolExecutionOutput, ToolName, ToolOutputStream};
 use zeta_shell_command::RipgrepExecutable;
 use zeta_workspace::TrustedWorkspace;
 use zeta_workspace::WorkspaceCapability;
 use zeta_workspace::WorkspaceRoot;
+
+use super::AgentGrepService;
 
 const READ_DESCRIPTION: &str = r#"Reads a file from the workspace and returns its content with line numbers.
 
@@ -56,7 +59,7 @@ Usage notes:
   replace_all to true to change every occurrence.
 - Do not include line-number prefixes from read_file output in old_string.
 - For moves or renames use shell with git mv; for full rewrites use write_file."#;
-const GREP_DESCRIPTION: &str = r#"Searches file contents with a regular expression (ripgrep syntax).
+const GREP_DESCRIPTION: &str = r#"Searches file contents with a regular expression.
 
 - Full regex support, e.g. "fn\\s+resolve" or "TODO|FIXME".
 - Results are file:line:content, capped at 100 matches; narrow with `glob`
@@ -85,7 +88,7 @@ fn definition(name: &str, description: &str, parameters: &str) -> ToolDefinition
 const READ_SCHEMA: &str = r#"{"type":"object","properties":{"path":{"type":"string","description":"Absolute path to the file to read."},"offset":{"type":["integer","null"],"description":"1-based line number to start from. Defaults to 1."},"limit":{"type":["integer","null"],"description":"Maximum lines to return. Defaults to 2000."}},"required":["path","offset","limit"],"additionalProperties":false}"#;
 const WRITE_SCHEMA: &str = r#"{"type":"object","properties":{"path":{"type":"string","description":"Absolute path of the file to write."},"content":{"type":"string","description":"Full content to write. The previous content is replaced entirely."}},"required":["path","content"],"additionalProperties":false}"#;
 const EDIT_SCHEMA: &str = r#"{"type":"object","properties":{"path":{"type":"string","description":"Absolute path of the file to modify."},"old_string":{"type":"string","description":"Exact text to replace. Must be unique in the file unless replace_all is true."},"new_string":{"type":"string","description":"Replacement text. Must differ from old_string."},"replace_all":{"type":["boolean","null"],"description":"Replace every occurrence. Defaults to false."}},"required":["path","old_string","new_string","replace_all"],"additionalProperties":false}"#;
-const GREP_SCHEMA: &str = r#"{"type":"object","properties":{"pattern":{"type":"string","description":"Regular expression to search for (ripgrep syntax)."},"path":{"type":["string","null"],"description":"File or directory to search. Defaults to the workspace root."},"glob":{"type":["string","null"],"description":"Restrict to files matching this glob, e.g. \"*.rs\"."},"case_insensitive":{"type":["boolean","null"],"description":"Case-insensitive search. Defaults to false."}},"required":["pattern","path","glob","case_insensitive"],"additionalProperties":false}"#;
+const GREP_SCHEMA: &str = r#"{"type":"object","properties":{"pattern":{"type":"string","description":"Regular expression to search for."},"path":{"type":["string","null"],"description":"File or directory to search. Defaults to the workspace root."},"glob":{"type":["string","null"],"description":"Restrict to files matching this glob, e.g. \"*.rs\"."},"case_insensitive":{"type":["boolean","null"],"description":"Case-insensitive search. Defaults to false."}},"required":["pattern","path","glob","case_insensitive"],"additionalProperties":false}"#;
 const GLOB_SCHEMA: &str = r#"{"type":"object","properties":{"pattern":{"type":"string","description":"Glob pattern to match file paths against."},"path":{"type":["string","null"],"description":"Directory to search in. Defaults to the workspace root."}},"required":["pattern","path"],"additionalProperties":false}"#;
 const MAX_READ_FILE_BYTES: u64 = 10 * 1024 * 1024;
 const MAX_WRITE_FILE_BYTES: usize = 10 * 1024 * 1024;
@@ -95,6 +98,7 @@ const SEARCH_TIMEOUT: Duration = Duration::from_secs(30);
 pub(crate) struct LocalToolSuite<B> {
     shell: LocalShellToolService<B>,
     ripgrep: RipgrepExecutable,
+    agent_grep: Arc<AgentGrepService>,
     workspace: TrustedWorkspace,
     session_workspace_access: Arc<SessionWorkspaceAccess>,
     read_paths: Mutex<BTreeSet<(String, PathBuf)>>,
@@ -102,16 +106,17 @@ pub(crate) struct LocalToolSuite<B> {
     definitions: Vec<ToolDefinition>,
 }
 
-struct ResolvedFilePath {
-    root: WorkspaceRoot,
-    relative: PathBuf,
-    absolute: PathBuf,
+pub(super) struct ResolvedFilePath {
+    pub(super) root: WorkspaceRoot,
+    pub(super) relative: PathBuf,
+    pub(super) absolute: PathBuf,
 }
 
 impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
     pub(super) fn new(
         shell: LocalShellToolService<B>,
         ripgrep: RipgrepExecutable,
+        agent_grep: Arc<AgentGrepService>,
         session_workspace_access: Arc<SessionWorkspaceAccess>,
     ) -> Self {
         let workspace = shell.workspace.clone();
@@ -126,6 +131,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         Self {
             shell,
             ripgrep,
+            agent_grep,
             workspace,
             session_workspace_access,
             read_paths: Mutex::new(BTreeSet::new()),
@@ -409,9 +415,15 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(
-                (scope.into(), resolved.absolute),
+                (scope.into(), resolved.absolute.clone()),
                 format!("{:x}", Sha256::digest(content.as_bytes())),
             );
+        self.agent_grep.apply_watcher_event(
+            &resolved.root,
+            &FileWatcherEvent::PathsChanged {
+                paths: vec![resolved.absolute],
+            },
+        );
         Ok(ToolExecutionOutput::Success(format!("wrote {path}")))
     }
 
@@ -504,9 +516,15 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(
-                (scope.into(), resolved.absolute),
+                (scope.into(), resolved.absolute.clone()),
                 format!("{:x}", Sha256::digest(replaced.as_bytes())),
             );
+        self.agent_grep.apply_watcher_event(
+            &resolved.root,
+            &FileWatcherEvent::PathsChanged {
+                paths: vec![resolved.absolute],
+            },
+        );
         let lines = replaced.lines().collect::<Vec<_>>();
         let excerpt_start = replacement_line.saturating_sub(5);
         let excerpt_end = excerpt_start.saturating_add(9).min(lines.len());
@@ -538,33 +556,8 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
             .map_err(CoreError::Execution)?;
         let glob = nullable_string(&call.arguments, "glob")?;
         let insensitive = nullable_bool(&call.arguments, "case_insensitive")?.unwrap_or(false);
-        let mut command = Command::new(self.ripgrep.path());
-        command.args(["--no-config", "-n", "--no-heading"]);
-        if insensitive {
-            command.arg("-i");
-        }
-        if let Some(glob) = glob {
-            command.args(["--glob", &glob]);
-        }
-        command.arg("--").arg(pattern).arg(resolved.absolute);
-        let output = match run_search(command, cancellation) {
-            Ok(output) => output,
-            Err(SearchError::Cancelled(error)) => return Err(error),
-            Err(SearchError::Failed(message)) => return Ok(ToolExecutionOutput::Failure(message)),
-        };
-        if output.status.code() == Some(1) {
-            return Ok(ToolExecutionOutput::Success("no matches".into()));
-        }
-        if !output.status.success() {
-            return Ok(ToolExecutionOutput::Failure(format!(
-                "{}\nescape literal characters like . ( ) {{ }} with a backslash",
-                String::from_utf8_lossy(&output.stderr).trim()
-            )));
-        }
-        Ok(ToolExecutionOutput::Success(limit_matches(
-            &String::from_utf8_lossy(&output.stdout),
-            500,
-        )))
+        self.agent_grep
+            .execute(pattern, &resolved, glob, insensitive, cancellation)
     }
 
     fn glob(
@@ -891,7 +884,7 @@ fn truncate_line(line: &str) -> String {
     }
 }
 
-fn limit_matches(output: &str, line_limit: usize) -> String {
+pub(super) fn limit_matches(output: &str, line_limit: usize) -> String {
     let lines = output.lines().collect::<Vec<_>>();
     let total = lines.len();
     let mut result = lines

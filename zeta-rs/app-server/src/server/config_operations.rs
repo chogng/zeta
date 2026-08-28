@@ -2,22 +2,22 @@ use super::extension_config_operations::{hook_config_dto, plugin_request_dto};
 use super::{AppServer, RpcError, decode, result};
 use serde_json::Value;
 use zeta_app_server_protocol::protocol::config::{
-    ApprovalReviewModelSelectionDto, ConfigCommandDispositionDto, ConfigCommandResult,
-    ConfigReadResult, ConfigUpdateParams, LanguageServerConfigDto, LanguageServerConfigureParams,
-    LanguageServerModeDto, LanguageServerRemoveParams, McpCredentialBindingDto, McpServerConfigDto,
-    McpServerEnablementDto, McpServerRemoveParams, McpServerSetEnablementParams,
-    McpServerUpsertParams, McpTransportDto, ModelContextConfigDto, ModelRefDto, ProviderConfigDto,
-    ProviderConfigureParams, ProviderRemoveParams, SemanticCodeIndexAuthorizeParams,
-    SemanticCodeIndexAutomaticContextDto, SemanticCodeIndexConfigDto,
-    SemanticCodeIndexConfigureParams, SemanticCodeIndexModelsDto, SemanticCodeIndexRevokeParams,
-    SemanticCodeIndexSelectionDto, SkillSourceAddParams, SkillSourceConfigDto,
-    SkillSourceEnablementDto, SkillSourceRemoveParams, SkillSourceSetEnablementParams,
-    ToolSearchConfigDto, ToolSearchConfigureParams, ToolSearchEmbeddingStatusDto,
-    ToolSearchModeDto,
+    AgentGrepBackendDto, ApprovalReviewModelSelectionDto, ConfigCommandDispositionDto,
+    ConfigCommandResult, ConfigReadResult, ConfigUpdateParams, LanguageServerConfigDto,
+    LanguageServerConfigureParams, LanguageServerModeDto, LanguageServerRemoveParams,
+    McpCredentialBindingDto, McpServerConfigDto, McpServerEnablementDto, McpServerRemoveParams,
+    McpServerSetEnablementParams, McpServerUpsertParams, McpTransportDto, ModelContextConfigDto,
+    ModelRefDto, ProviderConfigDto, ProviderConfigureParams, ProviderRemoveParams,
+    SemanticCodeIndexAuthorizeParams, SemanticCodeIndexAutomaticContextDto,
+    SemanticCodeIndexConfigDto, SemanticCodeIndexConfigureParams, SemanticCodeIndexModelsDto,
+    SemanticCodeIndexRevokeParams, SemanticCodeIndexSelectionDto, SkillSourceAddParams,
+    SkillSourceConfigDto, SkillSourceEnablementDto, SkillSourceRemoveParams,
+    SkillSourceSetEnablementParams, ToolSearchConfigDto, ToolSearchConfigureParams,
+    ToolSearchEmbeddingStatusDto, ToolSearchModeDto,
 };
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_config::{
-    ApprovalReviewModelSelection, ConfigCommandDisposition, ConfigCommandError,
+    AgentGrepBackend, ApprovalReviewModelSelection, ConfigCommandDisposition, ConfigCommandError,
     ConfigCommandRequest, ConfigRevision, LanguageServerConfig, LanguageServerId,
     LanguageServerModeConfig, McpCredentialBinding, McpServerConfig, McpServerEnablement,
     McpServerId, McpTransportConfig, PreferencesUpdate, ResolvedConfigSnapshot,
@@ -111,6 +111,7 @@ impl AppServer {
                         params.approval_review_model,
                     )?,
                     tool_mode: params.tool_mode,
+                    grep_backend: params.agent_grep_backend.map(agent_grep_backend_from_dto),
                 }),
             })
             .map_err(config_operation_error)?;
@@ -473,6 +474,7 @@ fn config_read_result(
         preferred_model: snapshot.values.preferred_model.map(model_ref_dto),
         approval_review_model: approval_review_model_dto(snapshot.values.approval_review_model),
         tool_mode: snapshot.values.tool_mode,
+        agent_grep_backend: agent_grep_backend_dto(snapshot.values.agent_grep_backend),
         providers: snapshot
             .values
             .providers
@@ -523,6 +525,20 @@ fn config_read_result(
             .into_iter()
             .map(exec_policy_rule_dto)
             .collect(),
+    }
+}
+
+fn agent_grep_backend_dto(backend: AgentGrepBackend) -> AgentGrepBackendDto {
+    match backend {
+        AgentGrepBackend::Ripgrep => AgentGrepBackendDto::Ripgrep,
+        AgentGrepBackend::FastRegex => AgentGrepBackendDto::FastRegex,
+    }
+}
+
+fn agent_grep_backend_from_dto(backend: AgentGrepBackendDto) -> AgentGrepBackend {
+    match backend {
+        AgentGrepBackendDto::Ripgrep => AgentGrepBackend::Ripgrep,
+        AgentGrepBackendDto::FastRegex => AgentGrepBackend::FastRegex,
     }
 }
 

@@ -10856,6 +10856,7 @@ dependencies = [
  "zeta-execpolicy",
  "zeta-extension-api",
  "zeta-extensions",
+ "zeta-fast-regex-search",
  "zeta-file-system",
  "zeta-file-watcher",
  "zeta-git",

@@ -2,6 +2,7 @@
 
 mod index;
 mod ngram;
+mod storage;
 mod types;
 
 pub use index::FastRegexSearch;
@@ -14,5 +15,6 @@ pub use types::FastRegexRange;
 pub use types::FastRegexSearchLimits;
 pub use types::FastRegexSearchResult;
 pub use types::FastRegexSearchSnapshot;
+pub use types::FastRegexSearchStatistics;
 pub use types::FastRegexSearchStorage;
 pub use types::FastRegexUpdateOutcome;

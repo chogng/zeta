@@ -33,6 +33,7 @@ JSONL / in-process caller
    ├─ optional WorkspaceFileSystem + filesystem watcher
    ├─ optional GitRuntime → zeta-file-watcher + GitService → zeta-git
    ├─ optional SearchService → zeta-search
+   ├─ AgentGrepService → frozen rg | zeta-fast-regex-search
    ├─ optional CodeIndexRuntime → zeta-code-index + filesystem watcher
    ├─ optional SymbolIndexRuntime → zeta-symbol-index + CodeIndex source/overlay authority
    ├─ optional CodeIndexSemanticService → local SQLite vectors + host model adapters
@@ -93,6 +94,7 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 | `AppServer::with_marketplace_editor_extension_admission` | 注入 Marketplace executable 的产品 enable/grant generation、通知与 drain authority；安装本身不会执行代码 |
 | `AppServer::with_extension_host_runtime` | 将 legacy Plugin 与已授权 Marketplace executable 规范化为同一 deployment fleet；Host 不解析 package manifest |
 | `AppServer::with_code_index_storage_root` | 配置按 root identity 分隔的 persistent index cache |
+| `AppServer::with_fast_regex_search_storage_root` | 配置 Agent 快速正则按工作区身份分隔的本地索引目录；不改变 Workspace Search |
 | `LocalCodeIndexProviders::with_semantic_models` | 在 Workspace activation 前注入本地 semantic 使用的 immutable embedding/rerank adapters |
 | `AppServer::with_cloud_code_index_providers` | 注入冻结的 provider registry；空 registry 不广告 cloud capability |
 | `AppServer::with_cloud_code_index_storage_root` | local composition 配置按 root identity 分隔的 durable grant/deletion state |
@@ -294,8 +296,9 @@ src/
 | `read_state` | private | after-sequence cursor → bounded Base64 chunks + gap/exited state | ring eviction 必须显式返回 `output_gap` |
 | `ConfigBackedModelService::resolve_config` | private | user snapshot + optional Workspace snapshot merge | 每次 invocation safe point 重新解析 |
 | `WorkspaceConfigTracker::read` | private | 内容变化才推进 synthetic workspace revision | 不监听/修改 workspace file |
-| `compose_local_tools_with_config` | crate-private | 要求 root-bound `ExecuteProcess` capability、组合 Host/User/Workspace exec-policy snapshot、冻结统一 revision、解析安装候选与 native sandbox | containment、trust、policy composition 或 discovery 失败时不降级成 unrestricted |
-| `LocalExecPolicyConfig::from_resolved` | crate-private | 从 safe-point `ResolvedConfig` 提取 User rules 与 Workspace restrictions | 不读取文件或自己决定 layer trust |
+| `compose_local_tools_with_config` | crate-private | 要求 root-bound `ExecuteProcess` capability、组合 Host/User/Workspace exec-policy snapshot、冻结统一 revision、解析安装候选与沙箱 | containment、trust、policy composition 或 discovery 失败时不降级成 unrestricted |
+| `LocalToolConfig::from_resolved` | crate-private | 从 safe-point `ResolvedConfig` 提取 exec-policy 和 Agent grep 执行方式 | 不读取文件或自己决定 layer trust |
+| `AgentGrepService` | crate-private | 仅为 Agent `grep` 选择冻结 `rg` 或快速正则索引，并接收工作区 watcher 刷新 | 不参与编辑器 Search、`glob`、`file-search` 或 code retrieval |
 | `LocalShellToolService::materialize` | private | parse call、约束 workspace 参数、冻结 rg executable | policy review 前不启动进程 |
 | `LocalShellPolicy::decide` | private | 将 frozen `ExecPolicySnapshot` 交给 `ActionPolicyEngine`，返回 exact typed decision | 不复制 rule precedence 或绕过 grant binding |
 | `zeta_hooks::DeclarativeHookRuntime` | external crate | immutable Hook snapshot → exact safe-point match → host policy → sandboxed process executor | App Server 只负责 Config reconcile、trust gate 与 Core port binding；实现契约见 [`zeta-hooks`](../hooks/README.md) |

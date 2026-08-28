@@ -14,8 +14,7 @@ Desktop Search contrib 只拥有查询表单、取消时机、增量结果投影
 `workspace/search/start`、`workspace/search/read`、`workspace/search/cancel` 三个 pull RPC，
 而不是把 `rg` 进程、路径授权或无界结果流放进 Renderer。
 
-这套 RPC 是产品搜索能力，不是模型 Tool。模型是否可以调用搜索、如何审批以及如何向模型压缩
-结果属于另一条 Tool/Policy contract；两者不能共享隐式权限或生命周期。
+这套 RPC 是产品搜索能力，不是模型 Tool。Agent `grep` 属于另一条 Tool/Policy contract：默认直接执行同一份冻结 `rg`，也可以通过 `agent.grepBackend = "fastRegex"` 切换到仅供 Agent 使用的本地稀疏 n-gram 索引。这个配置不改变工作区 Search RPC。
 
 | 用户操作 | 当前行为 | 当前限制 |
 | --- | --- | --- |
@@ -25,6 +24,7 @@ Desktop Search contrib 只拥有查询表单、取消时机、增量结果投影
 | 使用正则或文件过滤 | 在 Rust 边界重新校验输入 | 只能使用工作区相对 glob |
 | 点击结果打开文件 | 尚未接通编辑器 | 结果当前只用于查看 |
 | 让模型调用搜索 | 走独立工具与权限契约 | 不复用界面搜索权限 |
+| 为 Agent 开启快速正则 | 只替换 Agent `grep` 的执行方式 | Search 面板仍使用 `rg` |
 
 ## 所有权
 
@@ -35,6 +35,8 @@ Desktop Search contrib 只拥有查询表单、取消时机、增量结果投影
 | IPC sender、exact shape 与输入上限的快速校验 | Electron Main | ✅ |
 | workspace root 授权与 `rg` executable 冻结 | Rust / App Server composition | ✅ |
 | 查询校验、`rg` 进程、结果解析、分页与取消 | `zeta-search` | ✅ |
+| Agent `grep` 在 `ripgrep` / `fastRegex` 间选择 | App Server `AgentGrepService` | ✅ |
+| Agent 稀疏 n-gram 候选筛选与精确验证 | `zeta-fast-regex-search` | ✅ |
 | connection ID → `SearchOwner`、DTO 转换与稳定 RPC error | App Server | ✅ |
 | wire DTO、method registry、schema 与 TypeScript bindings | `zeta-app-server-protocol` | ✅ |
 | 文件路径 fuzzy match | `zeta-file-search` | ✅，与内容搜索无依赖 |

@@ -282,18 +282,18 @@ binding。`apply_patch` 在所有 hunk 校验完成前不写入；
 containment；调用方仍拥有项目根语义和搜索边界。实现与错误策略由
 [`zeta-rs/file-system/README.md`](../zeta-rs/file-system/README.md) 维护。
 
-搜索分成模型侧命令搜索与交互式路径搜索：
+搜索分成 Agent 内容搜索、编辑器内容搜索和交互式路径搜索：
 
 | Surface | 所有权 | 模型可见 |
 | --- | --- | --- |
-| `zeta-shell-command` + `rg` | 内容搜索、`rg --files` 路径枚举和 `-g` glob filtering | `shell-command` Tool |
+| App Server `LocalToolSuite::grep` | Agent 内容搜索；由 `agent.grepBackend` 在冻结 `rg` 与 `zeta-fast-regex-search` 间选择 | `grep` Tool |
+| `zeta-search` + `rg` | 编辑器工作区内容搜索、分页和取消；不读取 Agent grep 配置 | 否 |
 | `zeta-file-search` | ignore-aware 路径索引、fuzzy matching、`PathSearchHandle` 和 CLI | 否 |
 | `zeta-file-watcher` | 多订阅者路径失效提示、missing-path fallback、throttle/debounce 与 overflow rescan hint | 否 |
 
-模型侧不注册独立 `glob`、`grep` 或 `text-search` Tool：内容搜索使用 `rg PATTERN`，路径枚举
-使用 `rg --files`，glob 作为 `-g` 参数传给 `rg`。交互式路径搜索契约由
-[`zeta-rs/file-search/README.md`](../zeta-rs/file-search/README.md) 维护；TUI 直接持有
-`PathSearchHandle`，不启动 CLI，Core 也不把路径搜索注册成 Tool。
+模型侧注册独立 `grep` 和 `glob` Tool。`grep` 默认执行冻结的 `rg`；选择 `fastRegex` 后只把 `grep` 切换到本地稀疏 n-gram 索引，`glob` 与编辑器 Search 继续执行 `rg`。交互式路径搜索契约由 [`zeta-rs/file-search/README.md`](../zeta-rs/file-search/README.md) 维护；TUI 直接持有 `PathSearchHandle`，不启动 CLI，Core 也不把路径搜索注册成 Tool。
+
+`fastRegex` 必须先用覆盖 n-gram 和 posting 交集缩小候选，再读取当前文件做精确验证。短查询、纯字符类和其他没有必需文字的正则仍会扫描全部已索引文件，但它们也进入与 `rg --line-number` 等价输出的性能底线；稀有、无命中和全量扫描用例任一不快于 `rg`，基准就失败。执行方式在 Tool generation 冻结后不会按单次查询暗中切换。基准入口和当前存储契约由 [`zeta-fast-regex-search`](../zeta-rs/fast-regex-search/README.md) 维护。
 
 `zeta-file-watcher` 同样不是搜索或读取接口。它只把 OS mutation/error 转成
 `PathsChanged`/`RescanRequired`；consumer 必须重新扫描并校验 own state。其 ref-count、路径匹配、

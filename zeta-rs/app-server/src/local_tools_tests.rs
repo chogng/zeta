@@ -225,11 +225,12 @@ fn durable_user_and_workspace_exec_rules_drive_local_authorization() {
         ]),
         ExecPolicyEffect::AllowUnsandboxed,
     );
-    let policy_config = LocalExecPolicyConfig {
+    let policy_config = LocalToolConfig {
         user: UserExecPolicyConfig {
             rules: vec![user_rule],
         },
         workspace: None,
+        agent_grep_backend: zeta_config::AgentGrepBackend::Ripgrep,
     };
     let exec_policy = policy_config.snapshot().unwrap();
     let action_policy_revision = ActionPolicyRevision::from_components(
@@ -262,7 +263,7 @@ fn durable_user_and_workspace_exec_rules_drive_local_authorization() {
             if grant.source().rule_id().as_str() == "user-safe-shell"
     ));
 
-    let restrictive_config = LocalExecPolicyConfig {
+    let restrictive_config = LocalToolConfig {
         user: policy_config.user,
         workspace: Some((
             WorkspaceId::new("project").unwrap(),
@@ -277,6 +278,7 @@ fn durable_user_and_workspace_exec_rules_drive_local_authorization() {
                 )],
             },
         )),
+        agent_grep_backend: zeta_config::AgentGrepBackend::Ripgrep,
     };
     let exec_policy = restrictive_config.snapshot().unwrap();
     let action_policy_revision = ActionPolicyRevision::from_components(
@@ -438,14 +440,21 @@ fn local_tool_port_exposes_one_canonical_coding_tool_surface() {
     });
     let shell =
         LocalShellToolService::new(trusted.clone(), ripgrep.clone(), PassThroughBackend).unwrap();
+    let agent_grep = Arc::new(AgentGrepService::new(
+        zeta_config::AgentGrepBackend::FastRegex,
+        ripgrep.clone(),
+        None,
+    ));
     let composition = LocalToolComposition {
         tools: Arc::new(LocalToolSuite::new(
             shell,
             ripgrep.clone(),
+            Arc::clone(&agent_grep),
             Arc::new(crate::session_workspace_access::SessionWorkspaceAccess::default()),
         )),
         policy: Arc::new(LocalShellPolicy::default()),
         ripgrep,
+        agent_grep,
         action_policy_revision: local_policy_revision(),
         executors: vec![
             LocalExecutorContribution {
@@ -507,15 +516,97 @@ fn local_tool_port_exposes_one_canonical_coding_tool_surface() {
 }
 
 #[test]
+fn agent_edit_refreshes_an_existing_fast_regex_generation_before_returning() {
+    let workspace = TestWorkspace::new();
+    fs::create_dir_all(workspace.path().join("src")).unwrap();
+    let path = workspace.path().join("src/current.rs");
+    fs::write(&path, "before_immediate_marker\n").unwrap();
+    let ripgrep = RipgrepExecutable::from_path(workspace.ripgrep()).unwrap();
+    let shell =
+        LocalShellToolService::new(workspace.trusted(), ripgrep.clone(), PassThroughBackend)
+            .unwrap();
+    let agent_grep = Arc::new(AgentGrepService::new(
+        zeta_config::AgentGrepBackend::FastRegex,
+        ripgrep.clone(),
+        None,
+    ));
+    let suite = LocalToolSuite::new(
+        shell,
+        ripgrep,
+        agent_grep,
+        Arc::new(crate::session_workspace_access::SessionWorkspaceAccess::default()),
+    );
+    let authorization = ToolAuthorization::Sandboxed(read_only_sandbox());
+    let cancellation = CancellationSource::new().token();
+    let grep = |pattern: &str| ToolCall {
+        id: ToolCallId::new(format!("grep-{pattern}")).unwrap(),
+        name: ToolName::new("grep").unwrap(),
+        arguments: json!({
+            "pattern": pattern,
+            "path": null,
+            "glob": null,
+            "case_insensitive": false,
+        }),
+    };
+    assert!(matches!(
+        suite
+            .execute(&grep("before_immediate_marker"), &authorization, &cancellation)
+            .unwrap(),
+        ToolExecutionOutput::Success(text) if text.contains("before_immediate_marker")
+    ));
+    suite
+        .execute(
+            &ToolCall {
+                id: ToolCallId::new("read-before-edit").unwrap(),
+                name: ToolName::new("read_file").unwrap(),
+                arguments: json!({"path": path, "offset": null, "limit": null}),
+            },
+            &authorization,
+            &cancellation,
+        )
+        .unwrap();
+
+    suite
+        .execute(
+            &ToolCall {
+                id: ToolCallId::new("edit-immediate").unwrap(),
+                name: ToolName::new("edit").unwrap(),
+                arguments: json!({
+                    "path": path,
+                    "old_string": "before_immediate_marker",
+                    "new_string": "after_immediate_marker",
+                    "replace_all": false,
+                }),
+            },
+            &authorization,
+            &cancellation,
+        )
+        .unwrap();
+
+    assert!(matches!(
+        suite
+            .execute(&grep("after_immediate_marker"), &authorization, &cancellation)
+            .unwrap(),
+        ToolExecutionOutput::Success(text) if text.contains("after_immediate_marker")
+    ));
+}
+
+#[test]
 fn local_suite_reads_and_edits_with_spec_errors() {
     let workspace = TestWorkspace::new();
     let ripgrep = RipgrepExecutable::from_path(workspace.ripgrep()).unwrap();
     let shell =
         LocalShellToolService::new(workspace.trusted(), ripgrep.clone(), PassThroughBackend)
             .unwrap();
+    let agent_grep = Arc::new(AgentGrepService::new(
+        zeta_config::AgentGrepBackend::Ripgrep,
+        ripgrep.clone(),
+        None,
+    ));
     let suite = LocalToolSuite::new(
         shell,
         ripgrep,
+        agent_grep,
         Arc::new(crate::session_workspace_access::SessionWorkspaceAccess::default()),
     );
     let path = workspace.path().join("src/main.rs");

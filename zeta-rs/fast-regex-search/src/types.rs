@@ -19,6 +19,7 @@ pub struct FastRegexQuery {
     pub query: String,
     pub pattern: FastRegexPattern,
     pub case_sensitivity: FastRegexCaseSensitivity,
+    pub scope: PathBuf,
     pub include_patterns: Vec<String>,
     pub exclude_patterns: Vec<String>,
     pub max_results: usize,
@@ -42,6 +43,14 @@ pub struct FastRegexMatch {
 pub struct FastRegexSearchResult {
     pub matches: Vec<FastRegexMatch>,
     pub limit_hit: bool,
+    pub statistics: FastRegexSearchStatistics,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct FastRegexSearchStatistics {
+    pub indexed_file_count: usize,
+    pub candidate_file_count: usize,
+    pub scanned_file_count: usize,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -49,7 +58,6 @@ pub struct FastRegexSearchSnapshot {
     pub generation: u64,
     pub indexed_file_count: usize,
     pub indexed_source_bytes: usize,
-    pub indexed_ngram_count: usize,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -91,6 +99,7 @@ pub enum FastRegexError {
     InvalidQuery(&'static str),
     InvalidGlob,
     InvalidLimits,
+    CorruptIndex(PathBuf),
     NotReady,
     StaleSource(PathBuf),
     Io {
@@ -106,6 +115,13 @@ impl fmt::Display for FastRegexError {
             Self::InvalidQuery(message) => formatter.write_str(message),
             Self::InvalidGlob => formatter.write_str("search glob is invalid"),
             Self::InvalidLimits => formatter.write_str("fast regex search limits are invalid"),
+            Self::CorruptIndex(path) => {
+                write!(
+                    formatter,
+                    "fast regex search index is corrupt: {}",
+                    path.display()
+                )
+            }
             Self::NotReady => formatter.write_str("fast regex search index is not ready"),
             Self::StaleSource(path) => {
                 write!(formatter, "indexed source is stale: {}", path.display())

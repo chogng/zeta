@@ -22,5 +22,9 @@ zeta-workspace = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 
+[[bench]]
+name = "fast_regex_vs_rg"
+harness = false
+
 [lints]
 workspace = true

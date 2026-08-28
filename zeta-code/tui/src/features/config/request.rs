@@ -60,6 +60,7 @@ where
         preferred_model: preferred_model_patch,
         approval_review_model: Patch::Missing,
         tool_mode: Patch::Missing,
+        agent_grep_backend: Patch::Missing,
     })?;
     let config = client.read_config()?;
     let notice = format!(

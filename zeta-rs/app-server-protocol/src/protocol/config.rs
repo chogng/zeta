@@ -4,6 +4,15 @@ use std::collections::BTreeMap;
 use ts_rs::TS;
 use zeta_protocol::{CommandId, Patch, ToolMode};
 
+/// Selects the implementation behind the Agent-only `grep` Tool.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum AgentGrepBackendDto {
+    #[default]
+    Ripgrep,
+    FastRegex,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename = "ModelRef")]
@@ -394,6 +403,7 @@ pub struct ConfigReadResult {
     pub preferred_model: Option<ModelRefDto>,
     pub approval_review_model: ApprovalReviewModelSelectionDto,
     pub tool_mode: ToolMode,
+    pub agent_grep_backend: AgentGrepBackendDto,
     pub providers: BTreeMap<String, ProviderConfigDto>,
     pub mcp_servers: BTreeMap<String, McpServerConfigDto>,
     pub skill_sources: BTreeMap<String, SkillSourceConfigDto>,
@@ -523,6 +533,10 @@ pub struct ConfigUpdateParams {
     #[schemars(with = "Option<ToolMode>")]
     #[ts(as = "Option<ToolMode>", optional = nullable)]
     pub tool_mode: Patch<ToolMode>,
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    #[schemars(with = "Option<AgentGrepBackendDto>")]
+    #[ts(as = "Option<AgentGrepBackendDto>", optional = nullable)]
+    pub agent_grep_backend: Patch<AgentGrepBackendDto>,
 }
 
 /// Creates or replaces one user-owned language-server preference.

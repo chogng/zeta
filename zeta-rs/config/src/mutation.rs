@@ -246,4 +246,9 @@ fn apply_preferences(document: &mut UserConfigDocument, update: &PreferencesUpda
         Patch::Null => document.agent.tool_mode = zeta_protocol::ToolMode::Direct,
         Patch::Value(tool_mode) => document.agent.tool_mode = *tool_mode,
     }
+    match &update.grep_backend {
+        Patch::Missing => {}
+        Patch::Null => document.agent.grep_backend = crate::AgentGrepBackend::Ripgrep,
+        Patch::Value(backend) => document.agent.grep_backend = *backend,
+    }
 }
