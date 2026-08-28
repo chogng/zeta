@@ -11,7 +11,7 @@ Stanza 采用与 VS Code `src/vs/editor` 一致的扁平职责分区：`common` 
 | 完整行式实现 | `editor.all.ts` | Code 使用的完整行式 contribution 集合；不注册 Workbench pane |
 | Code 功能实现 | `editor.code.all.ts` | 加载完整行式实现，由 Code Workbench 注册 code/diff pane |
 | Academic 功能实现 | `editor.academic.all.ts` | 只加载 Academic 富文档 contribution；不加载 Code bundle 或 Code pane |
-| 程序化调用 | `editor.api.ts` | `editor.create/createModel`、`languages.register/register*Provider`、命名主题、standalone model registry、`TextModel`、schema、transaction 和坐标值对象；不注册 pane |
+| 程序化调用 | `editor.api.ts` | `editor.create/createModel`、`languages.register/registerLanguages/registerProviderBatch/register*Provider`、命名主题、standalone model registry、`TextModel`、schema、transaction 和坐标值对象；不注册 pane |
 | 完整 standalone 入口 | `editor.main.ts` | 先加载 `editor.all.ts` 的完整行式 contribution，再导出 `editor.api.ts` |
 
 ## 核心文档
@@ -102,6 +102,7 @@ Workbench 模式 contribution 是唯一能力选择点。Code 与 Academic 各�
 | `TextBuffer` | 字符与物理行存储 contract；PieceTree 是当前私有实现 | TextModel edit、snapshot、worker mirror、maintenance |
 | `CodeEditorWidget` | Code 模式的行式 DOM projection 与 input/navigation surface | viewport、accessibility、contributed controllers |
 | `StandaloneServices` | standalone 窗口级 model/language-identity/language-configuration/language-features/theme/worker 服务；服务与 worker 只允许首次初始化覆盖，theme 始终由 `StandaloneThemeService` 拥有 | `editor.api.ts`、standalone 生命周期测试、调试入口 |
+| `StandaloneCodeEditor` | 把 `EditorBrowser` 适配为 standalone code editor，绑定主题并按 model 来源决定所有权 | `standaloneEditor.ts`、model/editor 生命周期测试 |
 | `StandaloneThemeService` | 命名主题注册、默认 Light、活动主题切换与系统高对比度投影；不读取 Workbench 配置 | `editor.create` 的 `theme`/`autoDetectHighContrast`、`editor.defineTheme/setTheme`、主题服务测试 |
 | `registerEditorContribution` | 所有 Stanza capability 的进程级静态注册 | `editor.*.all.ts`、text/document 挂载点和 contribution 顺序 |
 | `RichTextEditorWidget` | 结构化节点、marks、selection 与 node-view lifecycle | schema profile、clipboard、collaboration decoration |

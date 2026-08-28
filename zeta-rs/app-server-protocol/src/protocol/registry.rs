@@ -371,6 +371,7 @@ use crate::protocol::turn::{
     InputItem, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult,
 };
 use crate::protocol::workspace::WorkspaceAdditionalDirectoryAddParams;
+use crate::protocol::workspace::WorkspaceAdditionalDirectoryContributionsDto;
 use crate::protocol::workspace::WorkspaceAdditionalDirectoryDto;
 use crate::protocol::workspace::WorkspaceAdditionalDirectoryListParams;
 use crate::protocol::workspace::WorkspaceAdditionalDirectoryListResult;
@@ -383,6 +384,7 @@ use crate::protocol::workspace::WorkspaceFolderDto;
 use crate::protocol::workspace::WorkspaceFolderSetEntry;
 use crate::protocol::workspace::WorkspaceFoldersSetParams;
 use crate::protocol::workspace::WorkspaceFoldersSetResult;
+use crate::protocol::workspace::WorkspaceSessionDirectorySelector;
 use crate::protocol::workspace::WorkspaceSwitchParams;
 use crate::protocol::workspace::WorkspaceSwitchResult;
 use crate::protocol::workspace::WorkspaceSwitchTrust;
@@ -2257,7 +2259,9 @@ typescript_bindings! {
     WorkspaceFolderSetEntry,
     WorkspaceFoldersSetParams,
     WorkspaceFoldersSetResult,
+    WorkspaceSessionDirectorySelector,
     WorkspaceAdditionalDirectoryDto,
+    WorkspaceAdditionalDirectoryContributionsDto,
     WorkspaceAdditionalDirectoryListParams,
     WorkspaceAdditionalDirectoryListResult,
     WorkspaceAdditionalDirectoryAddParams,

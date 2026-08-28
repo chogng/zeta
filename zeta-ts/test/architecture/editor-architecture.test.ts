@@ -197,6 +197,7 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"editor.main.ts",
 		"standalone/browser/standaloneServices.ts",
 		"standalone/browser/standaloneEditor.ts",
+		"standalone/browser/standaloneCodeEditor.ts",
 		"standalone/browser/standaloneLanguages.ts",
 		"README.md",
 		"text-engine.md",

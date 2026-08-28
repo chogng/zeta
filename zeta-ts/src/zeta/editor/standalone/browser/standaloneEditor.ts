@@ -1,16 +1,11 @@
-import { type IDimension } from "../../../base/browser/geometry.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { Disposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
+import { toDisposable } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
-import { bindColorTheme } from "../../../platform/theme/browser/themeStyles.js";
-import { EditorBrowser, type EditorBrowserOptions, type EditorTextViewState, type IEditorBrowser } from "../../browser/editorBrowser.js";
-import { type EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
-import { type TextRange } from "../../common/core/text.js";
+import { type EditorBrowserOptions } from "../../browser/editorBrowser.js";
 import { TextModel } from "../../common/model/textModel.js";
-import { type EditorView, type EditorViewport } from "../../browser/view.js";
-import { type CodeEditorWidget } from "../../browser/widget/codeEditor/codeEditorWidget.js";
 import { type ModelLanguageChangeEvent } from "../../common/services/model.js";
 import { type IStandaloneThemeData } from "../common/standaloneTheme.js";
+import { StandaloneCodeEditor, type IStandaloneCodeEditor } from "./standaloneCodeEditor.js";
 import { StandaloneServices, type StandaloneServiceOverrides } from "./standaloneServices.js";
 
 type StandaloneEditorBrowserOptions = Omit<EditorBrowserOptions,
@@ -27,10 +22,6 @@ export interface IStandaloneEditorConstructionOptions extends StandaloneEditorBr
 	readonly readOnly?: boolean;
 	readonly theme?: string;
 	readonly autoDetectHighContrast?: boolean;
-}
-
-export interface IStandaloneCodeEditor extends IEditorBrowser {
-	getModel(): TextModel;
 }
 
 export interface IStandaloneEditorApi {
@@ -166,44 +157,4 @@ export function createStandaloneEditorApi(): IStandaloneEditorApi {
 	});
 }
 
-class StandaloneCodeEditor extends Disposable implements IStandaloneCodeEditor {
-	private readonly editor: EditorBrowser;
-
-	readonly onDidChange: Event<void>;
-	readonly codeEditor: CodeEditorWidget;
-	readonly viewport: EditorViewport;
-	readonly selections: EditorSelectionController;
-	readonly view: EditorView;
-
-	constructor(options: EditorBrowserOptions, private readonly model: TextModel, ownsModel: boolean, themeService: Parameters<typeof bindColorTheme>[0]) {
-		super();
-		try {
-			if (ownsModel) this._register(model);
-			this._register(bindColorTheme(themeService, options.container));
-			this.editor = this._register(new EditorBrowser(options));
-			this.onDidChange = this.editor.onDidChange;
-			this.codeEditor = this.editor.codeEditor;
-			this.viewport = this.editor.viewport;
-			this.selections = this.editor.selections;
-			this.view = this.editor.view;
-		} catch (error) {
-			this.dispose();
-			throw error;
-		}
-	}
-
-	registerEditorLifetime(registration: IDisposable): void {
-		this._register(registration);
-	}
-
-	getModel(): TextModel { return this.model; }
-	announceAccessibilityStatus(message: string): void { this.editor.announceAccessibilityStatus(message); }
-	layout(dimension: IDimension): void { this.editor.layout(dimension); }
-	focus(): void { this.editor.focus(); }
-	getValue(): string { return this.editor.getValue(); }
-	setValue(value: string): void { this.editor.setValue(value); }
-	revealRange(range: TextRange): void { this.editor.revealRange(range); }
-	getViewState(): EditorTextViewState { return this.editor.getViewState(); }
-	restoreViewState(state: EditorTextViewState): void { this.editor.restoreViewState(state); }
-	prepareSave(): Promise<void> { return this.editor.prepareSave(); }
-}
+export type { IStandaloneCodeEditor } from './standaloneCodeEditor.js';

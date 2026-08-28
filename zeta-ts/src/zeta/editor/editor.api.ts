@@ -14,9 +14,12 @@ export { EditorLineWrapping, WrappingIndent } from "./common/config/editorOption
 export type { IEditorMinimapOptions } from './common/config/editorOptions.js';
 export { EditorTextDirection } from "./browser/view.js";
 export { ColorScheme } from "../platform/theme/common/theme.js";
-export type { IStandaloneCodeEditor, IStandaloneEditorApi, IStandaloneEditorConstructionOptions } from "./standalone/browser/standaloneEditor.js";
+export type { IStandaloneCodeEditor } from './standalone/browser/standaloneCodeEditor.js';
+export type { IStandaloneEditorApi, IStandaloneEditorConstructionOptions } from "./standalone/browser/standaloneEditor.js";
 export type { IStandaloneLanguagesApi } from './standalone/browser/standaloneLanguages.js';
-export type { LanguageDescription, LanguageRegistrationOptions } from './common/languages/languageRegistry.js';
+export type { LanguageDescription, LanguageDescriptionChangeEvent, LanguageDescriptionContribution, LanguageDescriptionRegistration, LanguageRegistrationOptions } from './common/languages/languageRegistry.js';
+export type { TextResourceLanguageInput } from '../platform/language/common/textResourceLanguage.js';
+export type { LanguageProviderBatch, LanguageProviderBatchRegistration } from './common/services/languageFeatures.js';
 export type { LanguageConfiguration, LanguageConfigurationRegistrationOptions } from './common/languages/languageConfiguration.js';
 export { RGBA8 } from './common/core/misc/rgba.js';
 export type { TextEdit, TextSnapshot } from './common/core/text.js';

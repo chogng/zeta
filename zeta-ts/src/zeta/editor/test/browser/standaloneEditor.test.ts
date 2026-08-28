@@ -93,6 +93,41 @@ test("standalone languages API exposes provider value types", () => {
 	assert.deepEqual(new stanza.languages.RGBA8(300, -1, 64, 255), new stanza.RGBA8(255, 0, 64, 255));
 });
 
+test('standalone languages API replaces one language generation without stale registrations', () => {
+	const changes: string[] = [];
+	using listener = stanza.languages.onDidChangeLanguages(event => changes.push(event.languageId));
+	using descriptions = stanza.languages.registerLanguages([{
+		description: { id: 'stanza-generation-a', extensions: ['.generation-a'] },
+	}]);
+
+	assert.equal(stanza.languages.resolveLanguageId({ resource: URI.parse('file:///sample.generation-a') }), 'stanza-generation-a');
+	descriptions.replace([{
+		description: { id: 'stanza-generation-b', extensions: ['.generation-b'] },
+	}]);
+	assert.equal(stanza.languages.resolveLanguageId({ resource: URI.parse('file:///sample.generation-a') }), undefined);
+	assert.equal(stanza.languages.resolveLanguageId({ resource: URI.parse('file:///sample.generation-b') }), 'stanza-generation-b');
+	assert.deepEqual(changes, ['stanza-generation-a', 'stanza-generation-a', 'stanza-generation-b']);
+});
+
+test('standalone languages API replaces provider batches atomically', () => {
+	const first = {
+		providerId: 'stanza.batch.first',
+		languageIds: ['stanza-batch'],
+		provideHover: () => ({ contents: ['first'] }),
+	};
+	const second = {
+		providerId: 'stanza.batch.second',
+		languageIds: ['stanza-batch'],
+		provideHover: () => ({ contents: ['second'] }),
+	};
+	using batch = stanza.languages.registerProviderBatch({ hovers: [first] });
+	const providers = StandaloneServices.get().languageFeaturesService.hoverProvider;
+
+	assert.deepEqual(providers.getProviders('stanza-batch'), [first]);
+	batch.replace({ hovers: [second] });
+	assert.deepEqual(providers.getProviders('stanza-batch'), [second]);
+});
+
 test("standalone languages API feeds the shared editor registries", async () => {
 	using language = stanza.languages.register({ id: 'stanza-public-test', extensions: ['.stanza-public'] });
 	using configuration = stanza.languages.setLanguageConfiguration('stanza-public-test', { comments: { lineComment: '//' } });

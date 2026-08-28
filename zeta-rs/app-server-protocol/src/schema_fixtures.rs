@@ -367,6 +367,8 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains(r#""fs/readFile": { method: "fs/readFile" }"#));
     assert!(typescript.contains(r#""fs/readBinaryFile": { method: "fs/readBinaryFile" }"#));
     assert!(typescript.contains(r#""fs/writeFile": { method: "fs/writeFile" }"#));
+    assert!(typescript.contains("export type WorkspaceSessionDirectorySelector ="));
+    assert!(typescript.contains("export type WorkspaceAdditionalDirectoryContributionsDto ="));
     assert!(typescript.contains(r#""fs/changed": { method: "fs/changed" }"#));
     assert!(
         typescript.contains(r#""workspace/search/start": { method: "workspace/search/start" }"#)
