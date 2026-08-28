@@ -26,7 +26,7 @@ export function describe(sample: GeometrySample): string {
 }
 
 console.log(describe(sample));
-`;
+${createScrollSamples(96)}`;
 
 const container = requiredElement("editor-root");
 const resource = stanzaApi.URI.parse("inmemory://stanza/standalone.ts");
@@ -53,7 +53,20 @@ resizeObserver.observe(container);
 disposables.add(toDisposable(() => resizeObserver.disconnect()));
 
 function layoutEditor(): void {
-  editor.layout({ width: container.clientWidth, height: container.clientHeight });
+  const bounds = container.getBoundingClientRect();
+  editor.layout({ width: bounds.width, height: bounds.height });
+}
+
+function createScrollSamples(count: number): string {
+  return Array.from({ length: count }, (_, index) => {
+    const ordinal = String(index + 1).padStart(3, "0");
+    return `
+export function scrollSample${ordinal}(value: number): string {
+\tconst adjusted = value + ${index + 1};
+\treturn "sample-${ordinal}: " + String(adjusted);
+}
+`;
+  }).join("");
 }
 
 layoutEditor();

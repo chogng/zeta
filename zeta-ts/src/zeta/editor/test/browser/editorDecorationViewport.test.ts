@@ -111,7 +111,7 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
 	assert.equal(errorOverview.classList.contains(DecorationPresentation.ErrorUnderline), true);
 	const errorMinimap = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-minimap-diagnostic-marker");
 	assert.equal(errorMinimap.classList.contains(DecorationPresentation.ErrorUnderline), true);
-	assert.equal(errorMinimap.style.top, "4px");
+	assert.equal(errorMinimap.style.top, "40px");
 
 	diagnostics.update(diagnosticId, {
 		range: TextRange.from(TextPosition.at(1, 1), TextPosition.at(1, 3)),
@@ -139,7 +139,7 @@ test("Decoration sources project, update, and follow tracked model ranges", () =
 	assert.equal(warningOverview.classList.contains(DecorationPresentation.WarningUnderline), true);
 	const warningMinimap = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-minimap-diagnostic-marker");
 	assert.equal(warningMinimap.classList.contains(DecorationPresentation.WarningUnderline), true);
-	assert.equal(warningMinimap.style.top, "2px");
+	assert.equal(warningMinimap.style.top, "20px");
 	assert.equal(matchResolutionCount, 1);
 
 	model.applyEdits([{

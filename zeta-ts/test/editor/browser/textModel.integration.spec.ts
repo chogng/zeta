@@ -52,6 +52,34 @@ test("text-model editor projects revision-bound Rust syntax, diagnostics, foldin
 	await expect(page.locator(".stanza-editor-goto-symbol-item")).toHaveText("main");
 });
 
+test("short documents have no false scroll range and use a proportional hover slider", async ({ page }) => {
+	await page.goto("/textModel.html");
+	await expect(page.locator(".stanza-editor")).toBeVisible();
+	const geometry = await page.locator(".stanza-editor").evaluate(editor => {
+		const minimap = editor.querySelector<HTMLElement>(".stanza-editor-minimap");
+		const slider = editor.querySelector<HTMLElement>(".stanza-editor-minimap-slider");
+		if (!minimap || !slider) throw new Error("Missing minimap geometry");
+		return {
+			clientHeight: editor.clientHeight,
+			scrollHeight: editor.scrollHeight,
+			scrollTop: editor.scrollTop,
+			sliderHidden: slider.hidden,
+			sliderHeight: slider.getBoundingClientRect().height,
+			minimapHeight: minimap.getBoundingClientRect().height,
+		};
+	});
+
+	expect(geometry.scrollHeight).toBe(geometry.clientHeight);
+	expect(geometry.scrollTop).toBe(0);
+	expect(geometry.sliderHidden).toBe(false);
+	expect(geometry.sliderHeight).toBeLessThan(geometry.minimapHeight);
+	const minimap = page.locator('.stanza-editor-minimap');
+	const slider = page.locator('.stanza-editor-minimap-slider');
+	await expect(slider).toHaveCSS('opacity', '0');
+	await minimap.hover();
+	await expect(slider).toHaveCSS('opacity', '1');
+});
+
 test("glyph margin, line numbers, and folding controls keep VS Code gutter order", async ({ page }) => {
 	await page.goto("/textModel.html");
 	const glyphMargin = page.locator(".stanza-editor-glyph-margin");

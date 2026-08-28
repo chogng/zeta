@@ -11,6 +11,10 @@
   box-shadow: 0 4px 14px var(--zeta-editor-widget-shadow);
 }
 
+.stanza-editor-rename[hidden] {
+  display: none;
+}
+
 .stanza-editor-rename-input {
   min-width: 220px;
   color: var(--zeta-editor-foreground);

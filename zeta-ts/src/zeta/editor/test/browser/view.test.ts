@@ -66,7 +66,7 @@ test('EditorView refreshes minimap canvas dimensions when the window pixel ratio
 		model,
 		selectionController: selections,
 		lineHeight: 20,
-		viewport: { textMeasurer: new FixedTextMeasurer() },
+		viewport: { textMeasurer: new FixedTextMeasurer(), minimap: { size: 'proportional' } },
 	});
 
 	view.viewport.layout({ width: 800, height: 600 });

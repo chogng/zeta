@@ -223,10 +223,6 @@ export class Minimap extends EditorViewPart {
 	}
 
 	private renderSlider(layout: MinimapRenderLayout): void {
-		if (!layout.sliderNeeded) {
-			this.slider.hidden = true;
-			return;
-		}
 		this.slider.hidden = false;
 		this.slider.style.height = `${layout.sliderHeight}px`;
 		this.slider.style.transform = `translate3d(0, ${layout.sliderTop}px, 0)`;

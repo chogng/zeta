@@ -380,7 +380,33 @@ test("EditorViewport normalizes minimap options through common editor configurat
 	assert.equal(minimap.style.transform, 'translate3d(0px, 0px, 0)');
 	const canvas = requiredElement<HTMLCanvasElement>(minimap, '.stanza-editor-minimap-canvas');
 	assert.equal(canvas.height, 40);
-	assert.equal(requiredElement<HTMLElement>(viewport.element, '.stanza-editor-content').style.transform, `translate3d(${canvas.width}px, 0, 0)`);
+	assert.equal(requiredElement<HTMLElement>(viewport.element, '.stanza-editor-content').style.transform, `translate3d(${Number.parseFloat(canvas.style.width)}px, 0, 0)`);
+	dom.window.close();
+});
+
+test("EditorViewport uses the common proportional minimap size by default and preserves an explicit fill size", () => {
+	const dom = new JSDOM("<!doctype html><body><main></main><aside></aside></body>");
+	using model = new TextModel("alpha\nbeta");
+	using proportionalViewport = new EditorViewport({
+		container: requiredElement(dom.window.document, "main"),
+		model,
+		lineHeight: 20,
+		textMeasurer: fixedTextMeasurer(),
+	});
+	using fillingViewport = new EditorViewport({
+		container: requiredElement(dom.window.document, "aside"),
+		model,
+		lineHeight: 20,
+		textMeasurer: fixedTextMeasurer(),
+		minimap: { size: 'fill' },
+	});
+	proportionalViewport.layout({ width: 300, height: 100 });
+	fillingViewport.layout({ width: 300, height: 100 });
+	const proportionalCanvas = requiredElement<HTMLCanvasElement>(proportionalViewport.element, '.stanza-editor-minimap-canvas');
+	const fillingCanvas = requiredElement<HTMLCanvasElement>(fillingViewport.element, '.stanza-editor-minimap-canvas');
+
+	assert.equal(fillingCanvas.style.width, proportionalCanvas.style.width);
+	assert.equal(fillingCanvas.width, proportionalCanvas.width * 2);
 	dom.window.close();
 });
 
@@ -603,7 +629,7 @@ test("Folding model removes folded physical rows from the viewport projection", 
 	dom.window.close();
 });
 
-test("EditorViewport keeps short minimap content at the top and omits a useless slider", () => {
+test("EditorViewport keeps short minimap content at the top and projects a proportional hover slider", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha\nbeta\ngamma");
@@ -618,7 +644,9 @@ test("EditorViewport keeps short minimap content at the top and omits a useless 
 	const minimap = requiredElement<HTMLElement>(viewport.element, ".stanza-editor-minimap");
 	const canvas = requiredElement<HTMLCanvasElement>(minimap, '.stanza-editor-minimap-canvas');
 	assert.equal(canvas.height, 100);
-	assert.equal(requiredElement<HTMLElement>(minimap, ".stanza-editor-minimap-slider").hidden, true);
+	const slider = requiredElement<HTMLElement>(minimap, ".stanza-editor-minimap-slider");
+	assert.equal(slider.hidden, false);
+	assert.equal(slider.style.height, '10px');
 	assert.equal(minimap.style.transform, "translate3d(252px, 0px, 0)");
 	dom.window.close();
 });
