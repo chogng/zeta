@@ -142,7 +142,7 @@ pub(crate) fn provider_api_key_view(provider: String, display_name: String) -> C
             .without_tab_bar()
             .without_selection()
             .with_secret_input("Enter API key", submit_id),
-            "Enter save  ·  Esc back",
+            "Enter save  ·  Esc cancel",
         ),
         actions,
     }
