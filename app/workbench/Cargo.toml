@@ -12,12 +12,12 @@ path = "lib.rs"
 
 [dependencies]
 zeta-commands = { workspace = true }
+zeta-files = { workspace = true }
 zeta-icons = { workspace = true }
 zeta-keybinding = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-session = { workspace = true }
 zeta-ui-components = { workspace = true }
-zeta-workspace-ui = { workspace = true }
 zui = { workspace = true, default-features = false }
 
 [lints]

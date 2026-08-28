@@ -1,27 +1,93 @@
-use zeta_ui_components::{
-    ActionBar, ActionBarItem, ActionBarOrientation, ActionBarStyle, ActionViewItem,
-    ButtonSelection, ButtonState, InteractionRegion,
-};
-use zui::ui::{
-    AccessibilityRole, AccessibilitySelection, CursorFeedback, FocusBehavior, NavigationAxis,
-    NavigationGroupId, NodeAction, UiDispatch, UiNode,
-};
-use zui::ui::{
-    Component, ComponentContext, ComponentElement, ComputedElement, Element, Rect, Size, UiScene,
-};
+use zeta_ui_components::ActionBar;
+use zeta_ui_components::ActionBarItem;
+use zeta_ui_components::ActionBarOrientation;
+use zeta_ui_components::ActionBarStyle;
+use zeta_ui_components::ActionViewItem;
+use zeta_ui_components::ButtonSelection;
+use zeta_ui_components::ButtonState;
+use zeta_ui_components::InteractionRegion;
+use zui::ui::AccessibilityRole;
+use zui::ui::AccessibilitySelection;
+use zui::ui::Component;
+use zui::ui::ComponentContext;
+use zui::ui::ComponentElement;
+use zui::ui::ComputedElement;
+use zui::ui::CursorFeedback;
+use zui::ui::Element;
+use zui::ui::ElementId;
+use zui::ui::FocusBehavior;
+use zui::ui::NavigationAxis;
+use zui::ui::NavigationGroupId;
+use zui::ui::NodeAction;
+use zui::ui::Rect;
+use zui::ui::Size;
+use zui::ui::UiDispatch;
+use zui::ui::UiNode;
+use zui::ui::UiScene;
 
-use crate::WorkspacePaneSelection;
-use crate::WorkspacePaneStyle;
-use crate::WorkspacePaneView;
-use crate::interaction::{WORKSPACE_PANE_NAVIGATION, WORKSPACE_PANE_TOOLBAR};
+use crate::PaneInputKind;
+use crate::WorkspaceNavigationStyle;
 
 const ITEM_WIDTH: f32 = 64.0;
+pub const WORKSPACE_PANE: ElementId = ElementId::scoped(1, 23);
+pub const WORKSPACE_PANE_NAVIGATION: ElementId = ElementId::scoped(1, 32);
+pub const WORKSPACE_CHANGES: ElementId = ElementId::scoped(1, 33);
+pub const WORKSPACE_FILES: ElementId = ElementId::scoped(1, 34);
+pub const WORKSPACE_PANE_TOOLBAR: ElementId = ElementId::scoped(1, 35);
+
+/// A concrete capability selectable in the Workspace Pane.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WorkspacePaneSelection {
+    Changes,
+    Files,
+}
+
+impl WorkspacePaneSelection {
+    pub const ALL: [Self; 2] = [Self::Changes, Self::Files];
+
+    pub const fn element_id(self) -> ElementId {
+        match self {
+            Self::Changes => WORKSPACE_CHANGES,
+            Self::Files => WORKSPACE_FILES,
+        }
+    }
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Changes => "Changes",
+            Self::Files => "Files",
+        }
+    }
+
+    pub const fn pane_kind(self) -> PaneInputKind {
+        match self {
+            Self::Changes => PaneInputKind::Diff,
+            Self::Files => PaneInputKind::Files,
+        }
+    }
+
+    pub const fn from_pane_kind(kind: PaneInputKind) -> Option<Self> {
+        match kind {
+            PaneInputKind::Diff => Some(Self::Changes),
+            PaneInputKind::Files => Some(Self::Files),
+            PaneInputKind::Agent | PaneInputKind::Settings | PaneInputKind::Terminal => None,
+        }
+    }
+
+    pub const fn from_element_id(id: ElementId) -> Option<Self> {
+        match id {
+            WORKSPACE_CHANGES => Some(Self::Changes),
+            WORKSPACE_FILES => Some(Self::Files),
+            _ => None,
+        }
+    }
+}
 
 /// Horizontal Changes/Files switcher hosted by a Workspace Pane toolbar.
 pub struct WorkspacePaneNavigation {
     bounds: Rect,
     action_bar: ActionBar,
-    selected: WorkspacePaneView,
+    selected: WorkspacePaneSelection,
 }
 
 impl WorkspacePaneNavigation {
@@ -36,11 +102,11 @@ impl WorkspacePaneNavigation {
 
     pub fn new(
         bounds: Rect,
-        selected: WorkspacePaneView,
-        palette: &WorkspacePaneStyle,
+        selected: WorkspacePaneSelection,
+        palette: &WorkspaceNavigationStyle,
         dispatch: &UiDispatch,
     ) -> Self {
-        let button_style = palette.navigation_button_style();
+        let button_style = palette.button_style();
         let items = WorkspacePaneSelection::ALL
             .into_iter()
             .map(|action| {
@@ -55,7 +121,7 @@ impl WorkspacePaneNavigation {
                     ButtonState::Resting
                 };
                 ActionBarItem::Action(ActionViewItem::label(action.label(), state).with_selection(
-                    if action.view() == selected {
+                    if action == selected {
                         ButtonSelection::Selected
                     } else {
                         ButtonSelection::Unselected
@@ -95,7 +161,7 @@ impl WorkspacePaneNavigation {
                 .with_focus(FocusBehavior::TabStop)
                 .with_action(NodeAction::Activate)
                 .with_navigation(navigation, NavigationAxis::Horizontal)
-                .with_selection(if action.view() == self.selected {
+                .with_selection(if action == self.selected {
                     AccessibilitySelection::Selected
                 } else {
                     AccessibilitySelection::Unselected
@@ -136,3 +202,7 @@ impl Component for WorkspacePaneNavigation {
         scene.draw_component(&self.action_bar);
     }
 }
+
+#[cfg(test)]
+#[path = "workspace_navigation_tests.rs"]
+mod tests;

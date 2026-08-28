@@ -11,7 +11,7 @@ use crate::remote_connection_manager::RemoteConnectionManagerField;
 use crate::remote_connection_picker::REMOTE_CONNECTION_SEARCH_INPUT;
 use crate::remote_tunnel_manager::REMOTE_TUNNEL_REMOTE_PORT;
 use crate::shell_interaction::{
-    AGENT_FILE_SEARCH_INPUT, COMPOSER, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT,
+    COMPOSER, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT, FILE_SEARCH_INPUT,
     SESSION_SEARCH_INPUT,
 };
 use crate::workspace_path_picker::WORKSPACE_PATH_SEARCH_INPUT;
@@ -363,7 +363,7 @@ impl NativeApp {
             file_editor_replace_focused: self.ui_dispatch.is_focused(FILE_EDITOR_REPLACE_INPUT),
             session_search_focused: self.ui_dispatch.is_focused(SESSION_SEARCH_INPUT),
             tab_rename_focused: self.ui_dispatch.is_focused(TAB_RENAME_INPUT),
-            file_search_focused: self.ui_dispatch.is_focused(AGENT_FILE_SEARCH_INPUT),
+            file_search_focused: self.ui_dispatch.is_focused(FILE_SEARCH_INPUT),
             git_branch_search_focused: self.ui_dispatch.is_focused(GIT_BRANCH_SEARCH_INPUT),
             workspace_path_search_focused: self.ui_dispatch.is_focused(WORKSPACE_PATH_SEARCH_INPUT),
             remote_connection_search_focused: self

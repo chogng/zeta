@@ -1,24 +1,33 @@
+//! Files Pane state, layout, interaction, and UI.
+
 use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::TryRecvError;
 
+use zeta_commands::AppCommandId;
+use zeta_commands::CommandRequest;
 use zeta_file_search::PathSearchHandle;
 use zeta_file_search::PathSearchOptions;
 use zeta_file_search::PathSearchSnapshot;
+use zeta_ui_components::ButtonBackgrounds;
+use zeta_ui_components::ButtonStyle;
 use zeta_ui_components::ScrollAxis;
 use zeta_ui_components::ScrollCommand;
 use zeta_ui_components::ScrollDelta;
 use zeta_ui_components::ScrollMetrics;
 use zeta_ui_components::ScrollState;
+use zeta_ui_components::SearchBoxStyle;
 use zeta_ui_components::TreeItem;
 use zeta_ui_components::VirtualListLayout;
+use zui::ui::Color;
+use zui::ui::CornerRadii;
+use zui::ui::Edges;
 use zui::ui::ElementId;
 use zui::ui::Size;
 use zui::ui::TextInput;
 use zui::ui::TextInputCommand;
 use zui::ui::TextInputCompositionEvent;
-
-use crate::WorkspacePaneAction;
+use zui::ui::TextStyle;
 
 #[path = "files/file_icon.rs"]
 mod file_icon;
@@ -42,6 +51,77 @@ pub use pane::FilesPaneStyle;
 pub use toolbar::FilesToolbar;
 
 pub const FILE_LIST_ROW_HEIGHT: f32 = 24.0;
+pub const FILES_PANE: ElementId = ElementId::scoped(1, 28);
+pub const FILES_ACTION_BAR: ElementId = ElementId::scoped(1, 36);
+pub const FILES_REFRESH: ElementId = ElementId::scoped(1, 37);
+pub const FILES_SEARCH: ElementId = ElementId::scoped(1, 38);
+pub const FILE_SEARCH_INPUT: ElementId = ElementId::scoped(1, 39);
+pub const FILES_TOOLBAR: ElementId = ElementId::scoped(1, 52);
+
+/// A Files-pane interaction that requires host work or focus routing.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum FilesAction {
+    Handled,
+    StateChanged,
+    Focus(ElementId),
+    OpenFile { path: PathBuf },
+    LoadChildren { element: ElementId, path: PathBuf },
+}
+
+/// Theme values required by the Files toolbar.
+#[derive(Clone)]
+pub struct FilesToolbarStyle {
+    text: Color,
+    surface_hovered: Color,
+    selected_background: Color,
+    search: SearchBoxStyle,
+}
+
+impl FilesToolbarStyle {
+    pub fn new(
+        text: Color,
+        surface_hovered: Color,
+        selected_background: Color,
+        search: SearchBoxStyle,
+    ) -> Self {
+        Self {
+            text,
+            surface_hovered,
+            selected_background,
+            search,
+        }
+    }
+
+    pub fn search_style(&self) -> SearchBoxStyle {
+        self.search.clone()
+    }
+
+    pub fn button_style(&self) -> ButtonStyle {
+        let backgrounds = ButtonBackgrounds::new(Color::TRANSPARENT)
+            .with_hovered(self.surface_hovered)
+            .with_focused(self.surface_hovered)
+            .with_pressed(self.selected_background);
+        let selected = ButtonBackgrounds::new(self.selected_background)
+            .with_hovered(self.selected_background)
+            .with_focused(self.selected_background)
+            .with_pressed(self.selected_background);
+        ButtonStyle::new(backgrounds, TextStyle::new(11.0, self.text))
+            .with_selected_backgrounds(selected)
+            .with_corner_radii(CornerRadii::uniform(4.0))
+            .with_padding(Edges::uniform(4.0))
+            .with_icon_size(16.0)
+    }
+}
+
+/// Resolves a Files-owned element into its stable product command.
+pub fn command_request_for_element(element: ElementId) -> Option<CommandRequest> {
+    let command = match element {
+        FILES_REFRESH => AppCommandId::RefreshAgentFiles,
+        FILES_SEARCH => AppCommandId::ToggleAgentFileSearch,
+        _ => return None,
+    };
+    Some(command.into())
+}
 
 /// A filesystem entry projected by the host into the Files pane.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -167,13 +247,13 @@ impl FilesState {
     pub fn selected_element(&self) -> Option<ElementId> {
         self.tree.selected_element()
     }
-    pub fn activate(&mut self, element: ElementId) -> Option<WorkspacePaneAction> {
+    pub fn activate(&mut self, element: ElementId) -> Option<FilesAction> {
         self.tree.activate(element)
     }
-    pub fn navigate_right(&mut self, element: ElementId) -> Option<WorkspacePaneAction> {
+    pub fn navigate_right(&mut self, element: ElementId) -> Option<FilesAction> {
         self.tree.navigate_right(element)
     }
-    pub fn navigate_left(&mut self, element: ElementId) -> Option<WorkspacePaneAction> {
+    pub fn navigate_left(&mut self, element: ElementId) -> Option<FilesAction> {
         self.tree.navigate_left(element)
     }
     pub fn set_search_visible(&mut self, visible: bool) {
@@ -257,3 +337,7 @@ impl FilesState {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "command_tests.rs"]
+mod command_tests;

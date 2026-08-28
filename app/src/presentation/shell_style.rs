@@ -1,12 +1,12 @@
-use crate::workspace_panes::FilesPaneStyle;
-use crate::workspace_panes::ScmPaneStyle;
-use crate::workspace_panes::WorkspacePaneStyle;
 use zeta_editor::{
     CodeEditorDiagnosticPalette, CodeEditorPalette, CodeEditorStyle, CodeEditorSyntaxPalette,
     CodeEditorTokenRole, DiffEditorPalette, DiffEditorStyle, MultiDiffEditorPalette,
     MultiDiffEditorStyle,
 };
+use zeta_files::FilesPaneStyle;
+use zeta_files::FilesToolbarStyle;
 use zeta_icons::icons;
+use zeta_scm::ScmPaneStyle;
 use zeta_settings::SettingsPageStyle;
 use zeta_theme::{ThemeError, ThemeSnapshot, tokens};
 use zeta_ui_components::ButtonBackgrounds;
@@ -15,6 +15,7 @@ use zeta_ui_components::{
     InputBoxStateColors, InputBoxStyle, ScrollViewStyle, ScrollbarStyle, SearchBoxStyle,
 };
 use zeta_workbench::WorkbenchUiStyle;
+use zeta_workbench::WorkspaceNavigationStyle;
 use zui::ui::Border;
 use zui::ui::{Color, CornerRadii, Edges, FontFamily, FontWeight, TextStyle};
 
@@ -166,9 +167,17 @@ impl ShellPalette {
         }
     }
 
-    pub(crate) fn workspace_pane_style(self) -> WorkspacePaneStyle {
-        WorkspacePaneStyle::new(
+    pub(crate) fn workspace_navigation_style(self) -> WorkspaceNavigationStyle {
+        WorkspaceNavigationStyle::new(
             self.surface_raised,
+            self.text,
+            self.surface_hovered,
+            self.session_tab_highlight,
+        )
+    }
+
+    pub(crate) fn files_toolbar_style(self) -> FilesToolbarStyle {
+        FilesToolbarStyle::new(
             self.text,
             self.surface_hovered,
             self.session_tab_highlight,

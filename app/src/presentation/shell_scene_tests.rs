@@ -11,12 +11,12 @@ use crate::remote_connection_manager::RemoteConnectionManagerState;
 use crate::remote_connection_picker::RemoteConnectionPickerState;
 use crate::remote_tunnel_manager::RemoteTunnelManagerState;
 use crate::shell_interaction::{
-    AGENT_CHANGES, AGENT_EDITOR_PANE, AGENT_EXPLORER_PANE, AGENT_FILES, AGENT_FILES_REFRESH,
-    AGENT_FILES_SEARCH, COMPOSER, COMPOSER_INFO_BAR, COMPOSER_PANEL, FILE_EDITOR_DOCUMENT,
-    FILE_EDITOR_PANE, FILE_EDITOR_TAB_LIST, INSPECTOR_RESIZE_HANDLE, MULTI_DIFF_EDITOR,
-    SESSION_HEADER, SESSION_SEARCH_INPUT, TAB_CONTAINER_RESIZE_HANDLE,
-    TAB_CONTAINER_SETTINGS_CLOSE, TAB_CONTAINER_SETTINGS_TAB, TAB_CONTEXT_MENU, THREAD_TIMELINE,
-    TITLEBAR, WORKSPACE_PANE, WORKSPACE_PANE_NAVIGATION, WORKSPACE_PANE_TOOLBAR,
+    CHANGES_PANE, COMPOSER, COMPOSER_INFO_BAR, COMPOSER_PANEL, FILE_EDITOR_DOCUMENT,
+    FILE_EDITOR_PANE, FILE_EDITOR_TAB_LIST, FILES_PANE, FILES_REFRESH, FILES_SEARCH,
+    INSPECTOR_RESIZE_HANDLE, MULTI_DIFF_EDITOR, SESSION_HEADER, SESSION_SEARCH_INPUT,
+    TAB_CONTAINER_RESIZE_HANDLE, TAB_CONTAINER_SETTINGS_CLOSE, TAB_CONTAINER_SETTINGS_TAB,
+    TAB_CONTEXT_MENU, THREAD_TIMELINE, TITLEBAR, WORKSPACE_CHANGES, WORKSPACE_FILES,
+    WORKSPACE_PANE, WORKSPACE_PANE_NAVIGATION, WORKSPACE_PANE_TOOLBAR,
 };
 use crate::tab_context_menu::TabContextMenuState;
 use crate::workspace_context::WorkspaceContext;
@@ -841,7 +841,7 @@ fn workspace_pane_defaults_to_files_in_the_main_workbench_with_navigation_and_ac
         .unwrap();
     let explorer = accessibility_nodes
         .iter()
-        .find(|node| node.id == AGENT_EXPLORER_PANE)
+        .find(|node| node.id == FILES_PANE)
         .unwrap();
     let navigation = accessibility_nodes
         .iter()
@@ -883,17 +883,17 @@ fn workspace_pane_defaults_to_files_in_the_main_workbench_with_navigation_and_ac
         zui::ui::Rect::from_xywh(0.0, 68.0, 1000.0, 632.0)
     );
     for id in [
-        AGENT_CHANGES,
-        AGENT_FILES,
-        AGENT_FILES_REFRESH,
-        AGENT_FILES_SEARCH,
+        WORKSPACE_CHANGES,
+        WORKSPACE_FILES,
+        FILES_REFRESH,
+        FILES_SEARCH,
     ] {
         assert!(accessibility_nodes.iter().any(|node| node.id == id));
     }
     assert!(
         accessibility_nodes
             .iter()
-            .all(|node| !matches!(node.id, AGENT_EDITOR_PANE | MULTI_DIFF_EDITOR))
+            .all(|node| !matches!(node.id, CHANGES_PANE | MULTI_DIFF_EDITOR))
     );
     let visible_text = presentation
         .frame()
@@ -911,7 +911,7 @@ fn workspace_pane_defaults_to_files_in_the_main_workbench_with_navigation_and_ac
     assert_eq!(
         accessibility_nodes
             .iter()
-            .filter(|node| node.parent == Some(crate::shell_interaction::AGENT_FILES_ACTION_BAR))
+            .filter(|node| node.parent == Some(crate::shell_interaction::FILES_ACTION_BAR))
             .count(),
         2
     );
@@ -1011,17 +1011,18 @@ fn changes_switch_mounts_workspace_diffs_in_the_multi_diff_editor_without_files_
     assert!(
         accessibility_nodes
             .iter()
-            .any(|node| node.id == AGENT_EDITOR_PANE)
+            .any(|node| node.id == CHANGES_PANE)
     );
     assert!(
         accessibility_nodes
             .iter()
             .any(|node| node.id == MULTI_DIFF_EDITOR)
     );
-    assert!(accessibility_nodes.iter().all(|node| !matches!(
-        node.id,
-        AGENT_EXPLORER_PANE | AGENT_FILES_REFRESH | AGENT_FILES_SEARCH
-    )));
+    assert!(
+        accessibility_nodes
+            .iter()
+            .all(|node| !matches!(node.id, FILES_PANE | FILES_REFRESH | FILES_SEARCH))
+    );
     let visible_text = presentation
         .frame()
         .scene()

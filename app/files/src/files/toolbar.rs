@@ -13,11 +13,12 @@ use zui::ui::{
 };
 
 use super::FilesState;
-use crate::WorkspacePaneStyle;
-use crate::interaction::{
-    AGENT_FILE_SEARCH_INPUT, AGENT_FILES_ACTION_BAR, AGENT_FILES_REFRESH, AGENT_FILES_SEARCH,
-    AGENT_FILES_TOOLBAR, WORKSPACE_PANE_TOOLBAR,
-};
+use crate::FILE_SEARCH_INPUT;
+use crate::FILES_ACTION_BAR;
+use crate::FILES_REFRESH;
+use crate::FILES_SEARCH;
+use crate::FILES_TOOLBAR;
+use crate::FilesToolbarStyle;
 
 const PADDING: f32 = 8.0;
 const ACTION_SIZE: f32 = 28.0;
@@ -27,6 +28,7 @@ const ACTION_BAR_WIDTH: f32 = ACTION_SIZE * 2.0 + STATUS_WIDTH;
 /// Files-owned functional toolbar for refresh, search, and search input.
 pub struct FilesToolbar {
     bounds: Rect,
+    parent: zui::ui::ElementId,
     search_box: Option<SearchBox>,
     search_value: String,
     action_bar: ActionBar,
@@ -39,7 +41,8 @@ impl FilesToolbar {
         files: &FilesState,
         upstream_distance: Option<(usize, usize)>,
         caret_visibility: CaretVisibility,
-        palette: WorkspacePaneStyle,
+        palette: FilesToolbarStyle,
+        parent: zui::ui::ElementId,
         text_layout: &mut TextInputLayoutEngine,
         dispatch: &UiDispatch,
     ) -> Self {
@@ -49,7 +52,7 @@ impl FilesToolbar {
             ACTION_BAR_WIDTH.min(bounds.size.width),
             ACTION_SIZE,
         );
-        let button_style = palette.toolbar_button_style();
+        let button_style = palette.button_style();
         let state = |id| {
             if dispatch.is_pressed(id) {
                 ButtonState::Pressed
@@ -69,15 +72,11 @@ impl FilesToolbar {
             ActionBarOrientation::Horizontal,
             vec![
                 ActionBarItem::Action(
-                    ActionViewItem::icon_and_label(
-                        icons::REFRESH,
-                        distance,
-                        state(AGENT_FILES_REFRESH),
-                    )
-                    .with_main_axis_extent(ACTION_SIZE + STATUS_WIDTH),
+                    ActionViewItem::icon_and_label(icons::REFRESH, distance, state(FILES_REFRESH))
+                        .with_main_axis_extent(ACTION_SIZE + STATUS_WIDTH),
                 ),
                 ActionBarItem::Action(
-                    ActionViewItem::icon(icons::SEARCH, "Search files", state(AGENT_FILES_SEARCH))
+                    ActionViewItem::icon(icons::SEARCH, "Search files", state(FILES_SEARCH))
                         .with_selection(if files.search_visible() {
                             ButtonSelection::Selected
                         } else {
@@ -94,9 +93,9 @@ impl FilesToolbar {
                 (action_bounds.origin.x - navigation_bounds.right() - PADDING * 2.0).max(1.0),
                 (bounds.size.height - 12.0).max(1.0),
             );
-            let search_state = if dispatch.is_focused(AGENT_FILE_SEARCH_INPUT) {
+            let search_state = if dispatch.is_focused(FILE_SEARCH_INPUT) {
                 zeta_ui_components::InputBoxState::Focused(caret_visibility)
-            } else if dispatch.is_hovered(AGENT_FILE_SEARCH_INPUT) {
+            } else if dispatch.is_hovered(FILE_SEARCH_INPUT) {
                 zeta_ui_components::InputBoxState::Hovered
             } else {
                 zeta_ui_components::InputBoxState::Resting
@@ -112,6 +111,7 @@ impl FilesToolbar {
         });
         Self {
             bounds,
+            parent,
             search_box,
             search_value: files.search_input().text().to_owned(),
             action_bar,
@@ -124,7 +124,7 @@ impl FilesToolbar {
             regions.push(
                 InteractionRegion::new(
                     "FilesSearchInput",
-                    AGENT_FILE_SEARCH_INPUT,
+                    FILE_SEARCH_INPUT,
                     search_box.bounds(),
                     AccessibilityRole::TextInput,
                     "Search files",
@@ -134,10 +134,10 @@ impl FilesToolbar {
                 .with_value(&self.search_value),
             );
         }
-        let navigation = NavigationGroupId::new(AGENT_FILES_ACTION_BAR);
+        let navigation = NavigationGroupId::new(FILES_ACTION_BAR);
         let actions = [
-            (AGENT_FILES_REFRESH, "Refresh Git status"),
-            (AGENT_FILES_SEARCH, "Search files"),
+            (FILES_REFRESH, "Refresh Git status"),
+            (FILES_SEARCH, "Search files"),
         ]
         .into_iter()
         .enumerate()
@@ -162,7 +162,7 @@ impl FilesToolbar {
         regions.push(
             InteractionRegion::new(
                 "FilesActionBar",
-                AGENT_FILES_ACTION_BAR,
+                FILES_ACTION_BAR,
                 self.action_bar.bounds(),
                 AccessibilityRole::Toolbar,
                 "Files actions",
@@ -184,18 +184,18 @@ impl Component for FilesToolbar {
     fn element(&self) -> ComponentElement {
         Element::leaf("FilesToolbar")
             .in_bounds(self.bounds)
-            .with_identity(AGENT_FILES_TOOLBAR)
+            .with_identity(FILES_TOOLBAR)
     }
 
     fn interaction_node(&self, element: &ComputedElement) -> Option<UiNode> {
         Some(
             UiNode::new(
-                AGENT_FILES_TOOLBAR,
+                FILES_TOOLBAR,
                 element.bounds(),
                 AccessibilityRole::Toolbar,
                 "Files toolbar",
             )
-            .with_parent(WORKSPACE_PANE_TOOLBAR),
+            .with_parent(self.parent),
         )
     }
 

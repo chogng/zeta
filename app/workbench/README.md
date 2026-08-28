@@ -16,4 +16,4 @@ WorkbenchHost
 
 `TabInputKey` 标识顶层 Tab，`PaneGroupId` 标识拆分叶子，`PaneInputId` 标识组内内容。切换到已有输入会复用原 binding；新建输入和拆分 Pane 只在结构验证后创建 binding；关闭 Pane 或 Tab 会一次返回该边界内的全部 binding。
 
-验证：`cargo test -p zeta-workbench --lib`。
+验证：`just test zeta-workbench`。

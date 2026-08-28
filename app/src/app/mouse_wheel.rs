@@ -4,10 +4,10 @@ use zeta_ui_components::{ScrollCommand, ScrollDelta};
 use zui::input::MouseScrollDelta;
 
 use crate::NativeApp;
-use crate::shell_interaction::{AGENT_EXPLORER_PANE, MULTI_DIFF_EDITOR};
+use crate::shell_interaction::{FILES_PANE, MULTI_DIFF_EDITOR};
 use crate::terminal_pointer::TerminalPointerRouting;
 use crate::terminal_projection::scroll_limit;
-use crate::workspace_panes::FILE_LIST_ROW_HEIGHT;
+use zeta_files::FILE_LIST_ROW_HEIGHT;
 
 const LINES_PER_WHEEL_STEP: f32 = 3.0;
 const MULTI_DIFF_PIXELS_PER_LINE: f32 = 18.0;
@@ -195,12 +195,12 @@ impl NativeApp {
         if !presentation
             .interaction_frame()
             .ancestry(target)
-            .contains(&AGENT_EXPLORER_PANE)
+            .contains(&FILES_PANE)
         {
             return false;
         }
         let Some(viewport) = presentation
-            .element_bounds(AGENT_EXPLORER_PANE)
+            .element_bounds(FILES_PANE)
             .map(|bounds| bounds.size)
         else {
             return false;

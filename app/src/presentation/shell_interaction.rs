@@ -9,6 +9,12 @@ pub(crate) use zeta_workbench::{
     TITLEBAR_TAB_LIST,
 };
 
+pub(crate) use zeta_files::{FILE_SEARCH_INPUT, FILES_PANE};
+#[cfg(test)]
+pub(crate) use zeta_files::{FILES_ACTION_BAR, FILES_REFRESH, FILES_SEARCH, FILES_TOOLBAR};
+#[cfg(test)]
+pub(crate) use zeta_scm::CHANGES_PANE;
+pub(crate) use zeta_scm::MULTI_DIFF_EDITOR;
 pub(crate) use zeta_session::interaction::{
     COMPOSER, COMPOSER_INTERACTION, CONTEXT_GIT_BRANCH, CONTEXT_LOCATION,
     CONTEXT_WORKING_DIRECTORY, THREAD_TIMELINE, composer_interaction_item_id,
@@ -19,14 +25,8 @@ pub(crate) use zeta_session::interaction::{COMPOSER_INFO_BAR, COMPOSER_PANEL, SE
 pub(crate) use zeta_workbench::TAB_CONTEXT_MENU;
 pub(crate) use zeta_workbench::TabContextMenuAction;
 #[cfg(test)]
-pub(crate) use zeta_workspace_ui::interaction::{
-    AGENT_CHANGES, AGENT_EDITOR_PANE, AGENT_FILES, AGENT_FILES_ACTION_BAR, AGENT_FILES_REFRESH,
-    AGENT_FILES_SEARCH, AGENT_FILES_TOOLBAR, WORKSPACE_PANE_NAVIGATION,
-};
-pub(crate) use zeta_workspace_ui::interaction::{
-    AGENT_EXPLORER_PANE, AGENT_FILE_SEARCH_INPUT, MULTI_DIFF_EDITOR, WORKSPACE_PANE,
-    WORKSPACE_PANE_TOOLBAR,
-};
+pub(crate) use zeta_workbench::{WORKSPACE_CHANGES, WORKSPACE_FILES, WORKSPACE_PANE_NAVIGATION};
+pub(crate) use zeta_workbench::{WORKSPACE_PANE, WORKSPACE_PANE_TOOLBAR};
 
 const SHELL_SCOPE: u32 = 1;
 const FILE_EDITOR_ACTION_SCOPE: u32 = 7;

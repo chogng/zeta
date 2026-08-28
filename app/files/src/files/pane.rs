@@ -17,7 +17,7 @@ use zeta_ui_components::ScrollViewStyle;
 use zui::ui::Color;
 use zui::ui::ElementId;
 
-pub const EXPLORER_PANE: ElementId = crate::interaction::AGENT_EXPLORER_PANE;
+pub const EXPLORER_PANE: ElementId = crate::FILES_PANE;
 pub(super) const HORIZONTAL_PADDING: f32 = 10.0;
 pub(super) const ICON_SIZE: f32 = 14.0;
 const SEARCH_RESULT_SCOPE: u32 = 6;

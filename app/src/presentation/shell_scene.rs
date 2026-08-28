@@ -25,10 +25,9 @@ use crate::remote_tunnel_manager::REMOTE_TUNNEL_REMOTE_PORT;
 use crate::remote_tunnel_manager::RemoteTunnelManagerState;
 use crate::remote_tunnel_manager_view::RemoteTunnelManager;
 use crate::shell_interaction::{
-    AGENT_FILE_SEARCH_INPUT, FILE_EDITOR_DOCUMENT, FILE_EDITOR_FIND_INPUT,
-    FILE_EDITOR_REPLACE_INPUT, FIRST_TAB_CONTAINER_SESSION_TAB, INSPECTOR_RESIZE_HANDLE,
-    MAIN_SURFACE, SESSION_SEARCH_INPUT, TAB_CONTAINER_RESIZE_HANDLE, TERMINAL_OUTPUT, WINDOW,
-    WORKSPACE_PANE, WORKSPACE_PANE_TOOLBAR,
+    FILE_EDITOR_DOCUMENT, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT, FILE_SEARCH_INPUT,
+    FIRST_TAB_CONTAINER_SESSION_TAB, INSPECTOR_RESIZE_HANDLE, MAIN_SURFACE, SESSION_SEARCH_INPUT,
+    TAB_CONTAINER_RESIZE_HANDLE, TERMINAL_OUTPUT, WINDOW, WORKSPACE_PANE, WORKSPACE_PANE_TOOLBAR,
 };
 use crate::shell_style::ShellPalette;
 use crate::tab_context_menu::{TabContextMenu, TabContextMenuState};
@@ -37,15 +36,13 @@ use crate::terminal_output_scroll_view::TerminalOutputScrollView;
 use crate::terminal_selection::{TerminalSelectionRange, paint_terminal_selection};
 use crate::workspace_context::WorkspaceContext;
 use crate::workspace_pane_host::WorkspacePaneHost;
-use crate::workspace_pane_host::WorkspacePaneView;
-use crate::workspace_panes::EditorPane;
-use crate::workspace_panes::FilesLayout;
-use crate::workspace_panes::FilesPane;
-use crate::workspace_panes::FilesToolbar;
-use crate::workspace_panes::ScmLayout;
-use crate::workspace_panes::WorkspacePaneNavigation;
 use crate::workspace_path_picker::{WorkspacePathPicker, WorkspacePathPickerState};
 use crate::workspace_surface::WorkspaceSurfaceKind;
+use zeta_files::FilesLayout;
+use zeta_files::FilesPane;
+use zeta_files::FilesToolbar;
+use zeta_scm::EditorPane;
+use zeta_scm::ScmLayout;
 use zeta_session::SessionPaneContext;
 use zeta_session::SessionPaneLayout;
 use zeta_session::SessionPaneState;
@@ -53,6 +50,8 @@ use zeta_session::SessionPaneView;
 use zeta_session::draw_session_pane;
 use zeta_terminal_workspace::PaneBinding;
 use zeta_workbench::SessionSearchState;
+use zeta_workbench::WorkspacePaneNavigation;
+use zeta_workbench::WorkspacePaneSelection;
 use zeta_workbench::{
     InspectorPartState, PaneGroupId as PaneId, PaneInputKind, PaneMount, PanePart, PanePartSashes,
     PaneSplitId, TITLEBAR_HEIGHT, TabContainer, TabContainerPlacement, TabContainerState,
@@ -968,8 +967,8 @@ fn draw_workspace_pane(
     )
     .with_parent(WINDOW);
     let active_view = match view.pane.map(|pane| pane.kind()) {
-        Some(PaneInputKind::Diff) => Some(WorkspacePaneView::Changes),
-        Some(PaneInputKind::Files) | None => Some(WorkspacePaneView::Files),
+        Some(PaneInputKind::Diff) => Some(WorkspacePaneSelection::Changes),
+        Some(PaneInputKind::Files) | None => Some(WorkspacePaneSelection::Files),
         Some(PaneInputKind::Agent)
         | Some(PaneInputKind::Settings)
         | Some(PaneInputKind::Terminal) => None,
@@ -980,12 +979,12 @@ fn draw_workspace_pane(
             return None;
         };
         let toolbar_bounds = match active_view {
-            WorkspacePaneView::Changes => ScmLayout::for_bounds(bounds).toolbar(),
-            WorkspacePaneView::Files => FilesLayout::for_bounds(bounds).toolbar(),
+            WorkspacePaneSelection::Changes => ScmLayout::for_bounds(bounds).toolbar(),
+            WorkspacePaneSelection::Files => FilesLayout::for_bounds(bounds).toolbar(),
         };
         let content_bounds = match active_view {
-            WorkspacePaneView::Changes => ScmLayout::for_bounds(bounds).content(),
-            WorkspacePaneView::Files => FilesLayout::for_bounds(bounds).content(),
+            WorkspacePaneSelection::Changes => ScmLayout::for_bounds(bounds).content(),
+            WorkspacePaneSelection::Files => FilesLayout::for_bounds(bounds).content(),
         };
         let toolbar = InteractionRegion::new(
             "WorkspacePaneToolbar",
@@ -995,7 +994,7 @@ fn draw_workspace_pane(
             "Workspace pane toolbar",
         )
         .with_parent(WORKSPACE_PANE);
-        let workspace_style = palette.workspace_pane_style();
+        let navigation_style = palette.workspace_navigation_style();
         let search_caret = context.with_component(&toolbar, |context, _| {
             context.scene_mut().draw_rect(
                 PaintRect::new(toolbar_bounds, palette.surface_raised).with_border(Border::new(
@@ -1006,20 +1005,21 @@ fn draw_workspace_pane(
             let navigation = WorkspacePaneNavigation::new(
                 WorkspacePaneNavigation::bounds_in(toolbar_bounds),
                 active_view,
-                &workspace_style,
+                &navigation_style,
                 view.dispatch,
             );
             context.draw_component(&navigation);
             match active_view {
-                WorkspacePaneView::Changes => None,
-                WorkspacePaneView::Files => {
+                WorkspacePaneSelection::Changes => None,
+                WorkspacePaneSelection::Files => {
                     let files_toolbar = FilesToolbar::new(
                         toolbar_bounds,
                         WorkspacePaneNavigation::bounds_in(toolbar_bounds),
                         view.workspace.files(),
                         view.context.upstream_distance(),
                         view.caret_visibility,
-                        workspace_style,
+                        palette.files_toolbar_style(),
+                        WORKSPACE_PANE_TOOLBAR,
                         text_layout,
                         view.dispatch,
                     );
@@ -1030,15 +1030,16 @@ fn draw_workspace_pane(
             }
         });
         match active_view {
-            WorkspacePaneView::Changes => {
+            WorkspacePaneSelection::Changes => {
                 let editor = EditorPane::new(
                     content_bounds,
                     view.workspace.editor(),
                     palette.scm_pane_style(),
+                    WORKSPACE_PANE,
                 );
                 context.draw_component(&editor);
             }
-            WorkspacePaneView::Files => {
+            WorkspacePaneSelection::Files => {
                 let files_style = palette.files_pane_style();
                 let explorer = FilesPane::new(
                     content_bounds,
@@ -1051,7 +1052,7 @@ fn draw_workspace_pane(
             }
         }
         view.dispatch
-            .is_focused(AGENT_FILE_SEARCH_INPUT)
+            .is_focused(FILE_SEARCH_INPUT)
             .then_some(search_caret.flatten())
             .flatten()
     })

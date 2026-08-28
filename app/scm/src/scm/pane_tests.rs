@@ -1,11 +1,15 @@
 use std::time::Instant;
 
 use super::{EditorPane, EditorPaneState};
+use crate::CHANGES_PANE;
+use crate::MULTI_DIFF_EDITOR;
+use crate::MULTI_DIFF_SCROLLBAR;
 use crate::TEST_SCM_PANE_STYLE;
-use crate::interaction::{AGENT_EDITOR_PANE, MULTI_DIFF_EDITOR, MULTI_DIFF_SCROLLBAR};
 use zeta_diff::DiffDocument;
 use zui::ui::{AccessibilityRole, InteractionFrame, UiDispatch, UiFrame};
 use zui::ui::{Color, Component, Rect, UiScene};
+
+const TEST_PARENT: zui::ui::ElementId = zui::ui::ElementId::scoped(99, 1);
 
 fn document(original: &str, modified: &str) -> DiffDocument {
     DiffDocument::from_text(original, modified).unwrap()
@@ -165,6 +169,7 @@ fn overflowing_editor_registers_an_accessible_scrollbar_region() {
         Rect::from_xywh(0.0, 0.0, 320.0, 240.0),
         &state,
         TEST_SCM_PANE_STYLE,
+        TEST_PARENT,
     );
     let mut frame = UiFrame::<InteractionFrame>::new(Color::WHITE);
     frame.draw_component(&pane);
@@ -199,6 +204,7 @@ fn editor_pane_paints_all_visible_file_diffs_as_unified_sections_without_tab_sel
         Rect::from_xywh(680.0, 212.0, 320.0, 488.0),
         &state,
         TEST_SCM_PANE_STYLE,
+        TEST_PARENT,
     );
     let mut frame = UiFrame::<InteractionFrame>::new(Color::WHITE);
     frame.draw_component(&pane);
@@ -224,7 +230,7 @@ fn editor_pane_paints_all_visible_file_diffs_as_unified_sections_without_tab_sel
         .iter()
         .find(|node| node.id == MULTI_DIFF_EDITOR)
         .unwrap();
-    assert_eq!(multi_diff.parent, Some(AGENT_EDITOR_PANE));
+    assert_eq!(multi_diff.parent, Some(CHANGES_PANE));
     assert_eq!(multi_diff.role, AccessibilityRole::Group);
     assert_eq!(multi_diff.label, "Multiple file differences");
     assert!(
@@ -259,6 +265,7 @@ fn editor_pane_exposes_nested_component_inspection_nodes() {
         Rect::from_xywh(0.0, 0.0, 320.0, 300.0),
         &state,
         TEST_SCM_PANE_STYLE,
+        TEST_PARENT,
     );
     let mut frame = UiFrame::<InteractionFrame>::new(Color::WHITE);
     frame.draw_component(&pane);
@@ -316,6 +323,7 @@ fn empty_editor_pane_exposes_an_honest_empty_state() {
         Rect::from_xywh(0.0, 100.0, 320.0, 300.0),
         &state,
         TEST_SCM_PANE_STYLE,
+        TEST_PARENT,
     );
     let mut scene = UiScene::new(Color::WHITE);
 
@@ -348,6 +356,7 @@ fn unchanged_region_controls_are_accessible_and_toggle_retained_diff_state() {
         Rect::from_xywh(0.0, 0.0, 320.0, 300.0),
         &state,
         TEST_SCM_PANE_STYLE,
+        TEST_PARENT,
     );
     frame.draw_component(&pane);
     let nodes = frame
@@ -372,6 +381,7 @@ fn unchanged_region_controls_are_accessible_and_toggle_retained_diff_state() {
         Rect::from_xywh(0.0, 0.0, 320.0, 480.0),
         &state,
         TEST_SCM_PANE_STYLE,
+        TEST_PARENT,
     );
     expanded_frame.draw_component(&expanded_pane);
     assert!(

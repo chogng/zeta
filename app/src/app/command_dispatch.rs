@@ -206,7 +206,8 @@ fn execute_toggle_workspace_pane(app: &mut NativeApp, _request: &CommandRequest)
         Some(zeta_workbench::PaneInputKind::Files) | Some(zeta_workbench::PaneInputKind::Diff) => {
             app.show_agent_pane()
         }
-        _ => app.select_workspace_pane_view(crate::workspace_pane_host::WorkspacePaneView::Files),
+        _ => app
+            .select_workspace_pane_view(crate::workspace_pane_host::WorkspacePaneSelection::Files),
     }
 }
 
@@ -215,11 +216,11 @@ fn execute_add_session(app: &mut NativeApp, _request: &CommandRequest) {
 }
 
 fn execute_show_agent_changes(app: &mut NativeApp, _request: &CommandRequest) {
-    app.select_workspace_pane_view(crate::workspace_pane_host::WorkspacePaneView::Changes);
+    app.select_workspace_pane_view(crate::workspace_pane_host::WorkspacePaneSelection::Changes);
 }
 
 fn execute_show_agent_files(app: &mut NativeApp, _request: &CommandRequest) {
-    app.select_workspace_pane_view(crate::workspace_pane_host::WorkspacePaneView::Files);
+    app.select_workspace_pane_view(crate::workspace_pane_host::WorkspacePaneSelection::Files);
 }
 
 fn execute_refresh_agent_files(app: &mut NativeApp, _request: &CommandRequest) {
@@ -237,7 +238,7 @@ fn execute_toggle_agent_file_search(app: &mut NativeApp, _request: &CommandReque
         if let Some(presentation) = app.presentation.as_ref() {
             let _ = app.ui_dispatch.focus_element(
                 presentation.interaction_frame(),
-                shell_interaction::AGENT_FILE_SEARCH_INPUT,
+                shell_interaction::FILE_SEARCH_INPUT,
             );
         }
     }
@@ -305,7 +306,7 @@ fn execute_show_workspace_diff(app: &mut NativeApp, _request: &CommandRequest) {
     if let Err(error) = app.refresh_git_from_app_server() {
         eprintln!("could not refresh Git projection: {error}");
     }
-    app.select_workspace_pane_view(crate::workspace_pane_host::WorkspacePaneView::Changes);
+    app.select_workspace_pane_view(crate::workspace_pane_host::WorkspacePaneSelection::Changes);
 }
 
 fn execute_split_terminal_horizontal(app: &mut NativeApp, _request: &CommandRequest) {

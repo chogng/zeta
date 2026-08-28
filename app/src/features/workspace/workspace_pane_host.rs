@@ -1,13 +1,13 @@
 use std::time::Instant;
 
-use crate::workspace_panes::DirectoryEntry;
-use crate::workspace_panes::EditorPaneState;
-use crate::workspace_panes::FilesState;
-use crate::workspace_panes::ScmDiff;
-use crate::workspace_panes::WorkspacePaneAction;
-use crate::workspace_panes::WorkspacePaneState;
 use zeta_app_server_protocol::protocol::fs::FsReadDirectoryEntry;
 use zeta_editor::MultiDiffEditorStyle;
+use zeta_files::DirectoryEntry;
+use zeta_files::FilesAction;
+use zeta_files::FilesState;
+use zeta_scm::EditorPaneState;
+use zeta_scm::ScmDiff;
+use zeta_scm::ScmState;
 use zui::ui::ElementId;
 use zui::ui::Point;
 use zui::ui::Rect;
@@ -17,73 +17,66 @@ use zui::ui::TextInputCommand;
 use zui::ui::TextInputCompositionEvent;
 
 use crate::workspace_context::WorkspaceContext;
-use crate::workspace_panes::ScrollbarPointerOutcome;
+use zeta_scm::ScrollbarPointerOutcome;
 
 #[cfg(test)]
-use crate::workspace_panes::FilesTreeRow;
+use zeta_files::FilesTreeRow;
 #[cfg(test)]
 use zeta_ui_components::ScrollState;
 
-pub(crate) use crate::workspace_panes::WorkspacePaneView;
+pub(crate) use zeta_workbench::WorkspacePaneSelection;
 
 pub(crate) struct WorkspacePaneHost {
-    state: WorkspacePaneState,
+    files: FilesState,
+    scm: ScmState,
 }
 
 impl Default for WorkspacePaneHost {
     fn default() -> Self {
         Self {
-            state: WorkspacePaneState::default(),
+            files: FilesState::default(),
+            scm: ScmState::default(),
         }
     }
 }
 
 impl WorkspacePaneHost {
     pub(crate) fn new(context: &WorkspaceContext) -> Self {
-        let mut workspace = Self {
-            state: WorkspacePaneState::new(context.working_directory().to_path_buf()),
-            ..Self::default()
-        };
+        let mut workspace = Self::default();
+        workspace
+            .files
+            .set_workspace_root(context.working_directory().to_path_buf());
         let _ = workspace.sync_repository(context);
         workspace
     }
 
     pub(crate) const fn editor(&self) -> &EditorPaneState {
-        self.state.scm().editor()
+        self.scm.editor()
     }
 
     pub(crate) const fn files(&self) -> &FilesState {
-        self.state.files()
+        &self.files
     }
 
     pub(crate) fn set_editor_style(&mut self, style: MultiDiffEditorStyle) {
-        self.state.scm_mut().editor_mut().set_style(style);
+        self.scm.editor_mut().set_style(style);
     }
 
     #[cfg(test)]
     pub(crate) fn file_tree_row(&self, index: usize) -> Option<FilesTreeRow<'_>> {
-        self.state.files().tree_row(index)
+        self.files.tree_row(index)
     }
 
-    pub(crate) fn activate_file_tree_element(
-        &mut self,
-        element: ElementId,
-    ) -> Option<WorkspacePaneAction> {
-        self.state.files_mut().activate(element)
+    pub(crate) fn activate_file_tree_element(&mut self, element: ElementId) -> Option<FilesAction> {
+        self.files.activate(element)
     }
 
-    pub(crate) fn navigate_file_tree_right(
-        &mut self,
-        element: ElementId,
-    ) -> Option<WorkspacePaneAction> {
-        self.state.files_mut().navigate_right(element)
+    pub(crate) fn navigate_file_tree_right(&mut self, element: ElementId) -> Option<FilesAction> {
+        self.files.navigate_right(element)
     }
 
-    pub(crate) fn navigate_file_tree_left(
-        &mut self,
-        element: ElementId,
-    ) -> Option<WorkspacePaneAction> {
-        self.state.files_mut().navigate_left(element)
+    pub(crate) fn navigate_file_tree_left(&mut self, element: ElementId) -> Option<FilesAction> {
+        self.files.navigate_left(element)
     }
 
     pub(crate) fn complete_file_tree_directory_load(
@@ -91,67 +84,67 @@ impl WorkspacePaneHost {
         element: ElementId,
         entries: Vec<FsReadDirectoryEntry>,
     ) -> bool {
-        self.state
-            .files_mut()
+        self.files
             .complete_directory_load(element, directory_entries(entries))
     }
 
     pub(crate) const fn search_visible(&self) -> bool {
-        self.state.files().search_visible()
+        self.files.search_visible()
     }
 
     pub(crate) const fn file_search_input(&self) -> &TextInput {
-        self.state.files().search_input()
+        self.files.search_input()
     }
 
     #[cfg(test)]
     pub(crate) const fn file_list_scroll_state(&self) -> ScrollState {
-        self.state.files().scroll_state()
+        self.files.scroll_state()
     }
 
     pub(crate) fn set_search_visible(&mut self, visible: bool) {
-        self.state.files_mut().set_search_visible(visible);
+        self.files.set_search_visible(visible);
     }
 
     pub(crate) fn apply_file_search(&mut self, command: TextInputCommand) {
-        self.state.files_mut().apply_search(command);
+        self.files.apply_search(command);
     }
 
     pub(crate) fn apply_file_search_composition(&mut self, event: TextInputCompositionEvent) {
-        self.state.files_mut().apply_search_composition(event);
+        self.files.apply_search_composition(event);
     }
 
     pub(crate) fn cancel_file_search_composition(&mut self) {
-        self.state.files_mut().cancel_search_composition();
+        self.files.cancel_search_composition();
     }
 
     pub(crate) fn clear_file_search(&mut self) {
-        self.state.files_mut().clear_search();
+        self.files.clear_search();
     }
 
     pub(crate) fn selected_file_search_text(&self) -> Option<&str> {
-        self.state.files().selected_search_text()
+        self.files.selected_search_text()
     }
 
     pub(crate) fn refresh_files(&mut self, entries: Vec<FsReadDirectoryEntry>) {
-        self.state.files_mut().refresh(directory_entries(entries));
+        self.files.refresh(directory_entries(entries));
     }
 
     pub(crate) fn replace_workspace(
         &mut self,
         context: &WorkspaceContext,
     ) -> Vec<zeta_editor::MultiDiffEditorItemIdentity> {
-        self.state
-            .replace_workspace(context.working_directory().to_path_buf());
+        self.files
+            .set_workspace_root(context.working_directory().to_path_buf());
+        self.scm.replace_diffs([]);
         self.sync_repository(context)
     }
 
     pub(crate) fn poll_file_search(&mut self) -> bool {
-        self.state.files_mut().poll_search()
+        self.files.poll_search()
     }
 
     pub(crate) const fn file_search_pending(&self) -> bool {
-        self.state.files().search_pending()
+        self.files.search_pending()
     }
 
     pub(crate) fn sync_repository(
@@ -163,25 +156,19 @@ impl WorkspacePaneHost {
             .iter()
             .map(|diff| ScmDiff::new(diff.path(), diff.document().clone()))
             .collect::<Vec<_>>();
-        self.state.scm_mut().replace_diffs(diffs)
+        self.scm.replace_diffs(diffs)
     }
 
     pub(crate) fn scroll_multi_diff(&mut self, delta: f32, viewport: Size, now: Instant) -> bool {
-        self.state
-            .scm_mut()
-            .editor_mut()
-            .scroll(delta, viewport, now)
+        self.scm.editor_mut().scroll(delta, viewport, now)
     }
 
     pub(crate) fn scroll_file_list(&mut self, delta: f32, viewport: Size) -> bool {
-        self.state.files_mut().scroll(delta, viewport)
+        self.files.scroll(delta, viewport)
     }
 
     pub(crate) fn toggle_multi_diff_fold(&mut self, id: ElementId) -> bool {
-        self.state
-            .scm_mut()
-            .editor_mut()
-            .toggle_fold_for_element(id)
+        self.scm.editor_mut().toggle_fold_for_element(id)
     }
 
     pub(crate) fn move_multi_diff_scrollbar(
@@ -190,8 +177,7 @@ impl WorkspacePaneHost {
         bounds: Rect,
         now: Instant,
     ) -> ScrollbarPointerOutcome {
-        self.state
-            .scm_mut()
+        self.scm
             .editor_mut()
             .scrollbar_pointer_moved(point, bounds, now)
     }
@@ -202,10 +188,7 @@ impl WorkspacePaneHost {
         bounds: Rect,
         now: Instant,
     ) -> ScrollbarPointerOutcome {
-        self.state
-            .scm_mut()
-            .editor_mut()
-            .press_scrollbar(point, bounds, now)
+        self.scm.editor_mut().press_scrollbar(point, bounds, now)
     }
 
     pub(crate) fn release_multi_diff_scrollbar(
@@ -214,32 +197,23 @@ impl WorkspacePaneHost {
         bounds: Rect,
         now: Instant,
     ) -> ScrollbarPointerOutcome {
-        self.state
-            .scm_mut()
-            .editor_mut()
-            .release_scrollbar(point, bounds, now)
+        self.scm.editor_mut().release_scrollbar(point, bounds, now)
     }
 
     pub(crate) fn leave_multi_diff_scrollbar(&mut self, now: Instant) -> bool {
-        self.state
-            .scm_mut()
-            .editor_mut()
-            .scrollbar_pointer_left(now)
+        self.scm.editor_mut().scrollbar_pointer_left(now)
     }
 
     pub(crate) fn cancel_multi_diff_scrollbar(&mut self) {
-        self.state
-            .scm_mut()
-            .editor_mut()
-            .cancel_scrollbar_interaction();
+        self.scm.editor_mut().cancel_scrollbar_interaction();
     }
 
     pub(crate) fn advance_multi_diff_scrollbar(&mut self, now: Instant) -> bool {
-        self.state.scm_mut().editor_mut().advance_scrollbar(now)
+        self.scm.editor_mut().advance_scrollbar(now)
     }
 
     pub(crate) const fn multi_diff_scrollbar_deadline(&self) -> Option<Instant> {
-        self.state.scm().editor().scrollbar_deadline()
+        self.scm.editor().scrollbar_deadline()
     }
 }
 

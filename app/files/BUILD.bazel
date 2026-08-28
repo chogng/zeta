@@ -1,0 +1,9 @@
+load("//app:defs.bzl", "app_rust_library")
+
+app_rust_library(
+    name = "files",
+    crate_name = "zeta_files",
+    package_name = "app/files",
+    source_files = ["README.md"],
+    unit_tests = True,
+)

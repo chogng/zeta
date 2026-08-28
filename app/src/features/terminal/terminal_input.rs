@@ -19,11 +19,11 @@ use crate::keybindings::{
     NativeKeybindingContext, NativeKeybindingFacts, NativeKeybindingResolution,
 };
 use crate::shell_interaction::{
-    AGENT_FILE_SEARCH_INPUT, COMPOSER, COMPOSER_INTERACTION, FILE_EDITOR_FIND_INPUT,
-    FILE_EDITOR_REPLACE_INPUT, SESSION_SEARCH_INPUT,
+    COMPOSER, COMPOSER_INTERACTION, FILE_EDITOR_FIND_INPUT, FILE_EDITOR_REPLACE_INPUT,
+    FILE_SEARCH_INPUT, SESSION_SEARCH_INPUT,
 };
 use crate::terminal_selection::{read_clipboard_text, write_clipboard_text};
-use crate::workspace_panes::WorkspacePaneAction;
+use zeta_files::FilesAction;
 use zeta_session::{ComposerInteractionActivation, SelectionDirection};
 use zeta_session::{ComposerRoute, ComposerSubmission};
 use zeta_settings::SETTINGS_SEARCH_INPUT;
@@ -105,7 +105,7 @@ impl NativeApp {
         {
             if self.ui_dispatch.is_focused(SESSION_SEARCH_INPUT) {
                 self.session_search_keyboard_input(&event);
-            } else if self.ui_dispatch.is_focused(AGENT_FILE_SEARCH_INPUT) {
+            } else if self.ui_dispatch.is_focused(FILE_SEARCH_INPUT) {
                 self.file_search_keyboard_input(&event);
             } else {
                 self.composer_keyboard_input(&event);
@@ -298,7 +298,7 @@ impl NativeApp {
             Some(self.ui_dispatch.focus_in_order(frame, direction))
         } else if !matches!(
             self.ui_dispatch.focused(),
-            Some(COMPOSER | SESSION_SEARCH_INPUT | AGENT_FILE_SEARCH_INPUT)
+            Some(COMPOSER | SESSION_SEARCH_INPUT | FILE_SEARCH_INPUT)
         ) {
             match &event.logical_key {
                 Key::Named(NamedKey::ArrowLeft) => Some(self.ui_dispatch.focus_within_group(
@@ -357,12 +357,12 @@ impl NativeApp {
             return false;
         };
         match navigation {
-            WorkspacePaneAction::Handled => {}
-            WorkspacePaneAction::StateChanged => {
+            FilesAction::Handled => {}
+            FilesAction::StateChanged => {
                 self.rebuild_presentation();
                 self.request_redraw();
             }
-            WorkspacePaneAction::Focus(target) => {
+            FilesAction::Focus(target) => {
                 let outcome = self
                     .presentation
                     .as_ref()
@@ -373,8 +373,8 @@ impl NativeApp {
                     .unwrap_or_default();
                 self.apply_dispatch_outcome(outcome);
             }
-            WorkspacePaneAction::OpenFile { path } => self.open_workspace_file(path),
-            WorkspacePaneAction::LoadChildren { element, path } => {
+            FilesAction::OpenFile { path } => self.open_workspace_file(path),
+            FilesAction::LoadChildren { element, path } => {
                 self.load_file_tree_directory(element, path);
                 self.rebuild_presentation();
                 self.request_redraw();
@@ -578,7 +578,7 @@ impl NativeApp {
             }
             return;
         }
-        if self.ui_dispatch.is_focused(AGENT_FILE_SEARCH_INPUT) {
+        if self.ui_dispatch.is_focused(FILE_SEARCH_INPUT) {
             if let Some(text) = self.workspace_pane_host.selected_file_search_text()
                 && let Err(error) = write_clipboard_text(&self.clipboard, text.to_owned())
             {
@@ -632,7 +632,7 @@ impl NativeApp {
             self.session_search_changed();
             return;
         }
-        if self.ui_dispatch.is_focused(AGENT_FILE_SEARCH_INPUT) {
+        if self.ui_dispatch.is_focused(FILE_SEARCH_INPUT) {
             let Some(text) = clipboard_text(&self.clipboard, "could not paste file search text")
             else {
                 return;
@@ -683,7 +683,7 @@ impl NativeApp {
         self.workspace_surface.is_terminal()
             && !self.ui_dispatch.is_focused(SETTINGS_SEARCH_INPUT)
             && !self.ui_dispatch.is_focused(SESSION_SEARCH_INPUT)
-            && !self.ui_dispatch.is_focused(AGENT_FILE_SEARCH_INPUT)
+            && !self.ui_dispatch.is_focused(FILE_SEARCH_INPUT)
     }
 }
 

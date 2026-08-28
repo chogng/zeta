@@ -150,13 +150,11 @@ impl NativeApp {
         }
         if let Some(action) = self.workspace_pane_host.activate_file_tree_element(id) {
             match action {
-                WorkspacePaneAction::OpenFile { path } => self.open_workspace_file(path),
-                WorkspacePaneAction::LoadChildren { element, path } => {
+                FilesAction::OpenFile { path } => self.open_workspace_file(path),
+                FilesAction::LoadChildren { element, path } => {
                     self.load_file_tree_directory(element, path);
                 }
-                WorkspacePaneAction::Handled
-                | WorkspacePaneAction::StateChanged
-                | WorkspacePaneAction::Focus(_) => {}
+                FilesAction::Handled | FilesAction::StateChanged | FilesAction::Focus(_) => {}
             }
             return;
         }

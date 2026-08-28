@@ -32,7 +32,7 @@ impl NativeApp {
     ///
     /// Files and Changes are ordinary `PaneInput`s. Their feature state stays in the workspace
     /// feature, while this host only changes the descriptive binding and active-pane context.
-    pub(super) fn select_workspace_pane_view(&mut self, view: WorkspacePaneView) {
+    pub(super) fn select_workspace_pane_view(&mut self, view: WorkspacePaneSelection) {
         let Some(tab_key) = self.active_session_tab_key() else {
             return;
         };
@@ -45,10 +45,10 @@ impl NativeApp {
             return;
         };
         let input = match view {
-            WorkspacePaneView::Changes => {
+            WorkspacePaneSelection::Changes => {
                 PaneInput::diff(self.workspace_context.working_directory().to_path_buf())
             }
-            WorkspacePaneView::Files => {
+            WorkspacePaneSelection::Files => {
                 PaneInput::files(self.workspace_context.working_directory().to_path_buf())
             }
         };

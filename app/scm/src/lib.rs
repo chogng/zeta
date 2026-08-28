@@ -13,6 +13,10 @@ pub use pane::EditorPane;
 pub use pane::EditorPaneState;
 pub use pane::ScrollbarPointerOutcome;
 
+pub const CHANGES_PANE: zui::ui::ElementId = zui::ui::ElementId::scoped(1, 29);
+pub const MULTI_DIFF_EDITOR: zui::ui::ElementId = zui::ui::ElementId::scoped(1, 30);
+pub const MULTI_DIFF_SCROLLBAR: zui::ui::ElementId = zui::ui::ElementId::scoped(1, 31);
+
 /// Theme values required by the SCM pane. Shell theme ownership remains in the host.
 #[derive(Clone, Copy)]
 pub struct ScmPaneStyle {
@@ -78,3 +82,10 @@ impl ScmState {
         &mut self.editor
     }
 }
+
+#[cfg(test)]
+pub(crate) const TEST_SCM_PANE_STYLE: ScmPaneStyle = ScmPaneStyle {
+    surface: Color::WHITE,
+    border: Color::rgb(222, 222, 224),
+    text_muted: Color::rgb(126, 126, 132),
+};

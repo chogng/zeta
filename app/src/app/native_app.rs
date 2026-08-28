@@ -24,11 +24,11 @@ use crate::shell_style::{SHELL_PALETTE, ShellPalette, code_editor_style};
 use crate::terminal_pane_view::TerminalPaneViewState;
 use crate::terminal_session::{TerminalSession, TerminalSessionEvent, TerminalSessionKey};
 use crate::workspace_context::WorkspaceContext;
-use crate::workspace_pane_host::{WorkspacePaneHost, WorkspacePaneView};
-use crate::workspace_panes::WorkspacePaneAction;
+use crate::workspace_pane_host::{WorkspacePaneHost, WorkspacePaneSelection};
 use crate::workspace_path_picker::WorkspacePathPickerState;
 use crate::workspace_surface::WorkspaceSurface;
 use zeta_editor::CodeEditorStyle;
+use zeta_files::FilesAction;
 use zeta_protocol::SessionId;
 use zeta_session::SessionPaneState;
 use zeta_settings::SettingsState;
@@ -215,8 +215,6 @@ mod workbench_tabs_resize;
 pub(crate) mod workspace_context;
 #[path = "../features/workspace/workspace_pane_host.rs"]
 pub(crate) mod workspace_pane_host;
-#[path = "../features/workspace/workspace_panes.rs"]
-pub(crate) mod workspace_panes;
 #[path = "../features/workspace/workspace_path_picker.rs"]
 pub(crate) mod workspace_path_picker;
 #[path = "../features/workspace/workspace_path_picker_input.rs"]

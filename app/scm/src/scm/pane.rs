@@ -17,9 +17,9 @@ use zui::ui::{
 
 use super::ScmDiff;
 use super::ScmPaneStyle;
-use crate::interaction::{
-    AGENT_EDITOR_PANE, MULTI_DIFF_EDITOR, MULTI_DIFF_SCROLLBAR, WORKSPACE_PANE,
-};
+use crate::CHANGES_PANE;
+use crate::MULTI_DIFF_EDITOR;
+use crate::MULTI_DIFF_SCROLLBAR;
 
 const EMPTY_STATE_PADDING: f32 = 12.0;
 
@@ -411,25 +411,32 @@ pub struct EditorPane<'a> {
     bounds: Rect,
     state: &'a EditorPaneState,
     style: ScmPaneStyle,
+    parent: ElementId,
 }
 
 impl<'a> EditorPane<'a> {
-    pub const fn new(bounds: Rect, state: &'a EditorPaneState, style: ScmPaneStyle) -> Self {
+    pub const fn new(
+        bounds: Rect,
+        state: &'a EditorPaneState,
+        style: ScmPaneStyle,
+        parent: ElementId,
+    ) -> Self {
         Self {
             bounds,
             state,
             style,
+            parent,
         }
     }
 
     fn interaction_node_for_bounds(&self, bounds: Rect) -> UiNode {
         UiNode::new(
-            AGENT_EDITOR_PANE,
+            CHANGES_PANE,
             bounds,
             AccessibilityRole::Group,
             "Changed files editor",
         )
-        .with_parent(WORKSPACE_PANE)
+        .with_parent(self.parent)
     }
 
     fn paint_surface(&self, scene: &mut UiScene, bounds: Rect) {
@@ -461,7 +468,7 @@ impl Component for EditorPane<'_> {
     fn element(&self) -> ComponentElement {
         Element::leaf("EditorPane")
             .in_bounds(self.bounds)
-            .with_identity(AGENT_EDITOR_PANE)
+            .with_identity(CHANGES_PANE)
     }
 
     fn interaction_node(&self, element: &ComputedElement) -> Option<UiNode> {

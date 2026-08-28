@@ -2,7 +2,7 @@
 
 use super::DirectoryEntry;
 use super::FilesTree;
-use crate::WorkspacePaneAction;
+use crate::FilesAction;
 use zeta_ui_components::TreeItemExpansion;
 
 #[test]
@@ -20,7 +20,7 @@ fn directory_activation_loads_once_and_preserves_child_identity() {
     );
     assert_eq!(
         tree.activate(directory),
-        Some(WorkspacePaneAction::LoadChildren {
+        Some(FilesAction::LoadChildren {
             element: directory,
             path: "src".into()
         })
@@ -29,18 +29,12 @@ fn directory_activation_loads_once_and_preserves_child_identity() {
 
     assert!(tree.complete_directory_load(directory, vec![DirectoryEntry::file("lib.rs")]));
     let child = tree.row(1).unwrap().entry().element_id();
-    assert_eq!(
-        tree.activate(directory),
-        Some(WorkspacePaneAction::StateChanged)
-    );
-    assert_eq!(
-        tree.activate(directory),
-        Some(WorkspacePaneAction::StateChanged)
-    );
+    assert_eq!(tree.activate(directory), Some(FilesAction::StateChanged));
+    assert_eq!(tree.activate(directory), Some(FilesAction::StateChanged));
     assert_eq!(tree.row(1).unwrap().entry().element_id(), child);
     assert_eq!(
         tree.navigate_right(directory),
-        Some(WorkspacePaneAction::Focus(child))
+        Some(FilesAction::Focus(child))
     );
     assert_eq!(tree.selected_element(), Some(child));
 }
@@ -53,7 +47,7 @@ fn files_are_opened_without_an_unnecessary_directory_load() {
     let file = tree.row(0).unwrap().entry().element_id();
     assert_eq!(
         tree.activate(file),
-        Some(WorkspacePaneAction::OpenFile {
+        Some(FilesAction::OpenFile {
             path: "alpha.txt".into()
         })
     );

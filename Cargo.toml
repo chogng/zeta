@@ -122,15 +122,16 @@ members = [
     "app/commands",
     "app/editor",
     "app/editor-host",
+    "app/files",
     "app/icons",
     "app/markdown",
+    "app/scm",
     "app/keybindings",
     "app/session",
     "app/settings",
     "app/terminal-workspace",
     "app/ui-components",
     "app/workbench",
-    "app/workspace-ui",
     "app/zui",
     "app/zui-demo",
 ]
@@ -320,6 +321,7 @@ zeta-file-search = { path = "zeta-rs/file-search" }
 zeta-file-system = { path = "zeta-rs/file-system" }
 zeta-file-system-tool = { path = "zeta-rs/file-system-tool" }
 zeta-file-watcher = { path = "zeta-rs/file-watcher" }
+zeta-files = { path = "app/files" }
 zeta-git = { path = "zeta-rs/git" }
 zeta-history = { path = "zeta-rs/history" }
 zeta-hooks = { path = "zeta-rs/hooks" }
@@ -358,6 +360,7 @@ zeta-rollout = { path = "zeta-rs/rollout" }
 zeta-rollout-trace = { path = "zeta-rs/rollout-trace" }
 zeta-rmcp-client = { path = "zeta-rs/rmcp-client" }
 zeta-sandboxing = { path = "zeta-rs/sandboxing" }
+zeta-scm = { path = "app/scm" }
 zeta-search = { path = "zeta-rs/search" }
 zeta-server-host = { path = "zeta-rs/server-host" }
 zeta-secrets = { path = "zeta-rs/secrets" }
@@ -384,7 +387,6 @@ zeta-tui = { path = "zeta-code/tui" }
 zeta-uds = { path = "zeta-rs/uds" }
 zeta-ui-components = { path = "app/ui-components" }
 zeta-workbench = { path = "app/workbench" }
-zeta-workspace-ui = { path = "app/workspace-ui" }
 zeta-utils-image = { path = "zeta-rs/utils/image" }
 zeta-utils-output-truncation = { path = "zeta-rs/utils/output-truncation" }
 zeta-utils-path = { path = "zeta-rs/utils/path-utils" }

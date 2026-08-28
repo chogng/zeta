@@ -25,7 +25,7 @@ use zeta_text_file::TextFileSnapshot;
 
 use crate::NativeApp;
 use crate::session_catalog::session_model_options;
-use crate::workspace_pane_host::WorkspacePaneView;
+use crate::workspace_pane_host::WorkspacePaneSelection;
 use zeta_workbench::PaneInput;
 use zeta_workbench::TabInputKey;
 
@@ -226,8 +226,8 @@ impl NativeApp {
             .workspace_pane_host
             .replace_workspace(&self.workspace_context);
         let view = match pane_kind {
-            Some(zeta_workbench::PaneInputKind::Diff) => Some(WorkspacePaneView::Changes),
-            Some(zeta_workbench::PaneInputKind::Files) => Some(WorkspacePaneView::Files),
+            Some(zeta_workbench::PaneInputKind::Diff) => Some(WorkspacePaneSelection::Changes),
+            Some(zeta_workbench::PaneInputKind::Files) => Some(WorkspacePaneSelection::Files),
             _ => None,
         };
         if let Some(view) = view {
