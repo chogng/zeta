@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { isCancellationError } from "../../../../../base/common/errors.js";
 import { Emitter } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { BrowserTextModelService } from "../../../../../editor/browser/services/browserTextModelService.js";
@@ -41,7 +42,7 @@ test("Stanza text model acquisition delegates absent bootstrap content and obser
 
 	const cancelled = new AbortController();
 	cancelled.abort();
-	await assert.rejects(models.acquire({ resource }, cancelled.signal), error => (error as Error).name === "CancellationError");
+	await assert.rejects(models.acquire({ resource }, cancelled.signal), isCancellationError);
 });
 
 test("Stanza text model references track dirty content, save snapshots, and explicitly revert", async () => {

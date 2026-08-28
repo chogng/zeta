@@ -1,5 +1,6 @@
 import './richTextEditorWidget.css';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
+import { CancellationError } from '../../../../base/common/errors.js';
 import { Disposable, MutableDisposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { isSafeInteger } from '../../../../base/common/numbers.js';
 import { assertDefined } from '../../../../base/common/types.js';
@@ -1382,7 +1383,8 @@ export class RichTextEditorWidget extends Disposable {
 			}, start.signal);
 			if (start.signal.aborted || this.modelReferenceSlot.value?.model !== model) {
 				connection.dispose();
-				throw new Error("Opening a document collaboration room was cancelled");
+				if (start.signal.aborted) throwIfCancelled(start.signal, 'Opening a document collaboration room was cancelled');
+				throw new CancellationError('Opening a document collaboration room was cancelled');
 			}
 			const controller = new DocumentCollaborationController(model, connection);
 			this.collaborationControllerSlot.value = controller;

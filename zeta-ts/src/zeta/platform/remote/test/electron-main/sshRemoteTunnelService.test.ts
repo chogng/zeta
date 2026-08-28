@@ -3,6 +3,7 @@ import { EventEmitter } from "node:events";
 import type { ChildProcess } from "node:child_process";
 import { createServer } from "node:net";
 import test from "node:test";
+import { isCancellationError } from "../../../../base/common/errors.js";
 import { URI } from "../../../../base/common/uri.js";
 import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";
 import { SshRemoteTunnelService, sshTunnelArguments } from "../../../../platform/remote/electron-main/sshRemoteTunnelService.js";
@@ -344,7 +345,7 @@ test("disposing during SSH tunnel startup cancels readiness and stops the child"
 	await waitingForSpawn;
 	service.dispose();
 
-	await assert.rejects(opening, /startup was cancelled/);
+	await assert.rejects(opening, error => isCancellationError(error) && /startup was cancelled/.test(error.message));
 	assert.equal(child.exitCode, 0);
 	assert.deepEqual(await service.list(), []);
 });

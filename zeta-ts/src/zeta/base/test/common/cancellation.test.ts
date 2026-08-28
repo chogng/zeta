@@ -8,7 +8,7 @@ import {
 	raceCancellation,
 	throwIfCancelled,
 } from "../../common/cancellation.js";
-import { CancellationError, isCancellationError } from "../../common/errors.js";
+import { isCancellationError } from "../../common/errors.js";
 import { DisposableStore } from "../../common/lifecycle.js";
 
 test("CancellationToken exposes stable none and cancelled tokens", async () => {
@@ -96,11 +96,6 @@ test("aborted signals produce a classified error and preserve their reason", () 
 			return true;
 		},
 	);
-});
-
-test("unrelated errors are not classified as cancellation", () => {
-	assert.equal(isCancellationError(new CancellationError()), true);
-	assert.equal(isCancellationError(new Error("cancelled")), false);
 });
 
 test("raceCancellation preserves settlement and classifies caller cancellation", async () => {

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { isCancellationError } from "../../../../../base/common/errors.js";
 import { Emitter } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { BrowserTextModelService } from "../../../../../editor/browser/services/browserTextModelService.js";
@@ -117,6 +118,23 @@ test("workspace edit rolls back created resources when a later operation fails",
 
 	assert.equal(files.has(created), false);
 	assert.equal(files.text(target), "occupied");
+});
+
+test("workspace edits classify caller cancellation before mutating resources", async () => {
+	const created = URI.file("C:\\workspace\\cancelled.ts");
+	using store = new MemoryResourceStore([]);
+	using models = new BrowserTextModelService(store);
+	using workingCopies = new BrowserWorkingCopyService();
+	const files = new MemoryFileService([]);
+	using service = new BrowserWorkspaceEditService(models, workingCopies, files);
+	const controller = new AbortController();
+	controller.abort("superseded");
+
+	await assert.rejects(service.apply({ entries: [
+		{ kind: "create", resource: created, existing: "error" },
+	] }, controller.signal), error => isCancellationError(error) && error.reason === "superseded");
+
+	assert.equal(files.has(created), false);
 });
 
 function workingCopy(reference: Awaited<ReturnType<BrowserTextModelService["acquire"]>>): IWorkingCopy {

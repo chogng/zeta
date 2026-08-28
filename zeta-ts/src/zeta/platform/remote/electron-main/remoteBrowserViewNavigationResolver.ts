@@ -1,3 +1,4 @@
+import { throwIfCancelled } from "../../../base/common/cancellation.js";
 import type { BrowserViewNavigation } from "../../browser/common/browserViewNavigation.js";
 import { directBrowserViewNavigation } from "../../browser/common/browserViewNavigation.js";
 import type { IBrowserViewNavigationResolver } from "../../browser/common/browserViewNavigation.js";
@@ -24,13 +25,13 @@ export class RemoteBrowserViewNavigationResolver implements IBrowserViewNavigati
 		if (!isRemoteWorkspaceIdentifier(workspace) || !isLoopbackWebUrl(parsed)) {
 			return directBrowserViewNavigation(requestedUrl);
 		}
-		throwIfAborted(signal);
+		throwIfCancelled(signal, "Remote Browser navigation was cancelled");
 		const workspaceIdentity = `${workspace.id}\0${workspace.uri.toString()}`;
 		const remotePort = parsed.port ? Number(parsed.port) : defaultPort(parsed.protocol);
 		const tunnel = await this.options.tunnels.open({ remotePort });
 		if (signal.aborted) {
 			await this.closeAfterAbandonedResolution(tunnel.id);
-			throw cancellationError(signal);
+			throwIfCancelled(signal, "Remote Browser navigation was cancelled");
 		}
 		if (!matchesRemoteWorkspace(this.options.getWorkspace, workspaceIdentity)) {
 			await this.closeAfterAbandonedResolution(tunnel.id);
@@ -157,12 +158,4 @@ function matchesRemoteWorkspace(getWorkspace: () => IAnyWorkspaceIdentifier, exp
 	} catch {
 		return false;
 	}
-}
-
-function throwIfAborted(signal: AbortSignal): void {
-	if (signal.aborted) throw cancellationError(signal);
-}
-
-function cancellationError(signal: AbortSignal): Error {
-	return signal.reason instanceof Error ? signal.reason : new Error("Remote Browser navigation was cancelled");
 }

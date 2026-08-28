@@ -7,10 +7,9 @@ import {
 	type IDisposable,
 	Disposable,
 } from "../../base/common/lifecycle.js";
-import { getErrorMessage, onUnexpectedError, setUnexpectedErrorHandler } from "../../base/common/errors.js";
+import { CancellationError, getErrorMessage, onUnexpectedError, setUnexpectedErrorHandler } from "../../base/common/errors.js";
 import { assertDefined } from "../../base/common/types.js";
 import { WorkbenchModeRegistry, type WorkbenchModeId } from "../common/workbenchMode.js";
-import { CancellationError } from "../../base/common/errors.js";
 import { URI } from "../../base/common/uri.js";
 import { AccessibilityService } from "../../platform/accessibility/browser/accessibilityService.js";
 import { IAccessibilityService } from "../../platform/accessibility/common/accessibility.js";

@@ -50,11 +50,8 @@ export class ErrorHandler {
 
 export const errorHandler = new ErrorHandler();
 
-export const canceledName = 'Canceled';
-
 export function isCancellationError(error: unknown): error is CancellationError {
-	if (error instanceof CancellationError) return true;
-	return error instanceof Error && error.name === canceledName && error.message === canceledName;
+	return error instanceof CancellationError;
 }
 
 export class CancellationError extends Error {
@@ -62,13 +59,6 @@ export class CancellationError extends Error {
 		super(message, { cause: reason });
 		this.name = 'CancellationError';
 	}
-}
-
-/** @deprecated Use `new CancellationError()` instead. */
-export function canceled(): Error {
-	const error = new Error(canceledName);
-	error.name = error.message;
-	return error;
 }
 
 export function setUnexpectedErrorHandler(handler: (error: unknown) => void): void {

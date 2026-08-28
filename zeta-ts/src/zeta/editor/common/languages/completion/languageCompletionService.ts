@@ -1,3 +1,4 @@
+import { raceCancellation } from "../../../../base/common/cancellation.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { LanguageRequestCoordinator, type LanguageRequestOptions, type LanguageRequestOutcome, type LanguageWorker, type LanguageWorkerRequest } from "../languageRequestCoordinator.js";
@@ -472,14 +473,5 @@ function isCompletionItemResolver(value: LanguageCompletionWorker): value is Lan
 
 function waitForCatalog(source: LanguageCompletionProviderCatalogSource, signal: AbortSignal | undefined): Promise<LanguageCompletionProviderCatalog> {
 	if (!signal) return source.waitForProviderCatalog();
-	signal.throwIfAborted();
-	return new Promise((resolve, reject) => {
-		const abort = (): void => {
-			reject(signal.reason ?? new Error("Completion provider catalog wait was cancelled"));
-		};
-		signal.addEventListener("abort", abort, { once: true });
-		source.waitForProviderCatalog().then(resolve, reject).finally(() => {
-			signal.removeEventListener("abort", abort);
-		});
-	});
+	return raceCancellation(source.waitForProviderCatalog(), signal, "Completion provider catalog wait was cancelled");
 }

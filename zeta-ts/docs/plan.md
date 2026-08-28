@@ -125,9 +125,7 @@ Store / UI
 `AbortController` 由发起操作的一方持有，取消一次 request 不得隐式销毁整个
 peer。生命周期协议和操作取消保持正交，不再维护自定义取消协议或通用转换器。
 
-基础模块在文件层面同样分离：`lifecycle.ts` 不依赖 `cancellation.ts`；
-`cancellation.ts` 继续以标准 `AbortSignal` 为公共协议，只统一
-`CancellationError`、错误判断以及未来确有调用方需要的 signal 组合与超时策略。
+基础模块在文件层面同样分离：`errors.ts` 统一 `CancellationError` 和错误判断；`cancellation.ts` 以标准 `AbortSignal` 为公共协议，负责取消令牌、等待竞争以及未来确有调用方需要的信号组合与超时策略；`lifecycle.ts` 不依赖取消机制。
 RPC 等上层模块可以依赖两者，但不得把取消能力加入 `IDisposable`。
 
 开发和测试环境可以显式安装 `DisposableTracker`。追踪器记录资源创建栈、

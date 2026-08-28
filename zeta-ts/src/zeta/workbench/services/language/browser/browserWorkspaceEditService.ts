@@ -1,3 +1,4 @@
+import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { normalizeTextLineEndings } from "../../../../editor/common/core/text.js";
@@ -58,14 +59,14 @@ export class BrowserWorkspaceEditService extends Disposable implements IWorkspac
 		const touched = new Map<string, URI>();
 		try {
 			for (const entry of edit.entries) {
-				if (signal.aborted) throw cancellationError();
+				throwIfCancelled(signal, "Workspace edit was cancelled");
 				for (const resource of entryResources(entry)) touched.set(resource.toString(), resource);
 				prepared.push(await this.preflight(entry, states, acquired, signal));
 			}
 			const undo: UndoOperation[] = [];
 			try {
 				for (const operation of prepared) {
-					if (signal.aborted) throw cancellationError();
+					throwIfCancelled(signal, "Workspace edit was cancelled");
 					await this.execute(operation, undo, signal);
 				}
 			} catch (error) {
@@ -242,10 +243,4 @@ async function rollback(operations: readonly UndoOperation[]): Promise<unknown[]
 		try { await operations[index]!(); } catch (error) { errors.push(error); }
 	}
 	return errors;
-}
-
-function cancellationError(): Error {
-	const error = new Error("Workspace edit was cancelled");
-	error.name = "CancellationError";
-	return error;
 }

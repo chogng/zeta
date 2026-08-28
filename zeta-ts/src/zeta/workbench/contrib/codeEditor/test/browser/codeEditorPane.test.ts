@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { isCancellationError } from "../../../../../base/common/errors.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { TextPosition, TextRange } from "../../../../../editor/common/core/text.js";
 import { EditorPaneVisibility } from "../../../../browser/parts/editor/editorPane.js";
@@ -132,7 +133,7 @@ test("Stanza editor pane releases a load cancelled before content resolution", a
 		encoding: "utf8",
 	});
 
-	await assert.rejects(opening, error => (error as Error).name === "CancellationError");
+	await assert.rejects(opening, isCancellationError);
 	assert.equal(parent.querySelectorAll(".stanza-editor").length, 0);
 	pane.dispose();
 	dom.window.close();

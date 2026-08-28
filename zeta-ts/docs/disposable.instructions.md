@@ -13,15 +13,16 @@ Zeta uses the ECMAScript explicit resource-management protocol as its foundation
 - `AbortSignal` represents cancellation of one asynchronous operation; it does not represent ownership and must not dispose the object performing the work.
 - Keep synchronous and asynchronous cleanup separate; do not define `dispose(): void | Promise<void>`.
 
-Lifecycle and cancellation are separate base modules:
+Lifecycle, cancellation, and shared error categories are separate base modules:
 
 ```text
 base/common/
 ├─ lifecycle.ts
-└─ cancellation.ts
+├─ cancellation.ts
+└─ errors.ts
 ```
 
-`lifecycle.ts` must not depend on `cancellation.ts`. The cancellation module uses the standard `AbortSignal` protocol and owns only project-wide cancellation policy such as `CancellationError`, classification, signal composition, and timeout helpers.
+`errors.ts` owns project-wide error types and classification, including `CancellationError` and `isCancellationError`. `cancellation.ts` owns cancellation tokens and the mechanisms that observe `AbortSignal` or `CancellationToken` and produce those errors. `lifecycle.ts` must not depend on cancellation.
 
 ## Project facade
 

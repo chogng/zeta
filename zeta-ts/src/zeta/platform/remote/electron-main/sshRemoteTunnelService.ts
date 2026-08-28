@@ -1,6 +1,7 @@
 import { createConnection, createServer } from "node:net";
 import { type ChildProcess, spawn } from "node:child_process";
-import { getErrorMessage } from "../../../base/common/errors.js";
+import { throwIfCancelled } from "../../../base/common/cancellation.js";
+import { CancellationError, getErrorMessage } from "../../../base/common/errors.js";
 import { Emitter } from "../../../base/common/event.js";
 import { Disposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { IAnyWorkspaceIdentifier } from "../../workspace/common/workspace.js";
@@ -312,7 +313,7 @@ async function reserveLoopbackPort(): Promise<number> {
 }
 
 async function probeLoopbackListener(localPort: number, signal?: AbortSignal): Promise<LoopbackListenerReadiness> {
-	if (signal?.aborted) throw new Error("SSH tunnel startup was cancelled");
+	if (signal) throwIfCancelled(signal, "SSH tunnel startup was cancelled");
 	return new Promise<LoopbackListenerReadiness>((resolve, reject) => {
 		const socket = createConnection({ host: REMOTE_LOOPBACK_HOST, port: localPort });
 		let settled = false;
@@ -329,7 +330,7 @@ async function probeLoopbackListener(localPort: number, signal?: AbortSignal): P
 			settled = true;
 			clearTimeout(timeout);
 			socket.destroy();
-			reject(new Error("SSH tunnel startup was cancelled"));
+			reject(new CancellationError("SSH tunnel startup was cancelled", signal?.reason));
 		};
 		const timeout = setTimeout(() => finish("pending"), LISTENER_PROBE_TIMEOUT_MS);
 		timeout.unref();
@@ -382,7 +383,7 @@ async function waitForStartup(child: ChildProcess, localPort: number, timeoutMs:
 function throwIfStartupFailed(child: ChildProcess, failure: Error | undefined, signal?: AbortSignal): void {
 	if (failure) throw failure;
 	if (child.exitCode !== null) throw new Error(`SSH tunnel exited before startup: ${child.exitCode}`);
-	if (signal?.aborted) throw new Error("SSH tunnel startup was cancelled");
+	if (signal) throwIfCancelled(signal, "SSH tunnel startup was cancelled");
 }
 
 async function stopChild(child: ChildProcess): Promise<void> {

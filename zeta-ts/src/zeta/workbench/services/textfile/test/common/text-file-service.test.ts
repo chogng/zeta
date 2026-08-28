@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { isCancellationError } from "../../../../../base/common/errors.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { FileKind, FileRevisionConflictError, type IFileService, type IFileWriteRequest } from "../../../../../platform/files/common/files.js";
 import {
@@ -36,7 +37,7 @@ test("TextFileService reads missing bootstrap content and observes cancellation"
 
 	const cancelled = new AbortController();
 	cancelled.abort("closed");
-	await assert.rejects(service.resolve({ resource }, cancelled.signal), error => (error as Error).name === "CancellationError");
+	await assert.rejects(service.resolve({ resource }, cancelled.signal), isCancellationError);
 	assert.equal(files.readCount, 1);
 });
 
@@ -48,7 +49,7 @@ test("TextFileService cancels before starting a byte read when metadata resoluti
 	const resolving = service.resolve({ resource: URI.file("C:\\project\\slow.ts") }, controller.signal);
 
 	controller.abort("closed");
-	await assert.rejects(resolving, error => (error as Error).name === "CancellationError");
+	await assert.rejects(resolving, isCancellationError);
 	pending.resolve("late");
 	assert.equal(files.readCount, 0);
 });
@@ -100,7 +101,7 @@ test("TextFileService writes text and observes cancellation", async () => {
 
 	const cancelled = new AbortController();
 	cancelled.abort("closed");
-	await assert.rejects(service.save({ resource, text: "ignored" }, cancelled.signal), error => (error as Error).name === "CancellationError");
+	await assert.rejects(service.save({ resource, text: "ignored" }, cancelled.signal), isCancellationError);
 	assert.equal(files.writes.length, 1);
 });
 

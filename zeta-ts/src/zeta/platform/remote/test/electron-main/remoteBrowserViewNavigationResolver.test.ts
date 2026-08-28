@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { CancellationError } from "../../../../base/common/errors.js";
 import { URI } from "../../../../base/common/uri.js";
 import type { DisposableHandle } from "../../../../platform/ipc/common/ipc.js";
 import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";
@@ -86,10 +87,15 @@ test("Remote Browser closes a tunnel completed after cancellation", async () => 
 	const resolver = new RemoteBrowserViewNavigationResolver({ getWorkspace: remoteWorkspace, tunnels });
 	const cancellation = new AbortController();
 	const pending = resolver.resolve("http://localhost:7000", cancellation.signal);
-	cancellation.abort(new Error("cancelled by test"));
+	const reason = new Error("cancelled by test");
+	cancellation.abort(reason);
 	finishOpen(tunnels.tunnel());
 
-	await assert.rejects(pending, /cancelled by test/);
+	await assert.rejects(pending, error => {
+		assert.ok(error instanceof CancellationError);
+		assert.equal(error.cause, reason);
+		return true;
+	});
 	assert.deepEqual(tunnels.closedIds, ["tunnel-1"]);
 });
 

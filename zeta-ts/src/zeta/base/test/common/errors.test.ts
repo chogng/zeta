@@ -1,6 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { BugIndicatingError, CancellationError, ErrorHandler, errorHandler, getErrorMessage, onBugIndicatingError, onUnexpectedError, setUnexpectedErrorHandler, toError } from '../../common/errors.js';
+import { BugIndicatingError, CancellationError, ErrorHandler, errorHandler, getErrorMessage, isCancellationError, onBugIndicatingError, onUnexpectedError, setUnexpectedErrorHandler, toError } from '../../common/errors.js';
+
+test('CancellationError preserves context and is the only project cancellation error', () => {
+	const reason = new Error('superseded');
+	const error = new CancellationError('Request cancelled', reason);
+
+	assert.equal(isCancellationError(error), true);
+	assert.equal(error.message, 'Request cancelled');
+	assert.equal(error.reason, reason);
+	assert.equal(error.cause, reason);
+	assert.equal(isCancellationError(new Error('cancelled')), false);
+});
 
 test('toError preserves Error instances', () => {
 	const error = new TypeError('failure');
