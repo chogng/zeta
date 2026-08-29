@@ -64,10 +64,10 @@ use zeta_typst::TypstCompiler;
 
 mod account_operations;
 mod attachment_operations;
-mod cloud_code_index_operations;
-mod code_index_operations;
-mod code_index_runtime;
-mod code_retrieval_operations;
+mod cloud_codebase_operations;
+mod codebase_operations;
+mod codebase_retrieval_operations;
+mod codebase_runtime;
 mod collaboration_operations;
 mod collaboration_runtime;
 mod config_operations;
@@ -120,13 +120,6 @@ mod symbol_index_runtime;
 mod syntax_operations;
 mod terminal_operations;
 mod turn_backend_router;
-mod turn_changes_commit;
-mod turn_changes_message;
-mod turn_changes_observer;
-mod turn_changes_operations;
-mod turn_changes_runtime;
-mod turn_changes_watcher;
-mod turn_changes_workspace;
 pub(crate) mod update_broker;
 pub(crate) mod update_plan_tool;
 mod workspace_customizations;
@@ -150,17 +143,17 @@ pub(crate) use workspace_runtime::WorkspaceRuntimeControl;
 pub(crate) use workspace_runtime::WorkspaceSwitchTrustPolicy;
 pub(crate) use workspace_runtime::WorkspaceToolPorts;
 
-/// Immutable model selection used by the local semantic code-index pipeline.
+/// Immutable model selection used by the local semantic codebase pipeline.
 #[derive(Clone)]
-pub struct CodeIndexSemanticModels {
-    model_id: zeta_code_index_semantic::CodeIndexEmbeddingModelId,
+pub struct CodebaseSemanticModels {
+    model_id: zeta_codebase::EmbeddingIndexKey,
     embedding: Arc<dyn zeta_model_provider::EmbeddingInvoker>,
     rerank: Option<Arc<dyn zeta_model_provider::RerankInvoker>>,
 }
 
-impl CodeIndexSemanticModels {
+impl CodebaseSemanticModels {
     pub fn new(
-        model_id: zeta_code_index_semantic::CodeIndexEmbeddingModelId,
+        model_id: zeta_codebase::EmbeddingIndexKey,
         embedding: Arc<dyn zeta_model_provider::EmbeddingInvoker>,
     ) -> Self {
         Self {
@@ -223,10 +216,10 @@ pub struct AppServer {
     workspace_index_storage:
         Option<std::sync::Arc<zeta_workspace_index_storage::WorkspaceIndexStorage>>,
     fast_regex_worker_command: Option<zeta_fast_regex_search::FastRegexWorkerCommand>,
-    code_index_semantic_models: Option<CodeIndexSemanticModels>,
+    codebase_semantic_models: Option<CodebaseSemanticModels>,
     semantic_model_provider: Option<Arc<dyn zeta_model_provider::SemanticModelProvider>>,
-    cloud_code_index_storage_root: Option<std::path::PathBuf>,
-    cloud_code_index_providers: zeta_code_index_cloud::CloudCodeIndexProviderRegistry,
+    cloud_codebase_storage_root: Option<std::path::PathBuf>,
+    cloud_codebase_providers: zeta_cloud_codebase::CloudCodebaseProviderRegistry,
     pub(super) typst: TypstCompiler,
     pub(super) slash_commands: SlashCommandCatalog,
     agent_extensions: Arc<ExtensionRegistry>,
@@ -238,7 +231,6 @@ pub struct AppServer {
     _marketplace_watcher: Option<marketplace_runtime::MarketplaceChangeWatcher>,
     _tool_config_watcher: Option<crate::local::ToolConfigWatcher>,
     _interaction_deadline_watcher: interaction_runtime::InteractionDeadlineWatcher,
-    turn_changes: Option<Arc<turn_changes_runtime::TurnChangesRuntime>>,
     updates: Arc<UpdateBroker>,
 }
 
@@ -501,11 +493,10 @@ impl AppServer {
             browser_tool_port,
             workspace_index_storage: None,
             fast_regex_worker_command: None,
-            code_index_semantic_models: None,
+            codebase_semantic_models: None,
             semantic_model_provider: None,
-            cloud_code_index_storage_root: None,
-            cloud_code_index_providers:
-                zeta_code_index_cloud::CloudCodeIndexProviderRegistry::default(),
+            cloud_codebase_storage_root: None,
+            cloud_codebase_providers: zeta_cloud_codebase::CloudCodebaseProviderRegistry::default(),
             typst: TypstCompiler::new(),
             slash_commands: SlashCommandCatalog::default(),
             agent_extensions,
@@ -517,69 +508,8 @@ impl AppServer {
             _marketplace_watcher: None,
             _tool_config_watcher: None,
             _interaction_deadline_watcher: interaction_deadline_watcher,
-            turn_changes: None,
             updates,
         }
-    }
-
-    fn with_turn_changes_runtime(
-        mut self,
-        runtime: Arc<turn_changes_runtime::TurnChangesRuntime>,
-    ) -> Result<Self, String> {
-        let provisioner: Arc<dyn zeta_core::ThreadWorkspaceProvisioner> = runtime.clone();
-        self.sessions
-            .install_thread_workspace_provisioner(provisioner)
-            .map_err(|error| error.to_string())?;
-        let observer: Arc<dyn zeta_core::TurnExecutionObserver> = runtime.clone();
-        let executor = self
-            .workspace_runtime
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .turn_executor
-            .clone()
-            .with_execution_observer(observer);
-        self.turn_backend.install_executor(executor.clone());
-        self.workspace_runtime
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .turn_executor = executor;
-        self.turn_changes = Some(runtime);
-        Ok(self)
-    }
-
-    pub(crate) fn with_local_turn_changes(
-        self,
-        database_path: &std::path::Path,
-        profile_root: &std::path::Path,
-        workspace_root: &std::path::Path,
-    ) -> Result<Self, String> {
-        let config = self
-            .config
-            .as_ref()
-            .cloned()
-            .ok_or_else(|| "Turn changes require the ConfigStore".to_string())?;
-        let workspace_access = Arc::clone(
-            &self
-                .workspace_runtime
-                .read()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .session_workspace_access,
-        );
-        let hooks = self
-            .local_hook_runtime()
-            .ok_or_else(|| "Turn changes require the local Hook runtime".to_string())?;
-        let runtime = turn_changes_runtime::TurnChangesRuntime::open(
-            database_path,
-            profile_root,
-            workspace_root,
-            config,
-            Arc::clone(&self.sessions),
-            Arc::clone(&self.model),
-            workspace_access,
-            hooks,
-            Arc::clone(&self.updates),
-        )?;
-        self.with_turn_changes_runtime(runtime)
     }
 
     pub fn connection(&self) -> ConnectionState {
@@ -1084,11 +1014,8 @@ impl AppServer {
     }
 
     /// Installs immutable embedding/rerank adapters for local semantic indexing.
-    pub(crate) fn with_code_index_semantic_models(
-        mut self,
-        models: CodeIndexSemanticModels,
-    ) -> Self {
-        self.code_index_semantic_models = Some(models);
+    pub(crate) fn with_codebase_semantic_models(mut self, models: CodebaseSemanticModels) -> Self {
+        self.codebase_semantic_models = Some(models);
         self
     }
 
@@ -1100,20 +1027,20 @@ impl AppServer {
         self
     }
 
-    pub(crate) fn with_cloud_code_index_storage_root(
+    pub(crate) fn with_cloud_codebase_storage_root(
         mut self,
         storage_root: impl Into<std::path::PathBuf>,
     ) -> Self {
-        self.cloud_code_index_storage_root = Some(storage_root.into());
+        self.cloud_codebase_storage_root = Some(storage_root.into());
         self
     }
 
-    /// Installs policy- and credential-bound cloud code-index provider adapters for this host.
-    pub fn with_cloud_code_index_providers(
+    /// Installs policy- and credential-bound cloud codebase provider adapters for this host.
+    pub fn with_cloud_codebase_providers(
         mut self,
-        providers: zeta_code_index_cloud::CloudCodeIndexProviderRegistry,
+        providers: zeta_cloud_codebase::CloudCodebaseProviderRegistry,
     ) -> Self {
-        self.cloud_code_index_providers = providers;
+        self.cloud_codebase_providers = providers;
         self
     }
 
@@ -1739,19 +1666,6 @@ impl AppServer {
             Some(ClientMethod::SessionThreadUnsubscribe) => {
                 self.session_thread_unsubscribe(connection, &request.params)
             }
-            Some(ClientMethod::TurnChangesList) => self.turn_changes_list(&request.params),
-            Some(ClientMethod::TurnChangesRead) => self.turn_changes_read(&request.params),
-            Some(ClientMethod::TurnChangesReadFile) => self.turn_changes_read_file(&request.params),
-            Some(ClientMethod::TurnChangesGenerateMessage) => {
-                self.turn_changes_generate_message(&request.params)
-            }
-            Some(ClientMethod::TurnChangesUpdateDraft) => {
-                self.turn_changes_update_draft(&request.params)
-            }
-            Some(ClientMethod::TurnChangesCommit) => self.turn_changes_commit(&request.params),
-            Some(ClientMethod::TurnChangesDiscardThread) => {
-                self.turn_changes_discard_thread(&request.params)
-            }
             Some(ClientMethod::TypstCompile) => self.typst_compile(connection, &request.params),
             Some(ClientMethod::ConfigRead) => self.config_read(),
             Some(ClientMethod::AccountRead) => self.account_read(),
@@ -1825,19 +1739,7 @@ impl AppServer {
                 self.exec_policy_rule_remove(&request.params)
             }
             Some(ClientMethod::ToolSearchConfigure) => self.tool_search_configure(&request.params),
-            Some(ClientMethod::SemanticCodeIndexConfigure) => {
-                self.semantic_code_index_configure(&request.params)
-            }
-            Some(ClientMethod::SemanticCodeIndexAuthorize) => {
-                self.semantic_code_index_authorize(&request.params)
-            }
-            Some(ClientMethod::SemanticCodeIndexRevoke) => {
-                self.semantic_code_index_revoke(&request.params)
-            }
-            Some(ClientMethod::CommitMessageAuthorize) => {
-                self.commit_message_authorize(&request.params)
-            }
-            Some(ClientMethod::CommitMessageRevoke) => self.commit_message_revoke(&request.params),
+            Some(ClientMethod::CodebaseConfigure) => self.codebase_configure(&request.params),
             Some(ClientMethod::LanguageServerConfigure) => {
                 self.language_server_configure(&request.params)
             }
@@ -2043,18 +1945,18 @@ impl AppServer {
             Some(ClientMethod::WorkspaceSearchCancel) => {
                 self.workspace_search_cancel(connection, &request.params)
             }
-            Some(ClientMethod::CodeIndexStatus) => self.code_index_status(&request.params),
-            Some(ClientMethod::CodeIndexSearch) => self.code_index_search(&request.params),
-            Some(ClientMethod::SymbolIndexStatus) => self.symbol_index_status(&request.params),
-            Some(ClientMethod::SymbolIndexSearch) => self.symbol_index_search(&request.params),
+            Some(ClientMethod::CodebaseStatus) => self.codebase_status(&request.params),
+            Some(ClientMethod::CodebaseSearch) => self.codebase_search(&request.params),
+            Some(ClientMethod::CodebaseSymbolsStatus) => self.symbol_index_status(&request.params),
+            Some(ClientMethod::CodebaseSymbolsSearch) => self.symbol_index_search(&request.params),
             Some(ClientMethod::WorkspaceDocumentOverlaySynchronize) => {
                 self.workspace_document_overlay_synchronize(&request.params)
             }
             Some(ClientMethod::WorkspaceDocumentOverlayClose) => {
                 self.workspace_document_overlay_close(&request.params)
             }
-            Some(ClientMethod::CodeIndexRetrieve) => self.code_retrieve(&request.params),
-            Some(ClientMethod::CodeIndexRebuild) => self.code_index_rebuild(&request.params),
+            Some(ClientMethod::CodebaseRetrieve) => self.code_retrieve(&request.params),
+            Some(ClientMethod::CodebaseRebuild) => self.codebase_rebuild(&request.params),
             Some(ClientMethod::FastRegexIndexStatus) => {
                 self.fast_regex_index_status(&request.params)
             }
@@ -2064,25 +1966,15 @@ impl AppServer {
             Some(ClientMethod::FastRegexDisableAndDelete) => {
                 self.fast_regex_disable_and_delete(&request.params)
             }
-            Some(ClientMethod::SemanticCodeIndexCancel) => {
-                self.semantic_code_index_cancel(&request.params)
+            Some(ClientMethod::CloudCodebaseStatus) => self.cloud_codebase_status(&request.params),
+            Some(ClientMethod::CloudCodebasePreview) => {
+                self.cloud_codebase_preview(&request.params)
             }
-            Some(ClientMethod::SemanticCodeIndexRetry) => {
-                self.semantic_code_index_retry(&request.params)
+            Some(ClientMethod::CloudCodebaseAuthorize) => {
+                self.cloud_codebase_authorize(&request.params)
             }
-            Some(ClientMethod::CloudCodeIndexStatus) => {
-                self.cloud_code_index_status(&request.params)
-            }
-            Some(ClientMethod::CloudCodeIndexPreview) => {
-                self.cloud_code_index_preview(&request.params)
-            }
-            Some(ClientMethod::CloudCodeIndexAuthorize) => {
-                self.cloud_code_index_authorize(&request.params)
-            }
-            Some(ClientMethod::CloudCodeIndexSync) => self.cloud_code_index_sync(&request.params),
-            Some(ClientMethod::CloudCodeIndexRevoke) => {
-                self.cloud_code_index_revoke(&request.params)
-            }
+            Some(ClientMethod::CloudCodebaseSync) => self.cloud_codebase_sync(&request.params),
+            Some(ClientMethod::CloudCodebaseRevoke) => self.cloud_codebase_revoke(&request.params),
             Some(ClientMethod::TerminalProfileList) => self.terminal_profile_list(&request.params),
             Some(ClientMethod::TerminalCreate) => self.terminal_create(connection, &request.params),
             Some(ClientMethod::TerminalCreateInSessionDirectory) => {

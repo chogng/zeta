@@ -108,7 +108,7 @@ function decodeRange(value: unknown, snapshot: TextSnapshot): TextRange {
 
 function decodePosition(value: unknown, owner: string): TextPosition {
 	assertRecord(value, owner);
-	return TextPosition.at(decodeIndex(value.lineIndex, `${owner} line index`), decodeIndex(value.columnIndex, `${owner} column index`));
+	return TextPosition.at(decodebase(value.lineIndex, `${owner} line index`), decodebase(value.columnIndex, `${owner} column index`));
 }
 
 function decodeUnicodeHighlight(value: unknown, snapshot: TextSnapshot): UnicodeHighlight {
@@ -124,7 +124,7 @@ function isUnicodeHighlightKind(value: string): value is UnicodeHighlightKind {
 	return value === 'invisible' || value === 'bidi' || value === 'confusable';
 }
 
-function decodeIndex(value: unknown, owner: string): number {
+function decodebase(value: unknown, owner: string): number {
 	if (!Number.isSafeInteger(value) || (value as number) < 0) throw new RangeError(`${owner} must be a non-negative safe integer`);
 	return value as number;
 }

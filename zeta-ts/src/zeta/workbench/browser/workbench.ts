@@ -166,8 +166,8 @@ import { GitService } from "../services/git/browser/gitService.js";
 import { IGitService } from "../services/git/common/gitService.js";
 import { ChatService } from "../services/chat/browser/chatService.js";
 import { IChatService } from "../services/chat/common/chatService.js";
-import { ICodeIndexService } from "../../platform/codeIndex/common/codeIndexService.js";
-import { AppServerCodeIndexService } from "../services/codeIndex/browser/appServerCodeIndexService.js";
+import { ICodebaseService } from "../../platform/codebase/common/codebaseService.js";
+import { AppServerCodebaseService } from "../services/codebase/browser/appServerCodebaseService.js";
 import { IToolSearchService } from "../../platform/toolSearch/common/toolSearchService.js";
 import { IWorkspaceTrustService } from "../../platform/workspaceTrust/common/workspaceTrustService.js";
 import { IKeybindingsResourceService } from "../../platform/keybinding/common/keybindingsResource.js";
@@ -188,7 +188,7 @@ import { ILocalizationService } from "../services/localization/common/localizati
 import { WorkbenchLocalizationService } from "../services/localization/browser/workbenchLocalizationService.js";
 import { builtinLanguagePackCatalogs } from "../services/localization/common/localizationCatalogs.js";
 import { AppServerToolSearchService } from "../services/toolSearch/browser/appServerToolSearchService.js";
-import { ISymbolIndexApi } from "../../platform/symbolIndex/common/symbolIndexApi.js";
+import { ICodebaseSymbolsApi } from "../../platform/codebaseSymbols/common/codebaseSymbolsApi.js";
 import { AccessibleViewInformationService, IAccessibleViewInformationService } from "../services/accessibility/common/accessibleViewInformationService.js";
 import { NativeAccessibilityService } from "../services/accessibility/electron-browser/accessibilityService.js";
 import { BrowserUntitledTextEditorService } from "../services/untitled/browser/browserUntitledTextEditorService.js";
@@ -340,7 +340,7 @@ export class Workbench extends Disposable {
 		this.registerErrorHandler(logService);
 		services.registerInstance(ILogService, logService);
 		services.registerInstance(IExtensionHostApi, api.extensionHost);
-		services.registerInstance(ISymbolIndexApi, api.symbolIndex);
+		services.registerInstance(ICodebaseSymbolsApi, api.codebaseSymbols);
 		services.registerInstance(ISyntaxApi, api.syntax);
 		if (api.debugAdapter) services.registerInstance(IDebugAdapterProcessService, api.debugAdapter);
 		const remoteAgentService = this._register(new AppServerRemoteAgentService({ api: api.appServer, remoteApi: api.remote }));
@@ -406,7 +406,7 @@ export class Workbench extends Disposable {
 		this._register(new AppServerLanguageProviders(languageFeaturesService, api.language, workspaceContext, { workspaceTrust: workspaceTrustService, events: api.events }));
 		const diffService = new AppServerDiffService(api.diff);
 		services.registerInstance(IDiffService, diffService);
-		const codeIntelligenceDocuments = new AppServerCodeIntelligenceDocumentService(api.symbolIndex);
+		const codeIntelligenceDocuments = new AppServerCodeIntelligenceDocumentService(api.codebaseSymbols);
 		services.registerInstance(ICodeIntelligenceDocumentService, codeIntelligenceDocuments);
 		const languageDiagnosticsService = this._register(new AppServerLanguageDiagnosticsService(api.language, api.events, workspaceContext, codeIntelligenceDocuments, workspaceTrustService));
 		services.registerInstance(ILanguageDiagnosticsService, languageDiagnosticsService);
@@ -425,7 +425,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(ITerminalService, terminalService);
 		const gitService = this._register(new GitService({ api: api.git, appServerApi: api.appServer, eventApi: api.events, workspaceContext }));
 		services.registerInstance(IGitService, gitService);
-		services.registerInstance(ICodeIndexService, new AppServerCodeIndexService(api.codeIndex));
+		services.registerInstance(ICodebaseService, new AppServerCodebaseService(api.codebase));
 		services.registerInstance(IConnectorService, this._register(new AppServerConnectorService(api.connectors, api.events)));
 		services.registerInstance(IAccountService, this._register(new AppServerAccountService(api.accounts, api.events)));
 		services.registerInstance(IPluginService, this._register(new AppServerPluginService(api.plugins, api.events)));

@@ -147,8 +147,8 @@ notification contract，不能拥有隐藏业务接口。JSONL/stdio、WebSocket
     "resources": true,
     "fileSystem": true,
     "workspaceSearch": true,
-    "codeIndex": true,
-    "cloudCodeIndex": false,
+    "codebase": true,
+    "cloudCodebase": false,
     "terminal": true,
     "mcp": true,
     "mcpOAuth": false,
@@ -252,10 +252,6 @@ Desktop 当前实现和 Playwright 后续边界见
 | `session/thread/read` | Session + Thread | 读取 canonical Thread snapshot |
 | `session/thread/subscribe` | Session + Thread + connection | snapshot + `afterSequence` 之后的 durable gap |
 | `session/thread/unsubscribe` | Session + Thread + connection | 删除 child Thread 订阅 |
-| `turnChanges/list` / `read` / `readFile` | Session + Thread + ChangeSet | 读取 Thread 工作区绑定、Turn ChangeSet、文件元数据与有界文本内容 |
-| `turnChanges/generateMessage` / `updateDraft` | ChangeSet | 排队生成候选提交信息，或 revision-safe 保存用户 draft |
-| `turnChanges/commit` | ChangeSet + repository | 后台提交一个 sealed ChangeSet；首版 `changeSetIds` 长度必须为 1 |
-| `turnChanges/discardThread` | Thread workspace | 用户确认后丢弃该 Thread 全部未提交修改；运行中 Turn 会拒绝 |
 | `config/read` | config | 读取配置 |
 | `connector/list` | Connector authority | 读取不含 secret/reference 的外部账号连接投影 |
 | `connector/connect/apiToken` | Connector authority + secret store | retry-safe 保存 API token 并发布 connected account |
@@ -270,8 +266,7 @@ Desktop 当前实现和 Playwright 后续边界见
 | `execPolicy/rule/upsert` / `execPolicy/rule/remove` | config + local policy runtime | revision-safe 持久化 User typed rule，并为未来 Tool safe point 重组 policy snapshot |
 | `toolSearch/configure` | config + semantic model runtime | 选择词法模式，或探活 exact embedding 模型后启用混合 Tool Search |
 | `workspace/additionalDirectories/list` / `add` / `remove` / `permissions/set` | Session Workspace access | 管理当前 Session 的附加目录与完整能力集合；权限替换使用 Workspace access revision，目录不会成为主 Workspace |
-| `workspace/codeIndex/semantic/configure` / `authorize` / `revoke` | config + Workspace | 独立配置 semantic CodeIndex，并显式管理源码外发授权 |
-| `workspace/codeIndex/semantic/cancel` / `retry` | semantic index job | 取消或重新调度 exact-generation 本地语义 projection；status 返回无内容进度计数 |
+| `workspace/codebase/configure` | config + Workspace | 配置可选设备内模型与自动上下文行为；不保存索引数据 |
 | `languageServer/configure` / `languageServer/remove` | config | revision-safe 修改或恢复 language-server mode/path preference |
 | `provider/configure` / `provider/remove` | config | 修改 Provider declaration |
 | `mcp/server/upsert` / `mcp/server/remove` / `mcp/server/enablement/set` | config | 修改 standalone MCP desired config |
@@ -309,17 +304,17 @@ Desktop 当前实现和 Playwright 后续边界见
 | `workspace/search/start` | connection + workspace | 启动有界内容搜索 |
 | `workspace/search/read` | connection + search job | 按游标读取最多 200 条结果 |
 | `workspace/search/cancel` | connection + search job | 取消并释放搜索 |
-| `workspace/codeIndex/status` | workspace | 读取本地 index lifecycle 与 generation counters |
-| `workspace/codeIndex/search` | workspace | 返回有界、revision-bound 的本地 lexical chunks |
-| `workspace/symbolIndex/status` / `search` | workspace | 读取 declaration projection 状态并执行有界 local fuzzy symbol query |
+| `workspace/codebase/status` | workspace | 读取本地 index lifecycle 与 generation counters |
+| `workspace/codebase/search` | workspace | 返回有界、revision-bound 的本地 lexical chunks |
+| `workspace/codebase/symbols/status` / `search` | workspace | 读取 declaration projection 状态并执行有界 local fuzzy symbol query |
 | `workspace/codeIntelligence/document/synchronize` / `close` | workspace + editor document | 发布或释放 ephemeral dirty snapshot；不持久化 overlay |
-| `workspace/codeIndex/retrieve` | workspace | 融合已启用召回源，返回复核、去重、受预算约束的 excerpts |
-| `workspace/codeIndex/rebuild` | workspace | 同步执行一次 full reconcile |
-| `workspace/codeIndex/cloud/status` | workspace | 读取 selected deployment、grant 与 local/remote generation state |
-| `workspace/codeIndex/cloud/preview` | workspace | 本地计算 proposed scope 的 chunk 外发单位与 bytes，不授权、不触网 |
-| `workspace/codeIndex/cloud/authorize` | workspace | 持久化 root-bound destination/scope/byte grant |
-| `workspace/codeIndex/cloud/sync` | workspace | 按 grant 复核 source revision 后调用 provider publication |
-| `workspace/codeIndex/cloud/revoke` | workspace | 先持久化 Revoking，再请求 provider 幂等删除 |
+| `workspace/codebase/retrieve` | workspace | 融合已启用召回源，返回复核、去重、受预算约束的 excerpts |
+| `workspace/codebase/rebuild` | workspace | 同步执行一次 full reconcile |
+| `workspace/codebase/cloud/status` | workspace | 读取 selected deployment、grant 与 local/remote generation state |
+| `workspace/codebase/cloud/preview` | workspace | 本地计算 proposed scope 的 chunk 外发单位与 bytes，不授权、不触网 |
+| `workspace/codebase/cloud/authorize` | workspace | 持久化 root-bound destination/scope/byte grant |
+| `workspace/codebase/cloud/sync` | workspace | 按 grant 复核 source revision 后调用 provider publication |
+| `workspace/codebase/cloud/revoke` | workspace | 先持久化 Revoking，再请求 provider 幂等删除 |
 | `terminal/profile/list` | workspace | 列出 App Server 冻结的可信 Shell Profile |
 | `terminal/create` | connection + workspace | 在可信 workspace root 启动 PTY |
 | `terminal/write` | connection + Terminal | 写入有界 UTF-8 输入 batch |
@@ -494,41 +489,38 @@ read result 的脱敏 `error` 返回。完整 ownership 与当前 UI 限制见
 
 ### Workspace 代码索引
 
-`initialize.capabilities.codeIndex` 表示 local composition 可以在当前 workspace authority 内建立
-本地代码索引。`workspace/codeIndex/status` 返回 `empty/indexing/ready/stale/failed` 和 published
-generation counters；`workspace/codeIndex/search` 接受最多 8 KiB query 与 1–100 个结果上限，
+`initialize.capabilities.codebase` 表示 local composition 可以在当前 workspace authority 内建立
+本地代码索引。`workspace/codebase/status` 返回 `empty/indexing/ready/stale/failed` 和 published
+generation counters；`workspace/codebase/search` 接受最多 8 KiB query 与 1–100 个结果上限，
 返回 root-relative path、language、source revision、chunk key/hash、UTF-8 byte/line span、当前
-验证过的 content 与 lexical score。初始 generation 尚未发布时返回 `CodeIndexNotReady`。
+验证过的 content 与 lexical score。初始 generation 尚未发布时返回 `CodebaseNotReady`。
 
-`workspace/symbolIndex/status` 投影 `empty/indexing/ready/stale/failed` 与 source/symbol generation；
-`workspace/symbolIndex/search` 对当前持久 projection 和 dirty overlay 做 Nucleo fuzzy query，返回 UTF-16
+`workspace/codebase/symbols/status` 投影 `empty/indexing/ready/stale/failed` 与 source/symbol generation；
+`workspace/codebase/symbols/search` 对当前持久 projection 和 dirty overlay 做 Nucleo fuzzy query，返回 UTF-16
 declaration/selection ranges、source revision、score 与 matched name indices。它不声称 reference 或 type
 语义；LSP workspace symbols 由 Desktop provider aggregator 并发补充。
 
-`workspace/codeIndex/retrieve` 使用相同 query/result 数量上限；内部始终按 Workspace excerpt identity
-校验和去重，但返回面只投影 revision-bound excerpt、RRF score、
-`localSymbol/localLexical/localSemantic/cloudSemantic` origins 和显式 degradations。未授权云能力时仍可
-使用本地 symbol/FTS 与已配置 local semantic；已启用云能力时只查询 durable state 中 exact ready
-remote generation。各来源失败会保留其他 local hits 并分别返回
-`localSymbolQueryFailed`、`localSemanticQueryFailed` 或 `cloudQueryFailed`；复核失败或 content budget
-丢弃也会返回计数，不把 provider candidate body 当作 source authority。
+`workspace/codebase/retrieve` 使用相同 query/result 数量上限；内部始终按 Workspace excerpt identity
+校验和去重，对外只返回 revision-bound excerpt 与 RRF score，不暴露全文、符号、设备内模型或云端模型
+等内部候选来源。非致命问题只返回 `codebaseIncomplete`、`cloudCodebaseUnavailable`、候选复核失败或
+content budget 丢弃计数，不把 provider candidate body 当作 source authority。
 
-`workspace/codeIntelligence/document/synchronize` 接收 Editor-authoritative full snapshot；CodeIndex
+`workspace/codeIntelligence/document/synchronize` 接收 Editor-authoritative full snapshot；Codebase
 首先校验 path、language、revision 与 text，再建立 canonical in-memory chunks，SymbolIndex 随后投影
 declarations。同一 dirty path 的磁盘 symbol、FTS、vector 和 cloud candidates 全部被抑制；保存后只有
 磁盘 generation 的 content hash 对齐才 handoff。`close`、Workspace replacement 或 host lifecycle
 释放 overlay。响应只包含 generation 和 dirty document count，不泄露正文。
 
-`workspace/codeIndex/rebuild` 是 global-exclusive、同步 manual reconcile；通常由 watcher-driven
+`workspace/codebase/rebuild` 是 global-exclusive、同步 manual reconcile；通常由 watcher-driven
 runtime 自动维护，不应在每次查询前调用。该能力不创建 embedding/network 请求，也不等价于产品
 文字/正则搜索。完整 chunking、持久化、stale gate 与隐私边界见
-[`code-index.md`](code-index.md)。
+[`codebase.md`](codebase.md)。
 
-`initialize.capabilities.cloudCodeIndex` 表示 host 已注入非空 provider registry；未激活或受限
+`initialize.capabilities.cloudCodebase` 表示 host 已注入非空 provider registry；未激活或受限
 Workspace 即使支持该方法，也没有 active cloud controller，调用会返回
-`CloudCodeIndexUnavailable`。云端只有一种 publication contract：上传 Workspace 已切块并复核的
+`CloudCodebaseUnavailable`。云端只有一种 publication contract：上传 Workspace 已切块并复核的
 exact chunks；provider 不得读取完整 source 后重新切块。客户端必须先用
-`workspace/codeIndex/cloud/preview` 展示 file/chunk/unit/byte shape，再用 authorize 固定
+`workspace/codebase/cloud/preview` 展示 file/chunk/unit/byte shape，再用 authorize 固定
 provider、tenant、collection、path scope 和 `maxEgressBytes`；该 ceiling 计算 source-content bytes，
 不包含 transport metadata overhead，authorize 本身不上传。旧 `mode` 字段按未知字段拒绝，不能把
 旧 `managed` consent 静默解释为新的 chunk-only grant。
@@ -730,25 +722,6 @@ mutation gate 下重读 exact pending request，过期后持久化 `DeadlineElap
 失败为可重试 `InteractionDeadlineElapsed`；过期响应返回 `AgentInteractionExpired`。Core reducer
 只归约 durable fact，不运行 timer，TUI 也不拥有 deadline policy。
 
-### Turn ChangeSet
-
-Thread 创建在允许执行前先持久化独立工作区绑定。Git 工作区使用受管 linked worktree；非 Git
-工作区使用内容寻址目录快照，只提供读取和丢弃，不提供提交。`turnChanges/list` 返回当前 Thread
-的 `ThreadWorkspaceBinding` 和全部 `TurnChangeSetSummary`，内部受管路径不会进入 wire。
-
-每个 ChangeSet 分别返回 `captureState`、`messageState`、`commitState`、terminal 状态、文件统计、
-ChangeSet 依赖、初始工作区依赖路径、warning、冲突路径、可选 `failureMessage`、revision 和 commit ID。`open` 可读不可提交；
-`sealed` 才能提交；`incomplete` 表示归属无法证明并禁止提交。failed/interrupted Turn 仍可 sealed，
-由 terminal 状态提醒用户。
-
-四个 mutation 都携带 `commandId + expectedRevision`。相同 command 与相同 payload 重放首次持久化
-response；相同 command 配不同 payload 返回冲突。后台 message/commit job 的后续 revision 不会改变
-首次 command response。`turnChanges/changed` 携带 Session/Thread scope 和更新后的 summaries。
-
-提交只使用封存的 before/after tree，不读取当前 Thread 目录。目标分支最新 HEAD、checkout index、
-未暂存与未跟踪状态均通过 tree CAS 保护；冲突时不会静默更新 ref、index 或文件。提交完成后账本用
-commit object ID 建立关联，commit message 不添加 Session/Thread/Turn trailer。
-
 ## 8. 更新流
 
 与 Session/Thread 交互相关的 notification method 包括：
@@ -760,7 +733,6 @@ commit object ID 建立关联，commit message 不添加 Session/Thread/Turn tra
 - `skills/changed`，payload 为新的 catalog `generation`；
 - `marketplace/changed`，payload 为 profile Marketplace 安装状态的 `instanceId` 与新 `generation`；
 - `git/statusChanged`，payload 为新的 workspace Git status；
-- `turnChanges/changed`，payload 为一个 Session/Thread 下发生状态变化的 ChangeSet summaries；
 - `fs/changed`，payload 为相对路径变化或 scoped rescan hint。
 
 durable update 使用 `durableSequence`。Thread 的低延迟非 durable update 可额外携带
@@ -806,22 +778,17 @@ notification 是重新 `config/read` 的失效提示，不包含完整 desired d
 exact replay 不推进 revision/generation，也不发布 change。外部 TOML 编辑与同一 profile 的其他
 SQLite connection 提交也会被观察并投影。
 
-`config/read` 当前返回 Agent preference（包括可选 `commitMessageModel`）、Provider、standalone MCP、Skill source、exact Plugin
-request、declarative Hook、language-server mode/path preference、semantic CodeIndex 配置和 Tool
+`config/read` 当前返回 Agent preference、Provider、standalone MCP、Skill source、exact Plugin
+request、declarative Hook、language-server mode/path preference、semantic Codebase 配置和 Tool
 Search 配置，以及 User `execPolicyRules`。`toolSearch.embeddingStatus` 明确区分 `disabled`、`ready` 和带脱敏原因的
 `unavailable`；不能只根据 desired `mode` 推断 embedding 已可用。Plugin request 的 `enabled` 只表示期望参与未来 activation；
 Hook 的 `enabled` 也不表示 process 已获准或已经执行。两者的 runtime/lifecycle projection 必须由
 后续独立领域 API 返回，不能从 Config desired state 推断。
 
-`agent.commitMessageModel` 必须是 exact provider/model；它不继承当前 Session Agent 模型。自动提交
-信息还要求当前 Workspace 对该 model 以及当前 provider endpoint 有独立源码外发授权。provider、
-model 或 endpoint 变化会使旧授权立即失效；未配置或未授权时 ChangeSet 的 `messageState` 为
-`unconfigured`，用户仍可手写 draft。
-
 `toolSearch/configure` 的 `hybridEmbedding` 必须携带 exact `embeddingModel`。App Server 在 durable
 commit 前从 Provider Config 解析模型并发送固定 readiness probe；失败返回
 `ToolSearchUnavailable`，不会把混合模式写入配置。默认 `lexical` 完全本地运行。Tool Search 的模型
-选择与 semantic CodeIndex 的模型和 Workspace source-egress grant 相互独立。外部配置或启动恢复的
+选择与 semantic Codebase 的模型和 Workspace source-egress grant 相互独立。外部配置或启动恢复的
 hybrid 模型不可用时，`embeddingStatus` 为 `unavailable`，自然语言搜索明确失败而不回退 BM25；
 显式 Regex 仍保持本地运行。
 

@@ -1,6 +1,0 @@
-load("//:defs.bzl", "zeta_rust_crate")
-
-zeta_rust_crate(
-    name = "code-index-semantic",
-    crate_name = "zeta_code_index_semantic",
-)

@@ -119,6 +119,34 @@ fn semantic_runtime_invokes_concrete_embedding_and_rerank_endpoints() {
 }
 
 #[test]
+fn semantic_runtime_reports_loopback_endpoints_as_device_local() {
+    let runtime = ModelProviderRuntime::with_client(
+        ProviderConfigRegistry::builtin(),
+        Arc::new(SemanticTransport::default()),
+    );
+    let ollama = EmbeddingRuntimeRequest::new(
+        semantic_model("ollama", "nomic-embed-text"),
+        ModelProviderConfig::new(ProviderId::new("ollama").unwrap()),
+    );
+    assert_eq!(
+        runtime.embedding_runtime_location(&ollama).unwrap(),
+        SemanticRuntimeLocation::Device
+    );
+
+    let provider = ProviderId::new("openai-compatible").unwrap();
+    let mut network_config = ModelProviderConfig::new(provider.clone());
+    network_config.base_url = Some("https://models.example.test/v1".into());
+    let network = EmbeddingRuntimeRequest::new(
+        semantic_model("openai-compatible", "embed-v1"),
+        network_config,
+    );
+    assert_eq!(
+        runtime.embedding_runtime_location(&network).unwrap(),
+        SemanticRuntimeLocation::Network
+    );
+}
+
+#[test]
 fn openai_semantic_runtime_requires_and_materializes_its_secret() {
     let transport = Arc::new(SemanticTransport::default());
     let secrets = Arc::new(MemorySecretStore::default());

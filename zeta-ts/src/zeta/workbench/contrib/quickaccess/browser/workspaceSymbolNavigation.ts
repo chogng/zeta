@@ -38,5 +38,5 @@ async function currentSourceRevision(symbol: LanguageWorkspaceSymbol, files: IFi
 function localSymbolRevision(symbol: LanguageWorkspaceSymbol): string | undefined {
 	if (!symbol.data || typeof symbol.data !== "object") return undefined;
 	const data = symbol.data as { source?: unknown; sourceRevision?: unknown };
-	return data.source === "localSymbolIndex" && typeof data.sourceRevision === "string" && data.sourceRevision.startsWith("sha256:") ? data.sourceRevision : undefined;
+	return data.source === "codebaseSymbols" && typeof data.sourceRevision === "string" && data.sourceRevision.startsWith("sha256:") ? data.sourceRevision : undefined;
 }

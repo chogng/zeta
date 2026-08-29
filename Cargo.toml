@@ -11,15 +11,13 @@ members = [
     "zeta-rs/app-server-transport",
     "zeta-rs/collaboration",
     "zeta-rs/collaboration-server",
-    "zeta-rs/code-index",
-    "zeta-rs/code-index-cloud",
-    "zeta-rs/code-index-semantic",
+    "zeta-rs/codebase",
+    "zeta-rs/cloud-codebase",
     "zeta-rs/code-mode",
     "zeta-rs/code-mode-host",
     "zeta-rs/code-mode-protocol",
     "zeta-rs/code-mode-runtime",
     "zeta-rs/v8-poc",
-    "zeta-rs/code-retrieval",
     "zeta-rs/chatgpt",
     "zeta-rs/apply-patch",
     "zeta-rs/async-utils",
@@ -95,7 +93,6 @@ members = [
     "zeta-rs/slash-launcher",
     "zeta-rs/skills",
     "zeta-rs/storage",
-    "zeta-rs/symbol-index",
     "zeta-rs/syntax",
     "zeta-rs/terminal",
     "zeta-rs/text-file",
@@ -292,15 +289,13 @@ zeta-app-server-protocol = { path = "zeta-rs/app-server-protocol" }
 zeta-app-server-transport = { path = "zeta-rs/app-server-transport" }
 zeta-collaboration = { path = "zeta-rs/collaboration" }
 zeta-collaboration-server = { path = "zeta-rs/collaboration-server" }
-zeta-code-index = { path = "zeta-rs/code-index" }
-zeta-code-index-cloud = { path = "zeta-rs/code-index-cloud" }
-zeta-code-index-semantic = { path = "zeta-rs/code-index-semantic" }
+zeta-codebase = { path = "zeta-rs/codebase" }
+zeta-cloud-codebase = { path = "zeta-rs/cloud-codebase" }
 zeta-code-mode = { path = "zeta-rs/code-mode" }
 zeta-code-mode-host = { path = "zeta-rs/code-mode-host" }
 zeta-code-mode-protocol = { path = "zeta-rs/code-mode-protocol" }
 zeta-code-mode-runtime = { path = "zeta-rs/code-mode-runtime" }
 zeta-v8-poc = { path = "zeta-rs/v8-poc" }
-zeta-code-retrieval = { path = "zeta-rs/code-retrieval" }
 zeta-chatgpt = { path = "zeta-rs/chatgpt" }
 zeta-apply-patch = { path = "zeta-rs/apply-patch" }
 zeta-async-utils = { path = "zeta-rs/async-utils" }
@@ -387,7 +382,6 @@ zeta-slash-commands = { path = "zeta-rs/slash-commands" }
 zeta-slash-launcher = { path = "zeta-rs/slash-launcher" }
 zeta-skills = { path = "zeta-rs/skills" }
 zeta-storage = { path = "zeta-rs/storage" }
-zeta-symbol-index = { path = "zeta-rs/symbol-index" }
 zeta-syntax = { path = "zeta-rs/syntax" }
 zeta-terminal = { path = "zeta-rs/terminal" }
 zeta-terminal-workspace = { path = "app/terminal-workspace" }

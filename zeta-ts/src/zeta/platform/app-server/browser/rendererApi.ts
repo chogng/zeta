@@ -12,8 +12,8 @@ import { createDisconnectedSkillApi } from "../../skills/browser/skillApi.js";
 import { DisconnectedTerminalProcessService } from "../../terminal/browser/disconnectedTerminalProcessService.js";
 import { createDisconnectedTypstApi } from "../../typst/browser/typstApi.js";
 import { createDisconnectedDocumentCollaborationApi } from "../../collaboration/browser/documentCollaborationApi.js";
-import { createDisconnectedCodeIndexApi } from "../../codeIndex/browser/codeIndexApi.js";
-import { createDisconnectedSymbolIndexApi } from "../../symbolIndex/browser/symbolIndexApi.js";
+import { createDisconnectedCodebaseApi } from "../../codebase/browser/codebaseApi.js";
+import { createDisconnectedCodebaseSymbolsApi } from "../../codebaseSymbols/browser/codebaseSymbolsApi.js";
 import { createDisconnectedConnectorApi } from "../../connectors/browser/connectorApi.js";
 import { createDisconnectedToolSearchApi } from "../../toolSearch/browser/toolSearchApi.js";
 import { createDisconnectedLanguageApi } from "../../language/browser/languageApi.js";
@@ -51,8 +51,8 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		workspaceSearch: createDisconnectedWorkspaceSearchApi(unavailableOperation),
 		terminal: new DisconnectedTerminalProcessService(unavailableOperation, appServer),
 		events: createDisconnectedServerEventApi(),
-		codeIndex: createDisconnectedCodeIndexApi(unavailableOperation),
-		symbolIndex: createDisconnectedSymbolIndexApi(unavailableOperation),
+		codebase: createDisconnectedCodebaseApi(unavailableOperation),
+		codebaseSymbols: createDisconnectedCodebaseSymbolsApi(unavailableOperation),
 		connectors: createDisconnectedConnectorApi(unavailableOperation),
 		plugins: createDisconnectedPluginApi(unavailableOperation),
 		marketplace: createDisconnectedMarketplaceApi(unavailableOperation),

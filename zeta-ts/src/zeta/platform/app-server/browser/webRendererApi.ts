@@ -12,8 +12,8 @@ import { createViteDevSkillApi } from "../../skills/browser/skillApi.js";
 import { ViteDevTerminalProcessService } from "../../terminal/browser/viteDevTerminalProcessService.js";
 import { createViteDevTypstApi } from "../../typst/browser/typstApi.js";
 import { createViteDevDocumentCollaborationApi } from "../../collaboration/browser/documentCollaborationApi.js";
-import { createViteDevCodeIndexApi } from "../../codeIndex/browser/codeIndexApi.js";
-import { createViteDevSymbolIndexApi } from "../../symbolIndex/browser/symbolIndexApi.js";
+import { createViteDevCodebaseApi } from "../../codebase/browser/codebaseApi.js";
+import { createViteDevCodebaseSymbolsApi } from "../../codebaseSymbols/browser/codebaseSymbolsApi.js";
 import { createViteDevConnectorApi, type BrowserConnectorHostServices } from "../../connectors/browser/connectorApi.js";
 import { createViteDevToolSearchApi } from "../../toolSearch/browser/toolSearchApi.js";
 import { createViteDevLanguageApi } from "../../language/browser/languageApi.js";
@@ -75,8 +75,8 @@ function createRendererHost(connection: ViteDevAppServerConnection, connectorHos
 		terminal: new ViteDevTerminalProcessService(connection, appServer),
 		...capabilities,
 		events: createViteDevServerEventApi(connection),
-		codeIndex: createViteDevCodeIndexApi(connection),
-		symbolIndex: createViteDevSymbolIndexApi(connection),
+		codebase: createViteDevCodebaseApi(connection),
+		codebaseSymbols: createViteDevCodebaseSymbolsApi(connection),
 		connectors: createViteDevConnectorApi(connection, connectorHostServices),
 		plugins: createViteDevPluginApi(connection),
 		marketplace: createViteDevMarketplaceApi(connection),

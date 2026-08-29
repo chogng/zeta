@@ -1,4 +1,4 @@
-use super::code_index_runtime::CodeIndexRuntime;
+use super::codebase_runtime::CodebaseRuntime;
 use super::semantic_index_job::SemanticIndexJobController;
 use super::symbol_index_runtime::SymbolIndexRuntime;
 use super::update_broker::UpdateBroker;
@@ -43,9 +43,9 @@ pub(crate) trait SessionDirectoryFileChangeSink: Send + Sync {
 enum FileSystemWatcherObservers {
     None,
     WorkspaceRuntime {
-        code_index: Arc<CodeIndexRuntime>,
+        codebase: Arc<CodebaseRuntime>,
         symbol_index: Arc<SymbolIndexRuntime>,
-        code_index_semantic: Option<Arc<SemanticIndexJobController>>,
+        codebase_semantic: Option<Arc<SemanticIndexJobController>>,
         changes: Arc<dyn WorkspaceFileChangeSink>,
         agent_grep: Option<Arc<AgentGrepService>>,
     },
@@ -93,15 +93,15 @@ impl PendingIndexRefresh {
     }
 }
 
-struct CodeIndexRefreshWorker {
+struct CodebaseRefreshWorker {
     pending: Arc<Mutex<PendingIndexRefresh>>,
     wake: Option<SyncSender<()>>,
     thread: Option<JoinHandle<()>>,
 }
 
-impl CodeIndexRefreshWorker {
+impl CodebaseRefreshWorker {
     fn start(
-        runtime: Arc<CodeIndexRuntime>,
+        runtime: Arc<CodebaseRuntime>,
         symbol_index: Arc<SymbolIndexRuntime>,
         semantic: Option<Arc<SemanticIndexJobController>>,
     ) -> Result<Self, String> {
@@ -110,7 +110,7 @@ impl CodeIndexRefreshWorker {
         let worker_runtime = Arc::clone(&runtime);
         let worker_pending = Arc::clone(&pending);
         let thread = std::thread::Builder::new()
-            .name("zeta-code-index-refresh".into())
+            .name("zeta-codebase-refresh".into())
             .spawn(move || {
                 while receiver.recv().is_ok() {
                     let event = worker_pending
@@ -131,7 +131,7 @@ impl CodeIndexRefreshWorker {
                             .ok();
                         if previous_generation != current_generation {
                             if let Err(error) = worker_runtime.index().handoff_matching_overlays() {
-                                log::warn!("code-index overlay handoff failed: {error}");
+                                log::warn!("codebase overlay handoff failed: {error}");
                             }
                             if let Err(error) = symbol_index.reconcile() {
                                 log::warn!("symbol-index reconcile failed: {error}");
@@ -146,7 +146,7 @@ impl CodeIndexRefreshWorker {
                     }
                 }
             })
-            .map_err(|error| format!("failed to initialize code-index refresh worker: {error}"))?;
+            .map_err(|error| format!("failed to initialize codebase refresh worker: {error}"))?;
         Ok(Self {
             pending,
             wake: Some(wake),
@@ -165,14 +165,14 @@ impl CodeIndexRefreshWorker {
             match wake.try_send(()) {
                 Ok(()) | Err(std::sync::mpsc::TrySendError::Full(())) => {}
                 Err(std::sync::mpsc::TrySendError::Disconnected(())) => {
-                    log::warn!("code-index refresh worker stopped unexpectedly");
+                    log::warn!("codebase refresh worker stopped unexpectedly");
                 }
             }
         }
     }
 }
 
-impl Drop for CodeIndexRefreshWorker {
+impl Drop for CodebaseRefreshWorker {
     fn drop(&mut self) {
         self.wake.take();
         if let Some(thread) = self.thread.take() {
@@ -269,9 +269,9 @@ impl FileSystemWatcher {
     pub(super) fn start_with_observers(
         workspace: WorkspaceRoot,
         updates: Arc<UpdateBroker>,
-        code_index: Arc<CodeIndexRuntime>,
+        codebase: Arc<CodebaseRuntime>,
         symbol_index: Arc<SymbolIndexRuntime>,
-        code_index_semantic: Option<Arc<SemanticIndexJobController>>,
+        codebase_semantic: Option<Arc<SemanticIndexJobController>>,
         changes: Arc<dyn WorkspaceFileChangeSink>,
         agent_grep: Option<Arc<AgentGrepService>>,
     ) -> Result<Self, FileSystemWatcherError> {
@@ -280,9 +280,9 @@ impl FileSystemWatcher {
             updates,
             None,
             FileSystemWatcherObservers::WorkspaceRuntime {
-                code_index,
+                codebase,
                 symbol_index,
-                code_index_semantic,
+                codebase_semantic,
                 changes,
                 agent_grep,
             },
@@ -383,22 +383,22 @@ fn watch_workspace(
     mut shutdown: tokio::sync::oneshot::Receiver<()>,
     startup: std::sync::mpsc::SyncSender<Result<(), String>>,
 ) {
-    let (code_index, symbol_index, code_index_semantic, changes, session_changes, agent_grep) =
+    let (codebase, symbol_index, codebase_semantic, changes, session_changes, agent_grep) =
         match observers {
             FileSystemWatcherObservers::None => (None, None, None, None, None, None),
             FileSystemWatcherObservers::WorkspaceFolder { agent_grep } => {
                 (None, None, None, None, None, agent_grep)
             }
             FileSystemWatcherObservers::WorkspaceRuntime {
-                code_index,
+                codebase,
                 symbol_index,
-                code_index_semantic,
+                codebase_semantic,
                 changes,
                 agent_grep,
             } => (
-                Some(code_index),
+                Some(codebase),
                 Some(symbol_index),
-                code_index_semantic,
+                codebase_semantic,
                 Some(changes),
                 None,
                 agent_grep,
@@ -455,9 +455,9 @@ fn watch_workspace(
                 return;
             }
         };
-        let code_index_worker = match (code_index, symbol_index) {
-            (Some(code_index), Some(symbol_index)) => {
-                match CodeIndexRefreshWorker::start(code_index, symbol_index, code_index_semantic) {
+        let codebase_worker = match (codebase, symbol_index) {
+            (Some(codebase), Some(symbol_index)) => {
+                match CodebaseRefreshWorker::start(codebase, symbol_index, codebase_semantic) {
                     Ok(worker) => Some(worker),
                     Err(error) => {
                         let _ = startup.send(Err(error));
@@ -468,7 +468,7 @@ fn watch_workspace(
             (None, None) => None,
             _ => {
                 let _ = startup.send(Err(
-                    "code-index and symbol-index watcher observers must be installed together"
+                    "codebase and symbol-index watcher observers must be installed together"
                         .into(),
                 ));
                 return;
@@ -503,8 +503,8 @@ fn watch_workspace(
                 },
             );
         }
-        if let Some(code_index_worker) = &code_index_worker {
-            code_index_worker.schedule(FileWatcherEvent::RescanRequired {
+        if let Some(codebase_worker) = &codebase_worker {
+            codebase_worker.schedule(FileWatcherEvent::RescanRequired {
                 watched_paths: vec![workspace.canonical_path().to_path_buf()],
             });
         }
@@ -521,8 +521,8 @@ fn watch_workspace(
                     let Some(event) = event else {
                         break;
                     };
-                    if let Some(code_index_worker) = &code_index_worker {
-                        code_index_worker.schedule(event.clone());
+                    if let Some(codebase_worker) = &codebase_worker {
+                        codebase_worker.schedule(event.clone());
                     }
                     if agent_grep_worker.is_none()
                         && let Some(agent_grep) = &agent_grep

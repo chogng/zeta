@@ -17,34 +17,23 @@ const GLOBAL_LOCK_FILE: &str = "indexes.lock";
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum WorkspaceIndexKind {
     AgentGrep,
-    Lexical,
-    Symbols,
-    Semantic,
+    Codebase,
 }
 
 impl WorkspaceIndexKind {
-    pub const ALL: [Self; 4] = [
-        Self::AgentGrep,
-        Self::Lexical,
-        Self::Symbols,
-        Self::Semantic,
-    ];
+    pub const ALL: [Self; 2] = [Self::AgentGrep, Self::Codebase];
 
     pub const fn directory_name(self) -> &'static str {
         match self {
             Self::AgentGrep => "agent-grep",
-            Self::Lexical => "lexical",
-            Self::Symbols => "symbols",
-            Self::Semantic => "semantic",
+            Self::Codebase => "codebase",
         }
     }
 
     fn lock_file_name(self) -> &'static str {
         match self {
             Self::AgentGrep => "agent-grep.lock",
-            Self::Lexical => "lexical.lock",
-            Self::Symbols => "symbols.lock",
-            Self::Semantic => "semantic.lock",
+            Self::Codebase => "codebase.lock",
         }
     }
 }

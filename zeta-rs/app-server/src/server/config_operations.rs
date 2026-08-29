@@ -5,13 +5,15 @@ use super::extension_config_operations::hook_config_dto;
 use super::extension_config_operations::plugin_request_dto;
 use super::result;
 use serde_json::Value;
-use zeta_app_server_protocol::protocol::code_index::FastRegexDisableAndDeleteParams;
-use zeta_app_server_protocol::protocol::code_index::FastRegexDisableAndDeleteResult;
-use zeta_app_server_protocol::protocol::code_index::LocalIndexClearOutcomeDto;
+use zeta_app_server_protocol::protocol::codebase::FastRegexDisableAndDeleteParams;
+use zeta_app_server_protocol::protocol::codebase::FastRegexDisableAndDeleteResult;
+use zeta_app_server_protocol::protocol::codebase::LocalIndexClearOutcomeDto;
 use zeta_app_server_protocol::protocol::config::AgentGrepBackendDto;
 use zeta_app_server_protocol::protocol::config::ApprovalReviewModelSelectionDto;
-use zeta_app_server_protocol::protocol::config::CommitMessageAuthorizeParams;
-use zeta_app_server_protocol::protocol::config::CommitMessageRevokeParams;
+use zeta_app_server_protocol::protocol::config::CodebaseAutomaticContextDto;
+use zeta_app_server_protocol::protocol::config::CodebaseConfigDto;
+use zeta_app_server_protocol::protocol::config::CodebaseConfigureParams;
+use zeta_app_server_protocol::protocol::config::CodebaseModelsDto;
 use zeta_app_server_protocol::protocol::config::ConfigCommandDispositionDto;
 use zeta_app_server_protocol::protocol::config::ConfigCommandResult;
 use zeta_app_server_protocol::protocol::config::ConfigReadResult;
@@ -32,13 +34,6 @@ use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_app_server_protocol::protocol::config::ProviderConfigDto;
 use zeta_app_server_protocol::protocol::config::ProviderConfigureParams;
 use zeta_app_server_protocol::protocol::config::ProviderRemoveParams;
-use zeta_app_server_protocol::protocol::config::SemanticCodeIndexAuthorizeParams;
-use zeta_app_server_protocol::protocol::config::SemanticCodeIndexAutomaticContextDto;
-use zeta_app_server_protocol::protocol::config::SemanticCodeIndexConfigDto;
-use zeta_app_server_protocol::protocol::config::SemanticCodeIndexConfigureParams;
-use zeta_app_server_protocol::protocol::config::SemanticCodeIndexModelsDto;
-use zeta_app_server_protocol::protocol::config::SemanticCodeIndexRevokeParams;
-use zeta_app_server_protocol::protocol::config::SemanticCodeIndexSelectionDto;
 use zeta_app_server_protocol::protocol::config::SkillSourceAddParams;
 use zeta_app_server_protocol::protocol::config::SkillSourceConfigDto;
 use zeta_app_server_protocol::protocol::config::SkillSourceEnablementDto;
@@ -51,6 +46,8 @@ use zeta_app_server_protocol::protocol::config::ToolSearchModeDto;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_config::AgentGrepBackend;
 use zeta_config::ApprovalReviewModelSelection;
+use zeta_config::CodebaseAutomaticContext;
+use zeta_config::CodebaseModelSelection;
 use zeta_config::ConfigCommandDisposition;
 use zeta_config::ConfigCommandError;
 use zeta_config::ConfigCommandRequest;
@@ -65,9 +62,6 @@ use zeta_config::McpServerId;
 use zeta_config::McpTransportConfig;
 use zeta_config::PreferencesUpdate;
 use zeta_config::ResolvedConfigSnapshot;
-use zeta_config::SemanticCodeIndexAutomaticContext;
-use zeta_config::SemanticCodeIndexModelSelection;
-use zeta_config::SemanticCodeIndexSelection;
 use zeta_config::SkillSourceConfig;
 use zeta_config::SkillSourceEnablement;
 use zeta_config::SkillSourceId;
@@ -113,7 +107,6 @@ impl AppServer {
             .map_err(config_error)?;
         result(&config_read_result(
             snapshot,
-            self.active_workspace_trust_id().as_ref(),
             self.tool_search_embedding_status(),
         ))
     }
@@ -163,7 +156,6 @@ impl AppServer {
                     approval_review_model: approval_review_model_update_from_dto(
                         params.approval_review_model,
                     )?,
-                    commit_message_model: model_ref_update_from_dto(params.commit_message_model)?,
                     tool_mode: params.tool_mode,
                     grep_backend: params.agent_grep_backend.map(agent_grep_backend_from_dto),
                 }),
@@ -176,7 +168,7 @@ impl AppServer {
         let params: FastRegexDisableAndDeleteParams = decode(params)?;
         let workspace = self
             .active_workspace_trust_id()
-            .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodeIndexUnavailable))?;
+            .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodebaseUnavailable))?;
         let store = self
             .config
             .clone()
@@ -188,7 +180,6 @@ impl AppServer {
                 command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                     preferred_model: Patch::Missing,
                     approval_review_model: Patch::Missing,
-                    commit_message_model: Patch::Missing,
                     tool_mode: Patch::Missing,
                     grep_backend: Patch::Value(AgentGrepBackend::Ripgrep),
                 }),
@@ -196,15 +187,15 @@ impl AppServer {
             .map_err(config_operation_error)?;
         let snapshot = store.read_snapshot().map_err(config_error)?;
         self.workspace_runtime_control()
-            .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodeIndexUnavailable))?
+            .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodebaseUnavailable))?
             .reconcile_local_tool_config(&snapshot.values)
-            .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodeIndexOperationFailed))?;
+            .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodebaseOperationFailed))?;
         let deletion = self
             .workspace_index_storage
             .as_ref()
-            .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodeIndexUnavailable))?
+            .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodebaseUnavailable))?
             .clear_index(&workspace, WorkspaceIndexKind::AgentGrep)
-            .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodeIndexOperationFailed))?;
+            .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodebaseOperationFailed))?;
         result(&FastRegexDisableAndDeleteResult {
             config: config_command_result(outcome),
             deletion: match deletion {
@@ -251,8 +242,8 @@ impl AppServer {
         result(&config_command_result(outcome))
     }
 
-    pub(super) fn semantic_code_index_configure(&self, params: &Value) -> Result<Value, RpcError> {
-        let params: SemanticCodeIndexConfigureParams = decode(params)?;
+    pub(super) fn codebase_configure(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: CodebaseConfigureParams = decode(params)?;
         let store = self
             .config
             .clone()
@@ -261,111 +252,21 @@ impl AppServer {
             .apply(ConfigCommandRequest {
                 command_id: params.command_id,
                 expected_revision: ConfigRevision::new(params.expected_revision),
-                command: UserConfigCommand::ConfigureSemanticCodeIndex {
-                    selection: semantic_selection_from_dto(params.selection)?,
+                command: UserConfigCommand::ConfigureCodebase {
+                    models: params.models.map(codebase_models_from_dto).transpose()?,
                     automatic_context: semantic_automatic_context_from_dto(
                         params.automatic_context,
                     ),
                 },
             })
             .map_err(config_operation_error)?;
-        if let Some(semantic) = self.code_index_semantic_service()
+        if let Some(semantic) = self.codebase_semantic_service()
             && let Err(error) = semantic.delete_index()
         {
-            log::warn!("failed to clear replaced semantic code-index projection: {error}");
+            log::warn!("failed to clear replaced semantic codebase projection: {error}");
         }
-        self.reconcile_semantic_code_index_runtime()
-            .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodeIndexOperationFailed))?;
-        result(&config_command_result(outcome))
-    }
-
-    pub(super) fn semantic_code_index_authorize(&self, params: &Value) -> Result<Value, RpcError> {
-        let params: SemanticCodeIndexAuthorizeParams = decode(params)?;
-        let workspace = self
-            .active_workspace_trust_id()
-            .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodeIndexUnavailable))?;
-        self.validate_semantic_code_index_selection()
-            .map_err(|error| {
-                log::warn!("semantic code-index authorization readiness check failed: {error}");
-                RpcError::new(-32092, AppServerErrorName::CodeIndexOperationFailed)
-            })?;
-        let store = self
-            .config
-            .clone()
-            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
-        let outcome = store
-            .apply(ConfigCommandRequest {
-                command_id: params.command_id,
-                expected_revision: ConfigRevision::new(params.expected_revision),
-                command: UserConfigCommand::AuthorizeSemanticCodeIndexEgress { workspace },
-            })
-            .map_err(config_operation_error)?;
-        self.reconcile_semantic_code_index_runtime()
-            .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodeIndexOperationFailed))?;
-        result(&config_command_result(outcome))
-    }
-
-    pub(super) fn semantic_code_index_revoke(&self, params: &Value) -> Result<Value, RpcError> {
-        let params: SemanticCodeIndexRevokeParams = decode(params)?;
-        let workspace = self
-            .active_workspace_trust_id()
-            .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodeIndexUnavailable))?;
-        let store = self
-            .config
-            .clone()
-            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
-        let outcome = store
-            .apply(ConfigCommandRequest {
-                command_id: params.command_id,
-                expected_revision: ConfigRevision::new(params.expected_revision),
-                command: UserConfigCommand::RevokeSemanticCodeIndexEgress { workspace },
-            })
-            .map_err(config_operation_error)?;
-        if let Some(semantic) = self.code_index_semantic_service()
-            && let Err(error) = semantic.delete_index()
-        {
-            log::warn!("failed to delete revoked semantic code-index projection: {error}");
-        }
-        self.reconcile_semantic_code_index_runtime()
-            .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodeIndexOperationFailed))?;
-        result(&config_command_result(outcome))
-    }
-
-    pub(super) fn commit_message_authorize(&self, params: &Value) -> Result<Value, RpcError> {
-        let params: CommitMessageAuthorizeParams = decode(params)?;
-        let workspace = self
-            .active_workspace_trust_id()
-            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
-        let store = self
-            .config
-            .clone()
-            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
-        let outcome = store
-            .apply(ConfigCommandRequest {
-                command_id: params.command_id,
-                expected_revision: ConfigRevision::new(params.expected_revision),
-                command: UserConfigCommand::AuthorizeCommitMessageEgress { workspace },
-            })
-            .map_err(config_operation_error)?;
-        result(&config_command_result(outcome))
-    }
-
-    pub(super) fn commit_message_revoke(&self, params: &Value) -> Result<Value, RpcError> {
-        let params: CommitMessageRevokeParams = decode(params)?;
-        let workspace = self
-            .active_workspace_trust_id()
-            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
-        let store = self
-            .config
-            .clone()
-            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
-        let outcome = store
-            .apply(ConfigCommandRequest {
-                command_id: params.command_id,
-                expected_revision: ConfigRevision::new(params.expected_revision),
-                command: UserConfigCommand::RevokeCommitMessageEgress { workspace },
-            })
-            .map_err(config_operation_error)?;
+        self.reconcile_codebase_runtime()
+            .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodebaseOperationFailed))?;
         result(&config_command_result(outcome))
     }
 
@@ -386,8 +287,8 @@ impl AppServer {
                 },
             })
             .map_err(config_operation_error)?;
-        self.reconcile_semantic_code_index_runtime()
-            .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodeIndexOperationFailed))?;
+        self.reconcile_codebase_runtime()
+            .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodebaseOperationFailed))?;
         result(&config_command_result(outcome))
     }
 
@@ -577,32 +478,18 @@ pub(super) fn config_operation_error(error: ConfigCommandError) -> RpcError {
 
 fn config_read_result(
     snapshot: ResolvedConfigSnapshot,
-    active_workspace: Option<&zeta_workspace::WorkspaceTrustId>,
     tool_search_status: ToolSearchEmbeddingStatus,
 ) -> ConfigReadResult {
-    let commit_message_active_workspace_authorized = active_workspace.is_some_and(|workspace| {
-        snapshot
+    let codebase = CodebaseConfigDto {
+        models: snapshot
             .values
-            .commit_messages
-            .authorized_model(
-                workspace,
-                snapshot.values.commit_message_model.as_ref(),
-                &snapshot.values.providers,
-            )
-            .is_some()
-    });
-    let semantic_code_index = SemanticCodeIndexConfigDto {
-        selection: semantic_selection_dto(snapshot.values.semantic_code_index.selection.clone()),
+            .codebase
+            .models
+            .clone()
+            .map(codebase_models_dto),
         automatic_context: semantic_automatic_context_dto(
-            snapshot.values.semantic_code_index.automatic_context,
+            snapshot.values.codebase.automatic_context,
         ),
-        active_workspace_authorized: active_workspace.is_some_and(|workspace| {
-            snapshot
-                .values
-                .semantic_code_index
-                .authorized_remote_models(workspace, &snapshot.values.providers)
-                .is_some()
-        }),
     };
     let tool_search = ToolSearchConfigDto {
         mode: tool_search_mode_dto(snapshot.values.tool_search.mode),
@@ -619,8 +506,6 @@ fn config_read_result(
         generation: snapshot.generation.get(),
         preferred_model: snapshot.values.preferred_model.map(model_ref_dto),
         approval_review_model: approval_review_model_dto(snapshot.values.approval_review_model),
-        commit_message_model: snapshot.values.commit_message_model.map(model_ref_dto),
-        commit_message_active_workspace_authorized,
         tool_mode: snapshot.values.tool_mode,
         agent_grep_backend: agent_grep_backend_dto(snapshot.values.agent_grep_backend),
         providers: snapshot
@@ -665,7 +550,7 @@ fn config_read_result(
             .map(|(id, config)| (id.to_string(), language_server_config_dto(config)))
             .collect(),
         tool_search,
-        semantic_code_index,
+        codebase,
         exec_policy_rules: snapshot
             .values
             .exec_policy
@@ -899,53 +784,35 @@ fn tool_search_config_from_dto(
     })
 }
 
-fn semantic_selection_dto(selection: SemanticCodeIndexSelection) -> SemanticCodeIndexSelectionDto {
-    match selection {
-        SemanticCodeIndexSelection::Disabled => SemanticCodeIndexSelectionDto::Disabled,
-        SemanticCodeIndexSelection::Remote { models } => SemanticCodeIndexSelectionDto::Remote {
-            models: SemanticCodeIndexModelsDto {
-                embedding_model: model_ref_dto(models.embedding_model),
-                rerank_model: models.rerank_model.map(model_ref_dto),
-            },
-        },
+fn codebase_models_dto(models: CodebaseModelSelection) -> CodebaseModelsDto {
+    CodebaseModelsDto {
+        embedding_model: model_ref_dto(models.embedding_model),
+        rerank_model: models.rerank_model.map(model_ref_dto),
     }
 }
 
-fn semantic_selection_from_dto(
-    selection: SemanticCodeIndexSelectionDto,
-) -> Result<SemanticCodeIndexSelection, RpcError> {
-    match selection {
-        SemanticCodeIndexSelectionDto::Disabled => Ok(SemanticCodeIndexSelection::Disabled),
-        SemanticCodeIndexSelectionDto::Remote { models } => {
-            Ok(SemanticCodeIndexSelection::Remote {
-                models: SemanticCodeIndexModelSelection {
-                    embedding_model: model_ref_from_dto(models.embedding_model)?,
-                    rerank_model: models.rerank_model.map(model_ref_from_dto).transpose()?,
-                },
-            })
-        }
-    }
+fn codebase_models_from_dto(models: CodebaseModelsDto) -> Result<CodebaseModelSelection, RpcError> {
+    Ok(CodebaseModelSelection {
+        embedding_model: model_ref_from_dto(models.embedding_model)?,
+        rerank_model: models.rerank_model.map(model_ref_from_dto).transpose()?,
+    })
 }
 
 fn semantic_automatic_context_dto(
-    automatic_context: SemanticCodeIndexAutomaticContext,
-) -> SemanticCodeIndexAutomaticContextDto {
+    automatic_context: CodebaseAutomaticContext,
+) -> CodebaseAutomaticContextDto {
     match automatic_context {
-        SemanticCodeIndexAutomaticContext::Off => SemanticCodeIndexAutomaticContextDto::Off,
-        SemanticCodeIndexAutomaticContext::FirstInvocation => {
-            SemanticCodeIndexAutomaticContextDto::FirstInvocation
-        }
+        CodebaseAutomaticContext::Off => CodebaseAutomaticContextDto::Off,
+        CodebaseAutomaticContext::FirstInvocation => CodebaseAutomaticContextDto::FirstInvocation,
     }
 }
 
 fn semantic_automatic_context_from_dto(
-    automatic_context: SemanticCodeIndexAutomaticContextDto,
-) -> SemanticCodeIndexAutomaticContext {
+    automatic_context: CodebaseAutomaticContextDto,
+) -> CodebaseAutomaticContext {
     match automatic_context {
-        SemanticCodeIndexAutomaticContextDto::Off => SemanticCodeIndexAutomaticContext::Off,
-        SemanticCodeIndexAutomaticContextDto::FirstInvocation => {
-            SemanticCodeIndexAutomaticContext::FirstInvocation
-        }
+        CodebaseAutomaticContextDto::Off => CodebaseAutomaticContext::Off,
+        CodebaseAutomaticContextDto::FirstInvocation => CodebaseAutomaticContext::FirstInvocation,
     }
 }
 

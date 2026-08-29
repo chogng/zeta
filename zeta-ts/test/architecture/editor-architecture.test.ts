@@ -569,7 +569,7 @@ test("Code services are installed by mode-selected service registrations rather 
 	assert.match(productServices, /testingServiceRegistration/u);
 	assert.match(productServices, /debugServiceRegistration/u);
 	assert.match(productServices, /extensionHostServiceRegistration/u);
-	assert.match(productServices, /symbolIndexServiceRegistration/u);
+	assert.match(productServices, /codebaseSymbolsServiceRegistration/u);
 	for (const registration of [tasks, testing, debug]) assert.match(registration, /registerWorkbenchServiceContribution/u);
 	for (const contribution of ["tasks", "testing", "debug"]) assert.doesNotMatch(readFileSync(join(workbenchRoot, `contrib/${contribution}/browser/${contribution}.contribution.ts`), "utf8"), /registerWorkbenchServiceContribution/u);
 });

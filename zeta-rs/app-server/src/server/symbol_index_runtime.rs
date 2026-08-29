@@ -2,15 +2,15 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
 
-use zeta_code_index::CodeIndex;
-use zeta_symbol_index::SymbolIndex;
-use zeta_symbol_index::SymbolIndexError;
-use zeta_symbol_index::SymbolIndexLimits;
-use zeta_symbol_index::SymbolIndexQuery;
-use zeta_symbol_index::SymbolIndexRefreshOutcome;
-use zeta_symbol_index::SymbolIndexSnapshot;
-use zeta_symbol_index::SymbolIndexStorage;
-use zeta_symbol_index::SymbolSearchHit;
+use zeta_codebase::Codebase;
+use zeta_codebase::SymbolIndex;
+use zeta_codebase::SymbolIndexError;
+use zeta_codebase::SymbolIndexLimits;
+use zeta_codebase::SymbolIndexQuery;
+use zeta_codebase::SymbolIndexRefreshOutcome;
+use zeta_codebase::SymbolIndexSnapshot;
+use zeta_codebase::SymbolIndexStorage;
+use zeta_codebase::SymbolSearchHit;
 use zeta_workspace_index_storage::WorkspaceIndexLease;
 
 /// App Server-owned lifecycle projection for one workspace symbol index.
@@ -26,7 +26,7 @@ pub(super) enum SymbolIndexRuntimeState {
 }
 
 pub(super) struct SymbolIndexRuntime {
-    source_index: Arc<CodeIndex>,
+    source_index: Arc<Codebase>,
     index: Arc<SymbolIndex>,
     operation: Mutex<()>,
     state: RwLock<SymbolIndexRuntimeState>,
@@ -35,14 +35,14 @@ pub(super) struct SymbolIndexRuntime {
 
 impl SymbolIndexRuntime {
     pub fn open(
-        source_index: Arc<CodeIndex>,
+        source_index: Arc<Codebase>,
         storage: SymbolIndexStorage,
     ) -> Result<Arc<Self>, SymbolIndexError> {
         Self::open_inner(source_index, storage, None)
     }
 
     pub(super) fn open_with_lease(
-        source_index: Arc<CodeIndex>,
+        source_index: Arc<Codebase>,
         storage: SymbolIndexStorage,
         storage_lease: WorkspaceIndexLease,
     ) -> Result<Arc<Self>, SymbolIndexError> {
@@ -50,7 +50,7 @@ impl SymbolIndexRuntime {
     }
 
     fn open_inner(
-        source_index: Arc<CodeIndex>,
+        source_index: Arc<Codebase>,
         storage: SymbolIndexStorage,
         storage_lease: Option<WorkspaceIndexLease>,
     ) -> Result<Arc<Self>, SymbolIndexError> {
@@ -81,7 +81,7 @@ impl SymbolIndexRuntime {
             .clone()
     }
 
-    pub fn root_id(&self) -> &zeta_code_index::IndexRootId {
+    pub fn root_id(&self) -> &zeta_codebase::IndexRootId {
         self.source_index.root_id()
     }
 
@@ -183,7 +183,7 @@ impl SymbolIndexRuntime {
 #[derive(Debug)]
 pub(super) enum SymbolIndexRuntimeError {
     NotReady,
-    SourceIndex(zeta_code_index::CodeIndexError),
+    SourceIndex(zeta_codebase::CodebaseError),
     Index(SymbolIndexError),
 }
 

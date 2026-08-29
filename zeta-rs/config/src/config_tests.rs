@@ -213,56 +213,16 @@ fn tool_mode_defaults_to_direct_and_updates_durably() {
 }
 
 #[test]
-fn semantic_code_index_egress_grants_are_bound_to_workspace_models_and_provider_config() {
-    let workspace = workspace_trust_id();
-    let provider = provider_id("openai-compatible");
-    let mut provider_config = ModelProviderConfig::new(provider.clone());
-    provider_config.base_url = Some("https://models.example.test/v1".into());
-    let mut providers = BTreeMap::from([(provider.clone(), provider_config.clone())]);
-    let first_models = SemanticCodeIndexModelSelection {
+fn codebase_config_persists_model_selection_without_runtime_state() {
+    let models = CodebaseModelSelection {
         embedding_model: model_ref("openai-compatible", "embed-v1"),
         rerank_model: Some(model_ref("openai-compatible", "rerank-v1")),
     };
-    let mut config = SemanticCodeIndexConfig::default();
-    config.replace_selection(SemanticCodeIndexSelection::Remote {
-        models: first_models.clone(),
-    });
-    config.authorize(workspace.clone(), &providers).unwrap();
-    assert_eq!(
-        config.authorized_remote_models(&workspace, &providers),
-        Some(&first_models)
-    );
-
-    providers.get_mut(&provider).unwrap().base_url =
-        Some("https://different.example.test/v1".into());
-    assert_eq!(
-        config.authorized_remote_models(&workspace, &providers),
-        None
-    );
-
-    providers.insert(provider, provider_config);
-    config.replace_selection(SemanticCodeIndexSelection::Remote {
-        models: SemanticCodeIndexModelSelection {
-            embedding_model: model_ref("openai-compatible", "embed-v2"),
-            rerank_model: None,
-        },
-    });
-    assert_eq!(
-        config.authorized_remote_models(&workspace, &providers),
-        None
-    );
-
-    config.authorize(workspace.clone(), &providers).unwrap();
-    assert!(
-        config
-            .authorized_remote_models(&workspace, &providers)
-            .is_some()
-    );
-    config.revoke(&workspace);
-    assert_eq!(
-        config.authorized_remote_models(&workspace, &providers),
-        None
-    );
+    let mut config = CodebaseConfig::default();
+    config.replace_models(Some(models.clone()));
+    assert_eq!(config.models, Some(models));
+    config.replace_models(None);
+    assert_eq!(config.models, None);
 }
 
 #[test]

@@ -31,7 +31,7 @@ generation；新连接不会误复用仍在 idle window 内运行的旧 daemon�
 ## 快速理解
 
 Zeta Desktop 通过 OpenSSH 在目标主机启动同一套 App Server，并继续使用已有的 Files、Git、
-Terminal、Search、Code Index 和语言协议。前端不会为每个领域复制一套 Remote provider，SSH
+Terminal、Search、Codebase 和语言协议。前端不会为每个领域复制一套 Remote provider，SSH
 凭证也不会进入 Renderer。
 
 | 用户场景 | 当前行为 | 用户需要做什么 |

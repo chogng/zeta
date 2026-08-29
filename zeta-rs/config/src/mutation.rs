@@ -39,31 +39,15 @@ pub(crate) fn apply_command(
                     provider
                 )));
             }
-            if document
-                .agent
-                .commit_message_model
-                .as_ref()
-                .is_some_and(|model| model.provider == *provider)
-            {
+            if document.codebase.models.as_ref().is_some_and(|models| {
+                models.embedding_model.provider == *provider
+                    || models
+                        .rerank_model
+                        .as_ref()
+                        .is_some_and(|model| model.provider == *provider)
+            }) {
                 return Err(ConfigError(format!(
-                    "cannot remove provider '{}' while it is the commit-message model provider",
-                    provider
-                )));
-            }
-            if document
-                .semantic_code_index
-                .selection
-                .remote_models()
-                .is_some_and(|models| {
-                    models.embedding_model.provider == *provider
-                        || models
-                            .rerank_model
-                            .as_ref()
-                            .is_some_and(|model| model.provider == *provider)
-                })
-            {
-                return Err(ConfigError(format!(
-                    "cannot remove provider '{}' while semantic code indexing uses it",
+                    "cannot remove provider '{}' while Codebase models use it",
                     provider
                 )));
             }
@@ -169,42 +153,17 @@ pub(crate) fn apply_command(
         UserConfigCommand::RemoveLanguageServerConfiguration { server_id } => {
             document.language_servers.servers.remove(server_id);
         }
-        UserConfigCommand::ConfigureSemanticCodeIndex {
-            selection,
+        UserConfigCommand::ConfigureCodebase {
+            models,
             automatic_context,
         } => {
+            document.codebase.replace_models(models.clone());
             document
-                .semantic_code_index
-                .replace_selection(selection.clone());
-            document
-                .semantic_code_index
+                .codebase
                 .replace_automatic_context(*automatic_context);
         }
         UserConfigCommand::ConfigureToolSearch { config } => {
             document.tool_search = config.clone();
-        }
-        UserConfigCommand::AuthorizeSemanticCodeIndexEgress { workspace } => {
-            let providers = document.providers.clone();
-            document
-                .semantic_code_index
-                .authorize(workspace.clone(), &providers)
-                .map_err(|message| ConfigError(message.into()))?;
-        }
-        UserConfigCommand::RevokeSemanticCodeIndexEgress { workspace } => {
-            document.semantic_code_index.revoke(workspace);
-        }
-        UserConfigCommand::AuthorizeCommitMessageEgress { workspace } => {
-            document
-                .commit_messages
-                .authorize(
-                    workspace.clone(),
-                    document.agent.commit_message_model.as_ref(),
-                    &document.providers,
-                )
-                .map_err(|message| ConfigError(message.into()))?;
-        }
-        UserConfigCommand::RevokeCommitMessageEgress { workspace } => {
-            document.commit_messages.revoke(workspace);
         }
         UserConfigCommand::SetWorkspaceTrust {
             workspace,
@@ -263,20 +222,6 @@ fn apply_preferences(document: &mut UserConfigDocument, update: &PreferencesUpda
         }
         Patch::Value(selection) => {
             document.agent.approval_review_model = selection.clone();
-        }
-    }
-    match &update.commit_message_model {
-        Patch::Missing => {}
-        Patch::Null => {
-            if document.agent.commit_message_model.take().is_some() {
-                document.commit_messages.revoke_all();
-            }
-        }
-        Patch::Value(model) => {
-            if document.agent.commit_message_model.as_ref() != Some(model) {
-                document.agent.commit_message_model = Some(model.clone());
-                document.commit_messages.revoke_all();
-            }
         }
     }
     match &update.tool_mode {

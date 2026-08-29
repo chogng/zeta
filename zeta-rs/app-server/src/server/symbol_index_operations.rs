@@ -3,28 +3,28 @@ use std::num::NonZeroUsize;
 use std::path::PathBuf;
 
 use serde_json::Value;
+use zeta_app_server_protocol::protocol::codebase_symbols::CodebaseSymbolsSearchHitDto;
+use zeta_app_server_protocol::protocol::codebase_symbols::CodebaseSymbolsSearchParams;
+use zeta_app_server_protocol::protocol::codebase_symbols::CodebaseSymbolsSearchResult;
+use zeta_app_server_protocol::protocol::codebase_symbols::CodebaseSymbolsStateDto;
+use zeta_app_server_protocol::protocol::codebase_symbols::CodebaseSymbolsStatusResult;
+use zeta_app_server_protocol::protocol::codebase_symbols::SymbolKindDto;
+use zeta_app_server_protocol::protocol::codebase_symbols::WorkspaceDocumentOverlayCloseParams;
+use zeta_app_server_protocol::protocol::codebase_symbols::WorkspaceDocumentOverlayStatusResult;
+use zeta_app_server_protocol::protocol::codebase_symbols::WorkspaceDocumentOverlaySynchronizeParams;
 use zeta_app_server_protocol::protocol::common::EmptyParams;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_app_server_protocol::protocol::language::LanguagePositionDto;
 use zeta_app_server_protocol::protocol::language::LanguageRangeDto;
-use zeta_app_server_protocol::protocol::symbol_index::SymbolIndexSearchHitDto;
-use zeta_app_server_protocol::protocol::symbol_index::SymbolIndexSearchParams;
-use zeta_app_server_protocol::protocol::symbol_index::SymbolIndexSearchResult;
-use zeta_app_server_protocol::protocol::symbol_index::SymbolIndexStateDto;
-use zeta_app_server_protocol::protocol::symbol_index::SymbolIndexStatusResult;
-use zeta_app_server_protocol::protocol::symbol_index::SymbolKindDto;
-use zeta_app_server_protocol::protocol::symbol_index::WorkspaceDocumentOverlayCloseParams;
-use zeta_app_server_protocol::protocol::symbol_index::WorkspaceDocumentOverlayStatusResult;
-use zeta_app_server_protocol::protocol::symbol_index::WorkspaceDocumentOverlaySynchronizeParams;
-use zeta_code_index::CodeIndexOverlayDocument;
-use zeta_code_index::IndexedLanguage;
-use zeta_code_index::IndexedSourceReference;
-use zeta_symbol_index::SymbolIndexError;
-use zeta_symbol_index::SymbolIndexQuery;
-use zeta_symbol_index::SymbolIndexSnapshot;
-use zeta_symbol_index::SymbolKind;
-use zeta_symbol_index::SymbolRange;
-use zeta_symbol_index::SymbolSearchHit;
+use zeta_codebase::CodebaseOverlayDocument;
+use zeta_codebase::IndexedLanguage;
+use zeta_codebase::IndexedSourceReference;
+use zeta_codebase::SymbolIndexError;
+use zeta_codebase::SymbolIndexQuery;
+use zeta_codebase::SymbolIndexSnapshot;
+use zeta_codebase::SymbolKind;
+use zeta_codebase::SymbolRange;
+use zeta_codebase::SymbolSearchHit;
 
 use super::AppServer;
 use super::RpcError;
@@ -44,16 +44,16 @@ impl AppServer {
     }
 
     pub(super) fn symbol_index_search(&self, params: &Value) -> Result<Value, RpcError> {
-        let params: SymbolIndexSearchParams = decode(params)?;
+        let params: CodebaseSymbolsSearchParams = decode(params)?;
         let result_limit = NonZeroUsize::new(params.max_results)
             .filter(|value| value.get() <= MAX_PROTOCOL_RESULTS)
             .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
         let query = SymbolIndexQuery::new(params.query).with_result_limit(result_limit);
         let runtime = self.symbol_index_service()?;
-        let code_index = self.code_index_service()?;
+        let codebase = self.codebase_service()?;
         let hits = runtime.search(&query).map_err(symbol_index_runtime_error)?;
-        let (hits, discarded_stale_hit_count) = project_verified_hits(code_index.index(), hits);
-        result(&SymbolIndexSearchResult {
+        let (hits, discarded_stale_hit_count) = project_verified_hits(codebase.index(), hits);
+        result(&CodebaseSymbolsSearchResult {
             status: project_status(&runtime),
             hits,
             discarded_stale_hit_count,
@@ -65,17 +65,17 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: WorkspaceDocumentOverlaySynchronizeParams = decode(params)?;
-        let code_index = self.code_index_service()?;
+        let codebase = self.codebase_service()?;
         let symbol_index = self.symbol_index_service()?;
-        let snapshot = code_index
+        let snapshot = codebase
             .index()
-            .synchronize_overlay(CodeIndexOverlayDocument {
+            .synchronize_overlay(CodebaseOverlayDocument {
                 relative_path: params.document.path,
                 editor_revision: params.document.revision,
                 language: indexed_language(&params.document.language_id),
                 content: params.document.text,
             })
-            .map_err(code_index_overlay_error)?;
+            .map_err(codebase_overlay_error)?;
         symbol_index
             .reconcile_overlay()
             .map_err(symbol_index_error)?;
@@ -90,12 +90,12 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: WorkspaceDocumentOverlayCloseParams = decode(params)?;
-        let code_index = self.code_index_service()?;
+        let codebase = self.codebase_service()?;
         let symbol_index = self.symbol_index_service()?;
-        let snapshot = code_index
+        let snapshot = codebase
             .index()
             .close_overlay(&params.path)
-            .map_err(code_index_overlay_error)?;
+            .map_err(codebase_overlay_error)?;
         symbol_index
             .reconcile_overlay()
             .map_err(symbol_index_error)?;
@@ -106,25 +106,29 @@ impl AppServer {
     }
 }
 
-pub(super) fn project_status(runtime: &SymbolIndexRuntime) -> SymbolIndexStatusResult {
+pub(super) fn project_status(runtime: &SymbolIndexRuntime) -> CodebaseSymbolsStatusResult {
     let (state, snapshot) = match runtime.state() {
-        SymbolIndexRuntimeState::Empty => (SymbolIndexStateDto::Empty, None),
+        SymbolIndexRuntimeState::Empty => (CodebaseSymbolsStateDto::Empty, None),
         SymbolIndexRuntimeState::Indexing { last_ready } => {
-            (SymbolIndexStateDto::Indexing, last_ready)
+            (CodebaseSymbolsStateDto::Indexing, last_ready)
         }
-        SymbolIndexRuntimeState::Ready(snapshot) => (SymbolIndexStateDto::Ready, Some(snapshot)),
-        SymbolIndexRuntimeState::Stale(snapshot) => (SymbolIndexStateDto::Stale, Some(snapshot)),
-        SymbolIndexRuntimeState::Failed => (SymbolIndexStateDto::Failed, None),
+        SymbolIndexRuntimeState::Ready(snapshot) => {
+            (CodebaseSymbolsStateDto::Ready, Some(snapshot))
+        }
+        SymbolIndexRuntimeState::Stale(snapshot) => {
+            (CodebaseSymbolsStateDto::Stale, Some(snapshot))
+        }
+        SymbolIndexRuntimeState::Failed => (CodebaseSymbolsStateDto::Failed, None),
     };
     project_snapshot(runtime, state, snapshot.as_ref())
 }
 
 fn project_snapshot(
     runtime: &SymbolIndexRuntime,
-    state: SymbolIndexStateDto,
+    state: CodebaseSymbolsStateDto,
     snapshot: Option<&SymbolIndexSnapshot>,
-) -> SymbolIndexStatusResult {
-    SymbolIndexStatusResult {
+) -> CodebaseSymbolsStatusResult {
+    CodebaseSymbolsStatusResult {
         state,
         root_id: runtime.root_id().as_str().to_owned(),
         generation: snapshot.map_or(0, |snapshot| snapshot.generation),
@@ -136,9 +140,9 @@ fn project_snapshot(
 }
 
 fn project_verified_hits(
-    code_index: std::sync::Arc<zeta_code_index::CodeIndex>,
+    codebase: std::sync::Arc<zeta_codebase::Codebase>,
     hits: Vec<SymbolSearchHit>,
-) -> (Vec<SymbolIndexSearchHitDto>, usize) {
+) -> (Vec<CodebaseSymbolsSearchHitDto>, usize) {
     let mut sources = BTreeMap::<(PathBuf, String), Option<String>>::new();
     let mut projected = Vec::with_capacity(hits.len());
     let mut discarded = 0;
@@ -149,7 +153,7 @@ fn project_verified_hits(
             reference.source_revision.as_str().to_owned(),
         );
         let content = sources.entry(key).or_insert_with(|| {
-            code_index
+            codebase
                 .materialize_sources(&[IndexedSourceReference {
                     root_id: reference.root_id.clone(),
                     relative_path: reference.relative_path.clone(),
@@ -173,7 +177,7 @@ fn project_verified_hits(
             discarded += 1;
             continue;
         };
-        projected.push(SymbolIndexSearchHitDto {
+        projected.push(CodebaseSymbolsSearchHitDto {
             name: hit.symbol.name.clone(),
             kind: project_kind(hit.symbol.kind),
             container_name: hit.symbol.container_name,
@@ -262,25 +266,25 @@ fn indexed_language(language_id: &str) -> IndexedLanguage {
     }
 }
 
-fn code_index_overlay_error(error: zeta_code_index::CodeIndexError) -> RpcError {
+fn codebase_overlay_error(error: zeta_codebase::CodebaseError) -> RpcError {
     match error {
-        zeta_code_index::CodeIndexError::InvalidOverlayPath
-        | zeta_code_index::CodeIndexError::OverlayRevisionConflict
-        | zeta_code_index::CodeIndexError::SourceVerificationLimitExceeded => {
+        zeta_codebase::CodebaseError::InvalidOverlayPath
+        | zeta_codebase::CodebaseError::OverlayRevisionConflict
+        | zeta_codebase::CodebaseError::SourceVerificationLimitExceeded => {
             RpcError::new(-32602, AppServerErrorName::InvalidParams)
         }
-        _ => RpcError::new(-32094, AppServerErrorName::SymbolIndexOperationFailed),
+        _ => RpcError::new(-32094, AppServerErrorName::CodebaseSymbolsOperationFailed),
     }
 }
 
 fn symbol_index_runtime_error(error: SymbolIndexRuntimeError) -> RpcError {
     match error {
         SymbolIndexRuntimeError::NotReady => {
-            RpcError::new(-32093, AppServerErrorName::SymbolIndexNotReady)
+            RpcError::new(-32093, AppServerErrorName::CodebaseSymbolsNotReady)
         }
         SymbolIndexRuntimeError::SourceIndex(error) => {
             log::warn!("symbol-index source generation check failed: {error}");
-            RpcError::new(-32094, AppServerErrorName::SymbolIndexOperationFailed)
+            RpcError::new(-32094, AppServerErrorName::CodebaseSymbolsOperationFailed)
         }
         SymbolIndexRuntimeError::Index(error) => symbol_index_error(error),
     }
@@ -289,7 +293,7 @@ fn symbol_index_runtime_error(error: SymbolIndexRuntimeError) -> RpcError {
 fn symbol_index_error(error: SymbolIndexError) -> RpcError {
     match error {
         SymbolIndexError::QueryTooLarge => RpcError::new(-32602, AppServerErrorName::InvalidParams),
-        _ => RpcError::new(-32094, AppServerErrorName::SymbolIndexOperationFailed),
+        _ => RpcError::new(-32094, AppServerErrorName::CodebaseSymbolsOperationFailed),
     }
 }
 

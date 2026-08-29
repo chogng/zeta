@@ -1,5 +1,5 @@
-use crate::SemanticCodeIndexAutomaticContext;
-use crate::SemanticCodeIndexSelection;
+use crate::CodebaseAutomaticContext;
+use crate::CodebaseModelSelection;
 use crate::ToolSearchConfig;
 use crate::{
     AgentGrepBackend, ApprovalReviewModelSelection, ConfigGeneration, ConfigRevision, HookConfig,
@@ -27,8 +27,6 @@ pub struct PreferencesUpdate {
     pub preferred_model: Patch<ModelRef>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub approval_review_model: Patch<ApprovalReviewModelSelection>,
-    #[serde(default, skip_serializing_if = "Patch::is_missing")]
-    pub commit_message_model: Patch<ModelRef>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub tool_mode: Patch<ToolMode>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
@@ -98,24 +96,12 @@ pub enum UserConfigCommand {
     RemoveLanguageServerConfiguration {
         server_id: LanguageServerId,
     },
-    ConfigureSemanticCodeIndex {
-        selection: SemanticCodeIndexSelection,
-        automatic_context: SemanticCodeIndexAutomaticContext,
+    ConfigureCodebase {
+        models: Option<CodebaseModelSelection>,
+        automatic_context: CodebaseAutomaticContext,
     },
     ConfigureToolSearch {
         config: ToolSearchConfig,
-    },
-    AuthorizeSemanticCodeIndexEgress {
-        workspace: WorkspaceTrustId,
-    },
-    RevokeSemanticCodeIndexEgress {
-        workspace: WorkspaceTrustId,
-    },
-    AuthorizeCommitMessageEgress {
-        workspace: WorkspaceTrustId,
-    },
-    RevokeCommitMessageEgress {
-        workspace: WorkspaceTrustId,
     },
     SetWorkspaceTrust {
         workspace: WorkspaceTrustId,

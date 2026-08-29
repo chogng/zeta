@@ -1,8 +1,8 @@
 use super::AppServer;
 use super::AppServerThreadUpdates;
-use super::CodeIndexSemanticModels;
+use super::CodebaseSemanticModels;
 use super::RpcError;
-use super::code_index_runtime::CodeIndexRuntime;
+use super::codebase_runtime::CodebaseRuntime;
 use super::fs_watcher::FileSystemWatcher;
 use super::git_runtime::GitRuntime;
 use super::git_runtime::GitWatcher;
@@ -13,8 +13,8 @@ use super::semantic_index_job::SemanticIndexJobController;
 use super::symbol_index_runtime::SymbolIndexRuntime;
 use super::update_plan_tool::UpdatePlanToolService;
 use super::workspace_customizations::WorkspaceCustomizations;
-use crate::code_retrieval_context::CodeRetrievalContextSource;
-use crate::code_retrieval_tool::CodeRetrievalTool;
+use crate::codebase_retrieval_context::CodebaseRetrievalContextSource;
+use crate::codebase_retrieval_tool::CodebaseRetrievalTool;
 use crate::dynamic_tools::DynamicToolCompositionError;
 use crate::dynamic_tools::compose_dynamic_tools;
 use crate::local_tools::AgentGrepService;
@@ -38,16 +38,17 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
-use zeta_code_index::CodeIndexStorage;
-use zeta_code_index_cloud::CloudCodeIndexController;
-use zeta_code_index_cloud::CloudCodeIndexStorage;
-use zeta_code_index_semantic::CodeIndexEmbeddingModelId;
-use zeta_code_index_semantic::CodeIndexSemanticService;
-use zeta_code_index_semantic::CodeIndexSemanticStorage;
-use zeta_code_index_semantic::CodeIndexVectorStore;
-use zeta_code_index_semantic::SqliteCodeIndexVectorStore;
+use zeta_cloud_codebase::CloudCodebaseController;
+use zeta_cloud_codebase::CloudCodebaseStorage;
+use zeta_codebase::CodebaseSemanticService;
+use zeta_codebase::CodebaseSemanticStorage;
+use zeta_codebase::CodebaseStorage;
+use zeta_codebase::CodebaseVectorStore;
+use zeta_codebase::EmbeddingIndexKey;
+use zeta_codebase::SqliteCodebaseVectorStore;
+use zeta_codebase::SymbolIndexStorage;
+use zeta_config::CodebaseModelSelection;
 use zeta_config::ConfigStore;
-use zeta_config::SemanticCodeIndexModelSelection;
 use zeta_config::ToolSearchConfig;
 use zeta_config::WorkspaceConfigScope;
 use zeta_config::WorkspaceConfigStore;
@@ -62,22 +63,19 @@ use zeta_file_system::LocalFileSystem;
 use zeta_file_system::WorkspaceFileSystem;
 use zeta_hooks::DeclarativeHookRuntime;
 use zeta_model_provider::EmbeddingInvoker;
-use zeta_model_provider::EmbeddingRequest;
-use zeta_model_provider::EmbeddingResponse;
+use zeta_model_provider::EmbeddingRuntimeIdentity;
 use zeta_model_provider::EmbeddingRuntimeRequest;
 use zeta_model_provider::ModelProviderError;
 use zeta_model_provider::RerankInvoker;
-use zeta_model_provider::RerankRequest;
-use zeta_model_provider::RerankResponse;
 use zeta_model_provider::RerankRuntimeRequest;
 use zeta_model_provider::SemanticModelProvider;
+use zeta_model_provider::SemanticRuntimeLocation;
 use zeta_model_provider_config::ModelProviderConfig;
 use zeta_protocol::CommandId;
 use zeta_protocol::ProviderId;
 use zeta_protocol::SessionId;
 use zeta_protocol::TurnStatus;
 use zeta_shell_command::RipgrepExecutable;
-use zeta_symbol_index::SymbolIndexStorage;
 use zeta_tools::ToolRegistryGeneration;
 use zeta_workspace::WorkspaceAuthorization;
 use zeta_workspace::WorkspaceCapability;
@@ -105,11 +103,11 @@ pub(super) struct WorkspaceRuntime {
         BTreeMap<(SessionId, PathBuf), Arc<WorkspaceSearchService>>,
     pub(super) ripgrep: Option<RipgrepExecutable>,
     pub(super) agent_grep: Option<Arc<AgentGrepService>>,
-    pub(super) code_index: Option<Arc<CodeIndexRuntime>>,
+    pub(super) codebase: Option<Arc<CodebaseRuntime>>,
     pub(super) symbol_index: Option<Arc<SymbolIndexRuntime>>,
-    pub(super) code_index_semantic: Option<Arc<CodeIndexSemanticService>>,
-    pub(super) code_index_semantic_job: Option<Arc<SemanticIndexJobController>>,
-    pub(super) cloud_code_index: Option<Arc<CloudCodeIndexController>>,
+    pub(super) codebase_semantic: Option<Arc<CodebaseSemanticService>>,
+    pub(super) codebase_semantic_job: Option<Arc<SemanticIndexJobController>>,
+    pub(super) cloud_codebase: Option<Arc<CloudCodebaseController>>,
     pub(super) _customizations: Option<Arc<WorkspaceCustomizations>>,
     pub(super) terminals: Option<Arc<crate::terminal_service::TerminalService>>,
     pub(super) folder_terminals: BTreeMap<String, Arc<crate::terminal_service::TerminalService>>,
@@ -153,11 +151,11 @@ impl WorkspaceRuntime {
             session_additional_directory_search: BTreeMap::new(),
             ripgrep: None,
             agent_grep: None,
-            code_index: None,
+            codebase: None,
             symbol_index: None,
-            code_index_semantic: None,
-            code_index_semantic_job: None,
-            cloud_code_index: None,
+            codebase_semantic: None,
+            codebase_semantic_job: None,
+            cloud_codebase: None,
             _customizations: None,
             terminals: None,
             folder_terminals: BTreeMap::new(),
@@ -204,7 +202,7 @@ pub(crate) struct WorkspaceRuntimeControl {
     local_tool_config: Arc<RwLock<LocalToolConfig>>,
     workspace_index_storage: Option<Arc<WorkspaceIndexStorage>>,
     fast_regex_worker_command: Option<zeta_fast_regex_search::FastRegexWorkerCommand>,
-    code_index_semantic_models: Option<CodeIndexSemanticModels>,
+    codebase_semantic_models: Option<CodebaseSemanticModels>,
     semantic_model_provider: Option<Arc<dyn SemanticModelProvider>>,
     extension_hosts: Option<super::extension_host_runtime::ExtensionHostRuntime>,
 }
@@ -220,7 +218,7 @@ impl WorkspaceRuntimeControl {
         let local_tool_config = LocalToolConfig::from_resolved(config);
         let (
             authorization,
-            code_index,
+            codebase,
             symbol_index,
             semantic,
             cloud,
@@ -234,10 +232,10 @@ impl WorkspaceRuntimeControl {
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             (
                 runtime.authorization.clone(),
-                runtime.code_index.clone(),
+                runtime.codebase.clone(),
                 runtime.symbol_index.clone(),
-                runtime.code_index_semantic.clone(),
-                runtime.cloud_code_index.clone(),
+                runtime.codebase_semantic.clone(),
+                runtime.cloud_codebase.clone(),
                 runtime._customizations.clone(),
                 Arc::clone(&runtime.session_workspace_access),
                 runtime.agent_grep.clone(),
@@ -269,14 +267,14 @@ impl WorkspaceRuntimeControl {
             self.fast_regex_worker_command.as_ref(),
         )
         .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
-        if let Some(code_index) = code_index {
+        if let Some(codebase) = codebase {
             let action_policy_revision = local.action_policy_revision().clone();
             local = append_local_tool(
                 local,
                 Arc::new(
-                    CodeRetrievalTool::new(
+                    CodebaseRetrievalTool::new(
                         execution,
-                        code_index.index(),
+                        codebase.index(),
                         symbol_index.map(|runtime| runtime.index()),
                         semantic,
                         cloud,
@@ -346,15 +344,13 @@ impl WorkspaceRuntimeControl {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = snapshot;
     }
 
-    pub(crate) fn reconcile_semantic_code_index_runtime(
-        &self,
-    ) -> Result<(), WorkspaceRuntimeError> {
+    pub(crate) fn reconcile_codebase_runtime(&self) -> Result<(), WorkspaceRuntimeError> {
         let _authority = self.authority_gate.lock().map_err(|_| {
             WorkspaceRuntimeError::Failed("Workspace authority gate poisoned".into())
         })?;
         let (
             authorization,
-            code_index,
+            codebase,
             symbol_index,
             cloud,
             customizations,
@@ -371,7 +367,7 @@ impl WorkspaceRuntimeControl {
             if authorization.decision() == WorkspaceTrustDecision::Restricted {
                 return Ok(());
             }
-            let Some(code_index) = runtime.code_index.clone() else {
+            let Some(codebase) = runtime.codebase.clone() else {
                 return Ok(());
             };
             let Some(symbol_index) = runtime.symbol_index.clone() else {
@@ -381,13 +377,13 @@ impl WorkspaceRuntimeControl {
                 return Ok(());
             };
             let previous_watcher = runtime._file_system_watcher.take();
-            let previous_job = runtime.code_index_semantic_job.take();
-            runtime.code_index_semantic = None;
+            let previous_job = runtime.codebase_semantic_job.take();
+            runtime.codebase_semantic = None;
             (
                 authorization,
-                code_index,
+                codebase,
                 symbol_index,
-                runtime.cloud_code_index.clone(),
+                runtime.cloud_codebase.clone(),
                 customizations,
                 previous_watcher,
                 previous_job,
@@ -397,9 +393,9 @@ impl WorkspaceRuntimeControl {
         drop(previous_job);
         self.tools.replace_local(None)?;
 
-        let semantic = open_code_index_semantic_runtime(
-            &code_index,
-            self.code_index_semantic_models.as_ref(),
+        let semantic = open_codebase_semantic_runtime(
+            &codebase,
+            self.codebase_semantic_models.as_ref(),
             self.semantic_model_provider.as_ref(),
             self.config.as_ref(),
             self.workspace_index_storage.as_ref(),
@@ -408,7 +404,7 @@ impl WorkspaceRuntimeControl {
             match SemanticIndexJobController::start(Arc::clone(service)) {
                 Ok(job) => Some(job),
                 Err(error) => {
-                    log::warn!("semantic code-index job is unavailable: {error}");
+                    log::warn!("semantic codebase job is unavailable: {error}");
                     None
                 }
             }
@@ -444,9 +440,9 @@ impl WorkspaceRuntimeControl {
         let local = append_local_tool(
             local,
             Arc::new(
-                CodeRetrievalTool::new(
+                CodebaseRetrievalTool::new(
                     execution,
-                    code_index.index(),
+                    codebase.index(),
                     Some(symbol_index.index()),
                     semantic.clone(),
                     cloud.clone(),
@@ -465,7 +461,7 @@ impl WorkspaceRuntimeControl {
         let watcher = FileSystemWatcher::start_with_observers(
             authorization.root().clone(),
             Arc::clone(&self.updates),
-            Arc::clone(&code_index),
+            Arc::clone(&codebase),
             Arc::clone(&symbol_index),
             semantic_job.clone(),
             customizations,
@@ -473,27 +469,26 @@ impl WorkspaceRuntimeControl {
         )
         .map_err(|error| {
             WorkspaceRuntimeError::Failed(format!(
-                "failed to rebind semantic code-index watcher: {error}"
+                "failed to rebind semantic codebase watcher: {error}"
             ))
         })?;
         let local_port = local
             .tool_port()
             .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
         self.tools.replace_local(Some(local_port))?;
-        let context_source = Arc::new(CodeRetrievalContextSource::new(
-            code_index.index(),
+        let context_source = Arc::new(CodebaseRetrievalContextSource::new(
+            codebase.index(),
             Some(symbol_index.index()),
             semantic.clone(),
             cloud.clone(),
             self.config.clone(),
-            authorization.root().trust_id(),
         ));
         let mut runtime = self
             .runtime
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        runtime.code_index_semantic = semantic;
-        runtime.code_index_semantic_job = semantic_job;
+        runtime.codebase_semantic = semantic;
+        runtime.codebase_semantic_job = semantic_job;
         runtime._file_system_watcher = Some(watcher);
         runtime.turn_executor = runtime
             .turn_executor
@@ -552,11 +547,11 @@ impl WorkspaceRuntimeControl {
         let folder_workspace_search = std::mem::take(&mut runtime.folder_workspace_search);
         let folder_terminals = std::mem::take(&mut runtime.folder_terminals);
         let folder_debug_adapters = std::mem::take(&mut runtime.folder_debug_adapters);
-        let cloud_code_index = runtime.cloud_code_index.clone();
+        let cloud_codebase = runtime.cloud_codebase.clone();
         let old_file_system_watcher = runtime._file_system_watcher.take();
         let old_folder_file_system_watchers =
             std::mem::take(&mut runtime._folder_file_system_watchers);
-        let code_index = runtime.code_index.clone();
+        let codebase = runtime.codebase.clone();
         let symbol_index = runtime.symbol_index.clone();
         let customizations = runtime._customizations.clone();
         let terminals = runtime.terminals.take();
@@ -564,9 +559,9 @@ impl WorkspaceRuntimeControl {
         let search = runtime.workspace_search.take();
         let git = runtime.git.take();
         let git_watcher = runtime._git_watcher.take();
-        runtime.cloud_code_index = None;
-        runtime.code_index_semantic = None;
-        runtime.code_index_semantic_job = None;
+        runtime.cloud_codebase = None;
+        runtime.codebase_semantic = None;
+        runtime.codebase_semantic_job = None;
         runtime.authorization = Some(restricted_authorization);
         runtime.git = Some(Arc::clone(&restricted_git));
         drop(runtime);
@@ -585,12 +580,12 @@ impl WorkspaceRuntimeControl {
         }
         drop(old_file_system_watcher);
         drop(old_folder_file_system_watchers);
-        let (restricted_watcher, watcher_error) = match (code_index, symbol_index, customizations) {
-            (Some(code_index), Some(symbol_index), Some(customizations)) => {
+        let (restricted_watcher, watcher_error) = match (codebase, symbol_index, customizations) {
+            (Some(codebase), Some(symbol_index), Some(customizations)) => {
                 match FileSystemWatcher::start_with_observers(
                     root.clone(),
                     Arc::clone(&self.updates),
-                    code_index,
+                    codebase,
                     symbol_index,
                     None,
                     customizations,
@@ -620,10 +615,10 @@ impl WorkspaceRuntimeControl {
         drop(git_watcher);
         drop(git);
         let interrupt_result = self.interrupt_active_turns();
-        if let Some(controller) = cloud_code_index
+        if let Some(controller) = cloud_codebase
             && controller.revoke().is_err()
         {
-            log::warn!("cloud code-index deletion remains pending after trust revocation");
+            log::warn!("cloud codebase deletion remains pending after trust revocation");
         }
         tool_result?;
         interrupt_result?;
@@ -1047,43 +1042,11 @@ impl AppServer {
             .map(|authorization| zeta_workspace::WorkspaceBinding::from_root(authorization.root()))
     }
 
-    pub(super) fn reconcile_semantic_code_index_runtime(
-        &self,
-    ) -> Result<(), WorkspaceRuntimeError> {
+    pub(super) fn reconcile_codebase_runtime(&self) -> Result<(), WorkspaceRuntimeError> {
         let Some(control) = self.workspace_runtime_control() else {
             return Ok(());
         };
-        control.reconcile_semantic_code_index_runtime()
-    }
-
-    pub(super) fn validate_semantic_code_index_selection(
-        &self,
-    ) -> Result<(), WorkspaceRuntimeError> {
-        if self.code_index_semantic_models.is_some() {
-            return Ok(());
-        }
-        let snapshot = self
-            .config
-            .as_ref()
-            .ok_or(WorkspaceRuntimeError::Unavailable)?
-            .read_snapshot()
-            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
-        let models = snapshot
-            .values
-            .semantic_code_index
-            .selection
-            .remote_models()
-            .ok_or_else(|| {
-                WorkspaceRuntimeError::Failed(
-                    "semantic code-index models are not configured".into(),
-                )
-            })?;
-        let provider = self.semantic_model_provider.as_ref().ok_or_else(|| {
-            WorkspaceRuntimeError::Failed("semantic model provider runtime is not installed".into())
-        })?;
-        resolve_semantic_model_invokers(provider, models, &snapshot.values.providers)
-            .map(|_| ())
-            .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))
+        control.reconcile_codebase_runtime()
     }
 
     pub(crate) fn with_local_workspace_host(
@@ -1194,7 +1157,7 @@ impl AppServer {
                 local_tool_config: Arc::clone(&self.local_tool_config),
                 workspace_index_storage: self.workspace_index_storage.clone(),
                 fast_regex_worker_command: self.fast_regex_worker_command.clone(),
-                code_index_semantic_models: self.code_index_semantic_models.clone(),
+                codebase_semantic_models: self.codebase_semantic_models.clone(),
                 semantic_model_provider: self.semantic_model_provider.clone(),
                 extension_hosts: self.extension_hosts.clone(),
             })
@@ -1830,9 +1793,9 @@ impl AppServer {
         self.revoke_cloud_index_for_restricted_root(&workspace);
         let file_system: Arc<dyn WorkspaceFileSystem> =
             Arc::new(LocalFileSystem::new(workspace.clone()));
-        let code_index = self.open_code_index_runtime(workspace.clone())?;
-        let symbol_index = self.open_symbol_index_runtime(&code_index)?;
-        self.retry_persisted_cloud_index_deletion(&code_index);
+        let codebase = self.open_codebase_runtime(workspace.clone())?;
+        let symbol_index = self.open_symbol_index_runtime(&codebase)?;
+        self.retry_persisted_cloud_index_deletion(&codebase);
         let repository_inspection = authorization
             .require(WorkspaceCapability::InspectRepository)
             .map_err(|_| {
@@ -1854,7 +1817,7 @@ impl AppServer {
         let file_system_watcher = FileSystemWatcher::start_with_observers(
             workspace,
             Arc::clone(&self.updates),
-            Arc::clone(&code_index),
+            Arc::clone(&codebase),
             Arc::clone(&symbol_index),
             None,
             customizations.clone(),
@@ -1892,11 +1855,11 @@ impl AppServer {
             session_additional_directory_search: BTreeMap::new(),
             ripgrep: None,
             agent_grep: None,
-            code_index: Some(code_index),
+            codebase: Some(codebase),
             symbol_index: Some(symbol_index),
-            code_index_semantic: None,
-            code_index_semantic_job: None,
-            cloud_code_index: None,
+            codebase_semantic: None,
+            codebase_semantic_job: None,
+            cloud_codebase: None,
             _customizations: Some(Arc::clone(&customizations)),
             terminals: None,
             folder_terminals: BTreeMap::new(),
@@ -1924,20 +1887,22 @@ impl AppServer {
         let workspace = authorization.root().clone();
         let file_system: Arc<dyn WorkspaceFileSystem> =
             Arc::new(LocalFileSystem::new(workspace.clone()));
-        let code_index = self.open_code_index_runtime(workspace.clone())?;
-        let symbol_index = self.open_symbol_index_runtime(&code_index)?;
-        let code_index_semantic = self.open_code_index_semantic(&code_index)?;
-        let code_index_semantic_job =
-            code_index_semantic.as_ref().and_then(
-                |service| match SemanticIndexJobController::start(Arc::clone(service)) {
-                    Ok(job) => Some(job),
-                    Err(error) => {
-                        log::warn!("semantic code-index job is unavailable: {error}");
-                        None
-                    }
-                },
-            );
-        let cloud_code_index = self.open_cloud_code_index_controller(&code_index);
+        let codebase = self.open_codebase_runtime(workspace.clone())?;
+        let symbol_index = self.open_symbol_index_runtime(&codebase)?;
+        let codebase_semantic = self.open_codebase_semantic(&codebase)?;
+        let codebase_semantic_job =
+            codebase_semantic
+                .as_ref()
+                .and_then(
+                    |service| match SemanticIndexJobController::start(Arc::clone(service)) {
+                        Ok(job) => Some(job),
+                        Err(error) => {
+                            log::warn!("semantic codebase job is unavailable: {error}");
+                            None
+                        }
+                    },
+                );
+        let cloud_codebase = self.open_cloud_codebase_controller(&codebase);
         let canonical_root = workspace.canonical_path().to_path_buf();
         let session_workspace_access = self
             .workspace_runtime
@@ -1959,9 +1924,9 @@ impl AppServer {
         let file_system_watcher = FileSystemWatcher::start_with_observers(
             workspace.clone(),
             Arc::clone(&self.updates),
-            Arc::clone(&code_index),
+            Arc::clone(&codebase),
             Arc::clone(&symbol_index),
-            code_index_semantic_job.clone(),
+            codebase_semantic_job.clone(),
             customizations.clone(),
             Some(Arc::clone(&agent_grep)),
         )
@@ -1977,12 +1942,12 @@ impl AppServer {
         let local = append_local_tool(
             local,
             Arc::new(
-                CodeRetrievalTool::new(
+                CodebaseRetrievalTool::new(
                     retrieval_workspace,
-                    code_index.index(),
+                    codebase.index(),
                     Some(symbol_index.index()),
-                    code_index_semantic.clone(),
-                    cloud_code_index.clone(),
+                    codebase_semantic.clone(),
+                    cloud_codebase.clone(),
                 )
                 .with_action_policy_revision(action_policy_revision),
             ),
@@ -2057,13 +2022,12 @@ impl AppServer {
         customizations.bind_hooks(Arc::clone(&host.hooks));
         host.tools.replace_executable(Some(local_port), true)?;
         self.bind_workspace_skills(&canonical_root)?;
-        let context_source = Arc::new(CodeRetrievalContextSource::new(
-            code_index.index(),
+        let context_source = Arc::new(CodebaseRetrievalContextSource::new(
+            codebase.index(),
             Some(symbol_index.index()),
-            code_index_semantic.clone(),
-            cloud_code_index.clone(),
+            codebase_semantic.clone(),
+            cloud_codebase.clone(),
             self.config.clone(),
-            workspace.trust_id(),
         ));
         let extension_workspace = authorization
             .require(WorkspaceCapability::ActivateWorkspaceExtension)
@@ -2091,11 +2055,11 @@ impl AppServer {
             session_additional_directory_search: BTreeMap::new(),
             ripgrep: Some(ripgrep),
             agent_grep: Some(agent_grep),
-            code_index: Some(code_index),
+            codebase: Some(codebase),
             symbol_index: Some(symbol_index),
-            code_index_semantic,
-            code_index_semantic_job,
-            cloud_code_index,
+            codebase_semantic,
+            codebase_semantic_job,
+            cloud_codebase,
             _customizations: Some(Arc::clone(&customizations)),
             terminals: Some(Arc::clone(&terminals)),
             folder_terminals: BTreeMap::new(),
@@ -2170,9 +2134,9 @@ impl AppServer {
             switchable || runtime.file_system.is_some(),
             switchable || runtime.git.is_some(),
             switchable || runtime.workspace_search.is_some(),
-            switchable || runtime.code_index.is_some(),
-            (switchable && !self.cloud_code_index_providers.is_empty())
-                || runtime.cloud_code_index.is_some(),
+            switchable || runtime.codebase.is_some(),
+            (switchable && !self.cloud_codebase_providers.is_empty())
+                || runtime.cloud_codebase.is_some(),
             switchable || runtime.terminals.is_some(),
             switchable || runtime.debug_adapters.is_some(),
         )
@@ -2188,37 +2152,37 @@ impl AppServer {
             .ok()
     }
 
-    fn open_code_index_runtime(
+    fn open_codebase_runtime(
         &self,
         workspace: WorkspaceRoot,
-    ) -> Result<Arc<CodeIndexRuntime>, WorkspaceRuntimeError> {
+    ) -> Result<Arc<CodebaseRuntime>, WorkspaceRuntimeError> {
         let trust_id = workspace.trust_id();
         if let Some(index_storage) = &self.workspace_index_storage {
             let lease = index_storage
-                .acquire(&trust_id, WorkspaceIndexKind::Lexical)
+                .acquire(&trust_id, WorkspaceIndexKind::Codebase)
                 .map_err(|error| {
                     WorkspaceRuntimeError::Failed(format!(
                         "failed to lock lexical index storage: {error}"
                     ))
                 })?;
-            let storage = CodeIndexStorage::Persistent(lease.directory().join("index.sqlite3"));
-            CodeIndexRuntime::open_with_lease(workspace, storage, lease).map_err(|error| {
-                WorkspaceRuntimeError::Failed(format!("failed to open code index: {error}"))
+            let storage = CodebaseStorage::Persistent(lease.directory().join("sources.sqlite3"));
+            CodebaseRuntime::open_with_lease(workspace, storage, lease).map_err(|error| {
+                WorkspaceRuntimeError::Failed(format!("failed to open Codebase: {error}"))
             })
         } else {
-            CodeIndexRuntime::open(workspace, CodeIndexStorage::Memory).map_err(|error| {
-                WorkspaceRuntimeError::Failed(format!("failed to open code index: {error}"))
+            CodebaseRuntime::open(workspace, CodebaseStorage::Memory).map_err(|error| {
+                WorkspaceRuntimeError::Failed(format!("failed to open Codebase: {error}"))
             })
         }
     }
 
-    pub(super) fn code_index_service(&self) -> Result<Arc<CodeIndexRuntime>, RpcError> {
+    pub(super) fn codebase_service(&self) -> Result<Arc<CodebaseRuntime>, RpcError> {
         self.workspace_runtime
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .code_index
+            .codebase
             .clone()
-            .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodeIndexUnavailable))
+            .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodebaseUnavailable))
     }
 
     pub(super) fn agent_grep_index_context(
@@ -2232,35 +2196,33 @@ impl AppServer {
             .authorization
             .as_ref()
             .map(|authorization| authorization.root().clone())
-            .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodeIndexUnavailable))?;
+            .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodebaseUnavailable))?;
         let service = runtime
             .agent_grep
             .clone()
-            .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodeIndexUnavailable))?;
+            .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodebaseUnavailable))?;
         Ok((service, root))
     }
 
     fn open_symbol_index_runtime(
         &self,
-        code_index: &Arc<CodeIndexRuntime>,
+        codebase: &Arc<CodebaseRuntime>,
     ) -> Result<Arc<SymbolIndexRuntime>, WorkspaceRuntimeError> {
-        let trust_id = code_index.root().trust_id();
+        let trust_id = codebase.root().trust_id();
         if let Some(index_storage) = &self.workspace_index_storage {
             let lease = index_storage
-                .acquire(&trust_id, WorkspaceIndexKind::Symbols)
+                .acquire(&trust_id, WorkspaceIndexKind::Codebase)
                 .map_err(|error| {
                     WorkspaceRuntimeError::Failed(format!(
                         "failed to lock symbol index storage: {error}"
                     ))
                 })?;
-            let storage = SymbolIndexStorage::Persistent(lease.directory().join("index.sqlite3"));
-            SymbolIndexRuntime::open_with_lease(code_index.index(), storage, lease).map_err(
-                |error| {
-                    WorkspaceRuntimeError::Failed(format!("failed to open symbol index: {error}"))
-                },
-            )
+            let storage = SymbolIndexStorage::Persistent(lease.directory().join("symbols.sqlite3"));
+            SymbolIndexRuntime::open_with_lease(codebase.index(), storage, lease).map_err(|error| {
+                WorkspaceRuntimeError::Failed(format!("failed to open symbol index: {error}"))
+            })
         } else {
-            SymbolIndexRuntime::open(code_index.index(), SymbolIndexStorage::Memory).map_err(
+            SymbolIndexRuntime::open(codebase.index(), SymbolIndexStorage::Memory).map_err(
                 |error| {
                     WorkspaceRuntimeError::Failed(format!("failed to open symbol index: {error}"))
                 },
@@ -2274,64 +2236,64 @@ impl AppServer {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .symbol_index
             .clone()
-            .ok_or_else(|| RpcError::new(-32092, AppServerErrorName::SymbolIndexUnavailable))
+            .ok_or_else(|| RpcError::new(-32092, AppServerErrorName::CodebaseSymbolsUnavailable))
     }
 
-    fn open_code_index_semantic(
+    fn open_codebase_semantic(
         &self,
-        code_index: &Arc<CodeIndexRuntime>,
-    ) -> Result<Option<Arc<CodeIndexSemanticService>>, WorkspaceRuntimeError> {
-        open_code_index_semantic_runtime(
-            code_index,
-            self.code_index_semantic_models.as_ref(),
+        codebase: &Arc<CodebaseRuntime>,
+    ) -> Result<Option<Arc<CodebaseSemanticService>>, WorkspaceRuntimeError> {
+        open_codebase_semantic_runtime(
+            codebase,
+            self.codebase_semantic_models.as_ref(),
             self.semantic_model_provider.as_ref(),
             self.config.as_ref(),
             self.workspace_index_storage.as_ref(),
         )
     }
 
-    pub(crate) fn code_index_semantic_service(&self) -> Option<Arc<CodeIndexSemanticService>> {
+    pub(crate) fn codebase_semantic_service(&self) -> Option<Arc<CodebaseSemanticService>> {
         self.workspace_runtime
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .code_index_semantic
+            .codebase_semantic
             .clone()
     }
 
-    pub(super) fn code_index_semantic_job(&self) -> Option<Arc<SemanticIndexJobController>> {
+    pub(super) fn codebase_semantic_job(&self) -> Option<Arc<SemanticIndexJobController>> {
         self.workspace_runtime
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .code_index_semantic_job
+            .codebase_semantic_job
             .clone()
     }
 
-    fn open_cloud_code_index_controller(
+    fn open_cloud_codebase_controller(
         &self,
-        code_index: &Arc<CodeIndexRuntime>,
-    ) -> Option<Arc<CloudCodeIndexController>> {
-        if self.cloud_code_index_providers.is_empty() {
+        codebase: &Arc<CodebaseRuntime>,
+    ) -> Option<Arc<CloudCodebaseController>> {
+        if self.cloud_codebase_providers.is_empty() {
             return None;
         }
-        let trust_id = code_index.root().trust_id();
+        let trust_id = codebase.root().trust_id();
         let digest = trust_id
             .as_str()
             .strip_prefix("sha256:")
             .unwrap_or(trust_id.as_str());
         let storage = self
-            .cloud_code_index_storage_root
+            .cloud_codebase_storage_root
             .as_ref()
-            .map_or(CloudCodeIndexStorage::Memory, |root| {
-                CloudCodeIndexStorage::Persistent(root.join(format!("{digest}.sqlite3")))
+            .map_or(CloudCodebaseStorage::Memory, |root| {
+                CloudCodebaseStorage::Persistent(root.join(format!("{digest}.sqlite3")))
             });
-        match CloudCodeIndexController::open(
-            code_index.index(),
-            self.cloud_code_index_providers.clone(),
+        match CloudCodebaseController::open(
+            codebase.index(),
+            self.cloud_codebase_providers.clone(),
             storage,
         ) {
             Ok(controller) => Some(controller),
             Err(error) => {
-                log::warn!("cloud code-index authority is unavailable: {error}");
+                log::warn!("cloud codebase authority is unavailable: {error}");
                 None
             }
         }
@@ -2350,7 +2312,7 @@ impl AppServer {
             if let Some(authorization) = runtime.authorization.as_ref() {
                 authorization.revoke();
             }
-            runtime.cloud_code_index.take()
+            runtime.cloud_codebase.take()
         } else {
             None
         };
@@ -2358,28 +2320,26 @@ impl AppServer {
         if let Some(controller) = controller
             && controller.revoke().is_err()
         {
-            log::warn!("cloud code-index deletion remains pending after trust revocation");
+            log::warn!("cloud codebase deletion remains pending after trust revocation");
         }
     }
 
-    fn retry_persisted_cloud_index_deletion(&self, code_index: &Arc<CodeIndexRuntime>) {
-        let Some(controller) = self.open_cloud_code_index_controller(code_index) else {
+    fn retry_persisted_cloud_index_deletion(&self, codebase: &Arc<CodebaseRuntime>) {
+        let Some(controller) = self.open_cloud_codebase_controller(codebase) else {
             return;
         };
         if controller.revoke().is_err() {
-            log::warn!("cloud code-index deletion remains pending while Workspace is restricted");
+            log::warn!("cloud codebase deletion remains pending while Workspace is restricted");
         }
     }
 
-    pub(super) fn cloud_code_index_service(
-        &self,
-    ) -> Result<Arc<CloudCodeIndexController>, RpcError> {
+    pub(super) fn cloud_codebase_service(&self) -> Result<Arc<CloudCodebaseController>, RpcError> {
         self.workspace_runtime
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .cloud_code_index
+            .cloud_codebase
             .clone()
-            .ok_or_else(|| RpcError::new(-32093, AppServerErrorName::CloudCodeIndexUnavailable))
+            .ok_or_else(|| RpcError::new(-32093, AppServerErrorName::CloudCodebaseUnavailable))
     }
 
     pub(super) fn file_system_service_for(
@@ -2745,13 +2705,13 @@ fn append_multi_agent_tools(
     append_local_tool(local, Arc::new(multi_agent))
 }
 
-fn open_code_index_semantic_runtime(
-    code_index: &Arc<CodeIndexRuntime>,
-    fixed_models: Option<&CodeIndexSemanticModels>,
+fn open_codebase_semantic_runtime(
+    codebase: &Arc<CodebaseRuntime>,
+    fixed_models: Option<&CodebaseSemanticModels>,
     provider: Option<&Arc<dyn SemanticModelProvider>>,
     config: Option<&Arc<ConfigStore>>,
     index_storage: Option<&Arc<WorkspaceIndexStorage>>,
-) -> Result<Option<Arc<CodeIndexSemanticService>>, WorkspaceRuntimeError> {
+) -> Result<Option<Arc<CodebaseSemanticService>>, WorkspaceRuntimeError> {
     let configured_models;
     let models = match fixed_models {
         Some(models) => models,
@@ -2759,8 +2719,7 @@ fn open_code_index_semantic_runtime(
             let (Some(provider), Some(config)) = (provider, config) else {
                 return Ok(None);
             };
-            let Some(resolved) =
-                resolve_configured_code_index_semantic_models(code_index, provider, config)
+            let Some(resolved) = resolve_configured_codebase_semantic_models(provider, config)
             else {
                 return Ok(None);
             };
@@ -2768,24 +2727,24 @@ fn open_code_index_semantic_runtime(
             &configured_models
         }
     };
-    let trust_id = code_index.root().trust_id();
+    let trust_id = codebase.root().trust_id();
     let lease = index_storage
-        .map(|storage| storage.acquire(&trust_id, WorkspaceIndexKind::Semantic))
+        .map(|storage| storage.acquire(&trust_id, WorkspaceIndexKind::Codebase))
         .transpose()
         .map_err(|error| {
             WorkspaceRuntimeError::Failed(format!("failed to lock semantic index storage: {error}"))
         })?;
     let storage = lease
         .as_ref()
-        .map_or(CodeIndexSemanticStorage::Memory, |lease| {
-            CodeIndexSemanticStorage::Persistent(lease.directory().join("index.sqlite3"))
+        .map_or(CodebaseSemanticStorage::Memory, |lease| {
+            CodebaseSemanticStorage::Persistent(lease.directory().join("semantic.sqlite3"))
         });
-    let store: Arc<dyn CodeIndexVectorStore> =
-        Arc::new(SqliteCodeIndexVectorStore::open(&storage).map_err(|error| {
-            WorkspaceRuntimeError::Failed(format!("failed to open semantic code index: {error}"))
+    let store: Arc<dyn CodebaseVectorStore> =
+        Arc::new(SqliteCodebaseVectorStore::open(&storage).map_err(|error| {
+            WorkspaceRuntimeError::Failed(format!("failed to open Codebase vector data: {error}"))
         })?);
-    let service = CodeIndexSemanticService::new(
-        code_index.index(),
+    let service = CodebaseSemanticService::new(
+        codebase.index(),
         models.model_id.clone(),
         Arc::clone(&models.embedding),
         store,
@@ -2802,58 +2761,44 @@ fn open_code_index_semantic_runtime(
     )))
 }
 
-fn resolve_configured_code_index_semantic_models(
-    code_index: &Arc<CodeIndexRuntime>,
+fn resolve_configured_codebase_semantic_models(
     provider: &Arc<dyn SemanticModelProvider>,
     config: &Arc<ConfigStore>,
-) -> Option<CodeIndexSemanticModels> {
+) -> Option<CodebaseSemanticModels> {
     let snapshot = config.read_snapshot().ok()?;
-    let models = snapshot
-        .values
-        .semantic_code_index
-        .authorized_remote_models(&code_index.root().trust_id(), &snapshot.values.providers)?
-        .clone();
+    let models = snapshot.values.codebase.models.clone()?;
     let invokers =
         match resolve_semantic_model_invokers(provider, &models, &snapshot.values.providers) {
             Ok(invokers) => invokers,
             Err(error) => {
-                log::warn!("configured semantic code-index models are unavailable: {error}");
+                log::warn!("configured semantic codebase models are unavailable: {error}");
                 return None;
             }
         };
-    let identity =
-        serde_json::to_vec(&(models.embedding_model.clone(), invokers.embedding_config)).ok()?;
+    let identity = serde_json::to_vec(&(
+        "zeta-codebase-document-v1",
+        models.embedding_model.clone(),
+        invokers.embedding_identity.as_str(),
+    ))
+    .ok()?;
     let model_id =
-        CodeIndexEmbeddingModelId::new(format!("semantic:sha256:{:x}", Sha256::digest(identity)))
-            .ok()?;
-    let consent = SemanticInvocationConsent {
-        config: Arc::clone(config),
-        workspace: code_index.root().trust_id(),
-        models: models.clone(),
-    };
-    let embedding: Arc<dyn EmbeddingInvoker> = Arc::new(ConsentBoundEmbeddingInvoker {
-        inner: invokers.embedding,
-        consent: consent.clone(),
-    });
-    let mut resolved = CodeIndexSemanticModels::new(model_id, embedding);
+        EmbeddingIndexKey::new(format!("semantic:sha256:{:x}", Sha256::digest(identity))).ok()?;
+    let mut resolved = CodebaseSemanticModels::new(model_id, invokers.embedding);
     if let Some(rerank) = invokers.rerank {
-        resolved = resolved.with_rerank(Arc::new(ConsentBoundRerankInvoker {
-            inner: rerank,
-            consent,
-        }));
+        resolved = resolved.with_rerank(rerank);
     }
     Some(resolved)
 }
 
 struct ResolvedSemanticModelInvokers {
-    embedding_config: ModelProviderConfig,
+    embedding_identity: EmbeddingRuntimeIdentity,
     embedding: Arc<dyn EmbeddingInvoker>,
     rerank: Option<Arc<dyn RerankInvoker>>,
 }
 
 fn resolve_semantic_model_invokers(
     provider: &Arc<dyn SemanticModelProvider>,
-    models: &SemanticCodeIndexModelSelection,
+    models: &CodebaseModelSelection,
     providers: &BTreeMap<ProviderId, ModelProviderConfig>,
 ) -> Result<ResolvedSemanticModelInvokers, ModelProviderError> {
     let embedding_config = providers
@@ -2865,10 +2810,15 @@ fn resolve_semantic_model_invokers(
                 models.embedding_model.provider
             ))
         })?;
-    let embedding = provider.embedding_runtime(EmbeddingRuntimeRequest::new(
-        models.embedding_model.clone(),
-        embedding_config.clone(),
-    ))?;
+    let embedding_request =
+        EmbeddingRuntimeRequest::new(models.embedding_model.clone(), embedding_config.clone());
+    if provider.embedding_runtime_location(&embedding_request)? != SemanticRuntimeLocation::Device {
+        return Err(ModelProviderError::Unavailable(
+            "Codebase embedding model must run on this device".into(),
+        ));
+    }
+    let embedding_identity = provider.embedding_runtime_identity(&embedding_request)?;
+    let embedding = provider.embedding_runtime(embedding_request)?;
     let rerank = models
         .rerank_model
         .as_ref()
@@ -2879,83 +2829,20 @@ fn resolve_semantic_model_invokers(
                     model.provider
                 ))
             })?;
-            provider.rerank_runtime(RerankRuntimeRequest::new(model.clone(), config))
+            let request = RerankRuntimeRequest::new(model.clone(), config);
+            if provider.rerank_runtime_location(&request)? != SemanticRuntimeLocation::Device {
+                return Err(ModelProviderError::Unavailable(
+                    "Codebase rerank model must run on this device".into(),
+                ));
+            }
+            provider.rerank_runtime(request)
         })
         .transpose()?;
     Ok(ResolvedSemanticModelInvokers {
-        embedding_config,
+        embedding_identity,
         embedding,
         rerank,
     })
-}
-
-#[derive(Clone)]
-struct SemanticInvocationConsent {
-    config: Arc<ConfigStore>,
-    workspace: zeta_workspace::WorkspaceTrustId,
-    models: zeta_config::SemanticCodeIndexModelSelection,
-}
-
-impl SemanticInvocationConsent {
-    fn ensure_current(&self) -> Result<(), ModelProviderError> {
-        let snapshot = self
-            .config
-            .read_snapshot()
-            .map_err(|error| ModelProviderError::Unavailable(error.to_string()))?;
-        let authorized = snapshot
-            .values
-            .semantic_code_index
-            .authorized_remote_models(&self.workspace, &snapshot.values.providers);
-        if authorized == Some(&self.models) {
-            Ok(())
-        } else {
-            Err(ModelProviderError::Unavailable(
-                "semantic code-index source egress is no longer authorized".into(),
-            ))
-        }
-    }
-}
-
-struct ConsentBoundEmbeddingInvoker {
-    inner: Arc<dyn EmbeddingInvoker>,
-    consent: SemanticInvocationConsent,
-}
-
-impl EmbeddingInvoker for ConsentBoundEmbeddingInvoker {
-    fn embed(&self, request: &EmbeddingRequest) -> Result<EmbeddingResponse, ModelProviderError> {
-        self.consent.ensure_current()?;
-        self.inner.embed(request)
-    }
-
-    fn embed_with_cancellation(
-        &self,
-        request: &EmbeddingRequest,
-        cancellation: &zeta_async_utils::CancellationToken,
-    ) -> Result<EmbeddingResponse, ModelProviderError> {
-        self.consent.ensure_current()?;
-        self.inner.embed_with_cancellation(request, cancellation)
-    }
-}
-
-struct ConsentBoundRerankInvoker {
-    inner: Arc<dyn RerankInvoker>,
-    consent: SemanticInvocationConsent,
-}
-
-impl RerankInvoker for ConsentBoundRerankInvoker {
-    fn rerank(&self, request: &RerankRequest) -> Result<RerankResponse, ModelProviderError> {
-        self.consent.ensure_current()?;
-        self.inner.rerank(request)
-    }
-
-    fn rerank_with_cancellation(
-        &self,
-        request: &RerankRequest,
-        cancellation: &zeta_async_utils::CancellationToken,
-    ) -> Result<RerankResponse, ModelProviderError> {
-        self.consent.ensure_current()?;
-        self.inner.rerank_with_cancellation(request, cancellation)
-    }
 }
 
 fn retire_workspace_runtime(

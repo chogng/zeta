@@ -60,7 +60,7 @@ zeta-rs/app-server-protocol/
 │   │   ├── connectors.rs     # redacted connection DTO + inbound-only secret
 │   │   ├── resources.rs
 │   │   ├── search.rs
-│   │   ├── code_index.rs
+│   │   ├── codebase.rs
 │   │   ├── terminal.rs
 │   │   └── error.rs
 │   ├── rpc.rs                # generic JSON-RPC 2.0 envelopes
@@ -107,7 +107,7 @@ zeta-rs/app-server-protocol/
 配置/供应商/MCP/Skill/Plugin request/Hook declaration 修改、signed language Marketplace list/install、
 digest-pinned `skill/resource/open`、
 Turn 与 Resource metadata/read/release、filesystem metadata/read/write、workspace search start/read/cancel、
-workspace code-index status/search/rebuild，以及 cloud code-index status/preview/authorize/sync/revoke。
+workspace codebase status/search/rebuild，以及 cloud codebase status/preview/authorize/sync/revoke。
 Workspace registry 还包含 Session-scoped `workspace/additionalDirectories/list|add|remove|permissions/set`。目录 DTO 携带完整权限集合，list 与 mutation result 携带 Workspace access revision；权限替换必须提交 `expectedRevision`。四个 method 都携带 `sessionId`，mutation method 使用 Session-exclusive serialization，主 Workspace identity 不进入 mutation result。App Server 要求 connection 声明 `workspaceTrustHost`；DTO 本身不是授权。
 Notification 包含 `session/update`、Session-owned child 的 `session/thread/update`、owner-directed
 `agent/request`、`connector/changed`、`skills/changed`、`git/statusChanged` 与 `fs/changed`；Terminal 当前使用
@@ -244,8 +244,8 @@ FIFO/shared-read 调度；connection-resource key 由 runtime 再加入 connecti
 - `SyntaxAnalyzeResult` 只包含通用 snapshot facts；structural selections 使用独立的
   `SyntaxSelectionRangesParams/Result`，避免普通分析序列化全树节点。
 - `WorkspaceDocumentOverlay*` DTO 只传 Editor-authoritative full snapshot 或相对 path，响应只返回
-  content-free generation/count；Symbol/CodeIndex store identity 不进入 wire。
-- `SymbolIndexSearchHitDto` 投影 revision-bound UTF-16 declaration/selection range，不承诺 stable semantic
+  content-free generation/count；Symbol/Codebase store identity 不进入 wire。
+- `CodebaseSymbolsSearchHitDto` 投影 revision-bound UTF-16 declaration/selection range，不承诺 stable semantic
   symbol ID；retrieval origin 显式区分 local symbol/lexical/semantic/cloud。
 - Durable mutation params 带 `CommandId` 与 expected sequence/revision；JSON-RPC ID 不替代它。
 - `ConfigUpdateParams` 使用 `Patch<T>` 表达 missing/no-op、null/clear、value/set 三态。

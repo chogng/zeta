@@ -310,7 +310,7 @@ fn initialize_with_capabilities(
         }),
     );
     assert_eq!(response["result"]["capabilities"]["sessions"], true);
-    assert_eq!(response["result"]["capabilities"]["codeIndex"], false);
+    assert_eq!(response["result"]["capabilities"]["codebase"], false);
     assert_eq!(response["result"]["capabilities"]["typst"], true);
     assert_eq!(response["result"]["capabilities"]["updateReplay"], true);
 }

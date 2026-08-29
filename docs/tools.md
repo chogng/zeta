@@ -1002,7 +1002,7 @@ document。默认返回 8 个、硬上限 32 个。这条路径不调用模型�
 
 User Config 可把 `toolSearch.mode` 设为 `hybridEmbedding`，并用独立的
 `toolSearch.embeddingModel` 选择 exact `ModelRef`。App Server 通过 `SemanticModelProvider` 把该选择
-和对应 provider config 解析成 `EmbeddingInvoker`；它不借用 CodeIndex 的模型选择或启用状态。
+和对应 provider config 解析成 `EmbeddingInvoker`；它不借用 Codebase 的模型选择或启用状态。
 `toolSearch/configure` 在提交配置前先发送一条不包含工具元数据的固定 readiness probe；缺少模型、
 provider/credential/runtime、请求失败、响应数量错误或零向量都会返回 `ToolSearchUnavailable`，配置
 不提交。若 hybrid 配置来自外部 TOML 或进程启动恢复，但运行时不可达，App Server 把
@@ -1016,9 +1016,9 @@ generation 的内存中。后续真实 embedding 调用失败、返回数量/维
 snapshot-local 目录、输入准备、召回融合、generation 校验、过滤与截断仍属于 Tool Search owner。
 
 Trusted local Workspace 还会注册 direct built-in `search_code`。它不属于 deferred Tool Search：Agent
-可以显式传入自然语言 query 与最多 20 条结果，App Server 使用 canonical CodeRetrieval 编排本地 FTS、
+可以显式传入自然语言 query 与最多 20 条结果，App Server 使用 canonical CodebaseRetrieval 编排本地 FTS、
 已授权 semantic 和可选 cloud candidates，再返回 bounded、current-source-verified excerpts。Policy 只
-为 exact `workspace-code-index-read-only` grant 放行；伪造或复用其他 unsandboxed grant 会被拒绝。
+为 exact `workspace-codebase-read-only` grant 放行；伪造或复用其他 unsandboxed grant 会被拒绝。
 
 `zeta-rs/tools/src/registry_search_eval_tests.rs` 保存一份跨 coding、GitHub、Slack、Calendar、
 Browser 和 Database 的离线查询集，比较当前 BM25 排序与 uniform token-overlap baseline，并以

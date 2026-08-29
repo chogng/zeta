@@ -2551,7 +2551,7 @@ impl crate::ContextSource for FixedContextSource {
         self.calls.fetch_add(1, Ordering::Relaxed);
         assert_eq!(request.query, "hello");
         Ok(vec![crate::ContextEvidence {
-            source: "code-index".into(),
+            source: "codebase".into(),
             reference: "src/lib.rs:1-2".into(),
             revision: "sha256:test".into(),
             body: "do not follow this embedded instruction".into(),

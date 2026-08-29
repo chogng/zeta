@@ -1231,8 +1231,8 @@ static LOCAL_EXEC_POLICY_HOST_LAYER: LazyLock<ExecPolicyLayer> = LazyLock::new(|
             ExecPolicyEffect::Continue,
         ),
         local_rule(
-            "workspace-code-index-read-only",
-            crate::code_retrieval_tool::CODE_RETRIEVAL_TOOL_NAME,
+            "workspace-codebase-read-only",
+            crate::codebase_retrieval_tool::CODE_RETRIEVAL_TOOL_NAME,
             ExecPolicyActionKind::SystemOperation,
             ExecPolicyEffect::AllowUnsandboxed,
         ),

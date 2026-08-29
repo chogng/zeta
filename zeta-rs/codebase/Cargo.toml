@@ -1,0 +1,29 @@
+[package]
+name = "zeta-codebase"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_codebase"
+path = "src/lib.rs"
+
+[dependencies]
+ignore = { workspace = true }
+nucleo = { workspace = true }
+rusqlite = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+zeta-async-utils = { workspace = true }
+zeta-model-provider = { workspace = true }
+zeta-syntax = { workspace = true }
+zeta-workspace = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+zeta-api = { workspace = true }
+
+[lints]
+workspace = true

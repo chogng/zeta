@@ -117,6 +117,27 @@ impl EmbeddingRuntimeRequest {
     }
 }
 
+/// Stable, non-secret identity of the runtime that produces persisted embeddings.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EmbeddingRuntimeIdentity(String);
+
+impl EmbeddingRuntimeIdentity {
+    pub fn new(value: impl Into<String>) -> Result<Self, ModelProviderError> {
+        let value = value.into();
+        if value.is_empty() || value.len() > 4096 || value.chars().any(char::is_control) {
+            return Err(ModelProviderError::InvalidRequest(
+                "embedding runtime identity must be 1..=4096 bytes without control characters"
+                    .into(),
+            ));
+        }
+        Ok(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 /// Query and candidate texts sent to one immutable rerank model invocation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RerankRequest {
@@ -155,7 +176,7 @@ impl RerankRequest {
 /// Model scores corresponding one-for-one with the request documents.
 ///
 /// The response preserves input order. The model adapter does not sort, filter, or truncate the
-/// candidates; that policy belongs to the calling CodeIndex service.
+/// candidates; that policy belongs to the calling Codebase service.
 #[derive(Clone, Debug, PartialEq)]
 pub struct RerankResponse {
     scores: Vec<f32>,
@@ -179,7 +200,7 @@ impl RerankResponse {
 /// Invokes one immutable provider/model selection through its rerank API.
 ///
 /// Implementations return one score per input document in the same order. Candidate construction,
-/// score interpretation, sorting, filtering, and truncation remain with the CodeIndex service.
+/// score interpretation, sorting, filtering, and truncation remain with the Codebase service.
 pub trait RerankInvoker: Send + Sync {
     fn rerank(&self, request: &RerankRequest) -> Result<RerankResponse, ModelProviderError>;
 
@@ -203,6 +224,13 @@ pub struct RerankRuntimeRequest {
     pub config: zeta_model_provider_config::ModelProviderConfig,
 }
 
+/// Where one semantic model invocation executes relative to the user's device.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SemanticRuntimeLocation {
+    Device,
+    Network,
+}
+
 impl RerankRuntimeRequest {
     pub fn new(
         model: crate::ModelRef,
@@ -215,8 +243,23 @@ impl RerankRuntimeRequest {
 /// Resolves configured semantic models into immutable provider invokers.
 ///
 /// Implementations own provider transport and credential materialization only. Code chunking,
-/// vector persistence, recall, candidate sorting, and fusion remain with code-index crates.
+/// vector persistence, recall, candidate sorting, and fusion remain with codebase crates.
 pub trait SemanticModelProvider: Send + Sync {
+    fn embedding_runtime_identity(
+        &self,
+        request: &EmbeddingRuntimeRequest,
+    ) -> Result<EmbeddingRuntimeIdentity, ModelProviderError>;
+
+    fn embedding_runtime_location(
+        &self,
+        request: &EmbeddingRuntimeRequest,
+    ) -> Result<SemanticRuntimeLocation, ModelProviderError>;
+
+    fn rerank_runtime_location(
+        &self,
+        request: &RerankRuntimeRequest,
+    ) -> Result<SemanticRuntimeLocation, ModelProviderError>;
+
     fn embedding_runtime(
         &self,
         request: EmbeddingRuntimeRequest,

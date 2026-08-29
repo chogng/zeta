@@ -105,7 +105,7 @@ test("Code searches and opens a workspace symbol from unsaved editor content", a
 	for (let index = 0; index < 3; index += 1) await input.press("ArrowRight");
 	for (let index = 0; index < 4; index += 1) await input.press("Shift+ArrowRight");
 	await workbench.page.keyboard.insertText("ephemeral_workspace_symbol");
-	await expect.poll(() => hasIndexedSymbol(page, "ephemeral_workspace_symbol"), { timeout: 60_000, message: "unsaved declaration reaches the Workspace SymbolIndex overlay" }).toBe(true);
+	await expect.poll(() => hasIndexedSymbol(page, "ephemeral_workspace_symbol"), { timeout: 60_000, message: "unsaved declaration reaches the Workspace CodebaseSymbols overlay" }).toBe(true);
 	await page.keyboard.press(process.platform === "darwin" ? "Meta+T" : "Control+T");
 
 	const quickPick = page.locator(".zeta-quick-pick");
@@ -375,9 +375,9 @@ function selectedCharacterCount(status: string | null): number {
 
 async function hasIndexedSymbol(page: Page, name: string): Promise<boolean> {
 	return page.evaluate(async query => {
-		const host = (globalThis as { zetaWebWorkbenchHost?: { api: { symbolIndex: { search(request: { query: string; maxResults: number }): Promise<{ hits: readonly { name: string }[] }> } } } }).zetaWebWorkbenchHost;
+		const host = (globalThis as { zetaWebWorkbenchHost?: { api: { codebaseSymbols: { search(request: { query: string; maxResults: number }): Promise<{ hits: readonly { name: string }[] }> } } } }).zetaWebWorkbenchHost;
 		if (!host) return false;
-		return host.api.symbolIndex.search({ query, maxResults: 20 }).then(result => result.hits.some(hit => hit.name === query), () => false);
+		return host.api.codebaseSymbols.search({ query, maxResults: 20 }).then(result => result.hits.some(hit => hit.name === query), () => false);
 	}, name);
 }
 

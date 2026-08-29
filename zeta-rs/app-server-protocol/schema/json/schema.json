@@ -1361,24 +1361,21 @@
         "GitUnavailable",
         "GitNotRepository",
         "GitOperationFailed",
-        "TurnChangesUnavailable",
-        "TurnChangesRevisionConflict",
-        "TurnChangesOperationFailed",
         "DiffOperationFailed",
         "SyntaxAnalysisFailed",
-        "CodeIndexUnavailable",
-        "CodeIndexNotReady",
-        "CodeIndexOperationFailed",
-        "SymbolIndexUnavailable",
-        "SymbolIndexNotReady",
-        "SymbolIndexOperationFailed",
-        "CodeRetrievalOperationFailed",
-        "CloudCodeIndexUnavailable",
-        "CloudCodeIndexInvalidGrant",
-        "CloudCodeIndexConsentConflict",
-        "CloudCodeIndexEgressLimitExceeded",
-        "CloudCodeIndexProviderUnavailable",
-        "CloudCodeIndexOperationFailed",
+        "CodebaseUnavailable",
+        "CodebaseNotReady",
+        "CodebaseOperationFailed",
+        "CodebaseSymbolsUnavailable",
+        "CodebaseSymbolsNotReady",
+        "CodebaseSymbolsOperationFailed",
+        "CodebaseRetrievalOperationFailed",
+        "CloudCodebaseUnavailable",
+        "CloudCodebaseInvalidGrant",
+        "CloudCodebaseConsentConflict",
+        "CloudCodebaseEgressLimitExceeded",
+        "CloudCodebaseProviderUnavailable",
+        "CloudCodebaseOperationFailed",
         "LanguageServiceUnavailable",
         "LanguageRequestFailed",
         "MarketplaceUnavailable",
@@ -1979,10 +1976,6 @@
       ],
       "type": "string"
     },
-    "ChangeSetId": {
-      "description": "Stable identity of one Turn/repository change set.",
-      "type": "string"
-    },
     "ClientCapabilities": {
       "properties": {
         "agentInteractions": {
@@ -2439,118 +2432,6 @@
             },
             "params": {
               "$ref": "#/$defs/ThreadGoalClearParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "turnChanges/list",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/$defs/TurnChangesListParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "turnChanges/read",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/$defs/TurnChangesReadParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "turnChanges/readFile",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/$defs/TurnChangesReadFileParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "turnChanges/generateMessage",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/$defs/TurnChangesMutationParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "turnChanges/updateDraft",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/$defs/TurnChangesUpdateDraftParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "turnChanges/commit",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/$defs/TurnChangesCommitParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "turnChanges/discardThread",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/$defs/TurnChangesDiscardThreadParams"
             }
           },
           "required": [
@@ -3346,75 +3227,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codeIndex/semantic/configure",
+              "const": "workspace/codebase/configure",
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/SemanticCodeIndexConfigureParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "workspace/codeIndex/semantic/authorize",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/$defs/SemanticCodeIndexAuthorizeParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "workspace/codeIndex/semantic/revoke",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/$defs/SemanticCodeIndexRevokeParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "workspace/commitMessage/authorize",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/$defs/CommitMessageAuthorizeParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "workspace/commitMessage/revoke",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/$defs/CommitMessageRevokeParams"
+              "$ref": "#/$defs/CodebaseConfigureParams"
             }
           },
           "required": [
@@ -4946,7 +4763,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codeIndex/status",
+              "const": "workspace/codebase/status",
               "type": "string"
             },
             "params": {
@@ -4962,11 +4779,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codeIndex/search",
+              "const": "workspace/codebase/search",
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/CodeIndexSearchParams"
+              "$ref": "#/$defs/CodebaseSearchParams"
             }
           },
           "required": [
@@ -4978,7 +4795,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/symbolIndex/status",
+              "const": "workspace/codebase/symbols/status",
               "type": "string"
             },
             "params": {
@@ -4994,11 +4811,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/symbolIndex/search",
+              "const": "workspace/codebase/symbols/search",
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/SymbolIndexSearchParams"
+              "$ref": "#/$defs/CodebaseSymbolsSearchParams"
             }
           },
           "required": [
@@ -5042,11 +4859,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codeIndex/retrieve",
+              "const": "workspace/codebase/retrieve",
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/CodeRetrievalParams"
+              "$ref": "#/$defs/CodebaseRetrievalParams"
             }
           },
           "required": [
@@ -5058,7 +4875,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codeIndex/rebuild",
+              "const": "workspace/codebase/rebuild",
               "type": "string"
             },
             "params": {
@@ -5122,7 +4939,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codeIndex/semantic/cancel",
+              "const": "workspace/codebase/cloud/status",
               "type": "string"
             },
             "params": {
@@ -5138,7 +4955,39 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codeIndex/semantic/retry",
+              "const": "workspace/codebase/cloud/preview",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/CloudCodebasePreviewParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workspace/codebase/cloud/authorize",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/CloudCodebaseAuthorizeParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workspace/codebase/cloud/sync",
               "type": "string"
             },
             "params": {
@@ -5154,71 +5003,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codeIndex/cloud/status",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/$defs/EmptyParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "workspace/codeIndex/cloud/preview",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/$defs/CloudCodeIndexPreviewParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "workspace/codeIndex/cloud/authorize",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/$defs/CloudCodeIndexAuthorizeParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "workspace/codeIndex/cloud/sync",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/$defs/EmptyParams"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "workspace/codeIndex/cloud/revoke",
+              "const": "workspace/codebase/cloud/revoke",
               "type": "string"
             },
             "params": {
@@ -5819,118 +5604,6 @@
             },
             "result": {
               "$ref": "#/$defs/ThreadGoalClearResponse"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "turnChanges/list",
-              "type": "string"
-            },
-            "result": {
-              "$ref": "#/$defs/TurnChangesListResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "turnChanges/read",
-              "type": "string"
-            },
-            "result": {
-              "$ref": "#/$defs/TurnChangesReadResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "turnChanges/readFile",
-              "type": "string"
-            },
-            "result": {
-              "$ref": "#/$defs/TurnChangesReadFileResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "turnChanges/generateMessage",
-              "type": "string"
-            },
-            "result": {
-              "$ref": "#/$defs/TurnChangesMutationResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "turnChanges/updateDraft",
-              "type": "string"
-            },
-            "result": {
-              "$ref": "#/$defs/TurnChangesMutationResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "turnChanges/commit",
-              "type": "string"
-            },
-            "result": {
-              "$ref": "#/$defs/TurnChangesMutationResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "turnChanges/discardThread",
-              "type": "string"
-            },
-            "result": {
-              "$ref": "#/$defs/TurnChangesMutationResult"
             }
           },
           "required": [
@@ -6726,71 +6399,7 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codeIndex/semantic/configure",
-              "type": "string"
-            },
-            "result": {
-              "$ref": "#/$defs/ConfigCommandResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "workspace/codeIndex/semantic/authorize",
-              "type": "string"
-            },
-            "result": {
-              "$ref": "#/$defs/ConfigCommandResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "workspace/codeIndex/semantic/revoke",
-              "type": "string"
-            },
-            "result": {
-              "$ref": "#/$defs/ConfigCommandResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "workspace/commitMessage/authorize",
-              "type": "string"
-            },
-            "result": {
-              "$ref": "#/$defs/ConfigCommandResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "workspace/commitMessage/revoke",
+              "const": "workspace/codebase/configure",
               "type": "string"
             },
             "result": {
@@ -8326,11 +7935,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codeIndex/status",
+              "const": "workspace/codebase/status",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/CodeIndexStatusResult"
+              "$ref": "#/$defs/CodebaseStatusResult"
             }
           },
           "required": [
@@ -8342,11 +7951,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codeIndex/search",
+              "const": "workspace/codebase/search",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/CodeIndexSearchResult"
+              "$ref": "#/$defs/CodebaseSearchResult"
             }
           },
           "required": [
@@ -8358,11 +7967,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/symbolIndex/status",
+              "const": "workspace/codebase/symbols/status",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/SymbolIndexStatusResult"
+              "$ref": "#/$defs/CodebaseSymbolsStatusResult"
             }
           },
           "required": [
@@ -8374,11 +7983,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/symbolIndex/search",
+              "const": "workspace/codebase/symbols/search",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/SymbolIndexSearchResult"
+              "$ref": "#/$defs/CodebaseSymbolsSearchResult"
             }
           },
           "required": [
@@ -8422,11 +8031,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codeIndex/retrieve",
+              "const": "workspace/codebase/retrieve",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/CodeRetrievalResult"
+              "$ref": "#/$defs/CodebaseRetrievalResult"
             }
           },
           "required": [
@@ -8438,11 +8047,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codeIndex/rebuild",
+              "const": "workspace/codebase/rebuild",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/CodeIndexStatusResult"
+              "$ref": "#/$defs/CodebaseStatusResult"
             }
           },
           "required": [
@@ -8502,11 +8111,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codeIndex/semantic/cancel",
+              "const": "workspace/codebase/cloud/status",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/CodeIndexStatusResult"
+              "$ref": "#/$defs/CloudCodebaseStatusResult"
             }
           },
           "required": [
@@ -8518,11 +8127,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codeIndex/semantic/retry",
+              "const": "workspace/codebase/cloud/preview",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/CodeIndexStatusResult"
+              "$ref": "#/$defs/CloudCodebasePreviewResult"
             }
           },
           "required": [
@@ -8534,11 +8143,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codeIndex/cloud/status",
+              "const": "workspace/codebase/cloud/authorize",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/CloudCodeIndexStatusResult"
+              "$ref": "#/$defs/CloudCodebaseStatusResult"
             }
           },
           "required": [
@@ -8550,11 +8159,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codeIndex/cloud/preview",
+              "const": "workspace/codebase/cloud/sync",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/CloudCodeIndexPreviewResult"
+              "$ref": "#/$defs/CloudCodebaseStatusResult"
             }
           },
           "required": [
@@ -8566,43 +8175,11 @@
         {
           "properties": {
             "method": {
-              "const": "workspace/codeIndex/cloud/authorize",
+              "const": "workspace/codebase/cloud/revoke",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/CloudCodeIndexStatusResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "workspace/codeIndex/cloud/sync",
-              "type": "string"
-            },
-            "result": {
-              "$ref": "#/$defs/CloudCodeIndexStatusResult"
-            }
-          },
-          "required": [
-            "method",
-            "result"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "workspace/codeIndex/cloud/revoke",
-              "type": "string"
-            },
-            "result": {
-              "$ref": "#/$defs/CloudCodeIndexStatusResult"
+              "$ref": "#/$defs/CloudCodebaseStatusResult"
             }
           },
           "required": [
@@ -8805,12 +8382,12 @@
         }
       ]
     },
-    "CloudCodeIndexAuthorizeParams": {
+    "CloudCodebaseAuthorizeParams": {
       "additionalProperties": false,
       "description": "Persists one explicit cloud destination, selection, and byte ceiling.",
       "properties": {
         "grant": {
-          "$ref": "#/$defs/CloudCodeIndexGrantDto"
+          "$ref": "#/$defs/CloudCodebaseGrantDto"
         }
       },
       "required": [
@@ -8818,7 +8395,7 @@
       ],
       "type": "object"
     },
-    "CloudCodeIndexDestinationDto": {
+    "CloudCodebaseDestinationDto": {
       "additionalProperties": false,
       "description": "Non-secret remote provider namespace chosen by the user.",
       "properties": {
@@ -8839,12 +8416,15 @@
       ],
       "type": "object"
     },
-    "CloudCodeIndexGrantDto": {
+    "CloudCodebaseGrantDto": {
       "additionalProperties": false,
       "description": "Root-bound cloud source-egress grant projected through the App Server.",
       "properties": {
+        "codebaseId": {
+          "type": "string"
+        },
         "destination": {
-          "$ref": "#/$defs/CloudCodeIndexDestinationDto"
+          "$ref": "#/$defs/CloudCodebaseDestinationDto"
         },
         "grantId": {
           "type": "string"
@@ -8855,18 +8435,19 @@
           "type": "integer"
         },
         "selection": {
-          "$ref": "#/$defs/CloudCodeIndexSelectionDto"
+          "$ref": "#/$defs/CloudCodebaseSelectionDto"
         }
       },
       "required": [
         "grantId",
+        "codebaseId",
         "destination",
         "selection",
         "maxEgressBytes"
       ],
       "type": "object"
     },
-    "CloudCodeIndexPreviewParams": {
+    "CloudCodebasePreviewParams": {
       "additionalProperties": false,
       "description": "Computes the current source-content egress shape without persisting consent or networking.",
       "properties": {
@@ -8876,7 +8457,7 @@
           "type": "integer"
         },
         "selection": {
-          "$ref": "#/$defs/CloudCodeIndexSelectionDto"
+          "$ref": "#/$defs/CloudCodebaseSelectionDto"
         }
       },
       "required": [
@@ -8885,7 +8466,7 @@
       ],
       "type": "object"
     },
-    "CloudCodeIndexPreviewResult": {
+    "CloudCodebasePreviewResult": {
       "description": "Bounded local preview of the Workspace-produced chunks eligible for publication.",
       "properties": {
         "chunkCount": {
@@ -8927,7 +8508,7 @@
       ],
       "type": "object"
     },
-    "CloudCodeIndexSelectionDto": {
+    "CloudCodebaseSelectionDto": {
       "description": "Workspace-relative source selection covered by a preview or grant.",
       "oneOf": [
         {
@@ -8965,7 +8546,7 @@
         }
       ]
     },
-    "CloudCodeIndexStateDto": {
+    "CloudCodebaseStateDto": {
       "description": "Durable publication/deletion phase of the selected cloud deployment.",
       "enum": [
         "localOnly",
@@ -8978,16 +8559,16 @@
       ],
       "type": "string"
     },
-    "CloudCodeIndexStatusResult": {
+    "CloudCodebaseStatusResult": {
       "description": "Current cloud deployment and local/remote generation relationship.",
       "properties": {
         "deploymentMode": {
-          "$ref": "#/$defs/CodeIndexDeploymentModeDto"
+          "$ref": "#/$defs/CodebaseDeploymentModeDto"
         },
         "grant": {
           "anyOf": [
             {
-              "$ref": "#/$defs/CloudCodeIndexGrantDto"
+              "$ref": "#/$defs/CloudCodebaseGrantDto"
             },
             {
               "type": "null"
@@ -9009,7 +8590,7 @@
           "type": "string"
         },
         "state": {
-          "$ref": "#/$defs/CloudCodeIndexStateDto"
+          "$ref": "#/$defs/CloudCodebaseStateDto"
         },
         "syncedLocalGeneration": {
           "format": "uint64",
@@ -9028,7 +8609,15 @@
       ],
       "type": "object"
     },
-    "CodeIndexChunkSpanDto": {
+    "CodebaseAutomaticContextDto": {
+      "description": "Whether verified code evidence is automatically attached to an Agent Turn.",
+      "enum": [
+        "off",
+        "firstInvocation"
+      ],
+      "type": "string"
+    },
+    "CodebaseChunkSpanDto": {
       "description": "Exact UTF-8 byte and zero-based line coverage of one indexed chunk.",
       "properties": {
         "endByte": {
@@ -9060,177 +8649,97 @@
       ],
       "type": "object"
     },
-    "CodeIndexDeploymentModeDto": {
-      "description": "User-visible code-index deployment choice.",
+    "CodebaseConfigDto": {
+      "description": "Current authorization state for the active Workspace and configured semantic model pair.",
+      "properties": {
+        "automaticContext": {
+          "$ref": "#/$defs/CodebaseAutomaticContextDto"
+        },
+        "models": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CodebaseModelsDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "automaticContext"
+      ],
+      "type": "object"
+    },
+    "CodebaseConfigureParams": {
+      "description": "Replaces the device-local semantic model selection.",
+      "properties": {
+        "automaticContext": {
+          "$ref": "#/$defs/CodebaseAutomaticContextDto",
+          "default": "off"
+        },
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "models": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CodebaseModelsDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision"
+      ],
+      "type": "object"
+    },
+    "CodebaseDeploymentModeDto": {
+      "description": "User-visible codebase deployment choice.",
       "enum": [
         "localOnly",
         "cloud"
       ],
       "type": "string"
     },
-    "CodeIndexSearchHitDto": {
-      "description": "One revision-bound lexical match from the local code index.",
+    "CodebaseModelsDto": {
+      "description": "Model pair used by Zeta's local semantic codebase orchestration.",
       "properties": {
-        "chunkKey": {
-          "type": "string"
+        "embeddingModel": {
+          "$ref": "#/$defs/ModelRefDto"
         },
-        "content": {
-          "type": "string"
-        },
-        "contentHash": {
-          "type": "string"
-        },
-        "language": {
-          "type": "string"
-        },
-        "path": {
-          "type": "string"
-        },
-        "score": {
-          "format": "double",
-          "type": "number"
-        },
-        "sourceRevision": {
-          "type": "string"
-        },
-        "span": {
-          "$ref": "#/$defs/CodeIndexChunkSpanDto"
+        "rerankModel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRefDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
-        "path",
-        "language",
-        "sourceRevision",
-        "chunkKey",
-        "contentHash",
-        "span",
-        "content",
-        "score"
+        "embeddingModel"
       ],
       "type": "object"
     },
-    "CodeIndexSearchParams": {
-      "description": "Performs one bounded literal lookup against the workspace-side code index.",
-      "properties": {
-        "maxResults": {
-          "format": "uint",
-          "maximum": 100,
-          "minimum": 1,
-          "type": "integer"
-        },
-        "query": {
-          "maxLength": 8192,
-          "minLength": 1,
-          "type": "string"
-        }
-      },
-      "required": [
-        "query",
-        "maxResults"
-      ],
-      "type": "object"
-    },
-    "CodeIndexSearchResult": {
-      "description": "Bounded code-index matches paired with the generation that served them.",
-      "properties": {
-        "hits": {
-          "items": {
-            "$ref": "#/$defs/CodeIndexSearchHitDto"
-          },
-          "type": "array"
-        },
-        "status": {
-          "$ref": "#/$defs/CodeIndexStatusResult"
-        }
-      },
-      "required": [
-        "status",
-        "hits"
-      ],
-      "type": "object"
-    },
-    "CodeIndexStateDto": {
-      "description": "Lifecycle state of the workspace-side code-index projection.",
-      "enum": [
-        "empty",
-        "indexing",
-        "ready",
-        "stale",
-        "failed"
-      ],
-      "type": "string"
-    },
-    "CodeIndexStatusResult": {
-      "description": "Published counters for the current or most recent usable code-index generation.",
-      "properties": {
-        "fileLimitHit": {
-          "type": "boolean"
-        },
-        "generation": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "indexedChunkCount": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "indexedFileCount": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "indexedSourceBytes": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "rootId": {
-          "type": "string"
-        },
-        "semantic": {
-          "$ref": "#/$defs/SemanticCodeIndexStatusDto"
-        },
-        "skippedFileCount": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "sourceBytesLimitHit": {
-          "type": "boolean"
-        },
-        "state": {
-          "$ref": "#/$defs/CodeIndexStateDto"
-        },
-        "truncatedFileCount": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "state",
-        "rootId",
-        "generation",
-        "indexedFileCount",
-        "indexedChunkCount",
-        "indexedSourceBytes",
-        "skippedFileCount",
-        "truncatedFileCount",
-        "fileLimitHit",
-        "sourceBytesLimitHit",
-        "semantic"
-      ],
-      "type": "object"
-    },
-    "CodeRetrievalDegradationDto": {
+    "CodebaseRetrievalDegradationDto": {
       "description": "Non-fatal loss reported while preserving usable retrieval results.",
       "oneOf": [
         {
           "properties": {
             "type": {
-              "const": "localSymbolQueryFailed",
+              "const": "codebaseIncomplete",
               "type": "string"
             }
           },
@@ -9242,19 +8751,7 @@
         {
           "properties": {
             "type": {
-              "const": "localSemanticQueryFailed",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "type": {
-              "const": "cloudQueryFailed",
+              "const": "cloudCodebaseUnavailable",
               "type": "string"
             }
           },
@@ -9301,7 +8798,7 @@
         }
       ]
     },
-    "CodeRetrievalHitDto": {
+    "CodebaseRetrievalHitDto": {
       "description": "One deduplicated, current-source-verified retrieval hit.",
       "properties": {
         "content": {
@@ -9312,12 +8809,6 @@
         },
         "language": {
           "type": "string"
-        },
-        "origins": {
-          "items": {
-            "$ref": "#/$defs/CodeRetrievalOriginDto"
-          },
-          "type": "array"
         },
         "path": {
           "type": "string"
@@ -9330,7 +8821,7 @@
           "type": "string"
         },
         "span": {
-          "$ref": "#/$defs/CodeIndexChunkSpanDto"
+          "$ref": "#/$defs/CodebaseChunkSpanDto"
         }
       },
       "required": [
@@ -9340,22 +8831,11 @@
         "contentHash",
         "span",
         "content",
-        "rrfScore",
-        "origins"
+        "rrfScore"
       ],
       "type": "object"
     },
-    "CodeRetrievalOriginDto": {
-      "description": "Candidate source that contributed to one fused retrieval hit.",
-      "enum": [
-        "localSymbol",
-        "localLexical",
-        "localSemantic",
-        "cloudSemantic"
-      ],
-      "type": "string"
-    },
-    "CodeRetrievalParams": {
+    "CodebaseRetrievalParams": {
       "description": "Performs one bounded retrieval across every source enabled for the workspace.",
       "properties": {
         "maxResults": {
@@ -9376,23 +8856,23 @@
       ],
       "type": "object"
     },
-    "CodeRetrievalResult": {
+    "CodebaseRetrievalResult": {
       "description": "Fused code excerpts and explicit degradation facts paired with local index status.",
       "properties": {
         "degradations": {
           "items": {
-            "$ref": "#/$defs/CodeRetrievalDegradationDto"
+            "$ref": "#/$defs/CodebaseRetrievalDegradationDto"
           },
           "type": "array"
         },
         "hits": {
           "items": {
-            "$ref": "#/$defs/CodeRetrievalHitDto"
+            "$ref": "#/$defs/CodebaseRetrievalHitDto"
           },
           "type": "array"
         },
         "status": {
-          "$ref": "#/$defs/CodeIndexStatusResult"
+          "$ref": "#/$defs/CodebaseStatusResult"
         }
       },
       "required": [
@@ -9402,46 +8882,321 @@
       ],
       "type": "object"
     },
+    "CodebaseSearchHitDto": {
+      "description": "One revision-bound match from the active Codebase.",
+      "properties": {
+        "chunkKey": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        },
+        "contentHash": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "score": {
+          "format": "double",
+          "type": "number"
+        },
+        "sourceRevision": {
+          "type": "string"
+        },
+        "span": {
+          "$ref": "#/$defs/CodebaseChunkSpanDto"
+        }
+      },
+      "required": [
+        "path",
+        "language",
+        "sourceRevision",
+        "chunkKey",
+        "contentHash",
+        "span",
+        "content",
+        "score"
+      ],
+      "type": "object"
+    },
+    "CodebaseSearchParams": {
+      "description": "Performs one bounded lookup against the active Codebase.",
+      "properties": {
+        "maxResults": {
+          "format": "uint",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "query": {
+          "maxLength": 8192,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "query",
+        "maxResults"
+      ],
+      "type": "object"
+    },
+    "CodebaseSearchResult": {
+      "description": "Bounded codebase matches paired with the generation that served them.",
+      "properties": {
+        "hits": {
+          "items": {
+            "$ref": "#/$defs/CodebaseSearchHitDto"
+          },
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/CodebaseStatusResult"
+        }
+      },
+      "required": [
+        "status",
+        "hits"
+      ],
+      "type": "object"
+    },
+    "CodebaseStateDto": {
+      "description": "Lifecycle state of the workspace-side codebase projection.",
+      "enum": [
+        "empty",
+        "indexing",
+        "ready",
+        "stale",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "CodebaseStatusResult": {
+      "description": "Published counters for the current or most recent usable codebase generation.",
+      "properties": {
+        "fileLimitHit": {
+          "type": "boolean"
+        },
+        "generation": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "indexedChunkCount": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "indexedFileCount": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "indexedSourceBytes": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rootId": {
+          "type": "string"
+        },
+        "skippedFileCount": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sourceBytesLimitHit": {
+          "type": "boolean"
+        },
+        "state": {
+          "$ref": "#/$defs/CodebaseStateDto"
+        },
+        "truncatedFileCount": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "state",
+        "rootId",
+        "generation",
+        "indexedFileCount",
+        "indexedChunkCount",
+        "indexedSourceBytes",
+        "skippedFileCount",
+        "truncatedFileCount",
+        "fileLimitHit",
+        "sourceBytesLimitHit"
+      ],
+      "type": "object"
+    },
+    "CodebaseSymbolsSearchHitDto": {
+      "description": "One revision-verified local symbol match in editor-native UTF-16 coordinates.",
+      "properties": {
+        "containerName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "declarationRange": {
+          "$ref": "#/$defs/LanguageRangeDto"
+        },
+        "kind": {
+          "$ref": "#/$defs/SymbolKindDto"
+        },
+        "language": {
+          "type": "string"
+        },
+        "matchedIndices": {
+          "description": "Zero-based UTF-16 offsets into `name` suitable for Renderer highlighting.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "score": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "selectionRange": {
+          "$ref": "#/$defs/LanguageRangeDto"
+        },
+        "sourceRevision": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "path",
+        "language",
+        "sourceRevision",
+        "declarationRange",
+        "selectionRange",
+        "score",
+        "matchedIndices"
+      ],
+      "type": "object"
+    },
+    "CodebaseSymbolsSearchParams": {
+      "description": "Performs one bounded local fuzzy lookup against workspace declarations.",
+      "properties": {
+        "maxResults": {
+          "format": "uint",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "query": {
+          "maxLength": 8192,
+          "type": "string"
+        }
+      },
+      "required": [
+        "query",
+        "maxResults"
+      ],
+      "type": "object"
+    },
+    "CodebaseSymbolsSearchResult": {
+      "description": "Bounded verified matches paired with the symbol generation that served them.",
+      "properties": {
+        "discardedStaleHitCount": {
+          "description": "Matches discarded because their exact source revision could no longer be materialized.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "hits": {
+          "items": {
+            "$ref": "#/$defs/CodebaseSymbolsSearchHitDto"
+          },
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/CodebaseSymbolsStatusResult"
+        }
+      },
+      "required": [
+        "status",
+        "hits",
+        "discardedStaleHitCount"
+      ],
+      "type": "object"
+    },
+    "CodebaseSymbolsStateDto": {
+      "description": "Lifecycle state of the workspace-side declaration projection.",
+      "enum": [
+        "empty",
+        "indexing",
+        "ready",
+        "stale",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "CodebaseSymbolsStatusResult": {
+      "description": "Published counters for the current or most recent usable symbol generation.",
+      "properties": {
+        "generation": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "indexedSourceCount": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "indexedSymbolCount": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rootId": {
+          "type": "string"
+        },
+        "sourceGeneration": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "state": {
+          "$ref": "#/$defs/CodebaseSymbolsStateDto"
+        },
+        "symbolLimitHit": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "state",
+        "rootId",
+        "generation",
+        "sourceGeneration",
+        "indexedSourceCount",
+        "indexedSymbolCount",
+        "symbolLimitHit"
+      ],
+      "type": "object"
+    },
     "CommandId": {
       "description": "Stable caller-supplied identity for one retry-safe product command.",
       "minLength": 1,
       "type": "string"
-    },
-    "CommitMessageAuthorizeParams": {
-      "description": "Authorizes the active Workspace to send bounded context and diff to the exact summary model.",
-      "properties": {
-        "commandId": {
-          "$ref": "#/$defs/CommandId"
-        },
-        "expectedRevision": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "commandId",
-        "expectedRevision"
-      ],
-      "type": "object"
-    },
-    "CommitMessageRevokeParams": {
-      "description": "Revokes automatic commit-message source egress for the active Workspace.",
-      "properties": {
-        "commandId": {
-          "$ref": "#/$defs/CommandId"
-        },
-        "expectedRevision": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "commandId",
-        "expectedRevision"
-      ],
-      "type": "object"
     },
     "ConfigChanged": {
       "description": "Notification payload emitted after a durable Config authority commit.",
@@ -9503,18 +9258,8 @@
         "approvalReviewModel": {
           "$ref": "#/$defs/ApprovalReviewModelSelectionDto"
         },
-        "commitMessageActiveWorkspaceAuthorized": {
-          "type": "boolean"
-        },
-        "commitMessageModel": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ModelRefDto"
-            },
-            {
-              "type": "null"
-            }
-          ]
+        "codebase": {
+          "$ref": "#/$defs/CodebaseConfigDto"
         },
         "execPolicyRules": {
           "items": {
@@ -9572,9 +9317,6 @@
           "minimum": 0,
           "type": "integer"
         },
-        "semanticCodeIndex": {
-          "$ref": "#/$defs/SemanticCodeIndexConfigDto"
-        },
         "skillSources": {
           "additionalProperties": {
             "$ref": "#/$defs/SkillSourceConfigDto"
@@ -9592,7 +9334,6 @@
         "revision",
         "generation",
         "approvalReviewModel",
-        "commitMessageActiveWorkspaceAuthorized",
         "toolMode",
         "agentGrepBackend",
         "providers",
@@ -9602,7 +9343,7 @@
         "hooks",
         "languageServers",
         "toolSearch",
-        "semanticCodeIndex",
+        "codebase",
         "execPolicyRules"
       ],
       "type": "object"
@@ -9632,16 +9373,6 @@
         },
         "commandId": {
           "$ref": "#/$defs/CommandId"
-        },
-        "commitMessageModel": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ModelRefDto"
-            },
-            {
-              "type": "null"
-            }
-          ]
         },
         "expectedRevision": {
           "format": "uint64",
@@ -19527,252 +19258,6 @@
     "SchemaHash": {
       "type": "string"
     },
-    "SemanticCodeIndexAuthorizeParams": {
-      "description": "Authorizes the exact active Workspace and current model pair to send source-derived text.",
-      "properties": {
-        "commandId": {
-          "$ref": "#/$defs/CommandId"
-        },
-        "expectedRevision": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "commandId",
-        "expectedRevision"
-      ],
-      "type": "object"
-    },
-    "SemanticCodeIndexAutomaticContextDto": {
-      "description": "Whether verified code evidence is automatically attached to an Agent Turn.",
-      "enum": [
-        "off",
-        "firstInvocation"
-      ],
-      "type": "string"
-    },
-    "SemanticCodeIndexConfigDto": {
-      "description": "Current authorization state for the active Workspace and configured semantic model pair.",
-      "properties": {
-        "activeWorkspaceAuthorized": {
-          "type": "boolean"
-        },
-        "automaticContext": {
-          "$ref": "#/$defs/SemanticCodeIndexAutomaticContextDto"
-        },
-        "selection": {
-          "$ref": "#/$defs/SemanticCodeIndexSelectionDto"
-        }
-      },
-      "required": [
-        "selection",
-        "automaticContext",
-        "activeWorkspaceAuthorized"
-      ],
-      "type": "object"
-    },
-    "SemanticCodeIndexConfigureParams": {
-      "description": "Replaces semantic model selection and revokes all previous source-egress grants when it changes.",
-      "properties": {
-        "automaticContext": {
-          "$ref": "#/$defs/SemanticCodeIndexAutomaticContextDto",
-          "default": "off"
-        },
-        "commandId": {
-          "$ref": "#/$defs/CommandId"
-        },
-        "expectedRevision": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "selection": {
-          "$ref": "#/$defs/SemanticCodeIndexSelectionDto"
-        }
-      },
-      "required": [
-        "commandId",
-        "expectedRevision",
-        "selection"
-      ],
-      "type": "object"
-    },
-    "SemanticCodeIndexModelsDto": {
-      "description": "Model pair used by Zeta's local semantic code-index orchestration.",
-      "properties": {
-        "embeddingModel": {
-          "$ref": "#/$defs/ModelRefDto"
-        },
-        "rerankModel": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ModelRefDto"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "required": [
-        "embeddingModel"
-      ],
-      "type": "object"
-    },
-    "SemanticCodeIndexRevokeParams": {
-      "description": "Revokes source egress for the active Workspace and deletes its local semantic projection.",
-      "properties": {
-        "commandId": {
-          "$ref": "#/$defs/CommandId"
-        },
-        "expectedRevision": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "commandId",
-        "expectedRevision"
-      ],
-      "type": "object"
-    },
-    "SemanticCodeIndexSelectionDto": {
-      "description": "Product selection for semantic code indexing. Remote is explicit because it can send bounded\ncode chunks and queries to the selected model provider after Workspace authorization.",
-      "oneOf": [
-        {
-          "properties": {
-            "type": {
-              "const": "disabled",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "models": {
-              "$ref": "#/$defs/SemanticCodeIndexModelsDto"
-            },
-            "type": {
-              "const": "remote",
-              "type": "string"
-            }
-          },
-          "required": [
-            "type",
-            "models"
-          ],
-          "type": "object"
-        }
-      ]
-    },
-    "SemanticCodeIndexStateDto": {
-      "description": "Lifecycle state of the local semantic projection for the active Workspace.",
-      "enum": [
-        "unavailable",
-        "idle",
-        "syncing",
-        "ready",
-        "stale",
-        "cancelled",
-        "failed"
-      ],
-      "type": "string"
-    },
-    "SemanticCodeIndexStatusDto": {
-      "description": "Content-free progress for a semantic projection built from the lexical generation.",
-      "properties": {
-        "completedBatchCount": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "embeddedChunkCount": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "lastErrorCode": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "operationId": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "phase": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "processedChunkCount": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "publishedGeneration": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "retryCount": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "reusedEmbeddingCount": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "state": {
-          "$ref": "#/$defs/SemanticCodeIndexStateDto"
-        },
-        "targetGeneration": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "totalBatchCount": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "totalChunkCount": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "state",
-        "targetGeneration",
-        "totalChunkCount",
-        "processedChunkCount",
-        "reusedEmbeddingCount",
-        "embeddedChunkCount",
-        "completedBatchCount",
-        "totalBatchCount",
-        "retryCount"
-      ],
-      "type": "object"
-    },
     "ServerCapabilities": {
       "properties": {
         "agentInteractions": {
@@ -19781,10 +19266,10 @@
         "attachments": {
           "type": "boolean"
         },
-        "cloudCodeIndex": {
+        "cloudCodebase": {
           "type": "boolean"
         },
-        "codeIndex": {
+        "codebase": {
           "type": "boolean"
         },
         "connectors": {
@@ -19862,8 +19347,8 @@
         "fileSystem",
         "git",
         "workspaceSearch",
-        "codeIndex",
-        "cloudCodeIndex",
+        "codebase",
+        "cloudCodebase",
         "terminal",
         "debugAdapter",
         "typst",
@@ -20160,22 +19645,6 @@
             },
             "params": {
               "$ref": "#/$defs/GitStatusChanged"
-            }
-          },
-          "required": [
-            "method",
-            "params"
-          ],
-          "type": "object"
-        },
-        {
-          "properties": {
-            "method": {
-              "const": "turnChanges/changed",
-              "type": "string"
-            },
-            "params": {
-              "$ref": "#/$defs/TurnChangesChanged"
             }
           },
           "required": [
@@ -21943,8 +21412,7 @@
         "completionPersistenceFailed",
         "interactionDeadlineElapsed",
         "toolRepetition",
-        "usageLimited",
-        "workspaceCaptureFailed"
+        "usageLimited"
       ],
       "type": "string"
     },
@@ -21970,165 +21438,6 @@
       "description": "Stable identity for one transient stream-emitter incarnation.\n\nA new value is created whenever the emitter restarts. Its sequence is meaningful only within\nthat instance, so consumers must discard a previous cursor when this value changes.",
       "minLength": 1,
       "type": "string"
-    },
-    "SymbolIndexSearchHitDto": {
-      "description": "One revision-verified local symbol match in editor-native UTF-16 coordinates.",
-      "properties": {
-        "containerName": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "declarationRange": {
-          "$ref": "#/$defs/LanguageRangeDto"
-        },
-        "kind": {
-          "$ref": "#/$defs/SymbolKindDto"
-        },
-        "language": {
-          "type": "string"
-        },
-        "matchedIndices": {
-          "description": "Zero-based UTF-16 offsets into `name` suitable for Renderer highlighting.",
-          "items": {
-            "format": "uint32",
-            "minimum": 0,
-            "type": "integer"
-          },
-          "type": "array"
-        },
-        "name": {
-          "type": "string"
-        },
-        "path": {
-          "type": "string"
-        },
-        "score": {
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "selectionRange": {
-          "$ref": "#/$defs/LanguageRangeDto"
-        },
-        "sourceRevision": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "name",
-        "kind",
-        "path",
-        "language",
-        "sourceRevision",
-        "declarationRange",
-        "selectionRange",
-        "score",
-        "matchedIndices"
-      ],
-      "type": "object"
-    },
-    "SymbolIndexSearchParams": {
-      "description": "Performs one bounded local fuzzy lookup against workspace declarations.",
-      "properties": {
-        "maxResults": {
-          "format": "uint",
-          "maximum": 100,
-          "minimum": 1,
-          "type": "integer"
-        },
-        "query": {
-          "maxLength": 8192,
-          "type": "string"
-        }
-      },
-      "required": [
-        "query",
-        "maxResults"
-      ],
-      "type": "object"
-    },
-    "SymbolIndexSearchResult": {
-      "description": "Bounded verified matches paired with the symbol generation that served them.",
-      "properties": {
-        "discardedStaleHitCount": {
-          "description": "Matches discarded because their exact source revision could no longer be materialized.",
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "hits": {
-          "items": {
-            "$ref": "#/$defs/SymbolIndexSearchHitDto"
-          },
-          "type": "array"
-        },
-        "status": {
-          "$ref": "#/$defs/SymbolIndexStatusResult"
-        }
-      },
-      "required": [
-        "status",
-        "hits",
-        "discardedStaleHitCount"
-      ],
-      "type": "object"
-    },
-    "SymbolIndexStateDto": {
-      "description": "Lifecycle state of the workspace-side declaration projection.",
-      "enum": [
-        "empty",
-        "indexing",
-        "ready",
-        "stale",
-        "failed"
-      ],
-      "type": "string"
-    },
-    "SymbolIndexStatusResult": {
-      "description": "Published counters for the current or most recent usable symbol generation.",
-      "properties": {
-        "generation": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "indexedSourceCount": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "indexedSymbolCount": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "rootId": {
-          "type": "string"
-        },
-        "sourceGeneration": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "state": {
-          "$ref": "#/$defs/SymbolIndexStateDto"
-        },
-        "symbolLimitHit": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "state",
-        "rootId",
-        "generation",
-        "sourceGeneration",
-        "indexedSourceCount",
-        "indexedSymbolCount",
-        "symbolLimitHit"
-      ],
-      "type": "object"
     },
     "SymbolKindDto": {
       "description": "Language-neutral category of a syntactically declared symbol.",
@@ -25058,56 +24367,6 @@
       ],
       "type": "object"
     },
-    "ThreadWorkspaceBinding": {
-      "description": "Public binding for a Thread workspace. Managed filesystem paths stay private to App Server.",
-      "properties": {
-        "baselineSummary": {
-          "type": "string"
-        },
-        "managedWorktreeId": {
-          "type": "string"
-        },
-        "repositories": {
-          "items": {
-            "$ref": "#/$defs/ThreadWorkspaceRepositoryBindingDto"
-          },
-          "type": "array"
-        },
-        "sourceWorkspaceId": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "managedWorktreeId",
-        "sourceWorkspaceId",
-        "repositories",
-        "baselineSummary"
-      ],
-      "type": "object"
-    },
-    "ThreadWorkspaceRepositoryBindingDto": {
-      "properties": {
-        "baselineObjectId": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "repositoryId": {
-          "type": "string"
-        },
-        "targetBranch": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "repositoryId"
-      ],
-      "type": "object"
-    },
     "ToolCallBinding": {
       "description": "Durable binding between one Tool Call and the exact definition/source generation it selected.\n\nRuntime keys are intentionally absent. Recovery must compare this value with an available\nimmutable source snapshot and fail closed when the exact binding can no longer be restored.",
       "properties": {
@@ -25728,535 +24987,6 @@
         "turnId",
         "status",
         "items"
-      ],
-      "type": "object"
-    },
-    "TurnChangeCaptureStateDto": {
-      "enum": [
-        "open",
-        "sealed",
-        "incomplete",
-        "discarded"
-      ],
-      "type": "string"
-    },
-    "TurnChangeCommitStateDto": {
-      "enum": [
-        "idle",
-        "queued",
-        "committing",
-        "committed",
-        "conflict",
-        "failed"
-      ],
-      "type": "string"
-    },
-    "TurnChangeFileDto": {
-      "properties": {
-        "additions": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "afterMode": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "beforeMode": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "binary": {
-          "type": "boolean"
-        },
-        "deletions": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "kind": {
-          "$ref": "#/$defs/TurnChangeFileKindDto"
-        },
-        "path": {
-          "type": "string"
-        },
-        "previousPath": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "path",
-        "kind",
-        "binary",
-        "additions",
-        "deletions"
-      ],
-      "type": "object"
-    },
-    "TurnChangeFileKindDto": {
-      "enum": [
-        "added",
-        "modified",
-        "deleted",
-        "renamed",
-        "typeChanged"
-      ],
-      "type": "string"
-    },
-    "TurnChangeFileStatisticsDto": {
-      "properties": {
-        "additions": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "deletions": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "files": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "files",
-        "additions",
-        "deletions"
-      ],
-      "type": "object"
-    },
-    "TurnChangeMessageStateDto": {
-      "enum": [
-        "unconfigured",
-        "queued",
-        "generating",
-        "ready",
-        "failed"
-      ],
-      "type": "string"
-    },
-    "TurnChangeSetSummary": {
-      "description": "Small record used by Session Inspector lists and notifications.",
-      "properties": {
-        "captureState": {
-          "$ref": "#/$defs/TurnChangeCaptureStateDto"
-        },
-        "changeSetId": {
-          "$ref": "#/$defs/ChangeSetId"
-        },
-        "commitId": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "commitState": {
-          "$ref": "#/$defs/TurnChangeCommitStateDto"
-        },
-        "conflictPaths": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "dependencies": {
-          "items": {
-            "$ref": "#/$defs/ChangeSetId"
-          },
-          "type": "array"
-        },
-        "externalDependencyPaths": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "failureMessage": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "messageState": {
-          "$ref": "#/$defs/TurnChangeMessageStateDto"
-        },
-        "repositoryId": {
-          "type": "string"
-        },
-        "revision": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "sessionId": {
-          "$ref": "#/$defs/SessionId"
-        },
-        "statistics": {
-          "$ref": "#/$defs/TurnChangeFileStatisticsDto"
-        },
-        "targetBranch": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "terminalState": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/TurnChangeTerminalStateDto"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "threadId": {
-          "$ref": "#/$defs/ThreadId"
-        },
-        "turnId": {
-          "$ref": "#/$defs/TurnId"
-        },
-        "warnings": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "changeSetId",
-        "sessionId",
-        "threadId",
-        "turnId",
-        "repositoryId",
-        "statistics",
-        "captureState",
-        "messageState",
-        "commitState",
-        "dependencies",
-        "externalDependencyPaths",
-        "warnings",
-        "conflictPaths",
-        "revision"
-      ],
-      "type": "object"
-    },
-    "TurnChangeTerminalStateDto": {
-      "enum": [
-        "completed",
-        "failed",
-        "interrupted"
-      ],
-      "type": "string"
-    },
-    "TurnChangesChanged": {
-      "properties": {
-        "changeSets": {
-          "items": {
-            "$ref": "#/$defs/TurnChangeSetSummary"
-          },
-          "type": "array"
-        },
-        "sessionId": {
-          "$ref": "#/$defs/SessionId"
-        },
-        "threadId": {
-          "$ref": "#/$defs/ThreadId"
-        }
-      },
-      "required": [
-        "sessionId",
-        "threadId",
-        "changeSets"
-      ],
-      "type": "object"
-    },
-    "TurnChangesCommitParams": {
-      "properties": {
-        "changeSetIds": {
-          "items": {
-            "$ref": "#/$defs/ChangeSetId"
-          },
-          "type": "array"
-        },
-        "commandId": {
-          "$ref": "#/$defs/CommandId"
-        },
-        "expectedRevision": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "sessionId": {
-          "$ref": "#/$defs/SessionId"
-        },
-        "threadId": {
-          "$ref": "#/$defs/ThreadId"
-        }
-      },
-      "required": [
-        "commandId",
-        "sessionId",
-        "threadId",
-        "changeSetIds",
-        "expectedRevision"
-      ],
-      "type": "object"
-    },
-    "TurnChangesDiscardThreadParams": {
-      "properties": {
-        "commandId": {
-          "$ref": "#/$defs/CommandId"
-        },
-        "confirmed": {
-          "type": "boolean"
-        },
-        "expectedRevision": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "sessionId": {
-          "$ref": "#/$defs/SessionId"
-        },
-        "threadId": {
-          "$ref": "#/$defs/ThreadId"
-        }
-      },
-      "required": [
-        "commandId",
-        "sessionId",
-        "threadId",
-        "expectedRevision",
-        "confirmed"
-      ],
-      "type": "object"
-    },
-    "TurnChangesListParams": {
-      "properties": {
-        "sessionId": {
-          "$ref": "#/$defs/SessionId"
-        },
-        "threadId": {
-          "$ref": "#/$defs/ThreadId"
-        }
-      },
-      "required": [
-        "sessionId",
-        "threadId"
-      ],
-      "type": "object"
-    },
-    "TurnChangesListResult": {
-      "properties": {
-        "changeSets": {
-          "items": {
-            "$ref": "#/$defs/TurnChangeSetSummary"
-          },
-          "type": "array"
-        },
-        "workspace": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ThreadWorkspaceBinding"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "required": [
-        "changeSets"
-      ],
-      "type": "object"
-    },
-    "TurnChangesMutationParams": {
-      "properties": {
-        "changeSetId": {
-          "$ref": "#/$defs/ChangeSetId"
-        },
-        "commandId": {
-          "$ref": "#/$defs/CommandId"
-        },
-        "expectedRevision": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "sessionId": {
-          "$ref": "#/$defs/SessionId"
-        },
-        "threadId": {
-          "$ref": "#/$defs/ThreadId"
-        }
-      },
-      "required": [
-        "commandId",
-        "sessionId",
-        "threadId",
-        "changeSetId",
-        "expectedRevision"
-      ],
-      "type": "object"
-    },
-    "TurnChangesMutationResult": {
-      "properties": {
-        "changeSets": {
-          "items": {
-            "$ref": "#/$defs/TurnChangeSetSummary"
-          },
-          "type": "array"
-        }
-      },
-      "required": [
-        "changeSets"
-      ],
-      "type": "object"
-    },
-    "TurnChangesReadFileParams": {
-      "properties": {
-        "changeSetId": {
-          "$ref": "#/$defs/ChangeSetId"
-        },
-        "path": {
-          "type": "string"
-        },
-        "sessionId": {
-          "$ref": "#/$defs/SessionId"
-        },
-        "threadId": {
-          "$ref": "#/$defs/ThreadId"
-        }
-      },
-      "required": [
-        "sessionId",
-        "threadId",
-        "changeSetId",
-        "path"
-      ],
-      "type": "object"
-    },
-    "TurnChangesReadFileResult": {
-      "properties": {
-        "after": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "before": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "binary": {
-          "type": "boolean"
-        },
-        "path": {
-          "type": "string"
-        },
-        "truncated": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "path",
-        "binary",
-        "truncated"
-      ],
-      "type": "object"
-    },
-    "TurnChangesReadParams": {
-      "properties": {
-        "changeSetId": {
-          "$ref": "#/$defs/ChangeSetId"
-        },
-        "sessionId": {
-          "$ref": "#/$defs/SessionId"
-        },
-        "threadId": {
-          "$ref": "#/$defs/ThreadId"
-        }
-      },
-      "required": [
-        "sessionId",
-        "threadId",
-        "changeSetId"
-      ],
-      "type": "object"
-    },
-    "TurnChangesReadResult": {
-      "properties": {
-        "draftMessage": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "files": {
-          "items": {
-            "$ref": "#/$defs/TurnChangeFileDto"
-          },
-          "type": "array"
-        },
-        "generatedMessage": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "summary": {
-          "$ref": "#/$defs/TurnChangeSetSummary"
-        }
-      },
-      "required": [
-        "summary",
-        "files"
-      ],
-      "type": "object"
-    },
-    "TurnChangesUpdateDraftParams": {
-      "properties": {
-        "changeSetId": {
-          "$ref": "#/$defs/ChangeSetId"
-        },
-        "commandId": {
-          "$ref": "#/$defs/CommandId"
-        },
-        "expectedRevision": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "message": {
-          "type": "string"
-        },
-        "sessionId": {
-          "$ref": "#/$defs/SessionId"
-        },
-        "threadId": {
-          "$ref": "#/$defs/ThreadId"
-        }
-      },
-      "required": [
-        "commandId",
-        "sessionId",
-        "threadId",
-        "changeSetId",
-        "expectedRevision",
-        "message"
       ],
       "type": "object"
     },

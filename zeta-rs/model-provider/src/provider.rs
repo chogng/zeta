@@ -471,6 +471,42 @@ fn production_client() -> Result<Arc<dyn OperationClient>, ClientError> {
 }
 
 impl crate::SemanticModelProvider for ModelProviderRuntime {
+    fn embedding_runtime_identity(
+        &self,
+        request: &crate::EmbeddingRuntimeRequest,
+    ) -> Result<crate::EmbeddingRuntimeIdentity, ModelProviderError> {
+        crate::semantic_runtime::SemanticRuntimeResolver {
+            configs: self.configs.clone(),
+            client: Arc::clone(&self.client),
+            credentials: self.credentials.clone(),
+        }
+        .embedding_runtime_identity(request)
+    }
+
+    fn embedding_runtime_location(
+        &self,
+        request: &crate::EmbeddingRuntimeRequest,
+    ) -> Result<crate::SemanticRuntimeLocation, ModelProviderError> {
+        crate::semantic_runtime::SemanticRuntimeResolver {
+            configs: self.configs.clone(),
+            client: Arc::clone(&self.client),
+            credentials: self.credentials.clone(),
+        }
+        .embedding_runtime_location(request)
+    }
+
+    fn rerank_runtime_location(
+        &self,
+        request: &crate::RerankRuntimeRequest,
+    ) -> Result<crate::SemanticRuntimeLocation, ModelProviderError> {
+        crate::semantic_runtime::SemanticRuntimeResolver {
+            configs: self.configs.clone(),
+            client: Arc::clone(&self.client),
+            credentials: self.credentials.clone(),
+        }
+        .rerank_runtime_location(request)
+    }
+
     fn embedding_runtime(
         &self,
         request: crate::EmbeddingRuntimeRequest,

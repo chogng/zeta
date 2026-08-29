@@ -108,7 +108,7 @@ host adapter；修改 symbol category 时必须同步检查未来 workspace inde
   `syntax/analyze` 不携带全树 selection nodes，Stanza Smart Select 负责 revision/cancellation/stale gate；
 - Current：Native `zeta-editor` 已私有组合 incremental analysis 与 folding；Stanza folding/document-symbol
   provider 已接入，具体 outline presentation 仍由产品 UI 决定；
-- Current：`zeta-symbol-index` 已作为独立 consumer 持久化 verified declaration facts；磁盘/dirty
-  arbitration 由 `zeta-code-index` overlay 拥有，不进入本 crate；
+- Current：`zeta-codebase` 已作为独立 consumer 持久化 verified declaration facts；磁盘/dirty
+  arbitration 由 `zeta-codebase` overlay 拥有，不进入本 crate；
 - Potential：继续增加按需 structural operations；mutation 仍由 Editor 生成 undo transaction 并验证
   revision，本 crate 不拥有 editor history。

@@ -714,8 +714,8 @@ fn local_composition_installs_semantic_models_before_workspace_activation() {
     let workspace = tempfile::tempdir().unwrap();
     std::fs::create_dir(workspace.path().join(".git")).unwrap();
     std::fs::write(workspace.path().join("lib.rs"), "pub fn indexed() {}\n").unwrap();
-    let models = CodeIndexSemanticModels::new(
-        zeta_code_index_semantic::CodeIndexEmbeddingModelId::new("local-test-v1").unwrap(),
+    let models = CodebaseSemanticModels::new(
+        zeta_codebase::EmbeddingIndexKey::new("local-test-v1").unwrap(),
         Arc::new(LocalSemanticEmbedding),
     );
     let options = LocalAppServerOptions::new(profile.path())
@@ -723,13 +723,13 @@ fn local_composition_installs_semantic_models_before_workspace_activation() {
         .without_built_in_skills()
         .with_session_state_mode(SessionStateMode::Ephemeral);
 
-    let server = open_local_app_server_with_code_index_providers(
+    let server = open_local_app_server_with_codebase_providers(
         options,
-        LocalCodeIndexProviders::new().with_semantic_models(models),
+        LocalCodebaseProviders::new().with_semantic_models(models),
     )
     .unwrap();
 
-    assert!(server.code_index_semantic_service().is_some());
+    assert!(server.codebase_semantic_service().is_some());
 }
 
 #[test]

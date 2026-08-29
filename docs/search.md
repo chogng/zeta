@@ -41,7 +41,7 @@ Desktop Search contrib 只拥有查询表单、取消时机、增量结果投影
 | wire DTO、method registry、schema 与 TypeScript bindings | `zeta-app-server-protocol` | ✅ |
 | 文件路径 fuzzy match | `zeta-file-search` | ✅，与内容搜索无依赖 |
 | 点击结果后读取文件并打开编辑器 | Files / Editor vertical | 尚未完成 |
-| 独立 workspace code index | `zeta-code-index` + App Server | ✅ 本地 lexical chunk retrieval；不作为当前 SearchView backend |
+| Workspace Codebase | `zeta-codebase` + App Server | ✅ 独立代码知识检索；不作为当前 SearchView backend |
 | replace 和 watcher 驱动的产品搜索失效 | 未确定 | 尚未完成 |
 
 ## 端到端流程
@@ -106,9 +106,9 @@ SearchViewPane
 
 Workspace Search 不消费 Session 的 `WorkspaceAccessAuthority`。`/add-dir` 改变的是当前对话中 Agent 文件工具的访问范围，产品搜索面板继续绑定 Workspace root；切换 Session 不会悄悄改变面板搜索范围。将来若产品需要聚合多个 Workspace folder，应由 `workspace/folders/set` 与产品级 root identity 定义，不能复用 `/add-dir` 的 Session 生命周期。
 
-当前已经存在独立的 [`zeta-code-index`](../zeta-rs/code-index/README.md)，它在 workspace side
+当前已经存在独立的 [`zeta-codebase`](../zeta-rs/codebase/README.md)，它在 workspace side
 完成 ignore-aware chunking、持久化 generation 与 FTS5 retrieval；跨系统边界见
-[`code-index.md`](code-index.md)。它服务 revision-bound chunk retrieval，不替换本页的逐行文字/
+[`codebase.md`](codebase.md)。它服务 revision-bound chunk retrieval，不替换本页的逐行文字/
 正则产品搜索。是否把 SearchView 迁移到索引 backend 必须先证明 regex、glob、UTF-16 range、
 connection-owned cancel 和结果完整性语义等价；当前 `searchId` 不承诺 backend 类型。
 

@@ -2,10 +2,9 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use zeta_app_server_protocol::protocol::config::{
-    AgentGrepBackendDto, ApprovalReviewModelSelectionDto, ConfigReadResult,
-    LanguageServerConfigDto, LanguageServerModeDto, SemanticCodeIndexAutomaticContextDto,
-    SemanticCodeIndexConfigDto, SemanticCodeIndexSelectionDto, ToolSearchConfigDto,
-    ToolSearchEmbeddingStatusDto, ToolSearchModeDto,
+    AgentGrepBackendDto, ApprovalReviewModelSelectionDto, CodebaseAutomaticContextDto,
+    CodebaseConfigDto, CodebaseSemanticSelectionDto, ConfigReadResult, LanguageServerConfigDto,
+    LanguageServerModeDto, ToolSearchConfigDto, ToolSearchEmbeddingStatusDto, ToolSearchModeDto,
 };
 use zeta_lsp_server_provider::{LanguageServerCatalogState, LanguageServerExecutionPolicy};
 use zeta_text_file::{TextFileAccess, TextFileDiskVersion, TextFileModifiedAt, TextFileSnapshot};
@@ -64,9 +63,9 @@ fn desktop_configuration_maps_persisted_mode_into_catalog_policy() {
             embedding_model: None,
             embedding_status: ToolSearchEmbeddingStatusDto::Disabled,
         },
-        semantic_code_index: SemanticCodeIndexConfigDto {
-            selection: SemanticCodeIndexSelectionDto::Disabled,
-            automatic_context: SemanticCodeIndexAutomaticContextDto::Off,
+        codebase: CodebaseConfigDto {
+            selection: CodebaseSemanticSelectionDto::Disabled,
+            automatic_context: CodebaseAutomaticContextDto::Off,
             active_workspace_authorized: false,
         },
         exec_policy_rules: Vec::new(),
@@ -108,9 +107,9 @@ fn desktop_configuration_does_not_start_unconfigured_language_servers() {
             embedding_model: None,
             embedding_status: ToolSearchEmbeddingStatusDto::Disabled,
         },
-        semantic_code_index: SemanticCodeIndexConfigDto {
-            selection: SemanticCodeIndexSelectionDto::Disabled,
-            automatic_context: SemanticCodeIndexAutomaticContextDto::Off,
+        codebase: CodebaseConfigDto {
+            selection: CodebaseSemanticSelectionDto::Disabled,
+            automatic_context: CodebaseAutomaticContextDto::Off,
             active_workspace_authorized: false,
         },
         exec_policy_rules: Vec::new(),

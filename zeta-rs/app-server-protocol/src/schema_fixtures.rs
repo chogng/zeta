@@ -94,10 +94,10 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(methods.contains("workspace/search/start"));
     assert!(methods.contains("workspace/search/read"));
     assert!(methods.contains("workspace/search/cancel"));
-    assert!(methods.contains("workspace/codeIndex/status"));
-    assert!(methods.contains("workspace/codeIndex/search"));
-    assert!(methods.contains("workspace/codeIndex/retrieve"));
-    assert!(methods.contains("workspace/codeIndex/rebuild"));
+    assert!(methods.contains("workspace/codebase/status"));
+    assert!(methods.contains("workspace/codebase/search"));
+    assert!(methods.contains("workspace/codebase/retrieve"));
+    assert!(methods.contains("workspace/codebase/rebuild"));
     assert!(methods.contains("terminal/profile/list"));
     assert!(methods.contains("terminal/create"));
     assert!(methods.contains("terminal/attach"));
@@ -383,27 +383,27 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     );
     assert!(
         typescript
-            .contains(r#""workspace/codeIndex/search": { method: "workspace/codeIndex/search" }"#)
+            .contains(r#""workspace/codebase/search": { method: "workspace/codebase/search" }"#)
     );
     assert!(
         typescript.contains(
-            r#""workspace/codeIndex/retrieve": { method: "workspace/codeIndex/retrieve" }"#
+            r#""workspace/codebase/retrieve": { method: "workspace/codebase/retrieve" }"#
         )
     );
     assert!(typescript.contains(
-        r#""workspace/codeIndex/cloud/status": { method: "workspace/codeIndex/cloud/status" }"#
+        r#""workspace/codebase/cloud/status": { method: "workspace/codebase/cloud/status" }"#
     ));
     assert!(typescript.contains(
-        r#""workspace/codeIndex/cloud/preview": { method: "workspace/codeIndex/cloud/preview" }"#
+        r#""workspace/codebase/cloud/preview": { method: "workspace/codebase/cloud/preview" }"#
     ));
     assert!(typescript.contains(
-        r#""workspace/codeIndex/cloud/authorize": { method: "workspace/codeIndex/cloud/authorize" }"#
+        r#""workspace/codebase/cloud/authorize": { method: "workspace/codebase/cloud/authorize" }"#
     ));
     assert!(typescript.contains(
-        r#""workspace/codeIndex/cloud/sync": { method: "workspace/codeIndex/cloud/sync" }"#
+        r#""workspace/codebase/cloud/sync": { method: "workspace/codebase/cloud/sync" }"#
     ));
     assert!(typescript.contains(
-        r#""workspace/codeIndex/cloud/revoke": { method: "workspace/codeIndex/cloud/revoke" }"#
+        r#""workspace/codebase/cloud/revoke": { method: "workspace/codebase/cloud/revoke" }"#
     ));
     assert!(typescript.contains(r#""terminal/profile/list": { method: "terminal/profile/list" }"#));
     assert!(typescript.contains(r#""terminal/create": { method: "terminal/create" }"#));
@@ -421,17 +421,17 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains("export type TerminalCommandStatusEvent ="));
     assert!(typescript.contains("export type TerminalReadResult ="));
     assert!(typescript.contains("export type WorkspaceSearchMatch ="));
-    assert!(typescript.contains("export type CodeIndexStatusResult ="));
-    assert!(typescript.contains("export type CodeIndexSearchResult ="));
-    assert!(typescript.contains("export type CodeRetrievalResult ="));
+    assert!(typescript.contains("export type CodebaseStatusResult ="));
+    assert!(typescript.contains("export type CodebaseSearchResult ="));
+    assert!(typescript.contains("export type CodebaseRetrievalResult ="));
     assert!(typescript.contains("rrfScore: number"));
     assert!(
-        typescript.contains("export type CodeIndexDeploymentModeDto = \"localOnly\" | \"cloud\";")
+        typescript.contains("export type CodebaseDeploymentModeDto = \"localOnly\" | \"cloud\";")
     );
-    assert!(!typescript.contains("CloudCodeIndexModeDto"));
+    assert!(!typescript.contains("CloudCodebaseModeDto"));
     assert!(!typescript.contains("cloudManaged"));
-    assert!(typescript.contains("export type CloudCodeIndexSelectionDto ="));
-    assert!(typescript.contains("export type CloudCodeIndexStatusResult ="));
+    assert!(typescript.contains("export type CloudCodebaseSelectionDto ="));
+    assert!(typescript.contains("export type CloudCodebaseStatusResult ="));
     assert!(typescript.contains("syncedLocalGeneration: number | null"));
     assert!(typescript.contains("export type TypstCompileResult ="));
     assert!(typescript.contains(r#""status": "success""#));
@@ -467,11 +467,11 @@ fn dto_driven_schema_contains_registered_rpc_envelopes() {
     assert!(definitions.contains_key("TypstCompileResult"));
     assert!(definitions.contains_key("WorkspaceSearchStartParams"));
     assert!(definitions.contains_key("WorkspaceSearchReadResult"));
-    assert!(definitions.contains_key("CodeIndexStatusResult"));
-    assert!(definitions.contains_key("CodeIndexSearchParams"));
-    assert!(definitions.contains_key("CodeIndexSearchResult"));
-    assert!(definitions.contains_key("CodeRetrievalParams"));
-    assert!(definitions.contains_key("CodeRetrievalResult"));
+    assert!(definitions.contains_key("CodebaseStatusResult"));
+    assert!(definitions.contains_key("CodebaseSearchParams"));
+    assert!(definitions.contains_key("CodebaseSearchResult"));
+    assert!(definitions.contains_key("CodebaseRetrievalParams"));
+    assert!(definitions.contains_key("CodebaseRetrievalResult"));
     assert!(definitions.contains_key("TerminalProfile"));
     assert!(definitions.contains_key("TerminalProfileSelection"));
     assert!(definitions.contains_key("TerminalProfileListResult"));

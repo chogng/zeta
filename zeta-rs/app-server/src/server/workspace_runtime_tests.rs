@@ -10,19 +10,20 @@ use std::sync::atomic::Ordering;
 use zeta_action_policy::ActionReviewRequest;
 use zeta_action_policy::ExecutionDecision;
 use zeta_async_utils::CancellationToken;
-use zeta_code_index_cloud::CloudCodeIndexCapabilities;
-use zeta_code_index_cloud::CloudCodeIndexDeletionSupport;
-use zeta_code_index_cloud::CloudCodeIndexDestination;
-use zeta_code_index_cloud::CloudCodeIndexGrant;
-use zeta_code_index_cloud::CloudCodeIndexGrantId;
-use zeta_code_index_cloud::CloudCodeIndexProvider;
-use zeta_code_index_cloud::CloudCodeIndexProviderError;
-use zeta_code_index_cloud::CloudCodeIndexProviderId;
-use zeta_code_index_cloud::CloudCodeIndexProviderRegistry;
-use zeta_code_index_cloud::CloudCodeIndexPublication;
-use zeta_code_index_cloud::CloudCodeIndexPublicationRequest;
-use zeta_code_index_cloud::CloudCodeIndexSelection;
-use zeta_code_index_cloud::CloudCodeIndexState;
+use zeta_cloud_codebase::CloudCodebaseCapabilities;
+use zeta_cloud_codebase::CloudCodebaseDeletionSupport;
+use zeta_cloud_codebase::CloudCodebaseDestination;
+use zeta_cloud_codebase::CloudCodebaseGrant;
+use zeta_cloud_codebase::CloudCodebaseGrantId;
+use zeta_cloud_codebase::CloudCodebaseId;
+use zeta_cloud_codebase::CloudCodebaseProvider;
+use zeta_cloud_codebase::CloudCodebaseProviderError;
+use zeta_cloud_codebase::CloudCodebaseProviderId;
+use zeta_cloud_codebase::CloudCodebaseProviderRegistry;
+use zeta_cloud_codebase::CloudCodebasePublication;
+use zeta_cloud_codebase::CloudCodebasePublicationRequest;
+use zeta_cloud_codebase::CloudCodebaseSelection;
+use zeta_cloud_codebase::CloudCodebaseState;
 use zeta_config::ConfigCommandRequest;
 use zeta_config::ConfigRevision;
 use zeta_config::ConfigStore;
@@ -975,10 +976,10 @@ fn workspace_trust_management_rpc_lists_trusted_entries_sets_and_forgets_user_de
 fn restricted_workspace_installs_only_non_executable_services() {
     let workspace = TestWorkspace::new("restricted", "readable.txt");
     let provider = Arc::new(TrustRevocationProvider::new());
-    let provider_trait: Arc<dyn CloudCodeIndexProvider> = provider;
-    let providers = CloudCodeIndexProviderRegistry::new([provider_trait]).unwrap();
+    let provider_trait: Arc<dyn CloudCodebaseProvider> = provider;
+    let providers = CloudCodebaseProviderRegistry::new([provider_trait]).unwrap();
     let server = server()
-        .with_cloud_code_index_providers(providers)
+        .with_cloud_codebase_providers(providers)
         .with_local_workspace_host(None, WorkspaceSwitchTrustPolicy::Restricted)
         .unwrap();
 
@@ -987,8 +988,8 @@ fn restricted_workspace_installs_only_non_executable_services() {
         Ok(workspace.root().canonical_path().to_path_buf())
     );
     assert!(server.file_system_service_for(None).is_ok());
-    assert!(server.code_index_service().is_ok());
-    assert!(server.cloud_code_index_service().is_err());
+    assert!(server.codebase_service().is_ok());
+    assert!(server.cloud_codebase_service().is_err());
     assert!(server.git_runtime_service().is_ok());
     assert!(server.workspace_search_service_for(None).is_err());
     assert!(server.terminal_service().is_err());
@@ -1305,7 +1306,7 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
             .unwrap(),
         b"config-revocation"
     );
-    assert!(server.code_index_service().is_ok());
+    assert!(server.codebase_service().is_ok());
     assert!(server.git_runtime_service().is_ok());
     assert!(server.workspace_search_service_for(None).is_err());
     assert!(server.terminal_service().is_err());
@@ -1351,12 +1352,12 @@ fn user_config_revocation_removes_local_semantic_model_access() {
             },
         })
         .unwrap();
-    let models = crate::CodeIndexSemanticModels::new(
-        zeta_code_index_semantic::CodeIndexEmbeddingModelId::new("trust-test-v1").unwrap(),
+    let models = crate::CodebaseSemanticModels::new(
+        zeta_codebase::EmbeddingIndexKey::new("trust-test-v1").unwrap(),
         Arc::new(TrustBoundSemanticEmbedding),
     );
     let server = server()
-        .with_code_index_semantic_models(models)
+        .with_codebase_semantic_models(models)
         .with_local_workspace_host(
             None,
             WorkspaceSwitchTrustPolicy::UserConfig(Arc::clone(&config)),
@@ -1365,7 +1366,7 @@ fn user_config_revocation_removes_local_semantic_model_access() {
     server
         .switch_local_workspace_root(workspace.path.clone())
         .unwrap();
-    assert!(server.code_index_semantic_service().is_some());
+    assert!(server.codebase_semantic_service().is_some());
 
     config
         .apply(ConfigCommandRequest {
@@ -1384,8 +1385,8 @@ fn user_config_revocation_removes_local_semantic_model_access() {
         .reconcile_user_trust(&config.read_snapshot().unwrap().values)
         .unwrap();
 
-    assert!(server.code_index_semantic_service().is_none());
-    assert!(server.code_index_service().is_ok());
+    assert!(server.codebase_semantic_service().is_none());
+    assert!(server.codebase_service().is_ok());
 }
 
 #[test]
@@ -1405,10 +1406,10 @@ fn user_config_revocation_deletes_cloud_grant_and_removes_cloud_runtime() {
         })
         .unwrap();
     let provider = Arc::new(TrustRevocationProvider::new());
-    let provider_trait: Arc<dyn CloudCodeIndexProvider> = provider.clone();
-    let providers = CloudCodeIndexProviderRegistry::new([provider_trait]).unwrap();
+    let provider_trait: Arc<dyn CloudCodebaseProvider> = provider.clone();
+    let providers = CloudCodebaseProviderRegistry::new([provider_trait]).unwrap();
     let server = server()
-        .with_cloud_code_index_providers(providers)
+        .with_cloud_codebase_providers(providers)
         .with_local_workspace_host(
             None,
             WorkspaceSwitchTrustPolicy::UserConfig(Arc::clone(&config)),
@@ -1417,28 +1418,29 @@ fn user_config_revocation_deletes_cloud_grant_and_removes_cloud_runtime() {
     server
         .switch_local_workspace_root(workspace.path.clone())
         .unwrap();
-    let Ok(code_index) = server.code_index_service() else {
-        panic!("local code index should be installed in a trusted workspace");
+    let Ok(codebase) = server.codebase_service() else {
+        panic!("local Codebase should be installed in a trusted workspace");
     };
-    code_index.rebuild().unwrap();
-    let Ok(controller) = server.cloud_code_index_service() else {
-        panic!("cloud code-index controller should be installed in a trusted workspace");
+    codebase.rebuild().unwrap();
+    let Ok(controller) = server.cloud_codebase_service() else {
+        panic!("cloud codebase controller should be installed in a trusted workspace");
     };
-    let grant = CloudCodeIndexGrant {
-        id: CloudCodeIndexGrantId::new("trust-revocation-grant").unwrap(),
+    let grant = CloudCodebaseGrant {
+        id: CloudCodebaseGrantId::new("trust-revocation-grant").unwrap(),
+        codebase_id: CloudCodebaseId::new("trust-revocation-codebase").unwrap(),
         root_id: controller.root_id().as_str().to_owned(),
-        destination: CloudCodeIndexDestination::new(
-            CloudCodeIndexProviderId::new("trust-revocation").unwrap(),
+        destination: CloudCodebaseDestination::new(
+            CloudCodebaseProviderId::new("trust-revocation").unwrap(),
             "tenant-a",
             "workspace-index",
         )
         .unwrap(),
-        selection: CloudCodeIndexSelection::EntireIndex,
+        selection: CloudCodebaseSelection::EntireIndex,
         max_egress_bytes: NonZeroU64::new(1024 * 1024).unwrap(),
     };
     assert_eq!(
         controller.authorize(grant).unwrap().state,
-        CloudCodeIndexState::Granted
+        CloudCodebaseState::Granted
     );
 
     config
@@ -1458,7 +1460,7 @@ fn user_config_revocation_deletes_cloud_grant_and_removes_cloud_runtime() {
         .reconcile_user_trust(&config.read_snapshot().unwrap().values)
         .unwrap();
 
-    assert!(server.cloud_code_index_service().is_err());
+    assert!(server.cloud_codebase_service().is_err());
     assert_eq!(provider.deletions.load(Ordering::SeqCst), 1);
 }
 
@@ -1467,21 +1469,21 @@ fn restricted_activation_retries_a_persisted_pending_cloud_deletion() {
     let workspace = TestWorkspace::new("pending-cloud-deletion", "source.rs");
     let storage = tempfile::tempdir().unwrap();
     let provider = Arc::new(TrustRevocationProvider::new());
-    let provider_trait: Arc<dyn CloudCodeIndexProvider> = provider.clone();
-    let providers = CloudCodeIndexProviderRegistry::new([provider_trait]).unwrap();
+    let provider_trait: Arc<dyn CloudCodebaseProvider> = provider.clone();
+    let providers = CloudCodebaseProviderRegistry::new([provider_trait]).unwrap();
     let first_server = server()
-        .with_cloud_code_index_storage_root(storage.path())
-        .with_cloud_code_index_providers(providers)
+        .with_cloud_codebase_storage_root(storage.path())
+        .with_cloud_codebase_providers(providers)
         .with_local_workspace_host(None, host_trust())
         .unwrap();
     first_server
         .switch_local_workspace_root(workspace.path.clone())
         .unwrap();
-    let Ok(code_index) = first_server.code_index_service() else {
-        panic!("local code index should be installed");
+    let Ok(codebase) = first_server.codebase_service() else {
+        panic!("local Codebase should be installed");
     };
-    code_index.rebuild().unwrap();
-    let Ok(controller) = first_server.cloud_code_index_service() else {
+    codebase.rebuild().unwrap();
+    let Ok(controller) = first_server.cloud_codebase_service() else {
         panic!("cloud controller should be installed");
     };
     controller.authorize(cloud_grant(&controller)).unwrap();
@@ -1491,18 +1493,18 @@ fn restricted_activation_retries_a_persisted_pending_cloud_deletion() {
     drop(first_server);
 
     provider.fail_deletions.store(false, Ordering::SeqCst);
-    let provider_trait: Arc<dyn CloudCodeIndexProvider> = provider.clone();
-    let providers = CloudCodeIndexProviderRegistry::new([provider_trait]).unwrap();
+    let provider_trait: Arc<dyn CloudCodebaseProvider> = provider.clone();
+    let providers = CloudCodebaseProviderRegistry::new([provider_trait]).unwrap();
     let restricted_server = server()
-        .with_cloud_code_index_storage_root(storage.path())
-        .with_cloud_code_index_providers(providers)
+        .with_cloud_codebase_storage_root(storage.path())
+        .with_cloud_codebase_providers(providers)
         .with_local_workspace_host(None, WorkspaceSwitchTrustPolicy::Restricted)
         .unwrap();
     restricted_server
         .switch_local_workspace_root(workspace.path.clone())
         .unwrap();
 
-    assert!(restricted_server.cloud_code_index_service().is_err());
+    assert!(restricted_server.cloud_codebase_service().is_err());
     assert_eq!(provider.deletions.load(Ordering::SeqCst), 2);
 }
 
@@ -1696,7 +1698,7 @@ struct RejectPolicy;
 struct EmptySkillConfig;
 
 struct TrustRevocationProvider {
-    id: CloudCodeIndexProviderId,
+    id: CloudCodebaseProviderId,
     deletions: AtomicUsize,
     fail_deletions: AtomicBool,
 }
@@ -1704,65 +1706,61 @@ struct TrustRevocationProvider {
 impl TrustRevocationProvider {
     fn new() -> Self {
         Self {
-            id: CloudCodeIndexProviderId::new("trust-revocation").unwrap(),
+            id: CloudCodebaseProviderId::new("trust-revocation").unwrap(),
             deletions: AtomicUsize::new(0),
             fail_deletions: AtomicBool::new(false),
         }
     }
 }
 
-impl CloudCodeIndexProvider for TrustRevocationProvider {
-    fn id(&self) -> &CloudCodeIndexProviderId {
+impl CloudCodebaseProvider for TrustRevocationProvider {
+    fn id(&self) -> &CloudCodebaseProviderId {
         &self.id
     }
 
-    fn capabilities(&self) -> CloudCodeIndexCapabilities {
-        CloudCodeIndexCapabilities {
-            deletion: CloudCodeIndexDeletionSupport::IdempotentGrantDeletion,
+    fn capabilities(&self) -> CloudCodebaseCapabilities {
+        CloudCodebaseCapabilities {
+            deletion: CloudCodebaseDeletionSupport::IdempotentGrantDeletion,
         }
     }
 
     fn publish(
         &self,
-        _request: CloudCodeIndexPublicationRequest,
-    ) -> Result<CloudCodeIndexPublication, CloudCodeIndexProviderError> {
-        Ok(CloudCodeIndexPublication {
+        _request: CloudCodebasePublicationRequest,
+    ) -> Result<CloudCodebasePublication, CloudCodebaseProviderError> {
+        Ok(CloudCodebasePublication {
             remote_generation: "workspace-projection-ready".into(),
         })
     }
 
     fn query(
         &self,
-        _request: zeta_code_index_cloud::CloudCodeIndexQueryRequest,
-    ) -> Result<zeta_code_index_cloud::CloudCodeIndexQueryResult, CloudCodeIndexProviderError> {
-        Err(CloudCodeIndexProviderError::new("query not configured"))
+        _request: zeta_cloud_codebase::CloudCodebaseQueryRequest,
+    ) -> Result<zeta_cloud_codebase::CloudCodebaseQueryResult, CloudCodebaseProviderError> {
+        Err(CloudCodebaseProviderError::new("query not configured"))
     }
 
-    fn delete_grant(
-        &self,
-        _grant: &CloudCodeIndexGrant,
-    ) -> Result<(), CloudCodeIndexProviderError> {
+    fn delete_grant(&self, _grant: &CloudCodebaseGrant) -> Result<(), CloudCodebaseProviderError> {
         self.deletions.fetch_add(1, Ordering::SeqCst);
         if self.fail_deletions.load(Ordering::SeqCst) {
-            return Err(CloudCodeIndexProviderError::new("delete failed"));
+            return Err(CloudCodebaseProviderError::new("delete failed"));
         }
         Ok(())
     }
 }
 
-fn cloud_grant(
-    controller: &zeta_code_index_cloud::CloudCodeIndexController,
-) -> CloudCodeIndexGrant {
-    CloudCodeIndexGrant {
-        id: CloudCodeIndexGrantId::new("pending-deletion-grant").unwrap(),
+fn cloud_grant(controller: &zeta_cloud_codebase::CloudCodebaseController) -> CloudCodebaseGrant {
+    CloudCodebaseGrant {
+        id: CloudCodebaseGrantId::new("pending-deletion-grant").unwrap(),
+        codebase_id: CloudCodebaseId::new("pending-deletion-codebase").unwrap(),
         root_id: controller.root_id().as_str().to_owned(),
-        destination: CloudCodeIndexDestination::new(
-            CloudCodeIndexProviderId::new("trust-revocation").unwrap(),
+        destination: CloudCodebaseDestination::new(
+            CloudCodebaseProviderId::new("trust-revocation").unwrap(),
             "tenant-a",
             "workspace-index",
         )
         .unwrap(),
-        selection: CloudCodeIndexSelection::EntireIndex,
+        selection: CloudCodebaseSelection::EntireIndex,
         max_egress_bytes: NonZeroU64::new(1024 * 1024).unwrap(),
     }
 }

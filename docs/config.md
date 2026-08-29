@@ -216,7 +216,7 @@ Provider 配置继续由 `zeta-model-provider-config` 定义。`zeta-config` 可
 
 Deferred Agent 工具检索只有两档 User intent：`toolSearch.mode = "lexical"`（默认）和
 `toolSearch.mode = "hybridEmbedding"`。混合模式还必须配置 `toolSearch.embeddingModel`；该
-`ModelRef` 与 CodeIndex 的 embedding/rerank 选择彼此独立，只共享 provider runtime 和 credential
+`ModelRef` 与 Codebase 的 embedding/rerank 选择彼此独立，只共享 provider runtime 和 credential
 materialization。配置本身不保存模型实例、向量或 provider credential。
 
 `toolSearch/configure` 会在 durable commit 前解析模型并用固定文本完成 readiness probe。未配置
@@ -226,11 +226,10 @@ provider、credential/runtime 或 probe 失败时返回 `ToolSearchUnavailable`�
 偷偷切到 BM25。显式 Regex 仍在本地运行；用户显式改回 `lexical` 后，BM25 才重新成为自然语言
 检索路径。门禁通过后，实际 embedding 调用失败同样使该次 Tool Search 明确失败。
 
-Semantic CodeIndex 使用独立的 `semanticCodeIndex.selection` 和按 Workspace trust ID 保存的 source-egress
-grant。授权会冻结 embedding/rerank `ModelRef` 以及它们实际使用的 provider config；模型或 endpoint
-变化后 `activeWorkspaceAuthorized` 立即变为 false，App Server 卸载旧 semantic runtime。Desktop 的
-Indexing 设置页可保存 Ollama/unauthenticated OpenAI-compatible endpoint、模型选择并 authorize/revoke；
-普通聊天模型配置和 Workspace 文件读取权限都不会自动授予源码外发。
+Codebase 使用可选的 `codebase.models` 保存 embedding/rerank `ModelRef`，使用
+`codebase.automaticContext` 保存自动上下文意图。Config 不保存向量、generation、索引路径或模型权重。
+本地 Codebase 只接受回环地址上的模型运行时；网络语义索引与查询由 Cloud Codebase 的独立 grant 和
+durable state 管理，不写入普通 Config。
 
 自动审批模型是独立于主 Agent 模型的 User 配置：
 

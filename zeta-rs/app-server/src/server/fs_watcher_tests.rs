@@ -52,7 +52,7 @@ fn watcher_overflow_becomes_a_root_scoped_rescan_hint() {
 }
 
 #[test]
-fn code_index_refresh_queue_coalesces_paths_and_rescan_dominates() {
+fn codebase_refresh_queue_coalesces_paths_and_rescan_dominates() {
     let mut pending = PendingIndexRefresh::None;
     pending.merge(FileWatcherEvent::PathsChanged {
         paths: vec![PathBuf::from("b.rs"), PathBuf::from("a.rs")],

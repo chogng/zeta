@@ -26,7 +26,7 @@
 | App Server syntax RPC | bounded stateless analysis | ✅；仅异步 facts，不拥有 editor revision 或输入热路径 |
 | Stanza Smart Select | Stanza selection/history + `zeta-syntax` on-demand scopes | ✅ expand/shrink；revision-bound、可取消、stale-safe，parser 失败时 lexical fallback |
 | completion、type、definition/reference、rename | `zeta-lsp` + language server，经编辑器 language feature 接入 | ✅ Code 主路径；语言覆盖由 provider collection 决定 |
-| workspace code chunk index | `zeta-code-index` 消费 `zeta-syntax` declaration facts | ✅ 本地 lexical retrieval；不是统一 semantic symbol graph |
+| workspace code chunk index | `zeta-codebase` 消费 `zeta-syntax` declaration facts | ✅ 本地 lexical retrieval；不是统一 semantic symbol graph |
 | workspace symbol/reference capability | `zeta-lsp` + App Server language runtime | ✅ workspace symbols 与按需 references 已接通；持久化全局 semantic graph 仍属于可选 index 演进，不属于单个 editor document |
 
 ## 一次 CodeEditor 编辑
@@ -96,7 +96,7 @@ source line number 读取同一份 editor-owned token；Changes Pane 不知道 p
 近期工作按以下顺序推进：
 
 1. 按真实产品需要扩展 parser-grade 语言覆盖，不复制已有 editor language contract。
-2. 当前 `zeta-code-index` 已作为独立 workspace capability 消费 declaration ranges；后续 semantic
+2. 当前 `zeta-codebase` 已作为独立 workspace capability 消费 declaration ranges；后续 semantic
    symbol/reference graph 继续由 LSP/index owner 演进，不能回填到 editor-local parser lifecycle。
 3. 先增加 select declaration/argument/expression/statement 等只读 operation；delete/move/wrap 等 mutation
    必须返回 revision-bound plan，由 Editor 在一个 undo transaction 中应用和复核。

@@ -10841,10 +10841,8 @@ dependencies = [
  "zeta-auto-review",
  "zeta-chatgpt",
  "zeta-client",
- "zeta-code-index",
- "zeta-code-index-cloud",
- "zeta-code-index-semantic",
- "zeta-code-retrieval",
+ "zeta-cloud-codebase",
+ "zeta-codebase",
  "zeta-collaboration",
  "zeta-config",
  "zeta-connectors",
@@ -10887,13 +10885,10 @@ dependencies = [
  "zeta-skills",
  "zeta-skills-extension",
  "zeta-slash-commands",
- "zeta-storage",
- "zeta-symbol-index",
  "zeta-syntax",
  "zeta-thread-transcript",
  "zeta-tool-executor",
  "zeta-tools",
- "zeta-turn-changes",
  "zeta-typst",
  "zeta-uds",
  "zeta-utils-pty",
@@ -10903,7 +10898,6 @@ dependencies = [
  "zeta-workspace-access",
  "zeta-workspace-index-storage",
  "zeta-workspace-search",
- "zeta-worktree",
 ]
 
 [[package]]
@@ -11066,20 +11060,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-code-index"
-version = "0.1.0"
-dependencies = [
- "ignore",
- "rusqlite",
- "sha2 0.10.9",
- "tempfile",
- "thiserror 2.0.19",
- "zeta-syntax",
- "zeta-workspace",
-]
-
-[[package]]
-name = "zeta-code-index-cloud"
+name = "zeta-cloud-codebase"
 version = "0.1.0"
 dependencies = [
  "rusqlite",
@@ -11087,21 +11068,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror 2.0.19",
- "zeta-code-index",
- "zeta-workspace",
-]
-
-[[package]]
-name = "zeta-code-index-semantic"
-version = "0.1.0"
-dependencies = [
- "rusqlite",
- "tempfile",
- "thiserror 2.0.19",
- "zeta-api",
- "zeta-async-utils",
- "zeta-code-index",
- "zeta-model-provider",
+ "zeta-codebase",
  "zeta-workspace",
 ]
 
@@ -11146,17 +11113,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-code-retrieval"
+name = "zeta-codebase"
 version = "0.1.0"
 dependencies = [
+ "ignore",
+ "nucleo",
+ "rusqlite",
+ "sha2 0.10.9",
  "tempfile",
  "thiserror 2.0.19",
+ "zeta-api",
  "zeta-async-utils",
- "zeta-code-index",
- "zeta-code-index-cloud",
- "zeta-code-index-semantic",
  "zeta-model-provider",
- "zeta-symbol-index",
+ "zeta-syntax",
  "zeta-workspace",
 ]
 
@@ -11458,9 +11427,6 @@ version = "0.1.0"
 dependencies = [
  "dunce",
  "pretty_assertions",
- "serde",
- "serde_json",
- "tempfile",
  "tokio",
  "zeta-diff",
 ]
@@ -11758,6 +11724,7 @@ name = "zeta-model-provider"
 version = "0.1.0"
 dependencies = [
  "serde_json",
+ "url",
  "zeta-api",
  "zeta-async-utils",
  "zeta-chatgpt",
@@ -12105,21 +12072,6 @@ dependencies = [
  "zeta-protocol",
  "zeta-session-store",
  "zeta-thread-store",
- "zeta-turn-changes",
-]
-
-[[package]]
-name = "zeta-symbol-index"
-version = "0.1.0"
-dependencies = [
- "nucleo",
- "rusqlite",
- "tempfile",
- "thiserror 2.0.19",
- "zeta-async-utils",
- "zeta-code-index",
- "zeta-syntax",
- "zeta-workspace",
 ]
 
 [[package]]
@@ -12259,22 +12211,6 @@ dependencies = [
  "zeta-theme",
  "zeta-utils-image",
  "zeta-utils-path",
-]
-
-[[package]]
-name = "zeta-turn-changes"
-version = "0.1.0"
-dependencies = [
- "dunce",
- "pretty_assertions",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
- "thiserror 2.0.19",
- "tokio",
- "zeta-git",
- "zeta-protocol",
 ]
 
 [[package]]
@@ -12527,15 +12463,12 @@ dependencies = [
  "anyhow",
  "dunce",
  "fs2",
- "ignore",
  "pretty_assertions",
  "serde",
  "serde_json",
- "sha2 0.10.9",
  "tempfile",
  "tokio",
  "zeta-git",
- "zeta-turn-changes",
 ]
 
 [[package]]

@@ -8,13 +8,13 @@ use std::sync::mpsc::SyncSender;
 use std::thread::JoinHandle;
 
 use zeta_async_utils::CancellationSource;
-use zeta_code_index_semantic::CodeIndexSemanticError;
-use zeta_code_index_semantic::CodeIndexSemanticMetric;
-use zeta_code_index_semantic::CodeIndexSemanticMetricsSink;
-use zeta_code_index_semantic::CodeIndexSemanticProgressSink;
-use zeta_code_index_semantic::CodeIndexSemanticService;
-use zeta_code_index_semantic::CodeIndexSemanticSyncPhase;
-use zeta_code_index_semantic::CodeIndexSemanticSyncProgress;
+use zeta_codebase::CodebaseSemanticError;
+use zeta_codebase::CodebaseSemanticMetric;
+use zeta_codebase::CodebaseSemanticMetricsSink;
+use zeta_codebase::CodebaseSemanticProgressSink;
+use zeta_codebase::CodebaseSemanticService;
+use zeta_codebase::CodebaseSemanticSyncPhase;
+use zeta_codebase::CodebaseSemanticSyncProgress;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum SemanticIndexJobState {
@@ -32,7 +32,7 @@ pub(super) struct SemanticIndexJobSnapshot {
     pub operation_id: Option<u64>,
     pub target_generation: u64,
     pub published_generation: Option<u64>,
-    pub phase: Option<CodeIndexSemanticSyncPhase>,
+    pub phase: Option<CodebaseSemanticSyncPhase>,
     pub total_chunk_count: usize,
     pub processed_chunk_count: usize,
     pub reused_embedding_count: usize,
@@ -49,7 +49,7 @@ struct ActiveOperation {
 }
 
 struct SemanticIndexJobInner {
-    service: Arc<CodeIndexSemanticService>,
+    service: Arc<CodebaseSemanticService>,
     state: RwLock<SemanticIndexJobSnapshot>,
     active: Mutex<Option<ActiveOperation>>,
     pending: AtomicBool,
@@ -60,37 +60,37 @@ struct SemanticIndexJobInner {
 /// Bridges content-free semantic measurements into the App Server diagnostics stream.
 pub(super) struct AppServerSemanticIndexMetrics;
 
-impl CodeIndexSemanticMetricsSink for AppServerSemanticIndexMetrics {
-    fn record(&self, metric: CodeIndexSemanticMetric) {
+impl CodebaseSemanticMetricsSink for AppServerSemanticIndexMetrics {
+    fn record(&self, metric: CodebaseSemanticMetric) {
         match metric {
-            CodeIndexSemanticMetric::SyncCompleted {
+            CodebaseSemanticMetric::SyncCompleted {
                 chunk_count,
                 reused_count,
                 embedded_count,
                 retry_count,
                 elapsed_millis,
             } => log::debug!(
-                target: "zeta_code_index_semantic",
+                target: "zeta_codebase",
                 "sync completed: chunks={chunk_count} reused={reused_count} embedded={embedded_count} retries={retry_count} elapsed_ms={elapsed_millis}"
             ),
-            CodeIndexSemanticMetric::SyncCancelled { processed_count } => log::debug!(
-                target: "zeta_code_index_semantic",
+            CodebaseSemanticMetric::SyncCancelled { processed_count } => log::debug!(
+                target: "zeta_codebase",
                 "sync cancelled: processed={processed_count}"
             ),
-            CodeIndexSemanticMetric::SyncFailed => log::debug!(
-                target: "zeta_code_index_semantic",
+            CodebaseSemanticMetric::SyncFailed => log::debug!(
+                target: "zeta_codebase",
                 "sync failed"
             ),
-            CodeIndexSemanticMetric::QueryCompleted {
+            CodebaseSemanticMetric::QueryCompleted {
                 candidate_count,
                 retry_count,
                 elapsed_millis,
             } => log::debug!(
-                target: "zeta_code_index_semantic",
+                target: "zeta_codebase",
                 "query completed: candidates={candidate_count} retries={retry_count} elapsed_ms={elapsed_millis}"
             ),
-            CodeIndexSemanticMetric::QueryDegraded => log::debug!(
-                target: "zeta_code_index_semantic",
+            CodebaseSemanticMetric::QueryDegraded => log::debug!(
+                target: "zeta_codebase",
                 "query degraded"
             ),
         }
@@ -106,7 +106,7 @@ pub(super) struct SemanticIndexJobController {
 }
 
 impl SemanticIndexJobController {
-    pub(super) fn start(service: Arc<CodeIndexSemanticService>) -> Result<Arc<Self>, String> {
+    pub(super) fn start(service: Arc<CodebaseSemanticService>) -> Result<Arc<Self>, String> {
         let target_generation = service.lexical_generation().unwrap_or(0);
         let published_generation = service.published_generation().unwrap_or(None);
         let initial_state = match published_generation {
@@ -193,33 +193,6 @@ impl SemanticIndexJobController {
         }
     }
 
-    /// Cancels both the active operation and any coalesced follow-up refresh.
-    pub(super) fn cancel(&self) -> SemanticIndexJobSnapshot {
-        let _control = self
-            .control
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        self.inner.suppressed.store(true, Ordering::Release);
-        let was_pending = self.inner.pending.swap(false, Ordering::AcqRel);
-        self.cancel_active();
-        {
-            let mut state = self
-                .inner
-                .state
-                .write()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            if matches!(
-                state.state,
-                SemanticIndexJobState::Syncing | SemanticIndexJobState::Stale
-            ) || was_pending
-            {
-                state.state = SemanticIndexJobState::Cancelled;
-                state.last_error_code = Some("cancelled");
-            }
-        }
-        self.snapshot()
-    }
-
     pub(super) fn snapshot(&self) -> SemanticIndexJobSnapshot {
         self.inner
             .state
@@ -282,7 +255,7 @@ impl SemanticIndexJobInner {
             operation_id: Some(operation_id),
             target_generation,
             published_generation,
-            phase: Some(CodeIndexSemanticSyncPhase::Preparing),
+            phase: Some(CodebaseSemanticSyncPhase::Preparing),
             total_chunk_count: 0,
             processed_chunk_count: 0,
             reused_embedding_count: 0,
@@ -313,7 +286,7 @@ impl SemanticIndexJobInner {
             state.phase = result
                 .as_ref()
                 .ok()
-                .map(|_| CodeIndexSemanticSyncPhase::Complete);
+                .map(|_| CodebaseSemanticSyncPhase::Complete);
             match result {
                 Ok(result) => {
                     state.state = SemanticIndexJobState::Ready;
@@ -324,14 +297,14 @@ impl SemanticIndexJobInner {
                     state.retry_count = result.retry_count;
                     state.last_error_code = None;
                 }
-                Err(CodeIndexSemanticError::Cancelled) => {
+                Err(CodebaseSemanticError::Cancelled) => {
                     state.state = SemanticIndexJobState::Cancelled;
                     state.last_error_code = Some("cancelled");
                 }
                 Err(error) => {
                     state.state = SemanticIndexJobState::Failed;
                     state.last_error_code = Some(error_code(&error));
-                    log::warn!("semantic code-index sync failed: {error}");
+                    log::warn!("semantic codebase sync failed: {error}");
                 }
             }
         }
@@ -354,8 +327,8 @@ struct OperationProgressSink {
     inner: Arc<SemanticIndexJobInner>,
 }
 
-impl CodeIndexSemanticProgressSink for OperationProgressSink {
-    fn report(&self, progress: &CodeIndexSemanticSyncProgress) {
+impl CodebaseSemanticProgressSink for OperationProgressSink {
+    fn report(&self, progress: &CodebaseSemanticSyncProgress) {
         let mut state = self
             .inner
             .state
@@ -376,14 +349,14 @@ impl CodeIndexSemanticProgressSink for OperationProgressSink {
     }
 }
 
-fn error_code(error: &CodeIndexSemanticError) -> &'static str {
+fn error_code(error: &CodebaseSemanticError) -> &'static str {
     match error {
-        CodeIndexSemanticError::InvalidInput(_) => "invalidInput",
-        CodeIndexSemanticError::IndexNotReady => "indexNotReady",
-        CodeIndexSemanticError::Cancelled => "cancelled",
-        CodeIndexSemanticError::InvalidModelResponse(_) => "invalidModelResponse",
-        CodeIndexSemanticError::LocalIndex(_) => "localIndexFailed",
-        CodeIndexSemanticError::Model(_) => "modelInvocationFailed",
-        CodeIndexSemanticError::VectorStore(_) => "vectorStoreFailed",
+        CodebaseSemanticError::InvalidInput(_) => "invalidInput",
+        CodebaseSemanticError::IndexNotReady => "indexNotReady",
+        CodebaseSemanticError::Cancelled => "cancelled",
+        CodebaseSemanticError::InvalidModelResponse(_) => "invalidModelResponse",
+        CodebaseSemanticError::LocalIndex(_) => "localIndexFailed",
+        CodebaseSemanticError::Model(_) => "modelInvocationFailed",
+        CodebaseSemanticError::VectorStore(_) => "vectorStoreFailed",
     }
 }

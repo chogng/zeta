@@ -47,26 +47,26 @@ fn clear_index_waits_for_users_and_is_idempotent() {
     let storage = WorkspaceIndexStorage::open(profile.path()).unwrap();
     let workspace = workspace_id('b');
     let lease = storage
-        .acquire(&workspace, WorkspaceIndexKind::Lexical)
+        .acquire(&workspace, WorkspaceIndexKind::Codebase)
         .unwrap();
     fs::write(lease.directory().join("index.sqlite3"), b"index").unwrap();
 
     assert_eq!(
         storage
-            .clear_index(&workspace, WorkspaceIndexKind::Lexical)
+            .clear_index(&workspace, WorkspaceIndexKind::Codebase)
             .unwrap(),
         ClearOutcome::InUse
     );
     drop(lease);
     assert_eq!(
         storage
-            .clear_index(&workspace, WorkspaceIndexKind::Lexical)
+            .clear_index(&workspace, WorkspaceIndexKind::Codebase)
             .unwrap(),
         ClearOutcome::Cleared
     );
     assert_eq!(
         storage
-            .clear_index(&workspace, WorkspaceIndexKind::Lexical)
+            .clear_index(&workspace, WorkspaceIndexKind::Codebase)
             .unwrap(),
         ClearOutcome::AlreadyAbsent
     );
@@ -78,10 +78,10 @@ fn clear_workspace_is_atomic_across_index_kinds() {
     let storage = WorkspaceIndexStorage::open(profile.path()).unwrap();
     let workspace = workspace_id('c');
     let lexical = storage
-        .acquire(&workspace, WorkspaceIndexKind::Lexical)
+        .acquire(&workspace, WorkspaceIndexKind::Codebase)
         .unwrap();
     let symbols = storage
-        .acquire(&workspace, WorkspaceIndexKind::Symbols)
+        .acquire(&workspace, WorkspaceIndexKind::AgentGrep)
         .unwrap();
     fs::write(lexical.directory().join("index.sqlite3"), b"lexical").unwrap();
     fs::write(symbols.directory().join("index.sqlite3"), b"symbols").unwrap();
@@ -104,7 +104,7 @@ fn clear_all_does_not_remove_an_open_workspace() {
     let storage = WorkspaceIndexStorage::open(profile.path()).unwrap();
     let workspace = workspace_id('d');
     let lease = storage
-        .acquire(&workspace, WorkspaceIndexKind::Semantic)
+        .acquire(&workspace, WorkspaceIndexKind::Codebase)
         .unwrap();
 
     assert_eq!(storage.clear_all().unwrap(), ClearOutcome::InUse);

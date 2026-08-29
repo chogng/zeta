@@ -549,7 +549,7 @@ zeta-rs/
 `ContextSource` 是 Core 的通用可选 evidence port：host 可在 Turn 第一次 model invocation 前返回带
 provenance 的 bounded evidence。Core 对已知窗口最多分配 input budget 的 1/8，并把内容作为 user-level
 `trust="untrusted-data"` 数据插在当前用户输入之前，不能提升为 system/workspace instructions。普通来源
-失败降级为空；Turn cancellation 继续传播。CodeIndex 自动召回默认关闭，由产品设置显式开启。
+失败降级为空；Turn cancellation 继续传播。Codebase 自动召回默认关闭，由产品设置显式开启。
 只有确有外部消费者时才从 `lib.rs` 导出窄 value/port，不能公开 cache、baseline、window mutable
 state 或 ContextManager 自身。
 

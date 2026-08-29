@@ -204,15 +204,8 @@ impl AppServer {
             }
         }
         connection.set_initialized();
-        let (
-            file_system,
-            git,
-            workspace_search,
-            code_index,
-            cloud_code_index,
-            terminal,
-            debug_adapter,
-        ) = self.workspace_features();
+        let (file_system, git, workspace_search, codebase, cloud_codebase, terminal, debug_adapter) =
+            self.workspace_features();
         let extensions = self
             .extensions
             .lock()
@@ -229,8 +222,8 @@ impl AppServer {
             file_system,
             git,
             workspace_search,
-            code_index,
-            cloud_code_index,
+            codebase,
+            cloud_codebase,
             terminal,
             debug_adapter,
             typst: true,

@@ -34,11 +34,11 @@ JSONL / in-process caller
    ├─ optional GitRuntime → zeta-file-watcher + GitService → zeta-git
    ├─ optional WorkspaceSearchService → zeta-workspace-search
    ├─ AgentGrepService → frozen rg | private UDS client → zeta-fast-regex-search worker
-   ├─ optional CodeIndexRuntime → zeta-code-index + filesystem watcher
-   ├─ optional SymbolIndexRuntime → zeta-symbol-index + CodeIndex source/overlay authority
-   ├─ optional CodeIndexSemanticService → local SQLite vectors + host model adapters
-   ├─ optional CloudCodeIndexController → zeta-code-index-cloud + host provider registry
-   ├─ request-scoped CodeRetrievalService → symbol/lexical/semantic/remote RRF + verification + budget
+   ├─ optional CodebaseRuntime → zeta-codebase + filesystem watcher
+   ├─ optional SymbolIndexRuntime → zeta-codebase + Codebase source/overlay authority
+   ├─ optional CodebaseSemanticService → local SQLite vectors + host model adapters
+   ├─ optional CloudCodebaseController → zeta-cloud-codebase + host provider registry
+   ├─ request-scoped CodebaseRetrievalService → symbol/lexical/semantic/remote RRF + verification + budget
    ├─ optional TerminalService → zeta-utils-pty
    ├─ optional LspServerProviders → zeta-lsp-manager → zeta-lsp
    ├─ optional MarketplaceManager → local installation state + remote client
@@ -95,17 +95,17 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 | `AppServer::with_extension_host_runtime` | 将 legacy Plugin 与已授权 Marketplace executable 规范化为同一 deployment fleet；Host 不解析 package manifest |
 | `LocalProfileRuntime::clear_workspace_indexes` | 显式清理一个未使用工作区的四类可重建本地索引 |
 | `LocalProfileRuntime::clear_all_workspace_indexes` | 显式清理当前 profile 下所有未使用的工作区索引 |
-| `LocalCodeIndexProviders::with_semantic_models` | 在 Workspace activation 前注入本地 semantic 使用的 immutable embedding/rerank adapters |
-| `AppServer::with_cloud_code_index_providers` | 注入冻结的 provider registry；空 registry 不广告 cloud capability |
-| `AppServer::with_cloud_code_index_storage_root` | local composition 配置按 root identity 分隔的 durable grant/deletion state |
+| `LocalCodebaseProviders::with_semantic_models` | 在 Workspace activation 前注入本地 semantic 使用的 immutable embedding/rerank adapters |
+| `AppServer::with_cloud_codebase_providers` | 注入冻结的 provider registry；空 registry 不广告 cloud capability |
+| `AppServer::with_cloud_codebase_storage_root` | local composition 配置按 root identity 分隔的 durable grant/deletion state |
 | `AppServer::with_tool_service` | 安装同一 server 内所有 Turn 使用的 Core Tool/Policy ports；正常 local composition 另在 Turn 接受时冻结 `coding-v1` snapshot |
 | `AppServer::with_mcp_oauth_service` | 安装独立 Config MCP 的 process-local OAuth coordinator，并广告 `mcpOAuth` capability |
 | `AppServer::with_dynamic_tools` | 校验 client-hosted dynamic specs，并接入共享 registry、审批和 durable interaction 执行链 |
 | `AppServer::resume_recovered_agent_coordinations` | 恢复 Agent spawn/delivery/join/cancellation saga，并调度恢复期间新建的 child Turn |
 | `AppServer::resume_recovered_goal_continuations` | 重启后恢复 idle active Goal 的隐藏 continuation Turn |
 | `open_local_app_server` | 按 SessionStateMode 选择 durable/in-memory coordinator，打开 config 并组合 provider-backed model |
-| `open_local_app_server_with_cloud_providers` | 在 Workspace 激活前注入 cloud code-index providers；默认入口使用空 registry |
-| `open_local_app_server_with_code_index_providers` | 在 Workspace 激活前同时注入本地 semantic models 与可选 cloud providers |
+| `open_local_app_server_with_cloud_providers` | 在 Workspace 激活前注入 cloud codebase providers；默认入口使用空 registry |
+| `open_local_app_server_with_codebase_providers` | 在 Workspace 激活前同时注入本地 semantic models 与可选 cloud providers |
 | `LocalProfileRuntime` | 单进程、单 profile 的 Session/Thread projection、Config 与跨 Workspace Session notification authority |
 | `LocalAppServerOptions` | user profile root + SessionStateMode + optional Workspace/Connector/language-provider runtime + validated slash catalog + built-in Skill root selection + optional model operation client/MCP OAuth providers |
 | `LocalAppServerOptions::with_profile_runtime` | 在 profile daemon 内复用 durable authority，同时为连接组合独立 Workspace runtime |
@@ -140,7 +140,7 @@ runtime 同一个 SecretStore 构造 `McpOAuthService`；App Server 只暴露 PK
 extension executor（当前包括统一的 `skills-read`）和 client-hosted dynamic tools 也进入同一个 registry，
 不得绕过 binding、policy 或 durable result commit。它仅在调用方通过
 `LocalAppServerOptions::with_workspace_root` 提供统一 Workspace 根时同时组合 filesystem、
-`.zeta` 自定义 catalog、Workspace code index、Workspace search、Git SCM、connection-owned/leased Terminal runtime、
+`.zeta` 自定义 catalog、Workspace Codebase、Workspace search、Git SCM、connection-owned/leased Terminal runtime、
 只读 `rg` registry；Zeta CLI 的 stdio 与
 in-process 路径都会使用同一个启动时解析结果：
 `ZETA_WORKSPACE_ROOT` 优先，否则使用当前目录。不能因为 protocol 暴露 approval interaction 就
@@ -158,17 +158,17 @@ Host 只有通过 `LocalAppServerOptions::with_web_search_backend` 注入
 system roots 或 proxy。Embedded test 可通过 `LocalAppServerOptions::with_model_operation_client`
 注入离线 client；真实 transport 初始化失败在第一次模型 operation 返回，不得让 App Server 启动 panic。
 
-local composition 会配置 `<profile>/code-index-cloud` 的 durable state 位置，但默认 provider registry
-为空，因此不会安装 cloud controller、广告 `cloudCodeIndex` 或创建网络请求。具体 host 只有在注入
+local composition 会配置 `<profile>/cloud-codebase` 的 durable state 位置，但默认 provider registry
+为空，因此不会安装 cloud controller、广告 `cloudCodebase` 或创建网络请求。具体 host 只有在注入
 接受 Workspace-owned exact chunks 且满足幂等 grant deletion 的 provider 后，才能启用云能力。
 
 local composition 把可重建索引统一放在
 `<profile>/cache/workspaces/<workspace-digest>/indexes/{agent-grep,lexical,symbols,semantic}`，并通过
 `<profile>/cache/locks` 下的独立锁文件协调多个进程。它同时安装共享的
-`SemanticModelProvider` resolver，但 semantic CodeIndex 默认仍关闭，所以不会后台发送 chunks 或创建
+`SemanticModelProvider` resolver，但 semantic Codebase 默认仍关闭，所以不会后台发送 chunks 或创建
 vectors。用户选择模型并对 exact Workspace 授权源码外发后，Trusted Workspace 的 lexical generation
 更新才会在 refresh worker 中同步本地 semantic SQLite。模型只返回 embedding/rerank 结果，召回与
-排序仍由本地 domain crate 完成；host 也可用 `LocalCodeIndexProviders::with_semantic_models` 注入测试
+排序仍由本地 domain crate 完成；host 也可用 `LocalCodebaseProviders::with_semantic_models` 注入测试
 或专用 immutable adapters。
 
 Fast Regex 提供 `workspace/agentGrep/fastRegex/status|rebuild|disableAndDelete`。普通配置切换到
@@ -176,11 +176,11 @@ Fast Regex 提供 `workspace/agentGrep/fastRegex/status|rebuild|disableAndDelete
 Agent grep 索引，并明确返回删除成功、原本不存在或仍在使用。
 
 Trusted Workspace 同时获得 built-in read-only `search_code` 工具。它只接受
-`workspace-code-index-read-only` exact grant，调用 canonical `CodeRetrievalService`，并返回 bounded、
+`workspace-codebase-read-only` exact grant，调用 canonical `CodebaseRetrievalService`，并返回 bounded、
 current-source-verified excerpts 与 degradation；未配置 semantic 时自然退回 lexical。semantic grant
 精确绑定 Workspace、model selection 与 provider config，provider URL 或模型变化会卸载旧 runtime 并要求重新授权。`provider/list` 通过 `zeta-model-provider::ProviderCredentialService` 从 built-in provider registry 读取供应商名称、API Key 策略与是否已配置；`provider/apiKey/set` 只负责协议转换并委托同一服务写入 profile `SecretStore`，App Server 不复制密钥校验、SecretKey 或 Header 规则，也不把密钥写入普通配置、响应或日志。
 
-Tool Search 拥有独立的 `toolSearch.embeddingModel`，不复用 CodeIndex 的模型选择。只有 User Config
+Tool Search 拥有独立的 `toolSearch.embeddingModel`，不复用 Codebase 的模型选择。只有 User Config
 明确设置 `toolSearch.mode = "hybridEmbedding"` 才会调用；默认 `lexical` 不产生 embedding 请求。
 `toolSearch/configure` 先解析 exact provider/model 并执行固定文本 readiness probe，失败返回
 `ToolSearchUnavailable` 且不提交配置。外部配置或启动恢复遇到不可用模型时，App Server 通过
@@ -216,9 +216,9 @@ src/
 │       ├── multi_agent_tools.rs   # Core coordinator Tool adapter + child Turn scheduling
 │       ├── notification_queue.rs  # bounded per-connection queue + wake/close semantics
 │       ├── search_operations.rs   # search RPC decode、ownership 与稳定错误映射
-│       ├── code_index_operations.rs # status/search/rebuild DTO 与 error mapping
-│       ├── code_index_runtime.rs  # generation lifecycle、watcher reconcile 与 stale gate
-│       ├── cloud_code_index_operations.rs # preview/grant/sync/revoke DTO 与稳定错误映射
+│       ├── codebase_operations.rs # status/search/rebuild DTO 与 error mapping
+│       ├── codebase_runtime.rs  # generation lifecycle、watcher reconcile 与 stale gate
+│       ├── cloud_codebase_operations.rs # preview/grant/sync/revoke DTO 与稳定错误映射
 │       ├── terminal_operations.rs # terminal RPC decode、ownership 与稳定错误映射
 │       ├── language_runtime.rs   # workspace state + provider definitions → shared LSP manager
 │       ├── marketplace_operations.rs # Manager business RPC、稳定错误与 connection-owned lease
@@ -284,14 +284,14 @@ src/
 | `file_type` in `fs_operations` | private | foundation file kind → protocol DTO | wire enum 只由 protocol crate 定义 |
 | `search_operations::{search_query, search_page}` | private | `WorkspaceSearch*` DTO 与 `zeta-workspace-search` 领域类型之间的显式转换 | 不复制查询校验、rg argv、job state 或 parsing |
 | `WorkspaceSearchService` | external crate | 持有 active workspace、frozen rg 和 owner-bound job map | App Server 不把 connection/DTO/UI 语义写入该 crate |
-| `CodeIndexRuntime` | crate-private | 串行 rebuild/refresh，投影 lifecycle，并在返回前 materialize | 不拥有 scan/chunk/schema，也不创建网络请求 |
-| `CodeIndexRefreshWorker` | private | 单 wake + merged paths/rescan priority 的后台刷新 | 不阻塞 filesystem notification thread，不建立无界 event queue |
+| `CodebaseRuntime` | crate-private | 串行 rebuild/refresh，投影 lifecycle，并在返回前 materialize | 不拥有 scan/chunk/schema，也不创建网络请求 |
+| `CodebaseRefreshWorker` | private | 单 wake + merged paths/rescan priority 的后台刷新 | 不阻塞 filesystem notification thread，不建立无界 event queue |
 | `SymbolIndexRuntime` | crate-private | 在 canonical source generation 后 reconcile，保持 last-ready/stale 状态，并暴露 current index | 不扫描 Workspace、不请求 LSP、不拥有 UI fusion |
-| `WorkspaceDocumentOverlay` composition | crate-private | 先同步 CodeIndex canonical dirty snapshot，再投影 SymbolIndex；close/replacement 同步清理 | 不把 overlay 持久化或在每次编辑触发 embedding |
-| `CodeIndexSemanticService` | external crate | 同步 exact lexical generation、复用/持久化 vectors、本地 recall/rerank | App Server 不解释模型分数或拥有 vector schema |
-| `code_index_operations::project_status` | private | runtime state + last usable snapshot → stable protocol status | 不暴露 SQLite/internal error text |
-| `CloudCodeIndexController` | external crate | root-bound grant、publication/deletion lifecycle 与 provider port | App Server 不复制 consent state 或允许 provider 直接读 Workspace |
-| `cloud_code_index_operations::project_status` | private | cloud lifecycle + grant → stable protocol DTO | 不回传 credential、绝对路径或 provider error text |
+| `WorkspaceDocumentOverlay` composition | crate-private | 先同步 Codebase canonical dirty snapshot，再投影 SymbolIndex；close/replacement 同步清理 | 不把 overlay 持久化或在每次编辑触发 embedding |
+| `CodebaseSemanticService` | external crate | 同步 exact lexical generation、复用/持久化 vectors、本地 recall/rerank | App Server 不解释模型分数或拥有 vector schema |
+| `codebase_operations::project_status` | private | runtime state + last usable snapshot → stable protocol status | 不暴露 SQLite/internal error text |
+| `CloudCodebaseController` | external crate | root-bound grant、publication/deletion lifecycle 与 provider port | App Server 不复制 consent state 或允许 provider 直接读 Workspace |
+| `cloud_codebase_operations::project_status` | private | cloud lifecycle + grant → stable protocol DTO | 不回传 credential、绝对路径或 provider error text |
 | `TerminalService` | crate-private | 持有 `ExecuteProcess` 的 `TrustedWorkspace`、Tokio runtime、PTY session map 与 1 MiB output ring | 不从 client path 自行授予 process authority |
 | `AppServerLanguageRuntime::configured_provider_definitions` | private | 只对 Config 显式启用的已注册 provider 生成 definition，并保留 authoritative host override | 不下载包、不自己启动 child、不复制 restart policy |
 | `TerminalEnvironment` | crate-private | 二次过滤 host environment、规范化 Windows key、固定 `TERM`/`COLORTERM`/`TERM_PROGRAM` | 不继承凭据或接受 client mutation |
@@ -538,7 +538,7 @@ ConfigStore::open_with_paths(profile_root/state.sqlite3, profile_root/config.tom
 Workspace authority
 ├─ host-configured initial root → HostConfiguration capability
 └─ client workspace/switch → latest WorkspaceTrustConfig lookup
-   ├─ missing / Restricted → filesystem + watcher + local code index + customizations
+   ├─ missing / Restricted → filesystem + watcher + Codebase + customizations
    └─ Trusted → ExplicitUserDecision capability + optional cloud controller when providers exist
 
 Workspace Trust management (workspaceTrustHost)
@@ -559,7 +559,7 @@ ConfigChange trust revocation
 ├─ remove local Tool / Git / search / terminal ports
 ├─ terminate PTY and search processes
 ├─ interrupt active Turns
-└─ retain restricted filesystem + watcher + local code index + customizations
+└─ retain restricted filesystem + watcher + Codebase + customizations
 
 optional WorkspaceConfigStore
 └─ WorkspaceConfigTracker::read preflight
@@ -762,14 +762,14 @@ MIME、size 与 SHA-256，不复制图片 bytes。
 | resource ownership/bounds | corresponding stable resource error |
 | missing filesystem authority | `FileSystemUnavailable` |
 | filesystem path/I/O failure | `FileSystemOperationFailed` |
-| missing / initial code index | `CodeIndexUnavailable` / `CodeIndexNotReady` |
-| index I/O、SQLite 或 stale materialization | `CodeIndexOperationFailed` |
-| missing cloud controller | `CloudCodeIndexUnavailable` |
-| invalid/conflicting cloud grant | `CloudCodeIndexInvalidGrant` / `CloudCodeIndexConsentConflict` |
-| cloud byte ceiling exceeded | `CloudCodeIndexEgressLimitExceeded` |
-| missing capability/deletion guarantee | `CloudCodeIndexProviderUnavailable` |
-| cloud persistence/publication/deletion failure | `CloudCodeIndexOperationFailed` |
-| retrieval local failure / source mismatch | `CodeRetrievalOperationFailed` |
+| missing / initial Codebase | `CodebaseUnavailable` / `CodebaseNotReady` |
+| index I/O、SQLite 或 stale materialization | `CodebaseOperationFailed` |
+| missing cloud controller | `CloudCodebaseUnavailable` |
+| invalid/conflicting cloud grant | `CloudCodebaseInvalidGrant` / `CloudCodebaseConsentConflict` |
+| cloud byte ceiling exceeded | `CloudCodebaseEgressLimitExceeded` |
+| missing capability/deletion guarantee | `CloudCodebaseProviderUnavailable` |
+| cloud persistence/publication/deletion failure | `CloudCodebaseOperationFailed` |
+| retrieval local failure / source mismatch | `CodebaseRetrievalOperationFailed` |
 | missing search backend | `SearchUnavailable` |
 | unknown/cross-connection search job | `SearchNotFound` / `SearchNotOwner` |
 | search job capacity exhausted | `SearchBusy` |
@@ -835,7 +835,7 @@ Git 覆盖 workspace projection、runtime stream identity、revision 去重、`g
 text diff、local branch list/switch、path mutation 与 commit。Filesystem 覆盖有界原子写入、权限保留、root containment、
 相对路径 `fs/changed` 与 watcher overflow rescan。
 Syntax 覆盖 revision mismatch、Unicode UTF-16 projection、按需 selection ancestor scopes 与 invalid
-surrogate boundary；CodeIndex/SymbolIndex 覆盖 persistent reopen、watcher reconcile、dirty overlay、
+surrogate boundary；Codebase/SymbolIndex 覆盖 persistent reopen、watcher reconcile、dirty overlay、
 save handoff、stale materialization 和 symbol-aware retrieval。
 Browser host 覆盖反向 request/response、非 owner 拒绝、target identity、断连 pending failure、
 截图 Resource ownership，以及 Desktop restart-safe handler registration 和原生目标回收。

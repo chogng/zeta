@@ -46,7 +46,7 @@ test("workspace symbol acceptance verifies an unsaved local result against curre
 });
 
 function symbol(sourceRevision: string): LanguageWorkspaceSymbol {
-	return { name: "main", kind: "function", resource, range, data: { source: "localSymbolIndex", sourceRevision } };
+	return { name: "main", kind: "function", resource, range, data: { source: "codebaseSymbols", sourceRevision } };
 }
 
 function acceptanceEvents(revision: string, workingCopyContent?: string) {

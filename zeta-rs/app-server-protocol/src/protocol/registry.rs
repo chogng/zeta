@@ -33,32 +33,38 @@ use crate::protocol::browser::BrowserPerformActionDto;
 use crate::protocol::browser::BrowserPerformParams;
 use crate::protocol::browser::BrowserPerformResult;
 use crate::protocol::browser::BrowserTextInputTargetDto;
-use crate::protocol::code_index::CloudCodeIndexAuthorizeParams;
-use crate::protocol::code_index::CloudCodeIndexDestinationDto;
-use crate::protocol::code_index::CloudCodeIndexGrantDto;
-use crate::protocol::code_index::CloudCodeIndexPreviewParams;
-use crate::protocol::code_index::CloudCodeIndexPreviewResult;
-use crate::protocol::code_index::CloudCodeIndexSelectionDto;
-use crate::protocol::code_index::CloudCodeIndexStateDto;
-use crate::protocol::code_index::CloudCodeIndexStatusResult;
-use crate::protocol::code_index::CodeIndexChunkSpanDto;
-use crate::protocol::code_index::CodeIndexDeploymentModeDto;
-use crate::protocol::code_index::CodeIndexSearchHitDto;
-use crate::protocol::code_index::CodeIndexSearchParams;
-use crate::protocol::code_index::CodeIndexSearchResult;
-use crate::protocol::code_index::CodeIndexStateDto;
-use crate::protocol::code_index::CodeIndexStatusResult;
-use crate::protocol::code_index::CodeRetrievalDegradationDto;
-use crate::protocol::code_index::CodeRetrievalHitDto;
-use crate::protocol::code_index::CodeRetrievalOriginDto;
-use crate::protocol::code_index::CodeRetrievalParams;
-use crate::protocol::code_index::CodeRetrievalResult;
-use crate::protocol::code_index::FastRegexDisableAndDeleteParams;
-use crate::protocol::code_index::FastRegexDisableAndDeleteResult;
-use crate::protocol::code_index::FastRegexIndexStatusResult;
-use crate::protocol::code_index::LocalIndexClearOutcomeDto;
-use crate::protocol::code_index::SemanticCodeIndexStateDto;
-use crate::protocol::code_index::SemanticCodeIndexStatusDto;
+use crate::protocol::codebase::CloudCodebaseAuthorizeParams;
+use crate::protocol::codebase::CloudCodebaseDestinationDto;
+use crate::protocol::codebase::CloudCodebaseGrantDto;
+use crate::protocol::codebase::CloudCodebasePreviewParams;
+use crate::protocol::codebase::CloudCodebasePreviewResult;
+use crate::protocol::codebase::CloudCodebaseSelectionDto;
+use crate::protocol::codebase::CloudCodebaseStateDto;
+use crate::protocol::codebase::CloudCodebaseStatusResult;
+use crate::protocol::codebase::CodebaseChunkSpanDto;
+use crate::protocol::codebase::CodebaseDeploymentModeDto;
+use crate::protocol::codebase::CodebaseRetrievalDegradationDto;
+use crate::protocol::codebase::CodebaseRetrievalHitDto;
+use crate::protocol::codebase::CodebaseRetrievalParams;
+use crate::protocol::codebase::CodebaseRetrievalResult;
+use crate::protocol::codebase::CodebaseSearchHitDto;
+use crate::protocol::codebase::CodebaseSearchParams;
+use crate::protocol::codebase::CodebaseSearchResult;
+use crate::protocol::codebase::CodebaseStateDto;
+use crate::protocol::codebase::CodebaseStatusResult;
+use crate::protocol::codebase::FastRegexDisableAndDeleteParams;
+use crate::protocol::codebase::FastRegexDisableAndDeleteResult;
+use crate::protocol::codebase::FastRegexIndexStatusResult;
+use crate::protocol::codebase::LocalIndexClearOutcomeDto;
+use crate::protocol::codebase_symbols::CodebaseSymbolsSearchHitDto;
+use crate::protocol::codebase_symbols::CodebaseSymbolsSearchParams;
+use crate::protocol::codebase_symbols::CodebaseSymbolsSearchResult;
+use crate::protocol::codebase_symbols::CodebaseSymbolsStateDto;
+use crate::protocol::codebase_symbols::CodebaseSymbolsStatusResult;
+use crate::protocol::codebase_symbols::SymbolKindDto;
+use crate::protocol::codebase_symbols::WorkspaceDocumentOverlayCloseParams;
+use crate::protocol::codebase_symbols::WorkspaceDocumentOverlayStatusResult;
+use crate::protocol::codebase_symbols::WorkspaceDocumentOverlaySynchronizeParams;
 use crate::protocol::collaboration::DocumentCollaborationOpenParams;
 use crate::protocol::collaboration::DocumentCollaborationOpenResult;
 use crate::protocol::collaboration::DocumentCollaborationPresence;
@@ -88,8 +94,10 @@ use crate::protocol::common::TurnId;
 use crate::protocol::common::WorkspaceTrustHostCapability;
 use crate::protocol::config::AgentGrepBackendDto;
 use crate::protocol::config::ApprovalReviewModelSelectionDto;
-use crate::protocol::config::CommitMessageAuthorizeParams;
-use crate::protocol::config::CommitMessageRevokeParams;
+use crate::protocol::config::CodebaseAutomaticContextDto;
+use crate::protocol::config::CodebaseConfigDto;
+use crate::protocol::config::CodebaseConfigureParams;
+use crate::protocol::config::CodebaseModelsDto;
 use crate::protocol::config::ConfigChanged;
 use crate::protocol::config::ConfigCommandDispositionDto;
 use crate::protocol::config::ConfigCommandResult;
@@ -133,13 +141,6 @@ use crate::protocol::config::PluginRequestUpsertParams;
 use crate::protocol::config::ProviderConfigDto;
 use crate::protocol::config::ProviderConfigureParams;
 use crate::protocol::config::ProviderRemoveParams;
-use crate::protocol::config::SemanticCodeIndexAuthorizeParams;
-use crate::protocol::config::SemanticCodeIndexAutomaticContextDto;
-use crate::protocol::config::SemanticCodeIndexConfigDto;
-use crate::protocol::config::SemanticCodeIndexConfigureParams;
-use crate::protocol::config::SemanticCodeIndexModelsDto;
-use crate::protocol::config::SemanticCodeIndexRevokeParams;
-use crate::protocol::config::SemanticCodeIndexSelectionDto;
 use crate::protocol::config::SkillSourceAddParams;
 use crate::protocol::config::SkillSourceConfigDto;
 use crate::protocol::config::SkillSourceEnablementDto;
@@ -506,15 +507,6 @@ use crate::protocol::skills::SkillSourceKindDto;
 use crate::protocol::skills::SkillsChanged;
 use crate::protocol::slash_commands::SlashCommandArgumentModeDto;
 use crate::protocol::slash_commands::SlashCommandDefinition;
-use crate::protocol::symbol_index::SymbolIndexSearchHitDto;
-use crate::protocol::symbol_index::SymbolIndexSearchParams;
-use crate::protocol::symbol_index::SymbolIndexSearchResult;
-use crate::protocol::symbol_index::SymbolIndexStateDto;
-use crate::protocol::symbol_index::SymbolIndexStatusResult;
-use crate::protocol::symbol_index::SymbolKindDto;
-use crate::protocol::symbol_index::WorkspaceDocumentOverlayCloseParams;
-use crate::protocol::symbol_index::WorkspaceDocumentOverlayStatusResult;
-use crate::protocol::symbol_index::WorkspaceDocumentOverlaySynchronizeParams;
 use crate::protocol::syntax::SyntaxAnalyzeParams;
 use crate::protocol::syntax::SyntaxAnalyzeResult;
 use crate::protocol::syntax::SyntaxDiagnosticDto;
@@ -556,29 +548,6 @@ use crate::protocol::turn::TurnInteractionResolveResult;
 use crate::protocol::turn::TurnInterruptResult;
 use crate::protocol::turn::TurnStartResult;
 use crate::protocol::turn::TurnSteerResult;
-use crate::protocol::turn_changes::ChangeSetId;
-use crate::protocol::turn_changes::ThreadWorkspaceBinding;
-use crate::protocol::turn_changes::ThreadWorkspaceRepositoryBindingDto;
-use crate::protocol::turn_changes::TurnChangeCaptureStateDto;
-use crate::protocol::turn_changes::TurnChangeCommitStateDto;
-use crate::protocol::turn_changes::TurnChangeFileDto;
-use crate::protocol::turn_changes::TurnChangeFileKindDto;
-use crate::protocol::turn_changes::TurnChangeFileStatisticsDto;
-use crate::protocol::turn_changes::TurnChangeMessageStateDto;
-use crate::protocol::turn_changes::TurnChangeSetSummary;
-use crate::protocol::turn_changes::TurnChangeTerminalStateDto;
-use crate::protocol::turn_changes::TurnChangesChanged;
-use crate::protocol::turn_changes::TurnChangesCommitParams;
-use crate::protocol::turn_changes::TurnChangesDiscardThreadParams;
-use crate::protocol::turn_changes::TurnChangesListParams;
-use crate::protocol::turn_changes::TurnChangesListResult;
-use crate::protocol::turn_changes::TurnChangesMutationParams;
-use crate::protocol::turn_changes::TurnChangesMutationResult;
-use crate::protocol::turn_changes::TurnChangesReadFileParams;
-use crate::protocol::turn_changes::TurnChangesReadFileResult;
-use crate::protocol::turn_changes::TurnChangesReadParams;
-use crate::protocol::turn_changes::TurnChangesReadResult;
-use crate::protocol::turn_changes::TurnChangesUpdateDraftParams;
 use crate::protocol::workspace::WorkspaceAdditionalDirectoryAddParams;
 use crate::protocol::workspace::WorkspaceAdditionalDirectoryContributionsDto;
 use crate::protocol::workspace::WorkspaceAdditionalDirectoryDto;
@@ -1127,41 +1096,6 @@ client_methods! {
         response: ThreadGoalClearResponse,
         serialization: GlobalExclusive,
     },
-    TurnChangesList => "turnChanges/list" {
-        params: TurnChangesListParams,
-        response: TurnChangesListResult,
-        serialization: SessionSharedRead,
-    },
-    TurnChangesRead => "turnChanges/read" {
-        params: TurnChangesReadParams,
-        response: TurnChangesReadResult,
-        serialization: SessionSharedRead,
-    },
-    TurnChangesReadFile => "turnChanges/readFile" {
-        params: TurnChangesReadFileParams,
-        response: TurnChangesReadFileResult,
-        serialization: SessionSharedRead,
-    },
-    TurnChangesGenerateMessage => "turnChanges/generateMessage" {
-        params: TurnChangesMutationParams,
-        response: TurnChangesMutationResult,
-        serialization: SessionExclusive,
-    },
-    TurnChangesUpdateDraft => "turnChanges/updateDraft" {
-        params: TurnChangesUpdateDraftParams,
-        response: TurnChangesMutationResult,
-        serialization: SessionExclusive,
-    },
-    TurnChangesCommit => "turnChanges/commit" {
-        params: TurnChangesCommitParams,
-        response: TurnChangesMutationResult,
-        serialization: SessionExclusive,
-    },
-    TurnChangesDiscardThread => "turnChanges/discardThread" {
-        params: TurnChangesDiscardThreadParams,
-        response: TurnChangesMutationResult,
-        serialization: SessionExclusive,
-    },
     SessionThreadSubscribe => "session/thread/subscribe" {
         params: SessionThreadSubscribeParams,
         response: SessionThreadSubscribeResult,
@@ -1407,28 +1341,8 @@ client_methods! {
         response: ConfigCommandResult,
         serialization: GlobalExclusive,
     },
-    SemanticCodeIndexConfigure => "workspace/codeIndex/semantic/configure" {
-        params: SemanticCodeIndexConfigureParams,
-        response: ConfigCommandResult,
-        serialization: GlobalExclusive,
-    },
-    SemanticCodeIndexAuthorize => "workspace/codeIndex/semantic/authorize" {
-        params: SemanticCodeIndexAuthorizeParams,
-        response: ConfigCommandResult,
-        serialization: GlobalExclusive,
-    },
-    SemanticCodeIndexRevoke => "workspace/codeIndex/semantic/revoke" {
-        params: SemanticCodeIndexRevokeParams,
-        response: ConfigCommandResult,
-        serialization: GlobalExclusive,
-    },
-    CommitMessageAuthorize => "workspace/commitMessage/authorize" {
-        params: CommitMessageAuthorizeParams,
-        response: ConfigCommandResult,
-        serialization: GlobalExclusive,
-    },
-    CommitMessageRevoke => "workspace/commitMessage/revoke" {
-        params: CommitMessageRevokeParams,
+    CodebaseConfigure => "workspace/codebase/configure" {
+        params: CodebaseConfigureParams,
         response: ConfigCommandResult,
         serialization: GlobalExclusive,
     },
@@ -1907,24 +1821,24 @@ client_methods! {
         response: (),
         serialization: None,
     },
-    CodeIndexStatus => "workspace/codeIndex/status" {
+    CodebaseStatus => "workspace/codebase/status" {
         params: EmptyParams,
-        response: CodeIndexStatusResult,
+        response: CodebaseStatusResult,
         serialization: GlobalSharedRead,
     },
-    CodeIndexSearch => "workspace/codeIndex/search" {
-        params: CodeIndexSearchParams,
-        response: CodeIndexSearchResult,
+    CodebaseSearch => "workspace/codebase/search" {
+        params: CodebaseSearchParams,
+        response: CodebaseSearchResult,
         serialization: GlobalSharedRead,
     },
-    SymbolIndexStatus => "workspace/symbolIndex/status" {
+    CodebaseSymbolsStatus => "workspace/codebase/symbols/status" {
         params: EmptyParams,
-        response: SymbolIndexStatusResult,
+        response: CodebaseSymbolsStatusResult,
         serialization: GlobalSharedRead,
     },
-    SymbolIndexSearch => "workspace/symbolIndex/search" {
-        params: SymbolIndexSearchParams,
-        response: SymbolIndexSearchResult,
+    CodebaseSymbolsSearch => "workspace/codebase/symbols/search" {
+        params: CodebaseSymbolsSearchParams,
+        response: CodebaseSymbolsSearchResult,
         serialization: GlobalSharedRead,
     },
     WorkspaceDocumentOverlaySynchronize => "workspace/codeIntelligence/document/synchronize" {
@@ -1937,14 +1851,14 @@ client_methods! {
         response: WorkspaceDocumentOverlayStatusResult,
         serialization: GlobalSharedRead,
     },
-    CodeIndexRetrieve => "workspace/codeIndex/retrieve" {
-        params: CodeRetrievalParams,
-        response: CodeRetrievalResult,
+    CodebaseRetrieve => "workspace/codebase/retrieve" {
+        params: CodebaseRetrievalParams,
+        response: CodebaseRetrievalResult,
         serialization: GlobalSharedRead,
     },
-    CodeIndexRebuild => "workspace/codeIndex/rebuild" {
+    CodebaseRebuild => "workspace/codebase/rebuild" {
         params: EmptyParams,
-        response: CodeIndexStatusResult,
+        response: CodebaseStatusResult,
         serialization: GlobalExclusive,
     },
     FastRegexIndexStatus => "workspace/agentGrep/fastRegex/status" {
@@ -1962,39 +1876,29 @@ client_methods! {
         response: FastRegexDisableAndDeleteResult,
         serialization: GlobalExclusive,
     },
-    SemanticCodeIndexCancel => "workspace/codeIndex/semantic/cancel" {
+    CloudCodebaseStatus => "workspace/codebase/cloud/status" {
         params: EmptyParams,
-        response: CodeIndexStatusResult,
-        serialization: None,
-    },
-    SemanticCodeIndexRetry => "workspace/codeIndex/semantic/retry" {
-        params: EmptyParams,
-        response: CodeIndexStatusResult,
-        serialization: None,
-    },
-    CloudCodeIndexStatus => "workspace/codeIndex/cloud/status" {
-        params: EmptyParams,
-        response: CloudCodeIndexStatusResult,
+        response: CloudCodebaseStatusResult,
         serialization: GlobalSharedRead,
     },
-    CloudCodeIndexPreview => "workspace/codeIndex/cloud/preview" {
-        params: CloudCodeIndexPreviewParams,
-        response: CloudCodeIndexPreviewResult,
+    CloudCodebasePreview => "workspace/codebase/cloud/preview" {
+        params: CloudCodebasePreviewParams,
+        response: CloudCodebasePreviewResult,
         serialization: GlobalSharedRead,
     },
-    CloudCodeIndexAuthorize => "workspace/codeIndex/cloud/authorize" {
-        params: CloudCodeIndexAuthorizeParams,
-        response: CloudCodeIndexStatusResult,
+    CloudCodebaseAuthorize => "workspace/codebase/cloud/authorize" {
+        params: CloudCodebaseAuthorizeParams,
+        response: CloudCodebaseStatusResult,
         serialization: GlobalExclusive,
     },
-    CloudCodeIndexSync => "workspace/codeIndex/cloud/sync" {
+    CloudCodebaseSync => "workspace/codebase/cloud/sync" {
         params: EmptyParams,
-        response: CloudCodeIndexStatusResult,
+        response: CloudCodebaseStatusResult,
         serialization: GlobalExclusive,
     },
-    CloudCodeIndexRevoke => "workspace/codeIndex/cloud/revoke" {
+    CloudCodebaseRevoke => "workspace/codebase/cloud/revoke" {
         params: EmptyParams,
-        response: CloudCodeIndexStatusResult,
+        response: CloudCodebaseStatusResult,
         serialization: GlobalExclusive,
     },
     TerminalProfileList => "terminal/profile/list" {
@@ -2304,9 +2208,6 @@ server_notifications! {
     GitStatusChanged => "git/statusChanged" {
         params: GitStatusChanged,
     },
-    TurnChangesChanged => "turnChanges/changed" {
-        params: TurnChangesChanged,
-    },
     FsChanged => "fs/changed" {
         params: FsChanged,
     },
@@ -2480,10 +2381,9 @@ typescript_bindings! {
     DocumentCollaborationSubmitParams,
     DocumentCollaborationSubmitResult,
     ModelRefDto,
-    SemanticCodeIndexModelsDto,
-    SemanticCodeIndexSelectionDto,
-    SemanticCodeIndexAutomaticContextDto,
-    SemanticCodeIndexConfigDto,
+    CodebaseModelsDto,
+    CodebaseAutomaticContextDto,
+    CodebaseConfigDto,
     ApprovalReviewModelSelectionDto,
     AgentGrepBackendDto,
     ModelContextConfigDto,
@@ -2521,11 +2421,7 @@ typescript_bindings! {
     ToolSearchEmbeddingStatusDto,
     ToolSearchConfigDto,
     ToolSearchConfigureParams,
-    SemanticCodeIndexConfigureParams,
-    SemanticCodeIndexAuthorizeParams,
-    SemanticCodeIndexRevokeParams,
-    CommitMessageAuthorizeParams,
-    CommitMessageRevokeParams,
+    CodebaseConfigureParams,
     LanguageServerConfigureParams,
     LanguageServerRemoveParams,
     ProviderConfigureParams,
@@ -2785,29 +2681,6 @@ typescript_bindings! {
     TurnSteerResult,
     TurnInterruptResult,
     TurnInteractionResolveResult,
-    ChangeSetId,
-    TurnChangeCaptureStateDto,
-    TurnChangeMessageStateDto,
-    TurnChangeCommitStateDto,
-    TurnChangeTerminalStateDto,
-    TurnChangeFileKindDto,
-    TurnChangeFileDto,
-    TurnChangeFileStatisticsDto,
-    ThreadWorkspaceBinding,
-    ThreadWorkspaceRepositoryBindingDto,
-    TurnChangeSetSummary,
-    TurnChangesListParams,
-    TurnChangesListResult,
-    TurnChangesReadParams,
-    TurnChangesReadResult,
-    TurnChangesReadFileParams,
-    TurnChangesReadFileResult,
-    TurnChangesMutationParams,
-    TurnChangesUpdateDraftParams,
-    TurnChangesCommitParams,
-    TurnChangesDiscardThreadParams,
-    TurnChangesMutationResult,
-    TurnChangesChanged,
     TypstCompileParams,
     TypstCompileResult,
     TypstDiagnosticDto,
@@ -3005,41 +2878,38 @@ typescript_bindings! {
     WorkspaceSearchMatch,
     WorkspaceSearchReadResult,
     WorkspaceSearchCancelParams,
-    CodeIndexStateDto,
-    CodeIndexStatusResult,
+    CodebaseStateDto,
+    CodebaseStatusResult,
     FastRegexIndexStatusResult,
     FastRegexDisableAndDeleteParams,
     FastRegexDisableAndDeleteResult,
     LocalIndexClearOutcomeDto,
-    SemanticCodeIndexStateDto,
-    SemanticCodeIndexStatusDto,
-    CodeIndexSearchParams,
-    CodeIndexChunkSpanDto,
-    CodeIndexSearchHitDto,
-    CodeIndexSearchResult,
-    SymbolIndexStateDto,
-    SymbolIndexStatusResult,
-    SymbolIndexSearchParams,
+    CodebaseSearchParams,
+    CodebaseChunkSpanDto,
+    CodebaseSearchHitDto,
+    CodebaseSearchResult,
+    CodebaseSymbolsStateDto,
+    CodebaseSymbolsStatusResult,
+    CodebaseSymbolsSearchParams,
     SymbolKindDto,
-    SymbolIndexSearchHitDto,
-    SymbolIndexSearchResult,
+    CodebaseSymbolsSearchHitDto,
+    CodebaseSymbolsSearchResult,
     WorkspaceDocumentOverlaySynchronizeParams,
     WorkspaceDocumentOverlayCloseParams,
     WorkspaceDocumentOverlayStatusResult,
-    CodeRetrievalParams,
-    CodeRetrievalOriginDto,
-    CodeRetrievalDegradationDto,
-    CodeRetrievalHitDto,
-    CodeRetrievalResult,
-    CodeIndexDeploymentModeDto,
-    CloudCodeIndexStateDto,
-    CloudCodeIndexSelectionDto,
-    CloudCodeIndexDestinationDto,
-    CloudCodeIndexGrantDto,
-    CloudCodeIndexPreviewParams,
-    CloudCodeIndexPreviewResult,
-    CloudCodeIndexAuthorizeParams,
-    CloudCodeIndexStatusResult,
+    CodebaseRetrievalParams,
+    CodebaseRetrievalDegradationDto,
+    CodebaseRetrievalHitDto,
+    CodebaseRetrievalResult,
+    CodebaseDeploymentModeDto,
+    CloudCodebaseStateDto,
+    CloudCodebaseSelectionDto,
+    CloudCodebaseDestinationDto,
+    CloudCodebaseGrantDto,
+    CloudCodebasePreviewParams,
+    CloudCodebasePreviewResult,
+    CloudCodebaseAuthorizeParams,
+    CloudCodebaseStatusResult,
     TerminalProfile,
     TerminalProfileListResult,
     TerminalProfileSelection,

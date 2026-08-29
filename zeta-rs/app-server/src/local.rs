@@ -1,5 +1,5 @@
 use crate::AppServer;
-use crate::CodeIndexSemanticModels;
+use crate::CodebaseSemanticModels;
 use crate::SlashCommandCatalog;
 use crate::model_catalog::ModelCatalog;
 use crate::model_provider_error::map_model_provider_error;
@@ -20,7 +20,7 @@ use std::time::Duration;
 use zeta_async_utils::CancellationToken;
 use zeta_chatgpt::ChatGptOAuth;
 use zeta_client::OperationClient;
-use zeta_code_index_cloud::CloudCodeIndexProviderRegistry;
+use zeta_cloud_codebase::CloudCodebaseProviderRegistry;
 use zeta_config::ConfigStore;
 use zeta_config::McpServerId;
 use zeta_config::ResolvedConfig;
@@ -830,26 +830,26 @@ impl LocalProfileRuntime {
     }
 }
 
-/// Optional code-index adapters installed before the local Workspace runtime is activated.
+/// Optional codebase adapters installed before the local Workspace runtime is activated.
 #[derive(Default)]
-pub struct LocalCodeIndexProviders {
-    semantic_models: Option<CodeIndexSemanticModels>,
-    cloud: CloudCodeIndexProviderRegistry,
+pub struct LocalCodebaseProviders {
+    semantic_models: Option<CodebaseSemanticModels>,
+    cloud: CloudCodebaseProviderRegistry,
 }
 
-impl LocalCodeIndexProviders {
+impl LocalCodebaseProviders {
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Installs models invoked by local semantic CodeIndex and opt-in Tool Search orchestration.
-    pub fn with_semantic_models(mut self, models: CodeIndexSemanticModels) -> Self {
+    /// Installs models invoked by local semantic Codebase and opt-in Tool Search orchestration.
+    pub fn with_semantic_models(mut self, models: CodebaseSemanticModels) -> Self {
         self.semantic_models = Some(models);
         self
     }
 
-    /// Installs optional remote code-index provider adapters.
-    pub fn with_cloud(mut self, cloud: CloudCodeIndexProviderRegistry) -> Self {
+    /// Installs optional remote codebase provider adapters.
+    pub fn with_cloud(mut self, cloud: CloudCodebaseProviderRegistry) -> Self {
         self.cloud = cloud;
         self
     }
@@ -859,24 +859,24 @@ impl LocalCodeIndexProviders {
 pub fn open_local_app_server(
     options: LocalAppServerOptions,
 ) -> Result<AppServer, OpenAppServerError> {
-    open_local_app_server_with_code_index_providers(options, LocalCodeIndexProviders::default())
+    open_local_app_server_with_codebase_providers(options, LocalCodebaseProviders::default())
 }
 
-/// Opens a local composition with explicit cloud code-index provider adapters.
+/// Opens a local composition with explicit cloud codebase provider adapters.
 pub fn open_local_app_server_with_cloud_providers(
     options: LocalAppServerOptions,
-    cloud_code_index_providers: CloudCodeIndexProviderRegistry,
+    cloud_codebase_providers: CloudCodebaseProviderRegistry,
 ) -> Result<AppServer, OpenAppServerError> {
-    open_local_app_server_with_code_index_providers(
+    open_local_app_server_with_codebase_providers(
         options,
-        LocalCodeIndexProviders::new().with_cloud(cloud_code_index_providers),
+        LocalCodebaseProviders::new().with_cloud(cloud_codebase_providers),
     )
 }
 
 /// Opens a local composition with semantic model and/or remote index provider adapters.
-pub fn open_local_app_server_with_code_index_providers(
+pub fn open_local_app_server_with_codebase_providers(
     mut options: LocalAppServerOptions,
-    providers: LocalCodeIndexProviders,
+    providers: LocalCodebaseProviders,
 ) -> Result<AppServer, OpenAppServerError> {
     let product_services = options.product_services.take();
     let fast_regex_worker_command = options.fast_regex_worker_command.take();
@@ -1156,8 +1156,8 @@ pub fn open_local_app_server_with_code_index_providers(
     .with_slash_command_catalog(options.slash_commands)
     .with_workspace_index_storage(workspace_index_storage)
     .with_semantic_model_provider(model_provider)
-    .with_cloud_code_index_storage_root(options.profile_root.join("code-index-cloud"))
-    .with_cloud_code_index_providers(providers.cloud)
+    .with_cloud_codebase_storage_root(options.profile_root.join("state").join("cloud-codebase"))
+    .with_cloud_codebase_providers(providers.cloud)
     .with_extension_roots(extension_roots)
     .with_skill_runtime(
         built_in_skill_root,
@@ -1169,7 +1169,7 @@ pub fn open_local_app_server_with_code_index_providers(
         server = server.with_fast_regex_worker_command(command);
     }
     if let Some(models) = providers.semantic_models {
-        server = server.with_code_index_semantic_models(models);
+        server = server.with_codebase_semantic_models(models);
     }
     if let Some(runtime) = marketplace_language_runtime {
         server = server
@@ -1352,12 +1352,10 @@ impl ToolConfigWatcher {
             mcp_changes,
             mcp_runtime_intent_changes,
         } = inputs;
-        let mut semantic_binding = config.read_snapshot().ok().map(|snapshot| {
-            (
-                snapshot.values.semantic_code_index,
-                snapshot.values.providers,
-            )
-        });
+        let mut semantic_binding = config
+            .read_snapshot()
+            .ok()
+            .map(|snapshot| (snapshot.values.codebase, snapshot.values.providers));
         let changes = config.subscribe_changes();
         let connector_changes = connector_runtime
             .as_ref()
@@ -1466,13 +1464,11 @@ impl ToolConfigWatcher {
                             continue;
                         }
                         let next_semantic_binding = (
-                            snapshot.values.semantic_code_index.clone(),
+                            snapshot.values.codebase.clone(),
                             snapshot.values.providers.clone(),
                         );
                         if semantic_binding.as_ref() != Some(&next_semantic_binding) {
-                            if let Err(error) =
-                                workspace_runtime.reconcile_semantic_code_index_runtime()
-                            {
+                            if let Err(error) = workspace_runtime.reconcile_codebase_runtime() {
                                 workspace_tools.record_reconcile_failure(error.to_string());
                                 continue;
                             }

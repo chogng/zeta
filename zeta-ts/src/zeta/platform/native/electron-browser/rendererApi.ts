@@ -21,8 +21,8 @@ import { ElectronTerminalProcessService } from "../../terminal/electron-browser/
 import { createUserThemeFilesApi } from "../../theme/electron-browser/userThemeFilesApi.js";
 import { createTypstApi } from "../../typst/electron-browser/typstApi.js";
 import { createWorkspaceContextApi } from "../../workspace/electron-browser/workspaceContextApi.js";
-import { createCodeIndexApi } from "../../codeIndex/electron-browser/codeIndexApi.js";
-import { createSymbolIndexApi } from "../../symbolIndex/electron-browser/symbolIndexApi.js";
+import { createCodebaseApi } from "../../codebase/electron-browser/codebaseApi.js";
+import { createCodebaseSymbolsApi } from "../../codebaseSymbols/electron-browser/codebaseSymbolsApi.js";
 import { createConnectorApi } from "../../connectors/electron-browser/connectorApi.js";
 import { createToolSearchApi } from "../../toolSearch/electron-browser/toolSearchApi.js";
 import type { ZetaElectronRendererApi } from "../common/rendererApi.js";
@@ -89,8 +89,8 @@ export function createElectronRendererApi(contributions: readonly ElectronRender
 		nativeMenubar: createNativeMenubarApi(),
 		userThemes: createUserThemeFilesApi(),
 		workspace: createWorkspaceContextApi(),
-		codeIndex: createCodeIndexApi(),
-		symbolIndex: createSymbolIndexApi(),
+		codebase: createCodebaseApi(),
+		codebaseSymbols: createCodebaseSymbolsApi(),
 		connectors: createConnectorApi(),
 		plugins: createPluginApi(),
 		marketplace: createMarketplaceApi(),

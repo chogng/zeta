@@ -9,6 +9,7 @@ use zeta_model_provider_config::ProviderConfigRegistry;
 use crate::EmbeddingInvoker;
 use crate::EmbeddingRequest;
 use crate::EmbeddingResponse;
+use crate::EmbeddingRuntimeIdentity;
 use crate::EmbeddingRuntimeRequest;
 use crate::EmbeddingVector;
 use crate::ModelProviderError;
@@ -18,6 +19,7 @@ use crate::RerankRequest;
 use crate::RerankResponse;
 use crate::RerankRuntimeRequest;
 use crate::SemanticModelProvider;
+use crate::SemanticRuntimeLocation;
 
 pub(crate) struct SemanticRuntimeResolver {
     pub(crate) configs: ProviderConfigRegistry,
@@ -26,6 +28,33 @@ pub(crate) struct SemanticRuntimeResolver {
 }
 
 impl SemanticModelProvider for SemanticRuntimeResolver {
+    fn embedding_runtime_identity(
+        &self,
+        request: &EmbeddingRuntimeRequest,
+    ) -> Result<EmbeddingRuntimeIdentity, ModelProviderError> {
+        let normalized = self
+            .configs
+            .normalize_for(&request.config, &request.model.provider)?;
+        EmbeddingRuntimeIdentity::new(format!(
+            "provider={};model={};endpoint={}",
+            request.model.provider, request.model.model, normalized.base_url
+        ))
+    }
+
+    fn embedding_runtime_location(
+        &self,
+        request: &EmbeddingRuntimeRequest,
+    ) -> Result<SemanticRuntimeLocation, ModelProviderError> {
+        self.runtime_location(&request.model.provider, &request.config)
+    }
+
+    fn rerank_runtime_location(
+        &self,
+        request: &RerankRuntimeRequest,
+    ) -> Result<SemanticRuntimeLocation, ModelProviderError> {
+        self.runtime_location(&request.model.provider, &request.config)
+    }
+
     fn embedding_runtime(
         &self,
         request: EmbeddingRuntimeRequest,
@@ -58,6 +87,30 @@ impl SemanticModelProvider for SemanticRuntimeResolver {
 }
 
 impl SemanticRuntimeResolver {
+    fn runtime_location(
+        &self,
+        provider: &zeta_protocol::ProviderId,
+        config: &zeta_model_provider_config::ModelProviderConfig,
+    ) -> Result<SemanticRuntimeLocation, ModelProviderError> {
+        let normalized = self.configs.normalize_for(config, provider)?;
+        let url = url::Url::parse(&normalized.base_url).map_err(|error| {
+            ModelProviderError::Unavailable(format!(
+                "provider '{provider}' has an invalid semantic endpoint: {error}"
+            ))
+        })?;
+        let device = url.host_str().is_some_and(|host| {
+            host.eq_ignore_ascii_case("localhost")
+                || host
+                    .parse::<std::net::IpAddr>()
+                    .is_ok_and(|address| address.is_loopback())
+        });
+        Ok(if device {
+            SemanticRuntimeLocation::Device
+        } else {
+            SemanticRuntimeLocation::Network
+        })
+    }
+
     fn resolve(
         &self,
         provider: &zeta_protocol::ProviderId,

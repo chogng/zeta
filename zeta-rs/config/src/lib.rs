@@ -3,7 +3,7 @@
 //! This crate owns ordinary, non-secret user configuration. It does not own credential values,
 //! Plugin packages, MCP connections, or any live runtime state.
 
-mod code_index;
+mod codebase;
 mod command;
 mod commit_messages;
 mod document;
@@ -23,10 +23,7 @@ mod tool_search;
 mod workspace;
 mod workspace_trust;
 
-pub use code_index::{
-    SemanticCodeIndexAutomaticContext, SemanticCodeIndexConfig, SemanticCodeIndexEgressGrant,
-    SemanticCodeIndexModelSelection, SemanticCodeIndexSelection,
-};
+pub use codebase::{CodebaseAutomaticContext, CodebaseConfig, CodebaseModelSelection};
 pub use command::{
     ConfigCommandDisposition, ConfigCommandError, ConfigCommandRequest, ConfigCommandResult,
     PreferencesUpdate, UserConfigCommand,

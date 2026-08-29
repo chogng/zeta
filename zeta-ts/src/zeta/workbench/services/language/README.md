@@ -6,7 +6,7 @@ registries are separate Editor services; Workbench registers App Server and
 product providers into those contracts without subclassing or wrapping them.
 
 `WorkbenchLanguageFeatures` installs built-in identities/configurations and JSON
-providers. App Server, extension-host, TextMate, symbol-index, and future LSP
+providers. App Server, extension-host, TextMate, codebase-symbols, and future LSP
 adapters register directly through `ILanguageFeaturesService` registries. Every
 registration is disposable and independent of per-document service lifetimes.
 

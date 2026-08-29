@@ -15,7 +15,7 @@ Responses WebSocket codec 或 `ModelClientSession`。
 OpenAI-compatible embedding/rerank wire codec、OpenAI/Ollama embedding runtime 和 exact provider
 config resolver。本 crate 仍只拥有模型 API 选择、credential materialization、请求适配和执行。
 它不决定代码如何切块、查询哪个向量索引、准备哪些 rerank 候选，也不拥有排序、过滤或截断
-策略；本地 CodeIndex 的这些策略属于 `zeta-code-index-semantic`，远端托管索引则属于具体 provider。
+策略；本地 Codebase 的这些策略属于 `zeta-codebase`，远端托管索引则属于具体 provider。
 
 ## 公共契约
 
@@ -148,7 +148,7 @@ bazel test //zeta-rs/model-provider:model-provider-unit-tests
 
 当前 completion `ModelInvoker` 已有 concrete provider adapters；embedding/rerank 已有 canonical
 invoker、request/response validation、OpenAI-compatible/Ollama runtime resolver，以及本地
-`zeta-code-index-semantic` 和 Tool Search consumers。
+`zeta-codebase` 和 Tool Search consumers。
 当前 completion invocation 同时支持 unary 与 OpenAI Responses、OpenAI-compatible Chat Completions、
 Google Chat-compatible、Anthropic Messages 原生 HTTP/SSE stream。每个 immutable provider definition
 显式发布 `ModelOutputTransport::{NativeStreaming, Unary}`；catalog/Desktop 只消费该声明，不从

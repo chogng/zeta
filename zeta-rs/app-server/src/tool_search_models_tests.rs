@@ -4,10 +4,12 @@ use std::sync::atomic::Ordering;
 use zeta_model_provider::EmbeddingInvoker;
 use zeta_model_provider::EmbeddingRequest;
 use zeta_model_provider::EmbeddingResponse;
+use zeta_model_provider::EmbeddingRuntimeIdentity;
 use zeta_model_provider::EmbeddingVector;
 use zeta_model_provider::ModelProviderError;
 use zeta_model_provider::RerankInvoker;
 use zeta_model_provider::RerankRuntimeRequest;
+use zeta_model_provider::SemanticRuntimeLocation;
 use zeta_protocol::ModelId;
 
 struct ReadyEmbedding;
@@ -29,6 +31,27 @@ struct TestSemanticModelProvider {
 }
 
 impl SemanticModelProvider for TestSemanticModelProvider {
+    fn embedding_runtime_identity(
+        &self,
+        _: &EmbeddingRuntimeRequest,
+    ) -> Result<EmbeddingRuntimeIdentity, ModelProviderError> {
+        EmbeddingRuntimeIdentity::new("test-tool-search-embedding")
+    }
+
+    fn embedding_runtime_location(
+        &self,
+        _: &EmbeddingRuntimeRequest,
+    ) -> Result<SemanticRuntimeLocation, ModelProviderError> {
+        Ok(SemanticRuntimeLocation::Device)
+    }
+
+    fn rerank_runtime_location(
+        &self,
+        _: &RerankRuntimeRequest,
+    ) -> Result<SemanticRuntimeLocation, ModelProviderError> {
+        Ok(SemanticRuntimeLocation::Device)
+    }
+
     fn embedding_runtime(
         &self,
         _: EmbeddingRuntimeRequest,

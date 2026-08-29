@@ -3,7 +3,8 @@
 pub mod account;
 pub mod attachments;
 pub mod browser;
-pub mod code_index;
+pub mod codebase;
+pub mod codebase_symbols;
 pub mod collaboration;
 pub mod common;
 pub mod config;
@@ -32,7 +33,6 @@ mod serde_helpers;
 pub mod session;
 pub mod skills;
 pub mod slash_commands;
-pub mod symbol_index;
 pub mod syntax;
 pub mod terminal;
 pub mod transcript;
