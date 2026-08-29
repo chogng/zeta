@@ -1,0 +1,23 @@
+[package]
+name = "zeta-immutable-generation-store"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_immutable_generation_store"
+path = "src/lib.rs"
+
+[dependencies]
+fs2 = { workspace = true }
+memmap2 = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints.rust]
+# This crate is the narrow immutable-generation mmap boundary. The single mapping operation is
+# audited in `mapped_file.rs`; all publication, locking and lifetime rules stay behind safe APIs.
+unsafe_code = "allow"

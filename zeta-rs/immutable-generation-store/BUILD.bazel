@@ -1,0 +1,6 @@
+load("//:defs.bzl", "zeta_rust_crate")
+
+zeta_rust_crate(
+    name = "immutable-generation-store",
+    crate_name = "zeta_immutable_generation_store",
+)
