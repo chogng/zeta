@@ -115,7 +115,7 @@ export class ViewOverlays extends Disposable {
 		this.whitespace.renderNow(context);
 		this.currentLineHighlight.renderNow(context);
 		this.selections.renderNow(context);
-		this.viewCursors.renderNow(context);
+		this.viewCursors.renderSelection(context);
 	}
 
 	setCompositionRange(range: TextRange | undefined): void {

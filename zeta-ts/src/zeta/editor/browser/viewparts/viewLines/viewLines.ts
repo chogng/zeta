@@ -121,7 +121,7 @@ export class ViewLines extends Disposable {
 		const offset = position.columnIndex - visualLine.startColumn;
 		if (!renderedLine.hasTextOffset(offset)) return undefined;
 		const left = renderedLine.getCaretLeft(offset);
-		return left === undefined ? undefined : Object.freeze({ visualLineIndex, left });
+		return left === undefined ? undefined : Object.freeze({ visualLineIndex, left, isRightToLeft: renderedLine.isRightToLeft() });
 	}
 
 	/** Reprojects semantic tokens without rebuilding the visible row window. */

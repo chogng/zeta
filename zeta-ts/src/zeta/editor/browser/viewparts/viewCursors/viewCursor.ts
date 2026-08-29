@@ -18,15 +18,19 @@ export class ViewCursor {
 		this.domNode.classList.add(cursorStyleClass(options.style));
 	}
 
-	public render(row: HTMLElement, left: number, characterWidth: number, rowHeight: number, isPrimary: boolean): void {
+	public render(row: HTMLElement, caretLeft: number, characterLeft: number, characterWidth: number, rowHeight: number, isPrimary: boolean): void {
 		this.domNode.classList.toggle('primary', isPrimary);
-		this.domNode.style.left = `${left}px`;
+		this.domNode.style.left = `${cursorLeft(this.options.style, caretLeft, characterLeft)}px`;
 		this.domNode.style.width = `${cursorWidth(this.options, characterWidth)}px`;
 		const height = cursorHeight(this.options, rowHeight);
 		this.domNode.style.height = `${height}px`;
 		this.domNode.style.top = `${cursorTop(this.options.style, rowHeight, height)}px`;
 		row.append(this.domNode);
 	}
+}
+
+function cursorLeft(style: TextEditorCursorStyle, caretLeft: number, characterLeft: number): number {
+	return style === TextEditorCursorStyle.Line || style === TextEditorCursorStyle.LineThin ? caretLeft : characterLeft;
 }
 
 function cursorStyleClass(style: TextEditorCursorStyle): string {

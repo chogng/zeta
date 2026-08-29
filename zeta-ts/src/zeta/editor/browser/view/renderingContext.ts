@@ -14,6 +14,7 @@ export interface EditorLineVisibleRange {
 export interface EditorVisiblePosition {
 	readonly visualLineIndex: number;
 	readonly left: number;
+	readonly isRightToLeft: boolean;
 }
 
 export interface EditorOverlayContext {

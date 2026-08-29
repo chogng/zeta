@@ -939,6 +939,53 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 	dom.window.close();
 });
 
+test('EditorViewport places RTL block cursors over their following glyph or trailing space', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = requiredElement(dom.window.document, 'main');
+	const createRange = dom.window.document.createRange.bind(dom.window.document);
+	Object.defineProperty(dom.window.document, 'createRange', {
+		configurable: true,
+		value: () => {
+			const range = createRange();
+			Object.defineProperty(range, 'getClientRects', {
+				configurable: true,
+				value: () => range.collapsed
+					? [testRectangle(range.startOffset === 0 ? 128 : 120, 0, 0)]
+					: [testRectangle(120, 0, 8)],
+			});
+			return range;
+		},
+	});
+	using model = new TextModel('讗');
+	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
+	using viewport = new EditorViewport({
+		container,
+		model,
+		lineHeight: 20,
+		textMeasurer: fixedTextMeasurer(),
+		selectionController: selections,
+		textDirection: EditorTextDirection.RightToLeft,
+		cursorStyle: 'block',
+		cursorBlinking: 'solid',
+	});
+	viewport.layout({ width: 300, height: 40 });
+	const line = requiredLine(viewport.element, 0);
+	Object.defineProperty(line, 'getBoundingClientRect', {
+		configurable: true,
+		value: () => testRectangle(100, 0, 300),
+	});
+	const caret = requiredElement<HTMLElement>(requiredPartRow(viewport.element, 'stanza-editor-line-cursors', 0), '.stanza-editor-caret');
+	selections.setSelections(TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	const overGlyph = { left: caret.style.left, width: caret.style.width };
+	selections.setSelections(TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
+
+	assert.deepEqual({ overGlyph, afterLine: { left: caret.style.left, width: caret.style.width } }, {
+		overGlyph: { left: '20px', width: '8px' },
+		afterLine: { left: '12px', width: '8px' },
+	});
+	dom.window.close();
+});
+
 test('EditorViewport renders active bracket and indentation guides from the structural bracket source', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
@@ -1038,6 +1085,8 @@ test('EditorViewport gives every cursor one shared blinking animation', () => {
 	});
 	viewport.layout({ width: 300, height: 40 });
 	const cursorsLayer = requiredElement(viewport.element, '.stanza-editor-cursors-layer');
+	const blinkingAnimation = { currentTime: 600 };
+	Object.defineProperty(cursorsLayer, 'getAnimations', { value: () => [blinkingAnimation] });
 	controller.setSelections(TextSelectionSet.withPrimary([
 		TextSelection.collapsedAt(TextPosition.at(0, 5)),
 		TextSelection.collapsedAt(TextPosition.at(1, 4)),
@@ -1045,12 +1094,38 @@ test('EditorViewport gives every cursor one shared blinking animation', () => {
 
 	assert.deepEqual({
 		layerExpands: cursorsLayer.classList.contains('cursor-blinking-expand'),
+		animationTime: blinkingAnimation.currentTime,
 		cursorAnimationClasses: [...viewport.element.querySelectorAll('.stanza-editor-caret')]
 			.map(caret => [...caret.classList].filter(className => className.startsWith('cursor-blinking-'))),
 	}, {
 		layerExpands: true,
+		animationTime: 0,
 		cursorAnimationClasses: [[], []],
 	});
+	dom.window.close();
+});
+
+test('EditorViewport sizes block cursors from contextual tab advances', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('a\tb\nabcd\tb');
+	using controller = new EditorSelectionController(model, TextSelectionSet.withPrimary([
+		TextSelection.collapsedAt(TextPosition.at(0, 1)),
+		TextSelection.collapsedAt(TextPosition.at(1, 4)),
+	], 0));
+	using viewport = new EditorViewport({
+		container,
+		model,
+		selectionController: controller,
+		lineHeight: 20,
+		textMeasurer: tabTextMeasurer(),
+		cursorStyle: 'block',
+		cursorBlinking: 'solid',
+	});
+	viewport.layout({ width: 300, height: 40 });
+
+	assert.deepEqual([...viewport.element.querySelectorAll<HTMLElement>('.stanza-editor-caret')]
+		.map(caret => caret.style.width), ['24px', '32px']);
 	dom.window.close();
 });
 
@@ -1468,6 +1543,19 @@ function fixedTextMeasurer(
 	horizontalPadding = 24,
 ): TestTextMeasurer {
 	return new TestTextMeasurer(characterWidth, horizontalPadding);
+}
+
+function tabTextMeasurer(): TextMeasurer {
+	return {
+		horizontalPadding: 24,
+		contentLeftPadding: 12,
+		refresh: () => false,
+		measureLineWidth: text => {
+			let columns = 0;
+			for (const character of text) columns += character === '\t' ? 4 - columns % 4 : 1;
+			return columns * 8;
+		},
+	};
 }
 
 class TestTextMeasurer implements TextMeasurer {
