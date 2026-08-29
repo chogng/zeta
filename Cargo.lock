@@ -10882,7 +10882,6 @@ dependencies = [
  "zeta-rmcp-client",
  "zeta-rollout",
  "zeta-sandboxing",
- "zeta-workspace-search",
  "zeta-secrets",
  "zeta-shell-command",
  "zeta-skills",
@@ -10900,6 +10899,7 @@ dependencies = [
  "zeta-windows-sandbox",
  "zeta-workspace",
  "zeta-workspace-access",
+ "zeta-workspace-search",
 ]
 
 [[package]]
@@ -11378,6 +11378,7 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "thiserror 2.0.19",
+ "zeta-immutable-generation-store",
  "zeta-workspace",
 ]
 
@@ -11498,6 +11499,15 @@ name = "zeta-icons"
 version = "0.1.0"
 dependencies = [
  "zui",
+]
+
+[[package]]
+name = "zeta-immutable-generation-store"
+version = "0.1.0"
+dependencies = [
+ "fs2",
+ "memmap2",
+ "tempfile",
 ]
 
 [[package]]

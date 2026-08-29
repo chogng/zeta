@@ -48,6 +48,7 @@ members = [
     "zeta-rs/file-identity",
     "zeta-rs/file-search",
     "zeta-rs/fast-regex-search",
+    "zeta-rs/immutable-generation-store",
     "zeta-rs/file-system",
     "zeta-rs/file-system-tool",
     "zeta-rs/file-watcher",
@@ -189,6 +190,7 @@ keyring = { version = "3.6", default-features = false }
 log = "0.4"
 lru = "0.18.2"
 lsp-types = "0.97"
+memmap2 = "0.9.11"
 hf-chat-template = { version = "1.0.0", features = ["strftime"] }
 # Recursive workspace watches must use FSEvents on macOS; kqueue holds one file
 # descriptor per watched entry and exhausts the process limit on large workspaces.
@@ -329,6 +331,7 @@ zeta-file-search = { path = "zeta-rs/file-search" }
 zeta-file-system = { path = "zeta-rs/file-system" }
 zeta-file-system-tool = { path = "zeta-rs/file-system-tool" }
 zeta-fast-regex-search = { path = "zeta-rs/fast-regex-search" }
+zeta-immutable-generation-store = { path = "zeta-rs/immutable-generation-store" }
 zeta-file-watcher = { path = "zeta-rs/file-watcher" }
 zeta-files = { path = "app/files" }
 zeta-git = { path = "zeta-rs/git" }
