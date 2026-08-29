@@ -42,14 +42,15 @@ zeta-rs/
 ├── shell-command/        # concrete approved-process executor
 ├── file-system/          # concrete read-only filesystem executor
 ├── file-search/          # workspace path fuzzy search + CLI
-├── codebase/             # Workspace 代码事实、本地数据、检索融合与复核
+├── codebase/             # Workspace 代码事实、存储接口、检索融合与复核
+├── codebase-store/       # Codebase SQLite 表、迁移、查询与记录映射
 ├── cloud-codebase/       # 可选云端语义增强、授权、同步与删除恢复
 ├── slash-commands/       # headless catalog, input grammar and interaction state
 ├── slash-launcher/       # product-selected list composition, slash query and selection state
 ├── file-watcher/         # shared filesystem invalidation hints
-├── workspace-index-storage/ # profile-local Workspace index paths and cross-process lifecycle locks
+├── state/                # Profile DB 运行时、路径、权限、迁移与跨进程锁
 ├── git/                  # bounded Git repository operations and structured parsing
-├── diff/                 # shared bounded line/inline diff mapping for Native and TUI
+├── diff/                 # shared bounded line/inline diff mapping for Desktop and TUI
 ├── syntax/               # bounded incremental tree-sitter analysis；不拥有文件、索引或 presentation
 ├── terminal-detection/   # host terminal identity/color capability 与 background fallback interpretation
 ├── theme/                # shared manifest/user-theme resolver 与 device-local bounded loader
@@ -283,7 +284,7 @@ Store trait、完整恢复/追加请求、atomic batch validator 与错误。Cor
 [`session-store/README.md`](../zeta-rs/session-store/README.md) 与
 [`thread-store/README.md`](../zeta-rs/thread-store/README.md)。
 
-`zeta-storage` 当前提供 `SqliteSessionStore` 与 `SqliteThreadStore`。两者打开同一
+`zeta-state` 当前提供 `SqliteSessionStore` 与 `SqliteThreadStore`。两者打开同一
 `state.sqlite3`，并统一负责：
 
 - `BEGIN IMMEDIATE` 下的 sequence compare-and-set；

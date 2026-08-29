@@ -6,7 +6,7 @@ use zeta_attachments::ImageAttachments;
 use zeta_core::{SessionCoordinator, ThreadController, ThreadStore, WriterLease};
 use zeta_protocol::SessionId;
 use zeta_session_store::SessionStore;
-use zeta_storage::{LeaseDirectory, SqliteSessionStore, SqliteThreadStore};
+use zeta_state::{LeaseDirectory, SqliteSessionStore, SqliteThreadStore, StateRuntime};
 
 /// Opens and recovers local authoritative Session and Thread state under one profile root.
 ///
@@ -22,9 +22,9 @@ pub struct LocalStateRepository {
 }
 
 impl LocalStateRepository {
-    pub fn open(root: impl Into<PathBuf>) -> Result<Self, LocalStateError> {
-        let root = root.into();
-        let database_path = local_database_path(&root);
+    pub fn open(state: &StateRuntime) -> Result<Self, LocalStateError> {
+        let root = state.profile_root();
+        let database_path = state.database_path().to_path_buf();
         let image_store = FileImageAttachmentStore::open(root.join("attachments"))
             .map_err(|error| zeta_core::CoreError::Journal(error.to_string()))?;
         Ok(Self {
@@ -87,8 +87,4 @@ impl LocalStateRepository {
         }
         Ok(sessions)
     }
-}
-
-fn local_database_path(root: &Path) -> PathBuf {
-    root.join("state.sqlite3")
 }

@@ -6,7 +6,7 @@ use std::time::Duration;
 use tempfile::TempDir;
 use zeta_workspace::WorkspaceTrustId;
 
-use super::{ClearOutcome, WorkspaceIndexKind, WorkspaceIndexStorage};
+use super::{ClearOutcome, StateRuntime, WorkspaceIndexKind};
 
 fn workspace_id(byte: char) -> WorkspaceTrustId {
     WorkspaceTrustId::from_str(&format!("sha256:{}", byte.to_string().repeat(64))).unwrap()
@@ -15,7 +15,7 @@ fn workspace_id(byte: char) -> WorkspaceTrustId {
 #[test]
 fn uses_one_external_directory_per_workspace() {
     let profile = TempDir::new().unwrap();
-    let storage = WorkspaceIndexStorage::open(profile.path()).unwrap();
+    let storage = StateRuntime::open(profile.path()).unwrap();
     let workspace = workspace_id('a');
 
     let lease = storage
@@ -24,16 +24,21 @@ fn uses_one_external_directory_per_workspace() {
 
     assert_eq!(
         lease.directory(),
-        profile
-            .path()
+        storage
+            .profile_root()
             .join("cache/workspaces")
             .join("a".repeat(64))
             .join("indexes/agent-grep")
     );
-    assert!(profile.path().join("cache/locks/indexes.lock").is_file());
     assert!(
-        profile
-            .path()
+        storage
+            .profile_root()
+            .join("cache/locks/indexes.lock")
+            .is_file()
+    );
+    assert!(
+        storage
+            .profile_root()
             .join("cache/locks/workspaces")
             .join("a".repeat(64))
             .join("agent-grep.lock")
@@ -44,7 +49,7 @@ fn uses_one_external_directory_per_workspace() {
 #[test]
 fn clear_index_waits_for_users_and_is_idempotent() {
     let profile = TempDir::new().unwrap();
-    let storage = WorkspaceIndexStorage::open(profile.path()).unwrap();
+    let storage = StateRuntime::open(profile.path()).unwrap();
     let workspace = workspace_id('b');
     let lease = storage
         .acquire(&workspace, WorkspaceIndexKind::Codebase)
@@ -75,7 +80,7 @@ fn clear_index_waits_for_users_and_is_idempotent() {
 #[test]
 fn clear_workspace_is_atomic_across_index_kinds() {
     let profile = TempDir::new().unwrap();
-    let storage = WorkspaceIndexStorage::open(profile.path()).unwrap();
+    let storage = StateRuntime::open(profile.path()).unwrap();
     let workspace = workspace_id('c');
     let lexical = storage
         .acquire(&workspace, WorkspaceIndexKind::Codebase)
@@ -101,7 +106,7 @@ fn clear_workspace_is_atomic_across_index_kinds() {
 #[test]
 fn clear_all_does_not_remove_an_open_workspace() {
     let profile = TempDir::new().unwrap();
-    let storage = WorkspaceIndexStorage::open(profile.path()).unwrap();
+    let storage = StateRuntime::open(profile.path()).unwrap();
     let workspace = workspace_id('d');
     let lease = storage
         .acquire(&workspace, WorkspaceIndexKind::Codebase)
@@ -120,7 +125,11 @@ fn a_cross_process_lease_blocks_explicit_deletion() {
     let ready = coordination.path().join("ready");
     let release = coordination.path().join("release");
     let mut child = Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "tests::cross_process_lease_child", "--nocapture"])
+        .args([
+            "--exact",
+            "workspace_index::tests::cross_process_lease_child",
+            "--nocapture",
+        ])
         .env("ZETA_INDEX_LOCK_TEST_ROOT", profile.path())
         .env("ZETA_INDEX_LOCK_TEST_READY", &ready)
         .env("ZETA_INDEX_LOCK_TEST_RELEASE", &release)
@@ -128,7 +137,7 @@ fn a_cross_process_lease_blocks_explicit_deletion() {
         .unwrap();
     wait_for_path(&ready);
 
-    let storage = WorkspaceIndexStorage::open(profile.path()).unwrap();
+    let storage = StateRuntime::open(profile.path()).unwrap();
     assert_eq!(
         storage
             .clear_index(&workspace_id('f'), WorkspaceIndexKind::AgentGrep)
@@ -151,7 +160,7 @@ fn cross_process_lease_child() {
     let Some(profile) = std::env::var_os("ZETA_INDEX_LOCK_TEST_ROOT") else {
         return;
     };
-    let storage = WorkspaceIndexStorage::open(profile).unwrap();
+    let storage = StateRuntime::open(profile).unwrap();
     let _lease = storage
         .acquire(&workspace_id('f'), WorkspaceIndexKind::AgentGrep)
         .unwrap();
@@ -178,7 +187,7 @@ fn refuses_to_follow_a_symlink_during_clear() {
 
     let profile = TempDir::new().unwrap();
     let outside = TempDir::new().unwrap();
-    let storage = WorkspaceIndexStorage::open(profile.path()).unwrap();
+    let storage = StateRuntime::open(profile.path()).unwrap();
     let workspace = workspace_id('e');
     let index_directory = storage.index_directory(&workspace, WorkspaceIndexKind::AgentGrep);
     fs::create_dir_all(index_directory.parent().unwrap()).unwrap();

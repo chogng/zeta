@@ -10,13 +10,13 @@
 ## 快速理解
 
 长期架构固定少数不会随实现替换而改变的边界：Session 管任务拓扑，Thread 管执行顺序，
-共享协议只定义语义，Core 协调状态，存储只实现一套事件流。
+共享协议只定义语义，Core 协调状态，State 只实现一套数据库运行时。
 
 | 长期问题 | 固定答案 | 主要边界 |
 | --- | --- | --- |
 | 产品根对象是什么？ | Session 是任务和 Thread 拓扑聚合，Thread 是独立执行聚合 | [聚合并发边界](#3-聚合并发边界) |
 | 谁拥有状态迁移？ | Core 中的纯 reducer 与协调器 | [Session 协调器](#5-session-协调器)、[Thread 控制器](#6-thread-控制器) |
-| 谁拥有持久化格式？ | 一个共享事件流引擎，Session/Thread 只保留类型化适配器 | [唯一物理事件流](#4-唯一物理-event-stream-引擎) |
+| 谁拥有数据库运行规则？ | `zeta-state`，领域 crate 只保留类型化适配器 | [唯一数据库运行时](#4-唯一数据库运行时) |
 | 客户端能否拥有另一套状态？ | 不能；Desktop、CLI、TUI 只消费统一 App Server API | [App Server](#8-app-server) |
 | 外部请求从哪里进入？ | App Server 是 Session/Thread/Turn/Item 的唯一外部进入/输出门禁 | [App Server](#8-app-server) 与 [App Server API](zeta-app-server-api.md) |
 | 开发期旧接口如何处理？ | 直接迁移权威契约和调用方，不建立隐藏兼容层 | 本文固定原则 |
@@ -35,7 +35,7 @@ flowchart LR
     SR --> TR["Thread Controller"]
     SR --> SS["SessionStore"]
     TR --> TS["ThreadStore"]
-    SS --> ES["Shared Event-Stream Engine"]
+    SS --> ES["Shared State Database Runtime"]
     TS --> ES
 ```
 
@@ -45,7 +45,7 @@ flowchart LR
 - protocol 只包含跨组件共享的领域契约；
 - Session 与 Thread reducer 都是纯函数；
 - Session 与 Thread 各自拥有逻辑 sequence；
-- storage 的物理 framing、checksum、atomic append 和断尾恢复只有一套实现；
+- State 的 SQLite 连接规则、文件权限、事务参数和锁只有一套实现；
 - App Server 是产品能力的唯一外部门禁，只做传输、路由、订阅和 DTO 编解码，
   不复制 Core reducer 或 Store authority；
 - Desktop、CLI、TUI 与任何 Agent host 消费同一个 Session-first 产品 API；进程内嵌也必须经过
@@ -76,8 +76,8 @@ zeta-core
   ├─ ThreadController + Thread reducer
   └─ ports / lifecycle policy / recovery
 
-zeta-storage
-  ├─ shared event-stream engine
+zeta-state
+  ├─ shared SQLite runtime
   ├─ SessionStore typed adapter
   ├─ ThreadStore typed adapter
   ├─ writer lease
@@ -127,7 +127,7 @@ core + rollout + app-server-protocol
   ↑
 app-server
 
-core + storage + history + session-store + thread-store
+core + state + history + session-store + thread-store
   ↑
 rollout
 
@@ -137,39 +137,37 @@ rollout-trace
 ```
 
 禁止 `core → app-server-protocol`、`protocol → tokio/fs/database/JSON-RPC` 或
-`storage → app-server`。
+`state → app-server`。
 
 ## 3. 聚合并发边界
 
 Session/Thread sequence 的定义与必须独立的理由见
 [`protocol.md` 的 Sequence、Cursor 与 ID](protocol.md#5-sequencecursor-与-id)。对系统实现
-的直接约束是：两种 aggregate 使用独立 writer/serialization scope，但共享同一个物理
-event-stream engine。
+的直接约束是：两种 aggregate 使用独立 writer/serialization scope，但共享同一套
+SQLite 运行规则。
 
-## 4. 唯一物理 event-stream 引擎
+## 4. 唯一数据库运行时
 
-`zeta-storage::event_stream` 独占以下职责：
+`zeta-state` 独占以下职责：
 
-- JSONL batch framing；
-- format version 与 stream kind discriminator；
-- batch checksum；
-- atomic append + `sync_data`；
-- 未终止尾记录恢复；
-- typed payload serde。
+- Profile 数据库路径与 Workspace 可重建数据目录；
+- SQLite 文件权限、普通文件检查、WAL、busy timeout 与 durability；
+- Session、Thread、Turn Changes 的 SQLite adapter；
+- Workspace 数据的跨进程占用锁与显式清理。
 
 Session 与 Thread storage adapter 只负责：
 
-- ID 到 stream path 的映射；
+- ID 到表记录的映射；
 - 调用各自 store crate 的 batch validator；
 - typed error 映射；
 - list/load 接口。
 
-不再提供第二种单文件 `RolloutLog` API，也不读取旧 kind/payload、旧 schema 或隐式 Session
-数据。当前开发数据不符合新格式时明确失败或由开发者清空，不在领域代码中加入 upcast。
+不再提供第二套数据库打开规则。领域表和查询由对应 adapter 拥有；文件权限、连接参数和锁不能在
+App Server 或领域 crate 中重复实现。
 
 `zeta-history` 只定义 persisted Thread record 及其版本兼容区间；它没有 Store、文件或数据库
 API。`zeta-rollout` 是这套权威历史的本地组合层：它同时打开 typed SessionStore、ThreadStore 与
-writer lease，并且保证恢复顺序为 Thread 在前、Session 在后。它不复制 event framing 或 reducer。
+writer lease，并且保证恢复顺序为 Thread 在前、Session 在后。它不复制数据库运行规则或 reducer。
 `zeta-rollout-trace` 只依赖两个 store port，将某个 Session 的 topology stream 和其计划的各
 Thread stream 导出为只读 artifact。trace 保留每个 aggregate 自己的 sequence，绝不发明全局
 sequence，也不参与任何运行时写入或状态决策。

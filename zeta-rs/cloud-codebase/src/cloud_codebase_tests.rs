@@ -9,7 +9,6 @@ use std::sync::atomic::Ordering;
 use tempfile::TempDir;
 use zeta_codebase::Codebase;
 use zeta_codebase::CodebaseLimits;
-use zeta_codebase::CodebaseStorage;
 use zeta_workspace::WorkspaceRoot;
 
 use super::*;
@@ -499,9 +498,8 @@ fn workspace() -> TempDir {
 
 fn index(workspace: &TempDir) -> Arc<Codebase> {
     Arc::new(
-        Codebase::open(
+        Codebase::open_memory(
             WorkspaceRoot::open(workspace.path()).expect("root"),
-            CodebaseStorage::Memory,
             CodebaseLimits::default(),
         )
         .expect("index"),

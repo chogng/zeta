@@ -2,7 +2,6 @@ use super::*;
 use std::fs;
 use zeta_action_policy::GrantId;
 use zeta_codebase::CodebaseLimits;
-use zeta_codebase::CodebaseStorage;
 use zeta_protocol::ToolCallId;
 use zeta_workspace::WorkspaceCapability;
 use zeta_workspace::WorkspaceRoot;
@@ -25,8 +24,7 @@ fn explicit_search_code_tool_requires_its_exact_read_only_grant_and_returns_loca
         WorkspaceCapability::ExecuteProcess,
     )
     .unwrap();
-    let index =
-        Arc::new(Codebase::open(root, CodebaseStorage::Memory, CodebaseLimits::default()).unwrap());
+    let index = Arc::new(Codebase::open_memory(root, CodebaseLimits::default()).unwrap());
     index.rebuild().unwrap();
     let tool = CodebaseRetrievalTool::new(workspace, index, None, None, None);
     let call = ToolCall {

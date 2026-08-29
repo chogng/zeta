@@ -3,7 +3,7 @@ use super::update_broker::UpdateBroker;
 use std::sync::Arc;
 use zeta_config::ConfigStore;
 use zeta_core::{ModelSelection, ModelService, SessionCoordinator};
-use zeta_storage::SqliteTurnChangeStore;
+use zeta_state::SqliteTurnChangeStore;
 use zeta_turn_changes::{MessageState, SnapshotBackend, TurnChangeSet, TurnChangeStore};
 use zeta_workspace::WorkspaceTrustId;
 

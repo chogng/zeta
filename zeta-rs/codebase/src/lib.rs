@@ -7,19 +7,24 @@
 mod chunker;
 mod error;
 mod index;
+mod memory_store;
 mod overlay;
 mod retrieval;
 mod scanner;
 mod semantic;
 mod store;
-mod store_manifest;
 mod symbol;
 mod types;
 
+#[doc(hidden)]
+pub use chunker::{CHUNKER_VERSION, PreparedChunk};
 pub use error::CodebaseError;
 pub use index::Codebase;
 pub use retrieval::*;
+#[doc(hidden)]
+pub use scanner::{PreparedFile, WorkspaceScan};
 pub use semantic::*;
+pub use store::{CodebaseIndexStore, FileUpdate, StoredSource};
 pub use symbol::*;
 pub use types::ChunkContentHash;
 pub use types::ChunkKey;
@@ -31,7 +36,6 @@ pub use types::CodebaseOverlayDocument;
 pub use types::CodebaseOverlaySnapshot;
 pub use types::CodebaseQuery;
 pub use types::CodebaseSnapshot;
-pub use types::CodebaseStorage;
 pub use types::IndexRootId;
 pub use types::IndexedChunkReference;
 pub use types::IndexedLanguage;

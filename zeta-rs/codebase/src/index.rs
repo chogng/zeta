@@ -21,7 +21,6 @@ use crate::CodebaseOverlayDocument;
 use crate::CodebaseOverlaySnapshot;
 use crate::CodebaseQuery;
 use crate::CodebaseSnapshot;
-use crate::CodebaseStorage;
 use crate::IndexRootId;
 use crate::IndexedChunkReference;
 use crate::IndexedSourceReference;
@@ -38,11 +37,12 @@ use crate::chunker::line_at;
 use crate::chunker::line_starts;
 use crate::chunker::source_revision;
 use crate::error::io_error;
+use crate::memory_store::InMemoryCodebaseIndexStore;
 use crate::overlay::CodebaseOverlay;
 use crate::scanner::prepare_relative_file;
 use crate::scanner::scan_workspace;
+use crate::store::CodebaseIndexStore;
 use crate::store::FileUpdate;
-use crate::store::IndexStore;
 use crate::store::StoredSource;
 
 /// One workspace Codebase backed by rebuildable local data.
@@ -50,23 +50,31 @@ pub struct Codebase {
     root: WorkspaceRoot,
     root_id: IndexRootId,
     limits: CodebaseLimits,
-    store: IndexStore,
+    store: Arc<dyn CodebaseIndexStore>,
     overlay: Arc<CodebaseOverlay>,
 }
 
 impl Codebase {
+    /// Opens a process-local Codebase for tests and explicitly ephemeral product sessions.
+    pub fn open_memory(root: WorkspaceRoot, limits: CodebaseLimits) -> Result<Self, CodebaseError> {
+        Self::open(
+            root,
+            Arc::new(InMemoryCodebaseIndexStore::default()),
+            limits,
+        )
+    }
+
     /// Opens a local index projection for one already-authorized workspace root.
     ///
     /// Opening does not scan the workspace. Call [`Self::rebuild`] after watcher registration so
     /// filesystem mutations during the initial scan remain observable to the host.
     pub fn open(
         root: WorkspaceRoot,
-        storage: CodebaseStorage,
+        store: Arc<dyn CodebaseIndexStore>,
         limits: CodebaseLimits,
     ) -> Result<Self, CodebaseError> {
         validate_limits(&limits)?;
         let root_id = IndexRootId::from_root(&root);
-        let store = IndexStore::open(&storage, &root_id)?;
         Ok(Self {
             root,
             root_id,

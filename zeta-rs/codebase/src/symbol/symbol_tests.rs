@@ -6,7 +6,6 @@ use std::sync::Arc;
 use crate::Codebase;
 use crate::CodebaseLimits;
 use crate::CodebaseOverlayDocument;
-use crate::CodebaseStorage;
 use tempfile::TempDir;
 use zeta_async_utils::CancellationSource;
 use zeta_workspace::WorkspaceRoot;
@@ -16,7 +15,6 @@ use crate::SymbolIndexError;
 use crate::SymbolIndexLimits;
 use crate::SymbolIndexQuery;
 use crate::SymbolIndexRefreshOutcome;
-use crate::SymbolIndexStorage;
 use crate::SymbolKind;
 
 fn workspace() -> TempDir {
@@ -26,9 +24,8 @@ fn workspace() -> TempDir {
 }
 
 fn codebase(directory: &TempDir) -> Arc<Codebase> {
-    let index = Codebase::open(
+    let index = Codebase::open_memory(
         WorkspaceRoot::open(directory.path()).expect("root"),
-        CodebaseStorage::Memory,
         CodebaseLimits::default(),
     )
     .expect("Codebase");
@@ -45,12 +42,8 @@ fn reconciles_verified_sources_and_fuzzy_searches_symbols() {
          pub fn create_session() {}\n",
     )
     .expect("source");
-    let index = SymbolIndex::open(
-        codebase(&directory),
-        SymbolIndexStorage::Memory,
-        SymbolIndexLimits::default(),
-    )
-    .expect("symbol index");
+    let index = SymbolIndex::open_memory(codebase(&directory), SymbolIndexLimits::default())
+        .expect("symbol index");
 
     let SymbolIndexRefreshOutcome::Published(snapshot) = index.reconcile().expect("reconcile")
     else {
@@ -76,12 +69,8 @@ fn exact_name_match_outranks_fuzzy_candidates() {
         "fn user() {}\nfn create_user() {}\nfn user_factory() {}\n",
     )
     .expect("source");
-    let index = SymbolIndex::open(
-        codebase(&directory),
-        SymbolIndexStorage::Memory,
-        SymbolIndexLimits::default(),
-    )
-    .expect("symbol index");
+    let index = SymbolIndex::open_memory(codebase(&directory), SymbolIndexLimits::default())
+        .expect("symbol index");
     index.reconcile().expect("reconcile");
 
     let hits = index
@@ -97,12 +86,8 @@ fn reconcile_replaces_changed_and_deleted_source_symbols() {
     let source = directory.path().join("service.rs");
     fs::write(&source, "fn before() {}\n").expect("source");
     let codebase = codebase(&directory);
-    let index = SymbolIndex::open(
-        Arc::clone(&codebase),
-        SymbolIndexStorage::Memory,
-        SymbolIndexLimits::default(),
-    )
-    .expect("symbol index");
+    let index = SymbolIndex::open_memory(Arc::clone(&codebase), SymbolIndexLimits::default())
+        .expect("symbol index");
     index.reconcile().expect("initial reconcile");
 
     fs::write(&source, "fn after() {}\n").expect("changed source");
@@ -137,44 +122,6 @@ fn reconcile_replaces_changed_and_deleted_source_symbols() {
 }
 
 #[test]
-fn persistent_projection_reopens_without_republishing_same_source_generation() {
-    let directory = workspace();
-    fs::write(directory.path().join("lib.rs"), "pub fn persisted() {}\n").expect("source");
-    let codebase = codebase(&directory);
-    let database = directory.path().join("profile/symbols.sqlite3");
-    let first = SymbolIndex::open(
-        Arc::clone(&codebase),
-        SymbolIndexStorage::Persistent(database.clone()),
-        SymbolIndexLimits::default(),
-    )
-    .expect("symbol index");
-    let published = first.reconcile().expect("reconcile");
-    assert!(matches!(published, SymbolIndexRefreshOutcome::Published(_)));
-    let generation = first.snapshot().unwrap().generation;
-    drop(first);
-
-    let reopened = SymbolIndex::open(
-        codebase,
-        SymbolIndexStorage::Persistent(database),
-        SymbolIndexLimits::default(),
-    )
-    .expect("reopen");
-    assert_eq!(
-        reopened.reconcile().expect("no-op reconcile"),
-        SymbolIndexRefreshOutcome::NoChange
-    );
-    assert_eq!(reopened.snapshot().unwrap().generation, generation);
-    assert_eq!(
-        reopened
-            .search(&SymbolIndexQuery::new("persisted"))
-            .unwrap()[0]
-            .symbol
-            .name,
-        "persisted"
-    );
-}
-
-#[test]
 fn total_symbol_limit_is_explicit_and_rebuilds_on_the_next_generation() {
     let directory = workspace();
     fs::write(
@@ -185,8 +132,7 @@ fn total_symbol_limit_is_explicit_and_rebuilds_on_the_next_generation() {
     let codebase = codebase(&directory);
     let limits = SymbolIndexLimits::default()
         .with_max_total_symbols(NonZeroUsize::new(2).expect("non-zero"));
-    let index =
-        SymbolIndex::open(codebase, SymbolIndexStorage::Memory, limits).expect("symbol index");
+    let index = SymbolIndex::open_memory(codebase, limits).expect("symbol index");
     let SymbolIndexRefreshOutcome::Published(snapshot) = index.reconcile().expect("reconcile")
     else {
         panic!("reconcile must publish");
@@ -200,12 +146,8 @@ fn dirty_overlay_symbols_replace_persistent_symbols_for_the_same_path() {
     let directory = workspace();
     fs::write(directory.path().join("service.rs"), "fn disk_name() {}\n").expect("source");
     let codebase = codebase(&directory);
-    let index = SymbolIndex::open(
-        Arc::clone(&codebase),
-        SymbolIndexStorage::Memory,
-        SymbolIndexLimits::default(),
-    )
-    .expect("symbol index");
+    let index = SymbolIndex::open_memory(Arc::clone(&codebase), SymbolIndexLimits::default())
+        .expect("symbol index");
     index.reconcile().expect("persistent reconcile");
 
     codebase
@@ -247,12 +189,8 @@ fn dirty_overlay_symbols_replace_persistent_symbols_for_the_same_path() {
 fn cancelled_query_does_not_publish_results() {
     let directory = workspace();
     fs::write(directory.path().join("lib.rs"), "fn searchable() {}\n").expect("source");
-    let index = SymbolIndex::open(
-        codebase(&directory),
-        SymbolIndexStorage::Memory,
-        SymbolIndexLimits::default(),
-    )
-    .expect("symbol index");
+    let index = SymbolIndex::open_memory(codebase(&directory), SymbolIndexLimits::default())
+        .expect("symbol index");
     index.reconcile().expect("reconcile");
     let cancellation = CancellationSource::new();
     cancellation.cancel();

@@ -178,8 +178,8 @@ fn cloud_codebase_error(error: CloudCodebaseError) -> RpcError {
         | CloudCodebaseError::LocalIndex(_)
         | CloudCodebaseError::IncompatibleStorage
         | CloudCodebaseError::Storage(_)
-        | CloudCodebaseError::Serialization(_)
-        | CloudCodebaseError::Io { .. } => {
+        | CloudCodebaseError::DatabaseRuntime(_)
+        | CloudCodebaseError::Serialization(_) => {
             RpcError::new(-32097, AppServerErrorName::CloudCodebaseOperationFailed)
         }
     }

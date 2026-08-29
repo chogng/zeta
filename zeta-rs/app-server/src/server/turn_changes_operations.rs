@@ -13,7 +13,7 @@ use zeta_app_server_protocol::protocol::turn_changes::{
     TurnChangesReadResult, TurnChangesUpdateDraftParams,
 };
 use zeta_core::TurnStatus;
-use zeta_storage::TurnChangeCommandOutcome;
+use zeta_state::TurnChangeCommandOutcome;
 use zeta_turn_changes::{ChangeFileKind, ChangeSetId, CommitState, TurnChangeSet, TurnChangeStore};
 
 const MAX_FILE_SIDE_BYTES: usize = 512 * 1024;

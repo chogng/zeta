@@ -10,7 +10,6 @@ use crate::CodebaseEnhancementError;
 use crate::CodebaseLimits;
 use crate::CodebaseOverlayDocument;
 use crate::CodebaseSemanticService;
-use crate::CodebaseStorage;
 use crate::CodebaseVectorStore;
 use crate::EmbeddingIndexKey;
 use crate::InMemoryCodebaseVectorStore;
@@ -18,7 +17,6 @@ use crate::IndexRootId;
 use crate::IndexedLanguage;
 use crate::SymbolIndex;
 use crate::SymbolIndexLimits;
-use crate::SymbolIndexStorage;
 use tempfile::TempDir;
 use zeta_model_provider::EmbeddingInvoker;
 use zeta_model_provider::EmbeddingRequest;
@@ -297,12 +295,8 @@ fn symbol_retrieval_returns_the_exact_declaration_with_provenance() {
     let index = index(&workspace);
     index.rebuild().expect("rebuild");
     let symbols = Arc::new(
-        SymbolIndex::open(
-            Arc::clone(&index),
-            SymbolIndexStorage::Memory,
-            SymbolIndexLimits::default(),
-        )
-        .expect("symbol index"),
+        SymbolIndex::open_memory(Arc::clone(&index), SymbolIndexLimits::default())
+            .expect("symbol index"),
     );
     symbols.reconcile().expect("symbol reconcile");
     let service = CodebaseRetrievalService::local(index)
@@ -333,9 +327,8 @@ fn workspace(content: &str) -> TempDir {
 
 fn index(workspace: &TempDir) -> Arc<Codebase> {
     Arc::new(
-        Codebase::open(
+        Codebase::open_memory(
             WorkspaceRoot::open(workspace.path()).expect("root"),
-            CodebaseStorage::Memory,
             CodebaseLimits::default(),
         )
         .expect("index"),

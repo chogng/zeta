@@ -3,6 +3,7 @@ use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 use zeta_core::{CreateSessionRequest, CreateSessionThreadRequest, SequenceExpectation};
 use zeta_protocol::CommandId;
+use zeta_state::StateRuntime;
 
 fn temporary_root() -> std::path::PathBuf {
     std::env::temp_dir().join(format!(
@@ -18,7 +19,8 @@ fn temporary_root() -> std::path::PathBuf {
 #[test]
 fn repository_recovers_threads_before_their_session_membership() {
     let root = temporary_root();
-    let repository = LocalStateRepository::open(&root).unwrap();
+    let state = StateRuntime::open(&root).unwrap();
+    let repository = LocalStateRepository::open(&state).unwrap();
     let runtime = repository.recover_coordinator().unwrap();
     let session = runtime
         .create_session(CreateSessionRequest {
@@ -37,7 +39,7 @@ fn repository_recovers_threads_before_their_session_membership() {
         })
         .unwrap();
 
-    let recovered = LocalStateRepository::open(&root)
+    let recovered = LocalStateRepository::open(&state)
         .unwrap()
         .recover_coordinator()
         .unwrap();

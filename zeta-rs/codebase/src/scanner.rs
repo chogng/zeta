@@ -17,7 +17,7 @@ use crate::types::SourceRevision;
 use zeta_workspace::WorkspaceRoot;
 
 #[derive(Clone, Debug)]
-pub(crate) struct PreparedFile {
+pub struct PreparedFile {
     pub relative_path: PathBuf,
     pub source_revision: SourceRevision,
     pub language: IndexedLanguage,
@@ -27,7 +27,7 @@ pub(crate) struct PreparedFile {
 }
 
 #[derive(Debug)]
-pub(crate) struct WorkspaceScan {
+pub struct WorkspaceScan {
     pub files: Vec<PreparedFile>,
     pub skipped_file_count: usize,
     pub file_limit_hit: bool,

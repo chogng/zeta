@@ -22,7 +22,8 @@ const DEFAULT_MAX_RESULTS: usize = 100;
 pub struct IndexRootId(String);
 
 impl IndexRootId {
-    pub(crate) fn from_root(root: &WorkspaceRoot) -> Self {
+    #[doc(hidden)]
+    pub fn from_root(root: &WorkspaceRoot) -> Self {
         Self(root.trust_id().as_str().to_owned())
     }
 
@@ -44,7 +45,8 @@ macro_rules! digest_identity {
         pub struct $name(pub(crate) String);
 
         impl $name {
-            pub(crate) fn new(value: String) -> Self {
+            #[doc(hidden)]
+            pub fn new(value: String) -> Self {
                 Self(value)
             }
 
@@ -124,7 +126,8 @@ impl IndexedLanguage {
         }
     }
 
-    pub(crate) fn from_id(value: &str) -> Self {
+    #[doc(hidden)]
+    pub fn from_id(value: &str) -> Self {
         match value {
             "javascript" => Self::Javascript,
             "javascriptreact" => Self::JavascriptReact,
@@ -270,13 +273,6 @@ pub struct MaterializedOverlayDocument {
 pub struct CodebaseOverlaySnapshot {
     pub generation: u64,
     pub documents: Vec<MaterializedOverlayDocument>,
-}
-
-/// Storage placement for one rebuildable index projection.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum CodebaseStorage {
-    Memory,
-    Persistent(PathBuf),
 }
 
 /// Resource and result limits applied by one Codebase.

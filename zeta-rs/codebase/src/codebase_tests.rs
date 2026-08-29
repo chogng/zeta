@@ -9,7 +9,6 @@ use crate::CodebaseError;
 use crate::CodebaseLimits;
 use crate::CodebaseOverlayDocument;
 use crate::CodebaseQuery;
-use crate::CodebaseStorage;
 use crate::IndexedLanguage;
 use crate::RefreshOutcome;
 use crate::SourceExcerptReference;
@@ -21,9 +20,8 @@ fn workspace() -> TempDir {
 }
 
 fn memory_index(directory: &TempDir) -> Codebase {
-    Codebase::open(
+    Codebase::open_memory(
         WorkspaceRoot::open(directory.path()).expect("root"),
-        CodebaseStorage::Memory,
         CodebaseLimits::default(),
     )
     .expect("index")
@@ -113,12 +111,8 @@ fn rebuild_honors_ignore_binary_and_file_limits() {
     )
     .expect("hidden");
     let limits = CodebaseLimits::default().with_max_files(NonZeroUsize::new(2).expect("non-zero"));
-    let index = Codebase::open(
-        WorkspaceRoot::open(directory.path()).expect("root"),
-        CodebaseStorage::Memory,
-        limits,
-    )
-    .expect("index");
+    let index = Codebase::open_memory(WorkspaceRoot::open(directory.path()).expect("root"), limits)
+        .expect("index");
 
     let snapshot = index.rebuild().expect("rebuild");
     assert_eq!(snapshot.indexed_file_count, 1);
@@ -186,12 +180,8 @@ fn materialization_does_not_read_past_the_configured_file_limit() {
         .with_max_total_source_bytes(NonZeroUsize::new(128).expect("non-zero"))
         .with_target_chunk_bytes(NonZeroUsize::new(32).expect("non-zero"))
         .with_max_chunk_bytes(NonZeroUsize::new(64).expect("non-zero"));
-    let index = Codebase::open(
-        WorkspaceRoot::open(directory.path()).expect("root"),
-        CodebaseStorage::Memory,
-        limits,
-    )
-    .expect("index");
+    let index = Codebase::open_memory(WorkspaceRoot::open(directory.path()).expect("root"), limits)
+        .expect("index");
     index.rebuild().expect("rebuild");
     let hit = index
         .search(&CodebaseQuery::new("bounded_marker"))
@@ -268,65 +258,6 @@ fn hard_excluded_runtime_paths_do_not_force_rebuilds() {
 }
 
 #[test]
-fn persistent_projection_reopens_and_rejects_another_root() {
-    let directory = workspace();
-    fs::write(
-        directory.path().join("lib.rs"),
-        "pub fn durable_index() {}\n",
-    )
-    .expect("source");
-    let state = tempfile::tempdir().expect("state");
-    let database = state.path().join("codebase.sqlite3");
-    let root = WorkspaceRoot::open(directory.path()).expect("root");
-    let index = Codebase::open(
-        root.clone(),
-        CodebaseStorage::Persistent(database.clone()),
-        CodebaseLimits::default(),
-    )
-    .expect("index");
-    index.rebuild().expect("rebuild");
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-
-        assert_eq!(
-            fs::metadata(&database)
-                .expect("database metadata")
-                .permissions()
-                .mode()
-                & 0o777,
-            0o600
-        );
-    }
-    drop(index);
-
-    let reopened = Codebase::open(
-        root,
-        CodebaseStorage::Persistent(database.clone()),
-        CodebaseLimits::default(),
-    )
-    .expect("reopen");
-    assert_eq!(reopened.snapshot().expect("snapshot").generation, 1);
-    assert_eq!(
-        reopened
-            .search(&CodebaseQuery::new("durable_index"))
-            .expect("search")
-            .len(),
-        1
-    );
-
-    let other = workspace();
-    assert!(matches!(
-        Codebase::open(
-            WorkspaceRoot::open(other.path()).expect("other root"),
-            CodebaseStorage::Persistent(database),
-            CodebaseLimits::default(),
-        ),
-        Err(CodebaseError::StorageRootMismatch)
-    ));
-}
-
-#[test]
 fn query_is_literal_bounded_and_empty_query_is_rejected() {
     let directory = workspace();
     fs::write(
@@ -361,12 +292,8 @@ fn chunk_limit_is_bounded_and_visible_in_the_snapshot() {
         .with_target_chunk_bytes(NonZeroUsize::new(16).expect("non-zero"))
         .with_max_chunk_bytes(NonZeroUsize::new(16).expect("non-zero"))
         .with_max_chunks_per_file(NonZeroUsize::new(1).expect("non-zero"));
-    let index = Codebase::open(
-        WorkspaceRoot::open(directory.path()).expect("root"),
-        CodebaseStorage::Memory,
-        limits,
-    )
-    .expect("index");
+    let index = Codebase::open_memory(WorkspaceRoot::open(directory.path()).expect("root"), limits)
+        .expect("index");
 
     let snapshot = index.rebuild().expect("rebuild");
     assert_eq!(snapshot.indexed_chunk_count, 1);

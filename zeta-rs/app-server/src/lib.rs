@@ -50,7 +50,7 @@ pub use review::ProviderReviewModel;
 pub use review::ReviewModelResolutionError;
 pub use review::ReviewModelResolver;
 pub use server::AppServer;
-pub use server::CodebaseSemanticModels;
+pub use server::CodebaseModels;
 pub use server::ConnectionNotifications;
 pub use server::ConnectionState;
 pub use zeta_extensions::ExtensionRoot;

@@ -15,7 +15,7 @@ zeta-attachments = { workspace = true }
 zeta-core = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-session-store = { workspace = true }
-zeta-storage = { workspace = true }
+zeta-state = { workspace = true }
 zeta-thread-store = { workspace = true }
 
 [lints]

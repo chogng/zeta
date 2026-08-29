@@ -1,5 +1,5 @@
 use crate::AppServer;
-use crate::CodebaseSemanticModels;
+use crate::CodebaseModels;
 use crate::SlashCommandCatalog;
 use crate::model_catalog::ModelCatalog;
 use crate::model_provider_error::map_model_provider_error;
@@ -678,8 +678,7 @@ impl std::error::Error for OpenAppServerError {}
 /// instances.
 pub struct LocalProfileRuntime {
     profile_root: PathBuf,
-    workspace_index_storage: Arc<zeta_workspace_index_storage::WorkspaceIndexStorage>,
-    database_path: PathBuf,
+    state: Arc<zeta_state::StateRuntime>,
     sessions: Arc<SessionCoordinator>,
     config: Arc<ConfigStore>,
     secrets: Arc<dyn SecretStore>,
@@ -721,9 +720,10 @@ impl LocalProfileRuntime {
         let requested_root = profile_root.into();
         std::fs::create_dir_all(&requested_root).map_err(open_error)?;
         let profile_root = std::fs::canonicalize(&requested_root).map_err(open_error)?;
-        let image_attachments = open_image_attachments(&profile_root)?;
-        let repository = LocalStateRepository::open(&profile_root).map_err(open_error)?;
-        let database_path = repository.database_path().to_path_buf();
+        let state = Arc::new(zeta_state::StateRuntime::open(&profile_root).map_err(open_error)?);
+        let image_attachments = open_image_attachments(state.profile_root())?;
+        let repository = LocalStateRepository::open(&state).map_err(open_error)?;
+        let database_path = state.database_path().to_path_buf();
         let sessions = repository
             .recover_coordinator_with_image_attachments(image_attachments)
             .map_err(open_error)?;
@@ -735,14 +735,9 @@ impl LocalProfileRuntime {
             FileSecretStore::open(profile_root.join("secrets"))
                 .map_err(|error| OpenAppServerError(error.to_string()))?,
         );
-        let workspace_index_storage = Arc::new(
-            zeta_workspace_index_storage::WorkspaceIndexStorage::open(&profile_root)
-                .map_err(open_error)?,
-        );
         Ok(Self {
             profile_root,
-            workspace_index_storage,
-            database_path,
+            state,
             sessions,
             config,
             secrets,
@@ -757,23 +752,21 @@ impl LocalProfileRuntime {
         Arc::clone(&self.secrets)
     }
 
-    fn workspace_index_storage(&self) -> Arc<zeta_workspace_index_storage::WorkspaceIndexStorage> {
-        Arc::clone(&self.workspace_index_storage)
+    fn state_runtime(&self) -> Arc<zeta_state::StateRuntime> {
+        Arc::clone(&self.state)
     }
 
     /// Explicitly clears all rebuildable local indexes for one inactive Workspace.
     pub fn clear_workspace_indexes(
         &self,
         workspace: &zeta_workspace::WorkspaceTrustId,
-    ) -> std::io::Result<zeta_workspace_index_storage::ClearOutcome> {
-        self.workspace_index_storage.clear_workspace(workspace)
+    ) -> std::io::Result<zeta_state::ClearOutcome> {
+        self.state.clear_workspace(workspace)
     }
 
     /// Explicitly clears every rebuildable local Workspace index in this profile.
-    pub fn clear_all_workspace_indexes(
-        &self,
-    ) -> std::io::Result<zeta_workspace_index_storage::ClearOutcome> {
-        self.workspace_index_storage.clear_all()
+    pub fn clear_all_workspace_indexes(&self) -> std::io::Result<zeta_state::ClearOutcome> {
+        self.state.clear_all()
     }
 
     fn scoped_updates(
@@ -833,7 +826,7 @@ impl LocalProfileRuntime {
 /// Optional codebase adapters installed before the local Workspace runtime is activated.
 #[derive(Default)]
 pub struct LocalCodebaseProviders {
-    semantic_models: Option<CodebaseSemanticModels>,
+    models: Option<CodebaseModels>,
     cloud: CloudCodebaseProviderRegistry,
 }
 
@@ -842,9 +835,9 @@ impl LocalCodebaseProviders {
         Self::default()
     }
 
-    /// Installs models invoked by local semantic Codebase and opt-in Tool Search orchestration.
-    pub fn with_semantic_models(mut self, models: CodebaseSemanticModels) -> Self {
-        self.semantic_models = Some(models);
+    /// Installs optional device-side models used by Codebase and Tool Search.
+    pub fn with_models(mut self, models: CodebaseModels) -> Self {
+        self.models = Some(models);
         self
     }
 
@@ -913,18 +906,23 @@ pub fn open_local_app_server_with_codebase_providers(
             ));
         }
     }
+    let state_runtime = match &profile_runtime {
+        Some(runtime) => runtime.state_runtime(),
+        None => {
+            Arc::new(zeta_state::StateRuntime::open(&options.profile_root).map_err(open_error)?)
+        }
+    };
     let (database_path, sessions, config) = match (&profile_runtime, options.session_state_mode) {
         (Some(runtime), SessionStateMode::Durable) => (
-            runtime.database_path.clone(),
+            runtime.state.database_path().to_path_buf(),
             Arc::clone(&runtime.sessions),
             Arc::clone(&runtime.config),
         ),
         (Some(_), SessionStateMode::Ephemeral) => unreachable!("validated above"),
         (None, SessionStateMode::Durable) => {
             let image_attachments = open_image_attachments(&options.profile_root)?;
-            let repository =
-                LocalStateRepository::open(&options.profile_root).map_err(open_error)?;
-            let database_path = repository.database_path().to_path_buf();
+            let repository = LocalStateRepository::open(&state_runtime).map_err(open_error)?;
+            let database_path = state_runtime.database_path().to_path_buf();
             let sessions = repository
                 .recover_coordinator_with_image_attachments(image_attachments)
                 .map_err(open_error)?;
@@ -947,7 +945,7 @@ pub fn open_local_app_server_with_codebase_providers(
                 Arc::new(InMemorySessionStore::default()),
                 threads,
             ));
-            let database_path = options.profile_root.join("state.sqlite3");
+            let database_path = state_runtime.database_path().to_path_buf();
             let config = Arc::new(
                 ConfigStore::open_with_paths(
                     database_path.clone(),
@@ -1127,13 +1125,7 @@ pub fn open_local_app_server_with_codebase_providers(
     } else {
         None
     };
-    let workspace_index_storage = match &profile_runtime {
-        Some(runtime) => runtime.workspace_index_storage(),
-        None => Arc::new(
-            zeta_workspace_index_storage::WorkspaceIndexStorage::open(&options.profile_root)
-                .map_err(open_error)?,
-        ),
-    };
+    let state_runtime = Arc::clone(&state_runtime);
     let mut server = match &profile_runtime {
         Some(runtime) => AppServer::new_with_updates(
             sessions,
@@ -1154,7 +1146,7 @@ pub fn open_local_app_server_with_codebase_providers(
     .with_login_service(login_service)
     .with_language_server_providers(options.language_server_providers)
     .with_slash_command_catalog(options.slash_commands)
-    .with_workspace_index_storage(workspace_index_storage)
+    .with_state_runtime(state_runtime)
     .with_semantic_model_provider(model_provider)
     .with_cloud_codebase_storage_root(options.profile_root.join("state").join("cloud-codebase"))
     .with_cloud_codebase_providers(providers.cloud)
@@ -1168,8 +1160,8 @@ pub fn open_local_app_server_with_codebase_providers(
     if let Some(command) = fast_regex_worker_command {
         server = server.with_fast_regex_worker_command(command);
     }
-    if let Some(models) = providers.semantic_models {
-        server = server.with_codebase_semantic_models(models);
+    if let Some(models) = providers.models {
+        server = server.with_codebase_models(models);
     }
     if let Some(runtime) = marketplace_language_runtime {
         server = server

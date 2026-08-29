@@ -1,6 +1,6 @@
 use super::AppServer;
 use super::AppServerThreadUpdates;
-use super::CodebaseSemanticModels;
+use super::CodebaseModels;
 use super::RpcError;
 use super::codebase_runtime::CodebaseRuntime;
 use super::fs_watcher::FileSystemWatcher;
@@ -41,12 +41,9 @@ use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_cloud_codebase::CloudCodebaseController;
 use zeta_cloud_codebase::CloudCodebaseStorage;
 use zeta_codebase::CodebaseSemanticService;
-use zeta_codebase::CodebaseSemanticStorage;
-use zeta_codebase::CodebaseStorage;
 use zeta_codebase::CodebaseVectorStore;
 use zeta_codebase::EmbeddingIndexKey;
-use zeta_codebase::SqliteCodebaseVectorStore;
-use zeta_codebase::SymbolIndexStorage;
+use zeta_codebase_store::CodebaseStore;
 use zeta_config::CodebaseModelSelection;
 use zeta_config::ConfigStore;
 use zeta_config::ToolSearchConfig;
@@ -76,14 +73,13 @@ use zeta_protocol::ProviderId;
 use zeta_protocol::SessionId;
 use zeta_protocol::TurnStatus;
 use zeta_shell_command::RipgrepExecutable;
+use zeta_state::StateRuntime;
 use zeta_tools::ToolRegistryGeneration;
 use zeta_workspace::WorkspaceAuthorization;
 use zeta_workspace::WorkspaceCapability;
 use zeta_workspace::WorkspaceRoot;
 use zeta_workspace::WorkspaceTrustDecision;
 use zeta_workspace_access::WorkspaceAccessMutation;
-use zeta_workspace_index_storage::WorkspaceIndexKind;
-use zeta_workspace_index_storage::WorkspaceIndexStorage;
 use zeta_workspace_search::WorkspaceSearchService;
 
 pub(super) struct WorkspaceRuntime {
@@ -200,9 +196,9 @@ pub(crate) struct WorkspaceRuntimeControl {
     mcp_status: Arc<RwLock<zeta_mcp_extension::McpRuntimeStatusSnapshot>>,
     config: Option<Arc<ConfigStore>>,
     local_tool_config: Arc<RwLock<LocalToolConfig>>,
-    workspace_index_storage: Option<Arc<WorkspaceIndexStorage>>,
+    state_runtime: Option<Arc<StateRuntime>>,
     fast_regex_worker_command: Option<zeta_fast_regex_search::FastRegexWorkerCommand>,
-    codebase_semantic_models: Option<CodebaseSemanticModels>,
+    codebase_models: Option<CodebaseModels>,
     semantic_model_provider: Option<Arc<dyn SemanticModelProvider>>,
     extension_hosts: Option<super::extension_host_runtime::ExtensionHostRuntime>,
 }
@@ -263,7 +259,7 @@ impl WorkspaceRuntimeControl {
             &local_tool_config,
             session_workspace_access,
             agent_grep,
-            self.workspace_index_storage.clone(),
+            self.state_runtime.clone(),
             self.fast_regex_worker_command.as_ref(),
         )
         .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
@@ -395,10 +391,9 @@ impl WorkspaceRuntimeControl {
 
         let semantic = open_codebase_semantic_runtime(
             &codebase,
-            self.codebase_semantic_models.as_ref(),
+            self.codebase_models.as_ref(),
             self.semantic_model_provider.as_ref(),
             self.config.as_ref(),
-            self.workspace_index_storage.as_ref(),
         )?;
         let semantic_job = semantic.as_ref().and_then(|service| {
             match SemanticIndexJobController::start(Arc::clone(service)) {
@@ -432,7 +427,7 @@ impl WorkspaceRuntimeControl {
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .agent_grep
                 .clone(),
-            self.workspace_index_storage.clone(),
+            self.state_runtime.clone(),
             self.fast_regex_worker_command.as_ref(),
         )
         .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
@@ -1155,9 +1150,9 @@ impl AppServer {
                 mcp_status: Arc::clone(&self.mcp_status),
                 config: self.config.clone(),
                 local_tool_config: Arc::clone(&self.local_tool_config),
-                workspace_index_storage: self.workspace_index_storage.clone(),
+                state_runtime: self.state_runtime.clone(),
                 fast_regex_worker_command: self.fast_regex_worker_command.clone(),
-                codebase_semantic_models: self.codebase_semantic_models.clone(),
+                codebase_models: self.codebase_models.clone(),
                 semantic_model_provider: self.semantic_model_provider.clone(),
                 extension_hosts: self.extension_hosts.clone(),
             })
@@ -1765,7 +1760,7 @@ impl AppServer {
                 &local_tool_config,
                 session_workspace_access,
                 None,
-                self.workspace_index_storage.clone(),
+                self.state_runtime.clone(),
                 self.fast_regex_worker_command.as_ref(),
             )
             .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
@@ -2157,23 +2152,15 @@ impl AppServer {
         workspace: WorkspaceRoot,
     ) -> Result<Arc<CodebaseRuntime>, WorkspaceRuntimeError> {
         let trust_id = workspace.trust_id();
-        if let Some(index_storage) = &self.workspace_index_storage {
-            let lease = index_storage
-                .acquire(&trust_id, WorkspaceIndexKind::Codebase)
-                .map_err(|error| {
-                    WorkspaceRuntimeError::Failed(format!(
-                        "failed to lock lexical index storage: {error}"
-                    ))
-                })?;
-            let storage = CodebaseStorage::Persistent(lease.directory().join("sources.sqlite3"));
-            CodebaseRuntime::open_with_lease(workspace, storage, lease).map_err(|error| {
-                WorkspaceRuntimeError::Failed(format!("failed to open Codebase: {error}"))
-            })
-        } else {
-            CodebaseRuntime::open(workspace, CodebaseStorage::Memory).map_err(|error| {
-                WorkspaceRuntimeError::Failed(format!("failed to open Codebase: {error}"))
-            })
-        }
+        let store = match &self.state_runtime {
+            Some(state) => CodebaseStore::open(state, &trust_id).map_err(|error| {
+                WorkspaceRuntimeError::Failed(format!("failed to lock Codebase storage: {error}"))
+            })?,
+            None => CodebaseStore::memory(),
+        };
+        CodebaseRuntime::open(workspace, Arc::new(store)).map_err(|error| {
+            WorkspaceRuntimeError::Failed(format!("failed to open Codebase: {error}"))
+        })
     }
 
     pub(super) fn codebase_service(&self) -> Result<Arc<CodebaseRuntime>, RpcError> {
@@ -2208,26 +2195,9 @@ impl AppServer {
         &self,
         codebase: &Arc<CodebaseRuntime>,
     ) -> Result<Arc<SymbolIndexRuntime>, WorkspaceRuntimeError> {
-        let trust_id = codebase.root().trust_id();
-        if let Some(index_storage) = &self.workspace_index_storage {
-            let lease = index_storage
-                .acquire(&trust_id, WorkspaceIndexKind::Codebase)
-                .map_err(|error| {
-                    WorkspaceRuntimeError::Failed(format!(
-                        "failed to lock symbol index storage: {error}"
-                    ))
-                })?;
-            let storage = SymbolIndexStorage::Persistent(lease.directory().join("symbols.sqlite3"));
-            SymbolIndexRuntime::open_with_lease(codebase.index(), storage, lease).map_err(|error| {
-                WorkspaceRuntimeError::Failed(format!("failed to open symbol index: {error}"))
-            })
-        } else {
-            SymbolIndexRuntime::open(codebase.index(), SymbolIndexStorage::Memory).map_err(
-                |error| {
-                    WorkspaceRuntimeError::Failed(format!("failed to open symbol index: {error}"))
-                },
-            )
-        }
+        SymbolIndexRuntime::open(codebase.index(), codebase.store()).map_err(|error| {
+            WorkspaceRuntimeError::Failed(format!("failed to open symbol index: {error}"))
+        })
     }
 
     pub(super) fn symbol_index_service(&self) -> Result<Arc<SymbolIndexRuntime>, RpcError> {
@@ -2245,10 +2215,9 @@ impl AppServer {
     ) -> Result<Option<Arc<CodebaseSemanticService>>, WorkspaceRuntimeError> {
         open_codebase_semantic_runtime(
             codebase,
-            self.codebase_semantic_models.as_ref(),
+            self.codebase_models.as_ref(),
             self.semantic_model_provider.as_ref(),
             self.config.as_ref(),
-            self.workspace_index_storage.as_ref(),
         )
     }
 
@@ -2707,10 +2676,9 @@ fn append_multi_agent_tools(
 
 fn open_codebase_semantic_runtime(
     codebase: &Arc<CodebaseRuntime>,
-    fixed_models: Option<&CodebaseSemanticModels>,
+    fixed_models: Option<&CodebaseModels>,
     provider: Option<&Arc<dyn SemanticModelProvider>>,
     config: Option<&Arc<ConfigStore>>,
-    index_storage: Option<&Arc<WorkspaceIndexStorage>>,
 ) -> Result<Option<Arc<CodebaseSemanticService>>, WorkspaceRuntimeError> {
     let configured_models;
     let models = match fixed_models {
@@ -2719,52 +2687,36 @@ fn open_codebase_semantic_runtime(
             let (Some(provider), Some(config)) = (provider, config) else {
                 return Ok(None);
             };
-            let Some(resolved) = resolve_configured_codebase_semantic_models(provider, config)
-            else {
+            let Some(resolved) = resolve_configured_codebase_models(provider, config) else {
                 return Ok(None);
             };
             configured_models = resolved;
             &configured_models
         }
     };
-    let trust_id = codebase.root().trust_id();
-    let lease = index_storage
-        .map(|storage| storage.acquire(&trust_id, WorkspaceIndexKind::Codebase))
-        .transpose()
-        .map_err(|error| {
-            WorkspaceRuntimeError::Failed(format!("failed to lock semantic index storage: {error}"))
-        })?;
-    let storage = lease
-        .as_ref()
-        .map_or(CodebaseSemanticStorage::Memory, |lease| {
-            CodebaseSemanticStorage::Persistent(lease.directory().join("semantic.sqlite3"))
-        });
     let store: Arc<dyn CodebaseVectorStore> =
-        Arc::new(SqliteCodebaseVectorStore::open(&storage).map_err(|error| {
+        codebase.store().open_vector_store().map_err(|error| {
             WorkspaceRuntimeError::Failed(format!("failed to open Codebase vector data: {error}"))
-        })?);
+        })?;
     let service = CodebaseSemanticService::new(
         codebase.index(),
-        models.model_id.clone(),
-        Arc::clone(&models.embedding),
+        models.embedding_index_key().clone(),
+        models.embedding(),
         store,
     );
-    let mut service = match &models.rerank {
-        Some(rerank) => service.with_rerank(Arc::clone(rerank)),
+    let service = match models.rerank() {
+        Some(rerank) => service.with_rerank(rerank),
         None => service,
     };
-    if let Some(lease) = lease {
-        service = service.with_storage_lease(Arc::new(lease));
-    }
     Ok(Some(Arc::new(
         service.with_metrics(Arc::new(AppServerSemanticIndexMetrics)),
     )))
 }
 
-fn resolve_configured_codebase_semantic_models(
+fn resolve_configured_codebase_models(
     provider: &Arc<dyn SemanticModelProvider>,
     config: &Arc<ConfigStore>,
-) -> Option<CodebaseSemanticModels> {
+) -> Option<CodebaseModels> {
     let snapshot = config.read_snapshot().ok()?;
     let models = snapshot.values.codebase.models.clone()?;
     let invokers =
@@ -2775,15 +2727,13 @@ fn resolve_configured_codebase_semantic_models(
                 return None;
             }
         };
-    let identity = serde_json::to_vec(&(
-        "zeta-codebase-document-v1",
-        models.embedding_model.clone(),
+    let model_id = EmbeddingIndexKey::for_device_model(
+        models.embedding_model.provider.as_str(),
+        models.embedding_model.model.as_str(),
         invokers.embedding_identity.as_str(),
-    ))
+    )
     .ok()?;
-    let model_id =
-        EmbeddingIndexKey::new(format!("semantic:sha256:{:x}", Sha256::digest(identity))).ok()?;
-    let mut resolved = CodebaseSemanticModels::new(model_id, invokers.embedding);
+    let mut resolved = CodebaseModels::new(model_id, invokers.embedding);
     if let Some(rerank) = invokers.rerank {
         resolved = resolved.with_rerank(rerank);
     }

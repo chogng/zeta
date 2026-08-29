@@ -3,7 +3,7 @@
 > 本 README 解释模型历史与持久化 Thread record 的数据契约。Canonical `ThreadEvent` 语义见
 > [`docs/protocol.md`](../../docs/protocol.md)，恢复与追加接口见
 > [`zeta-thread-store`](../thread-store/README.md)，物理 SQLite 映射见
-> [`zeta-storage`](../storage/README.md)。
+> [`zeta-state`](../state/README.md)。
 
 `zeta-history` 是纯数据层：它定义“一个 Thread 事实被长期保存时长什么样”。它不打开文件或
 数据库，不做分页、事务、恢复、归约、模型调用，也不拥有 TUI 展示。
@@ -16,7 +16,7 @@
 | 事实落盘时携带哪些稳定元数据？ | `zeta-history` | ✅ |
 | 如何完整读取、追加和报告 sequence conflict？ | `zeta-thread-store` | ❌ |
 | 如何返回有界 Turn 窗口？ | Core projection / App Server | ❌ |
-| 如何写入 SQLite、提交事务和恢复？ | `zeta-storage` / `zeta-core` | ❌ |
+| 如何写入 SQLite、提交事务和恢复？ | `zeta-state` / `zeta-core` | ❌ |
 | 如何显示旧消息？ | App Server client / TUI | ❌ |
 
 因此它与 Codex 的 `codex-history` 一样属于 persisted-history domain types，而不是第二个
@@ -44,7 +44,7 @@ zeta-core constructs StoredEvent
 zeta-thread-store validates recovery/append contract
           │
           ▼
-zeta-storage serializes exact record to SQLite
+zeta-state serializes exact record to SQLite
           │
           ├─► zeta-core replays it during recovery
           └─► zeta-rollout-trace exports a read-only copy
@@ -62,7 +62,7 @@ tag、默认值或类型变化都是持久化兼容性变化，必须同步审�
 
 - `zeta-core` 的 record 构造与 reducer recovery；
 - `zeta-thread-store::validate_append_batch`；
-- `zeta-storage::sqlite::thread`；
+- `zeta-state` 的 Thread SQLite adapter；
 - `zeta-rollout-trace` export 与 fixtures。
 
 ```text

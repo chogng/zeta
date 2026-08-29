@@ -9,9 +9,8 @@ use zeta_codebase::SymbolIndexLimits;
 use zeta_codebase::SymbolIndexQuery;
 use zeta_codebase::SymbolIndexRefreshOutcome;
 use zeta_codebase::SymbolIndexSnapshot;
-use zeta_codebase::SymbolIndexStorage;
 use zeta_codebase::SymbolSearchHit;
-use zeta_workspace_index_storage::WorkspaceIndexLease;
+use zeta_codebase_store::CodebaseStore;
 
 /// App Server-owned lifecycle projection for one workspace symbol index.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -30,35 +29,16 @@ pub(super) struct SymbolIndexRuntime {
     index: Arc<SymbolIndex>,
     operation: Mutex<()>,
     state: RwLock<SymbolIndexRuntimeState>,
-    _storage_lease: Option<WorkspaceIndexLease>,
 }
 
 impl SymbolIndexRuntime {
     pub fn open(
         source_index: Arc<Codebase>,
-        storage: SymbolIndexStorage,
+        store: Arc<CodebaseStore>,
     ) -> Result<Arc<Self>, SymbolIndexError> {
-        Self::open_inner(source_index, storage, None)
-    }
-
-    pub(super) fn open_with_lease(
-        source_index: Arc<Codebase>,
-        storage: SymbolIndexStorage,
-        storage_lease: WorkspaceIndexLease,
-    ) -> Result<Arc<Self>, SymbolIndexError> {
-        Self::open_inner(source_index, storage, Some(storage_lease))
-    }
-
-    fn open_inner(
-        source_index: Arc<Codebase>,
-        storage: SymbolIndexStorage,
-        storage_lease: Option<WorkspaceIndexLease>,
-    ) -> Result<Arc<Self>, SymbolIndexError> {
-        let index = Arc::new(SymbolIndex::open(
-            Arc::clone(&source_index),
-            storage,
-            SymbolIndexLimits::default(),
-        )?);
+        let index =
+            store.open_symbol_index(Arc::clone(&source_index), SymbolIndexLimits::default())?;
+        let index = Arc::new(index);
         let snapshot = index.snapshot()?;
         let state = if snapshot.generation == 0 {
             SymbolIndexRuntimeState::Empty
@@ -70,7 +50,6 @@ impl SymbolIndexRuntime {
             index,
             operation: Mutex::new(()),
             state: RwLock::new(state),
-            _storage_lease: storage_lease,
         }))
     }
 

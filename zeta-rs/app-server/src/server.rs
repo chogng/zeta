@@ -143,31 +143,7 @@ pub(crate) use workspace_runtime::WorkspaceRuntimeControl;
 pub(crate) use workspace_runtime::WorkspaceSwitchTrustPolicy;
 pub(crate) use workspace_runtime::WorkspaceToolPorts;
 
-/// Immutable model selection used by the local semantic codebase pipeline.
-#[derive(Clone)]
-pub struct CodebaseSemanticModels {
-    model_id: zeta_codebase::EmbeddingIndexKey,
-    embedding: Arc<dyn zeta_model_provider::EmbeddingInvoker>,
-    rerank: Option<Arc<dyn zeta_model_provider::RerankInvoker>>,
-}
-
-impl CodebaseSemanticModels {
-    pub fn new(
-        model_id: zeta_codebase::EmbeddingIndexKey,
-        embedding: Arc<dyn zeta_model_provider::EmbeddingInvoker>,
-    ) -> Self {
-        Self {
-            model_id,
-            embedding,
-            rerank: None,
-        }
-    }
-
-    pub fn with_rerank(mut self, rerank: Arc<dyn zeta_model_provider::RerankInvoker>) -> Self {
-        self.rerank = Some(rerank);
-        self
-    }
-}
+pub use zeta_codebase::CodebaseModels;
 
 pub struct AppServer {
     pub(super) sessions: Arc<SessionCoordinator>,
@@ -213,10 +189,9 @@ pub struct AppServer {
     extension_tool_port: Option<crate::tool_composition::ToolPort>,
     browser_host: Arc<BrowserHost>,
     browser_tool_port: crate::tool_composition::ToolPort,
-    workspace_index_storage:
-        Option<std::sync::Arc<zeta_workspace_index_storage::WorkspaceIndexStorage>>,
+    state_runtime: Option<std::sync::Arc<zeta_state::StateRuntime>>,
     fast_regex_worker_command: Option<zeta_fast_regex_search::FastRegexWorkerCommand>,
-    codebase_semantic_models: Option<CodebaseSemanticModels>,
+    codebase_models: Option<CodebaseModels>,
     semantic_model_provider: Option<Arc<dyn zeta_model_provider::SemanticModelProvider>>,
     cloud_codebase_storage_root: Option<std::path::PathBuf>,
     cloud_codebase_providers: zeta_cloud_codebase::CloudCodebaseProviderRegistry,
@@ -491,9 +466,9 @@ impl AppServer {
             extension_tool_port: None,
             browser_host,
             browser_tool_port,
-            workspace_index_storage: None,
+            state_runtime: None,
             fast_regex_worker_command: None,
-            codebase_semantic_models: None,
+            codebase_models: None,
             semantic_model_provider: None,
             cloud_codebase_storage_root: None,
             cloud_codebase_providers: zeta_cloud_codebase::CloudCodebaseProviderRegistry::default(),
@@ -997,11 +972,11 @@ impl AppServer {
         self
     }
 
-    pub(crate) fn with_workspace_index_storage(
+    pub(crate) fn with_state_runtime(
         mut self,
-        storage: std::sync::Arc<zeta_workspace_index_storage::WorkspaceIndexStorage>,
+        storage: std::sync::Arc<zeta_state::StateRuntime>,
     ) -> Self {
-        self.workspace_index_storage = Some(storage);
+        self.state_runtime = Some(storage);
         self
     }
 
@@ -1014,8 +989,8 @@ impl AppServer {
     }
 
     /// Installs immutable embedding/rerank adapters for local semantic indexing.
-    pub(crate) fn with_codebase_semantic_models(mut self, models: CodebaseSemanticModels) -> Self {
-        self.codebase_semantic_models = Some(models);
+    pub(crate) fn with_codebase_models(mut self, models: CodebaseModels) -> Self {
+        self.codebase_models = Some(models);
         self
     }
 

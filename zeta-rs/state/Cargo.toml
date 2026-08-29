@@ -1,5 +1,5 @@
 [package]
-name = "zeta-storage"
+name = "zeta-state"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -7,10 +7,11 @@ publish.workspace = true
 
 [lib]
 doctest = false
-name = "zeta_storage"
+name = "zeta_state"
 path = "src/lib.rs"
 
 [dependencies]
+fs2 = { workspace = true }
 rusqlite = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -20,6 +21,10 @@ zeta-protocol = { workspace = true }
 zeta-session-store = { workspace = true }
 zeta-thread-store = { workspace = true }
 zeta-turn-changes = { workspace = true }
+zeta-workspace = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

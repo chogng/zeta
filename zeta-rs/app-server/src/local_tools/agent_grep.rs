@@ -29,11 +29,11 @@ use zeta_fast_regex_search::FastRegexWorkerClient;
 use zeta_fast_regex_search::FastRegexWorkerCommand;
 use zeta_file_watcher::FileWatcherEvent;
 use zeta_shell_command::RipgrepExecutable;
+use zeta_state::StateRuntime;
+use zeta_state::WorkspaceIndexKind;
+use zeta_state::WorkspaceIndexLease;
 use zeta_workspace::WorkspaceRoot;
 use zeta_workspace::WorkspaceTrustId;
-use zeta_workspace_index_storage::WorkspaceIndexKind;
-use zeta_workspace_index_storage::WorkspaceIndexLease;
-use zeta_workspace_index_storage::WorkspaceIndexStorage;
 
 const SEARCH_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_AGENT_MATCHES: usize = 100;
@@ -51,7 +51,7 @@ pub(crate) struct AgentGrepService {
 
 struct FastRegexIndexes {
     enabled: AtomicBool,
-    storage: Option<Arc<WorkspaceIndexStorage>>,
+    storage: Option<Arc<StateRuntime>>,
     worker_command: Option<FastRegexWorkerCommand>,
     indexes: Mutex<BTreeMap<WorkspaceTrustId, Arc<ManagedFastRegexSearch>>>,
 }
@@ -70,7 +70,7 @@ impl AgentGrepService {
     pub(crate) fn new(
         backend: AgentGrepBackend,
         ripgrep: RipgrepExecutable,
-        storage: Option<Arc<WorkspaceIndexStorage>>,
+        storage: Option<Arc<StateRuntime>>,
     ) -> Self {
         Self {
             backend,
@@ -87,7 +87,7 @@ impl AgentGrepService {
     pub(crate) fn new_with_worker(
         backend: AgentGrepBackend,
         ripgrep: RipgrepExecutable,
-        storage: Arc<WorkspaceIndexStorage>,
+        storage: Arc<StateRuntime>,
         worker_command: FastRegexWorkerCommand,
     ) -> Self {
         Self {

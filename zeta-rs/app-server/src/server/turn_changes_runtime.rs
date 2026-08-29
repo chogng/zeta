@@ -17,7 +17,7 @@ use zeta_config::ConfigStore;
 use zeta_core::{ModelService, SessionCoordinator};
 use zeta_hooks::DeclarativeHookRuntime;
 use zeta_protocol::{CommandId, SessionId, ThreadId, ToolCallId, TurnId};
-use zeta_storage::{SqliteTurnChangeStore, TurnChangeCommandOutcome};
+use zeta_state::{SqliteTurnChangeStore, TurnChangeCommandOutcome};
 use zeta_turn_changes::{
     CaptureState, CommitState, MessageState, TerminalTurnState, TurnChangeLedger, TurnChangeSet,
     TurnChangeStore,

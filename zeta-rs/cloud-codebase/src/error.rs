@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use thiserror::Error;
 
 /// Non-secret failure returned by one concrete cloud codebase provider adapter.
@@ -49,12 +47,8 @@ pub enum CloudCodebaseError {
     LocalIndex(#[from] zeta_codebase::CodebaseError),
     #[error("cloud codebase storage failed: {0}")]
     Storage(#[from] rusqlite::Error),
+    #[error("cloud codebase database runtime failed: {0}")]
+    DatabaseRuntime(String),
     #[error("cloud codebase state serialization failed: {0}")]
     Serialization(#[from] serde_json::Error),
-    #[error("filesystem operation failed for {}: {source}", path.display())]
-    Io {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
 }

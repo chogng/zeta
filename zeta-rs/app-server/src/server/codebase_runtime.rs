@@ -8,12 +8,11 @@ use zeta_codebase::CodebaseError;
 use zeta_codebase::CodebaseLimits;
 use zeta_codebase::CodebaseQuery;
 use zeta_codebase::CodebaseSnapshot;
-use zeta_codebase::CodebaseStorage;
 use zeta_codebase::RefreshOutcome;
 use zeta_codebase::SearchHit;
+use zeta_codebase_store::CodebaseStore;
 use zeta_file_watcher::FileWatcherEvent;
 use zeta_workspace::WorkspaceRoot;
-use zeta_workspace_index_storage::WorkspaceIndexLease;
 
 /// App Server-owned lifecycle for one workspace Codebase.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -31,35 +30,16 @@ pub(super) struct CodebaseRuntime {
     index: Arc<Codebase>,
     operation: Mutex<()>,
     state: RwLock<CodebaseRuntimeState>,
-    _storage_lease: Option<WorkspaceIndexLease>,
+    store: Arc<CodebaseStore>,
 }
 
 impl CodebaseRuntime {
     pub fn open(
         workspace: WorkspaceRoot,
-        storage: CodebaseStorage,
+        store: Arc<CodebaseStore>,
     ) -> Result<Arc<Self>, CodebaseError> {
-        Self::open_inner(workspace, storage, None)
-    }
-
-    pub(super) fn open_with_lease(
-        workspace: WorkspaceRoot,
-        storage: CodebaseStorage,
-        storage_lease: WorkspaceIndexLease,
-    ) -> Result<Arc<Self>, CodebaseError> {
-        Self::open_inner(workspace, storage, Some(storage_lease))
-    }
-
-    fn open_inner(
-        workspace: WorkspaceRoot,
-        storage: CodebaseStorage,
-        storage_lease: Option<WorkspaceIndexLease>,
-    ) -> Result<Arc<Self>, CodebaseError> {
-        let index = Arc::new(Codebase::open(
-            workspace,
-            storage,
-            CodebaseLimits::default(),
-        )?);
+        let index = store.open_codebase(workspace, CodebaseLimits::default())?;
+        let index = Arc::new(index);
         let snapshot = index.snapshot()?;
         let state = if snapshot.generation == 0 {
             CodebaseRuntimeState::Empty
@@ -70,8 +50,12 @@ impl CodebaseRuntime {
             index,
             operation: Mutex::new(()),
             state: RwLock::new(state),
-            _storage_lease: storage_lease,
+            store,
         }))
+    }
+
+    pub fn store(&self) -> Arc<CodebaseStore> {
+        Arc::clone(&self.store)
     }
 
     pub fn root(&self) -> &WorkspaceRoot {

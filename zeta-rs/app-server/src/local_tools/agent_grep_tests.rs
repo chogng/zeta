@@ -80,9 +80,7 @@ fn fast_regex_backend_uses_the_private_worker_client() {
     let service = AgentGrepService::new_with_worker(
         AgentGrepBackend::FastRegex,
         ripgrep,
-        Arc::new(
-            zeta_workspace_index_storage::WorkspaceIndexStorage::open(storage.path()).unwrap(),
-        ),
+        Arc::new(zeta_state::StateRuntime::open(storage.path()).unwrap()),
         command,
     );
 
@@ -106,9 +104,7 @@ fn disabling_fast_regex_releases_but_preserves_its_project_index() {
     let profile = tempfile::tempdir().unwrap();
     fs::write(directory.path().join("source.rs"), "disable_marker\n").unwrap();
     let ripgrep = RipgrepExecutable::from_path(std::env::current_exe().unwrap()).unwrap();
-    let storage = Arc::new(
-        zeta_workspace_index_storage::WorkspaceIndexStorage::open(profile.path()).unwrap(),
-    );
+    let storage = Arc::new(zeta_state::StateRuntime::open(profile.path()).unwrap());
     let service = AgentGrepService::new(
         AgentGrepBackend::FastRegex,
         ripgrep.clone(),
@@ -135,7 +131,7 @@ fn disabling_fast_regex_releases_but_preserves_its_project_index() {
         storage
             .clear_index(&root.trust_id(), WorkspaceIndexKind::AgentGrep)
             .unwrap(),
-        zeta_workspace_index_storage::ClearOutcome::Cleared
+        zeta_state::ClearOutcome::Cleared
     );
 }
 

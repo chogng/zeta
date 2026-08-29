@@ -72,6 +72,6 @@ Thread history。修改恢复顺序时必须增加 interrupted create/fork saga 
 
 ## 当前限制与演进
 
-当前只组合本地 SQLite `zeta-storage` backend，没有 remote repository、encryption policy、
+当前只组合本地 SQLite `zeta-state` backend，没有 remote repository、encryption policy、
 multi-process coordination protocol、旧 JSONL import 或 lazy recovery。未来 backend 可以变化，
 但 typed store ports、shared lease generation 和 Thread-before-Session recovery 是稳定边界。

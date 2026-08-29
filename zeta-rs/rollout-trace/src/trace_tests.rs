@@ -14,6 +14,7 @@ use zeta_session_store::{
     CURRENT_SESSION_EVENT_SCHEMA_VERSION, SessionEventBatch, SessionEventId, SessionTimestamp,
     StoredSessionEvent,
 };
+use zeta_state::StateRuntime;
 use zeta_thread_store::ThreadEventBatch;
 
 fn temporary_root() -> std::path::PathBuf {
@@ -30,7 +31,8 @@ fn temporary_root() -> std::path::PathBuf {
 #[test]
 fn trace_keeps_session_and_thread_sequences_independent() {
     let root = temporary_root();
-    let repository = LocalStateRepository::open(&root).unwrap();
+    let state = StateRuntime::open(&root).unwrap();
+    let repository = LocalStateRepository::open(&state).unwrap();
     let session_id = SessionId::new("session_1").expect("test ID is non-empty");
     let thread_id = ThreadId::new("thread_1").expect("test ID is non-empty");
     let session_store = repository.session_store();

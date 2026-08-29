@@ -77,7 +77,7 @@ storage envelope 与 append contract。
 6. 保留 exact event/command bytes 的语义；
 7. 将 backend detail 映射为 sanitized `SessionStoreError::Storage`。
 
-物理 JSONL framing、checksum、tail recovery 和 filesystem layout 当前由 `zeta-storage`
+物理 SQLite 连接规则、文件权限、事务参数和 Profile 路径当前由 `zeta-state`
 实现，不应反向进入这个 port。
 
 ## 测试与修改路径
@@ -87,7 +87,7 @@ cargo test -p zeta-session-store
 bazel test //zeta-rs/session-store:session-store-unit-tests
 ```
 
-修改 stored field 或 schema version 时，同时审查 serde compatibility、`zeta-storage`
+修改 stored field 或 schema version 时，同时审查 serde compatibility、`zeta-state`
 adapter、rollout recovery、trace export 和 fixtures。修改 batch validation 时，SessionStore 与
 ThreadStore 的共同原则应保持一致，但不要抽象掉各自的 ID、event 和 sequence 类型。
 

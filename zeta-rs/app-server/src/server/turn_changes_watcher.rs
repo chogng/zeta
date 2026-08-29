@@ -7,7 +7,7 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 use zeta_file_watcher::{DebouncedWatchReceiver, FileWatcher, WatchPath};
 use zeta_protocol::{ThreadId, TurnId};
-use zeta_storage::SqliteTurnChangeStore;
+use zeta_state::SqliteTurnChangeStore;
 use zeta_turn_changes::{CaptureState, TurnChangeLedger, TurnChangeStore};
 
 const WATCH_DEBOUNCE: Duration = Duration::from_millis(75);

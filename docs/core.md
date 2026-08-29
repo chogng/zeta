@@ -374,7 +374,7 @@ message、join、tree budget 和 recovery。
 
 ```text
 zeta-core → zeta-app-server(-protocol)
-zeta-core → zeta-storage / zeta-rollout
+zeta-core → zeta-state / zeta-rollout
 zeta-core → zeta-api / concrete model provider
 zeta-core → shell-command / file-system / apply-patch / MCP implementation
 zeta-core → config files / credentials / secrets

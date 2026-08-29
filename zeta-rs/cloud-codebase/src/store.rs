@@ -1,5 +1,3 @@
-use std::fs;
-use std::path::Path;
 use std::sync::Mutex;
 
 use rusqlite::Connection;
@@ -7,6 +5,7 @@ use rusqlite::OptionalExtension;
 use rusqlite::params;
 use serde::Deserialize;
 use serde::Serialize;
+use zeta_state::{SqliteDurability, open_in_memory_database, open_sqlite_database};
 
 use crate::CloudCodebaseDestination;
 use crate::CloudCodebaseError;
@@ -89,16 +88,11 @@ pub(crate) struct CloudStateStore {
 impl CloudStateStore {
     pub fn open(storage: &CloudCodebaseStorage, root_id: &str) -> Result<Self, CloudCodebaseError> {
         let mut connection = match storage {
-            CloudCodebaseStorage::Memory => Connection::open_in_memory()?,
+            CloudCodebaseStorage::Memory => open_in_memory_database(SqliteDurability::Durable)
+                .map_err(CloudCodebaseError::DatabaseRuntime)?,
             CloudCodebaseStorage::Persistent(path) => {
-                if let Some(parent) = path.parent() {
-                    fs::create_dir_all(parent).map_err(|source| CloudCodebaseError::Io {
-                        path: parent.to_path_buf(),
-                        source,
-                    })?;
-                }
-                prepare_persistent_database(path)?;
-                Connection::open(path)?
+                open_sqlite_database(path, SqliteDurability::Durable)
+                    .map_err(CloudCodebaseError::DatabaseRuntime)?
             }
         };
         connection.execute_batch(
@@ -229,53 +223,5 @@ fn set_metadata(connection: &Connection, key: &str, value: &str) -> rusqlite::Re
          ON CONFLICT(key) DO UPDATE SET value = excluded.value",
         params![key, value],
     )?;
-    Ok(())
-}
-
-#[cfg(unix)]
-fn prepare_persistent_database(path: &Path) -> Result<(), CloudCodebaseError> {
-    use std::os::unix::fs::OpenOptionsExt;
-    use std::os::unix::fs::PermissionsExt;
-
-    match fs::symlink_metadata(path) {
-        Ok(metadata) if !metadata.file_type().is_file() => {
-            return Err(CloudCodebaseError::Io {
-                path: path.to_path_buf(),
-                source: std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    "cloud codebase database must be a regular file",
-                ),
-            });
-        }
-        Ok(_) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(source) => {
-            return Err(CloudCodebaseError::Io {
-                path: path.to_path_buf(),
-                source,
-            });
-        }
-    }
-    fs::OpenOptions::new()
-        .create(true)
-        .read(true)
-        .truncate(false)
-        .write(true)
-        .mode(0o600)
-        .open(path)
-        .map_err(|source| CloudCodebaseError::Io {
-            path: path.to_path_buf(),
-            source,
-        })?;
-    fs::set_permissions(path, fs::Permissions::from_mode(0o600)).map_err(|source| {
-        CloudCodebaseError::Io {
-            path: path.to_path_buf(),
-            source,
-        }
-    })
-}
-
-#[cfg(not(unix))]
-fn prepare_persistent_database(_path: &Path) -> Result<(), CloudCodebaseError> {
     Ok(())
 }

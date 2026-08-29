@@ -4,9 +4,7 @@ use std::sync::Arc;
 use tempfile::TempDir;
 use zeta_codebase::Codebase;
 use zeta_codebase::CodebaseLimits;
-use zeta_codebase::CodebaseStorage;
 use zeta_codebase::SymbolIndexQuery;
-use zeta_codebase::SymbolIndexStorage;
 use zeta_workspace::WorkspaceRoot;
 
 use super::SymbolIndexRuntime;
@@ -19,9 +17,8 @@ fn workspace() -> TempDir {
 }
 
 fn codebase(directory: &TempDir) -> Arc<Codebase> {
-    let index = Codebase::open(
+    let index = Codebase::open_memory(
         WorkspaceRoot::open(directory.path()).expect("workspace root"),
-        CodebaseStorage::Memory,
         CodebaseLimits::default(),
     )
     .expect("Codebase");
@@ -33,7 +30,7 @@ fn codebase(directory: &TempDir) -> Arc<Codebase> {
 fn reconcile_publishes_a_searchable_generation() {
     let directory = workspace();
     fs::write(directory.path().join("lib.rs"), "pub fn searchable() {}\n").expect("source");
-    let runtime = SymbolIndexRuntime::open(codebase(&directory), SymbolIndexStorage::Memory)
+    let runtime = SymbolIndexRuntime::open(codebase(&directory), Arc::new(CodebaseStore::memory()))
         .expect("symbol-index runtime");
 
     assert_eq!(runtime.state(), SymbolIndexRuntimeState::Empty);
@@ -56,8 +53,9 @@ fn search_marks_a_projection_stale_after_source_generation_changes() {
     let source = directory.path().join("lib.rs");
     fs::write(&source, "pub fn before() {}\n").expect("source");
     let codebase = codebase(&directory);
-    let runtime = SymbolIndexRuntime::open(Arc::clone(&codebase), SymbolIndexStorage::Memory)
-        .expect("symbol-index runtime");
+    let runtime =
+        SymbolIndexRuntime::open(Arc::clone(&codebase), Arc::new(CodebaseStore::memory()))
+            .expect("symbol-index runtime");
     runtime.reconcile().expect("initial reconcile");
 
     fs::write(&source, "pub fn after() {}\n").expect("changed source");

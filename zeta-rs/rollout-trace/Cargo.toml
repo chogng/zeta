@@ -19,6 +19,7 @@ zeta-thread-store = { workspace = true }
 
 [dev-dependencies]
 zeta-rollout = { workspace = true }
+zeta-state = { workspace = true }
 
 [lints]
 workspace = true

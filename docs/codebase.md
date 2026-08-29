@@ -1,8 +1,6 @@
-# Codebase 与 Cloud Codebase
+## 快速理解
 
-> 状态：Current。本文定义工作区代码知识的产品边界、配置归属、持久化位置和云端增强契约。crate 内部接口见 [`zeta-codebase`](../zeta-rs/codebase/README.md) 与 [`zeta-cloud-codebase`](../zeta-rs/cloud-codebase/README.md)。
-
-## 结论
+> 状态：Current。本文定义工作区代码知识的产品边界、配置归属、持久化位置和云端增强契约。crate 内部接口见 [`zeta-codebase`](../zeta-rs/codebase/README.md)、[`zeta-codebase-store`](../zeta-rs/codebase-store/README.md)、[`zeta-state`](../zeta-rs/state/README.md) 与 [`zeta-cloud-codebase`](../zeta-rs/cloud-codebase/README.md)。
 
 Codebase 是完整主流程：它读取当前 Workspace，建立并维护本地代码知识，完成检索、融合、源码复核和结果预算。Cloud Codebase 是可选增强：它只消费 Codebase 已切分、已复核的代码片段，在云端完成语义索引与语义查询，再把候选交回 Codebase。
 
@@ -44,7 +42,7 @@ flowchart TD
 | --- | --- | --- |
 | 用户选择的 embedding/rerank `ModelRef`、自动上下文行为、非敏感 provider 配置 | Config | 否，属于用户意图 |
 | API key、OAuth token、provider secret | SecretStore | 否，属于凭据 |
-| 文件片段、全文数据、符号数据、向量、generation、`EmbeddingIndexKey` | Codebase storage | 是 |
+| 文件片段、全文数据、符号数据、向量、generation、`EmbeddingIndexKey` | Codebase Store | 是 |
 | Cloud grant、`CloudCodebaseId`、同步 generation、撤销与待删除状态 | Cloud Codebase state | 否，删除任务完成前必须保留 |
 
 Config 不保存索引路径、文件片段、向量、generation、同步进度或云端删除状态。模型权重由模型运行时管理；Ollama 等运行时下载的模型不进入 Config，也不进入 Codebase 数据库。
@@ -79,13 +77,11 @@ Config 不保存索引路径、文件片段、向量、generation、同步进度
       └─ <root-digest>/
          └─ indexes/
             ├─ codebase/
-            │  ├─ sources.sqlite3
-            │  ├─ symbols.sqlite3
-            │  └─ semantic.sqlite3
+            │  └─ codebase.sqlite3
             └─ agent-grep/...
 ```
 
-Codebase 的三个 SQLite 文件共享一个生命周期锁和一个显式清理入口。它们是可重建数据，不会进入 Config。Cloud Codebase 的数据库位于 `state`，因为其中的授权和待删除任务不能作为缓存随意丢弃。
+Codebase Store 在一个 SQLite 文件中维护源码、符号和向量表，共享一个生命周期锁和一个显式清理入口。它是可重建数据，不会进入 Config。Cloud Codebase 的数据库位于 `state`，因为其中的授权和待删除任务不能作为缓存随意丢弃。
 
 Unix 上的持久化数据库必须是普通文件并使用 `0600`。索引目录按 Workspace 摘要隔离；跨进程锁放在独立的 `cache/locks` 下，清理索引时不会把正在使用的数据删除。
 

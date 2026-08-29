@@ -3,7 +3,7 @@ use super::update_broker::UpdateBroker;
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 use std::sync::Arc;
-use zeta_storage::SqliteTurnChangeStore;
+use zeta_state::SqliteTurnChangeStore;
 use zeta_turn_changes::{CommitState, TurnChangeSet, TurnChangeStore};
 use zeta_worktree::ThreadWorktreeBinding;
 

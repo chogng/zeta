@@ -1,15 +1,14 @@
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 
-use crate::ChunkContentHash;
-use crate::ChunkKey;
-use crate::ChunkReference;
-use crate::ChunkSpan;
-use crate::Codebase;
-use crate::CodebaseLimits;
-use crate::CodebaseStorage;
-use crate::IndexedLanguage;
-use crate::SourceRevision;
+use zeta_codebase::ChunkContentHash;
+use zeta_codebase::ChunkKey;
+use zeta_codebase::ChunkReference;
+use zeta_codebase::ChunkSpan;
+use zeta_codebase::Codebase;
+use zeta_codebase::CodebaseLimits;
+use zeta_codebase::IndexedLanguage;
+use zeta_codebase::SourceRevision;
 use zeta_model_provider::EmbeddingVector;
 use zeta_workspace::WorkspaceRoot;
 
@@ -18,19 +17,18 @@ use super::ANN_REVISION;
 use super::SqliteCodebaseVectorStore;
 use super::metadata;
 use super::set_metadata;
-use crate::CodebaseSemanticStorage;
-use crate::CodebaseVectorStore;
-use crate::EmbeddedCodeChunk;
-use crate::EmbeddingIndexKey;
+use crate::CodebaseStoreStorage;
+use zeta_codebase::CodebaseVectorStore;
+use zeta_codebase::EmbeddedCodeChunk;
+use zeta_codebase::EmbeddingIndexKey;
 
 #[test]
 fn large_projection_uses_ann_candidates_and_falls_back_when_projection_is_unavailable() {
     let workspace = tempfile::tempdir().expect("workspace");
     std::fs::create_dir(workspace.path().join(".git")).expect("git marker");
     std::fs::write(workspace.path().join("seed.rs"), "fn seed() {}\n").expect("source");
-    let index = Codebase::open(
+    let index = Codebase::open_memory(
         WorkspaceRoot::open(workspace.path()).expect("root"),
-        CodebaseStorage::Memory,
         CodebaseLimits::default(),
     )
     .expect("index");
@@ -41,7 +39,7 @@ fn large_projection_uses_ann_candidates_and_falls_back_when_projection_is_unavai
         .map(|index| embedded_chunk(&root_id, index))
         .collect::<Vec<_>>();
     let query = chunks[target].embedding.clone();
-    let store = SqliteCodebaseVectorStore::open(&CodebaseSemanticStorage::Memory).expect("store");
+    let store = SqliteCodebaseVectorStore::open(&CodebaseStoreStorage::Memory).expect("store");
     store
         .replace_generation(&root_id, 1, &model, chunks)
         .expect("publish");
@@ -75,7 +73,7 @@ fn large_projection_uses_ann_candidates_and_falls_back_when_projection_is_unavai
     assert_eq!(fallback[0].chunk.reference.relative_path, path(target));
 }
 
-fn embedded_chunk(root_id: &crate::IndexRootId, index: usize) -> EmbeddedCodeChunk {
+fn embedded_chunk(root_id: &zeta_codebase::IndexRootId, index: usize) -> EmbeddedCodeChunk {
     EmbeddedCodeChunk {
         reference: ChunkReference {
             root_id: root_id.clone(),

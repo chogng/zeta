@@ -10843,6 +10843,7 @@ dependencies = [
  "zeta-client",
  "zeta-cloud-codebase",
  "zeta-codebase",
+ "zeta-codebase-store",
  "zeta-collaboration",
  "zeta-config",
  "zeta-connectors",
@@ -10885,10 +10886,12 @@ dependencies = [
  "zeta-skills",
  "zeta-skills-extension",
  "zeta-slash-commands",
+ "zeta-state",
  "zeta-syntax",
  "zeta-thread-transcript",
  "zeta-tool-executor",
  "zeta-tools",
+ "zeta-turn-changes",
  "zeta-typst",
  "zeta-uds",
  "zeta-utils-pty",
@@ -10896,8 +10899,8 @@ dependencies = [
  "zeta-windows-sandbox",
  "zeta-workspace",
  "zeta-workspace-access",
- "zeta-workspace-index-storage",
  "zeta-workspace-search",
+ "zeta-worktree",
 ]
 
 [[package]]
@@ -11069,6 +11072,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "zeta-codebase",
+ "zeta-state",
  "zeta-workspace",
 ]
 
@@ -11118,13 +11122,26 @@ version = "0.1.0"
 dependencies = [
  "ignore",
  "nucleo",
- "rusqlite",
  "sha2 0.10.9",
  "tempfile",
  "thiserror 2.0.19",
  "zeta-api",
  "zeta-async-utils",
  "zeta-model-provider",
+ "zeta-syntax",
+ "zeta-workspace",
+]
+
+[[package]]
+name = "zeta-codebase-store"
+version = "0.1.0"
+dependencies = [
+ "rusqlite",
+ "tempfile",
+ "zeta-api",
+ "zeta-codebase",
+ "zeta-model-provider",
+ "zeta-state",
  "zeta-syntax",
  "zeta-workspace",
 ]
@@ -11427,6 +11444,9 @@ version = "0.1.0"
 dependencies = [
  "dunce",
  "pretty_assertions",
+ "serde",
+ "serde_json",
+ "tempfile",
  "tokio",
  "zeta-diff",
 ]
@@ -11888,7 +11908,7 @@ dependencies = [
  "zeta-core",
  "zeta-protocol",
  "zeta-session-store",
- "zeta-storage",
+ "zeta-state",
  "zeta-thread-store",
 ]
 
@@ -11901,6 +11921,7 @@ dependencies = [
  "zeta-protocol",
  "zeta-rollout",
  "zeta-session-store",
+ "zeta-state",
  "zeta-thread-store",
 ]
 
@@ -12061,17 +12082,21 @@ name = "zeta-slash-launcher"
 version = "0.1.0"
 
 [[package]]
-name = "zeta-storage"
+name = "zeta-state"
 version = "0.1.0"
 dependencies = [
+ "fs2",
  "rusqlite",
  "serde",
  "serde_json",
+ "tempfile",
  "zeta-core",
  "zeta-history",
  "zeta-protocol",
  "zeta-session-store",
  "zeta-thread-store",
+ "zeta-turn-changes",
+ "zeta-workspace",
 ]
 
 [[package]]
@@ -12211,6 +12236,22 @@ dependencies = [
  "zeta-theme",
  "zeta-utils-image",
  "zeta-utils-path",
+]
+
+[[package]]
+name = "zeta-turn-changes"
+version = "0.1.0"
+dependencies = [
+ "dunce",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.19",
+ "tokio",
+ "zeta-git",
+ "zeta-protocol",
 ]
 
 [[package]]
@@ -12438,15 +12479,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-workspace-index-storage"
-version = "0.1.0"
-dependencies = [
- "fs2",
- "tempfile",
- "zeta-workspace",
-]
-
-[[package]]
 name = "zeta-workspace-search"
 version = "0.1.0"
 dependencies = [
@@ -12463,12 +12495,15 @@ dependencies = [
  "anyhow",
  "dunce",
  "fs2",
+ "ignore",
  "pretty_assertions",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tempfile",
  "tokio",
  "zeta-git",
+ "zeta-turn-changes",
 ]
 
 [[package]]

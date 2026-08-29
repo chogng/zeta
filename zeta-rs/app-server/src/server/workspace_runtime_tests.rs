@@ -1352,12 +1352,12 @@ fn user_config_revocation_removes_local_semantic_model_access() {
             },
         })
         .unwrap();
-    let models = crate::CodebaseSemanticModels::new(
+    let models = crate::CodebaseModels::new(
         zeta_codebase::EmbeddingIndexKey::new("trust-test-v1").unwrap(),
         Arc::new(TrustBoundSemanticEmbedding),
     );
     let server = server()
-        .with_codebase_semantic_models(models)
+        .with_codebase_models(models)
         .with_local_workspace_host(
             None,
             WorkspaceSwitchTrustPolicy::UserConfig(Arc::clone(&config)),

@@ -93,9 +93,9 @@ Core/store 继续拥有 Session/Thread durable state；需要进程内生命周�
 | `AppServer::with_marketplace_language_runtime` | 将通用 Marketplace 已验证的 Language/Executable capability 投影为本地 `LspServerProviders` collection；不拥有发现、下载或安装 |
 | `AppServer::with_marketplace_editor_extension_admission` | 注入 Marketplace executable 的产品 enable/grant generation、通知与 drain authority；安装本身不会执行代码 |
 | `AppServer::with_extension_host_runtime` | 将 legacy Plugin 与已授权 Marketplace executable 规范化为同一 deployment fleet；Host 不解析 package manifest |
-| `LocalProfileRuntime::clear_workspace_indexes` | 显式清理一个未使用工作区的四类可重建本地索引 |
+| `LocalProfileRuntime::clear_workspace_indexes` | 显式清理一个未使用工作区的 Codebase 和 Agent Grep 可重建数据 |
 | `LocalProfileRuntime::clear_all_workspace_indexes` | 显式清理当前 profile 下所有未使用的工作区索引 |
-| `LocalCodebaseProviders::with_semantic_models` | 在 Workspace activation 前注入本地 semantic 使用的 immutable embedding/rerank adapters |
+| `LocalCodebaseProviders::with_models` | 在 Workspace activation 前注入 Codebase 使用的 immutable embedding/rerank adapters |
 | `AppServer::with_cloud_codebase_providers` | 注入冻结的 provider registry；空 registry 不广告 cloud capability |
 | `AppServer::with_cloud_codebase_storage_root` | local composition 配置按 root identity 分隔的 durable grant/deletion state |
 | `AppServer::with_tool_service` | 安装同一 server 内所有 Turn 使用的 Core Tool/Policy ports；正常 local composition 另在 Turn 接受时冻结 `coding-v1` snapshot |
@@ -158,17 +158,18 @@ Host 只有通过 `LocalAppServerOptions::with_web_search_backend` 注入
 system roots 或 proxy。Embedded test 可通过 `LocalAppServerOptions::with_model_operation_client`
 注入离线 client；真实 transport 初始化失败在第一次模型 operation 返回，不得让 App Server 启动 panic。
 
-local composition 会配置 `<profile>/cloud-codebase` 的 durable state 位置，但默认 provider registry
+local composition 会配置 `<profile>/state/cloud-codebase` 的 durable state 位置，但默认 provider registry
 为空，因此不会安装 cloud controller、广告 `cloudCodebase` 或创建网络请求。具体 host 只有在注入
 接受 Workspace-owned exact chunks 且满足幂等 grant deletion 的 provider 后，才能启用云能力。
 
-local composition 把可重建索引统一放在
-`<profile>/cache/workspaces/<workspace-digest>/indexes/{agent-grep,lexical,symbols,semantic}`，并通过
+local composition 把可重建数据统一放在
+`<profile>/cache/workspaces/<workspace-digest>/indexes/{agent-grep,codebase}`；Codebase 的源码、符号和向量表共用
+`codebase/codebase.sqlite3`。它们通过
 `<profile>/cache/locks` 下的独立锁文件协调多个进程。它同时安装共享的
 `SemanticModelProvider` resolver，但 semantic Codebase 默认仍关闭，所以不会后台发送 chunks 或创建
 vectors。用户选择模型并对 exact Workspace 授权源码外发后，Trusted Workspace 的 lexical generation
 更新才会在 refresh worker 中同步本地 semantic SQLite。模型只返回 embedding/rerank 结果，召回与
-排序仍由本地 domain crate 完成；host 也可用 `LocalCodebaseProviders::with_semantic_models` 注入测试
+排序仍由本地 domain crate 完成；host 也可用 `LocalCodebaseProviders::with_models` 注入测试
 或专用 immutable adapters。
 
 Fast Regex 提供 `workspace/agentGrep/fastRegex/status|rebuild|disableAndDelete`。普通配置切换到

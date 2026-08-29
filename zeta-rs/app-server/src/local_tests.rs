@@ -709,12 +709,12 @@ impl EmbeddingInvoker for LocalSemanticEmbedding {
 }
 
 #[test]
-fn local_composition_installs_semantic_models_before_workspace_activation() {
+fn local_composition_installs_models_before_workspace_activation() {
     let profile = tempfile::tempdir().unwrap();
     let workspace = tempfile::tempdir().unwrap();
     std::fs::create_dir(workspace.path().join(".git")).unwrap();
     std::fs::write(workspace.path().join("lib.rs"), "pub fn indexed() {}\n").unwrap();
-    let models = CodebaseSemanticModels::new(
+    let models = CodebaseModels::new(
         zeta_codebase::EmbeddingIndexKey::new("local-test-v1").unwrap(),
         Arc::new(LocalSemanticEmbedding),
     );
@@ -725,7 +725,7 @@ fn local_composition_installs_semantic_models_before_workspace_activation() {
 
     let server = open_local_app_server_with_codebase_providers(
         options,
-        LocalCodebaseProviders::new().with_semantic_models(models),
+        LocalCodebaseProviders::new().with_models(models),
     )
     .unwrap();
 

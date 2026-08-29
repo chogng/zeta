@@ -1,5 +1,5 @@
 use super::*;
-use crate::CodebaseSemanticModels;
+use crate::CodebaseModels;
 use crate::local::ProviderModelService;
 use crate::server::WorkspaceSwitchTrustPolicy;
 use std::sync::Arc;
@@ -24,8 +24,8 @@ use zeta_model_provider::RerankInvoker;
 use zeta_model_provider::RerankRuntimeRequest;
 use zeta_model_provider::SemanticModelProvider;
 use zeta_model_provider::SemanticRuntimeLocation;
+use zeta_state::WorkspaceIndexKind;
 use zeta_workspace::WorkspaceTrustSource;
-use zeta_workspace_index_storage::WorkspaceIndexKind;
 
 struct SemanticTestEmbedding;
 
@@ -209,16 +209,14 @@ fn fast_regex_rpc_rebuilds_then_disables_and_deletes_the_project_index() {
     )
     .unwrap();
     let config = Arc::new(ConfigStore::open(profile.path().join("config.sqlite3")).unwrap());
-    let index_storage = Arc::new(
-        zeta_workspace_index_storage::WorkspaceIndexStorage::open(profile.path()).unwrap(),
-    );
+    let index_storage = Arc::new(zeta_state::StateRuntime::open(profile.path()).unwrap());
     let resolved = ResolvedConfig {
         agent_grep_backend: AgentGrepBackend::FastRegex,
         ..ResolvedConfig::default()
     };
     let server = server()
         .with_config_store(config)
-        .with_workspace_index_storage(Arc::clone(&index_storage))
+        .with_state_runtime(Arc::clone(&index_storage))
         .with_local_tool_config(crate::local_tools::LocalToolConfig::from_resolved(
             &resolved,
         ))
@@ -319,12 +317,12 @@ fn rpc_retrieval_uses_local_semantic_models_installed_before_workspace_activatio
         "pub fn unrelated_symbol() -> bool { false }\n",
     )
     .unwrap();
-    let models = CodebaseSemanticModels::new(
+    let models = CodebaseModels::new(
         zeta_codebase::EmbeddingIndexKey::new("semantic-test-v1").unwrap(),
         Arc::new(SemanticTestEmbedding),
     );
     let server = server()
-        .with_codebase_semantic_models(models)
+        .with_codebase_models(models)
         .with_local_workspace_host(
             None,
             WorkspaceSwitchTrustPolicy::TrustHostSelectedRoots(

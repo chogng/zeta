@@ -5,7 +5,6 @@ use zeta_async_utils::CancellationSource;
 use zeta_codebase::Codebase;
 use zeta_codebase::CodebaseLimits;
 use zeta_codebase::CodebaseSemanticService;
-use zeta_codebase::CodebaseStorage;
 use zeta_codebase::EmbeddingIndexKey;
 use zeta_codebase::InMemoryCodebaseVectorStore;
 use zeta_config::CodebaseAutomaticContext;
@@ -51,9 +50,7 @@ impl EmbeddingInvoker for ConstantEmbedding {
 fn automatic_context_requires_explicit_opt_in() {
     let workspace = workspace();
     let root = WorkspaceRoot::open(workspace.path()).expect("workspace root");
-    let index = Arc::new(
-        Codebase::open(root, CodebaseStorage::Memory, CodebaseLimits::default()).expect("Codebase"),
-    );
+    let index = Arc::new(Codebase::open_memory(root, CodebaseLimits::default()).expect("Codebase"));
     index.rebuild().expect("lexical index");
     let semantic = Arc::new(CodebaseSemanticService::new(
         Arc::clone(&index),

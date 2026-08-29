@@ -13,7 +13,6 @@ path = "src/lib.rs"
 [dependencies]
 ignore = { workspace = true }
 nucleo = { workspace = true }
-rusqlite = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 zeta-async-utils = { workspace = true }

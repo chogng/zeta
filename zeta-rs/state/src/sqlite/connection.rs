@@ -1,27 +1,15 @@
-use rusqlite::{Connection, ErrorCode, OptionalExtension, TransactionBehavior};
-use std::fs;
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior};
 use std::path::Path;
-use std::time::Duration;
+
+use crate::{SqliteDurability, open_sqlite_database};
 
 const STORAGE_SQLITE_SCHEMA_VERSION: u32 = 3;
 
 pub(super) fn open(path: &Path) -> Result<Connection, String> {
-    if let Some(parent) = path.parent()
-        && !parent.as_os_str().is_empty()
-    {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    prepare_private_database_file(path)?;
-    let mut connection = Connection::open(path).map_err(sql_error)?;
-    connection
-        .busy_timeout(Duration::from_secs(5))
-        .map_err(sql_error)?;
-    enable_wal(&connection)?;
+    let mut connection = open_sqlite_database(path, SqliteDurability::Durable)?;
     connection
         .execute_batch(
-            "PRAGMA foreign_keys = ON;
-             PRAGMA synchronous = FULL;
-             CREATE TABLE IF NOT EXISTS zeta_schema_migrations (
+            "CREATE TABLE IF NOT EXISTS zeta_schema_migrations (
                  component TEXT PRIMARY KEY,
                  version INTEGER NOT NULL
              );",
@@ -174,42 +162,4 @@ pub(super) fn from_sql_integer(value: i64) -> Result<u64, String> {
 
 pub(super) fn sql_error(error: impl std::fmt::Display) -> String {
     format!("SQLite event-store error: {error}")
-}
-
-fn enable_wal(connection: &Connection) -> Result<(), String> {
-    for _ in 0..100 {
-        match connection.query_row("PRAGMA journal_mode = WAL", [], |row| {
-            row.get::<_, String>(0)
-        }) {
-            Ok(_) => return Ok(()),
-            Err(rusqlite::Error::SqliteFailure(error, _))
-                if matches!(
-                    error.code,
-                    ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked
-                ) =>
-            {
-                std::thread::sleep(Duration::from_millis(10));
-            }
-            Err(error) => return Err(sql_error(error)),
-        }
-    }
-    Err("SQLite event-store database remained locked while enabling WAL".into())
-}
-
-fn prepare_private_database_file(path: &Path) -> Result<(), String> {
-    let mut options = fs::OpenOptions::new();
-    options.create(true).append(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    options.open(path).map_err(|error| error.to_string())?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(path, fs::Permissions::from_mode(0o600))
-            .map_err(|error| error.to_string())?;
-    }
-    Ok(())
 }

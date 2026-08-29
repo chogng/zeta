@@ -1,0 +1,27 @@
+[package]
+name = "zeta-codebase-store"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+doctest = false
+name = "zeta_codebase_store"
+path = "src/lib.rs"
+
+[dependencies]
+rusqlite = { workspace = true }
+zeta-codebase = { workspace = true }
+zeta-model-provider = { workspace = true }
+zeta-state = { workspace = true }
+zeta-syntax = { workspace = true }
+zeta-workspace = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+zeta-api = { workspace = true }
+zeta-workspace = { workspace = true }
+
+[lints]
+workspace = true

@@ -13,10 +13,11 @@ use crate::ChunkSpan;
 use crate::CodebaseLimits;
 use crate::IndexedLanguage;
 
-pub(crate) const CHUNKER_VERSION: &str = "zeta-codebase-v1";
+#[doc(hidden)]
+pub const CHUNKER_VERSION: &str = "zeta-codebase-v1";
 
 #[derive(Clone, Debug)]
-pub(crate) struct PreparedChunk {
+pub struct PreparedChunk {
     pub key: ChunkKey,
     pub content_hash: ChunkContentHash,
     pub span: ChunkSpan,

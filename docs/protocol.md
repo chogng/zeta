@@ -86,7 +86,7 @@ serde / serde_json / schemars / ts-rs
 
 ```text
 zeta-protocol → zeta-core
-zeta-protocol → zeta-storage
+zeta-protocol → zeta-state
 zeta-protocol → zeta-app-server-protocol
 zeta-protocol → provider implementation
 ```
@@ -349,8 +349,8 @@ Session 与 Thread 使用独立 sequence，是因为它们是不同的冲突域�
 
 如果合成一条 sequence，子 Thread 的执行会无意义地争用 Session revision，多分支并行会产生
 虚假的 optimistic-concurrency 冲突，单个 Thread 的恢复也会被迫读取整个 Session 的历史。
-逻辑 sequence 独立不代表物理实现重复；不同 aggregate 可以复用同一个 event-stream engine，
-只保留各自的 typed validation、reducer 和 writer scope。
+逻辑 sequence 独立不代表物理实现重复；不同 aggregate 可以复用 `zeta-state` 的同一套
+SQLite 运行规则，只保留各自的 typed validation、reducer 和 writer scope。
 
 ### 5.3 当前校验不一致
 

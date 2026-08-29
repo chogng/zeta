@@ -34,6 +34,7 @@ zeta-attachments = { workspace = true }
 zeta-auto-review = { workspace = true }
 zeta-collaboration = { workspace = true }
 zeta-codebase = { workspace = true }
+zeta-codebase-store = { workspace = true }
 zeta-cloud-codebase = { workspace = true }
 zeta-chatgpt = { workspace = true }
 zeta-config = { workspace = true }
@@ -72,12 +73,11 @@ zeta-execpolicy = { workspace = true }
 zeta-plugins = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-rollout = { workspace = true }
-zeta-storage = { workspace = true }
+zeta-state = { workspace = true }
 zeta-rmcp-client = { workspace = true }
 zeta-sandboxing = { workspace = true }
 zeta-workspace = { workspace = true }
 zeta-workspace-access = { workspace = true }
-zeta-workspace-index-storage = { workspace = true }
 zeta-workspace-search = { workspace = true }
 zeta-secrets = { workspace = true }
 zeta-shell-command = { workspace = true }

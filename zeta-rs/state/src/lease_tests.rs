@@ -3,7 +3,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 fn lease_directory(label: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
-        "zeta-storage-{label}-{}-{}",
+        "zeta-state-{label}-{}-{}",
         std::process::id(),
         SystemTime::now()
             .duration_since(UNIX_EPOCH)

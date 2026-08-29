@@ -1,6 +1,6 @@
 #![deny(unsafe_code)]
 
-//! Profile-local storage and cross-process lifecycle locks for rebuildable Workspace indexes.
+//! Profile-local database paths and cross-process lifecycle locks for rebuildable indexes.
 
 use std::fs::{self, File, OpenOptions};
 use std::io;
@@ -46,26 +46,42 @@ pub enum ClearOutcome {
     InUse,
 }
 
-/// Profile-level owner of rebuildable Workspace index paths and lifecycle locks.
+/// Profile-level owner of durable database paths and rebuildable Workspace index locks.
 #[derive(Clone, Debug)]
-pub struct WorkspaceIndexStorage {
+pub struct StateRuntime {
+    profile_root: PathBuf,
+    database_path: PathBuf,
     cache_root: PathBuf,
     locks_root: PathBuf,
     workspaces_root: PathBuf,
 }
 
-impl WorkspaceIndexStorage {
+impl StateRuntime {
     pub fn open(profile_root: impl AsRef<Path>) -> io::Result<Self> {
-        let cache_root = profile_root.as_ref().join("cache");
+        fs::create_dir_all(profile_root.as_ref())?;
+        let profile_root = fs::canonicalize(profile_root.as_ref())?;
+        let cache_root = profile_root.join("cache");
         let locks_root = cache_root.join(LOCKS_DIRECTORY);
         let workspaces_root = cache_root.join(WORKSPACES_DIRECTORY);
         fs::create_dir_all(locks_root.join(WORKSPACES_DIRECTORY))?;
         fs::create_dir_all(&workspaces_root)?;
         Ok(Self {
+            database_path: profile_root.join("state.sqlite3"),
+            profile_root,
             cache_root,
             locks_root,
             workspaces_root,
         })
+    }
+
+    /// Returns the profile root that contains durable state and rebuildable cache data.
+    pub fn profile_root(&self) -> &Path {
+        &self.profile_root
+    }
+
+    /// Returns the single durable profile database path.
+    pub fn database_path(&self) -> &Path {
+        &self.database_path
     }
 
     pub fn cache_root(&self) -> &Path {
@@ -228,5 +244,5 @@ fn remove_directory(path: &Path) -> io::Result<ClearOutcome> {
 }
 
 #[cfg(test)]
-#[path = "storage_tests.rs"]
+#[path = "workspace_index_tests.rs"]
 mod tests;

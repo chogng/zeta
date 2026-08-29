@@ -29,7 +29,8 @@ pub enum SymbolKind {
 }
 
 impl SymbolKind {
-    pub(crate) const fn id(self) -> &'static str {
+    #[doc(hidden)]
+    pub const fn id(self) -> &'static str {
         match self {
             Self::Constant => "constant",
             Self::Enum => "enum",
@@ -46,7 +47,8 @@ impl SymbolKind {
         }
     }
 
-    pub(crate) fn from_id(value: &str) -> Option<Self> {
+    #[doc(hidden)]
+    pub fn from_id(value: &str) -> Option<Self> {
         match value {
             "constant" => Some(Self::Constant),
             "enum" => Some(Self::Enum),
@@ -133,13 +135,6 @@ impl SymbolIndexQuery {
     pub fn result_limit(&self) -> NonZeroUsize {
         self.result_limit
     }
-}
-
-/// Storage placement for one rebuildable symbol projection.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum SymbolIndexStorage {
-    Memory,
-    Persistent(PathBuf),
 }
 
 /// Resource limits applied while reconciling and querying one symbol index.

@@ -92,7 +92,7 @@ zeta-cli → zeta-tui  → zeta-app-server-client
 ```
 
 CLI 可以依赖产品层 `zeta-exec` 运行无交互 Agent，但不依赖目标
-`zeta-tool-executor`。CLI/TUI/exec 都不直接调用 `zeta-core`、`zeta-storage`、
+`zeta-tool-executor`。CLI/TUI/exec 都不直接调用 `zeta-core`、`zeta-state`、
 `zeta-rollout`、`zeta-rollout-trace`、`zeta-sandboxing` 或 Model Provider。
 
 `zeta app-server` 子命令只作为兼容入口委托 `zeta-server-host`，不能由 `zeta-cli` 直接组合

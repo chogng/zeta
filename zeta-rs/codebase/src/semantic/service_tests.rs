@@ -6,7 +6,6 @@ use std::sync::atomic::Ordering;
 
 use crate::Codebase;
 use crate::CodebaseLimits;
-use crate::CodebaseStorage;
 use tempfile::TempDir;
 use zeta_model_provider::EmbeddingInvoker;
 use zeta_model_provider::EmbeddingRequest;
@@ -62,10 +61,6 @@ impl EmbeddingInvoker for WrongCardinalityEmbedding {
     }
 }
 
-struct CountingEmbedding {
-    embedded_input_count: Arc<AtomicUsize>,
-}
-
 struct CancellingBatchEmbedding {
     calls: AtomicUsize,
     cancellation: Mutex<Option<zeta_async_utils::CancellationSource>>,
@@ -115,14 +110,6 @@ impl EmbeddingInvoker for CancellingBatchEmbedding {
     }
 }
 
-impl EmbeddingInvoker for CountingEmbedding {
-    fn embed(&self, request: &EmbeddingRequest) -> Result<EmbeddingResponse, ModelProviderError> {
-        self.embedded_input_count
-            .fetch_add(request.inputs().len(), Ordering::Relaxed);
-        KeywordEmbedding.embed(request)
-    }
-}
-
 #[test]
 fn local_vector_recall_returns_current_workspace_chunk_references() {
     let workspace = workspace();
@@ -158,101 +145,6 @@ fn local_semantic_service_interprets_rerank_scores_and_owns_final_order() {
         result.candidates[0].relative_path,
         std::path::Path::new("alpha.rs")
     );
-}
-
-#[test]
-fn persistent_sqlite_projection_reopens_without_reembedding_chunks() {
-    let workspace = workspace();
-    let index = index(&workspace);
-    let storage = tempfile::tempdir().expect("storage");
-    let path = storage.path().join("semantic.sqlite3");
-    let first_store: Arc<dyn CodebaseVectorStore> = Arc::new(
-        SqliteCodebaseVectorStore::open(&CodebaseSemanticStorage::Persistent(path.clone()))
-            .expect("open store"),
-    );
-    service(Arc::clone(&index), None, first_store)
-        .sync()
-        .expect("sync");
-
-    let reopened: Arc<dyn CodebaseVectorStore> = Arc::new(
-        SqliteCodebaseVectorStore::open(&CodebaseSemanticStorage::Persistent(path))
-            .expect("reopen store"),
-    );
-    let result = service(index, None, reopened)
-        .query(&query("find alpha"))
-        .expect("query reopened projection");
-
-    assert_eq!(
-        result.candidates[0].relative_path,
-        std::path::Path::new("alpha.rs")
-    );
-}
-
-#[test]
-fn persistent_projection_reuses_unchanged_chunks_across_lexical_generations() {
-    let workspace = workspace();
-    let index = index(&workspace);
-    let storage = tempfile::tempdir().expect("storage");
-    let path = storage.path().join("semantic.sqlite3");
-    let embedded_input_count = Arc::new(AtomicUsize::new(0));
-    let embedding: Arc<dyn EmbeddingInvoker> = Arc::new(CountingEmbedding {
-        embedded_input_count: Arc::clone(&embedded_input_count),
-    });
-    let first_store: Arc<dyn CodebaseVectorStore> = Arc::new(
-        SqliteCodebaseVectorStore::open(&CodebaseSemanticStorage::Persistent(path.clone()))
-            .expect("open store"),
-    );
-    let first = CodebaseSemanticService::new(
-        Arc::clone(&index),
-        model_id(),
-        Arc::clone(&embedding),
-        first_store,
-    )
-    .sync()
-    .expect("initial sync");
-    assert_eq!(first.reused_embedding_count, 0);
-    assert_eq!(embedded_input_count.load(Ordering::Relaxed), 2);
-
-    index.rebuild().expect("advance lexical generation");
-    let reopened: Arc<dyn CodebaseVectorStore> = Arc::new(
-        SqliteCodebaseVectorStore::open(&CodebaseSemanticStorage::Persistent(path))
-            .expect("reopen store"),
-    );
-    let second = CodebaseSemanticService::new(index, model_id(), embedding, reopened)
-        .sync()
-        .expect("reuse sync");
-
-    assert_eq!(second.reused_embedding_count, 2);
-    assert_eq!(embedded_input_count.load(Ordering::Relaxed), 2);
-}
-
-#[test]
-fn persistent_projection_embeds_only_changed_chunks() {
-    let workspace = workspace();
-    let index = index(&workspace);
-    let storage = tempfile::tempdir().expect("storage");
-    let path = storage.path().join("semantic.sqlite3");
-    let embedded_input_count = Arc::new(AtomicUsize::new(0));
-    let embedding: Arc<dyn EmbeddingInvoker> = Arc::new(CountingEmbedding {
-        embedded_input_count: Arc::clone(&embedded_input_count),
-    });
-    let store: Arc<dyn CodebaseVectorStore> = Arc::new(
-        SqliteCodebaseVectorStore::open(&CodebaseSemanticStorage::Persistent(path))
-            .expect("open store"),
-    );
-    let service = CodebaseSemanticService::new(index.clone(), model_id(), embedding, store);
-    service.sync().expect("initial sync");
-
-    std::fs::write(
-        workspace.path().join("beta.rs"),
-        "pub fn changed_beta_feature() {}\n",
-    )
-    .expect("change source");
-    index.rebuild().expect("advance lexical generation");
-    let sync = service.sync().expect("incremental sync");
-
-    assert_eq!(sync.reused_embedding_count, 1);
-    assert_eq!(embedded_input_count.load(Ordering::Relaxed), 3);
 }
 
 #[test]
@@ -370,9 +262,8 @@ fn query(text: &str) -> CodebaseSemanticQuery {
 
 fn index(workspace: &TempDir) -> Arc<Codebase> {
     let index = Arc::new(
-        Codebase::open(
+        Codebase::open_memory(
             WorkspaceRoot::open(workspace.path()).expect("root"),
-            CodebaseStorage::Memory,
             CodebaseLimits::default(),
         )
         .expect("index"),

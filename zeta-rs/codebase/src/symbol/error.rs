@@ -16,18 +16,12 @@ pub enum SymbolIndexError {
     #[error("symbol-index storage contains an unknown symbol kind: {0}")]
     InvalidStoredSymbolKind(String),
     #[error("symbol-index storage failed: {0}")]
-    Storage(#[from] rusqlite::Error),
+    Storage(String),
     #[error("symbol extraction failed for {}: {source}", path.display())]
     Syntax {
         path: PathBuf,
         #[source]
         source: zeta_syntax::SyntaxError,
-    },
-    #[error("filesystem operation failed for {}: {source}", path.display())]
-    Io {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
     },
     #[error("symbol-index operation was cancelled: {0}")]
     Cancelled(String),
@@ -35,9 +29,9 @@ pub enum SymbolIndexError {
     Codebase(#[from] crate::CodebaseError),
 }
 
-pub(crate) fn io_error(path: impl Into<PathBuf>, source: std::io::Error) -> SymbolIndexError {
-    SymbolIndexError::Io {
-        path: path.into(),
-        source,
+impl SymbolIndexError {
+    #[doc(hidden)]
+    pub fn storage(error: impl std::fmt::Display) -> Self {
+        Self::Storage(error.to_string())
     }
 }

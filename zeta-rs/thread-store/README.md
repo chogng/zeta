@@ -63,9 +63,9 @@ ThreadStore::append_batch
 `SequenceConflict` 是正常 concurrency signal，不应被转换为 generic I/O failure。
 `InvalidBatch` 表示 caller/backend contract bug；`Storage` 表示 backend failure。
 
-Backend 必须 complete-or-none commit、success-before-durability 禁止、tail 不可见，并保留每条
-event 的 exact sequence。Reducer legality 属于 Core，物理 framing/checksum/tail recovery 属于
-`zeta-storage`。
+Backend 必须 complete-or-none commit、success-before-durability 禁止、未提交记录不可见，并保留每条
+event 的 exact sequence。Reducer legality 属于 Core，SQLite 连接规则、文件权限与事务参数属于
+`zeta-state`。
 
 ## 测试与修改路径
 

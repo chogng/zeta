@@ -1,28 +1,28 @@
-use std::fs;
 use std::num::NonZeroUsize;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use crate::ChunkContentHash;
-use crate::ChunkKey;
-use crate::ChunkReference;
-use crate::ChunkSpan;
-use crate::IndexRootId;
-use crate::IndexedLanguage;
-use crate::MaterializedChunk;
-use crate::SourceRevision;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use rusqlite::params;
+use zeta_codebase::ChunkContentHash;
+use zeta_codebase::ChunkKey;
+use zeta_codebase::ChunkReference;
+use zeta_codebase::ChunkSpan;
+use zeta_codebase::IndexRootId;
+use zeta_codebase::IndexedLanguage;
+use zeta_codebase::MaterializedChunk;
+use zeta_codebase::SourceRevision;
 use zeta_model_provider::EmbeddingVector;
+use zeta_state::{SqliteDurability, open_in_memory_database, open_sqlite_database};
 
-use crate::CodebaseSemanticStorage;
-use crate::CodebaseVectorStore;
-use crate::CodebaseVectorStoreError;
-use crate::EmbeddedCodeChunk;
-use crate::EmbeddingIndexKey;
-use crate::VectorSearchHit;
+use crate::CodebaseStoreStorage;
+use zeta_codebase::CodebaseVectorStore;
+use zeta_codebase::CodebaseVectorStoreError;
+use zeta_codebase::EmbeddedCodeChunk;
+use zeta_codebase::EmbeddingIndexKey;
+use zeta_codebase::VectorSearchHit;
 
 const SCHEMA_VERSION: &str = "5";
 const ANN_REVISION: &str = "simhash64-v1";
@@ -37,34 +37,19 @@ const ANN_MAX_CANDIDATES: usize = 900;
 /// embeddings locally and rejects stale generations and model identities. Small collections use
 /// brute-force cosine search; larger collections use a rebuildable SimHash projection to select
 /// candidates before exact cosine scoring, with automatic brute-force fallback.
-pub struct SqliteCodebaseVectorStore {
+pub(crate) struct SqliteCodebaseVectorStore {
     connection: Mutex<Connection>,
 }
 
 impl SqliteCodebaseVectorStore {
-    pub fn open(storage: &CodebaseSemanticStorage) -> Result<Self, CodebaseVectorStoreError> {
+    pub(crate) fn open(storage: &CodebaseStoreStorage) -> Result<Self, CodebaseVectorStoreError> {
         let connection = match storage {
-            CodebaseSemanticStorage::Memory => Connection::open_in_memory(),
-            CodebaseSemanticStorage::Persistent(path) => {
-                if let Some(parent) = path.parent() {
-                    fs::create_dir_all(parent).map_err(store_error)?;
-                }
-                prepare_persistent_database(path)?;
-                Connection::open(path)
+            CodebaseStoreStorage::Memory => open_in_memory_database(SqliteDurability::Rebuildable),
+            CodebaseStoreStorage::Persistent(path) => {
+                open_sqlite_database(path, SqliteDurability::Rebuildable)
             }
         }
         .map_err(store_error)?;
-        connection
-            .busy_timeout(std::time::Duration::from_secs(5))
-            .map_err(store_error)?;
-        if matches!(storage, CodebaseSemanticStorage::Persistent(_)) {
-            connection
-                .pragma_update(None, "journal_mode", "WAL")
-                .map_err(store_error)?;
-            connection
-                .pragma_update(None, "synchronous", "NORMAL")
-                .map_err(store_error)?;
-        }
         create_schema(&connection).map_err(store_error)?;
         let stored_schema = metadata(&connection, "schema_version").map_err(store_error)?;
         if stored_schema
@@ -651,41 +636,10 @@ fn store_error(error: impl std::fmt::Display) -> CodebaseVectorStoreError {
     CodebaseVectorStoreError::new(error.to_string())
 }
 
-fn index_identity_error(error: crate::CodebaseError) -> CodebaseVectorStoreError {
+fn index_identity_error(error: zeta_codebase::CodebaseError) -> CodebaseVectorStoreError {
     CodebaseVectorStoreError::new(error.to_string())
 }
 
 #[cfg(test)]
-#[path = "sqlite_store_tests.rs"]
+#[path = "semantic_tests.rs"]
 mod tests;
-
-#[cfg(unix)]
-fn prepare_persistent_database(path: &Path) -> Result<(), CodebaseVectorStoreError> {
-    use std::os::unix::fs::OpenOptionsExt;
-    use std::os::unix::fs::PermissionsExt;
-
-    match fs::symlink_metadata(path) {
-        Ok(metadata) if !metadata.file_type().is_file() => {
-            return Err(CodebaseVectorStoreError::new(
-                "semantic codebase database must be a regular file",
-            ));
-        }
-        Ok(_) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(store_error(error)),
-    }
-    fs::OpenOptions::new()
-        .create(true)
-        .read(true)
-        .truncate(false)
-        .write(true)
-        .mode(0o600)
-        .open(path)
-        .map_err(store_error)?;
-    fs::set_permissions(path, fs::Permissions::from_mode(0o600)).map_err(store_error)
-}
-
-#[cfg(not(unix))]
-fn prepare_persistent_database(_path: &Path) -> Result<(), CodebaseVectorStoreError> {
-    Ok(())
-}

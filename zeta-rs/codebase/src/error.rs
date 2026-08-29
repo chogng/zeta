@@ -17,7 +17,7 @@ pub enum CodebaseError {
     #[error("codebase storage belongs to another workspace root")]
     StorageRootMismatch,
     #[error("codebase storage failed: {0}")]
-    Storage(#[from] rusqlite::Error),
+    Storage(String),
     #[error("filesystem operation failed for {}: {source}", path.display())]
     Io {
         path: PathBuf,
@@ -45,6 +45,13 @@ pub enum CodebaseError {
     OverlayRevisionConflict,
     #[error("a dirty document overlay supersedes the requested persistent source revision")]
     OverlaySupersedesPersistentSource,
+}
+
+impl CodebaseError {
+    #[doc(hidden)]
+    pub fn storage(error: impl std::fmt::Display) -> Self {
+        Self::Storage(error.to_string())
+    }
 }
 
 pub(crate) fn io_error(path: impl Into<PathBuf>, source: std::io::Error) -> CodebaseError {

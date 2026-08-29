@@ -2,23 +2,16 @@ use std::path::PathBuf;
 
 use rusqlite::Connection;
 
-use crate::ChunkContentHash;
-use crate::ChunkKey;
-use crate::ChunkReference;
-use crate::ChunkSpan;
-use crate::CodebaseError;
-use crate::CodebaseManifest;
-use crate::CodebaseSnapshot;
-use crate::IndexRootId;
-use crate::IndexedChunkReference;
-use crate::IndexedLanguage;
-use crate::IndexedSourceReference;
-use crate::SourceRevision;
+use crate::source::SourceResult;
+use zeta_codebase::{
+    ChunkContentHash, ChunkKey, ChunkReference, ChunkSpan, CodebaseManifest, CodebaseSnapshot,
+    IndexRootId, IndexedChunkReference, IndexedLanguage, IndexedSourceReference, SourceRevision,
+};
 
 pub(crate) fn load_manifest(
     connection: &Connection,
     root_id: &IndexRootId,
-) -> Result<CodebaseManifest, CodebaseError> {
+) -> SourceResult<CodebaseManifest> {
     let generation = metadata(connection, "generation")?
         .and_then(|value| value.parse::<u64>().ok())
         .unwrap_or(0);

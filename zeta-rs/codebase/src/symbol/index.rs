@@ -16,19 +16,19 @@ use crate::SymbolIndexLimits;
 use crate::SymbolIndexQuery;
 use crate::SymbolIndexRefreshOutcome;
 use crate::SymbolIndexSnapshot;
-use crate::SymbolIndexStorage;
 use crate::SymbolSearchHit;
 use crate::symbol::extractor::extract_source;
 use crate::symbol::matcher::SymbolMatcher;
 use crate::symbol::matcher::sort_hits;
-use crate::symbol::store::IndexStore;
+use crate::symbol::memory_store::InMemorySymbolIndexStore;
 use crate::symbol::store::SourceSymbols;
+use crate::symbol::store::SymbolIndexStore;
 
 /// Workspace-side symbol projection backed by one canonical [`Codebase`] source authority.
 pub struct SymbolIndex {
     codebase: Arc<Codebase>,
     limits: SymbolIndexLimits,
-    store: IndexStore,
+    store: Arc<dyn SymbolIndexStore>,
     operation: Mutex<()>,
     matcher: RwLock<Arc<Mutex<SymbolMatcher>>>,
     overlay: RwLock<OverlayProjection>,
@@ -41,14 +41,22 @@ struct OverlayProjection {
 }
 
 impl SymbolIndex {
+    /// Opens a process-local symbol projection.
+    pub fn open_memory(
+        codebase: Arc<Codebase>,
+        limits: SymbolIndexLimits,
+    ) -> Result<Self, SymbolIndexError> {
+        let store = Arc::new(InMemorySymbolIndexStore::new(codebase.root_id().clone()));
+        Self::open(codebase, store, limits)
+    }
+
     /// Opens a rebuildable symbol projection for the exact root owned by `codebase`.
     pub fn open(
         codebase: Arc<Codebase>,
-        storage: SymbolIndexStorage,
+        store: Arc<dyn SymbolIndexStore>,
         limits: SymbolIndexLimits,
     ) -> Result<Self, SymbolIndexError> {
         validate_limits(&limits)?;
-        let store = IndexStore::open(&storage, codebase.root_id())?;
         let projection = store.load_projection(codebase.root_id())?;
         let matcher = SymbolMatcher::new(
             flatten_symbols(projection.sources.values()),

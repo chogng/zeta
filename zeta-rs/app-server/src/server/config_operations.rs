@@ -74,8 +74,8 @@ use zeta_model_provider::ProviderId;
 use zeta_model_provider_config::ModelContextConfig;
 use zeta_model_provider_config::ModelProviderConfig;
 use zeta_protocol::Patch;
-use zeta_workspace_index_storage::ClearOutcome;
-use zeta_workspace_index_storage::WorkspaceIndexKind;
+use zeta_state::ClearOutcome;
+use zeta_state::WorkspaceIndexKind;
 
 use crate::tool_search_models::ToolSearchEmbeddingStatus;
 use crate::tool_search_models::resolve_tool_search;
@@ -191,7 +191,7 @@ impl AppServer {
             .reconcile_local_tool_config(&snapshot.values)
             .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodebaseOperationFailed))?;
         let deletion = self
-            .workspace_index_storage
+            .state_runtime
             .as_ref()
             .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodebaseUnavailable))?
             .clear_index(&workspace, WorkspaceIndexKind::AgentGrep)

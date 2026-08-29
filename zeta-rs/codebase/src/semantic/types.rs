@@ -1,9 +1,11 @@
 use std::num::NonZeroUsize;
-use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::ChunkReference;
 use crate::IndexedLanguage;
+use sha2::{Digest, Sha256};
 use zeta_model_provider::EmbeddingVector;
+use zeta_model_provider::{EmbeddingInvoker, RerankInvoker};
 
 use crate::CodebaseSemanticError;
 
@@ -33,11 +35,63 @@ text_identity!(
     "embedding model identity must be 1..=256 bytes without control characters"
 );
 
-/// Storage placement for a rebuildable local semantic projection.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum CodebaseSemanticStorage {
-    Memory,
-    Persistent(PathBuf),
+impl EmbeddingIndexKey {
+    /// Derives the persistent vector identity from the document encoder and model runtime.
+    pub fn for_device_model(
+        provider_id: &str,
+        model_id: &str,
+        runtime_identity: &str,
+    ) -> Result<Self, CodebaseSemanticError> {
+        let mut digest = Sha256::new();
+        for value in [
+            "zeta-codebase-document-v1",
+            provider_id,
+            model_id,
+            runtime_identity,
+        ] {
+            digest.update(value.len().to_le_bytes());
+            digest.update(value.as_bytes());
+        }
+        Self::new(format!("semantic:sha256:{:x}", digest.finalize()))
+    }
+}
+
+/// Device-side model runtime selected for optional semantic Codebase indexing and query.
+#[derive(Clone)]
+pub struct CodebaseModels {
+    embedding_index_key: EmbeddingIndexKey,
+    embedding: Arc<dyn EmbeddingInvoker>,
+    rerank: Option<Arc<dyn RerankInvoker>>,
+}
+
+impl CodebaseModels {
+    pub fn new(
+        embedding_index_key: EmbeddingIndexKey,
+        embedding: Arc<dyn EmbeddingInvoker>,
+    ) -> Self {
+        Self {
+            embedding_index_key,
+            embedding,
+            rerank: None,
+        }
+    }
+
+    pub fn with_rerank(mut self, rerank: Arc<dyn RerankInvoker>) -> Self {
+        self.rerank = Some(rerank);
+        self
+    }
+
+    pub fn embedding_index_key(&self) -> &EmbeddingIndexKey {
+        &self.embedding_index_key
+    }
+
+    pub fn embedding(&self) -> Arc<dyn EmbeddingInvoker> {
+        Arc::clone(&self.embedding)
+    }
+
+    pub fn rerank(&self) -> Option<Arc<dyn RerankInvoker>> {
+        self.rerank.clone()
+    }
 }
 
 /// Bounded semantic query against the current local Workspace generation.
