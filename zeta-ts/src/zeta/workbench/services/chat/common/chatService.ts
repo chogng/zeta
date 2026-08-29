@@ -1,7 +1,6 @@
 import type { Event } from "../../../../base/common/event.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { ApprovalMode, ModelRef, SessionId, ThreadId } from "../../../../sessions/services/sessions/common/session.js";
-import type { ThreadGoal as ThreadGoalDto } from "../../../../../../generated/app-server/types.js";
 import type { SkillReference } from "../../../../platform/skills/common/skillApi.js";
 import type { ModelCatalogEntry } from "./modelCatalog.js";
 import type { ResolvedChatContext } from "./chatContextService.js";
@@ -84,8 +83,16 @@ export interface ModelUsageSummary {
 	readonly reasoningTokens: ModelUsageTotal;
 }
 
-export type ThreadGoal = ThreadGoalDto;
-export type ThreadGoalStatus = ThreadGoal["status"];
+export type ThreadGoalStatus = "active" | "paused" | "blocked" | "usageLimited" | "budgetLimited" | "complete";
+
+export interface ThreadGoal {
+	readonly threadId: ThreadId;
+	readonly goalId: string;
+	readonly objective: string;
+	readonly status: ThreadGoalStatus;
+	readonly tokenBudget?: number | null;
+	readonly tokensUsed: number;
+}
 
 export interface Thread {
 	readonly sessionId: SessionId;

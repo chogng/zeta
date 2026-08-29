@@ -470,6 +470,9 @@ export type ModelUsageTotal = { reported: number, complete: boolean, };
 export type ModelUsageSummary = { modelInvocations: number, inputTokens: ModelUsageTotal, outputTokens: ModelUsageTotal, cachedInputTokens: ModelUsageTotal, reasoningTokens: ModelUsageTotal, };
 export type ToolMode = "direct" | "codeMode" | "codeModeOnly";
 export type ToolProfileSnapshot = { id: string, revision: string, definitionDigest: string, toolNames: Array<ToolName>, parallelToolCalls: boolean, };
+export type ReviewTarget = { "type": "uncommittedChanges" } | { "type": "baseBranch", branch: string, } | { "type": "commit", sha: string, title?: string | null, } | { "type": "custom", instructions: string, };
+export type TurnKind = "coding" | "review";
+export type TurnInstructions = { owner: string, id: string, revision: string, body: string, };
 export type Turn = { turnId: TurnId, status: TurnStatus, kind: TurnKind,
 /**
  * Exact instructions frozen when this Turn was accepted.

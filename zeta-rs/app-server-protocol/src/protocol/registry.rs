@@ -660,6 +660,7 @@ use zeta_protocol::ProcessExitStatus;
 use zeta_protocol::ReasoningEffort;
 use zeta_protocol::RequestUserInput;
 use zeta_protocol::RequestUserInputResponse;
+use zeta_protocol::ReviewTarget;
 use zeta_protocol::SandboxDenialOutput;
 use zeta_protocol::Session;
 use zeta_protocol::SessionEvent;
@@ -695,7 +696,9 @@ use zeta_protocol::ToolReplaySafety;
 use zeta_protocol::ToolSourceProvenance;
 use zeta_protocol::Turn;
 use zeta_protocol::TurnExecutionBinding;
+use zeta_protocol::TurnInstructions;
 use zeta_protocol::TurnInteraction;
+use zeta_protocol::TurnKind;
 use zeta_protocol::TurnStatus;
 use zeta_protocol::UserInputAnswer;
 use zeta_protocol::UserInputOption;
@@ -872,11 +875,21 @@ impl ServerNotificationDefinition {
 #[derive(Clone, Copy)]
 pub(crate) struct TypeScriptBinding {
     declaration: fn() -> String,
+    dependencies: fn() -> Vec<String>,
+    identifier: fn() -> String,
 }
 
 impl TypeScriptBinding {
     pub(crate) fn declaration(&self) -> String {
         (self.declaration)()
+    }
+
+    pub(crate) fn dependencies(&self) -> Vec<String> {
+        (self.dependencies)()
+    }
+
+    pub(crate) fn identifier(&self) -> String {
+        (self.identifier)()
     }
 }
 
@@ -886,6 +899,17 @@ fn type_name<T: TS>() -> String {
 
 fn declaration<T: TS>() -> String {
     T::decl(&Config::default())
+}
+
+fn dependencies<T: TS + 'static>() -> Vec<String> {
+    T::dependencies(&Config::default())
+        .into_iter()
+        .map(|dependency| dependency.ts_name)
+        .collect()
+}
+
+fn identifier<T: TS>() -> String {
+    T::ident(&Config::default())
 }
 
 macro_rules! client_methods {
@@ -2233,6 +2257,8 @@ macro_rules! typescript_bindings {
             $(
                 TypeScriptBinding {
                     declaration: declaration::<$type>,
+                    dependencies: dependencies::<$type>,
+                    identifier: identifier::<$type>,
                 },
             )+
         ];
@@ -2650,6 +2676,9 @@ typescript_bindings! {
     ModelUsageSummary,
     ToolMode,
     ToolProfileSnapshot,
+    ReviewTarget,
+    TurnKind,
+    TurnInstructions,
     Turn,
     Thread,
     ToolExecutionAuthority,

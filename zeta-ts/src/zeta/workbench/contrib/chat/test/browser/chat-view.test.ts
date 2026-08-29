@@ -174,8 +174,8 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	});
 	let shownContextMenuActions: readonly IAction[] = [];
 	const contextMenuService = {
-		showContextMenu: (options: { readonly actions?: readonly IAction[] }) => {
-			shownContextMenuActions = options.actions ?? [];
+		showContextMenu: (options: { readonly getActions: () => readonly IAction[] }) => {
+			shownContextMenuActions = options.getActions();
 		},
 	} as unknown as IContextMenuService;
 	using pane = new ChatViewPane(
@@ -319,11 +319,11 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	const chatPanes = pane.element.querySelectorAll<HTMLElement>(".zeta-chat-pane-host > .zeta-chat");
 	assert.equal(chatPanes.length, 2);
 	for (const chatPane of chatPanes) {
-		assert.equal(chatPane.childElementCount, 2);
 		assert.equal(chatPane.classList.contains("empty"), true);
 		assert.equal(chatPane.classList.contains("has-conversation"), false);
-		assert.ok(chatPane.firstElementChild?.classList.contains("zeta-chat-list-widget"));
-		assert.ok(chatPane.lastElementChild?.classList.contains("zeta-chat-input-part"));
+		assert.equal(chatPane.querySelector<HTMLElement>(":scope > .zeta-chat-goal")?.hidden, true);
+		assert.ok(chatPane.querySelector(":scope > .zeta-chat-list-widget"));
+		assert.ok(chatPane.querySelector(":scope > .zeta-chat-input-part"));
 		const inputToolbar = chatPane.querySelector<HTMLElement>(".zeta-chat-input-toolbars");
 		assert.equal(inputToolbar?.getAttribute("role"), "toolbar");
 		assert.deepEqual(
@@ -557,8 +557,8 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	}));
 	assert.equal(untitledPane.classList.contains("empty"), false);
 	assert.equal(untitledPane.classList.contains("has-conversation"), true);
-	assert.ok(untitledPane.firstElementChild?.classList.contains("zeta-chat-list-widget"));
-	assert.ok(untitledPane.lastElementChild?.classList.contains("zeta-chat-input-part"));
+	assert.ok(untitledPane.querySelector(":scope > .zeta-chat-list-widget"));
+	assert.ok(untitledPane.querySelector(":scope > .zeta-chat-input-part"));
 	await waitFor(() => fake.turnStartRequests.length === 1);
 
 	assert.equal(fake.createSessionRequests.length, 1);
@@ -1085,6 +1085,7 @@ test("ChatPaneModel projects and refreshes the canonical durable Turn plan", asy
 		turns: [{
 			turnId: "turn-1",
 			status: "running",
+			kind: "coding",
 			toolMode: "direct",
 			approvalMode: "askPermissions",
 			usage: emptyUsage(),
@@ -1206,6 +1207,7 @@ test("ChatPaneModel projects a durable Turn failure into the conversation", asyn
 		turns: [{
 			turnId: "turn-1",
 			status: "failed",
+			kind: "coding",
 			toolMode: "direct",
 			approvalMode: "askPermissions",
 			usage: emptyUsage(),
@@ -1490,6 +1492,7 @@ test("ChatPaneModel steers an active Turn instead of starting another Turn", asy
 		turns: [{
 			turnId: "turn-running",
 			status: "running",
+			kind: "coding",
 			toolMode: "direct",
 			approvalMode: "askPermissions",
 			usage: emptyUsage(),
@@ -1751,6 +1754,7 @@ function thread(agentText?: string): Thread {
 			? [{
 				turnId: "turn-1",
 				status: "completed",
+				kind: "coding",
 				toolMode: "direct",
 				approvalMode: "askPermissions",
 				usage: emptyUsage(),
@@ -1782,6 +1786,7 @@ function failedTurn(code: TurnError["code"], retryable: boolean, message = "Turn
 	return {
 		turnId: "turn-1",
 		status: "failed",
+		kind: "coding",
 		toolMode: "direct",
 		approvalMode: "askPermissions",
 		usage: emptyUsage(),
