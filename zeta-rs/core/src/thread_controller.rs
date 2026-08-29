@@ -11,11 +11,13 @@ use crate::reduce_thread_event;
 use crate::thread_reducer::validate_agent_request;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::RwLock;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 use zeta_attachments::ImageAttachments;
 use zeta_history::CURRENT_STORED_EVENT_SCHEMA_VERSION;
 use zeta_history::EventId;
@@ -50,7 +52,9 @@ use zeta_protocol::ToolCallId;
 use zeta_protocol::ToolDefinition;
 use zeta_protocol::ToolName;
 use zeta_protocol::TurnId;
+use zeta_protocol::TurnInstructions;
 use zeta_protocol::TurnInteraction;
+use zeta_protocol::TurnKind;
 use zeta_protocol::TurnStatus;
 use zeta_protocol::UserInput;
 use zeta_thread_store::AppendBatchResult;
@@ -73,6 +77,8 @@ pub struct StartTurnRequest {
     pub command_id: CommandId,
     pub expected_sequence: SequenceExpectation,
     pub model: Option<ModelRef>,
+    pub kind: TurnKind,
+    pub instructions: TurnInstructions,
     pub policy_revision: String,
     /// Host-seeded automatic activations. Explicit selections are resolved by extensions.
     pub approval_mode: ApprovalMode,
@@ -90,6 +96,7 @@ pub struct StartTurnRequest {
 pub struct StartGoalTurnRequest {
     pub command_id: CommandId,
     pub model: Option<ModelRef>,
+    pub instructions: TurnInstructions,
     pub policy_revision: String,
     pub approval_mode: ApprovalMode,
     pub tool_mode: zeta_protocol::ToolMode,
@@ -633,6 +640,10 @@ impl ThreadController {
     ) -> Result<StartTurnResult, CoreError> {
         validate_command_id(&request.command_id)?;
         validate_policy_revision(&request.policy_revision)?;
+        request
+            .instructions
+            .validate()
+            .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
         let normalized_input =
             user_input::normalize_images(&request.input, &self.image_attachments)?;
         let thread = self.read_thread(thread_id)?;
@@ -643,6 +654,8 @@ impl ThreadController {
             .find(|existing| existing.receipt.command_id == request.command_id)
         {
             let ThreadCommand::StartTurn {
+                kind,
+                instructions,
                 model,
                 activated_skills,
                 host_activated_skills,
@@ -655,7 +668,9 @@ impl ThreadController {
             else {
                 return Err(CoreError::CommandConflict);
             };
-            if model != &request.model
+            if kind != &request.kind
+                || instructions.as_ref() != Some(&request.instructions)
+                || model != &request.model
                 || replay_host_activations(host_activated_skills.as_deref(), activated_skills)
                     != request.activated_skills
                 || approval_mode != &request.approval_mode
@@ -732,6 +747,8 @@ impl ThreadController {
         }
         let validated_input = user_input::validate(&normalized_input, &activated_skills)?;
         let command = ThreadCommand::StartTurn {
+            kind: request.kind,
+            instructions: Some(request.instructions.clone()),
             model: request.model.clone(),
             activated_skills: activated_skills.clone(),
             host_activated_skills: Some(request.activated_skills.clone()),
@@ -770,6 +787,8 @@ impl ThreadController {
             events.push(ThreadEvent::TurnAccepted {
                 thread_id: thread_id.clone(),
                 turn_id: turn_id.clone(),
+                kind: request.kind,
+                instructions: Some(request.instructions.clone()),
                 policy_revision: request.policy_revision.clone(),
                 approval_mode: request.approval_mode,
                 tool_mode: request.tool_mode,
@@ -824,7 +843,13 @@ impl ThreadController {
     ) -> Result<Option<StartTurnResult>, CoreError> {
         validate_command_id(&request.command_id)?;
         validate_policy_revision(&request.policy_revision)?;
+        request
+            .instructions
+            .validate()
+            .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
         let command = ThreadCommand::StartTurn {
+            kind: TurnKind::Coding,
+            instructions: Some(request.instructions.clone()),
             model: request.model.clone(),
             activated_skills: Vec::new(),
             host_activated_skills: Some(Vec::new()),
@@ -879,6 +904,8 @@ impl ThreadController {
                     ThreadEvent::TurnAccepted {
                         thread_id: thread_id.clone(),
                         turn_id: turn_id.clone(),
+                        kind: TurnKind::Coding,
+                        instructions: Some(request.instructions.clone()),
                         policy_revision: request.policy_revision.clone(),
                         approval_mode: request.approval_mode,
                         tool_mode: request.tool_mode,
@@ -1100,6 +1127,8 @@ impl ThreadController {
                 ThreadEvent::TurnAccepted {
                     thread_id: thread_id.clone(),
                     turn_id: turn_id.clone(),
+                    kind: TurnKind::Coding,
+                    instructions: None,
                     policy_revision: request.policy_revision.clone(),
                     approval_mode: ApprovalMode::AskPermissions,
                     tool_mode: zeta_protocol::ToolMode::Direct,
@@ -1203,6 +1232,8 @@ impl ThreadController {
                 ThreadEvent::TurnAccepted {
                     thread_id: thread_id.clone(),
                     turn_id: turn_id.clone(),
+                    kind: TurnKind::Coding,
+                    instructions: None,
                     policy_revision: request.policy_revision.clone(),
                     approval_mode: request.approval_mode,
                     tool_mode: zeta_protocol::ToolMode::Direct,

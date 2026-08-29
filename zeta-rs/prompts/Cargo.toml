@@ -11,5 +11,8 @@ doctest = false
 name = "zeta_prompts"
 path = "src/lib.rs"
 
+[dependencies]
+zeta-protocol = { workspace = true }
+
 [lints]
 workspace = true

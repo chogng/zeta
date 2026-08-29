@@ -1,9 +1,19 @@
-use crate::{
-    ActionApprovalResponse, ApprovalMode, DynamicToolResponse, FrozenSkillActivation, ModelRef,
-    RequestId, RequestUserInputResponse, ToolMode, ToolProfileSnapshot, TurnId, UserInput,
-};
+use crate::ActionApprovalResponse;
+use crate::ApprovalMode;
+use crate::DynamicToolResponse;
+use crate::FrozenSkillActivation;
+use crate::ModelRef;
+use crate::RequestId;
+use crate::RequestUserInputResponse;
+use crate::ToolMode;
+use crate::ToolProfileSnapshot;
+use crate::TurnId;
+use crate::TurnInstructions;
+use crate::TurnKind;
+use crate::UserInput;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use ts_rs::TS;
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -14,6 +24,14 @@ use ts_rs::TS;
 )]
 pub enum ThreadCommand {
     StartTurn {
+        #[serde(default)]
+        kind: TurnKind,
+        /// Exact instructions selected by the host before durable Turn acceptance.
+        ///
+        /// `None` exists only so journals written before instruction snapshots remain readable.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        instructions: Option<TurnInstructions>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         model: Option<ModelRef>,

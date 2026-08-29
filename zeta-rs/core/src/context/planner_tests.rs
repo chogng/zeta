@@ -560,6 +560,8 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
         turns: turn_ids
             .into_iter()
             .map(|turn_id| TurnSnapshot {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: None,
                 status: if turn_id == current_turn_id {
                     TurnStatus::Running
                 } else {

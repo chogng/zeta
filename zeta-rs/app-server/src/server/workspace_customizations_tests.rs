@@ -39,6 +39,7 @@ fn global_instructions_are_injected_but_other_load_policies_are_not() {
 
     assert_eq!(customizations.instruction_snapshot().entries().len(), 2);
     let injected = harness.instructions().workspace_instructions().unwrap();
+    assert!(harness.instructions().system_body().is_empty());
     assert!(injected.contains("Always use the Workspace formatter."));
     assert!(!injected.contains("Rust-specific review guidance."));
     assert!(!injected.contains("Legacy root instructions"));

@@ -1,59 +1,96 @@
-use super::{AppServer, ConnectionState, RpcError, core_error, decode, result};
+use super::AppServer;
+use super::ConnectionState;
+use super::RpcError;
+use super::core_error;
+use super::decode;
+use super::result;
 use base64::Engine;
 use serde_json::Value;
 use std::sync::Arc;
 use std::time::Duration;
-use zeta_app_server_protocol::protocol::common::{SchemaHash, ServerInfo};
-use zeta_app_server_protocol::protocol::document::{
-    TypstCompileParams, TypstCompileResult, TypstDiagnosticDto, TypstDiagnosticSeverityDto,
-    TypstSourceRangeDto,
-};
+use zeta_app_server_protocol::protocol::common::SchemaHash;
+use zeta_app_server_protocol::protocol::common::ServerInfo;
+use zeta_app_server_protocol::protocol::document::TypstCompileParams;
+use zeta_app_server_protocol::protocol::document::TypstCompileResult;
+use zeta_app_server_protocol::protocol::document::TypstDiagnosticDto;
+use zeta_app_server_protocol::protocol::document::TypstDiagnosticSeverityDto;
+use zeta_app_server_protocol::protocol::document::TypstSourceRangeDto;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
-use zeta_app_server_protocol::protocol::goal::{
-    ThreadGoalClearParams, ThreadGoalClearResponse, ThreadGoalGetParams, ThreadGoalGetResponse,
-    ThreadGoalSetParams, ThreadGoalSetResponse,
-};
-use zeta_app_server_protocol::protocol::initialize::{
-    InitializeParams, InitializeResult, ProtocolVersion, ServerCapabilities,
-};
+use zeta_app_server_protocol::protocol::goal::ThreadGoalClearParams;
+use zeta_app_server_protocol::protocol::goal::ThreadGoalClearResponse;
+use zeta_app_server_protocol::protocol::goal::ThreadGoalGetParams;
+use zeta_app_server_protocol::protocol::goal::ThreadGoalGetResponse;
+use zeta_app_server_protocol::protocol::goal::ThreadGoalSetParams;
+use zeta_app_server_protocol::protocol::goal::ThreadGoalSetResponse;
+use zeta_app_server_protocol::protocol::initialize::InitializeParams;
+use zeta_app_server_protocol::protocol::initialize::InitializeResult;
+use zeta_app_server_protocol::protocol::initialize::ProtocolVersion;
+use zeta_app_server_protocol::protocol::initialize::ServerCapabilities;
 use zeta_app_server_protocol::protocol::model::ModelListResult;
-use zeta_app_server_protocol::protocol::resources::{
-    ResourceMetadataParams, ResourceMetadataResult, ResourceReadParams, ResourceReadResult,
-    ResourceReleaseParams,
-};
+use zeta_app_server_protocol::protocol::resources::ResourceMetadataParams;
+use zeta_app_server_protocol::protocol::resources::ResourceMetadataResult;
+use zeta_app_server_protocol::protocol::resources::ResourceReadParams;
+use zeta_app_server_protocol::protocol::resources::ResourceReadResult;
+use zeta_app_server_protocol::protocol::resources::ResourceReleaseParams;
 use zeta_app_server_protocol::protocol::session::MAX_THREAD_SNAPSHOT_TURNS;
+use zeta_app_server_protocol::protocol::session::SessionCreateParams;
+use zeta_app_server_protocol::protocol::session::SessionListResult;
+use zeta_app_server_protocol::protocol::session::SessionReadParams;
+use zeta_app_server_protocol::protocol::session::SessionRequest;
+use zeta_app_server_protocol::protocol::session::SessionRequestParams;
+use zeta_app_server_protocol::protocol::session::SessionRequestResult;
+use zeta_app_server_protocol::protocol::session::SessionResult;
+use zeta_app_server_protocol::protocol::session::SessionRewriteResult;
+use zeta_app_server_protocol::protocol::session::SessionSubscribeParams;
+use zeta_app_server_protocol::protocol::session::SessionSubscribeResult;
+use zeta_app_server_protocol::protocol::session::SessionThreadProjection;
+use zeta_app_server_protocol::protocol::session::SessionThreadReadParams;
+use zeta_app_server_protocol::protocol::session::SessionThreadReadResult;
+use zeta_app_server_protocol::protocol::session::SessionThreadResult;
+use zeta_app_server_protocol::protocol::session::SessionThreadSubscribeParams;
+use zeta_app_server_protocol::protocol::session::SessionThreadSubscribeResult;
+use zeta_app_server_protocol::protocol::session::SessionThreadUnsubscribeParams;
+use zeta_app_server_protocol::protocol::session::SessionUnsubscribeParams;
 use zeta_app_server_protocol::protocol::session::ThreadHistoryBoundary;
 use zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory;
-use zeta_app_server_protocol::protocol::session::{
-    SessionCreateParams, SessionListResult, SessionReadParams, SessionRequest,
-    SessionRequestParams, SessionRequestResult, SessionResult, SessionRewriteResult,
-    SessionSubscribeParams, SessionSubscribeResult, SessionThreadProjection,
-    SessionThreadReadParams, SessionThreadReadResult, SessionThreadResult,
-    SessionThreadSubscribeParams, SessionThreadSubscribeResult, SessionThreadUnsubscribeParams,
-    SessionUnsubscribeParams,
-};
-use zeta_app_server_protocol::protocol::turn::{
-    InputItem, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult,
-};
+use zeta_app_server_protocol::protocol::turn::InputItem;
+use zeta_app_server_protocol::protocol::turn::TurnInteractionResolveResult;
+use zeta_app_server_protocol::protocol::turn::TurnInterruptResult;
+use zeta_app_server_protocol::protocol::turn::TurnStartResult;
+use zeta_app_server_protocol::protocol::turn::TurnSteerResult;
 use zeta_app_server_protocol::schema_hash;
-use zeta_core::{
-    CreateSessionRequest, CreateSessionThreadRequest, ForkSessionThreadRequest,
-    InterruptTurnRequest, ResolveTurnInteractionRequest, RewindSessionThreadRequest,
-    RewriteSessionThreadRequest, SequenceExpectation, SessionLifecycleRequest,
-    SetSessionCurrentThreadRequest, SetSessionModelRequest, SetSessionNextApprovalModeRequest,
-    ShellTurnInvocation, StartContextCompactionRequest, StartSessionShellTurnRequest,
-    StartSessionTurnRequest, StartTurnDisposition, SteerTurnDisposition, SteerTurnRequest,
-    ThreadSnapshot, TurnExecutionBackend, TurnStatus,
-};
+use zeta_core::CreateSessionRequest;
+use zeta_core::CreateSessionThreadRequest;
+use zeta_core::ForkSessionThreadRequest;
+use zeta_core::InterruptTurnRequest;
+use zeta_core::ResolveTurnInteractionRequest;
+use zeta_core::RewindSessionThreadRequest;
+use zeta_core::RewriteSessionThreadRequest;
+use zeta_core::SequenceExpectation;
+use zeta_core::SessionLifecycleRequest;
+use zeta_core::SetSessionCurrentThreadRequest;
+use zeta_core::SetSessionModelRequest;
+use zeta_core::SetSessionNextApprovalModeRequest;
+use zeta_core::ShellTurnInvocation;
+use zeta_core::StartContextCompactionRequest;
+use zeta_core::StartSessionShellTurnRequest;
+use zeta_core::StartSessionTurnRequest;
+use zeta_core::StartTurnDisposition;
+use zeta_core::SteerTurnDisposition;
+use zeta_core::SteerTurnRequest;
+use zeta_core::ThreadSnapshot;
+use zeta_core::TurnExecutionBackend;
+use zeta_core::TurnStatus;
 use zeta_protocol::AgentRequestEnvelope;
 use zeta_protocol::ModelAccess;
 use zeta_protocol::ModelRef;
 use zeta_protocol::SessionStatus;
 use zeta_protocol::StableTurnError;
 use zeta_protocol::UserInput;
-use zeta_typst::{
-    TypstCompileError, TypstCompileOutcome, TypstDiagnostic, TypstDiagnosticSeverity,
-};
+use zeta_typst::TypstCompileError;
+use zeta_typst::TypstCompileOutcome;
+use zeta_typst::TypstDiagnostic;
+use zeta_typst::TypstDiagnosticSeverity;
 
 struct SessionMutation {
     command_id: zeta_protocol::CommandId,
@@ -67,6 +104,11 @@ struct RewriteSessionMutation {
     title: String,
     tool_mode: Option<zeta_protocol::ToolMode>,
     input: Vec<InputItem>,
+}
+
+enum TurnToolModeSelection {
+    ConfiguredDefault,
+    Explicit(zeta_protocol::ToolMode),
 }
 
 enum RewritePhase {
@@ -537,6 +579,11 @@ impl AppServer {
             } => result(&SessionRequestResult::Turn(
                 self.start_turn_request(mutation, thread_id, tool_mode, input)?,
             )),
+            SessionRequest::StartReview { thread_id, target } => {
+                result(&SessionRequestResult::Turn(
+                    self.start_review_request(mutation, thread_id, target)?,
+                ))
+            }
             SessionRequest::StartShellTurn {
                 thread_id,
                 command,
@@ -1062,6 +1109,47 @@ impl AppServer {
         requested_tool_mode: Option<zeta_protocol::ToolMode>,
         input: Vec<InputItem>,
     ) -> Result<TurnStartResult, RpcError> {
+        let tool_mode = match requested_tool_mode {
+            Some(tool_mode) => TurnToolModeSelection::Explicit(tool_mode),
+            None => TurnToolModeSelection::ConfiguredDefault,
+        };
+        self.start_agent_turn_request(
+            mutation,
+            thread_id,
+            tool_mode,
+            normalize_input(input),
+            zeta_protocol::TurnKind::Coding,
+            zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
+        )
+    }
+
+    fn start_review_request(
+        &self,
+        mutation: SessionMutation,
+        thread_id: zeta_protocol::ThreadId,
+        target: zeta_protocol::ReviewTarget,
+    ) -> Result<TurnStartResult, RpcError> {
+        let prompt = zeta_prompts::review_target_prompt(&target)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        self.start_agent_turn_request(
+            mutation,
+            thread_id,
+            TurnToolModeSelection::Explicit(zeta_protocol::ToolMode::Direct),
+            vec![UserInput::Text { text: prompt }],
+            zeta_protocol::TurnKind::Review,
+            zeta_prompts::REVIEW_PROMPT.freeze(),
+        )
+    }
+
+    fn start_agent_turn_request(
+        &self,
+        mutation: SessionMutation,
+        thread_id: zeta_protocol::ThreadId,
+        tool_mode_selection: TurnToolModeSelection,
+        input: Vec<UserInput>,
+        kind: zeta_protocol::TurnKind,
+        instructions: zeta_protocol::TurnInstructions,
+    ) -> Result<TurnStartResult, RpcError> {
         let thread_before = self
             .sessions
             .threads()
@@ -1083,10 +1171,9 @@ impl AppServer {
                 AppServerErrorName::CoreOperationFailed,
             ));
         }
-        let input = normalize_input(input);
-        let tool_mode = match requested_tool_mode {
-            Some(tool_mode) => tool_mode,
-            None => match self.config.as_ref() {
+        let tool_mode = match tool_mode_selection {
+            TurnToolModeSelection::Explicit(tool_mode) => tool_mode,
+            TurnToolModeSelection::ConfiguredDefault => match self.config.as_ref() {
                 Some(config) => {
                     config
                         .read_snapshot()
@@ -1130,6 +1217,8 @@ impl AppServer {
                     command_id: mutation.command_id,
                     expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
                     model,
+                    kind,
+                    instructions,
                     policy_revision,
                     tool_mode,
                     tool_profile: Some(tool_profile),

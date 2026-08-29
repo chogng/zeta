@@ -2,20 +2,46 @@ use super::*;
 use crate::thread_controller::CommitContextCheckpointRequest;
 use crate::thread_controller::live_interaction;
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Condvar, Mutex, mpsc};
+use std::sync::Arc;
+use std::sync::Condvar;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 use zeta_async_utils::CancellationSource;
 use zeta_history::StoredEvent;
-use zeta_protocol::{
-    ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalDecision,
-    ActionApprovalRequest, ActionApprovalResponse, AgentRequest, AgentResponse, CommandId,
-    ContextSourceRange, InteractionDeadline, ModelUsage, PlanStep, PlanStepStatus, PlanUpdate,
-    RequestId, RequestUserInput, RequestUserInputResponse, SessionId, StableTurnError,
-    StableTurnErrorCode, ThreadEvent, ThreadGoalStatus, ThreadId, ThreadItem, ToolCallId, ToolName,
-    TurnId, UserInput, UserInputQuestion,
-};
+use zeta_protocol::ActionApprovalCapability;
+use zeta_protocol::ActionApprovalCapabilityKind;
+use zeta_protocol::ActionApprovalDecision;
+use zeta_protocol::ActionApprovalRequest;
+use zeta_protocol::ActionApprovalResponse;
+use zeta_protocol::AgentRequest;
+use zeta_protocol::AgentResponse;
+use zeta_protocol::CommandId;
+use zeta_protocol::ContextSourceRange;
+use zeta_protocol::InteractionDeadline;
+use zeta_protocol::ModelUsage;
+use zeta_protocol::PlanStep;
+use zeta_protocol::PlanStepStatus;
+use zeta_protocol::PlanUpdate;
+use zeta_protocol::RequestId;
+use zeta_protocol::RequestUserInput;
+use zeta_protocol::RequestUserInputResponse;
+use zeta_protocol::SessionId;
+use zeta_protocol::StableTurnError;
+use zeta_protocol::StableTurnErrorCode;
+use zeta_protocol::ThreadEvent;
+use zeta_protocol::ThreadGoalStatus;
+use zeta_protocol::ThreadId;
+use zeta_protocol::ThreadItem;
+use zeta_protocol::ToolCallId;
+use zeta_protocol::ToolName;
+use zeta_protocol::TurnId;
+use zeta_protocol::UserInput;
+use zeta_protocol::UserInputQuestion;
 
 struct OneShotActivation {
     calls: Arc<AtomicU64>,
@@ -49,6 +75,8 @@ static NEXT_THREAD: AtomicU64 = AtomicU64::new(1);
 
 fn start_request(key: &str) -> StartTurnRequest {
     StartTurnRequest {
+        kind: zeta_protocol::TurnKind::Coding,
+        instructions: crate::test_turn_instructions(),
         command_id: CommandId::new(key).expect("test ID is non-empty"),
         expected_sequence: SequenceExpectation::Any,
         model: None,
@@ -1250,6 +1278,8 @@ fn typed_command_rejects_reusing_an_id_with_different_input() {
         .start_turn(&thread, start_request("conflict"))
         .unwrap();
     let conflicting = StartTurnRequest {
+        kind: zeta_protocol::TurnKind::Coding,
+        instructions: crate::test_turn_instructions(),
         command_id: CommandId::new("conflict").expect("test ID is non-empty"),
         expected_sequence: SequenceExpectation::Any,
         model: None,
@@ -1354,7 +1384,7 @@ fn replay_rejects_different_host_seeded_automatic_activations() {
 }
 
 #[test]
-fn start_turn_snapshots_the_selected_model() {
+fn start_turn_snapshots_the_selected_model_and_instructions() {
     let threads = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
     let thread = create_thread(&threads, "model");
     let model = zeta_protocol::ModelRef::new(
@@ -1367,14 +1397,35 @@ fn start_turn_snapshots_the_selected_model() {
     let started = threads.start_turn(&thread, request).unwrap();
     let snapshot = threads.read_thread(&thread).unwrap();
 
-    assert_eq!(
-        snapshot
-            .turns
-            .iter()
-            .find(|turn| turn.turn_id == started.turn_id)
-            .and_then(|turn| turn.model.clone()),
-        Some(model)
-    );
+    let turn = snapshot
+        .turns
+        .iter()
+        .find(|turn| turn.turn_id == started.turn_id)
+        .unwrap();
+    assert_eq!(turn.model, Some(model));
+    assert_eq!(turn.instructions, Some(crate::test_turn_instructions()));
+}
+
+#[test]
+fn start_turn_replay_rejects_different_frozen_instructions() {
+    let threads = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
+    let thread = create_thread(&threads, "instructions");
+    threads
+        .start_turn(&thread, start_request("instructions-conflict"))
+        .unwrap();
+    let mut conflicting = start_request("instructions-conflict");
+    conflicting.instructions = zeta_protocol::TurnInstructions::new(
+        "core-tests",
+        "test/review-instructions",
+        "review-v1",
+        "review instructions",
+    )
+    .unwrap();
+
+    assert!(matches!(
+        threads.start_turn(&thread, conflicting),
+        Err(CoreError::CommandConflict)
+    ));
 }
 
 #[test]
@@ -1795,6 +1846,8 @@ fn start_turn_persists_ordered_text_and_normalized_image_attachment_items() {
         .start_turn(
             &thread,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("image-turn").expect("test ID is non-empty"),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,

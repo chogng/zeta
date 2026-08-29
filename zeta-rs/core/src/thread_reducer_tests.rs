@@ -20,6 +20,8 @@ fn envelope(sequence: u64, event: ThreadEvent) -> StoredEvent {
             command_id: CommandId::new(format!("command_{sequence}"))
                 .expect("test ID is non-empty"),
             command: ThreadCommand::StartTurn {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: None,
                 model: None,
                 activated_skills: Vec::new(),
                 host_activated_skills: Some(Vec::new()),
@@ -66,6 +68,8 @@ fn reducer_keeps_legacy_external_execution_attempts_readable() {
         &envelope(
             2,
             ThreadEvent::TurnAccepted {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: None,
                 thread_id: thread_id.clone(),
                 turn_id: turn_id.clone(),
                 policy_revision: "test-policy-v1".into(),
@@ -128,6 +132,8 @@ fn reducer_rebuilds_a_failed_turn_with_stable_error_details() {
         &envelope(
             2,
             ThreadEvent::TurnAccepted {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: None,
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                 turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
                 policy_revision: "test-policy-v1".into(),
@@ -180,6 +186,8 @@ fn reducer_rebuilds_model_calibration_and_rejects_unknown_algorithm_revisions() 
     let mut accepted = envelope(
         2,
         ThreadEvent::TurnAccepted {
+            kind: zeta_protocol::TurnKind::Coding,
+            instructions: None,
             thread_id: ThreadId::new("thread_1").unwrap(),
             turn_id: TurnId::new("turn_1").unwrap(),
             policy_revision: "test-policy-v1".into(),
@@ -193,6 +201,8 @@ fn reducer_rebuilds_model_calibration_and_rejects_unknown_algorithm_revisions() 
     accepted.command = Some(ThreadCommandReceipt {
         command_id: CommandId::new("command_2").unwrap(),
         command: ThreadCommand::StartTurn {
+            kind: zeta_protocol::TurnKind::Coding,
+            instructions: None,
             model: Some(model.clone()),
             activated_skills: Vec::new(),
             host_activated_skills: Some(Vec::new()),
@@ -290,6 +300,8 @@ fn reducer_rebuilds_a_steer_receipt_from_its_immediately_preceding_items() {
         envelope(
             2,
             ThreadEvent::TurnAccepted {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: None,
                 thread_id: ThreadId::new("thread_1").unwrap(),
                 turn_id: TurnId::new("turn_1").unwrap(),
                 policy_revision: "test-policy-v1".into(),
@@ -525,6 +537,8 @@ fn reducer_rejects_a_fork_import_with_an_incomplete_tool_exchange() {
 
 fn imported_turn(turn_id: &str, items: Vec<ThreadItem>) -> Turn {
     Turn {
+        kind: zeta_protocol::TurnKind::Coding,
+        instructions: None,
         turn_id: TurnId::new(turn_id).unwrap(),
         status: TurnStatus::Interrupted,
         model: None,
@@ -554,6 +568,8 @@ fn reducer_verifies_and_rebuilds_a_context_checkpoint() {
         envelope(
             2,
             ThreadEvent::TurnAccepted {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: None,
                 thread_id: ThreadId::new("thread_1").unwrap(),
                 turn_id: TurnId::new("turn_1").unwrap(),
                 policy_revision: "test-policy-v1".into(),
@@ -685,6 +701,8 @@ fn reducer_rejects_sequence_gaps_and_illegal_transitions() {
             &envelope(
                 3,
                 ThreadEvent::TurnAccepted {
+                    kind: zeta_protocol::TurnKind::Coding,
+                    instructions: None,
                     thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                     turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
                     policy_revision: "test-policy-v1".into(),
@@ -704,6 +722,8 @@ fn reducer_rejects_sequence_gaps_and_illegal_transitions() {
         &envelope(
             2,
             ThreadEvent::TurnAccepted {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: None,
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                 turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
                 policy_revision: "test-policy-v1".into(),
@@ -736,6 +756,8 @@ fn reducer_rebuilds_typed_command_receipt_and_all_durable_item_kinds() {
     let mut accepted = envelope(
         2,
         ThreadEvent::TurnAccepted {
+            kind: zeta_protocol::TurnKind::Coding,
+            instructions: None,
             thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
             turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
             policy_revision: "test-policy-v1".into(),
@@ -749,6 +771,8 @@ fn reducer_rebuilds_typed_command_receipt_and_all_durable_item_kinds() {
     accepted.command = Some(ThreadCommandReceipt {
         command_id: CommandId::new("command_1").expect("test ID is non-empty"),
         command: ThreadCommand::StartTurn {
+            kind: zeta_protocol::TurnKind::Coding,
+            instructions: None,
             model: None,
             activated_skills: Vec::new(),
             host_activated_skills: Some(Vec::new()),
@@ -879,6 +903,8 @@ fn reducer_rejects_a_tool_result_without_its_tool_call() {
         &envelope(
             2,
             ThreadEvent::TurnAccepted {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: None,
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                 turn_id: TurnId::new("turn_1").expect("test ID is non-empty"),
                 policy_revision: "test-policy-v1".into(),
@@ -989,6 +1015,8 @@ fn started_sandboxed_tool_snapshot() -> ThreadSnapshot {
         envelope(
             2,
             ThreadEvent::TurnAccepted {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: None,
                 thread_id: ThreadId::new("thread_1").unwrap(),
                 turn_id: TurnId::new("turn_1").unwrap(),
                 policy_revision: "test-policy-v1".into(),

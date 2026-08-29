@@ -3,23 +3,15 @@ use super::*;
 #[test]
 fn rejects_an_empty_goal_objective() {
     assert_eq!(
-        GoalPromptContext::new("  ", GoalBudget::Unbounded),
+        render_goal_instructions("  ", None, 0),
         Err(GoalPromptError::EmptyObjective)
     );
 }
 
 #[test]
 fn renders_and_escapes_a_limited_goal() {
-    let context = GoalPromptContext::new(
-        "Update <crate> & verify {{ budget }}",
-        GoalBudget::Limited {
-            token_budget: 100,
-            tokens_used: 65,
-        },
-    )
-    .unwrap();
-
-    let prompt = render_goals_prompt(context);
+    let prompt = render_goal_instructions("Update <crate> & verify {{ budget }}", Some(100), 65)
+        .expect("non-empty objective should render");
 
     assert!(
         prompt
@@ -29,15 +21,14 @@ fn renders_and_escapes_a_limited_goal() {
     assert!(prompt.body().contains("token budget: 100"));
     assert!(prompt.body().contains("tokens used: 65"));
     assert!(prompt.body().contains("tokens remaining: 35"));
-    assert_eq!(prompt.source(), GOALS_PROMPT);
+    assert_eq!(prompt.source(), GOAL_INSTRUCTIONS);
 }
 
 #[test]
 fn renders_an_unbounded_goal() {
-    let context = GoalPromptContext::new("Finish the migration", GoalBudget::Unbounded).unwrap();
-
     assert!(
-        render_goals_prompt(context)
+        render_goal_instructions("Finish the migration", None, 0)
+            .expect("non-empty objective should render")
             .body()
             .contains("mode: unbounded")
     );

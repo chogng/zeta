@@ -13,7 +13,7 @@
 > Canonical Thread/Turn/Item contract：[`protocol.md`](protocol.md)
 > 通用 extension contract：[`zeta-rs/ext/extension-api/README.md`](../zeta-rs/ext/extension-api/README.md)
 > 多 Agent context inheritance：[`core-multi-agent.md`](core-multi-agent.md)
-> 内置模型提示词资产：[`zeta-prompts`](../zeta-rs/prompts/README.md)
+> 共享提示词资产契约：[`zeta-prompts`](../zeta-rs/prompts/README.md)
 > 预算与 token 计量实现：[`zeta-context-engine`](../zeta-rs/context-engine/README.md)
 
 ## 快速理解
@@ -237,15 +237,11 @@ ContextManager/Planner 完成。
 预算边界，仍拥有 instruction precedence、完整语义单元选择和 compaction outcome。provider adapter
 只负责产生与所选模型匹配的计量结果，不能拥有另一套预算公式。
 
-### 5.5 内置提示词资产
+### 5.5 提示词所有权与组装
 
-[`zeta-prompts`](../zeta-rs/prompts/README.md) 只拥有四类 Zeta 内置、模型可见的提示词资产：system、
-compaction、goals 和通用 review。它提供稳定的 asset ID、revision 与 compile-time body，但不决定
-何时注入，也不读取 Thread、Config、Skill、MCP 或 provider runtime。
+提示词按功能归属：`zeta-models-manager` 拥有所选模型的基础 instructions，Core Goal 和动态 context fragment 留在对应生命周期模块，`zeta-auto-review` 拥有与动作授权 response schema 绑定的审查提示词，Skill、扩展和工具描述由各能力 crate 拥有。[`zeta-prompts`](../zeta-rs/prompts/README.md) 提供统一资产和冻结契约，并拥有 context compaction、通用代码 review 这类共享产品提示词。
 
-需要某类提示词的功能模块负责触发条件和生命周期；当资产进入 Agent 的 canonical context 后，仍由
-Core context pipeline 负责 instruction layer、precedence、budget、provenance 和最终 request 组装。
-`zeta-auto-review` 的 prompt/schema/revision 专用契约继续由该 crate 自己拥有。
+App Server 在接受普通 Turn 前把 `zeta-models-manager` 的基础 instructions 冻结为 durable `TurnInstructions`，review Turn 则冻结共享 review rubric 并标记 `TurnKind::Review`。Core 不在 invocation 时重新读取模型配置；它把 Turn 快照连同 Workspace、Goal、Skill 与扩展 fragment 按 instruction layer、precedence、budget 和 provenance 组装成最终 request。Review Turn 跳过 active Goal 注入与 Goal continuation。历史旧 Turn 可以读取为缺少快照，但不能以临时查询或默认文本继续执行。
 
 当前 assembler 会把同一 Turn 中相邻的 `UserMessage` / `UserImage` 按 durable 顺序合并成一个
 provider-neutral user `Message`，分别映射为 `ContentPart::Text` 与
@@ -460,7 +456,7 @@ Tool Call/Result 组和压缩 Turn 自身都不进入 source；选择与普通�
 失败时当前批次不产生 checkpoint，Turn 以 canonical failure 出现在对话。
 
 可选保留提示作为 compaction model request 中独立于 untrusted durable source 的用户要求，不写成
-Thread 用户 Item，也不改变 `COMPACTION_PROMPT` revision 或 checkpoint source provenance。
+Thread 用户 Item，也不改变 Core compaction prompt revision 或 checkpoint source provenance。
 订阅后端对无提示请求调用 upstream `thread/compact/start`，压缩状态由远端 Thread 拥有；上游没有
 保留提示字段，因此带提示的订阅请求明确失败，不能静默忽略。
 

@@ -1,25 +1,53 @@
 use super::*;
-use crate::{
-    ActionPolicyService, ContextBudget, ContextCompactionLimit, ContextTokenCount,
-    ContextTokenMeasurementCapability, ContextTokenMeasurementOutcome, CreateThreadRequest,
-    InMemoryThreadStore, ModelSelection, ModelService, ModelStreamSink, SequenceExpectation,
-    StartContextCompactionRequest, StartGoalTurnRequest, StartTurnRequest, SteerTurnRequest,
-    ThreadUpdateSink, ToolAuthorization, ToolExecutionFacts, ToolExecutionOutput,
-    ToolInteractionService, ToolOutputSink, ToolService, ToolUserInputOutcome,
-    TurnExecutionOutcome,
-};
+use crate::ActionPolicyService;
+use crate::ContextBudget;
+use crate::ContextCompactionLimit;
+use crate::ContextTokenCount;
+use crate::ContextTokenMeasurementCapability;
+use crate::ContextTokenMeasurementOutcome;
+use crate::CreateThreadRequest;
+use crate::InMemoryThreadStore;
+use crate::ModelSelection;
+use crate::ModelService;
+use crate::ModelStreamSink;
+use crate::SequenceExpectation;
+use crate::StartContextCompactionRequest;
+use crate::StartGoalTurnRequest;
+use crate::StartTurnRequest;
+use crate::SteerTurnRequest;
+use crate::ThreadUpdateSink;
+use crate::ToolAuthorization;
+use crate::ToolExecutionFacts;
+use crate::ToolExecutionOutput;
+use crate::ToolInteractionService;
+use crate::ToolOutputSink;
+use crate::ToolService;
+use crate::ToolUserInputOutcome;
+use crate::TurnExecutionOutcome;
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::Arc;
+use std::sync::Condvar;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::thread;
-use std::time::{Duration, Instant};
-use zeta_action_policy::{
-    ActionDigest, ActionKind, ActionPolicyRevision, ActionProvenance, ActionReviewRequest,
-    ActionSource, Capability, CapabilityKind, CapabilitySet, ExecutionDecision, ResolvedAction,
-    SandboxCompatibility,
-};
+use std::time::Duration;
+use std::time::Instant;
+use zeta_action_policy::ActionDigest;
+use zeta_action_policy::ActionKind;
+use zeta_action_policy::ActionPolicyRevision;
+use zeta_action_policy::ActionProvenance;
+use zeta_action_policy::ActionReviewRequest;
+use zeta_action_policy::ActionSource;
+use zeta_action_policy::Capability;
+use zeta_action_policy::CapabilityKind;
+use zeta_action_policy::CapabilitySet;
+use zeta_action_policy::ExecutionDecision;
+use zeta_action_policy::ResolvedAction;
+use zeta_action_policy::SandboxCompatibility;
 use zeta_agent_environment::AgentEnvironmentSnapshot;
 use zeta_agent_environment::HostEnvironment;
 use zeta_agent_environment::RepositoryEnvironment;
@@ -27,15 +55,44 @@ use zeta_agent_environment::WorkspaceRoots;
 use zeta_async_utils::CancellationSource;
 use zeta_context_engine::ContextTokenMeasurement;
 use zeta_context_engine::ContextTokenMeasurementSource;
-use zeta_protocol::{
-    AgentResponse, CommandId, ContentDigest, ContentPart, FrozenSkillActivation, InputItem,
-    ModelId, ModelRef, ModelRequest, ModelResponse, ModelStreamEvent, ModelUsage, ProviderId,
-    RequestUserInput, RequestUserInputResponse, ResponseItem, SessionId, SkillActivationReason,
-    SkillId, SkillName, SkillRef, SkillSourceId, StableTurnErrorCode, StopReason, ThreadId,
-    ThreadItem, ThreadUpdate, ThreadUpdateEnvelope, ToolCallId, ToolDefinition, ToolName,
-    TurnStatus, UserInput, UserInputAnswer, UserInputQuestion,
-};
-use zeta_sandboxing::{FileSystemAccess, NetworkAccess, SandboxPolicy};
+use zeta_protocol::AgentResponse;
+use zeta_protocol::CommandId;
+use zeta_protocol::ContentDigest;
+use zeta_protocol::ContentPart;
+use zeta_protocol::FrozenSkillActivation;
+use zeta_protocol::InputItem;
+use zeta_protocol::ModelId;
+use zeta_protocol::ModelRef;
+use zeta_protocol::ModelRequest;
+use zeta_protocol::ModelResponse;
+use zeta_protocol::ModelStreamEvent;
+use zeta_protocol::ModelUsage;
+use zeta_protocol::ProviderId;
+use zeta_protocol::RequestUserInput;
+use zeta_protocol::RequestUserInputResponse;
+use zeta_protocol::ResponseItem;
+use zeta_protocol::SessionId;
+use zeta_protocol::SkillActivationReason;
+use zeta_protocol::SkillId;
+use zeta_protocol::SkillName;
+use zeta_protocol::SkillRef;
+use zeta_protocol::SkillSourceId;
+use zeta_protocol::StableTurnErrorCode;
+use zeta_protocol::StopReason;
+use zeta_protocol::ThreadId;
+use zeta_protocol::ThreadItem;
+use zeta_protocol::ThreadUpdate;
+use zeta_protocol::ThreadUpdateEnvelope;
+use zeta_protocol::ToolCallId;
+use zeta_protocol::ToolDefinition;
+use zeta_protocol::ToolName;
+use zeta_protocol::TurnStatus;
+use zeta_protocol::UserInput;
+use zeta_protocol::UserInputAnswer;
+use zeta_protocol::UserInputQuestion;
+use zeta_sandboxing::FileSystemAccess;
+use zeta_sandboxing::NetworkAccess;
+use zeta_sandboxing::SandboxPolicy;
 
 #[test]
 fn completes_a_text_turn_from_durable_context() {
@@ -281,6 +338,8 @@ fn frozen_tool_profile_rejects_definition_drift_before_model_invocation() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("profile-start").unwrap(),
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: Some(ModelRef::new(
@@ -325,6 +384,8 @@ fn frozen_tool_profile_rejects_definition_drift_before_model_invocation() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("profile-drift-start").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: Some(ModelRef::new(
@@ -462,6 +523,8 @@ fn manual_context_compaction_batches_a_prefix_that_exceeds_the_model_window() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("second-history-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
@@ -889,6 +952,28 @@ fn active_goal_starts_a_hidden_follow_up_until_the_budget_stops_it() {
 }
 
 #[test]
+fn review_turn_ignores_active_goal_instructions_and_does_not_continue_it() {
+    let (threads, thread_id, turn_id) = started_review_turn();
+    threads
+        .create_goal(&thread_id, "goal text must not enter review".into(), None)
+        .unwrap();
+    let model = Arc::new(ScriptedModel::new([Ok(text_response("review complete"))]));
+
+    TurnExecutor::without_tools(threads.clone(), model.clone())
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    assert_eq!(snapshot.turns.len(), 1);
+    assert_eq!(snapshot.goal.unwrap().tokens_used, 0);
+    assert_eq!(model.requests().len(), 1);
+    assert!(!request_contains(
+        &model.requests()[0],
+        "goal text must not enter review"
+    ));
+}
+
+#[test]
 fn recovered_active_goal_resumes_a_running_hidden_turn() {
     let (threads, thread_id, first_turn_id) = started_turn();
     threads
@@ -901,6 +986,7 @@ fn recovered_active_goal_resumes_a_running_hidden_turn() {
         .start_goal_turn(
             &thread_id,
             StartGoalTurnRequest {
+                instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("recovered-goal-continuation").unwrap(),
                 model: None,
                 policy_revision: "test-policy-v1".into(),
@@ -1001,6 +1087,8 @@ fn compacts_durable_history_then_replans_with_the_verified_checkpoint() {
             .start_turn(
                 &thread_id,
                 StartTurnRequest {
+                    kind: zeta_protocol::TurnKind::Coding,
+                    instructions: crate::test_turn_instructions(),
                     command_id: CommandId::new(format!("history-{index}")).unwrap(),
                     expected_sequence: SequenceExpectation::Any,
                     model: None,
@@ -1024,6 +1112,8 @@ fn compacts_durable_history_then_replans_with_the_verified_checkpoint() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("start-after-history").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
@@ -1085,6 +1175,8 @@ fn provider_preflight_tightens_the_budget_and_rechecks_after_compaction() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("start-measured-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
@@ -1160,6 +1252,8 @@ fn explicit_skill_selection_uses_frozen_digest_and_layered_body() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("skill-start").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
@@ -1341,7 +1435,7 @@ fn rejects_a_model_tool_call_outside_the_invocation_capability_scope() {
 }
 
 #[test]
-fn reloadable_instructions_change_only_at_model_invocation_boundaries() {
+fn durable_turn_instructions_stay_frozen_while_harness_context_refreshes() {
     let (threads, thread_id, turn_id) = started_turn();
     let instructions = Arc::new(MutableInstructions::new("first instructions"));
     let model = Arc::new(InstructionRefreshingModel {
@@ -1368,6 +1462,18 @@ fn reloadable_instructions_change_only_at_model_invocation_boundaries() {
     assert!(request_contains(&requests[0], "first environment"));
     assert!(!request_contains(&requests[0], "second environment"));
     assert!(request_contains(&requests[1], "second environment"));
+    assert!(
+        requests[0]
+            .instructions
+            .as_deref()
+            .is_some_and(|body| body.contains("test instructions"))
+    );
+    assert!(
+        requests[1]
+            .instructions
+            .as_deref()
+            .is_some_and(|body| body.contains("test instructions"))
+    );
     assert_eq!(
         instructions.request_identities(),
         vec![
@@ -1682,6 +1788,8 @@ fn restart_after_overflow_checkpoint_commit_does_not_replay_the_model_call() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("overflow-restart-history").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
@@ -1704,6 +1812,8 @@ fn restart_after_overflow_checkpoint_commit_does_not_replay_the_model_call() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("overflow-restart-current").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
@@ -1844,6 +1954,8 @@ fn model_usage_and_goal_projection_are_identical_after_recovery() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("usage-recovery-start").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: Some(model_ref.clone()),
@@ -2002,6 +2114,8 @@ fn per_thread_mailboxes_run_independently_and_interrupt_the_active_turn() {
         .start_turn(
             &fast_thread_id,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("fast-start").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
@@ -3207,6 +3321,42 @@ fn started_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
     started_turn_with_tool_mode(zeta_protocol::ToolMode::Direct)
 }
 
+fn started_review_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let thread_id = ThreadId::new("review-thread").unwrap();
+    threads
+        .create_thread(CreateThreadRequest {
+            session_id: SessionId::new("review-session").unwrap(),
+            thread_id: thread_id.clone(),
+            title: "review".into(),
+        })
+        .unwrap();
+    let turn_id = threads
+        .start_turn(
+            &thread_id,
+            StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Review,
+                instructions: crate::test_turn_instructions(),
+                command_id: CommandId::new("start-review").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: None,
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: zeta_protocol::ApprovalMode::AskPermissions,
+                tool_mode: zeta_protocol::ToolMode::Direct,
+                tool_profile: None,
+                activated_skills: Vec::new(),
+                input: vec![UserInput::Text {
+                    text: "review current changes".into(),
+                }],
+            },
+        )
+        .unwrap()
+        .turn_id;
+    (threads, thread_id, turn_id)
+}
+
 fn started_turn_with_tool_mode(
     tool_mode: zeta_protocol::ToolMode,
 ) -> (Arc<ThreadController>, ThreadId, TurnId) {
@@ -3225,6 +3375,8 @@ fn started_turn_with_tool_mode(
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("start").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
@@ -3252,6 +3404,8 @@ fn started_turn_with_history() -> (Arc<ThreadController>, ThreadId, TurnId) {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("start-overflow-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,

@@ -127,6 +127,8 @@ fn stop_archives_session_and_interrupts_active_child_turns() {
         .start_turn(
             &thread.thread_id,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("start-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
@@ -260,6 +262,8 @@ fn next_approval_mode_is_durable_and_is_frozen_by_each_new_turn() {
             &session.session_id,
             &thread.thread_id,
             StartSessionTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("start-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,
@@ -315,6 +319,8 @@ fn fork_imports_the_exact_parent_snapshot_and_inherits_its_checkpoint() {
         .start_turn(
             &root.thread_id,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("completed-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,
@@ -362,6 +368,8 @@ fn fork_imports_the_exact_parent_snapshot_and_inherits_its_checkpoint() {
         .start_turn(
             &root.thread_id,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("active-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Exact(checkpoint_sequence),
                 model: None,
@@ -490,6 +498,8 @@ fn rewind_creates_a_child_with_only_turns_before_the_checkpoint() {
             .start_turn(
                 &root.thread_id,
                 StartTurnRequest {
+                    kind: zeta_protocol::TurnKind::Coding,
+                    instructions: crate::test_turn_instructions(),
                     command_id: CommandId::new(format!("turn-{index}")).unwrap(),
                     expected_sequence: SequenceExpectation::Exact(sequence),
                     model: None,

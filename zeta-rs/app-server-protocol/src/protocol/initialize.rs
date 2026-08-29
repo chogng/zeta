@@ -1,13 +1,17 @@
-use crate::protocol::common::{ClientCapabilities, ClientInfo, SchemaHash, ServerInfo};
+use crate::protocol::common::ClientCapabilities;
+use crate::protocol::common::ClientInfo;
+use crate::protocol::common::SchemaHash;
+use crate::protocol::common::ServerInfo;
 use crate::protocol::slash_commands::SlashCommandDefinition;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::BTreeMap;
 use std::fmt;
 use ts_rs::TS;
 
 pub const APP_SERVER_PROTOCOL_MAJOR: u32 = 1;
-pub const APP_SERVER_PROTOCOL_REVISION: u32 = 5;
+pub const APP_SERVER_PROTOCOL_REVISION: u32 = 6;
 pub const APP_SERVER_CAPABILITY_VERSION: u32 = 3;
 
 pub const REQUIRED_SESSION_CAPABILITIES: &[CapabilityRequirement] = &[

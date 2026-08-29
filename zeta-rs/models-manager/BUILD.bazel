@@ -3,4 +3,5 @@ load("//:defs.bzl", "zeta_rust_crate")
 zeta_rust_crate(
     name = "models-manager",
     crate_name = "zeta_models_manager",
+    data = glob(["templates/**"]),
 )

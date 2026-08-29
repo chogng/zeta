@@ -1,20 +1,43 @@
 use super::*;
-use crate::{
-    CreateThreadRequest, InMemoryThreadStore, ProcessExecutionOutput, ProcessExitStatus,
-    ResolveTurnInteractionRequest, SandboxDenialOutput, SequenceExpectation, StartTurnRequest,
-    ToolAuthorization, ToolExecutionOutput,
-};
+use crate::CreateThreadRequest;
+use crate::InMemoryThreadStore;
+use crate::ProcessExecutionOutput;
+use crate::ProcessExitStatus;
+use crate::ResolveTurnInteractionRequest;
+use crate::SandboxDenialOutput;
+use crate::SequenceExpectation;
+use crate::StartTurnRequest;
+use crate::ToolAuthorization;
+use crate::ToolExecutionOutput;
 use serde_json::json;
 use std::collections::VecDeque;
-use std::sync::{Arc, Mutex};
-use zeta_action_policy::{
-    ActionClassifier, ActionDigest, ActionKind, ActionPolicyEngine, ActionPolicyRevision,
-    ActionProvenance, ActionReviewPhase, ActionReviewRequest, ActionSource, ApprovalRequest,
-    AssessmentId, Capability, CapabilityKind, CapabilitySet, ClassifierAssessment,
-    ClassifierRecommendation, ExecutionDecision, ResolvedAction, ReviewEvidence,
-    ReviewEvidenceKind, ReviewEvidenceTrust, ReviewFailurePolicy, RiskLevel, SandboxCompatibility,
-    UserAuthorization,
-};
+use std::sync::Arc;
+use std::sync::Mutex;
+use zeta_action_policy::ActionClassifier;
+use zeta_action_policy::ActionDigest;
+use zeta_action_policy::ActionKind;
+use zeta_action_policy::ActionPolicyEngine;
+use zeta_action_policy::ActionPolicyRevision;
+use zeta_action_policy::ActionProvenance;
+use zeta_action_policy::ActionReviewPhase;
+use zeta_action_policy::ActionReviewRequest;
+use zeta_action_policy::ActionSource;
+use zeta_action_policy::ApprovalRequest;
+use zeta_action_policy::AssessmentId;
+use zeta_action_policy::Capability;
+use zeta_action_policy::CapabilityKind;
+use zeta_action_policy::CapabilitySet;
+use zeta_action_policy::ClassifierAssessment;
+use zeta_action_policy::ClassifierRecommendation;
+use zeta_action_policy::ExecutionDecision;
+use zeta_action_policy::ResolvedAction;
+use zeta_action_policy::ReviewEvidence;
+use zeta_action_policy::ReviewEvidenceKind;
+use zeta_action_policy::ReviewEvidenceTrust;
+use zeta_action_policy::ReviewFailurePolicy;
+use zeta_action_policy::RiskLevel;
+use zeta_action_policy::SandboxCompatibility;
+use zeta_action_policy::UserAuthorization;
 use zeta_async_utils::CancellationSource;
 use zeta_execpolicy::ExecPolicyDefault;
 use zeta_execpolicy::ExecPolicyEffect;
@@ -25,12 +48,25 @@ use zeta_execpolicy::ExecPolicyRule;
 use zeta_execpolicy::ExecPolicyRuleId;
 use zeta_execpolicy::ExecPolicySelector;
 use zeta_execpolicy::ExecPolicySnapshot;
-use zeta_protocol::{
-    ActionApprovalDecision, ActionApprovalResponse, AgentRequest, AgentResponse, CommandId,
-    DynamicToolOutput, DynamicToolResponse, SessionId, ThreadId, ThreadItem, ToolCallId,
-    ToolDefinition, ToolExecutionAuthority, ToolName, TurnStatus, UserInput,
-};
-use zeta_sandboxing::{FileSystemAccess, NetworkAccess, SandboxPolicy};
+use zeta_protocol::ActionApprovalDecision;
+use zeta_protocol::ActionApprovalResponse;
+use zeta_protocol::AgentRequest;
+use zeta_protocol::AgentResponse;
+use zeta_protocol::CommandId;
+use zeta_protocol::DynamicToolOutput;
+use zeta_protocol::DynamicToolResponse;
+use zeta_protocol::SessionId;
+use zeta_protocol::ThreadId;
+use zeta_protocol::ThreadItem;
+use zeta_protocol::ToolCallId;
+use zeta_protocol::ToolDefinition;
+use zeta_protocol::ToolExecutionAuthority;
+use zeta_protocol::ToolName;
+use zeta_protocol::TurnStatus;
+use zeta_protocol::UserInput;
+use zeta_sandboxing::FileSystemAccess;
+use zeta_sandboxing::NetworkAccess;
+use zeta_sandboxing::SandboxPolicy;
 
 struct DenyBeforeToolHooks;
 
@@ -970,6 +1006,8 @@ fn fixture_with_approval_mode(
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("start").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,

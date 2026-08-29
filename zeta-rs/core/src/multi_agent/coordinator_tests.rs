@@ -451,6 +451,8 @@ fn later_child_turns_cannot_expand_the_spawned_skill_ceiling() {
             &fixture.session_id,
             &spawned.child_thread_id,
             crate::StartSessionTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("child-second-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
@@ -494,6 +496,8 @@ fn later_child_turns_cannot_expand_the_spawned_skill_ceiling() {
         &fixture.session_id,
         &spawned.child_thread_id,
         crate::StartSessionTurnRequest {
+            kind: zeta_protocol::TurnKind::Coding,
+            instructions: crate::test_turn_instructions(),
             command_id: CommandId::new("child-third-turn").unwrap(),
             expected_sequence: SequenceExpectation::Any,
             model: None,
@@ -961,6 +965,8 @@ fn fixture() -> Fixture {
             &session.session_id,
             &parent.thread_id,
             crate::StartSessionTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("start-parent").unwrap(),
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,

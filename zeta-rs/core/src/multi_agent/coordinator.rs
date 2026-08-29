@@ -473,6 +473,12 @@ impl MultiAgentCoordinator {
             .ok_or_else(|| CoreError::NotFound(seed.parent_turn_id.to_string()))?;
         let parent_tool_profile = parent_turn.tool_profile.clone();
         let parent_tool_mode = parent_turn.tool_mode;
+        let parent_instructions = parent_turn.instructions.clone().ok_or_else(|| {
+            CoreError::Context(format!(
+                "parent Turn {} has no frozen instructions",
+                parent_turn.turn_id
+            ))
+        })?;
         let session = self.sessions.read_session(&parent.session_id)?;
         let spawned = self.sessions.spawn_agent_thread(SpawnAgentThreadRequest {
             command_id: spawn_command_id(&seed.delegation_id)?,
@@ -494,6 +500,8 @@ impl MultiAgentCoordinator {
                 command_id: initial_turn_command_id(&seed.delegation_id)?,
                 expected_sequence: SequenceExpectation::Any,
                 model: seed.role.model.clone(),
+                kind: parent_turn.kind,
+                instructions: parent_instructions,
                 policy_revision: seed.policy_ceiling.policy_revision.clone(),
                 tool_mode: parent_tool_mode,
                 tool_profile: parent_tool_profile,

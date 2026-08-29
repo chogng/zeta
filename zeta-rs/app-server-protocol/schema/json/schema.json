@@ -18899,6 +18899,81 @@
       ],
       "type": "object"
     },
+    "ReviewTarget": {
+      "description": "Selects the code change that one review Turn must inspect.",
+      "oneOf": [
+        {
+          "description": "Reviews tracked and untracked changes in the current working tree.",
+          "properties": {
+            "type": {
+              "const": "uncommittedChanges",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Reviews changes relative to the merge base with a named branch.",
+          "properties": {
+            "branch": {
+              "type": "string"
+            },
+            "type": {
+              "const": "baseBranch",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "branch"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Reviews one commit.",
+          "properties": {
+            "sha": {
+              "type": "string"
+            },
+            "title": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "type": {
+              "const": "commit",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "sha"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Reviews a caller-defined target described in natural language.",
+          "properties": {
+            "instructions": {
+              "type": "string"
+            },
+            "type": {
+              "const": "custom",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "instructions"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "SandboxDenialOutput": {
       "description": "Trustworthy result of an execution attempt rejected by sandbox enforcement.\n\nProducers must not use this for an ordinary non-zero exit. Captured streams must already be\nbounded and secret-free before this value crosses the executor boundary.",
       "properties": {
@@ -20187,6 +20262,26 @@
             "type",
             "threadId",
             "input"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "target": {
+              "$ref": "#/$defs/ReviewTarget"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "const": "startReview",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "target"
           ],
           "type": "object"
         },
@@ -22722,6 +22817,21 @@
               "$ref": "#/$defs/ApprovalMode",
               "default": "askPermissions"
             },
+            "instructions": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TurnInstructions"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exact instructions selected before this Turn was durably accepted.\n\nHistorical events written before instruction snapshots omit this field."
+            },
+            "kind": {
+              "$ref": "#/$defs/TurnKind",
+              "default": "coding"
+            },
             "model": {
               "anyOf": [
                 {
@@ -24923,11 +25033,26 @@
             }
           ]
         },
+        "instructions": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TurnInstructions"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Exact instructions frozen when this Turn was accepted.\n\nHistorical Turns written before instruction snapshots were introduced omit this field."
+        },
         "items": {
           "items": {
             "$ref": "#/$defs/ThreadItem"
           },
           "type": "array"
+        },
+        "kind": {
+          "$ref": "#/$defs/TurnKind",
+          "default": "coding"
         },
         "model": {
           "anyOf": [
@@ -25035,6 +25160,30 @@
       "minLength": 1,
       "type": "string"
     },
+    "TurnInstructions": {
+      "description": "Immutable instructions selected before one Agent Turn is durably accepted.",
+      "properties": {
+        "body": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "owner",
+        "id",
+        "revision",
+        "body"
+      ],
+      "type": "object"
+    },
     "TurnInteraction": {
       "description": "One outstanding interaction that pauses a Turn until it is resolved or cancelled.\n\nThe request is durable product state. Selecting a connection that receives it is an App\nServer delivery concern and deliberately does not appear here.",
       "properties": {
@@ -25096,6 +25245,21 @@
         "sequence"
       ],
       "type": "object"
+    },
+    "TurnKind": {
+      "description": "Product execution purpose frozen for one Agent Turn.",
+      "oneOf": [
+        {
+          "const": "coding",
+          "description": "Ordinary coding and task execution.",
+          "type": "string"
+        },
+        {
+          "const": "review",
+          "description": "Read-only code review with its own rubric and output contract.",
+          "type": "string"
+        }
+      ]
     },
     "TurnStartResult": {
       "properties": {

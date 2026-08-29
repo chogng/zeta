@@ -75,6 +75,8 @@ fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
         goal_budget_limited_turn_id: None,
         context_calibrations: Vec::new(),
         turns: vec![TurnSnapshot {
+            kind: zeta_protocol::TurnKind::Coding,
+            instructions: None,
             turn_id: turn_id.clone(),
             status: TurnStatus::Running,
             model: None,

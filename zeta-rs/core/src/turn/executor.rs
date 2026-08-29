@@ -1,5 +1,28 @@
 use super::code_mode::CodeModeBroker;
-use super::tool_scheduler::{ToolScheduler, ToolSchedulingProgress};
+use super::tool_scheduler::ToolScheduler;
+use super::tool_scheduler::ToolSchedulingProgress;
+use crate::ActionPolicyService;
+use crate::CompletedTurn;
+use crate::ContextAssembler;
+use crate::ContextCompactionRequest;
+use crate::ContextCompactionResult;
+use crate::ContextCompactionService;
+use crate::CoreError;
+use crate::HarnessContext;
+use crate::HarnessContextProvider;
+use crate::HarnessInstructions;
+use crate::HookService;
+use crate::ModelSelection;
+use crate::ModelService;
+use crate::ModelStreamSink;
+use crate::NoHooks;
+use crate::NoThreadUpdates;
+use crate::NoTools;
+use crate::StartGoalTurnRequest;
+use crate::ThreadController;
+use crate::ThreadUpdateSink;
+use crate::ToolService;
+use crate::TurnCompletedHookRequest;
 use crate::action_policy_service::UnavailableActionPolicyService;
 use crate::context::CONTEXT_CALIBRATION_REVISION;
 use crate::context::CONTEXT_ESTIMATOR_REVISION;
@@ -15,24 +38,34 @@ use crate::thread_controller::CommitModelInvocationItemsResult;
 use crate::thread_controller::CompleteModelInvocationResult;
 use crate::thread_controller::PrepareModelInvocationRequest;
 use crate::turn::TurnExecutionBackend;
-use crate::{
-    ActionPolicyService, CompletedTurn, ContextAssembler, ContextCompactionRequest,
-    ContextCompactionResult, ContextCompactionService, CoreError, HarnessContext,
-    HarnessContextProvider, HarnessInstructions, HookService, ModelSelection, ModelService,
-    ModelStreamSink, NoHooks, NoThreadUpdates, NoTools, StartGoalTurnRequest, ThreadController,
-    ThreadUpdateSink, ToolService, TurnCompletedHookRequest,
-};
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use zeta_async_utils::{Cancellation, CancellationReason, CancellationToken};
+use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
+use zeta_async_utils::Cancellation;
+use zeta_async_utils::CancellationReason;
+use zeta_async_utils::CancellationToken;
 use zeta_context_engine::ContextTokenMeasurementOutcome;
-use zeta_protocol::{
-    CommandId, ItemId, ModelInputEstimate, ModelResponse, ModelStreamEvent, ResponseItem,
-    SessionId, StableTurnError, StreamCursor, StreamInstanceId, ThreadCommand, ThreadId,
-    ThreadItem, ThreadUpdate, ThreadUpdateEnvelope, ToolCall, TurnId, TurnStatus,
-};
+use zeta_protocol::CommandId;
+use zeta_protocol::ItemId;
+use zeta_protocol::ModelInputEstimate;
+use zeta_protocol::ModelResponse;
+use zeta_protocol::ModelStreamEvent;
+use zeta_protocol::ResponseItem;
+use zeta_protocol::SessionId;
+use zeta_protocol::StableTurnError;
+use zeta_protocol::StreamCursor;
+use zeta_protocol::StreamInstanceId;
+use zeta_protocol::ThreadCommand;
+use zeta_protocol::ThreadId;
+use zeta_protocol::ThreadItem;
+use zeta_protocol::ThreadUpdate;
+use zeta_protocol::ThreadUpdateEnvelope;
+use zeta_protocol::ToolCall;
+use zeta_protocol::TurnId;
+use zeta_protocol::TurnStatus;
 use zeta_utils_stream_parser::AssistantTextMode;
 use zeta_utils_stream_parser::AssistantTextStreamParser;
 use zeta_utils_stream_parser::strip_citations;
@@ -360,6 +393,9 @@ impl TurnExecutor {
         else {
             return Ok(false);
         };
+        if completed_turn.kind == zeta_protocol::TurnKind::Review {
+            return Ok(false);
+        }
         self.maybe_start_goal_continuation(thread_id, &completed_turn.turn_id)
     }
 
@@ -1164,6 +1200,9 @@ impl TurnExecutor {
         else {
             return Ok(false);
         };
+        if completed_turn.kind == zeta_protocol::TurnKind::Review {
+            return Ok(false);
+        }
         let command_id = CommandId::new(format!("goal_continue_{}", completed_turn.turn_id))
             .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
         let Some(start) = self.threads.start_goal_turn(
@@ -1171,6 +1210,12 @@ impl TurnExecutor {
             StartGoalTurnRequest {
                 command_id,
                 model: completed_turn.model.clone(),
+                instructions: completed_turn.instructions.clone().ok_or_else(|| {
+                    CoreError::Context(format!(
+                        "completed Turn {} has no frozen instructions",
+                        completed_turn.turn_id
+                    ))
+                })?,
                 policy_revision: completed_turn.policy_revision.clone(),
                 approval_mode: completed_turn.approval_mode,
                 tool_mode: completed_turn.tool_mode,

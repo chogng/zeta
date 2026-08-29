@@ -23,6 +23,11 @@ impl HarnessInstructions {
         }
     }
 
+    /// Creates host additions containing only optional Workspace instructions.
+    pub fn workspace(workspace_instructions: Option<String>) -> Self {
+        Self::new(String::new(), workspace_instructions)
+    }
+
     pub fn with_system_revision(mut self, revision: impl Into<String>) -> Self {
         self.system_revision = revision.into();
         self

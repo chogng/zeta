@@ -179,10 +179,52 @@ fn legacy_start_turn_without_host_skill_activations_remains_distinguishable() {
     assert!(matches!(
         command,
         ThreadCommand::StartTurn {
+            kind: TurnKind::Coding,
             host_activated_skills: None,
+            instructions: None,
             ..
         }
     ));
+}
+
+#[test]
+fn turn_instructions_and_review_target_have_stable_public_shapes() {
+    let instructions =
+        TurnInstructions::new("prompts", "review/code", "review-v3", "review instructions")
+            .unwrap();
+    assert_eq!(
+        serde_json::to_value(instructions).unwrap(),
+        json!({
+            "owner": "prompts",
+            "id": "review/code",
+            "revision": "review-v3",
+            "body": "review instructions"
+        })
+    );
+    assert_eq!(
+        serde_json::to_value(ReviewTarget::BaseBranch {
+            branch: "main".into(),
+        })
+        .unwrap(),
+        json!({"type": "baseBranch", "branch": "main"})
+    );
+    assert_eq!(
+        serde_json::to_value(TurnKind::Review).unwrap(),
+        json!("review")
+    );
+}
+
+#[test]
+fn empty_turn_instruction_fields_are_rejected() {
+    assert!(TurnInstructions::new("", "review/code", "review-v3", "body").is_err());
+    let decoded: TurnInstructions = serde_json::from_value(json!({
+        "owner": "prompts",
+        "id": "review/code",
+        "revision": "review-v3",
+        "body": ""
+    }))
+    .unwrap();
+    assert!(decoded.validate().is_err());
 }
 
 #[test]

@@ -247,29 +247,38 @@ impl ThreadController {
                 Some(model) => FrozenModelSelection::Selected(model.clone()),
                 None => FrozenModelSelection::ConfiguredDefault,
             };
-            let mut instruction_fragments =
-                request.harness_context.instructions().context_fragments();
-            if let Some(goal) = loaded
-                .snapshot
-                .goal
-                .as_ref()
-                .filter(|goal| goal.status.is_active())
-            {
-                let budget = match goal.token_budget {
-                    Some(token_budget) => zeta_prompts::GoalBudget::Limited {
-                        token_budget,
-                        tokens_used: goal.tokens_used,
-                    },
-                    None => zeta_prompts::GoalBudget::Unbounded,
-                };
-                let prompt = zeta_prompts::GoalPromptContext::new(&goal.objective, budget)
-                    .map(zeta_prompts::render_goals_prompt)
-                    .map_err(|error| CoreError::Context(error.to_string()))?;
+            let instructions = turn.instructions.as_ref().ok_or_else(|| {
+                CoreError::Context(format!(
+                    "Turn {} has no frozen instructions",
+                    request.turn_id
+                ))
+            })?;
+            let mut instruction_fragments = vec![crate::context::InstructionFragment::new(
+                crate::context::InstructionSource::new(
+                    instructions.owner(),
+                    instructions.id(),
+                    instructions.revision(),
+                ),
+                crate::context::InstructionLayer::System,
+                crate::context::InstructionRetention::Required,
+                instructions.body(),
+            )];
+            instruction_fragments
+                .extend(request.harness_context.instructions().context_fragments());
+            if let Some(goal) = loaded.snapshot.goal.as_ref().filter(|goal| {
+                turn.kind != zeta_protocol::TurnKind::Review && goal.status.is_active()
+            }) {
+                let prompt = crate::context::render_goal_instructions(
+                    &goal.objective,
+                    goal.token_budget,
+                    goal.tokens_used,
+                )
+                .map_err(|error| CoreError::Context(error.to_string()))?;
                 instruction_fragments.push(crate::context::InstructionFragment::new(
                     crate::context::InstructionSource::new(
-                        "product",
-                        "thread-goal",
-                        zeta_prompts::GOALS_PROMPT.revision(),
+                        prompt.source().owner(),
+                        prompt.source().id(),
+                        prompt.source().revision(),
                     ),
                     crate::context::InstructionLayer::Product,
                     crate::context::InstructionRetention::Required,

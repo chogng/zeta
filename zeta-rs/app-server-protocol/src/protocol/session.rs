@@ -8,12 +8,14 @@ use crate::protocol::turn::TurnInteractionResolveResult;
 use crate::protocol::turn::TurnInterruptResult;
 use crate::protocol::turn::TurnStartResult;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use ts_rs::TS;
 use zeta_protocol::AgentResponse;
 use zeta_protocol::AgentTreeProjection;
 use zeta_protocol::ApprovalMode;
 use zeta_protocol::ModelRef;
+use zeta_protocol::ReviewTarget;
 use zeta_protocol::Session;
 use zeta_protocol::SessionUpdateEnvelope;
 use zeta_protocol::Thread;
@@ -100,6 +102,10 @@ pub enum SessionRequest {
         tool_mode: Option<ToolMode>,
         #[schemars(length(min = 1))]
         input: Vec<InputItem>,
+    },
+    StartReview {
+        thread_id: ThreadId,
+        target: ReviewTarget,
     },
     StartShellTurn {
         thread_id: ThreadId,

@@ -11780,6 +11780,7 @@ version = "0.1.0"
 dependencies = [
  "tokio",
  "zeta-model-provider-config",
+ "zeta-prompts",
  "zeta-protocol",
 ]
 
@@ -11820,6 +11821,9 @@ dependencies = [
 [[package]]
 name = "zeta-prompts"
 version = "0.1.0"
+dependencies = [
+ "zeta-protocol",
+]
 
 [[package]]
 name = "zeta-protocol"

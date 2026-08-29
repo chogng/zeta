@@ -2,9 +2,13 @@ use super::*;
 use crate::local::ProviderModelService;
 use crate::local_tools::LocalToolComposition;
 use std::num::NonZeroU64;
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use zeta_action_policy::{ActionReviewRequest, ExecutionDecision};
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use zeta_action_policy::ActionReviewRequest;
+use zeta_action_policy::ExecutionDecision;
 use zeta_async_utils::CancellationToken;
 use zeta_code_index_cloud::CloudCodeIndexCapabilities;
 use zeta_code_index_cloud::CloudCodeIndexDeletionSupport;
@@ -19,16 +23,24 @@ use zeta_code_index_cloud::CloudCodeIndexPublication;
 use zeta_code_index_cloud::CloudCodeIndexPublicationRequest;
 use zeta_code_index_cloud::CloudCodeIndexSelection;
 use zeta_code_index_cloud::CloudCodeIndexState;
+use zeta_config::ConfigCommandRequest;
+use zeta_config::ConfigRevision;
+use zeta_config::ConfigStore;
 use zeta_config::ToolSearchConfig;
 use zeta_config::ToolSearchModeConfig;
-use zeta_config::{
-    ConfigCommandRequest, ConfigRevision, ConfigStore, UserConfigCommand, WorkspaceTrustSetting,
-};
-use zeta_core::{
-    ActionPolicyService, CoreError, CreateSessionRequest, CreateSessionThreadRequest,
-    InMemorySessionStore, InMemoryThreadStore, NoTools, SequenceExpectation, SessionCoordinator,
-    StartTurnRequest, ThreadController,
-};
+use zeta_config::UserConfigCommand;
+use zeta_config::WorkspaceTrustSetting;
+use zeta_core::ActionPolicyService;
+use zeta_core::CoreError;
+use zeta_core::CreateSessionRequest;
+use zeta_core::CreateSessionThreadRequest;
+use zeta_core::InMemorySessionStore;
+use zeta_core::InMemoryThreadStore;
+use zeta_core::NoTools;
+use zeta_core::SequenceExpectation;
+use zeta_core::SessionCoordinator;
+use zeta_core::StartTurnRequest;
+use zeta_core::ThreadController;
 use zeta_model_provider::EchoModel;
 use zeta_model_provider::EmbeddingInvoker;
 use zeta_model_provider::EmbeddingRequest;
@@ -36,10 +48,11 @@ use zeta_model_provider::EmbeddingResponse;
 use zeta_model_provider::EmbeddingVector;
 use zeta_model_provider::ModelProviderError;
 use zeta_model_provider_config::ModelProviderConfig;
+use zeta_protocol::CommandId;
 use zeta_protocol::ModelId;
 use zeta_protocol::ModelRef;
 use zeta_protocol::ProviderId;
-use zeta_protocol::{CommandId, UserInput};
+use zeta_protocol::UserInput;
 use zeta_shell_command::RipgrepExecutable;
 use zeta_workspace::WorkspaceTrustSource;
 
@@ -1249,6 +1262,8 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
         .start_turn(
             &thread.thread_id,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("start-revocation-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,
@@ -1526,6 +1541,8 @@ fn active_turn_blocks_workspace_switch_without_changing_authority() {
         .start_turn(
             &thread.thread_id,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("start-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,
@@ -1594,6 +1611,8 @@ fn active_turn_accepts_session_access_changes_and_revokes_old_snapshots() {
         .start_turn(
             &thread.thread_id,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("start-active-add-dir-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,

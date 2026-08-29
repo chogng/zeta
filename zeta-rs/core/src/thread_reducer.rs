@@ -6,7 +6,8 @@ use crate::multi_agent::validate_delegation_result_digest;
 use crate::state::transition_turn_status;
 use sha2::Digest;
 use sha2::Sha256;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use zeta_history::StoredEvent;
 use zeta_history::ThreadCommandReceipt;
 use zeta_history::supports_stored_event_schema_version;
@@ -52,7 +53,9 @@ use zeta_protocol::ToolProfileSnapshot;
 use zeta_protocol::Turn;
 use zeta_protocol::TurnExecutionBinding;
 use zeta_protocol::TurnId;
+use zeta_protocol::TurnInstructions;
 use zeta_protocol::TurnInteraction;
+use zeta_protocol::TurnKind;
 use zeta_protocol::TurnStatus;
 
 #[path = "thread_reducer_approval.rs"]
@@ -156,6 +159,8 @@ impl ThreadSnapshot {
                 .map(|turn| Turn {
                     turn_id: turn.turn_id.clone(),
                     status: turn.status,
+                    kind: turn.kind,
+                    instructions: turn.instructions.clone(),
                     model: turn.model.clone(),
                     tool_profile: turn.tool_profile.clone(),
                     tool_mode: turn.tool_mode,
@@ -212,6 +217,8 @@ impl ThreadSnapshot {
 pub struct TurnSnapshot {
     pub turn_id: TurnId,
     pub status: TurnStatus,
+    pub kind: TurnKind,
+    pub instructions: Option<TurnInstructions>,
     pub model: Option<ModelRef>,
     pub policy_revision: String,
     pub approval_mode: ApprovalMode,
@@ -744,6 +751,8 @@ pub fn reduce_thread_event(
         }
         ThreadEvent::TurnAccepted {
             turn_id,
+            kind,
+            instructions,
             model,
             policy_revision,
             approval_mode,
@@ -752,6 +761,11 @@ pub fn reduce_thread_event(
             tool_profile,
             ..
         } => {
+            if let Some(instructions) = instructions {
+                instructions
+                    .validate()
+                    .map_err(|error| CoreError::Journal(error.to_string()))?;
+            }
             if policy_revision.trim().is_empty() {
                 return Err(CoreError::Journal(
                     "Turn policy revision must not be empty".into(),
@@ -766,6 +780,8 @@ pub fn reduce_thread_event(
                 TurnSnapshot {
                     turn_id: turn_id.clone(),
                     status: TurnStatus::Created,
+                    kind: *kind,
+                    instructions: instructions.clone(),
                     model: model.clone(),
                     policy_revision: policy_revision.clone(),
                     approval_mode: *approval_mode,
@@ -785,6 +801,8 @@ pub fn reduce_thread_event(
             })?;
             let matching_start = match &receipt.command {
                 ThreadCommand::StartTurn {
+                    kind: command_kind,
+                    instructions: command_instructions,
                     model: command_model,
                     activated_skills: command_skills,
                     approval_mode: command_approval_mode,
@@ -793,7 +811,9 @@ pub fn reduce_thread_event(
                     input,
                     ..
                 } => {
-                    command_model == model
+                    command_kind == kind
+                        && command_instructions == instructions
+                        && command_model == model
                         && command_skills == activated_skills
                         && command_approval_mode == approval_mode
                         && command_tool_mode == tool_mode
@@ -804,7 +824,9 @@ pub fn reduce_thread_event(
                     approval_mode: command_approval_mode,
                     ..
                 } => {
-                    model.is_none()
+                    *kind == TurnKind::Coding
+                        && instructions.is_none()
+                        && model.is_none()
                         && tool_profile.is_none()
                         && *tool_mode == ToolMode::Direct
                         && command_approval_mode == approval_mode
@@ -814,7 +836,9 @@ pub fn reduce_thread_event(
                     model: command_model,
                     ..
                 } => {
-                    command_model == model
+                    *kind == TurnKind::Coding
+                        && instructions.is_none()
+                        && command_model == model
                         && tool_profile.is_none()
                         && *tool_mode == ToolMode::Direct
                         && *approval_mode == ApprovalMode::AskPermissions
@@ -1970,6 +1994,8 @@ fn import_history(
         .map(|turn| TurnSnapshot {
             turn_id: turn.turn_id.clone(),
             status: turn.status,
+            kind: turn.kind,
+            instructions: turn.instructions.clone(),
             model: turn.model.clone(),
             policy_revision: "imported-history-policy".into(),
             approval_mode: ApprovalMode::AskPermissions,
@@ -2069,6 +2095,8 @@ fn append_imported_turn(
     turns.push(TurnSnapshot {
         turn_id: turn.turn_id.clone(),
         status: turn.status,
+        kind: turn.kind,
+        instructions: turn.instructions.clone(),
         model: turn.model.clone(),
         policy_revision: "imported-history-policy".into(),
         approval_mode: ApprovalMode::AskPermissions,

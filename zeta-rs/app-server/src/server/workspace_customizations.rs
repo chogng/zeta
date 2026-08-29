@@ -20,7 +20,6 @@ use zeta_core::HarnessContextRequest;
 use zeta_core::HarnessInstructions;
 use zeta_instructions::InstructionCatalog;
 use zeta_instructions::InstructionCatalogSnapshot;
-use zeta_prompts::SYSTEM_PROMPT;
 use zeta_protocol::SessionId;
 use zeta_workspace::TrustedWorkspace;
 
@@ -31,8 +30,6 @@ struct AdditionalCustomizationCatalog {
 }
 
 pub(super) struct WorkspaceCustomizations {
-    system_body: String,
-    system_revision: String,
     environment: WorkspaceEnvironment,
     instructions: Mutex<InstructionCatalog>,
     agents: Mutex<AgentDefinitionCatalog>,
@@ -50,17 +47,11 @@ impl WorkspaceCustomizations {
         let workspace_root = workspace_root.as_ref().to_path_buf();
         let instructions = InstructionCatalog::discover(&workspace_root);
         let agents = AgentDefinitionCatalog::discover(&workspace_root);
-        let system_body = SYSTEM_PROMPT.body().to_owned();
-        let system_revision = SYSTEM_PROMPT.revision().to_owned();
         let environment = WorkspaceEnvironment::capture(&workspace_root)?;
         let harness_instructions = Arc::new(render_harness_instructions(
-            &system_body,
-            &system_revision,
             instructions.snapshot().as_ref(),
         ));
         Ok(Arc::new(Self {
-            system_body,
-            system_revision,
             environment,
             instructions: Mutex::new(instructions),
             agents: Mutex::new(agents),
@@ -263,11 +254,7 @@ impl WorkspaceCustomizations {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .refresh();
-        let harness_instructions = Arc::new(render_harness_instructions(
-            &self.system_body,
-            &self.system_revision,
-            snapshot.as_ref(),
-        ));
+        let harness_instructions = Arc::new(render_harness_instructions(snapshot.as_ref()));
         *self
             .harness_instructions
             .write()
@@ -338,8 +325,6 @@ impl HarnessContextProvider for WorkspaceCustomizations {
         } else {
             let primary = self.instruction_snapshot();
             Arc::new(render_harness_instructions_with_additional(
-                &self.system_body,
-                &self.system_revision,
                 primary.as_ref(),
                 &additional_content,
             ))
@@ -381,24 +366,16 @@ fn affects(path: &Path, customization_root: &str) -> bool {
         || Path::new(customization_root).starts_with(path)
 }
 
-fn render_harness_instructions(
-    system_body: &str,
-    system_revision: &str,
-    instructions: &InstructionCatalogSnapshot,
-) -> HarnessInstructions {
+fn render_harness_instructions(instructions: &InstructionCatalogSnapshot) -> HarnessInstructions {
     let workspace_content = instructions.global_content();
     let workspace_revision = content_revision(
         "workspace-instructions",
         workspace_content.as_deref().unwrap_or_default(),
     );
-    HarnessInstructions::new(system_body, workspace_content)
-        .with_system_revision(system_revision)
-        .with_workspace_revision(workspace_revision)
+    HarnessInstructions::workspace(workspace_content).with_workspace_revision(workspace_revision)
 }
 
 fn render_harness_instructions_with_additional(
-    system_body: &str,
-    system_revision: &str,
     instructions: &InstructionCatalogSnapshot,
     additional: &[(PathBuf, String)],
 ) -> HarnessInstructions {
@@ -415,8 +392,7 @@ fn render_harness_instructions_with_additional(
     }));
     let content = sections.join("\n\n");
     let workspace_revision = content_revision("workspace-instructions", &content);
-    HarnessInstructions::new(system_body, (!content.is_empty()).then_some(content))
-        .with_system_revision(system_revision)
+    HarnessInstructions::workspace((!content.is_empty()).then_some(content))
         .with_workspace_revision(workspace_revision)
 }
 

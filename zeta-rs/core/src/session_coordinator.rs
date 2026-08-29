@@ -1,25 +1,56 @@
-use crate::{
-    CoreError, CreateAgentThreadRequest, CreateThreadRequest, LeaseGuard, SessionCommandResult,
-    SessionSnapshot, StartContextCompactionRequest, StartShellTurnRequest, StartTurnRequest,
-    StartTurnResult, SteerTurnRequest, SteerTurnResult, ThreadController, WriterLease,
-    reduce_session_event,
-};
-use std::collections::{BTreeMap, BTreeSet};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
+use crate::CoreError;
+use crate::CreateAgentThreadRequest;
+use crate::CreateThreadRequest;
+use crate::LeaseGuard;
+use crate::SessionCommandResult;
+use crate::SessionSnapshot;
+use crate::StartContextCompactionRequest;
+use crate::StartShellTurnRequest;
+use crate::StartTurnRequest;
+use crate::StartTurnResult;
+use crate::SteerTurnRequest;
+use crate::SteerTurnResult;
+use crate::ThreadController;
+use crate::WriterLease;
+use crate::reduce_session_event;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
+use zeta_protocol::ApprovalMode;
+use zeta_protocol::CommandId;
+use zeta_protocol::FrozenSkillActivation;
+use zeta_protocol::ModelRef;
+use zeta_protocol::SessionCommand;
+use zeta_protocol::SessionEvent;
+use zeta_protocol::SessionId;
+use zeta_protocol::SessionStatus;
+use zeta_protocol::SessionThread;
+use zeta_protocol::SessionThreadStatus;
+use zeta_protocol::SessionUpdate;
+use zeta_protocol::SessionUpdateEnvelope;
+use zeta_protocol::ThreadId;
+use zeta_protocol::ThreadOrigin;
+use zeta_protocol::ToolMode;
+use zeta_protocol::ToolProfileSnapshot;
 use zeta_protocol::TurnId;
-use zeta_protocol::{
-    ApprovalMode, CommandId, FrozenSkillActivation, ModelRef, SessionCommand, SessionEvent,
-    SessionId, SessionStatus, SessionThread, SessionThreadStatus, SessionUpdate,
-    SessionUpdateEnvelope, ThreadId, ThreadOrigin, ToolMode, ToolProfileSnapshot, TurnStatus,
-    UserInput, WorkspaceBinding,
-};
-use zeta_session_store::{
-    AppendSessionBatchResult, CURRENT_SESSION_EVENT_SCHEMA_VERSION, SessionCommandReceipt,
-    SessionEventBatch, SessionEventId, SessionStore, SessionStoreError, SessionTimestamp,
-    StoredSessionEvent, validate_session_append_batch,
-};
+use zeta_protocol::TurnStatus;
+use zeta_protocol::UserInput;
+use zeta_protocol::WorkspaceBinding;
+use zeta_session_store::AppendSessionBatchResult;
+use zeta_session_store::CURRENT_SESSION_EVENT_SCHEMA_VERSION;
+use zeta_session_store::SessionCommandReceipt;
+use zeta_session_store::SessionEventBatch;
+use zeta_session_store::SessionEventId;
+use zeta_session_store::SessionStore;
+use zeta_session_store::SessionStoreError;
+use zeta_session_store::SessionTimestamp;
+use zeta_session_store::StoredSessionEvent;
+use zeta_session_store::validate_session_append_batch;
 
 mod agent_spawn;
 
@@ -69,6 +100,8 @@ pub struct StartSessionTurnRequest {
     pub command_id: CommandId,
     pub expected_sequence: SequenceExpectation,
     pub model: Option<ModelRef>,
+    pub kind: zeta_protocol::TurnKind,
+    pub instructions: zeta_protocol::TurnInstructions,
     pub policy_revision: String,
     pub tool_mode: ToolMode,
     pub tool_profile: Option<ToolProfileSnapshot>,
@@ -211,6 +244,8 @@ impl SessionCoordinator {
                 command_id: request.command_id,
                 expected_sequence: request.expected_sequence,
                 model: request.model,
+                kind: request.kind,
+                instructions: request.instructions,
                 policy_revision: request.policy_revision,
                 approval_mode,
                 tool_mode: request.tool_mode,

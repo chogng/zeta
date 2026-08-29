@@ -6,26 +6,44 @@ use std::net::Shutdown;
 use std::sync::Arc;
 use std::sync::Condvar;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
 use std::thread;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use zeta_action_policy::{
-    ActionDigest, ActionKind, ActionPolicyRevision, ActionProvenance, ActionReviewRequest,
-    ActionSource, Capability, CapabilityKind, CapabilitySet, ExecutionDecision,
-    ProcessInvocationKind, ResolvedAction, SandboxCompatibility,
-};
-use zeta_app_server_protocol::protocol::slash_commands::{
-    SlashCommandArgumentModeDto, SlashCommandDefinition,
-};
+use std::time::Duration;
+use std::time::Instant;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
+use zeta_action_policy::ActionDigest;
+use zeta_action_policy::ActionKind;
+use zeta_action_policy::ActionPolicyRevision;
+use zeta_action_policy::ActionProvenance;
+use zeta_action_policy::ActionReviewRequest;
+use zeta_action_policy::ActionSource;
+use zeta_action_policy::Capability;
+use zeta_action_policy::CapabilityKind;
+use zeta_action_policy::CapabilitySet;
+use zeta_action_policy::ExecutionDecision;
+use zeta_action_policy::ProcessInvocationKind;
+use zeta_action_policy::ResolvedAction;
+use zeta_action_policy::SandboxCompatibility;
+use zeta_app_server_protocol::protocol::slash_commands::SlashCommandArgumentModeDto;
+use zeta_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
 use zeta_async_utils::CancellationToken;
 use zeta_config::ConfigStore;
-use zeta_core::{
-    ActionPolicyService, CoreError, InMemorySessionStore, InMemoryThreadStore, ModelService,
-    RequestTurnInteraction, SessionCoordinator, StartTurnRequest, ThreadController,
-    ToolAuthorization, ToolOutputSink, ToolService,
-};
+use zeta_core::ActionPolicyService;
+use zeta_core::CoreError;
+use zeta_core::InMemorySessionStore;
+use zeta_core::InMemoryThreadStore;
+use zeta_core::ModelService;
+use zeta_core::RequestTurnInteraction;
+use zeta_core::SessionCoordinator;
+use zeta_core::StartTurnRequest;
+use zeta_core::ThreadController;
+use zeta_core::ToolAuthorization;
+use zeta_core::ToolOutputSink;
+use zeta_core::ToolService;
 use zeta_file_system::LocalFileSystem;
 use zeta_login::AccountRef;
 use zeta_login::AccountSnapshot;
@@ -40,21 +58,40 @@ use zeta_login::LoginError;
 use zeta_login::LoginId;
 use zeta_login::LoginService;
 use zeta_model_provider::EchoModel;
+use zeta_protocol::ActionApprovalCapability;
+use zeta_protocol::ActionApprovalCapabilityKind;
+use zeta_protocol::ActionApprovalRequest;
+use zeta_protocol::AgentRequest;
+use zeta_protocol::CommandId;
+use zeta_protocol::ContentPart;
+use zeta_protocol::InputItem;
 use zeta_protocol::InteractionDeadline;
+use zeta_protocol::ModelId;
+use zeta_protocol::ModelRef;
+use zeta_protocol::ModelRequest;
+use zeta_protocol::ModelResponse;
+use zeta_protocol::ProviderId;
+use zeta_protocol::RequestId;
+use zeta_protocol::RequestUserInput;
+use zeta_protocol::ResponseItem;
 use zeta_protocol::StableTurnErrorCode;
-use zeta_protocol::{
-    ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalRequest, AgentRequest,
-    CommandId, ContentPart, InputItem, ModelId, ModelRef, ModelRequest, ModelResponse, ProviderId,
-    RequestId, RequestUserInput, ResponseItem, StopReason, ToolCall, ToolDefinition,
-    ToolExecutionOutput, ToolOutputStream, TurnStatus, UserInput,
-};
-use zeta_sandboxing::{FileSystemAccess, NetworkAccess, SandboxPolicy};
+use zeta_protocol::StopReason;
+use zeta_protocol::ToolCall;
+use zeta_protocol::ToolDefinition;
+use zeta_protocol::ToolExecutionOutput;
+use zeta_protocol::ToolOutputStream;
+use zeta_protocol::TurnStatus;
+use zeta_protocol::UserInput;
+use zeta_sandboxing::FileSystemAccess;
+use zeta_sandboxing::NetworkAccess;
+use zeta_sandboxing::SandboxPolicy;
 use zeta_secrets::MemorySecretStore;
 use zeta_uds::UnixStream;
-use zeta_workspace::{
-    TrustedWorkspace, WorkspaceCapability, WorkspaceRoot, WorkspaceTrustDecision,
-    WorkspaceTrustSource,
-};
+use zeta_workspace::TrustedWorkspace;
+use zeta_workspace::WorkspaceCapability;
+use zeta_workspace::WorkspaceRoot;
+use zeta_workspace::WorkspaceTrustDecision;
+use zeta_workspace::WorkspaceTrustSource;
 
 fn server_with_model(model: Arc<dyn ModelService>) -> AppServer {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
@@ -2335,6 +2372,57 @@ fn model_request_contains_text(request: &ModelRequest, expected: &str) -> bool {
 }
 
 #[test]
+fn review_turn_freezes_review_rubric_and_renders_the_requested_target() {
+    let model = Arc::new(RecordingModel::default());
+    let server = server_with_model(model.clone());
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let session = create_session(&server, &mut connection, 2, "review-session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = create_thread(&server, &mut connection, 3, "review-thread", session_id, 1);
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+
+    let started = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":4,"method":"session/request",
+            "params":{
+                "commandId":"review-turn","sessionId":session_id,"expectedSequence":1,
+                "request":{
+                    "type":"startReview","threadId":thread_id,
+                    "target":{"type":"baseBranch","branch":"main"}
+                }
+            }
+        }),
+    );
+
+    assert!(started["result"]["value"]["turnId"].is_string());
+    wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
+    let requests = model.requests();
+    assert_eq!(requests.len(), 1);
+    assert!(
+        requests[0]
+            .instructions
+            .as_deref()
+            .is_some_and(|body| body.contains("overall_correctness"))
+    );
+    assert!(model_request_contains_text(
+        &requests[0],
+        "Review the changes against base branch `main`. Determine the merge base with HEAD, then inspect the diff from that merge base."
+    ));
+    let snapshot = server
+        .sessions()
+        .threads()
+        .read_thread(&zeta_protocol::ThreadId::new(thread_id).unwrap())
+        .unwrap();
+    let instructions = snapshot.turns[0].instructions.as_ref().unwrap();
+    assert_eq!(snapshot.turns[0].kind, zeta_protocol::TurnKind::Review);
+    assert_eq!(instructions.owner(), "prompts");
+    assert_eq!(instructions.id(), "review/code");
+}
+
+#[test]
 fn explicit_skill_flows_through_core_extension_lifecycle() {
     let root = std::env::temp_dir().join(format!(
         "zeta-app-server-extension-skill-{}-{}",
@@ -3414,6 +3502,8 @@ fn interaction_resolution_uses_the_durable_identity_and_resumes_the_turn() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("agent-turn").unwrap(),
                 expected_sequence: zeta_core::SequenceExpectation::Exact(1),
                 model: None,
@@ -3782,6 +3872,8 @@ fn expired_interaction_is_cancelled_and_fails_the_turn() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("deadline-turn").unwrap(),
                 expected_sequence: zeta_core::SequenceExpectation::Exact(1),
                 model: None,
@@ -3873,6 +3965,8 @@ fn approval_interaction_resolves_through_the_typed_app_server_contract() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("approval-turn").unwrap(),
                 expected_sequence: zeta_core::SequenceExpectation::Exact(1),
                 model: None,
@@ -3989,6 +4083,8 @@ fn interaction_response_is_rejected_from_a_capable_non_owner_connection() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("approval-turn-owner-check").unwrap(),
                 expected_sequence: zeta_core::SequenceExpectation::Exact(1),
                 model: None,

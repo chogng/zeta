@@ -9,7 +9,7 @@
 `STATIC_MODEL_CATALOG` 经 `ProviderConfigRegistry::builtin()` 投影为 `ProviderDefinition.models` 静态
 seed，再把 provider discovery observation 合并到按 scope 隔离的
 内存目录，并发布带 generation 的 immutable snapshot。它拥有 freshness、singleflight、字段级 merge、
-筛选和 typed resolution；不拥有 provider HTTP DTO、credential、模型调用、prompt/context cache、
+筛选、typed resolution 和模型基础 instructions 资产；不拥有 provider HTTP DTO、credential、模型调用、prompt/context cache、
 Config persistence 或 UI。
 
 ## 公共契约
@@ -26,6 +26,7 @@ Config persistence 或 UI。
 | `DiscoveredCatalog` | source 的一次完整提交 | `CompleteAgentCatalog` 缺席可下架；`Partial` 缺席不改变 availability |
 | `ModelMetadataPatch` | provider 明确返回的字段 | `Unknown` 不覆盖已有 known metadata |
 | `ResolvedModel` | exact model + catalog generation + warnings | `AllowUnlisted` 产生 unverified synthetic metadata |
+| `BASE_INSTRUCTIONS` | 当前支持模型的基础行为资产 | App Server 在普通 Turn 创建前冻结；本 crate 拥有文本和 revision |
 
 `CatalogSourceScopeId` 不是 endpoint 或 credential reference。Host 必须先对 normalized endpoint、tenant、
 credential revision 和 provider config revision 生成不可逆、无秘密的稳定指纹；任一输入变化都使用新
@@ -41,6 +42,7 @@ src/
 ├── snapshot.rs     # immutable snapshot、generation、provenance、warning
 ├── merge.rs        # seed/live 字段级合并与 complete/partial availability
 ├── filter.rs       # capability/availability query 与 resolution checks
+├── instructions.rs # 模型基础 instructions 资产与 revision
 ├── policy.rs       # freshness/read named policy
 ├── scope.rs        # opaque scope identity
 ├── error.rs        # typed manager failures

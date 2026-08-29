@@ -8,7 +8,7 @@
 > [`zeta-agent-runtime-architecture.md`](zeta-agent-runtime-architecture.md) 负责；上下文生命
 > 周期抽象（ContextPlan/Manager/checkpoint）由 [`core-context.md`](core-context.md) 负责；
 > 工具三层契约（定义/绑定/执行接口）由 [`tools.md`](tools.md) 负责；**逐工具规格（schema、
-> 描述正文、错误文案）与系统提示词扩写正文**由
+> 描述正文、错误文案）由
 > [`agent-tools-spec.md`](agent-tools-spec.md) 负责。本文负责 harness 的**行为策略**。
 
 ## 快速理解
@@ -17,7 +17,7 @@
 | --- | --- | --- |
 | 模型调用失败怎么办？ | 运行时按错误类别重试、压缩或稳定失败；终态错误在对话内提供重试、换模型、新对话或改方案动作 | [§7](#7-turn-内循环与失败策略) |
 | Agent 运行中用户发消息怎么办？ | durable 追加到当前 Turn；本地模型输出在安全点与 steer 原子仲裁，再从最新 snapshot 重规划 | [§8](#8-引导与并发输入) |
-| 提示词怎么做？ | 四层：静态身份/策略 + per-profile 工具指导 + 会话冻结环境快照 + 工作区指令；动态走 append-only reminder | [§4](#4-提示词) |
+| 提示词怎么做？ | 分域拥有：模型基础 instructions 归 models-manager，工具描述归工具 owner，Workspace/Goal/Skill 各自贡献 fragment，Core 统一组装 | [§4](#4-提示词) |
 | 工具选哪些？ | 统一八件套；`apply_patch` 是默认代码变更协议，`edit` 是唯一字符串微编辑和降级工具；逐工具规格见 tools-spec | [§5](#5-工具集) |
 | 工具什么时候注册？ | Turn 接受时冻结；内置静态平铺，MCP 超阈值切检索式；不做运行时动态增删 | [§6](#6-工具注册时机) |
 | 上下文怎么裁剪/压缩？ | 输入侧逐条限幅；历史语义单元保留；阈值用 `ModelInfo.effective_auto_compact_token_limit` | [§9](#9-上下文裁剪)、[§10](#10-压缩) |
@@ -30,14 +30,14 @@
 
 | 环节 | 可用 harness 需要 | Zeta 现状 |
 | --- | --- | --- |
-| System prompt | 每次调用注入身份、策略、工具指导、环境 | ✅ `SYSTEM_PROMPT` 已经通过 `HarnessInstructions` 和 `ContextPlan` 注入；`system-v4` 固定 `apply_patch` 默认、`edit` 微编辑/降级与 `update_plan` guidance |
+| Model instructions | 每次调用注入身份、策略和通用工作行为 | ✅ `zeta-models-manager::BASE_INSTRUCTIONS` 在普通 Turn 创建时冻结并持久化，Core 通过 `ContextPlan` 注入 |
 | 环境上下文 | cwd、平台、日期、git 状态、项目指令 | ✅ Local Workspace host 在 model safe point 提供环境与 `.zeta/instructions` snapshot |
 | 工具面 | 读/搜/改/执行闭环 | ✅ `coding-v1` 在 Turn 接受时冻结模型中立的 exact 工具定义；canonical direct 文件工具、`apply_patch`、shell 与 durable `update_plan` 已进入本地闭环 |
 | 模型失败弹性 | 429/5xx 退避重试、溢出压缩重试、空响应处理 | ✅ 类型化错误、退避、单次溢出恢复、空响应重试、Refusal 完成语义和对话内错误动作已接通 |
 | Steering | 运行中排队注入用户消息 | ✅ typed command、receipt、delivery fact、App Server、Desktop 与本地重规划均已接通 |
 | 工具结果限幅 | 模型侧截断 + 保留头尾 | 已实现：ContextPlan 为 shell、read、search、MCP 生成带 continuation 的 bounded clone，durable 原值不改写 |
 | 上下文预算 | 窗口估算、溢出显式处理 | ✅ 已知/配置窗口走确定性预算；未知窗口明确退回 provider-managed |
-| 压缩 | 阈值触发、durable checkpoint | ✅ `COMPACTION_PROMPT`、source digest、原子 commit、恢复校验与 commit 后重规划已接通 |
+| 压缩 | 阈值触发、durable checkpoint | ✅ `zeta-prompts` 共享 compaction 提示词、source digest、原子 commit、恢复校验与 commit 后重规划已接通 |
 | Prompt cache | 前缀稳定 + 断点标注 | 已实现：Anthropic tools/system/滚动 user 三断点、cached usage 与 scope 回归已接通 |
 | 多 Tool Call/响应 | 模型一次响应多个调用 | 已实现：`parallel_tool_calls: true`，调用先完整持久化再按顺序执行，避免并行写副作用 |
 | 计划工具 | 长任务显式计划状态 | ✅ `update_plan` 提交 durable `PlanUpdated`；Turn 与 Desktop 只投影最新 canonical plan，恢复/replay 保持一致 |
@@ -47,17 +47,15 @@
 
 ```text
 ModelRequest
-├─ instructions                          ── 静态层（会话内不变，缓存友好）
-│  ├─ 身份 + 指令优先级 + 安全策略          （zeta-prompts SYSTEM_PROMPT，静态）
-│  ├─ 工具使用指导 + 输出风格               （per tool-profile，profile 内静态，
-│  │                                        正文见 agent-tools-spec.md 附录 A）
-│  ├─ Skill 清单                           （名称+一行描述，预算上限内，会话稳定）
-│  └─ 环境快照                             （字段见 §4.2，Thread 首 Turn 冻结）
+├─ instructions                          ── Core 按 precedence 组装
+│  ├─ 模型基础 instructions                 （models-manager，按冻结模型选择）
+│  └─ Product fragments                    （Goal、Agent 与 system/product extension）
 ├─ input
-│  ├─ [0] 工作区指令 message               （Global `.zeta/instructions`，§4.3，调用内冻结）
+│  ├─ [0] Workspace/Skill fragments        （`.zeta/instructions`、Skill 与对应 extension）
 │  ├─ [1..] durable history                （append-only，语义单元完整，
 │  │                                        可含 checkpoint summary 替代更早历史）
-│  └─ [last] 当前 Turn 输入 / steering 消息（+ append-only reminder 块）
+│  ├─ 当前 Turn 输入 / steering 消息        （+ append-only reminder 块）
+│  └─ [last] 环境快照                       （字段见 §4.2）
 └─ tools                                  ── Turn 接受时冻结的 ToolProfile
 ```
 
@@ -96,10 +94,12 @@ loop:
 
 | 层 | 内容 | 变化频率 | 存放位置 |
 | --- | --- | --- | --- |
-| 身份与策略 | 身份、指令优先级、注入防护、工作行为 | 随产品版本 | `zeta-prompts` `SYSTEM_PROMPT`（已存在） |
-| 工具指导 + 输出风格 | 工具组合惯例、验证纪律、简洁度、路径引用格式 | 随 tool profile | `zeta-prompts` 新模板；正文已写好，见 [`agent-tools-spec.md` 附录 A](agent-tools-spec.md#附录-a系统提示词扩写正文) |
+| 模型基础 instructions | 身份、指令优先级、注入防护、通用工作行为和输出风格 | 新 Turn 创建时冻结；已开始 Turn 永不变化 | `zeta-models-manager` 拥有资产；App Server 冻结到 durable `TurnInstructions` |
+| 工具契约 | exact schema、描述、使用边界和错误语义 | 随 tool profile | 各工具 owner；随冻结的 `ToolDefinition` 进入请求，不复制进基础 instructions |
 | 环境快照 | 见 §4.2 | 静态字段在 Workspace 启动时冻结；workspace roots 在每次模型调用时读取 | `zeta-agent-environment` 定义值和渲染，App Server 采集，Core 放在请求尾部 |
-| 工作区指令 | Global `.zeta/instructions` | model invocation 内冻结；文件变化影响后续调用 | `input[0]` 独立 message |
+| 工作区与功能指令 | Global `.zeta/instructions`、Goal、Skill、extension fragment | model invocation 内冻结；对应状态变化影响后续调用 | 各功能 owner 提供，Core 按 layer 和 provenance 组装 |
+
+`zeta-prompts` 只拥有公共设施和共享产品提示词。目前 context compaction 与通用代码 review 在这里；模型基础 instructions 留在 `zeta-models-manager`，Goal 与动态 context fragment 留在 Core，动作授权审查提示词留在 `zeta-auto-review`。
 
 外部产品如何组织项目指令只是参照系；Zeta 的原生 artifact、目录和加载策略由
 [`agent-customizations.md`](agent-customizations.md) 定义。共同点是**静态与动态严格分离**——
@@ -334,7 +334,7 @@ session/request::SteerTurn { command_id, expected_sequence, thread_id, turn_id, 
 
 - **tail 选择**：从最新 Turn 向前按完整 Turn 单元保留；当前 Turn 无条件保留，checkpoint 只
   覆盖 durable 前缀；
-- **压缩调用**：独立模型调用使用被吸收前缀、上一个 checkpoint 和 `COMPACTION_PROMPT`；不带
+- **压缩调用**：独立模型调用使用被吸收前缀、上一个 checkpoint 和 `zeta-prompts` 的共享 compaction 提示词；不带
   tools，summary target 在剩余预算内有界；
 - **分批处理**：压缩请求本身也必须装入同一模型窗口。过长前缀分批提交 checkpoint；若单个
   新 Turn 连同 compaction envelope 都无法装入，则返回 `CompactionSourceTooLarge`，不循环重试；
@@ -449,7 +449,7 @@ M0–M6 只表示本文行为规格的覆盖状态，不再承担实际构建顺
 
 | 里程碑 | 内容 | 关键改动点 | 前置接线 |
 | --- | --- | --- | --- |
-| M0（完成）提示词接线 | SYSTEM_PROMPT、环境快照、Global `.zeta/instructions`、稳定组装、工具指导与统一编辑选择 guidance 已接线 | `ContextAssembler`、host 环境快照、`WorkspaceCustomizations` | 无 |
+| M0（完成）提示词接线 | 模型基础 instructions 在 Turn 创建时持久化，review 使用独立 rubric，环境快照、Global `.zeta/instructions`、功能 fragments 与稳定组装已接线；工具契约随各自 definition 注入 | `zeta-models-manager`、`zeta-prompts`、`TurnInstructions`、`ContextAssembler`、host 环境快照、`WorkspaceCustomizations` | 无 |
 | M1（实现完成）工具最小闭环 | canonical 文件工具、`apply_patch`、shell、模型中立的 `coding-v1` ToolProfile、durable `update_plan` 与模型输入逐项限幅已接线；确定性行为由现有测试覆盖 | 本地工具组合、executor contributions、profile 声明层 | 现有行为测试 |
 | M2（完成）失败弹性 + steering | Provider 错误分类、退避、空响应、Refusal、overflow 恢复、steering、重复失败工具熔断和对话内错误动作已实现 | executor 重试层、Thread command、App Server protocol | protocol/schema/Desktop 同批同步 |
 | M3（实现完成）限幅/预算/压缩 | ContextPlan、逐项输入限幅、配置窗口、preflight、自动/手动 durable compaction、模型调用 usage 账本、跨 Turn 累计的 Thread Goal token 预算已实现；限幅、预算和压缩由现有测试覆盖 | ContextPlan 选入路径、checkpoint、usage 与 Goal 持久化 | 现有行为测试 |
@@ -466,4 +466,4 @@ M0–M6 只表示本文行为规格的覆盖状态，不再承担实际构建顺
 - [`core-context.md`](core-context.md) — ContextPlan / checkpoint 机制
 - [`tools.md`](tools.md) — 工具三层契约与 registry snapshot
 - [`skills.md`](skills.md) / [`slash-commands` crate](../zeta-rs/slash-commands/) — 扩展来源
-- [`zeta-prompts` README](../zeta-rs/prompts/README.md) — 提示词资产 ownership
+- [`zeta-prompts` README](../zeta-rs/prompts/README.md) — 共享提示词资产契约与分域 ownership

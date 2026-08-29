@@ -27,9 +27,12 @@ use crate::ToolProfileSnapshot;
 use crate::Turn;
 use crate::TurnExecutionBinding;
 use crate::TurnId;
+use crate::TurnInstructions;
 use crate::TurnInteraction;
+use crate::TurnKind;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use ts_rs::TS;
 
 /// Durable authority selected before a Tool Call crosses its side-effect boundary.
@@ -144,6 +147,14 @@ pub enum ThreadEvent {
     TurnAccepted {
         thread_id: ThreadId,
         turn_id: TurnId,
+        #[serde(default)]
+        kind: TurnKind,
+        /// Exact instructions selected before this Turn was durably accepted.
+        ///
+        /// Historical events written before instruction snapshots omit this field.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        instructions: Option<TurnInstructions>,
         #[serde(default = "legacy_turn_action_policy_revision")]
         policy_revision: String,
         #[serde(default)]

@@ -111,6 +111,8 @@ fn provider_context_overflow_compacts_and_retries_through_the_product_boundary()
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("provider-overflow-history").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
@@ -133,6 +135,8 @@ fn provider_context_overflow_compacts_and_retries_through_the_product_boundary()
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("provider-overflow-current").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
@@ -239,6 +243,8 @@ fn run_provider_failure(failure: ProviderFailure) -> (StableTurnErrorCode, bool,
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("provider-error-start").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,

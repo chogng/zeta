@@ -19,65 +19,182 @@ mod tool_name;
 mod turn;
 mod turn_execution;
 
-pub use attachment::{ImageAttachmentRef, ImageMediaType};
-pub use config::{ApprovalMode, Patch, Personality, SandboxMode, Theme, WebSearchMode};
-pub use error::{StableTurnError, StableTurnErrorCode};
-pub use ids::{
-    AgentJoinId, AgentMessageId, CommandId, ContextCheckpointId, DelegationId, InvalidIdentifier,
-    ItemId, RequestId, SessionId, ThreadId, ToolCallId, TurnId,
-};
-pub use interaction::{
-    ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalDecision,
-    ActionApprovalRequest, ActionApprovalResponse, AgentInteractionKind, AgentRequest,
-    AgentRequestEnvelope, AgentResponse, AgentResponseEnvelope, DynamicToolCall, DynamicToolOutput,
-    DynamicToolResponse, DynamicToolSpec, InteractionCancelReason, InteractionDeadline,
-    PendingInteraction, RequestUserInput, RequestUserInputResponse, TurnInteraction, UserInput,
-    UserInputAnswer, UserInputOption, UserInputQuestion,
-};
-pub use item::{PlanStep, PlanStepStatus, PlanUpdate, ThreadItem};
-pub use model::{
-    CapabilitySupport, ContentPart, ContextWindow, ImageDetail, ImageDetailDecision,
-    ImageDetailDecisionReason, InputItem, InvalidModelIdentity, Message, MessageRole, Model,
-    ModelAccess, ModelAvailability, ModelCapabilities, ModelCatalogFreshness, ModelContextUsage,
-    ModelContextUsageSource, ModelId, ModelInfo, ModelInputEstimate, ModelLifecycle,
-    ModelMetadataQuality, ModelOutputTransport, ModelPreset, ModelRef, ModelRequest, ModelResponse,
-    ModelStreamEvent, ModelUsage, ModelUsageSummary, ModelUsageTotal, ProviderId, ReasoningConfig,
-    ReasoningEffort, ResponseItem, StopReason, ToolCall, ToolChoice, ToolDefinition, ToolResult,
-};
-pub use multi_agent::{
-    AgentContextContent, AgentContextMode, AgentContextSeed, AgentContextSource,
-    AgentDefinitionSelectionReason, AgentJoin, AgentJoinPolicy, AgentJoinStatus,
-    AgentMaterializedContext, AgentMessage, AgentMessageContent, AgentMessageProvenance,
-    AgentRoleSnapshot, AgentTreeExecutionStatus, AgentTreeNodeProjection, AgentTreeProjection,
-    AgentTreeWaitingReason, ContextSeedDigest, DelegatedCapabilityScope, DelegatedPolicyCeiling,
-    DelegatedTask, DelegationArtifactRef, DelegationResult, DelegationResultDigest,
-    DelegationResultStatus, ForkedAgentContext, FrozenAgentDefinitionRef, InvalidContextSeedDigest,
-    InvalidDelegationResultDigest, ThreadSequenceRange,
-};
-pub use session::{
-    Session, SessionCommand, SessionEvent, SessionStatus, SessionThread, SessionThreadStatus,
-    SessionUpdate, SessionUpdateEnvelope, ThreadOrigin,
-};
-pub use skill::{
-    ContentDigest, FrozenSkillActivation, InvalidContentDigest, InvalidSkillName,
-    InvalidSkillSourceId, SkillActivationReason, SkillId, SkillName, SkillRef, SkillSourceId,
-    SkillVersionSelector,
-};
-pub use stream::{StreamCursor, StreamInstanceId};
-pub use thread::{
-    ContextCheckpoint, ContextCheckpointVerification, ContextSourceDigest, ContextSourceRange,
-    InvalidContextSourceDigest, ItemDelta, Thread, ThreadCommand, ThreadEvent, ThreadGoal,
-    ThreadGoalStatus, ThreadStatus, ThreadUpdate, ThreadUpdateEnvelope, ToolExecutionAuthority,
-    ToolOutputStream,
-};
-pub use tool_binding::{ToolCallBinding, ToolCallCaller, ToolSourceProvenance};
-pub use tool_execution::{
-    ProcessExecutionOutput, ProcessExitStatus, SandboxDenialOutput, ToolExecutionOutput,
-    ToolReplaySafety,
-};
+pub use attachment::ImageAttachmentRef;
+pub use attachment::ImageMediaType;
+pub use config::ApprovalMode;
+pub use config::Patch;
+pub use config::Personality;
+pub use config::SandboxMode;
+pub use config::Theme;
+pub use config::WebSearchMode;
+pub use error::StableTurnError;
+pub use error::StableTurnErrorCode;
+pub use ids::AgentJoinId;
+pub use ids::AgentMessageId;
+pub use ids::CommandId;
+pub use ids::ContextCheckpointId;
+pub use ids::DelegationId;
+pub use ids::InvalidIdentifier;
+pub use ids::ItemId;
+pub use ids::RequestId;
+pub use ids::SessionId;
+pub use ids::ThreadId;
+pub use ids::ToolCallId;
+pub use ids::TurnId;
+pub use interaction::ActionApprovalCapability;
+pub use interaction::ActionApprovalCapabilityKind;
+pub use interaction::ActionApprovalDecision;
+pub use interaction::ActionApprovalRequest;
+pub use interaction::ActionApprovalResponse;
+pub use interaction::AgentInteractionKind;
+pub use interaction::AgentRequest;
+pub use interaction::AgentRequestEnvelope;
+pub use interaction::AgentResponse;
+pub use interaction::AgentResponseEnvelope;
+pub use interaction::DynamicToolCall;
+pub use interaction::DynamicToolOutput;
+pub use interaction::DynamicToolResponse;
+pub use interaction::DynamicToolSpec;
+pub use interaction::InteractionCancelReason;
+pub use interaction::InteractionDeadline;
+pub use interaction::PendingInteraction;
+pub use interaction::RequestUserInput;
+pub use interaction::RequestUserInputResponse;
+pub use interaction::TurnInteraction;
+pub use interaction::UserInput;
+pub use interaction::UserInputAnswer;
+pub use interaction::UserInputOption;
+pub use interaction::UserInputQuestion;
+pub use item::PlanStep;
+pub use item::PlanStepStatus;
+pub use item::PlanUpdate;
+pub use item::ThreadItem;
+pub use model::CapabilitySupport;
+pub use model::ContentPart;
+pub use model::ContextWindow;
+pub use model::ImageDetail;
+pub use model::ImageDetailDecision;
+pub use model::ImageDetailDecisionReason;
+pub use model::InputItem;
+pub use model::InvalidModelIdentity;
+pub use model::Message;
+pub use model::MessageRole;
+pub use model::Model;
+pub use model::ModelAccess;
+pub use model::ModelAvailability;
+pub use model::ModelCapabilities;
+pub use model::ModelCatalogFreshness;
+pub use model::ModelContextUsage;
+pub use model::ModelContextUsageSource;
+pub use model::ModelId;
+pub use model::ModelInfo;
+pub use model::ModelInputEstimate;
+pub use model::ModelLifecycle;
+pub use model::ModelMetadataQuality;
+pub use model::ModelOutputTransport;
+pub use model::ModelPreset;
+pub use model::ModelRef;
+pub use model::ModelRequest;
+pub use model::ModelResponse;
+pub use model::ModelStreamEvent;
+pub use model::ModelUsage;
+pub use model::ModelUsageSummary;
+pub use model::ModelUsageTotal;
+pub use model::ProviderId;
+pub use model::ReasoningConfig;
+pub use model::ReasoningEffort;
+pub use model::ResponseItem;
+pub use model::StopReason;
+pub use model::ToolCall;
+pub use model::ToolChoice;
+pub use model::ToolDefinition;
+pub use model::ToolResult;
+pub use multi_agent::AgentContextContent;
+pub use multi_agent::AgentContextMode;
+pub use multi_agent::AgentContextSeed;
+pub use multi_agent::AgentContextSource;
+pub use multi_agent::AgentDefinitionSelectionReason;
+pub use multi_agent::AgentJoin;
+pub use multi_agent::AgentJoinPolicy;
+pub use multi_agent::AgentJoinStatus;
+pub use multi_agent::AgentMaterializedContext;
+pub use multi_agent::AgentMessage;
+pub use multi_agent::AgentMessageContent;
+pub use multi_agent::AgentMessageProvenance;
+pub use multi_agent::AgentRoleSnapshot;
+pub use multi_agent::AgentTreeExecutionStatus;
+pub use multi_agent::AgentTreeNodeProjection;
+pub use multi_agent::AgentTreeProjection;
+pub use multi_agent::AgentTreeWaitingReason;
+pub use multi_agent::ContextSeedDigest;
+pub use multi_agent::DelegatedCapabilityScope;
+pub use multi_agent::DelegatedPolicyCeiling;
+pub use multi_agent::DelegatedTask;
+pub use multi_agent::DelegationArtifactRef;
+pub use multi_agent::DelegationResult;
+pub use multi_agent::DelegationResultDigest;
+pub use multi_agent::DelegationResultStatus;
+pub use multi_agent::ForkedAgentContext;
+pub use multi_agent::FrozenAgentDefinitionRef;
+pub use multi_agent::InvalidContextSeedDigest;
+pub use multi_agent::InvalidDelegationResultDigest;
+pub use multi_agent::ThreadSequenceRange;
+pub use session::Session;
+pub use session::SessionCommand;
+pub use session::SessionEvent;
+pub use session::SessionStatus;
+pub use session::SessionThread;
+pub use session::SessionThreadStatus;
+pub use session::SessionUpdate;
+pub use session::SessionUpdateEnvelope;
+pub use session::ThreadOrigin;
+pub use skill::ContentDigest;
+pub use skill::FrozenSkillActivation;
+pub use skill::InvalidContentDigest;
+pub use skill::InvalidSkillName;
+pub use skill::InvalidSkillSourceId;
+pub use skill::SkillActivationReason;
+pub use skill::SkillId;
+pub use skill::SkillName;
+pub use skill::SkillRef;
+pub use skill::SkillSourceId;
+pub use skill::SkillVersionSelector;
+pub use stream::StreamCursor;
+pub use stream::StreamInstanceId;
+pub use thread::ContextCheckpoint;
+pub use thread::ContextCheckpointVerification;
+pub use thread::ContextSourceDigest;
+pub use thread::ContextSourceRange;
+pub use thread::InvalidContextSourceDigest;
+pub use thread::ItemDelta;
+pub use thread::Thread;
+pub use thread::ThreadCommand;
+pub use thread::ThreadEvent;
+pub use thread::ThreadGoal;
+pub use thread::ThreadGoalStatus;
+pub use thread::ThreadStatus;
+pub use thread::ThreadUpdate;
+pub use thread::ThreadUpdateEnvelope;
+pub use thread::ToolExecutionAuthority;
+pub use thread::ToolOutputStream;
+pub use tool_binding::ToolCallBinding;
+pub use tool_binding::ToolCallCaller;
+pub use tool_binding::ToolSourceProvenance;
+pub use tool_execution::ProcessExecutionOutput;
+pub use tool_execution::ProcessExitStatus;
+pub use tool_execution::SandboxDenialOutput;
+pub use tool_execution::ToolExecutionOutput;
+pub use tool_execution::ToolReplaySafety;
 pub use tool_mode::ToolMode;
-pub use tool_name::{InvalidToolName, ToolName};
-pub use turn::{ToolProfileSnapshot, Turn, TurnStatus};
+pub use tool_name::InvalidToolName;
+pub use tool_name::ToolName;
+pub use turn::InvalidTurnInstructions;
+pub use turn::ReviewTarget;
+pub use turn::ToolProfileSnapshot;
+pub use turn::Turn;
+pub use turn::TurnInstructions;
+pub use turn::TurnKind;
+pub use turn::TurnStatus;
 pub use turn_execution::TurnExecutionBinding;
 pub use zeta_workspace::WorkspaceBinding;
 pub use zeta_workspace::WorkspaceTrustId;

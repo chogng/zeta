@@ -425,10 +425,12 @@ start/compact/interrupt 与 interaction resolve，并以 tagged `SessionRequestR
 
 1. 校验 Thread 属于 supplied Session；
 2. 校验 Session 仍为 active；
-3. 读取 Session 当前模型与 `next_approval_mode`，从 exact registry definitions 构造 `coding-v1` `ToolProfileSnapshot`，再把模型、profile 和批准模式一起作为 `TurnAccepted` 的 durable snapshot；Thread Goal 通过独立的 `thread/goal/*` mutation 写入同一条 Thread event log；
+3. 读取 Session 当前模型与 `next_approval_mode`，冻结 `zeta-models-manager` 的基础 instructions，从 exact registry definitions 构造 `coding-v1` `ToolProfileSnapshot`，再把模型、instructions、profile 和批准模式一起作为 `TurnAccepted` 的 durable snapshot；Thread Goal 通过独立的 `thread/goal/*` mutation 写入同一条 Thread event log；
 4. `start_turn` 使用 typed command ID + exact expected sequence；
 5. replay 在读取 mutable model、批准模式和 Skill authority 前按 command receipt 校验 input，直接返回原 Turn；后续 Session 设置变化不会改写已接受的 Turn，terminal failure/interruption 不伪装成 success；
 6. 新 start 发布 durable update 后调用 `TurnExecutor::start`；执行器在每次模型调用前复核冻结的工具名、顺序和 definition digest，漂移时 fail closed。
+
+`session/request::StartReview` 接受 `UncommittedChanges`、`BaseBranch`、`Commit` 或 `Custom` target。App Server 使用 `zeta-prompts` 渲染精确的用户审查范围，并把共享 review rubric 冻结为该 Turn 的 `TurnInstructions`；它不复用动作授权的 `zeta-auto-review` 提示词。Core 持久化 `TurnKind::Review`，因此 active Goal 不会注入 review，也不会在 review 完成后启动 Goal continuation。review rubric 要求只读检查、只报告变更引入且可验证的问题，并输出固定 JSON findings/verdict。
 
 Trusted Workspace 的 canonical local coding surface 由 direct `LocalToolSuite` 唯一提供
 `read_file`、`write_file`、`edit`、`grep` 和 `glob`，由独立 executor 提供 `shell-command` 与

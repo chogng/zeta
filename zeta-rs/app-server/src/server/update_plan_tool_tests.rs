@@ -1,16 +1,31 @@
 use super::*;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::{Duration, Instant};
-use zeta_action_policy::{ExecutionDecision, GrantId};
-use zeta_core::{
-    ActionPolicyService, CreateThreadRequest, InMemorySessionStore, InMemoryThreadStore,
-    ModelSelection, ModelService, SequenceExpectation, StartTurnRequest, ThreadController,
-    TurnExecutor,
-};
-use zeta_protocol::{
-    ApprovalMode, CommandId, ModelRequest, ModelResponse, ResponseItem, SessionId, StopReason,
-    ThreadId, ToolCallId, TurnStatus, UserInput,
-};
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
+use std::time::Instant;
+use zeta_action_policy::ExecutionDecision;
+use zeta_action_policy::GrantId;
+use zeta_core::ActionPolicyService;
+use zeta_core::CreateThreadRequest;
+use zeta_core::InMemorySessionStore;
+use zeta_core::InMemoryThreadStore;
+use zeta_core::ModelSelection;
+use zeta_core::ModelService;
+use zeta_core::SequenceExpectation;
+use zeta_core::StartTurnRequest;
+use zeta_core::ThreadController;
+use zeta_core::TurnExecutor;
+use zeta_protocol::ApprovalMode;
+use zeta_protocol::CommandId;
+use zeta_protocol::ModelRequest;
+use zeta_protocol::ModelResponse;
+use zeta_protocol::ResponseItem;
+use zeta_protocol::SessionId;
+use zeta_protocol::StopReason;
+use zeta_protocol::ThreadId;
+use zeta_protocol::ToolCallId;
+use zeta_protocol::TurnStatus;
+use zeta_protocol::UserInput;
 
 #[test]
 fn definition_exposes_strict_snake_case_plan_contract() {
@@ -86,6 +101,8 @@ fn tool_call_durably_updates_the_running_turn_plan() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("plan-start").unwrap(),
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,

@@ -21,7 +21,8 @@ mod tool_profile;
 mod tool_repetition;
 mod turn;
 
-pub use action_policy_service::{ActionPolicyService, durable_approval_request};
+pub use action_policy_service::ActionPolicyService;
+pub use action_policy_service::durable_approval_request;
 pub(crate) use context::ContextAssembler;
 pub use context::ContextBudget;
 pub use context::ContextCompactionLimit;
@@ -80,18 +81,30 @@ pub use services::ToolOutputSink;
 pub use services::ToolService;
 pub use services::ToolUserInputOutcome;
 pub use services::WriterLease;
-pub use session_coordinator::{
-    CommandDisposition, CreateSessionRequest, CreateSessionResult, CreateSessionThreadRequest,
-    ForkSessionThreadRequest, InMemorySessionStore, RewindSessionThreadRequest,
-    RewriteSessionThreadRequest, SequenceExpectation, SessionCoordinator, SessionLifecycleRequest,
-    SessionMutationResult, SessionThreadResult, SetSessionCurrentThreadRequest,
-    SetSessionModelRequest, SetSessionNextApprovalModeRequest, SpawnAgentThreadRequest,
-    StartSessionShellTurnRequest, StartSessionTurnRequest,
-};
-pub use session_reducer::{
-    SessionCommandResult, SessionCommandSnapshot, SessionSnapshot, SessionThreadSnapshot,
-    reduce_session_event,
-};
+pub use session_coordinator::CommandDisposition;
+pub use session_coordinator::CreateSessionRequest;
+pub use session_coordinator::CreateSessionResult;
+pub use session_coordinator::CreateSessionThreadRequest;
+pub use session_coordinator::ForkSessionThreadRequest;
+pub use session_coordinator::InMemorySessionStore;
+pub use session_coordinator::RewindSessionThreadRequest;
+pub use session_coordinator::RewriteSessionThreadRequest;
+pub use session_coordinator::SequenceExpectation;
+pub use session_coordinator::SessionCoordinator;
+pub use session_coordinator::SessionLifecycleRequest;
+pub use session_coordinator::SessionMutationResult;
+pub use session_coordinator::SessionThreadResult;
+pub use session_coordinator::SetSessionCurrentThreadRequest;
+pub use session_coordinator::SetSessionModelRequest;
+pub use session_coordinator::SetSessionNextApprovalModeRequest;
+pub use session_coordinator::SpawnAgentThreadRequest;
+pub use session_coordinator::StartSessionShellTurnRequest;
+pub use session_coordinator::StartSessionTurnRequest;
+pub use session_reducer::SessionCommandResult;
+pub use session_reducer::SessionCommandSnapshot;
+pub use session_reducer::SessionSnapshot;
+pub use session_reducer::SessionThreadSnapshot;
+pub use session_reducer::reduce_session_event;
 pub use state::ItemStatus;
 pub use state::ToolCallStatus;
 pub use thread_controller::CancelTurnInteractionRequest;
@@ -116,9 +129,12 @@ pub use thread_controller::ResolveTurnInteractionRequest;
 pub use thread_controller::ResolveTurnInteractionResult;
 pub use thread_controller::SetGoalRequest;
 pub use thread_controller::SetGoalResult;
+pub use thread_controller::ShellTurnInvocation;
 pub use thread_controller::StartContextCompactionRequest;
 pub use thread_controller::StartGoalTurnRequest;
+pub use thread_controller::StartShellTurnRequest;
 pub use thread_controller::StartTurnDisposition;
+pub use thread_controller::StartTurnRequest;
 pub use thread_controller::StartTurnResult;
 pub use thread_controller::SteerTurnDisposition;
 pub use thread_controller::SteerTurnRequest;
@@ -128,7 +144,6 @@ pub use thread_controller::ThreadExecutionContext;
 pub use thread_controller::ToolCallOutput;
 pub use thread_controller::UpdatePlanDisposition;
 pub use thread_controller::UpdatePlanResult;
-pub use thread_controller::{ShellTurnInvocation, StartShellTurnRequest, StartTurnRequest};
 pub use thread_reducer::DelegationSnapshot;
 pub use thread_reducer::ResolvedTurnInteraction;
 pub use thread_reducer::ThreadCommandResult;
@@ -140,11 +155,24 @@ pub use thread_reducer::reduce_thread_event;
 pub use turn::TurnExecutionBackend;
 pub use turn::TurnExecutionOutcome;
 pub use turn::TurnExecutor;
+pub use zeta_prompts::PromptArtifact;
+
+#[cfg(test)]
+pub(crate) fn test_turn_instructions() -> zeta_protocol::TurnInstructions {
+    zeta_protocol::TurnInstructions::new(
+        "core-tests",
+        "test/base-instructions",
+        "test-v1",
+        "test instructions",
+    )
+    .expect("static test Turn instructions are valid")
+}
+pub use zeta_protocol::ProcessExecutionOutput;
+pub use zeta_protocol::ProcessExitStatus;
+pub use zeta_protocol::SandboxDenialOutput;
+pub use zeta_protocol::ToolExecutionOutput;
+pub use zeta_protocol::ToolReplaySafety;
 pub use zeta_protocol::TurnStatus;
-pub use zeta_protocol::{
-    ProcessExecutionOutput, ProcessExitStatus, SandboxDenialOutput, ToolExecutionOutput,
-    ToolReplaySafety,
-};
 pub use zeta_thread_store::AppendBatchResult;
 pub use zeta_thread_store::ThreadEventBatch;
 pub use zeta_thread_store::ThreadStore;

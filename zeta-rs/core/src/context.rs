@@ -1,6 +1,7 @@
 mod assembler;
 mod calibration;
 mod compaction;
+mod goal_instructions;
 mod harness;
 mod input_limits;
 mod instructions;
@@ -19,6 +20,7 @@ pub use compaction::ContextCompactionRequest;
 pub use compaction::ContextCompactionResult;
 pub use compaction::ContextCompactionService;
 pub(crate) use compaction::ModelContextCompactionService;
+pub(crate) use goal_instructions::render_goal_instructions;
 pub use harness::HarnessContext;
 pub use harness::HarnessContextProvider;
 pub use harness::HarnessContextRequest;

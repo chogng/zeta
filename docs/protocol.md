@@ -176,9 +176,7 @@ ThreadCommand
   StartTurn / SteerTurn / InterruptTurn / ResolveUserInput / ResolveDynamicTool
 ```
 
-`StartTurn` 保存最终解析后的 `ToolMode`：`Direct`、`CodeMode` 或 `CodeModeOnly`。它属于 command
-identity 和 `TurnAccepted` durable fact；相同 `CommandId` 若改了模式必须产生 conflict，回放不能
-重新咨询当前全局配置。
+`StartTurn` 保存最终解析后的 `ToolMode`：`Direct`、`CodeMode` 或 `CodeModeOnly`，并保存 host 在接受前冻结的 `TurnInstructions`。它们都属于 command identity 和 `TurnAccepted` durable fact；相同 `CommandId` 若改了模式或 instructions 必须产生 conflict，回放不能重新咨询当前全局配置。旧日志缺少 instructions 时仍可读取，但不能继续模型执行。
 
 Command 表达产品意图，不代表已经发生，也不能直接写入 projection。
 

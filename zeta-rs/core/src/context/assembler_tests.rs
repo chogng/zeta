@@ -10,7 +10,8 @@ use crate::HarnessInstructions;
 use crate::ThreadCommandSnapshot;
 use crate::ThreadSnapshot;
 use crate::TurnSnapshot;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use zeta_agent_environment::AgentEnvironmentSnapshot;
 use zeta_agent_environment::HostEnvironment;
@@ -479,6 +480,8 @@ fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
         goal_budget_limited_turn_id: None,
         context_calibrations: Vec::new(),
         turns: vec![TurnSnapshot {
+            kind: zeta_protocol::TurnKind::Coding,
+            instructions: None,
             turn_id,
             status: TurnStatus::Running,
             model: None,

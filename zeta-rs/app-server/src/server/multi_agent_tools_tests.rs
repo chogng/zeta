@@ -185,6 +185,8 @@ fn wait_timeout_returns_a_durable_waiting_join_without_losing_the_delegation() {
             &session.session_id,
             &parent.thread_id,
             StartSessionTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("timeout-turn").unwrap(),
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,
@@ -285,6 +287,8 @@ fn recovered_spawn_starts_a_new_child_turn_once() {
             &session.session_id,
             &parent.thread_id,
             StartSessionTurnRequest {
+                kind: zeta_protocol::TurnKind::Coding,
+                instructions: zeta_models_manager::BASE_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("start-parent").unwrap(),
                 expected_sequence: SequenceExpectation::Exact(1),
                 model: None,

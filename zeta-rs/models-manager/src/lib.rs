@@ -3,6 +3,7 @@
 mod cache;
 mod error;
 mod filter;
+mod instructions;
 mod manager;
 mod merge;
 mod policy;
@@ -16,6 +17,7 @@ pub use filter::CatalogQuery;
 pub use filter::ModelCapability;
 pub use filter::ModelRequirements;
 pub use filter::UnknownCapabilityPolicy;
+pub use instructions::BASE_INSTRUCTIONS;
 pub use manager::CatalogReadSource;
 pub use manager::ModelsManager;
 pub use policy::CatalogFreshnessPolicy;
