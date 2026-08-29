@@ -1,11 +1,19 @@
 use super::*;
-use crate::{CreateThreadRequest, InMemoryThreadStore, ThreadController, ThreadSnapshot};
-use std::collections::{BTreeMap, BTreeSet};
+use crate::CreateThreadRequest;
+use crate::InMemoryThreadStore;
+use crate::ThreadController;
+use crate::ThreadSnapshot;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::mpsc;
-use std::time::{Duration, Instant};
-use zeta_protocol::{SessionId, ThreadId, TurnId};
+use std::time::Duration;
+use std::time::Instant;
+use zeta_protocol::SessionId;
+use zeta_protocol::ThreadId;
+use zeta_protocol::TurnId;
 
 #[test]
 fn idle_lane_evicts_projection_and_a_later_load_gets_a_new_incarnation() {

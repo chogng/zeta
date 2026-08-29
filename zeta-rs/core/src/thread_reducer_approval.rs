@@ -1,9 +1,13 @@
 use crate::CoreError;
 use crate::thread_reducer::ThreadSnapshot;
-use zeta_protocol::{
-    ActionApprovalDecision, AgentRequest, AgentResponse, SandboxDenialOutput, ThreadItem,
-    ToolCallId, ToolExecutionAuthority, TurnId,
-};
+use zeta_protocol::ActionApprovalDecision;
+use zeta_protocol::AgentRequest;
+use zeta_protocol::AgentResponse;
+use zeta_protocol::SandboxDenialOutput;
+use zeta_protocol::ThreadItem;
+use zeta_protocol::ToolCallId;
+use zeta_protocol::ToolExecutionAuthority;
+use zeta_protocol::TurnId;
 
 pub(super) fn validate_escalation_authority(
     snapshot: &ThreadSnapshot,

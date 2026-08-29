@@ -1,6 +1,10 @@
 use super::*;
-use zeta_action_policy::{AssessmentId, BlockReason};
-use zeta_protocol::{ItemId, ThreadItem, ToolCallId, TurnId};
+use zeta_action_policy::AssessmentId;
+use zeta_action_policy::BlockReason;
+use zeta_protocol::ItemId;
+use zeta_protocol::ThreadItem;
+use zeta_protocol::ToolCallId;
+use zeta_protocol::TurnId;
 
 #[test]
 fn opens_after_three_consecutive_reviewer_rejections() {

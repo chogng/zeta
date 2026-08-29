@@ -1,6 +1,9 @@
-use super::catalog::{control_definitions, parse_exec_source, projected_tools};
+use super::catalog::control_definitions;
+use super::catalog::parse_exec_source;
+use super::catalog::projected_tools;
 use super::*;
-use zeta_protocol::{ToolDefinition, ToolName};
+use zeta_protocol::ToolDefinition;
+use zeta_protocol::ToolName;
 
 #[test]
 fn control_catalog_exposes_exec_and_wait_with_stable_names() {

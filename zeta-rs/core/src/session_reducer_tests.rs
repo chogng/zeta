@@ -1,6 +1,8 @@
 use super::*;
-use zeta_protocol::{CommandId, SessionThreadStatus};
-use zeta_session_store::{SessionEventId, SessionTimestamp};
+use zeta_protocol::CommandId;
+use zeta_protocol::SessionThreadStatus;
+use zeta_session_store::SessionEventId;
+use zeta_session_store::SessionTimestamp;
 
 fn envelope(
     sequence: u64,

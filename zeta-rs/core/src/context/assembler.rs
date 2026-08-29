@@ -2,10 +2,17 @@ use super::ContextPlan;
 use super::InstructionLayer;
 use crate::CoreError;
 use std::collections::BTreeMap;
-use zeta_protocol::{
-    ContentPart, ImageDetail, InputItem, Message, MessageRole, ModelRequest, ThreadItem, ToolCall,
-    ToolChoice, ToolResult, TurnId,
-};
+use zeta_protocol::ContentPart;
+use zeta_protocol::ImageDetail;
+use zeta_protocol::InputItem;
+use zeta_protocol::Message;
+use zeta_protocol::MessageRole;
+use zeta_protocol::ModelRequest;
+use zeta_protocol::ThreadItem;
+use zeta_protocol::ToolCall;
+use zeta_protocol::ToolChoice;
+use zeta_protocol::ToolResult;
+use zeta_protocol::TurnId;
 
 /// Assembles one provider-independent model request from an immutable context plan.
 pub(crate) struct ContextAssembler;

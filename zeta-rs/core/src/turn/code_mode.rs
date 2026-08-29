@@ -12,7 +12,9 @@ mod response;
 #[cfg(feature = "code-mode")]
 pub(super) use broker::CodeModeBroker;
 #[cfg(all(test, feature = "code-mode"))]
-pub(super) use broker::{EXEC_TOOL_NAME, WAIT_TOOL_NAME};
+pub(super) use broker::EXEC_TOOL_NAME;
+#[cfg(all(test, feature = "code-mode"))]
+pub(super) use broker::WAIT_TOOL_NAME;
 
 #[cfg(all(test, feature = "code-mode"))]
 #[path = "code_mode_tests.rs"]
@@ -20,12 +22,21 @@ mod tests;
 
 #[cfg(not(feature = "code-mode"))]
 mod unavailable {
-    use crate::{
-        ActionPolicyService, CoreError, HookService, ModelToolCatalogSnapshot, ThreadController,
-        ThreadUpdateSink, ToolExecutionOutput, ToolService,
-    };
+    use crate::ActionPolicyService;
+    use crate::CoreError;
+    use crate::HookService;
+    use crate::ModelToolCatalogSnapshot;
+    use crate::ThreadController;
+    use crate::ThreadUpdateSink;
+    use crate::ToolExecutionOutput;
+    use crate::ToolService;
     use std::sync::Arc;
-    use zeta_protocol::{ThreadId, ToolCall, ToolCallBinding, ToolCallCaller, ToolMode, TurnId};
+    use zeta_protocol::ThreadId;
+    use zeta_protocol::ToolCall;
+    use zeta_protocol::ToolCallBinding;
+    use zeta_protocol::ToolCallCaller;
+    use zeta_protocol::ToolMode;
+    use zeta_protocol::TurnId;
 
     #[derive(Clone)]
     pub(crate) struct CodeModeBroker;

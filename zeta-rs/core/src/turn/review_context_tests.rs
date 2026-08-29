@@ -1,9 +1,19 @@
 use super::*;
-use zeta_action_policy::{
-    ActionDigest, ActionKind, ActionPolicyRevision, ActionProvenance, ActionSource, CapabilitySet,
-    ResolvedAction, ReviewEvidenceKind, ReviewEvidenceTrust, SandboxCompatibility,
-};
-use zeta_protocol::{ItemId, ThreadItem, ToolCallId, ToolName, TurnId};
+use zeta_action_policy::ActionDigest;
+use zeta_action_policy::ActionKind;
+use zeta_action_policy::ActionPolicyRevision;
+use zeta_action_policy::ActionProvenance;
+use zeta_action_policy::ActionSource;
+use zeta_action_policy::CapabilitySet;
+use zeta_action_policy::ResolvedAction;
+use zeta_action_policy::ReviewEvidenceKind;
+use zeta_action_policy::ReviewEvidenceTrust;
+use zeta_action_policy::SandboxCompatibility;
+use zeta_protocol::ItemId;
+use zeta_protocol::ThreadItem;
+use zeta_protocol::ToolCallId;
+use zeta_protocol::ToolName;
+use zeta_protocol::TurnId;
 
 #[test]
 fn attaches_only_the_current_user_intent_and_bounded_host_evidence() {

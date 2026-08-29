@@ -1,18 +1,27 @@
-use super::{
-    CommitModelInvocationItemsResult, CompleteModelInvocationResult, CompletedTurn,
-    RecordToolExecutionEscalation, RecordToolExecutionStart, ThreadController,
-};
+use super::CommitModelInvocationItemsResult;
+use super::CompleteModelInvocationResult;
+use super::CompletedTurn;
+use super::RecordToolExecutionEscalation;
+use super::RecordToolExecutionStart;
+use super::ThreadController;
 use crate::CoreError;
 use crate::ThreadCommandResult;
-use zeta_protocol::{
-    ItemId, ModelInputEstimate, ModelUsage, RequestId, StreamInstanceId, ThreadEvent, ThreadId,
-    ThreadItem, TurnId,
-};
+use zeta_protocol::ItemId;
+use zeta_protocol::ModelInputEstimate;
+use zeta_protocol::ModelUsage;
+use zeta_protocol::RequestId;
+use zeta_protocol::StreamInstanceId;
+use zeta_protocol::ThreadEvent;
+use zeta_protocol::ThreadId;
+use zeta_protocol::ThreadItem;
+use zeta_protocol::TurnId;
 
 #[cfg(test)]
 use super::RecordedToolCall;
 #[cfg(test)]
-use zeta_protocol::{ToolCall, ToolCallBinding};
+use zeta_protocol::ToolCall;
+#[cfg(test)]
+use zeta_protocol::ToolCallBinding;
 
 impl ThreadController {
     /// Durably accounts for one completed provider invocation before its output is consumed.

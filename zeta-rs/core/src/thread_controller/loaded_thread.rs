@@ -4,8 +4,11 @@ use crate::ThreadStore;
 use crate::context_manager::ContextManager;
 use crate::reduce_thread_event;
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::Arc;
+use std::sync::Condvar;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use zeta_protocol::ThreadId;
 
 /// Identifies one process-local load of a durable Thread.

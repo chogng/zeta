@@ -1,13 +1,22 @@
 use crate::CoreError;
 use crate::multi_agent::validate_context_seed_digest;
-use zeta_protocol::{
-    AgentContextSeed, ApprovalMode, ModelRef, Session, SessionCommand, SessionEvent, SessionId,
-    SessionStatus, SessionThread, SessionThreadStatus, ThreadId, ThreadOrigin, WorkspaceBinding,
-};
-use zeta_session_store::{
-    CURRENT_SESSION_EVENT_SCHEMA_VERSION, MINIMUM_SUPPORTED_SESSION_EVENT_SCHEMA_VERSION,
-    SessionCommandReceipt, StoredSessionEvent,
-};
+use zeta_protocol::AgentContextSeed;
+use zeta_protocol::ApprovalMode;
+use zeta_protocol::ModelRef;
+use zeta_protocol::Session;
+use zeta_protocol::SessionCommand;
+use zeta_protocol::SessionEvent;
+use zeta_protocol::SessionId;
+use zeta_protocol::SessionStatus;
+use zeta_protocol::SessionThread;
+use zeta_protocol::SessionThreadStatus;
+use zeta_protocol::ThreadId;
+use zeta_protocol::ThreadOrigin;
+use zeta_protocol::WorkspaceBinding;
+use zeta_session_store::CURRENT_SESSION_EVENT_SCHEMA_VERSION;
+use zeta_session_store::MINIMUM_SUPPORTED_SESSION_EVENT_SCHEMA_VERSION;
+use zeta_session_store::SessionCommandReceipt;
+use zeta_session_store::StoredSessionEvent;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SessionSnapshot {

@@ -1,7 +1,11 @@
 use std::collections::BTreeMap;
 
 use serde_json::Value;
-use zeta_protocol::{ContentPart, ThreadItem, ToolCallBinding, ToolCallId, ToolSourceProvenance};
+use zeta_protocol::ContentPart;
+use zeta_protocol::ThreadItem;
+use zeta_protocol::ToolCallBinding;
+use zeta_protocol::ToolCallId;
+use zeta_protocol::ToolSourceProvenance;
 
 const SHELL_RESULT_MAX_BYTES: usize = 30 * 1024;
 const MCP_RESULT_MAX_BYTES: usize = 25 * 1024;
@@ -339,7 +343,11 @@ fn ceil_char_boundary(text: &str, mut index: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use zeta_protocol::{ImageDetail, ItemId, ToolCallCaller, ToolName, TurnId};
+    use zeta_protocol::ImageDetail;
+    use zeta_protocol::ItemId;
+    use zeta_protocol::ToolCallCaller;
+    use zeta_protocol::ToolName;
+    use zeta_protocol::TurnId;
 
     #[test]
     fn head_tail_limit_is_utf8_safe_and_bounded() {

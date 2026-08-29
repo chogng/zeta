@@ -1,14 +1,23 @@
-use super::loaded_thread::{LoadedThreads, ThreadIncarnationId};
+use super::loaded_thread::LoadedThreads;
+use super::loaded_thread::ThreadIncarnationId;
 use crate::CoreError;
 use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc::{Receiver, SyncSender, TryRecvError, TrySendError, sync_channel};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::sync::mpsc::Receiver;
+use std::sync::mpsc::SyncSender;
+use std::sync::mpsc::TryRecvError;
+use std::sync::mpsc::TrySendError;
+use std::sync::mpsc::sync_channel;
 use std::thread;
 use std::time::Duration;
-use zeta_async_utils::{CancellationSource, CancellationToken};
-use zeta_protocol::{ThreadId, TurnId};
+use zeta_async_utils::CancellationSource;
+use zeta_async_utils::CancellationToken;
+use zeta_protocol::ThreadId;
+use zeta_protocol::TurnId;
 
 const DEFAULT_EXECUTION_MAILBOX_CAPACITY: NonZeroUsize =
     NonZeroUsize::new(8).expect("execution mailbox capacity is non-zero");
