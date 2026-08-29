@@ -1,11 +1,10 @@
 import { Emitter } from "../../../common/event.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../common/lifecycle.js";
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, type IRectangle, layout2d } from "../../../common/layout.js";
-import { addDisposableListener, isHTMLElement, isNode, h } from "../../dom.js";
-import { getActiveElement, restoreFocus } from "../../focus.js";
+import { addDisposableListener, getActiveElement, getWindow, isHTMLElement, isNode, h } from "../../dom.js";
+import { restoreFocus } from "../../focus.js";
 import { getViewport } from "../../geometry.js";
 import { observeResize } from "../../observer.js";
-import { getWindow } from "../../window.js";
 
 export {
 	AnchorAlignment,

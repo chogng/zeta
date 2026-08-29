@@ -6,6 +6,7 @@ import { type GpuRenderFrame, type GpuRenderStrategyInput } from './gpu.js';
 import { type GlyphRasterizer } from './raster/glyphRasterizer.js';
 import { type IGpuGlyphStyle } from './raster/raster.js';
 import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { containsRTL, isBasicASCII } from '../../../base/common/strings.js';
 
 export const quadVertices = new Float32Array([
 	1, 0,
@@ -35,12 +36,6 @@ export function observeDevicePixelDimensions(element: HTMLElement, ownerWindow: 
 	return toDisposable(() => observer.disconnect());
 }
 
-export function validatedDevicePixelRatio(ownerWindow: Window): number {
-	const value = ownerWindow.devicePixelRatio;
-	if (!Number.isFinite(value) || value <= 0) throw new RangeError('WebGPU device pixel ratio must be finite and positive');
-	return value;
-}
-
 export function createGpuRenderFrame(glyphRasterizer: GlyphRasterizer, input: GpuRenderStrategyInput, lineIndexes: Iterable<number>): GpuRenderFrame {
 		const vertices: number[] = [];
 		const gpuLineIndexes = new Set<number>();
@@ -56,7 +51,7 @@ export function createGpuRenderFrame(glyphRasterizer: GlyphRasterizer, input: Gp
 			const lineStart = (input.textLeft + (visualLine.wrappedTextIndentWidth ?? 0)) * glyphRasterizer.devicePixelRatio;
 			let deviceX = lineStart;
 			const lineTop = (input.paddingTop + visualLineIndex * input.layout.lineHeight) * glyphRasterizer.devicePixelRatio;
-			const segments = createContentSegmenter(text, { isBasicASCII: /^[\x00-\x7f]*$/u.test(text), useMonospaceOptimizations: false });
+			const segments = createContentSegmenter(text, { isBasicASCII: isBasicASCII(text), useMonospaceOptimizations: false });
 			for (let index = 0; index < text.length; index += 1) {
 				const segment = segments.getSegmentData(index);
 				if (!segment) continue;
@@ -80,7 +75,7 @@ export function createGpuRenderFrame(glyphRasterizer: GlyphRasterizer, input: Gp
 	}
 
 function canRenderLine(input: GpuRenderStrategyInput, text: string, tokens: readonly ResolvedSemanticToken[]): boolean {
-		if (input.fontLigatures || input.textDirection === 'rtl' || text.length > 2_000 || containsRtl(text)) return false;
+		if (input.fontLigatures || input.textDirection === 'rtl' || text.length > 2_000 || containsRTL(text)) return false;
 		for (const token of tokens) {
 			if (token.modifiers?.includes(SemanticTokenModifier.Static) || token.modifiers?.includes(SemanticTokenModifier.Deprecated)) return false;
 			if (token.syntaxPresentation?.fontStyle?.some(style => style === 'underline' || style === 'strikethrough')) return false;
@@ -151,5 +146,4 @@ function tokenColorVariable(presentation: SemanticTokenPresentation): string {
 }
 
 function cssVariable(style: CSSStyleDeclaration, name: string, defaultValue: string): string { return style.getPropertyValue(name).trim() || defaultValue; }
-function containsRtl(text: string): boolean { return /[\u0590-\u08ff\ufb1d-\ufefc]/u.test(text); }
 function positiveNumber(value: number, defaultValue: number): number { return Number.isFinite(value) && value > 0 ? value : defaultValue; }

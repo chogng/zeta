@@ -23,3 +23,7 @@ export function parseUuid(value: unknown): UUID {
 export function createUuid(): UUID {
 	return globalThis.crypto.randomUUID() as UUID;
 }
+
+export function generateUuid(): UUID {
+	return createUuid();
+}

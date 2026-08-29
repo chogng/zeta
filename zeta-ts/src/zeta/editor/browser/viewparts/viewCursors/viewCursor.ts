@@ -4,8 +4,8 @@ import { h } from '../../../../base/browser/dom.js';
 export class ViewCursor {
 	public readonly domNode: HTMLDivElement;
 
-	constructor(ownerDocument: Document, selectionIndex: number) {
-		this.domNode = h(ownerDocument, 'div');
+	constructor(host: HTMLElement, selectionIndex: number) {
+		this.domNode = h(host.ownerDocument, 'div');
 		this.domNode.className = 'stanza-editor-caret';
 		this.domNode.dataset.selectionIndex = String(selectionIndex);
 	}

@@ -5,7 +5,8 @@ import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { IME } from "../../../../../base/common/ime.js";
 import { type EditContextCharacterBounds, type EditContextCompositionEvent, EditContext, type EditContextOptions, type EditContextPosition, type EditContextState, type EditContextTextFormat, type EditContextTextFormatUpdate, type EditContextTextUpdate } from "../editContext.js";
 import { normalizeTextLineEndings } from "../../../../common/core/text.js";
-import { editContextAddDisposableListener, FocusTracker, MAX_CHARACTER_BOUNDS_REQUEST_LENGTH, clampOffset, createNativeTextWindow, isFiniteOffset, isHighSurrogate, isLowSurrogate, isNativeTextUpdateEvent, isValidOffset } from "./nativeEditContextUtils.js";
+import { isHighSurrogate, isLowSurrogate } from '../../../../../base/common/strings.js';
+import { editContextAddDisposableListener, FocusTracker, MAX_CHARACTER_BOUNDS_REQUEST_LENGTH, clampOffset, createNativeTextWindow, isFiniteOffset, isNativeTextUpdateEvent, isValidOffset } from "./nativeEditContextUtils.js";
 import { NativeEditContextRegistry } from "./nativeEditContextRegistry.js";
 
 /** Minimal local declaration because TypeScript's DOM library does not yet expose EditContext. */

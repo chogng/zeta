@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { h } from "../../../base/browser/dom.js";
 import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
 import { createStanzaDecorationSource, DecorationPresentation, GlyphMarginLane } from "../../browser/viewparts/decorations/decorations.js";
 import { EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
@@ -1057,9 +1058,9 @@ test('EditorViewport mounts content and overlay widgets through their VS Code ow
 	using model = new TextModel('alpha');
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer() });
 	viewport.layout({ width: 300, height: 100 });
-	const contentDomNode = dom.window.document.createElement('div');
+	const contentDomNode = h(dom.window.document, 'div');
 	const contentWidget = { id: 'content', domNode: contentDomNode, getPosition: () => ({ position: TextPosition.at(0, 1), preference: 'below' as const }) };
-	const overlayDomNode = dom.window.document.createElement('div');
+	const overlayDomNode = h(dom.window.document, 'div');
 	const overlayWidget = { id: 'overlay', domNode: overlayDomNode, getPosition: () => 'top-right' as const };
 
 	viewport.addContentWidget(contentWidget);

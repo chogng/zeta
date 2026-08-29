@@ -1,3 +1,5 @@
+import { Lazy } from "../../../base/common/lazy.js";
+import { LRUCache } from "../../../base/common/map.js";
 import { CharacterClassifier } from "./characterClassifier.js";
 
 export enum WordCharacterClass {
@@ -15,14 +17,16 @@ export interface IntlWordSegmentData {
 /** Character classes and optional locale-aware word segmentation for cursor commands. */
 export class WordCharacterClassifier extends CharacterClassifier<WordCharacterClass> {
 	readonly intlSegmenterLocales: readonly string[];
-	private readonly segmenter: Intl.Segmenter | undefined;
+	private readonly segmenter: Lazy<Intl.Segmenter> | undefined;
 	private cachedLine: string | undefined;
 	private cachedSegments: readonly IntlWordSegmentData[] = [];
 
 	constructor(wordSeparators: string, intlSegmenterLocales: readonly string[] = []) {
 		super(WordCharacterClass.Regular);
 		this.intlSegmenterLocales = Object.freeze([...intlSegmenterLocales]);
-		this.segmenter = createSegmenter(this.intlSegmenterLocales);
+		this.segmenter = this.intlSegmenterLocales.length === 0
+			? undefined
+			: new Lazy(() => new Intl.Segmenter(this.intlSegmenterLocales, { granularity: "word" }));
 		for (let index = 0; index < wordSeparators.length; index += 1) this.set(wordSeparators.charCodeAt(index), WordCharacterClass.WordSeparator);
 		this.set(32, WordCharacterClass.Whitespace);
 		this.set(9, WordCharacterClass.Whitespace);
@@ -45,7 +49,7 @@ export class WordCharacterClassifier extends CharacterClassifier<WordCharacterCl
 		if (!this.segmenter) return [];
 		if (this.cachedLine === line) return this.cachedSegments;
 		this.cachedLine = line;
-		this.cachedSegments = Object.freeze([...this.segmenter.segment(line)].filter(segment => segment.isWordLike).map(segment => Object.freeze({
+		this.cachedSegments = Object.freeze([...this.segmenter.value.segment(line)].filter(segment => segment.isWordLike).map(segment => Object.freeze({
 			index: segment.index,
 			segment: segment.segment,
 			isWordLike: true as const,
@@ -54,7 +58,7 @@ export class WordCharacterClassifier extends CharacterClassifier<WordCharacterCl
 	}
 }
 
-const classifierCache = new Map<string, WordCharacterClassifier>();
+const classifierCache = new LRUCache<string, WordCharacterClassifier>(10);
 
 export function getMapForWordSeparators(wordSeparators: string, intlSegmenterLocales: readonly string[] = []): WordCharacterClassifier {
 	const key = `${wordSeparators}\u0000${intlSegmenterLocales.join(",")}`;
@@ -62,13 +66,5 @@ export function getMapForWordSeparators(wordSeparators: string, intlSegmenterLoc
 	if (cached) return cached;
 	const classifier = new WordCharacterClassifier(wordSeparators, intlSegmenterLocales);
 	classifierCache.set(key, classifier);
-	if (classifierCache.size > 10) classifierCache.delete(classifierCache.keys().next().value!);
 	return classifier;
-}
-
-function createSegmenter(locales: readonly string[]): Intl.Segmenter | undefined {
-	if (locales.length === 0) return undefined;
-	if (typeof Intl.Segmenter !== "function") return undefined;
-	try { return new Intl.Segmenter(locales.length > 0 ? locales : undefined, { granularity: "word" }); }
-	catch { return undefined; }
 }

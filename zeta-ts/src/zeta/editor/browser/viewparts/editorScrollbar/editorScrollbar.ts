@@ -1,4 +1,4 @@
-import { toDisposable } from "../../../../base/common/lifecycle.js";
+import { RunOnceScheduler } from "../../../../base/common/async.js";
 import { isFiniteNumber } from "../../../../base/common/numbers.js";
 import { HorizontalScrollbar } from "../../../../base/browser/ui/scrollbar/horizontalScrollbar.js";
 import { VerticalScrollbar } from "../../../../base/browser/ui/scrollbar/verticalScrollbar.js";
@@ -38,7 +38,7 @@ export class EditorScrollbar extends EditorViewPart {
 	private horizontalMetrics: ScrollbarAxisMetrics;
 	private verticalMetrics: ScrollbarAxisMetrics;
 	private lastScrollPosition: EditorScrollPosition | undefined;
-	private scrollActivityTimer: ReturnType<typeof setTimeout> | undefined;
+	private readonly scrollActivityScheduler: RunOnceScheduler;
 
 	constructor(options: EditorScrollbarOptions) {
 		super();
@@ -81,10 +81,9 @@ export class EditorScrollbar extends EditorViewPart {
 		}));
 		this.configureTrack(this.horizontal, "horizontal", this.horizontalVisibility);
 		this.configureTrack(this.vertical, "vertical", this.verticalVisibility);
-		this._register(toDisposable(() => {
-			if (this.scrollActivityTimer !== undefined) clearTimeout(this.scrollActivityTimer);
+		this.scrollActivityScheduler = this._register(new RunOnceScheduler(() => {
 			this.container.classList.remove("stanza-editor-scrolling");
-		}));
+		}, 700));
 	}
 
 	render(context: EditorRenderingContext): void {
@@ -148,11 +147,7 @@ export class EditorScrollbar extends EditorViewPart {
 
 	private showScrollbars(): void {
 		this.container.classList.add("stanza-editor-scrolling");
-		if (this.scrollActivityTimer !== undefined) clearTimeout(this.scrollActivityTimer);
-		this.scrollActivityTimer = setTimeout(() => {
-			this.scrollActivityTimer = undefined;
-			this.container.classList.remove("stanza-editor-scrolling");
-		}, 700);
+		this.scrollActivityScheduler.schedule();
 	}
 }
 

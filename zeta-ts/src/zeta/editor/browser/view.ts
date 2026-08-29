@@ -2,6 +2,7 @@ import { type Event } from '../../base/common/event.js';
 import { getClientArea, type IDimension } from '../../base/browser/geometry.js';
 import { addDisposableListener, h } from '../../base/browser/dom.js';
 import { FastDomNode } from '../../base/browser/fastDomNode.js';
+import { PixelRatio, type IPixelRatioMonitor } from '../../base/browser/pixelRatio.js';
 import { Disposable, type IDisposable, toDisposable } from '../../base/common/lifecycle.js';
 import { runWhenWindowIdle } from '../../base/browser/scheduler.js';
 import { type ISize } from '../../base/common/layout.js';
@@ -429,6 +430,7 @@ export class View extends Disposable {
 	private readonly minimapLayoutMemory = new ComputeOptionsMemory();
 	private readonly viewLineOptions: ViewLineOptions;
 	private readonly elementSizeObserver: ElementSizeObserver;
+	private readonly pixelRatio: IPixelRatioMonitor;
 	private softWrapping: boolean;
 
 	get currentLayout(): EditorViewportLayout {
@@ -438,6 +440,9 @@ export class View extends Disposable {
 	constructor(options: EditorViewportOptions) {
 		super();
 		const ownerDocument = options.container.ownerDocument;
+		const ownerWindow = ownerDocument.defaultView;
+		if (!ownerWindow) throw new ReferenceError('Editor viewport requires a browser window');
+		this.pixelRatio = PixelRatio.getInstance(ownerWindow);
 		this.model = options.model;
 		this.element = h(ownerDocument, "div");
 		this.elementSizeObserver = this._register(new ElementSizeObserver(this.element));
@@ -529,7 +534,7 @@ export class View extends Disposable {
 				initialMeasurement: {
 					...(this.model.largeFile.tooLargeForTokenization ? { maximumMeasuredLineCount: 2_048 } : {}),
 					schedule: callback => runWhenWindowIdle(
-						ownerDocument.defaultView!,
+						ownerWindow,
 						() => callback(),
 						{ timeoutMs: 250 },
 					),
@@ -544,7 +549,7 @@ export class View extends Disposable {
 				wrappingIndent: options.wrappingIndent,
 				initialWrappingMeasurement: {
 					schedule: callback => runWhenWindowIdle(
-						ownerDocument.defaultView!,
+						ownerWindow,
 						() => callback(),
 						{ timeoutMs: 250 },
 					),
@@ -566,8 +571,8 @@ export class View extends Disposable {
 		);
 		this.viewParts = this._register(new EditorViewPartCollection());
 		this.viewZones = this.viewParts.register(new ViewZones(this.element, this.viewport, () => this.visualProjection.visualLineCount));
-		this.contentWidgets = this.viewParts.register(new ViewContentWidgets(ownerDocument));
-		this.overlayWidgets = this.viewParts.register(new ViewOverlayWidgets(ownerDocument));
+		this.contentWidgets = this.viewParts.register(new ViewContentWidgets(this.element));
+		this.overlayWidgets = this.viewParts.register(new ViewOverlayWidgets(this.element));
 		this.viewLines = this._register(new ViewLines({
 			host: this.contentElement,
 			model: this.model,
@@ -730,6 +735,7 @@ export class View extends Disposable {
 		}
 
 		this._register(this.elementSizeObserver.onDidChange(() => this.layout()));
+		this._register(this.pixelRatio.onDidChange(() => this.project(viewport.layout)));
 		this.elementSizeObserver.startObserving();
 
 		this.project(viewport.layout);
@@ -1063,7 +1069,7 @@ export class View extends Disposable {
 			outerHeight: viewportHeight,
 			lineHeight: this.viewport.layout.lineHeight,
 			typicalHalfwidthCharacterWidth: Math.max(1, this.textMeasurer.measureLineWidth('n')),
-			pixelRatio: Math.max(1, this.element.ownerDocument.defaultView?.devicePixelRatio ?? 1),
+			pixelRatio: this.pixelRatio.value,
 			scrollBeyondLastLine: false,
 			paddingTop: this.padding.top,
 			paddingBottom: this.padding.bottom,

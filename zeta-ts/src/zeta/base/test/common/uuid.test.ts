@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { createUuid, isUuid, parseUuid } from "../../common/uuid.js";
+import { createUuid, generateUuid, isUuid, parseUuid } from "../../common/uuid.js";
 
 test("createUuid returns canonical random UUIDs", () => {
 	const first = createUuid();
@@ -18,4 +18,8 @@ test("parseUuid validates and canonicalizes external UUIDs", () => {
 	);
 	assert.throws(() => parseUuid("not-a-uuid"), TypeError);
 	assert.throws(() => parseUuid(null), TypeError);
+});
+
+test('generateUuid exposes a canonical generated identity', () => {
+	assert.equal(isUuid(generateUuid()), true);
 });

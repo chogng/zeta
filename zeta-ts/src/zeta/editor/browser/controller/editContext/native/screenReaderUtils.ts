@@ -1,7 +1,7 @@
 import { SelectionDirection, type TextSelection } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { type TextModel } from "../../../../common/model/textModel.js";
-import { isHighSurrogate, isLowSurrogate } from "./nativeEditContextUtils.js";
+import { isHighSurrogate, isLowSurrogate } from '../../../../../base/common/strings.js';
 
 /** Keeps the screen-reader mirror bounded for the same reason as the native text window. */
 export const SCREEN_READER_CONTENT_LENGTH = 32 * 1_024;

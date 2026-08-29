@@ -1,5 +1,6 @@
 import { Emitter, type Event as BaseEvent } from "../common/event.js";
 import { Disposable, type IDisposable, toDisposable } from "../common/lifecycle.js";
+import { type BrowserWindow, getWindows, isWindow, mainWindow } from "./window.js";
 
 type DomListenerOptions = boolean | AddEventListenerOptions;
 type DomChild = Node | string;
@@ -15,6 +16,75 @@ type DomTreeChild =
 const DOCUMENT_NODE_TYPE = 9;
 const ELEMENT_NODE_TYPE = 1;
 const HTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
+
+export interface IExternalFocusInfo {
+	readonly hasFocus: boolean;
+	readonly window?: BrowserWindow;
+}
+
+export type ExternalFocusChecker = () => IExternalFocusInfo;
+
+const externalFocusCheckers = new Set<ExternalFocusChecker>();
+
+export function registerExternalFocusChecker(checker: ExternalFocusChecker): IDisposable {
+	externalFocusCheckers.add(checker);
+	return toDisposable(() => externalFocusCheckers.delete(checker));
+}
+
+export function getExternalFocusWindow(): BrowserWindow | undefined {
+	for (const checker of externalFocusCheckers) {
+		const result = checker();
+		if (result.hasFocus) return result.window;
+	}
+	return undefined;
+}
+
+export function hasAppFocus(): boolean {
+	return getWindows().some(({ window }) => window.document.hasFocus()) ||
+		[...externalFocusCheckers].some(checker => checker().hasFocus);
+}
+
+export function getActiveWindow(): BrowserWindow {
+	return getWindows().find(({ window }) => window.document.hasFocus())?.window ??
+		getExternalFocusWindow() ??
+		getMainWindow();
+}
+
+export function getActiveDocument(): Document {
+	return getActiveWindow().document;
+}
+
+/** Returns the deepest active element, including open shadow roots. */
+export function getActiveElement(root: Document | ShadowRoot = getActiveDocument()): Element | null {
+	let active = root.activeElement;
+	while (active?.shadowRoot?.activeElement) {
+		active = active.shadowRoot.activeElement;
+	}
+	return active;
+}
+
+/** Resolves the owning window for a node, document, event, or window. */
+export function getWindow(source?: Node | Document | UIEvent | Window | null): BrowserWindow {
+	if (!source) return getMainWindow();
+	if (isWindow(source)) return source as BrowserWindow;
+	if ("nodeType" in source && source.nodeType === DOCUMENT_NODE_TYPE) {
+		return ((source as Document).defaultView ?? getMainWindow()) as BrowserWindow;
+	}
+	if ("ownerDocument" in source) {
+		return (source.ownerDocument?.defaultView ?? getMainWindow()) as BrowserWindow;
+	}
+	return (source.view ?? getMainWindow()) as BrowserWindow;
+}
+
+export function getDocument(source?: Node | Document | UIEvent | Window | null): Document {
+	return getWindow(source).document;
+}
+
+function getMainWindow(): BrowserWindow {
+	getWindows();
+	if (!mainWindow) throw new Error("A browser window is required");
+	return mainWindow;
+}
 
 export interface IModifierKeyStatus {
 	readonly altKey: boolean;
@@ -170,6 +240,11 @@ export function isHTMLElement(value: unknown): value is HTMLElement {
 	return typeof htmlElementConstructor === "function"
 		? value instanceof htmlElementConstructor
 		: value.namespaceURI === HTML_NAMESPACE;
+}
+
+export function getShadowRoot(node: Node): ShadowRoot | null {
+	const root = node.getRootNode();
+	return root.nodeType === 11 && 'host' in root ? root as ShadowRoot : null;
 }
 
 /** Stops propagation and, by default, the browser's native behavior. */

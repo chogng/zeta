@@ -1,3 +1,4 @@
+import { fragment as createFragment, h, text as createText } from "../../../../../base/browser/dom.js";
 import { type TextModel } from "../../../../common/model/textModel.js";
 import { projectStanzaSemanticTokenLine, type BracketColorizationSource, type BracketColorizationSpan, type ResolvedSemanticToken, type SemanticTokenSource } from "../../../viewparts/viewLines/viewLine.js";
 import { type ScreenReaderContentState } from "./screenReaderUtils.js";
@@ -33,10 +34,10 @@ export class RichScreenReaderContent extends SimpleScreenReaderContent {
 
 	protected override renderText(text: string, state: ScreenReaderContentState): void {
 		const ownerDocument = this.element.ownerDocument;
-		const fragment = ownerDocument.createDocumentFragment();
+		const fragment = createFragment(ownerDocument);
 		for (const [index, segment] of state.segments.entries()) {
 			if (index > 0) {
-				fragment.append(ownerDocument.createTextNode(text.slice(
+				fragment.append(createText(ownerDocument, text.slice(
 					state.segments[index - 1]!.contentEndOffset,
 					segment.contentStartOffset,
 				)));
@@ -69,7 +70,7 @@ function renderSegment(
 	let lineStartColumn = startColumn;
 	for (let index = 0; index < lineCount; index += 1) {
 		const lineText = lines[index]!;
-		const lineElement = ownerDocument.createElement("span");
+		const lineElement = h(ownerDocument, "span");
 		lineElement.dataset.lineIndex = String(lineIndex);
 		const lineEndColumn = lineStartColumn + lineText.length;
 		projectStanzaSemanticTokenLine(
@@ -78,9 +79,9 @@ function renderSegment(
 			clipSemanticTokens(options.semanticTokenSource?.getLineTokens(lineIndex) ?? [], lineStartColumn, lineEndColumn),
 			clipBracketColorizations(options.bracketColorizationSource?.getLineBrackets(lineIndex) ?? [], lineStartColumn, lineEndColumn),
 		);
-		if (!lineElement.firstChild) lineElement.append(ownerDocument.createTextNode(""));
+		if (!lineElement.firstChild) lineElement.append(createText(ownerDocument, ""));
 		fragment.append(lineElement);
-		if (index < lines.length - 1) fragment.append(ownerDocument.createTextNode("\n"));
+		if (index < lines.length - 1) fragment.append(createText(ownerDocument, "\n"));
 		lineIndex += 1;
 		lineStartColumn = 0;
 	}

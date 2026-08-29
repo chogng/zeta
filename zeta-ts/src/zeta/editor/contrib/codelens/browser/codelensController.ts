@@ -1,7 +1,8 @@
 import { registerEditorContribution } from '../../../browser/editorExtensions.js';
 import { type EditorViewport } from '../../../browser/view.js';
 import { StableEditorScrollState } from '../../../browser/stableEditorScroll.js';
-import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { TimeoutTimer } from '../../../../base/common/async.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { type LanguageFeatureProviderRegistry } from '../../../common/languageFeatureRegistry.js';
 import { type LanguageCodeLensCommand, type LanguageCodeLensProvider } from '../common/codelens.js';
@@ -17,7 +18,7 @@ export class CodeLensContribution extends Disposable {
 
 	private readonly widgets = this._register(new DisposableMap<number, CodeLensWidget>());
 	private readonly providerListeners = this._register(new DisposableStore());
-	private readonly cacheExpiry = this._register(new MutableDisposable());
+	private readonly cacheExpiry = this._register(new TimeoutTimer());
 	private readonly resolvingWidgets = new Map<CodeLensWidget, AbortController>();
 	private request: AbortController | undefined;
 	private currentModel = CodeLensModel.Empty;
@@ -88,7 +89,7 @@ export class CodeLensContribution extends Disposable {
 		this.request?.abort();
 		this.resolvePromise = undefined;
 		this.resolvingWidgets.clear();
-		this.cacheExpiry.clear();
+		this.cacheExpiry.cancel();
 		if (this.providers.getProviders(this.languageId).length === 0) {
 			this.showCachedModelUntilExpiry();
 			return;
@@ -121,14 +122,13 @@ export class CodeLensContribution extends Disposable {
 		this.cachedModel = cachedModel;
 		this.currentModel = cachedModel;
 		this.reconcileWidgets(cachedModel.lenses);
-		const timeout = globalThis.setTimeout(() => {
+		this.cacheExpiry.cancelAndSet(() => {
 			if (this.cachedModel !== cachedModel || this.isDisposed) return;
 			if (this.resource) codeLensCache.delete(this.resource);
 			this.cachedModel = undefined;
 			this.currentModel = CodeLensModel.Empty;
 			this.clearWidgets();
 		}, 30_000);
-		this.cacheExpiry.value = toDisposable(() => globalThis.clearTimeout(timeout));
 	}
 
 	private reconcileWidgets(items: readonly CodeLensItem[]): void {

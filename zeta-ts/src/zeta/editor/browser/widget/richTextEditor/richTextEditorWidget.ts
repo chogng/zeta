@@ -5,6 +5,7 @@ import { Disposable, MutableDisposable, type IDisposable, toDisposable } from '.
 import { isSafeInteger } from '../../../../base/common/numbers.js';
 import { assertDefined } from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
+import { generateUuid } from '../../../../base/common/uuid.js';
 import type { IDimension } from '../../../../base/browser/geometry.js';
 import type { EditorResourceInput } from '../../editorBrowser.js';
 import { TextModel } from '../../../common/model/textModel.js';
@@ -1374,7 +1375,7 @@ export class RichTextEditorWidget extends Disposable {
 		try {
 			const connection = await service.open({
 				...(roomId === undefined ? {} : { roomId }),
-				clientId: createCollaborationClientId(input.resource),
+				clientId: createCollaborationClientId(),
 				schemaId: this.options.collaborationSchemaId ?? "stanza-document-v1",
 				schema: model.schema,
 				document: model.document,
@@ -1466,11 +1467,8 @@ function createFallbackInlineNode(ownerDocument: Document, node: DocumentNode): 
 	return element;
 }
 
-function createCollaborationClientId(resource: URI): string {
-	const identifier = globalThis.crypto?.randomUUID?.();
-	if (identifier) return `stanza-${identifier}`;
-	const suffix = `${Date.now().toString(36)}${Math.random().toString(36).replace(/[^a-z0-9]/g, "")}`;
-	return `stanza-${resource.path.length.toString(36)}-${suffix}`;
+function createCollaborationClientId(): string {
+	return `stanza-${generateUuid()}`;
 }
 
 function editableBlockAriaLabel(node: DocumentNode): string {

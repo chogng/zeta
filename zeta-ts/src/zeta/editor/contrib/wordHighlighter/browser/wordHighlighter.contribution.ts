@@ -1,4 +1,5 @@
 import { ResourceMap } from '../../../../base/common/map.js';
+import { RunOnceScheduler, TimeoutTimer } from '../../../../base/common/async.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../base/common/cancellation.js';
@@ -42,7 +43,7 @@ class WordHighlighter extends Disposable {
 	private readonly multiDocumentProviders: LanguageFeatureProviderRegistry<MultiDocumentHighlightProvider>;
 	private readonly coordinator: WordHighlightCoordinator;
 	private request: CancellationTokenSource | undefined;
-	private timer: ReturnType<typeof setTimeout> | undefined;
+	private readonly scheduler: RunOnceScheduler;
 	private requestId = 0;
 	private lastDecorationKey = '';
 	private focused = false;
@@ -65,6 +66,7 @@ class WordHighlighter extends Disposable {
 		this.providers = options.languageFeaturesService.documentHighlightProvider;
 		this.multiDocumentProviders = options.languageFeaturesService.multiDocumentHighlightProvider;
 		this.coordinator = acquireCoordinator(options.languageFeaturesService, this);
+		this.scheduler = this._register(new RunOnceScheduler(() => void this.run(), this.delay));
 		this._register(toDisposable(() => {
 			this.cancelRequest();
 			this.coordinator.remove(this);
@@ -177,10 +179,7 @@ class WordHighlighter extends Disposable {
 	private schedule(delay = this.delay): void {
 		this.cancelRequest();
 		if (this.mode === 'off' || (!this.focused && delay !== 0)) return;
-		this.timer = setTimeout(() => {
-			this.timer = undefined;
-			void this.run();
-		}, delay);
+		this.scheduler.schedule(delay);
 	}
 
 	private async run(): Promise<void> {
@@ -242,10 +241,7 @@ class WordHighlighter extends Disposable {
 	}
 
 	private cancelRequest(): void {
-		if (this.timer !== undefined) {
-			clearTimeout(this.timer);
-			this.timer = undefined;
-		}
+		this.scheduler.cancel();
 		this.request?.cancel();
 		this.request?.dispose();
 		this.request = undefined;
@@ -317,7 +313,7 @@ function normalizeHighlights(model: TextModel, highlights: readonly DocumentHigh
 
 class WordHighlightCoordinator {
 	private readonly controllers = new Set<WordHighlighter>();
-	private clearTimer: ReturnType<typeof setTimeout> | undefined;
+	private readonly clearTimer = new TimeoutTimer();
 
 	constructor(private readonly service: ILanguageFeaturesService) {}
 
@@ -327,7 +323,10 @@ class WordHighlightCoordinator {
 
 	remove(controller: WordHighlighter): void {
 		this.controllers.delete(controller);
-		if (this.controllers.size === 0) coordinators.delete(this.service);
+		if (this.controllers.size === 0) {
+			this.clearTimer.dispose();
+			coordinators.delete(this.service);
+		}
 	}
 
 	clear(): void {
@@ -335,9 +334,7 @@ class WordHighlightCoordinator {
 	}
 
 	clearWhenUnfocused(): void {
-		if (this.clearTimer !== undefined) clearTimeout(this.clearTimer);
-		this.clearTimer = setTimeout(() => {
-			this.clearTimer = undefined;
+		this.clearTimer.cancelAndSet(() => {
 			if (![...this.controllers].some(controller => controller.isFocused)) this.clear();
 		}, 0);
 	}

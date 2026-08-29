@@ -44,7 +44,7 @@ test('matchesMimeType and UriList preserve their wire semantics', () => {
 	assert.deepEqual({
 		matches: matchesMimeType('text/*', ['TEXT/PLAIN']),
 		list: UriList.create([first, first, 'file:///second.ts']),
-		parsed: UriList.parse('file:///first.ts\n# comment\r\nfile:///second.ts'),
+		parsed: UriList.parse('file:///first.ts\r# comment\r\nfile:///second.ts'),
 	}, {
 		matches: true,
 		list: 'file:///first.ts\r\nfile:///second.ts',

@@ -79,7 +79,7 @@ function projectStanzaCursorOverlays(context: EditorOverlayContext, controller: 
 function appendCaret(context: EditorOverlayContext, rows: ReadonlyMap<number, HTMLElement>, cursors: Map<number, ViewCursor>, renderedCursorIndexes: Set<number>, selectionIndex: number, visualLineIndex: number, left: number, primary: boolean): void {
 	const row = rows.get(visualLineIndex);
 	if (!row) return;
-	const cursor = cursors.get(selectionIndex) ?? new ViewCursor(context.ownerDocument, selectionIndex);
+	const cursor = cursors.get(selectionIndex) ?? new ViewCursor(row, selectionIndex);
 	cursors.set(selectionIndex, cursor);
 	cursor.render(row, left, primary);
 	renderedCursorIndexes.add(selectionIndex);

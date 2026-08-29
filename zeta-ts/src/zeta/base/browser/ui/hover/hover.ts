@@ -1,8 +1,7 @@
 import { Emitter } from "../../../common/event.js";
 import { Disposable, MutableDisposable, DisposableStore, type IDisposable, toDisposable } from "../../../common/lifecycle.js";
-import { addDisposableListener, isNode, h } from "../../dom.js";
+import { addDisposableListener, getWindow, isNode, h } from "../../dom.js";
 import { disposableWindowTimeout } from "../../scheduler.js";
-import { getWindow } from "../../window.js";
 import { getAriaAttribute, setAriaAttribute } from "../aria/aria.js";
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, ContextView, type ContextViewHideReason, type IContextViewProvider } from "../contextview/contextview.js";
 

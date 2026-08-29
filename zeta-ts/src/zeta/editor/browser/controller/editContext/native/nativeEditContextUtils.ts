@@ -1,5 +1,6 @@
 import { addDisposableListener } from "../../../../../base/browser/dom.js";
 import { Disposable, toDisposable, type IDisposable } from "../../../../../base/common/lifecycle.js";
+import { isHighSurrogate, isLowSurrogate } from '../../../../../base/common/strings.js';
 
 /** Maximum native text window used when the complete document is too large. */
 export const NATIVE_TEXT_WINDOW_LENGTH = 32 * 1_024;
@@ -124,14 +125,6 @@ export function createNativeTextWindow(
 	startOffset = moveToCodePointBoundary(text, startOffset, -1);
 	endOffset = moveToCodePointBoundary(text, endOffset, 1);
 	return { startOffset, endOffset };
-}
-
-export function isHighSurrogate(charCode: number): boolean {
-	return charCode >= 0xD800 && charCode <= 0xDBFF;
-}
-
-export function isLowSurrogate(charCode: number): boolean {
-	return charCode >= 0xDC00 && charCode <= 0xDFFF;
 }
 
 function moveToCodePointBoundary(text: string, offset: number, direction: -1 | 1): number {

@@ -61,6 +61,10 @@ export class CancellationError extends Error {
 	}
 }
 
+export function canceled(reason?: unknown): CancellationError {
+	return new CancellationError('Operation cancelled', reason);
+}
+
 export function setUnexpectedErrorHandler(handler: (error: unknown) => void): void {
 	errorHandler.setUnexpectedErrorHandler(handler);
 }

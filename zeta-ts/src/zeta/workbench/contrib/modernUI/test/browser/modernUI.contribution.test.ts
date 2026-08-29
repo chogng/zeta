@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
+import { h } from '../../../../../base/browser/dom.js';
 import type { AuxiliaryWindowOpenOptions, IAuxiliaryWindow, IAuxiliaryWindowService as IAuxiliaryWindowServiceContract } from '../../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import type { WorkbenchLayoutStyle } from '../../../../common/configuration.js';
 import type { IWorkbenchLayoutStyleService as IWorkbenchLayoutStyleServiceContract } from '../../../../services/layout/common/workbenchLayoutStyleService.js';
@@ -22,7 +23,7 @@ await import('../../browser/modernUI.contribution.js');
 
 class TestWorkbenchLayoutStyleService implements IWorkbenchLayoutStyleServiceContract {
 	public readonly styles: WorkbenchLayoutStyle[] = [];
-	public readonly container = document.createElement('main');
+	public readonly container = h(document, 'main');
 
 	public setLayoutStyle(style: WorkbenchLayoutStyle): void {
 		this.styles.push(style);

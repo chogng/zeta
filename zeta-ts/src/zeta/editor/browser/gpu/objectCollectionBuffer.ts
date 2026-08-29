@@ -1,5 +1,5 @@
 import { Emitter, type Event } from '../../../base/common/event.js';
-import { AbstractDisposable, Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { AbstractDisposable, Disposable, dispose, type IDisposable } from '../../../base/common/lifecycle.js';
 import { BufferDirtyTracker, type IBufferDirtyTrackerReader } from './bufferDirtyTracker.js';
 
 export interface ObjectCollectionBufferPropertySpec {
@@ -70,7 +70,7 @@ class ObjectCollectionBuffer<T extends readonly ObjectCollectionBufferPropertySp
 	}
 
 	protected override disposeCore(): void {
-		for (const entry of [...this.entries]) entry.dispose();
+		dispose([...this.entries]);
 		super.disposeCore();
 	}
 

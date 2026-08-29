@@ -1,3 +1,4 @@
+import { h } from '../../../../base/browser/dom.js';
 import { type IGlyphRasterizer, type IGpuGlyphStyle, type IRasterizedGlyph } from './raster.js';
 import { createCanvasFontShorthand } from '../../config/fontMeasurements.js';
 
@@ -10,9 +11,9 @@ export class GlyphRasterizer implements IGlyphRasterizer {
 	private readonly canvas: HTMLCanvasElement;
 	private readonly context: CanvasRenderingContext2D;
 
-	constructor(ownerDocument: Document, public readonly devicePixelRatio: number) {
+	constructor(host: HTMLElement, public readonly devicePixelRatio: number) {
 		this.cacheKey = String(devicePixelRatio);
-		this.canvas = ownerDocument.createElement('canvas');
+		this.canvas = h(host.ownerDocument, 'canvas');
 		const context = this.canvas.getContext('2d', { alpha: true, willReadFrequently: false });
 		if (!context) throw new Error('WebGPU glyph rasterization requires a 2D canvas context');
 		this.context = context;

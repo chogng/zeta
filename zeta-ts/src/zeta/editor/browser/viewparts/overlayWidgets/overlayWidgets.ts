@@ -16,9 +16,9 @@ export class ViewOverlayWidgets extends EditorViewPart {
 	public readonly domNode: HTMLDivElement;
 	private readonly widgets = new Map<string, IOverlayWidget>();
 
-	constructor(ownerDocument: Document) {
+	constructor(host: HTMLElement) {
 		super();
-		this.domNode = h(ownerDocument, 'div');
+		this.domNode = h(host.ownerDocument, 'div');
 		this.domNode.className = 'stanza-editor-overlay-widgets';
 		this.domNode.setAttribute('role', 'presentation');
 		this._register(toDisposable(() => this.domNode.remove()));

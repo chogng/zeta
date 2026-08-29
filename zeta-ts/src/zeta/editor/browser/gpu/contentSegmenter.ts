@@ -1,3 +1,5 @@
+import { GraphemeIterator } from '../../../base/common/strings.js';
+
 export interface IContentSegmenter {
 	getSegmentAtIndex(index: number): string | undefined;
 	getSegmentData(index: number): Intl.SegmentData | undefined;
@@ -30,17 +32,14 @@ class GraphemeContentSegmenter implements IContentSegmenter {
 	private readonly segments: (Intl.SegmentData | undefined)[] = [];
 
 	constructor(content: string) {
-		const segmentedContent = [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(content)];
-		let segmentIndex = 0;
-		for (let index = 0; index < content.length; index += 1) {
-			const segment = segmentedContent[segmentIndex];
-			if (!segment) break;
-			if (segment.index !== index) {
+		const iterator = new GraphemeIterator(content);
+		while (!iterator.eol()) {
+			const index = iterator.offset;
+			const segment = content.slice(index, index + iterator.nextGraphemeLength());
+			while (this.segments.length < index) {
 				this.segments.push(undefined);
-				continue;
 			}
-			segmentIndex += 1;
-			this.segments.push(segment);
+			this.segments.push({ segment, index, input: content });
 		}
 	}
 

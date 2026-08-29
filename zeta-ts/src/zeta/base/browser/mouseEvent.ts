@@ -1,8 +1,46 @@
 import { stopEvent } from "./dom.js";
 import { isFiniteNumber } from "../common/numbers.js";
 
+export interface IMouseEvent {
+	readonly browserEvent: MouseEvent;
+	readonly target: EventTarget | null;
+	readonly button: number;
+	readonly leftButton: boolean;
+	readonly middleButton: boolean;
+	readonly rightButton: boolean;
+	readonly buttons: number;
+	readonly detail: number;
+	readonly clientX: number;
+	readonly clientY: number;
+	readonly pageX: number;
+	readonly pageY: number;
+	readonly ctrlKey: boolean;
+	readonly shiftKey: boolean;
+	readonly altKey: boolean;
+	readonly metaKey: boolean;
+	readonly timestamp: number;
+	readonly defaultPrevented: boolean;
+	preventDefault(): void;
+	stopPropagation(): void;
+}
+
+export interface IMouseWheelEvent {
+	readonly browserEvent: WheelEvent;
+	readonly target: EventTarget | null;
+	readonly deltaX: number;
+	readonly deltaY: number;
+	readonly deltaZ: number;
+	readonly ctrlKey: boolean;
+	readonly shiftKey: boolean;
+	readonly altKey: boolean;
+	readonly metaKey: boolean;
+	readonly defaultPrevented: boolean;
+	preventDefault(): void;
+	stopPropagation(): void;
+}
+
 /** Normalized mouse-event coordinates and buttons across browser windows. */
-export class StandardMouseEvent {
+export class StandardMouseEvent implements IMouseEvent {
 	readonly target: EventTarget | null;
 	readonly button: number;
 	readonly leftButton: boolean;
@@ -116,7 +154,7 @@ export interface WheelNormalizationOptions {
  * `WheelEvent` convention. Callers can therefore apply the deltas directly to
  * `scrollLeft` and `scrollTop`.
  */
-export class StandardWheelEvent {
+export class StandardWheelEvent implements IMouseWheelEvent {
 	readonly target: EventTarget | null;
 	readonly deltaX: number;
 	readonly deltaY: number;

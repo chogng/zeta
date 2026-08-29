@@ -1,5 +1,5 @@
 import { Emitter, type Event } from '../../../../base/common/event.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, dispose, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type IGlyphRasterizer, type IGpuGlyphStyle } from '../raster/raster.js';
 import { type IReadableTextureAtlasPage, type ITextureAtlasPageGlyph } from './atlas.js';
 import { type AllocatorType, TextureAtlasPage } from './textureAtlasPage.js';
@@ -14,12 +14,12 @@ export class TextureAtlas extends Disposable {
 	private readonly deleteGlyphsEmitter = this._register(new Emitter<void>());
 	public readonly onDidDeleteGlyphs: Event<void> = this.deleteGlyphsEmitter.event;
 
-	constructor(private readonly ownerDocument: Document, public readonly pageSize: number, private readonly options: ITextureAtlasOptions = {}) {
+	constructor(private readonly host: HTMLElement, public readonly pageSize: number, private readonly options: ITextureAtlasOptions = {}) {
 		super();
 		if (!Number.isSafeInteger(pageSize) || pageSize < 64) throw new RangeError('WebGPU texture atlas page size must be an integer of at least 64 pixels');
 		this.mutablePages.push(this.createPage(0));
 		this._register(toDisposable(() => {
-			for (const page of this.mutablePages) page.dispose();
+			dispose(this.mutablePages);
 			this.mutablePages.length = 0;
 		}));
 	}
@@ -44,12 +44,12 @@ export class TextureAtlas extends Disposable {
 	}
 
 	public clear(): void {
-		for (const page of this.mutablePages) page.dispose();
+		dispose(this.mutablePages);
 		this.mutablePages.splice(0, this.mutablePages.length, this.createPage(0));
 		this.deleteGlyphsEmitter.fire();
 	}
 
 	private createPage(index: number): TextureAtlasPage {
-		return new TextureAtlasPage(this.ownerDocument, index, this.pageSize, this.options.allocatorType);
+		return new TextureAtlasPage(this.host, index, this.pageSize, this.options.allocatorType);
 	}
 }

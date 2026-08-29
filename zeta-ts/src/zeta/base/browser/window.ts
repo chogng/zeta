@@ -20,17 +20,11 @@ const windowIds = new WeakMap<Window, number>();
 const onDidRegisterEmitter = new Emitter<IRegisteredWindow>();
 const onWillUnregisterEmitter = new Emitter<IRegisteredWindow>();
 const onDidUnregisterEmitter = new Emitter<BrowserWindow>();
-let nextWindowId = 1;
+let nextWindowId = 2;
 
-export const mainWindow = window as BrowserWindow;
+export let mainWindow = globalThis.window as BrowserWindow;
 
-const mainRegistration: IRegisteredWindow = {
-	id: nextWindowId++,
-	window: mainWindow,
-	disposables: new DisposableStore(),
-};
-registrations.set(mainRegistration.id, mainRegistration);
-windowIds.set(mainWindow, mainRegistration.id);
+registerMainWindowIfAvailable();
 
 export const onDidRegisterWindow: Event<IRegisteredWindow> =
 	onDidRegisterEmitter.event;
@@ -44,6 +38,7 @@ export const onDidUnregisterWindow: Event<BrowserWindow> =
  * lifetime.
  */
 export function registerWindow(targetWindow: Window): IDisposable {
+	registerMainWindowIfAvailable();
 	if (windowIds.has(targetWindow)) {
 		throw new Error("Browser window is already registered");
 	}
@@ -63,18 +58,22 @@ export function registerWindow(targetWindow: Window): IDisposable {
 }
 
 export function getWindows(): readonly IRegisteredWindow[] {
+	registerMainWindowIfAvailable();
 	return [...registrations.values()];
 }
 
 export function getWindowById(id: number): IRegisteredWindow | undefined {
+	registerMainWindowIfAvailable();
 	return registrations.get(id);
 }
 
 export function getWindowId(targetWindow: Window): number | undefined {
+	registerMainWindowIfAvailable();
 	return windowIds.get(targetWindow);
 }
 
 export function isRegisteredWindow(targetWindow: Window): boolean {
+	registerMainWindowIfAvailable();
 	return windowIds.has(targetWindow);
 }
 
@@ -110,27 +109,6 @@ export function openPopupWindow(
 	targetWindow.open(url.toString(), "_blank", features.join(","));
 }
 
-/** Resolves the owning window for a node, document, event, or window. */
-export function getWindow(
-	source?: Node | Document | UIEvent | Window | null,
-): BrowserWindow {
-	if (!source) return mainWindow;
-	if (isWindow(source)) return source as BrowserWindow;
-	if (isDocument(source)) {
-		return (source.defaultView ?? mainWindow) as BrowserWindow;
-	}
-	if ("ownerDocument" in source) {
-		return (source.ownerDocument?.defaultView ?? mainWindow) as BrowserWindow;
-	}
-	return (source.view ?? mainWindow) as BrowserWindow;
-}
-
-export function getDocument(
-	source?: Node | Document | UIEvent | Window | null,
-): Document {
-	return getWindow(source).document;
-}
-
 export function isWindow(value: unknown): value is Window {
 	return typeof value === "object" &&
 		value !== null &&
@@ -138,11 +116,17 @@ export function isWindow(value: unknown): value is Window {
 		(value as Window).window === value;
 }
 
-function isDocument(value: unknown): value is Document {
-	return typeof value === "object" &&
-		value !== null &&
-		"nodeType" in value &&
-		(value as Node).nodeType === 9;
+function registerMainWindowIfAvailable(): void {
+	const targetWindow = globalThis.window as BrowserWindow | undefined;
+	if (!targetWindow || windowIds.has(targetWindow)) return;
+	mainWindow = targetWindow;
+	const registration: IRegisteredWindow = {
+		id: 1,
+		window: targetWindow,
+		disposables: new DisposableStore(),
+	};
+	registrations.set(registration.id, registration);
+	windowIds.set(targetWindow, registration.id);
 }
 
 class WindowRegistrationLifecycle extends Disposable {

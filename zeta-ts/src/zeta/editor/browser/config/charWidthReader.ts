@@ -10,8 +10,8 @@ export interface CharWidthReader {
 export class CanvasCharWidthReader implements CharWidthReader {
 	private readonly context: CanvasRenderingContext2D | undefined;
 
-	public constructor(ownerDocument: Document) {
-		this.context = createCanvasContext(ownerDocument);
+	public constructor(referenceElement: HTMLElement) {
+		this.context = createCanvasContext(referenceElement.ownerDocument);
 	}
 
 	public setFont(font: string): void {

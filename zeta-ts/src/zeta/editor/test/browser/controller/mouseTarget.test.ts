@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { h } from "../../../../base/browser/dom.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { MouseTargetFactory, MouseTargetKind } from "../../../browser/controller/mouseTarget.js";
 import { TextPosition } from "../../../common/core/text.js";
@@ -21,7 +22,7 @@ test("MouseTargetFactory preserves editor targets and classifies browser-owned r
 	} as unknown as EditorViewport;
 	const factory = new MouseTargetFactory(viewport);
 	const node = (className: string): HTMLElement => {
-		const element = dom.window.document.createElement("span");
+		const element = h(dom.window.document, "span");
 		element.className = className;
 		container.append(element);
 		return element;
@@ -30,7 +31,7 @@ test("MouseTargetFactory preserves editor targets and classifies browser-owned r
 	assert.equal(factory.create(mouseEvent(node("stanza-editor-line-number")))?.kind, MouseTargetKind.LineNumber);
 	const glyphLane = node("stanza-editor-glyph-margin-lane");
 	glyphLane.dataset.glyphMarginLane = "center";
-	const glyph = dom.window.document.createElement("button");
+	const glyph = h(dom.window.document, "button");
 	glyph.className = "stanza-editor-glyph-margin-decoration";
 	glyph.dataset.decorationId = "7";
 	glyph.dataset.decorationOwner = "folding";

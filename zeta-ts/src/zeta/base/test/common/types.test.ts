@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assert as assertCondition, assertDefined, isNonEmptyString, isRecord } from "../../common/types.js";
+import { assert as assertCondition, assertDefined, assertReturnsDefined, isFunction, isNonEmptyString, isObject, isRecord, type Mutable } from "../../common/types.js";
 
 test("assert narrows caller-defined conditions", () => {
 	assert.equal(requireStringFromUnknown("value"), "value");
@@ -44,6 +44,25 @@ test("isNonEmptyString requires non-whitespace text", () => {
 	assert.equal(isNonEmptyString(" value "), true);
 	assert.equal(isNonEmptyString(" \t\n"), false);
 	assert.equal(isNonEmptyString(1), false);
+});
+
+test('general type guards expose object, function, defined, and mutable contracts', () => {
+	const value: Mutable<{ readonly count: number }> = { count: 1 };
+	value.count = 2;
+	assert.deepEqual({
+		count: value.count,
+		function: isFunction(() => undefined),
+		object: isObject({ value: true }),
+		array: isObject([]),
+		defined: assertReturnsDefined('value'),
+	}, {
+		count: 2,
+		function: true,
+		object: true,
+		array: false,
+		defined: 'value',
+	});
+	assert.throws(() => assertReturnsDefined(undefined), /must not be null or undefined/);
 });
 
 function requireString(value: string | undefined): string {

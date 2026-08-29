@@ -1,12 +1,11 @@
 import { DisposableStore, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { LRUCache } from '../../../../base/common/map.js';
 import { URI } from '../../../../base/common/uri.js';
 import { type IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { TextPosition, TextRange } from '../../../common/core/text.js';
 import { type LanguageCodeLensProvider } from '../common/codelens.js';
 import { CodeLensModel, type CodeLensItem } from './codelens.js';
 
-const MaximumEntries = 20;
-const TrimmedEntries = 15;
 const StorageKey = 'codelens/cache2';
 
 interface SerializedCacheEntry {
@@ -26,21 +25,19 @@ const cachedCodeLensProvider: LanguageCodeLensProvider = {
 
 /** Owns the bounded non-executable cache and its optional workspace storage binding. */
 class CodeLensCache {
-	private readonly entries = new Map<string, CacheEntry>();
+	private readonly entries = new LRUCache<string, CacheEntry>(20, 0.75);
 	private storageBinding: IDisposable | undefined;
 
 	public put(resource: URI, lineCount: number, model: CodeLensModel): void {
 		const key = resource.toString();
 		const lenses = model.lenses.map(item => createCachedItem(item.symbol.range, item.symbol.command?.title));
-		this.set(key, { lineCount, model: new CodeLensModel(lenses) });
+		this.entries.set(key, { lineCount, model: new CodeLensModel(lenses) });
 	}
 
 	public get(resource: URI, lineCount: number): CodeLensModel | undefined {
 		const key = resource.toString();
 		const entry = this.entries.get(key);
 		if (!entry || entry.lineCount !== lineCount) return undefined;
-		this.entries.delete(key);
-		this.entries.set(key, entry);
 		return entry.model;
 	}
 
@@ -66,17 +63,6 @@ class CodeLensCache {
 		return binding;
 	}
 
-	private set(key: string, entry: CacheEntry): void {
-		this.entries.delete(key);
-		this.entries.set(key, entry);
-		if (this.entries.size <= MaximumEntries) return;
-		while (this.entries.size > TrimmedEntries) {
-			const oldestKey = this.entries.keys().next().value as string | undefined;
-			if (oldestKey === undefined) return;
-			this.entries.delete(oldestKey);
-		}
-	}
-
 	private store(storageService: IStorageService): void {
 		const serialized: Record<string, SerializedCacheEntry> = Object.create(null);
 		for (const [key, entry] of this.entries) {
@@ -89,7 +75,7 @@ class CodeLensCache {
 	private restore(raw: string): void {
 		const restored = deserialize(raw);
 		this.entries.clear();
-		for (const [key, entry] of restored) this.set(key, entry);
+		for (const [key, entry] of restored) this.entries.set(key, entry);
 	}
 }
 

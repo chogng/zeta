@@ -1,5 +1,6 @@
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { LinkedList } from '../../../base/common/linkedList.js';
 import { type URI } from '../../../base/common/uri.js';
 import { type CodeEditorWidget } from '../widget/codeEditor/codeEditorWidget.js';
 import { type ICodeEditorOpenHandler, type ICodeEditorService } from './codeEditorService.js';
@@ -9,7 +10,7 @@ export abstract class AbstractCodeEditorService extends Disposable implements IC
 	private readonly codeEditorAddEmitter = this._register(new Emitter<CodeEditorWidget>());
 	private readonly codeEditorRemoveEmitter = this._register(new Emitter<CodeEditorWidget>());
 	private readonly codeEditors = new Set<CodeEditorWidget>();
-	private readonly openHandlers: ICodeEditorOpenHandler[] = [];
+	private readonly openHandlers = new LinkedList<ICodeEditorOpenHandler>();
 	private activeCodeEditor: CodeEditorWidget | undefined;
 
 	public readonly onCodeEditorAdd = this.codeEditorAddEmitter.event;
@@ -51,13 +52,7 @@ export abstract class AbstractCodeEditorService extends Disposable implements IC
 		if (typeof handler !== 'function') {
 			throw new TypeError('Code editor open handler must be a function');
 		}
-		this.openHandlers.unshift(handler);
-		return toDisposable(() => {
-			const index = this.openHandlers.indexOf(handler);
-			if (index >= 0) {
-				this.openHandlers.splice(index, 1);
-			}
-		});
+		return toDisposable(this.openHandlers.unshift(handler));
 	}
 
 	public async openCodeEditor(resource: URI): Promise<CodeEditorWidget | undefined> {

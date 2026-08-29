@@ -23,8 +23,9 @@ export class ColorPickerWidget extends Disposable {
 	private model: ColorPickerModel | undefined;
 	private updating = false;
 
-	constructor(ownerDocument: Document, private readonly onColorChange: (color: RGBA8) => void, private readonly onApply: () => void, private readonly onCancel: () => void) {
+	constructor(host: HTMLElement, private readonly onColorChange: (color: RGBA8) => void, private readonly onApply: () => void, private readonly onCancel: () => void) {
 		super();
+		const ownerDocument = host.ownerDocument;
 		this.preview = h(ownerDocument, 'div', {
 			className: 'stanza-editor-color-picker-preview',
 			attributes: { 'aria-hidden': 'true' },

@@ -1,4 +1,5 @@
 import { LineRange } from "../ranges/lineRange.js";
+import { splitLines } from '../../../../base/common/strings.js';
 import { TextPosition } from "../position.js";
 import { TextRange } from "../range.js";
 import { AbstractText } from "../text/abstractText.js";
@@ -75,7 +76,7 @@ export class LineReplacement {
 	static fromSingleTextEdit(edit: TextReplacement, initialValue: AbstractText): LineReplacement { return LineReplacement.fromTextReplacement(edit, initialValue); }
 
 	static fromTextReplacement(edit: TextReplacement, initialValue: AbstractText): LineReplacement {
-		const newLines = edit.text.split(/\r\n|\r|\n/);
+		const newLines = splitLines(edit.text);
 		const prefix = initialValue.getLineAt(edit.range.start.lineIndex).slice(0, edit.range.start.columnIndex);
 		const suffix = initialValue.getLineAt(edit.range.end.lineIndex).slice(edit.range.end.columnIndex);
 		newLines[0] = prefix + newLines[0]!;

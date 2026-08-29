@@ -1,7 +1,6 @@
-import { addDisposableListener, h } from "../../dom.js";
+import { addDisposableListener, getWindow, h } from "../../dom.js";
 import { ManagedStyleSheet } from "../../domStylesheets.js";
 import { disposableWindowTimeout } from "../../scheduler.js";
-import { getWindow } from "../../window.js";
 import { type IDisposable, MutableDisposable, Disposable, DisposableStore, toDisposable } from "../../../common/lifecycle.js";
 import { isFiniteNumber } from "../../../common/numbers.js";
 

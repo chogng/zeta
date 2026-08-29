@@ -76,7 +76,7 @@ export class DomTextMeasurer implements TextMeasurer {
 	private metrics: FontMeasurementSnapshot;
 
 	public constructor(private readonly referenceElement: HTMLElement) {
-		this.charWidthReader = new CanvasCharWidthReader(referenceElement.ownerDocument);
+		this.charWidthReader = new CanvasCharWidthReader(referenceElement);
 		this.metrics = readFontMeasurements(referenceElement, this.charWidthReader);
 	}
 

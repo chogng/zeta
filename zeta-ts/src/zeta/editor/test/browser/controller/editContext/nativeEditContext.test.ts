@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { h } from "../../../../../base/browser/dom.js";
 import { Emitter } from "../../../../../base/common/event.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
@@ -36,7 +37,8 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { NATIVE_TEXT_WINDOW_LENGTH, createNativeTextWindow, isLowSurrogate } = await import("../../../../browser/controller/editContext/native/nativeEditContextUtils.js");
+const { isLowSurrogate } = await import("../../../../../base/common/strings.js");
+const { NATIVE_TEXT_WINDOW_LENGTH, createNativeTextWindow } = await import("../../../../browser/controller/editContext/native/nativeEditContextUtils.js");
 const { NativeEditContextRegistry } = await import("../../../../browser/controller/editContext/native/nativeEditContextRegistry.js");
 const { SimpleScreenReaderContent } = await import("../../../../browser/controller/editContext/native/screenReaderContentSimple.js");
 const { RichScreenReaderContent } = await import("../../../../browser/controller/editContext/native/screenReaderContentRich.js");
@@ -57,7 +59,7 @@ test("native text windows retain the active range and never split UTF-16 code po
 });
 
 test("native edit-context registry owns element and owner-id registrations independently", () => {
-	const element = browserEnvironment.window.document.createElement("div");
+	const element = h(browserEnvironment.window.document, "div");
 	const context = {} as never;
 	const ownerId = `native-test-${Math.random()}`;
 	const byElement = NativeEditContextRegistry.register(element, context);

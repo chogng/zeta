@@ -1,3 +1,4 @@
+import { h } from '../../../../base/browser/dom.js';
 import { BugIndicatingError } from '../../../../base/common/errors.js';
 import { type IRasterizedGlyph } from '../raster/raster.js';
 import { UsagePreviewColors, type ITextureAtlasAllocator, type ITextureAtlasPageGlyph } from './atlas.js';
@@ -54,7 +55,7 @@ export class TextureAtlasSlabAllocator implements ITextureAtlasAllocator {
 	}
 
 	public async getUsagePreview(): Promise<Blob> {
-		const canvas = this.canvas.ownerDocument.createElement('canvas');
+		const canvas = h(this.canvas.ownerDocument, 'canvas');
 		canvas.width = this.canvas.width;
 		canvas.height = this.canvas.height;
 		const context = canvas.getContext('2d');

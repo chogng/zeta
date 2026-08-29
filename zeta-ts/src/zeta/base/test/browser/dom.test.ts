@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { addDisposableListener, h, isElement, isHTMLElement, isNode, stopEvent, svg } from "../../browser/dom.js";
+import { addDisposableListener, getActiveDocument, getActiveElement, getDocument, getShadowRoot, getWindow, h, isElement, isHTMLElement, isNode, stopEvent, svg } from "../../browser/dom.js";
+import { registerWindow } from "../../browser/window.js";
 
 test("disposable DOM listeners detach deterministically", () => {
 	const target = new EventTarget();
@@ -60,6 +61,54 @@ test("DOM guards validate nodes from their owning window", () => {
 		svgHtmlElement: false,
 		structuralLookalike: false,
 	});
+});
+
+test("DOM context queries resolve the owning window and document", () => {
+	const ownerWindow = new JSDOM("<!doctype html><body><button></button></body>").window;
+	const button = ownerWindow.document.querySelector("button")!;
+
+	assert.deepEqual({
+		windowFromNode: getWindow(button),
+		windowFromDocument: getWindow(ownerWindow.document),
+		documentFromNode: getDocument(button),
+	}, {
+		windowFromNode: ownerWindow,
+		windowFromDocument: ownerWindow,
+		documentFromNode: ownerWindow.document,
+	});
+	ownerWindow.close();
+});
+
+test("active DOM context follows a registered focused window", () => {
+	const ownerWindow = new JSDOM("<!doctype html><body><button></button></body>").window;
+	const registration = registerWindow(ownerWindow as unknown as Window);
+	const button = ownerWindow.document.querySelector("button")!;
+	button.focus();
+
+	try {
+		assert.deepEqual({
+			document: getActiveDocument(),
+			element: getActiveElement(),
+		}, {
+			document: ownerWindow.document,
+			element: button,
+		});
+	} finally {
+		registration.dispose();
+		ownerWindow.close();
+	}
+});
+
+test('getShadowRoot resolves an element inside an open shadow tree', () => {
+	const ownerWindow = new JSDOM('<!doctype html><body><main><button></button></main></body>').window;
+	const document = ownerWindow.document;
+	const main = document.querySelector('main')!;
+	const shadowRoot = main.attachShadow({ mode: 'open' });
+	const shadowChild = h(document, 'span');
+	shadowRoot.append(shadowChild);
+
+	assert.equal(getShadowRoot(shadowChild), shadowRoot);
+	ownerWindow.close();
 });
 
 test("stopEvent prevents native behavior and propagation", () => {

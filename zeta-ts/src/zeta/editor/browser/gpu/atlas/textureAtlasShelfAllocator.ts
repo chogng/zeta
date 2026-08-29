@@ -1,3 +1,4 @@
+import { h } from '../../../../base/browser/dom.js';
 import { BugIndicatingError } from '../../../../base/common/errors.js';
 import { type IRasterizedGlyph } from '../raster/raster.js';
 import { UsagePreviewColors, type ITextureAtlasAllocator, type ITextureAtlasPageGlyph } from './atlas.js';
@@ -62,8 +63,7 @@ export class TextureAtlasShelfAllocator implements ITextureAtlasAllocator {
 }
 
 async function canvasToBlob(source: HTMLCanvasElement, glyphs: ReadonlySet<Readonly<ITextureAtlasPageGlyph>>): Promise<Blob> {
-	const document = source.ownerDocument;
-	const canvas = document.createElement('canvas');
+	const canvas = h(source.ownerDocument, 'canvas');
 	canvas.width = source.width;
 	canvas.height = source.height;
 	const context = canvas.getContext('2d');

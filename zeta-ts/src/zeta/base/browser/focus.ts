@@ -3,10 +3,12 @@ import {
 	Disposable,
 	MutableDisposable,
 	type IDisposable,
-	toDisposable,
 } from "../common/lifecycle.js";
 import {
 	addDisposableListener,
+	getActiveDocument,
+	getActiveElement,
+	getWindow,
 	isAncestor,
 	isHTMLElement,
 	isNode,
@@ -14,18 +16,8 @@ import {
 import { disposableWindowTimeout } from "./scheduler.js";
 import {
 	type BrowserWindow,
-	getWindow,
-	getWindows,
 	isWindow,
-	mainWindow,
 } from "./window.js";
-
-export interface IExternalFocusInfo {
-	readonly hasFocus: boolean;
-	readonly window?: BrowserWindow;
-}
-
-export type ExternalFocusChecker = () => IExternalFocusInfo;
 
 export interface IFocusTracker extends IDisposable {
 	readonly onDidFocus: Event<void>;
@@ -34,7 +26,6 @@ export interface IFocusTracker extends IDisposable {
 	refreshState(): void;
 }
 
-const externalFocusCheckers = new Set<ExternalFocusChecker>();
 const tabbableSelector = [
 	"a[href]",
 	"area[href]",
@@ -60,47 +51,6 @@ export enum FocusNavigationDirection {
 export enum FocusNavigationBoundary {
 	Stop,
 	Wrap,
-}
-
-export function registerExternalFocusChecker(
-	checker: ExternalFocusChecker,
-): IDisposable {
-	externalFocusCheckers.add(checker);
-	return toDisposable(() => externalFocusCheckers.delete(checker));
-}
-
-export function getExternalFocusWindow(): BrowserWindow | undefined {
-	for (const checker of externalFocusCheckers) {
-		const result = checker();
-		if (result.hasFocus) return result.window;
-	}
-	return undefined;
-}
-
-export function hasAppFocus(): boolean {
-	return getWindows().some(({ window }) => window.document.hasFocus()) ||
-		[...externalFocusCheckers].some((checker) => checker().hasFocus);
-}
-
-export function getActiveWindow(): BrowserWindow {
-	return getWindows().find(({ window }) => window.document.hasFocus())?.window ??
-		getExternalFocusWindow() ??
-		mainWindow;
-}
-
-export function getActiveDocument(): Document {
-	return getActiveWindow().document;
-}
-
-/** Returns the deepest active element, including open shadow roots. */
-export function getActiveElement(
-	root: Document | ShadowRoot = getActiveDocument(),
-): Element | null {
-	let active = root.activeElement;
-	while (active?.shadowRoot?.activeElement) {
-		active = active.shadowRoot.activeElement;
-	}
-	return active;
 }
 
 export function isActiveElement(element: Element): boolean {

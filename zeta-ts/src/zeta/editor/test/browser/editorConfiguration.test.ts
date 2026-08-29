@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
+import { h } from '../../../base/browser/dom.js';
 import { applyEditorFontInfo } from '../../browser/config/domFontInfo.js';
 import { resolveEditorConfiguration } from '../../browser/config/editorConfiguration.js';
 import { migrateOptions } from '../../browser/config/migrateOptions.js';
@@ -23,7 +24,7 @@ test('browser editor configuration resolves geometry defaults at the composition
 
 test('DOM font info applies the shared editor font vocabulary', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
-	const element = dom.window.document.createElement('div');
+	const element = h(dom.window.document, 'div');
 	applyEditorFontInfo(element, {
 		fontFamily: 'Stanza Mono',
 		fontSize: 15,

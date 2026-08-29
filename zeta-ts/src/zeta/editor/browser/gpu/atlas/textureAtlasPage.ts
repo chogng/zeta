@@ -1,3 +1,4 @@
+import { h } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type IGlyphRasterizer, type IRasterizedGlyph } from '../raster/raster.js';
 import { type IReadableTextureAtlasPage, type ITextureAtlasAllocator, type ITextureAtlasPageGlyph } from './atlas.js';
@@ -15,9 +16,9 @@ export class TextureAtlasPage extends Disposable implements IReadableTextureAtla
 	private currentVersion = 0;
 	private mutableUsedArea = { left: 0, top: 0, right: 0, bottom: 0 };
 
-	constructor(ownerDocument: Document, public readonly index: number, pageSize: number, allocatorType: AllocatorType = 'slab') {
+	constructor(host: HTMLElement, public readonly index: number, pageSize: number, allocatorType: AllocatorType = 'slab') {
 		super();
-		this.source = ownerDocument.createElement('canvas');
+		this.source = h(host.ownerDocument, 'canvas');
 		this.source.width = pageSize;
 		this.source.height = pageSize;
 		this.allocator = typeof allocatorType === 'function'

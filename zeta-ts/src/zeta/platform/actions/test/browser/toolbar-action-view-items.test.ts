@@ -101,7 +101,7 @@ test("menu entry actions switch to their alternative while Alt is held", async (
 	);
 	const item = createActionViewItem(primary, { showContextMenu() {} });
 	assert.ok(item);
-	const container = dom.window.document.createElement("div");
+	const container = h(dom.window.document, "div");
 	dom.window.document.body.append(container);
 	item.render(container);
 	const button = container.querySelector("button");

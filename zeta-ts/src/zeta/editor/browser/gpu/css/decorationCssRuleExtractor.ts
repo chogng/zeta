@@ -1,3 +1,4 @@
+import { h } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import './media/decorationCssRuleExtractor.css';
 
@@ -6,12 +7,14 @@ export class DecorationCssRuleExtractor extends Disposable {
 	private readonly dummyElement: HTMLSpanElement;
 	private readonly ruleCache = new Map<string, CSSStyleRule[]>();
 	private readonly cssVariableCache = new Map<string, string>();
+	private readonly ownerDocument: Document;
 
-	constructor(private readonly ownerDocument: Document) {
+	constructor(host: HTMLElement) {
 		super();
-		this.container = ownerDocument.createElement('div');
+		this.ownerDocument = host.ownerDocument;
+		this.container = h(this.ownerDocument, 'div');
 		this.container.className = 'stanza-decoration-css-rule-extractor';
-		this.dummyElement = ownerDocument.createElement('span');
+		this.dummyElement = h(this.ownerDocument, 'span');
 		this.container.append(this.dummyElement);
 		this._register(toDisposable(() => this.container.remove()));
 	}

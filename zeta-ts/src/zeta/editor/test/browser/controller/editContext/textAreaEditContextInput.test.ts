@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { h } from "../../../../../base/browser/dom.js";
 import { TextAreaInput } from "../../../../browser/controller/editContext/textArea/textAreaEditContextInput.js";
 import { TextAreaEditContext } from "../../../../browser/controller/editContext/textArea/textAreaEditContext.js";
 import { TextAreaEditContextRegistry } from "../../../../browser/controller/editContext/textArea/textAreaEditContextRegistry.js";
 
 test("TextAreaInput owns textarea DOM events and direction-aware state", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
-	const textarea = dom.window.document.createElement("textarea");
+	const textarea = h(dom.window.document, "textarea");
 	dom.window.document.querySelector("main")!.append(textarea);
 	using input = new TextAreaInput(textarea);
 	let focusCount = 0;

@@ -1,10 +1,9 @@
 import './multiDiffEditorWidget.css';
 import '../diffEditor/diffEditorWidget.css';
-import { addDisposableListener, fragment as createFragment, h, isHTMLElement, reset, stopEvent } from '../../../../base/browser/dom.js';
+import { addDisposableListener, fragment as createFragment, getWindow, h, isHTMLElement, reset, stopEvent } from '../../../../base/browser/dom.js';
 import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { getClientArea, type IDimension } from '../../../../base/browser/geometry.js';
 import { observeResize } from '../../../../base/browser/observer.js';
-import { getWindow } from '../../../../base/browser/window.js';
 import { isNonEmptyArray } from '../../../../base/common/arrays.js';
 import { Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { isFiniteNumber, isNonNegativeSafeInteger, rot } from '../../../../base/common/numbers.js';

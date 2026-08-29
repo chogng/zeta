@@ -108,7 +108,7 @@ export class ViewLinesGpu extends Disposable {
 	private ensureResources(visualLines: EditorVisualLineProjection): void {
 		const device = this.context.device;
 		if (!this.rasterizer || this.rasterizer.devicePixelRatio !== this.context.devicePixelRatio) {
-			this.rasterizer = new GlyphRasterizer(this.context.canvas.ownerDocument, this.context.devicePixelRatio);
+			this.rasterizer = new GlyphRasterizer(this.context.canvas, this.context.devicePixelRatio);
 			this.renderStrategy.value = this.createRenderStrategy(this.rasterizer, visualLines);
 		}
 		if (!this.pipeline) {

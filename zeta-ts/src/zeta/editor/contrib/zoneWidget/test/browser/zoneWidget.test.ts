@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
+import { h } from '../../../../../base/browser/dom.js';
 import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
 import { TextPosition, TextRange } from '../../../../common/core/text.js';
 import { TextModel } from '../../../../common/model/textModel.js';
@@ -205,7 +206,7 @@ class TestZoneWidget extends ZoneWidget {
 	}
 
 	protected override fillContainer(container: HTMLElement): void {
-		const content = container.ownerDocument.createElement('button');
+		const content = h(container.ownerDocument, 'button');
 		content.textContent = 'Content';
 		container.append(content);
 	}

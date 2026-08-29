@@ -1,4 +1,5 @@
 import { URI } from './uri.js';
+import { splitLines } from './strings.js';
 import { createUuid } from './uuid.js';
 
 export interface IDataTransferFile {
@@ -114,7 +115,7 @@ export const UriList = Object.freeze({
 		return [...new Set(entries.map(entry => entry.toString()))].join('\r\n');
 	},
 	split(value: string): string[] {
-		return value.split(/\r?\n/u);
+		return splitLines(value);
 	},
 	parse(value: string): string[] {
 		return UriList.split(value).filter(entry => !entry.startsWith('#'));

@@ -1,5 +1,4 @@
-import { addDisposableListener } from '../../../base/browser/dom.js';
-import { getWindow } from '../../../base/browser/window.js';
+import { addDisposableListener, getWindow } from '../../../base/browser/dom.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
 

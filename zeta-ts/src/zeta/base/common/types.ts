@@ -31,3 +31,20 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 export function isNonEmptyString(value: unknown): value is string {
 	return typeof value === "string" && value.trim().length > 0;
 }
+
+export type Mutable<T> = {
+	-readonly [K in keyof T]: T[K];
+};
+
+export function isFunction(value: unknown): value is (...args: never[]) => unknown {
+	return typeof value === 'function';
+}
+
+export function isObject(value: unknown): value is object {
+	return typeof value === 'object' && value !== null && !Array.isArray(value) && !(value instanceof RegExp) && !(value instanceof Date);
+}
+
+export function assertReturnsDefined<T>(value: T | null | undefined): NonNullable<T> {
+	assertDefined(value, 'Value must not be null or undefined');
+	return value;
+}

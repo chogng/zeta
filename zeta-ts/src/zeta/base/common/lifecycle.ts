@@ -582,3 +582,33 @@ export function combinedDisposable(
 	for (const resource of resources) store.add(resource);
 	return store;
 }
+
+export function dispose<T extends IDisposable>(resource: T): T;
+export function dispose<T extends IDisposable>(resource: T | undefined): T | undefined;
+export function dispose<T extends IDisposable, TCollection extends Iterable<T>>(resources: TCollection): TCollection;
+export function dispose<T extends IDisposable>(resources: readonly T[]): readonly T[];
+export function dispose<T extends IDisposable>(value: T | Iterable<T> | undefined): T | Iterable<T> | undefined {
+	if (!value) {
+		return value;
+	}
+	if (!(Symbol.iterator in Object(value))) {
+		(value as T).dispose();
+		return value;
+	}
+
+	const errors: unknown[] = [];
+	for (const resource of value as Iterable<T>) {
+		try {
+			resource.dispose();
+		} catch (error) {
+			errors.push(error);
+		}
+	}
+	if (errors.length === 1) {
+		throw errors[0];
+	}
+	if (errors.length > 1) {
+		throw new AggregateError(errors, 'Multiple resources failed to dispose');
+	}
+	return Array.isArray(value) ? [] : value;
+}

@@ -1,10 +1,7 @@
 import { Button } from "../../../base/browser/ui/button/button.js";
 import { Dialog } from "../../../base/browser/ui/dialog/dialog.js";
-import {
-	getActiveElement,
-	restoreFocus,
-} from "../../../base/browser/focus.js";
-import { addDisposableListener, isHTMLElement, h } from "../../../base/browser/dom.js";
+import { restoreFocus } from "../../../base/browser/focus.js";
+import { addDisposableListener, getActiveElement, isHTMLElement, h } from "../../../base/browser/dom.js";
 import { DisposableStore } from "../../../base/common/lifecycle.js";
 import {
 	type DialogRequest,

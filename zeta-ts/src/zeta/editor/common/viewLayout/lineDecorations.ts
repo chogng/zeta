@@ -1,3 +1,4 @@
+import { isHighSurrogate } from '../../../base/common/strings.js';
 import { InlineDecorationType, type InlineDecoration } from '../viewModel/inlineDecorations.js';
 import { LinePartMetadata } from './linePart.js';
 
@@ -128,8 +129,4 @@ function moveSurrogateBoundary(lineContent: string, column: number): number {
 	return column > 0 && column < lineContent.length && isHighSurrogate(lineContent.charCodeAt(column - 1))
 		? column - 1
 		: column;
-}
-
-function isHighSurrogate(charCode: number): boolean {
-	return charCode >= 0xD800 && charCode <= 0xDBFF;
 }

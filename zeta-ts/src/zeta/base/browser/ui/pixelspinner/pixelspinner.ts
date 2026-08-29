@@ -3,13 +3,12 @@ import {
 
 	toDisposable,
 } from "../../../common/lifecycle.js";
+import { getWindow, h } from "../../dom.js";
 import { disposableWindowInterval } from "../../scheduler.js";
-import { getWindow } from "../../window.js";
 import {
 	setAriaAttribute,
 	setRole,
 } from "../aria/aria.js";
-import { h } from "../../dom.js";
 
 /** A compact four-pixel activity indicator with no image asset dependency. */
 export class PixelSpinner extends Disposable {

@@ -1,6 +1,7 @@
 import './minimap.css';
-import { addDisposableListener, h, reset } from '../../../../base/browser/dom.js';
+import { addDisposableListener, fragment, h, reset } from '../../../../base/browser/dom.js';
 import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
+import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { clamp } from '../../../../base/common/numbers.js';
 import { RGBA8 } from '../../../common/core/misc/rgba.js';
@@ -48,7 +49,7 @@ export class Minimap extends EditorViewPart {
 	private renderedMarkersKey = '';
 	private semanticTokensRevision = 0;
 	private lastScrollTop = 0;
-	private scrollAutohideHandle: ReturnType<typeof setTimeout> | undefined;
+	private readonly scrollAutohideScheduler: RunOnceScheduler;
 
 	constructor(options: MinimapOptions) {
 		super();
@@ -74,9 +75,9 @@ export class Minimap extends EditorViewPart {
 		this._register(addDisposableListener<PointerEvent>(ownerDocument, 'pointerup', event => this.handlePointerEnd(event)));
 		this._register(addDisposableListener<PointerEvent>(ownerDocument, 'pointercancel', event => this.handlePointerEnd(event)));
 		this._register(toDisposable(() => this.domNode.classList.remove('dragging')));
-		this._register(toDisposable(() => {
-			if (this.scrollAutohideHandle !== undefined) clearTimeout(this.scrollAutohideHandle);
-		}));
+		this.scrollAutohideScheduler = this._register(new RunOnceScheduler(() => {
+			this.domNode.classList.remove('scrolling');
+		}, 500));
 	}
 
 	public invalidateTokens(): void {
@@ -127,7 +128,7 @@ export class Minimap extends EditorViewPart {
 		const foreground = parseCssColor(style.color, new RGBA8(128, 128, 128, 255));
 		const background = parseCssColor(style.backgroundColor, new RGBA8(0, 0, 0, 0));
 		const fontFamily = style.fontFamily || 'monospace';
-		const charRenderer = MinimapCharRendererFactory.create(layout.minimapScale, fontFamily, this.canvas.ownerDocument);
+		const charRenderer = MinimapCharRendererFactory.create(layout.minimapScale, fontFamily, this.canvas);
 		const projection = this.options.readVisualProjection();
 		const visualLineCount = projection.visualLineCount;
 		const rowCount = layout.minimapIsSampling
@@ -161,11 +162,7 @@ export class Minimap extends EditorViewPart {
 		if (this.options.options.autohide !== 'scroll' || scrollTop === this.lastScrollTop) return;
 		this.lastScrollTop = scrollTop;
 		this.domNode.classList.add('scrolling');
-		if (this.scrollAutohideHandle !== undefined) clearTimeout(this.scrollAutohideHandle);
-		this.scrollAutohideHandle = setTimeout(() => {
-			this.scrollAutohideHandle = undefined;
-			this.domNode.classList.remove('scrolling');
-		}, 500);
+		this.scrollAutohideScheduler.schedule();
 	}
 
 	private renderLine(
@@ -202,7 +199,7 @@ export class Minimap extends EditorViewPart {
 	}
 
 	private renderMarkers(renderLayout: MinimapRenderLayout): void {
-		const fragment = this.domNode.ownerDocument.createDocumentFragment();
+		const markers = fragment(this.domNode.ownerDocument);
 		const projection = this.options.readVisualProjection();
 		for (const marker of this.options.readMarkers()) {
 			const startVisualLineIndex = projection.firstVisualLineIndex(marker.startLineIndex);
@@ -216,9 +213,9 @@ export class Minimap extends EditorViewPart {
 			element.style.top = `${span.top}px`;
 			element.style.height = `${Math.max(2, span.height)}px`;
 			if (marker.hoverText !== undefined) element.title = marker.hoverText;
-			fragment.append(element);
+			markers.append(element);
 		}
-		reset(this.markerLayer, fragment);
+		reset(this.markerLayer, markers);
 	}
 
 	private renderSlider(layout: MinimapRenderLayout): void {

@@ -11,6 +11,128 @@ export function getOrSet<K, V>(map: Map<K, V>, key: K, value: V): V {
 	return result;
 }
 
+/**
+ * A bounded map ordered from least recently used to most recently used.
+ *
+ * Reading or replacing an entry marks it as recently used. When the limit is
+ * exceeded, the oldest entries are removed until the configured trim ratio is
+ * reached.
+ */
+export class LRUCache<K, V> implements Map<K, V> {
+	private readonly entriesByAge = new Map<K, V>();
+	private mutableLimit: number;
+	private mutableRatio: number;
+
+	readonly [Symbol.toStringTag] = "LRUCache";
+
+	constructor(limit: number, ratio = 1) {
+		this.mutableLimit = validateCacheLimit(limit);
+		this.mutableRatio = validateCacheRatio(ratio);
+	}
+
+	get size(): number {
+		return this.entriesByAge.size;
+	}
+
+	get limit(): number {
+		return this.mutableLimit;
+	}
+
+	set limit(value: number) {
+		this.mutableLimit = validateCacheLimit(value);
+		this.trimIfNeeded();
+	}
+
+	get ratio(): number {
+		return this.mutableRatio;
+	}
+
+	set ratio(value: number) {
+		this.mutableRatio = validateCacheRatio(value);
+		this.trimIfNeeded();
+	}
+
+	clear(): void {
+		this.entriesByAge.clear();
+	}
+
+	delete(key: K): boolean {
+		return this.entriesByAge.delete(key);
+	}
+
+	forEach(
+		callback: (value: V, key: K, map: Map<K, V>) => void,
+		thisArg?: unknown,
+	): void {
+		new Map(this.entriesByAge).forEach((value, key) => {
+			callback.call(thisArg, value, key, this);
+		});
+	}
+
+	get(key: K): V | undefined {
+		if (!this.entriesByAge.has(key)) return undefined;
+		const value = this.entriesByAge.get(key)!;
+		this.entriesByAge.delete(key);
+		this.entriesByAge.set(key, value);
+		return value;
+	}
+
+	peek(key: K): V | undefined {
+		return this.entriesByAge.get(key);
+	}
+
+	has(key: K): boolean {
+		return this.entriesByAge.has(key);
+	}
+
+	set(key: K, value: V): this {
+		this.entriesByAge.delete(key);
+		this.entriesByAge.set(key, value);
+		this.trimIfNeeded();
+		return this;
+	}
+
+	entries(): MapIterator<[K, V]> {
+		return new Map(this.entriesByAge).entries();
+	}
+
+	keys(): MapIterator<K> {
+		return new Map(this.entriesByAge).keys();
+	}
+
+	values(): MapIterator<V> {
+		return new Map(this.entriesByAge).values();
+	}
+
+	[Symbol.iterator](): MapIterator<[K, V]> {
+		return this.entries();
+	}
+
+	private trimIfNeeded(): void {
+		if (this.size <= this.mutableLimit) return;
+		const targetSize = Math.round(this.mutableLimit * this.mutableRatio);
+		while (this.size > targetSize) {
+			const oldest = this.entriesByAge.keys().next();
+			if (oldest.done) return;
+			this.entriesByAge.delete(oldest.value);
+		}
+	}
+}
+
+function validateCacheLimit(value: number): number {
+	if (!Number.isSafeInteger(value) || value < 0) {
+		throw new RangeError("LRU cache limit must be a non-negative safe integer");
+	}
+	return value;
+}
+
+function validateCacheRatio(value: number): number {
+	if (!Number.isFinite(value) || value < 0 || value > 1) {
+		throw new RangeError("LRU cache ratio must be between zero and one");
+	}
+	return value;
+}
+
 /** Converts a URI into the string used by a resource collection. */
 export type ResourceMapKeyFn = (resource: URI) => string;
 

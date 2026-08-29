@@ -1,4 +1,4 @@
-import { StandardKeyboardEvent } from '../../../base/browser/keyboardEvent.js';
+import { type IKeyboardEvent } from '../../../base/browser/keyboardEvent.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { operatingSystem, OperatingSystem } from '../../../base/common/platform.js';
@@ -245,7 +245,7 @@ export class ViewController extends Disposable {
 	}
 
 	/** Forwards view-originated input without taking ownership of its policy. */
-	emitKeyDown(event: StandardKeyboardEvent): void {
+	emitKeyDown(event: IKeyboardEvent): void {
 		this.userInputEvents.emitKeyDown(event);
 	}
 
@@ -377,7 +377,7 @@ export class KeyboardNavigationController extends Disposable {
 			);
 		}
 		const previousKeyDownHandler = userInputEvents.onKeyDown;
-		const keyDownHandler = (event: StandardKeyboardEvent): void => {
+		const keyDownHandler = (event: IKeyboardEvent): void => {
 			previousKeyDownHandler?.(event);
 			if (!event.browserEvent.defaultPrevented) {
 				this.handleKeyDown(event);
@@ -397,7 +397,7 @@ export class KeyboardNavigationController extends Disposable {
 		}));
 	}
 
-	private handleKeyDown(event: StandardKeyboardEvent): void {
+	private handleKeyDown(event: IKeyboardEvent): void {
 		const navigation = resolveStanzaKeyboardNavigation(
 			event,
 			this.targetOperatingSystem,
@@ -464,7 +464,7 @@ function isVisualVerticalCommand(command: EditorCursorNavigationCommand): comman
 		command === EditorCursorNavigationCommand.PageDown;
 }
 
-export function resolveStanzaKeyboardNavigation(event: Pick<StandardKeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey" | "altGraphKey" | "isComposing">, targetOperatingSystem: OperatingSystem): KeyboardNavigationCommand | undefined {
+export function resolveStanzaKeyboardNavigation(event: Pick<IKeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey" | "altGraphKey" | "isComposing">, targetOperatingSystem: OperatingSystem): KeyboardNavigationCommand | undefined {
 	if (event.isComposing || event.altGraphKey) return undefined;
 	const mode = event.shiftKey
 		? EditorCursorNavigationMode.Extend

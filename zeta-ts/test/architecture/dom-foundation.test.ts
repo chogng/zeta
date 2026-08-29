@@ -49,6 +49,26 @@ test("frontend TypeScript creates DOM only through the canonical foundations", (
 	assert.deepEqual(violations, []);
 });
 
+test("DOM context queries have one canonical owner", () => {
+	const expectedSymbols = ["getWindow", "getDocument", "getActiveElement", "getActiveDocument"];
+	const ownerFiles = [
+		resolve(sourceRoot, "base/browser/dom.ts"),
+		resolve(sourceRoot, "base/browser/focus.ts"),
+		resolve(sourceRoot, "base/browser/window.ts"),
+	];
+	const owners = Object.fromEntries(expectedSymbols.map(symbol => [symbol, [] as string[]]));
+	for (const file of ownerFiles) {
+		const source = readFileSync(file, "utf8");
+		const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+		for (const statement of sourceFile.statements) {
+			if (!ts.isFunctionDeclaration(statement) || !statement.name || !statement.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.ExportKeyword)) continue;
+			const matches = owners[statement.name.text];
+			if (matches) matches.push(relative(desktopRoot, file).replaceAll("\\", "/"));
+		}
+	}
+	assert.deepEqual(owners, Object.fromEntries(expectedSymbols.map(symbol => [symbol, ["src/zeta/base/browser/dom.ts"]])));
+});
+
 test("FastDomNode managed writes stay behind the canonical wrapper", () => {
 	const configPath = resolve(desktopRoot, "tsconfig.renderer.json");
 	const configFile = ts.readConfigFile(configPath, ts.sys.readFile);

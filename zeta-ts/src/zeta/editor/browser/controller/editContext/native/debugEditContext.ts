@@ -1,3 +1,4 @@
+import { h } from "../../../../../base/browser/dom.js";
 import { Disposable, type IDisposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { NativeEditContextObject } from "./nativeEditContext.js";
 
@@ -6,7 +7,7 @@ const SELECTION_BOUNDS_COLOR = "red";
 const CHARACTER_BOUNDS_COLOR = "green";
 
 export interface DebugNativeEditContextOptions {
-	readonly ownerDocument: Document;
+	readonly host: HTMLElement;
 	readonly enabled?: boolean;
 }
 
@@ -116,7 +117,7 @@ export class DebugEditContext extends Disposable implements NativeEditContextObj
 	private readonly markers: IDisposable[] = [];
 
 	private addMarker(bounds: DOMRect, color: string): void {
-		const element = this.options.ownerDocument.createElement("div");
+		const element = h(this.options.host.ownerDocument, "div");
 		element.className = "stanza-debug-edit-context-marker";
 		element.style.position = "fixed";
 		element.style.zIndex = "999999999";
@@ -126,7 +127,7 @@ export class DebugEditContext extends Disposable implements NativeEditContextObj
 		element.style.top = `${bounds.top}px`;
 		element.style.width = `${bounds.width}px`;
 		element.style.height = `${bounds.height}px`;
-		this.options.ownerDocument.body.append(element);
+		this.options.host.ownerDocument.body.append(element);
 		this.markers.push({
 			dispose: () => element.remove(),
 			[Symbol.dispose]: () => element.remove(),
@@ -134,7 +135,7 @@ export class DebugEditContext extends Disposable implements NativeEditContextObj
 	}
 
 	private addTextMarker(): void {
-		const element = this.options.ownerDocument.createElement("div");
+		const element = h(this.options.host.ownerDocument, "div");
 		element.className = "stanza-debug-edit-context-marker";
 		element.textContent = `${this.text.slice(0, this.selectionStart)}|${this.text.slice(this.selectionEnd)}`;
 		element.style.position = "fixed";
@@ -146,7 +147,7 @@ export class DebugEditContext extends Disposable implements NativeEditContextObj
 		element.style.color = "black";
 		element.style.font = "12px monospace";
 		element.style.pointerEvents = "none";
-		this.options.ownerDocument.body.append(element);
+		this.options.host.ownerDocument.body.append(element);
 		this.markers.push({
 			dispose: () => element.remove(),
 			[Symbol.dispose]: () => element.remove(),

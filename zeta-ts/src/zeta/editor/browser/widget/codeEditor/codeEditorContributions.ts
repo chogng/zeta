@@ -1,7 +1,6 @@
-import { addDisposableListener } from '../../../../base/browser/dom.js';
+import { addDisposableListener, getWindow } from '../../../../base/browser/dom.js';
 import { DisposableMap, Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { runWhenWindowIdle, scheduleAtNextAnimationFrame } from '../../../../base/browser/scheduler.js';
-import { getWindow } from '../../../../base/browser/window.js';
 import { type EditorSelectionController } from '../../../common/cursor/editorSelectionController.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type IInstantiationService, type SyncDescriptor } from '../../../../platform/instantiation/common/instantiation.js';

@@ -1,4 +1,4 @@
-import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
+import { addDisposableListener, h, text as createText } from "../../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { clampScreenReaderOffset, domOffsetAtPoint, domPointAtOffset, modelOffsetAtContentOffset, type NativeScreenReaderContent, type ScreenReaderContentLayout, type ScreenReaderContentState } from "./screenReaderUtils.js";
 
@@ -70,7 +70,7 @@ export class SimpleScreenReaderContent extends Disposable implements NativeScree
 
 	protected renderText(text: string, _state: ScreenReaderContentState): void {
 		if (this.element.textContent === text && this.element.firstChild?.nodeType === 3) return;
-		this.element.replaceChildren(this.element.ownerDocument.createTextNode(text));
+		this.element.replaceChildren(createText(this.element.ownerDocument, text));
 	}
 
 	protected setDomSelection(state: ScreenReaderContentState): void {

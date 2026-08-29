@@ -1,4 +1,5 @@
 import { addDisposableListener } from '../../../../base/browser/dom.js';
+import { UriList } from '../../../../base/common/dataTransfer.js';
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { isWindows } from '../../../../base/common/platform.js';
 import { type IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
@@ -499,7 +500,7 @@ function escapeHtml(text: string): string {
 }
 
 function readUriList(value: string): string | undefined {
-	const entries = value.split(/\r?\n/).map(entry => entry.trim()).filter(entry => entry.length > 0 && !entry.startsWith('#'));
+	const entries = UriList.parse(value).map(entry => entry.trim()).filter(entry => entry.length > 0);
 	return entries.length > 0 ? entries.join('\n') : undefined;
 }
 

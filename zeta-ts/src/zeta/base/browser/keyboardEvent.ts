@@ -15,6 +15,24 @@ export interface KeyChord {
 	readonly metaKey?: boolean;
 }
 
+export interface IKeyboardEvent {
+	readonly browserEvent: KeyboardEvent;
+	readonly key: string;
+	readonly code: string;
+	readonly keyCode: KeyCode;
+	readonly scanCode: ScanCode;
+	readonly location: number;
+	readonly ctrlKey: boolean;
+	readonly shiftKey: boolean;
+	readonly altKey: boolean;
+	readonly metaKey: boolean;
+	readonly altGraphKey: boolean;
+	readonly isComposing: boolean;
+	readonly repeat: boolean;
+	matches(chord: KeyChord): boolean;
+	stop(options?: { readonly preventDefault?: boolean; readonly immediate?: boolean }): void;
+}
+
 /**
  * Stable physical-key view for shortcut and keybinding matching.
  *
@@ -22,7 +40,7 @@ export interface KeyChord {
  * Construct this representation when an event crosses a component boundary or
  * must be compared with a reusable physical key chord.
  */
-export class StandardKeyboardEvent {
+export class StandardKeyboardEvent implements IKeyboardEvent {
 	readonly key: string;
 	readonly code: string;
 	readonly keyCode: KeyCode;

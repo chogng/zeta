@@ -1,4 +1,4 @@
-import { type StandardKeyboardEvent } from '../../../base/browser/keyboardEvent.js';
+import { type IKeyboardEvent } from '../../../base/browser/keyboardEvent.js';
 import { type TextPosition, type TextRange } from '../../common/core/text.js';
 import { EditorHitTargetKind } from '../../common/viewModel/pointerHitTest.js';
 
@@ -43,7 +43,7 @@ export type EditorViewPartialMouseEvent = EditorViewMouseEvent;
  * It does not own pointer gestures, selection, editing, or drag/drop policy.
  */
 export class ViewUserInputEvents {
-	public onKeyDown: EventCallback<StandardKeyboardEvent> | null = null;
+	public onKeyDown: EventCallback<IKeyboardEvent> | null = null;
 	public onKeyUp: EventCallback<KeyboardEvent> | null = null;
 	public onContextMenu: EventCallback<EditorViewMouseEvent> | null = null;
 	public onMouseMove: EventCallback<EditorViewMouseEvent> | null = null;
@@ -55,7 +55,7 @@ export class ViewUserInputEvents {
 	public onMouseDropCanceled: EventCallback<void> | null = null;
 	public onMouseWheel: EventCallback<WheelEvent> | null = null;
 
-	public emitKeyDown(event: StandardKeyboardEvent): void {
+	public emitKeyDown(event: IKeyboardEvent): void {
 		this.onKeyDown?.(event);
 	}
 

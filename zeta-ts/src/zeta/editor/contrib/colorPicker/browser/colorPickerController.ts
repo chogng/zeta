@@ -47,7 +47,7 @@ export class ColorPickerController extends Disposable {
 		super();
 		if (viewport.textModel !== selections.textModel) throw new TypeError('Stanza color picker dependencies must share a text model');
 		this.widget = this._register(new ColorPickerWidget(
-			viewport.element.ownerDocument,
+			viewport.element,
 			color => this.refreshPresentations(color),
 			() => this.apply(),
 			() => this.close(true),

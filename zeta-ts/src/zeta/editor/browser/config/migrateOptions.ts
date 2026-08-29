@@ -1,10 +1,11 @@
 import { EditorLineWrapping } from '../../common/config/editorOptions.js';
+import { isObject, type Mutable } from '../../../base/common/types.js';
 
-type MutableOptions = Record<string, unknown>;
+type MutableOptions = Mutable<Readonly<Record<string, unknown>>>;
 
 /** Converts legacy browser-editor option shapes before the current contract is validated. */
 export function migrateOptions<T extends object>(options: T): T {
-	if (!options || typeof options !== 'object' || Array.isArray(options)) {
+	if (!isObject(options)) {
 		throw new TypeError('Editor options must be an object');
 	}
 

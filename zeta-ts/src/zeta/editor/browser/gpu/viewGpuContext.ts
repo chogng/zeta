@@ -1,8 +1,10 @@
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, toDisposable, type IReference } from '../../../base/common/lifecycle.js';
+import { PixelRatio, type IPixelRatioMonitor } from '../../../base/browser/pixelRatio.js';
+import { h } from '../../../base/browser/dom.js';
 import { TextureAtlas } from './atlas/textureAtlas.js';
 import { GPULifecycle } from './gpuDisposable.js';
-import { observeDevicePixelDimensions, validatedDevicePixelRatio } from './gpuUtils.js';
+import { observeDevicePixelDimensions } from './gpuUtils.js';
 import { DecorationCssRuleExtractor } from './css/decorationCssRuleExtractor.js';
 import { DecorationStyleCache } from './css/decorationStyleCache.js';
 import { RectangleRenderer } from './rectangleRenderer.js';
@@ -21,6 +23,7 @@ export class ViewGpuContext extends Disposable {
 	public readonly decorationCssRuleExtractor: DecorationCssRuleExtractor;
 	public readonly decorationStyleCache = new DecorationStyleCache();
 	private readonly ownerWindow: Window;
+	private readonly pixelRatio: IPixelRatioMonitor;
 	private readonly changeEmitter = this._register(new Emitter<void>());
 	public readonly onDidChange: Event<void> = this.changeEmitter.event;
 	private canvasContext: GPUCanvasContext | undefined;
@@ -39,14 +42,21 @@ export class ViewGpuContext extends Disposable {
 		const ownerWindow = options.host.ownerDocument.defaultView;
 		if (!ownerWindow) throw new ReferenceError('WebGPU editor rendering requires a browser window');
 		this.ownerWindow = ownerWindow;
-		this.decorationCssRuleExtractor = this._register(new DecorationCssRuleExtractor(options.host.ownerDocument));
-		this.currentDevicePixelRatio = validatedDevicePixelRatio(ownerWindow);
-		this.canvas = options.host.ownerDocument.createElement('canvas');
+		this.pixelRatio = PixelRatio.getInstance(ownerWindow);
+		this.decorationCssRuleExtractor = this._register(new DecorationCssRuleExtractor(options.host));
+		this.currentDevicePixelRatio = this.pixelRatio.value;
+		this.canvas = h(options.host.ownerDocument, 'canvas');
 		this.canvas.className = 'stanza-editor-gpu-canvas';
 		this.canvas.setAttribute('aria-hidden', 'true');
 		this.canvas.hidden = true;
 		options.host.append(this.canvas);
 		this._register(toDisposable(() => this.canvas.remove()));
+		this._register(this.pixelRatio.onDidChange(value => {
+			if (value === this.currentDevicePixelRatio) return;
+			this.currentDevicePixelRatio = value;
+			if (this.currentDevice) this.createAtlas();
+			this.changeEmitter.fire();
+		}));
 		try {
 			this._register(observeDevicePixelDimensions(this.canvas, ownerWindow, (width, height) => this.setPhysicalSize(width, height)));
 		} catch (error) {
@@ -104,7 +114,7 @@ export class ViewGpuContext extends Disposable {
 		this.canvas.style.height = `${height}px`;
 		this.canvas.style.left = `${left}px`;
 		this.canvas.style.top = `${top}px`;
-		const nextDevicePixelRatio = validatedDevicePixelRatio(this.ownerWindow);
+		const nextDevicePixelRatio = this.pixelRatio.value;
 		if (nextDevicePixelRatio !== this.currentDevicePixelRatio) {
 			this.currentDevicePixelRatio = nextDevicePixelRatio;
 			if (this.currentDevice) this.createAtlas();
@@ -171,7 +181,7 @@ export class ViewGpuContext extends Disposable {
 		const maximumTextureSize = this.device.limits.maxTextureDimension2D;
 		const pageSize = Math.min(maximumTextureSize, 1024 * Math.max(1, Math.floor(this.currentDevicePixelRatio)));
 		this.currentAtlas?.dispose();
-		this.currentAtlas = new TextureAtlas(this.canvas.ownerDocument, pageSize);
+		this.currentAtlas = new TextureAtlas(this.canvas, pageSize);
 		this.atlasRevision += 1;
 	}
 

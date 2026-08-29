@@ -7,10 +7,24 @@ import {
 	MutableDisposable,
 	DisposableStore,
 	Disposable,
+	dispose,
 	type IDisposable,
 	noneDisposable,
 	toDisposable,
 } from "../../common/lifecycle.js";
+
+test('dispose releases complete collections and aggregates failures', () => {
+	const calls: string[] = [];
+	assert.deepEqual(dispose([
+		toDisposable(() => calls.push('first')),
+		toDisposable(() => calls.push('second')),
+	]), []);
+	assert.deepEqual(calls, ['first', 'second']);
+	assert.throws(() => dispose([
+		toDisposable(() => { throw new Error('first failure'); }),
+		toDisposable(() => { throw new Error('second failure'); }),
+	]), AggregateError);
+});
 
 test("noneDisposable is a reusable no-op", () => {
 	assert.equal(Disposable.None, noneDisposable);
