@@ -10,7 +10,7 @@ const OVERVIEW_RULER_WIDTH = 6;
 
 export type OverviewRulerMarker = DiagnosticOverviewMarker | DiffOverviewMarker;
 
-export interface OverviewRulerPartOptions {
+export interface DecorationsOverviewRulerOptions {
 	readonly host: HTMLElement;
 	readonly verticalScrollbarWidth: number;
 	readonly readLineCount: () => number;
@@ -19,7 +19,7 @@ export interface OverviewRulerPartOptions {
 }
 
 /** Projects diagnostic and diff markers into the editor's overview ruler. */
-export class OverviewRulerPart extends EditorViewPart {
+export class DecorationsOverviewRuler extends EditorViewPart {
 	readonly domNode: HTMLDivElement;
 	private readonly root: FastDomNode<HTMLDivElement>;
 	private readonly verticalScrollbarWidth: number;
@@ -28,7 +28,7 @@ export class OverviewRulerPart extends EditorViewPart {
 	private readonly readMarkersRevision: () => number;
 	private renderedMarkersRevision = -1;
 
-	constructor(options: OverviewRulerPartOptions) {
+	constructor(options: DecorationsOverviewRulerOptions) {
 		super();
 		this.verticalScrollbarWidth = options.verticalScrollbarWidth;
 		this.readLineCount = options.readLineCount;

@@ -7,31 +7,31 @@ import { type TextDecorationId } from '../../../common/model/decorationCollectio
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { EditorViewPart, type EditorRenderingContext } from '../../view/viewPart.js';
 import { type DecorationGlyphMarginPresentation, type DecorationSource, type ResolvedDecoration, GlyphMarginLane } from '../decorations/decorationPresentation.js';
-import { type DecorationsPart } from '../decorations/decorationsPart.js';
+import { type DecorationsOverlay } from '../decorations/decorations.js';
 
-export interface GlyphMarginPartOptions {
+export interface GlyphMarginWidgetsOptions {
 	readonly host: HTMLElement;
 	readonly lanes: readonly GlyphMarginLane[];
-	readonly decorationsPart: DecorationsPart;
+	readonly decorations: DecorationsOverlay;
 	readonly readVisualLines: () => EditorVisualLineProjection;
 	readonly readLeft: () => number;
 	readonly readLaneWidth: () => number;
 }
 
 /** Renders decoration-backed glyphs in shared, stable margin lanes. */
-export class GlyphMarginPart extends EditorViewPart {
+export class GlyphMarginWidgets extends EditorViewPart {
 	public readonly domNode: HTMLDivElement;
 	private readonly root: FastDomNode<HTMLDivElement>;
-	private readonly decorationsPart: DecorationsPart;
+	private readonly decorations: DecorationsOverlay;
 	private readonly readVisualLines: () => EditorVisualLineProjection;
 	private readonly readLeft: () => number;
 	private readonly readLaneWidth: () => number;
 	private readonly laneDomNodes: ReadonlyMap<GlyphMarginLane, HTMLSpanElement>;
 	private readonly buttons = new Map<TextDecorationId, HTMLButtonElement>();
 
-	constructor(options: GlyphMarginPartOptions) {
+	constructor(options: GlyphMarginWidgetsOptions) {
 		super();
-		this.decorationsPart = options.decorationsPart;
+		this.decorations = options.decorations;
 		this.readVisualLines = options.readVisualLines;
 		this.readLeft = options.readLeft;
 		this.readLaneWidth = options.readLaneWidth;
@@ -67,7 +67,7 @@ export class GlyphMarginPart extends EditorViewPart {
 			return;
 		}
 		const visualLines = this.readVisualLines();
-		const visible = this.decorationsPart.visibleDecorations(overlay)
+		const visible = this.decorations.visibleDecorations(overlay)
 			.filter((decoration): decoration is ResolvedDecoration & { readonly glyphMargin: DecorationGlyphMarginPresentation } => decoration.glyphMargin !== undefined)
 			.sort(compareGlyphDecorations);
 		const renderedIds = new Set<TextDecorationId>();

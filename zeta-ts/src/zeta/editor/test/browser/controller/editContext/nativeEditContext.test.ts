@@ -7,7 +7,7 @@ import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { type IAccessibilityService } from "../../../../../platform/accessibility/common/accessibility.js";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
-import { SemanticTokenPresentation, type BracketColorizationSource, type SemanticTokenSource } from "../../../../browser/viewparts/semanticTokens/semanticTokenPresentation.js";
+import { SemanticTokenPresentation, type BracketColorizationSource, type SemanticTokenSource } from "../../../../browser/viewparts/viewLines/semanticTokenPresentation.js";
 
 class FixedTextMeasurer implements TextMeasurer {
 	readonly horizontalPadding = 24;

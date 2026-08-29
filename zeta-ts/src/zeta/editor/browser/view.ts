@@ -30,22 +30,22 @@ import { ElementSizeObserver } from './config/elementSizeObserver.js';
 import { DomTextMeasurer, type TextMeasurer } from './config/fontMeasurements.js';
 import { LineWidthIndex } from './measurement/lineWidthIndex.js';
 import { type DecorationSource } from './viewparts/decorations/decorationPresentation.js';
-import { type BracketColorizationSource, type SemanticTokenSource } from './viewparts/semanticTokens/semanticTokenPresentation.js';
+import { type BracketColorizationSource, type SemanticTokenSource } from './viewparts/viewLines/semanticTokenPresentation.js';
 import { getTextGraphemeBoundaries } from '../common/core/textSegmentation.js';
-import { MarginPart } from './viewparts/margin/marginPart.js';
-import { GlyphMarginPart, resolveGlyphMarginLanes } from './viewparts/glyphMargin/glyphMarginPart.js';
-import { RulersPart, type EditorRuler } from './viewparts/rulers/rulersPart.js';
-import { EditorScrollbarPart } from './viewparts/editorScrollbar/editorScrollbarPart.js';
-import { LineNumbersPart } from './viewparts/lineNumbers/lineNumbersPart.js';
+import { Margin } from './viewparts/margin/margin.js';
+import { GlyphMarginWidgets, resolveGlyphMarginLanes } from './viewparts/glyphMargin/glyphMargin.js';
+import { Rulers, type EditorRuler } from './viewparts/rulers/rulers.js';
+import { EditorScrollbar } from './viewparts/editorScrollbar/editorScrollbar.js';
+import { LineNumbersOverlay } from './viewparts/lineNumbers/lineNumbers.js';
 import { Minimap } from './viewparts/minimap/minimap.js';
-import { OverviewRulerPart } from './viewparts/overviewRuler/overviewRulerPart.js';
-import { ScrollDecorationPart } from './viewparts/scrollDecoration/scrollDecorationPart.js';
+import { DecorationsOverviewRuler } from './viewparts/overviewRuler/decorationsOverviewRuler.js';
+import { ScrollDecorationViewPart } from './viewparts/scrollDecoration/scrollDecoration.js';
 import { EditorViewContext, EditorViewPartCollection } from './view/viewPart.js';
 import { ViewOverlays } from './view/viewOverlays.js';
 import { ViewLines } from './viewparts/viewLines/viewLines.js';
 import { ViewLineOptions, ViewLineTextDirection as EditorTextDirection } from './viewparts/viewLines/viewLineOptions.js';
 import { ViewLinesGpu } from './viewparts/viewLinesGpu/viewLinesGpu.js';
-import { linesDecorationsWidth } from './viewparts/linesDecorations/linesDecorationsPart.js';
+import { linesDecorationsWidth } from './viewparts/linesDecorations/linesDecorations.js';
 import { createEditorRenderingContext, createEditorViewportData, type ActiveLineHighlight, type EditorOverlayContext, type EditorRenderingContext } from './view/renderingContext.js';
 import { ViewUserInputEvents } from './view/viewUserInputEvents.js';
 import { DOMLineBreaksComputer } from './view/domLineBreaksComputer.js';
@@ -339,7 +339,7 @@ export interface EditorViewportPadding {
 	readonly left: number;
 }
 
-export type { EditorRuler } from "./viewparts/rulers/rulersPart.js";
+export type { EditorRuler } from "./viewparts/rulers/rulers.js";
 
 /** Controls the browser paragraph direction used to shape Stanza's rendered text. */
 export { EditorTextDirection };
@@ -418,7 +418,7 @@ export class View extends Disposable {
 	private readonly viewParts: EditorViewPartCollection;
 	private readonly viewLines: ViewLines;
 	private readonly viewLinesGpu: ViewLinesGpu | undefined;
-	private readonly marginPart: MarginPart;
+	private readonly margin: Margin;
 	private readonly viewOverlays: ViewOverlays;
 	private readonly textMeasurer: TextMeasurer;
 	private readonly lineWidths: LineWidthIndex;
@@ -611,7 +611,7 @@ export class View extends Disposable {
 			showIndentationGuides: this.showIndentationGuides,
 			indentationTabSize: this.indentation.tabSize,
 		}));
-		this.marginPart = this.viewParts.register(new MarginPart({
+		this.margin = this.viewParts.register(new Margin({
 			host: this.element,
 			contentElement: this.contentElement,
 			model: this.model,
@@ -622,27 +622,27 @@ export class View extends Disposable {
 			lineHeight: options.lineHeight,
 			lineDecorationsWidth: linesDecorationsWidth(decorationSources),
 		}));
-		const glyphMarginPart = this.viewParts.register(new GlyphMarginPart({
+		const glyphMarginWidgets = this.viewParts.register(new GlyphMarginWidgets({
 			host: this.contentElement,
 			lanes: glyphMarginLanes,
-			decorationsPart: this.viewOverlays.decorationsPart,
+			decorations: this.viewOverlays.decorations,
 			readVisualLines: () => this.visualProjection,
-			readLeft: () => this.marginPart.glyphMarginLeft,
-			readLaneWidth: () => this.marginPart.glyphMarginLaneWidth,
+			readLeft: () => this.margin.glyphMarginLeft,
+			readLaneWidth: () => this.margin.glyphMarginLaneWidth,
 		}));
-		const lineNumbersPart = this.viewParts.register(new LineNumbersPart({
+		const lineNumbersOverlay = this.viewParts.register(new LineNumbersOverlay({
 			host: this.contentElement,
 			showLineNumbers: this.showLineNumbers,
 			selectionController: this.selectionController,
 			readVisualProjection: () => this.visualProjection,
 		}));
-		const rulersPart = this.viewParts.register(new RulersPart({
+		const rulers = this.viewParts.register(new Rulers({
 			host: this.contentElement,
 			textMeasurer: this.textMeasurer,
 			readTextLeft: () => this.textLeft,
 			rulers: options.rulers,
 		}));
-		this.viewParts.register(new EditorScrollbarPart({
+		this.viewParts.register(new EditorScrollbar({
 			container: this.element,
 			viewport: this.element,
 			scrollTo: position => this.scrollTo(position),
@@ -662,32 +662,32 @@ export class View extends Disposable {
 			readVisualProjection: () => this.visualProjection,
 			readProjectionRevision: () => this.viewModelLines.revision,
 			scrollTo: position => this.scrollTo(position),
-			readMarkers: () => this.viewOverlays.decorationsPart.minimapMarkers(),
-			readMarkersRevision: () => this.viewOverlays.decorationsPart.markersRevision,
+			readMarkers: () => this.viewOverlays.decorations.minimapMarkers(),
+			readMarkersRevision: () => this.viewOverlays.decorations.markersRevision,
 		}));
-		const overviewRulerPart = this.viewParts.register(new OverviewRulerPart({
+		const decorationsOverviewRuler = this.viewParts.register(new DecorationsOverviewRuler({
 			host: this.element,
 			verticalScrollbarWidth: DEFAULT_EDITOR_SCROLLBAR.verticalScrollbarSize,
 			readLineCount: () => this.model.lineCount,
-			readMarkers: () => this.viewOverlays.decorationsPart.overviewMarkers(),
-			readMarkersRevision: () => this.viewOverlays.decorationsPart.markersRevision,
+			readMarkers: () => this.viewOverlays.decorations.overviewMarkers(),
+			readMarkersRevision: () => this.viewOverlays.decorations.markersRevision,
 		}));
-		const scrollDecorationPart = this.viewParts.register(new ScrollDecorationPart(this.element));
+		const scrollDecoration = this.viewParts.register(new ScrollDecorationViewPart(this.element));
 
 		// Root order is the visual stacking contract; Parts own nodes but do not choose their host.
 		this.contentElement.append(
 			this.viewLines.domNode,
 			...this.viewOverlays.domNodes,
-			lineNumbersPart.domNode,
-			this.marginPart.domNode,
-			glyphMarginPart.domNode,
-			this.viewOverlays.blockDecorationsPart.domNode,
-			rulersPart.domNode,
+			lineNumbersOverlay.domNode,
+			this.margin.domNode,
+			glyphMarginWidgets.domNode,
+			this.viewOverlays.blockDecorations.domNode,
+			rulers.domNode,
 		);
 		this.element.append(
 			minimapPart.domNode,
-			overviewRulerPart.domNode,
-			scrollDecorationPart.domNode,
+			decorationsOverviewRuler.domNode,
+			scrollDecoration.domNode,
 		);
 		this._register(this.viewModelLines.onDidChange(() => this.project(viewport.layout)));
 		this._register(this.viewOverlays.onDidChangeDecorations(() => this.project(viewport.layout)));
@@ -713,7 +713,7 @@ export class View extends Disposable {
 		if (this.selectionController) {
 			this._register(this.selectionController.onDidChange(() => {
 				const context = this.createRenderingContext(viewport.layout);
-				lineNumbersPart.renderNow(context);
+				lineNumbersOverlay.renderNow(context);
 				this.viewOverlays.renderSelection(context);
 				this.updateAccessibilityStatus();
 			}));
@@ -830,7 +830,7 @@ export class View extends Disposable {
 	}
 
 	setLineHeight(lineHeight: number): EditorViewportLayout {
-		this.marginPart.setLineHeight(lineHeight);
+		this.margin.setLineHeight(lineHeight);
 		const lineHeightLayout = this.viewport.setLineHeight(lineHeight);
 		if (this.softWrapping) this.updateWrapWidth(lineHeightLayout.viewportSize.width);
 		const layout = this.viewport.setContentWidth(this.measuredContentWidth);
@@ -1029,11 +1029,11 @@ export class View extends Disposable {
 	}
 
 	private get gutterWidth(): number {
-		return this.marginPart.gutterWidth;
+		return this.margin.gutterWidth;
 	}
 
 	private get textLeft(): number {
-		return this.marginPart.textLeft;
+		return this.margin.textLeft;
 	}
 
 	private get contentTextLeft(): number {

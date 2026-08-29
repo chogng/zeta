@@ -5,7 +5,7 @@ import { RangeUtil } from './rangeUtil.js';
 import { ViewLineTextDirection, type ViewLineOptions } from './viewLineOptions.js';
 import { DomPosition, type CharacterMapping } from '../../../common/viewLayout/viewLineRenderer.js';
 import { type FloatHorizontalRange } from '../../view/renderingContext.js';
-import { projectStanzaSemanticTokenLine, type BracketColorizationSpan, type ResolvedSemanticToken } from '../semanticTokens/semanticTokenPresentation.js';
+import { projectStanzaSemanticTokenLine, type BracketColorizationSpan, type ResolvedSemanticToken } from './semanticTokenPresentation.js';
 
 interface BrowserCaretPosition {
 	readonly offsetNode: Node;

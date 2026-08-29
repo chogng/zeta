@@ -10,7 +10,7 @@ import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart
 
 export type EditorScrollbarVisibility = "auto" | "visible" | "hidden";
 
-export interface EditorScrollbarPartOptions {
+export interface EditorScrollbarOptions {
 	readonly container: HTMLElement;
 	readonly viewport: HTMLElement;
 	readonly scrollTo: (position: EditorScrollPosition) => void;
@@ -26,7 +26,7 @@ export interface EditorScrollbarPartOptions {
  * scrollbar axes. Native scrolling remains the editor's input and
  * accessibility fallback; this part owns only the visible custom tracks.
  */
-export class EditorScrollbarPart extends EditorViewPart {
+export class EditorScrollbar extends EditorViewPart {
 	private static nextViewportId = 1;
 	private readonly container: HTMLElement;
 	private readonly horizontal: HorizontalScrollbar;
@@ -41,7 +41,7 @@ export class EditorScrollbarPart extends EditorViewPart {
 	private lastScrollPosition: EditorScrollPosition | undefined;
 	private scrollActivityTimer: ReturnType<typeof setTimeout> | undefined;
 
-	constructor(options: EditorScrollbarPartOptions) {
+	constructor(options: EditorScrollbarOptions) {
 		super();
 		if (!options.container || !options.viewport) {
 			throw new TypeError("Editor scrollbar part requires a container and viewport");
@@ -56,7 +56,7 @@ export class EditorScrollbarPart extends EditorViewPart {
 		this.horizontalVisibility = options.horizontal ?? "auto";
 		this.verticalVisibility = options.vertical ?? "auto";
 		if (!options.viewport.id) {
-			options.viewport.id = `stanza-editor-scroll-viewport-${EditorScrollbarPart.nextViewportId++}`;
+			options.viewport.id = `stanza-editor-scroll-viewport-${EditorScrollbar.nextViewportId++}`;
 		}
 		options.container.style.setProperty("--stanza-editor-horizontal-scrollbar-size", `${this.horizontalScrollbarSize}px`);
 		options.container.style.setProperty("--stanza-editor-vertical-scrollbar-size", `${this.verticalScrollbarSize}px`);

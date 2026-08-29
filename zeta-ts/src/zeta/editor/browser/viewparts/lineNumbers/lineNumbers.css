@@ -1,5 +1,5 @@
 .stanza-editor-line-margin {
-  position: sticky;
+  position: absolute;
   left: 0;
   z-index: 4;
   display: block;

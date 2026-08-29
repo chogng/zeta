@@ -5,7 +5,7 @@ import { type EditorVisualLineProjection } from "../../../common/viewModel/model
 import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
 import { ViewPartRows } from "../../view/viewPartRows.js";
 
-export interface LineNumbersPartOptions {
+export interface LineNumbersOverlayOptions {
 	readonly host: HTMLElement;
 	readonly showLineNumbers: boolean;
 	readonly selectionController: EditorSelectionController | undefined;
@@ -13,14 +13,14 @@ export interface LineNumbersPartOptions {
 }
 
 /** Projects line numbers into virtual rows. */
-export class LineNumbersPart extends EditorViewPart {
+export class LineNumbersOverlay extends EditorViewPart {
 	public readonly domNode: HTMLElement;
 	private readonly showLineNumbers: boolean;
 	private readonly selectionController: EditorSelectionController | undefined;
 	private readonly readVisualProjection: () => EditorVisualLineProjection;
 	private readonly rows: ViewPartRows;
 
-	constructor(options: LineNumbersPartOptions) {
+	constructor(options: LineNumbersOverlayOptions) {
 		super();
 		this.rows = this._register(new ViewPartRows(options.host, "stanza-editor-line-numbers-layer", "stanza-editor-line-margin"));
 		this.domNode = this.rows.domNode;
@@ -30,6 +30,7 @@ export class LineNumbersPart extends EditorViewPart {
 	}
 
 	render(context: EditorRenderingContext): void {
+		this.domNode.style.left = `${context.layout.scrollPosition.left}px`;
 		const visualProjection = this.readVisualProjection();
 		const activeLineIndex = this.selectionController?.selections.primary.active.lineIndex;
 		for (const [visualLineIndex, row] of this.rows.render(context)) {

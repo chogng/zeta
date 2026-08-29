@@ -144,22 +144,25 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"contrib/smartSelect/common/selectionRanges.ts",
 		"contrib/symbolIcons/browser/symbolIcons.ts",
 		"contrib/symbolIcons/browser/symbolIcons.css",
-		"browser/viewparts/margin/marginPart.ts",
-		"browser/viewparts/glyphMargin/glyphMarginPart.ts",
-		"browser/viewparts/marginDecorations/marginDecorationsPart.ts",
-		"browser/viewparts/linesDecorations/linesDecorationsPart.ts",
-		"browser/viewparts/blockDecorations/blockDecorationsPart.ts",
-		"browser/viewparts/rulers/rulersPart.ts",
+		"browser/viewparts/margin/margin.ts",
+		"browser/viewparts/glyphMargin/glyphMargin.ts",
+		"browser/viewparts/marginDecorations/marginDecorations.ts",
+		"browser/viewparts/linesDecorations/linesDecorations.ts",
+		"browser/viewparts/blockDecorations/blockDecorations.ts",
+		"browser/viewparts/rulers/rulers.ts",
+		"browser/viewparts/editorScrollbar/editorScrollbar.ts",
+		"browser/viewparts/lineNumbers/lineNumbers.ts",
+		"browser/viewparts/overviewRuler/decorationsOverviewRuler.ts",
+		"browser/viewparts/scrollDecoration/scrollDecoration.ts",
 		"browser/viewparts/minimap/minimap.ts",
 		"browser/viewparts/minimap/minimapCharRenderer.ts",
 		"browser/viewparts/minimap/minimapCharRendererFactory.ts",
 		"browser/viewparts/minimap/minimapCharSheet.ts",
 		"browser/viewparts/minimap/minimapPreBaked.ts",
-		"browser/viewparts/decorations/decorationsPart.ts",
-		"browser/viewparts/indentGuides/indentGuidesPart.ts",
-		"browser/viewparts/composition/compositionPart.ts",
-		"browser/viewparts/selections/selectionsPart.ts",
-		"browser/viewparts/viewCursors/viewCursorsPart.ts",
+		"browser/viewparts/decorations/decorations.ts",
+		"browser/viewparts/indentGuides/indentGuides.ts",
+		"browser/viewparts/selections/selections.ts",
+		"browser/viewparts/viewCursors/viewCursors.ts",
 		"browser/config/fontMeasurements.ts",
 		"browser/config/charWidthReader.ts",
 		"browser/config/editorConfiguration.ts",
@@ -175,7 +178,7 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"common/viewModel/visualCursorNavigation.ts",
 		"common/viewModel/pointerHitTest.ts",
 		"browser/viewparts/decorations/decorationPresentation.ts",
-		"browser/viewparts/semanticTokens/semanticTokenPresentation.ts",
+		"browser/viewparts/viewLines/semanticTokenPresentation.ts",
 		"browser/viewparts/viewLines/domReadingContext.ts",
 		"browser/viewparts/viewLines/rangeUtil.ts",
 		"browser/viewparts/viewLines/viewLineOptions.ts",
@@ -292,6 +295,31 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/viewparts/minimap/minimapProjection.ts",
 		"browser/viewparts/minimap/minimapPresentation.ts",
 		"browser/viewparts/minimap/minimapNavigationController.ts",
+		"browser/viewparts/blockDecorations/blockDecorationsPart.ts",
+		"browser/viewparts/blockDecorations/blockDecorationsProjection.ts",
+		"browser/viewparts/composition/compositionPart.ts",
+		"browser/viewparts/composition/compositionProjection.ts",
+		"browser/viewparts/composition/composition.css",
+		"browser/viewparts/decorations/decorationsPart.ts",
+		"browser/viewparts/decorations/decorationProjection.ts",
+		"browser/viewparts/editorScrollbar/editorScrollbarPart.ts",
+		"browser/viewparts/glyphMargin/glyphMarginPart.ts",
+		"browser/viewparts/indentGuides/indentGuidesPart.ts",
+		"browser/viewparts/indentGuides/indentationGuides.ts",
+		"browser/viewparts/lineNumbers/lineNumbersPart.ts",
+		"browser/viewparts/linesDecorations/linesDecorationsPart.ts",
+		"browser/viewparts/linesDecorations/linesDecorationsProjection.ts",
+		"browser/viewparts/margin/marginPart.ts",
+		"browser/viewparts/marginDecorations/marginDecorationsPart.ts",
+		"browser/viewparts/marginDecorations/marginDecorationsProjection.ts",
+		"browser/viewparts/overviewRuler/overviewRulerPart.ts",
+		"browser/viewparts/rulers/rulersPart.ts",
+		"browser/viewparts/scrollDecoration/scrollDecorationPart.ts",
+		"browser/viewparts/selections/selectionsPart.ts",
+		"browser/viewparts/selections/selectionProjection.ts",
+		"browser/viewparts/semanticTokens/semanticTokenPresentation.ts",
+		"browser/viewparts/viewCursors/viewCursorsPart.ts",
+		"browser/viewparts/viewCursors/cursorProjection.ts",
 		"text-engine-architecture.md",
 		"text-engine-implementation-ledger.md",
 		"document-engine-architecture.md",
@@ -323,13 +351,13 @@ test("Editor browser retires only the editor-layer EditorPart", () => {
 	assert.doesNotMatch(editorBrowser, /export class EditorPart/u);
 });
 
-test("ViewLine owns text rows while overlay Parts own their row DOM", () => {
+test("ViewLine owns text rows while overlays own their row DOM", () => {
 	const viewLine = readFileSync(join(editorRoot, "browser/viewparts/viewLines/viewLine.ts"), "utf8");
 	for (const foreignRow of ["line-number", "diagnostic-marker", "indent-guides", "decorations", "selections", "cursors", "composition"]) {
 		assert.doesNotMatch(viewLine, new RegExp(`stanza-editor-${foreignRow}`, "u"), foreignRow);
 	}
 	assert.match(viewLine, /stanza-editor-line-text/u);
-	for (const part of ["decorations/decorationsPart", "indentGuides/indentGuidesPart", "linesDecorations/linesDecorationsPart", "marginDecorations/marginDecorationsPart", "selections/selectionsPart", "viewCursors/viewCursorsPart", "composition/compositionPart", "lineNumbers/lineNumbersPart"]) {
+	for (const part of ["decorations/decorations", "indentGuides/indentGuides", "linesDecorations/linesDecorations", "marginDecorations/marginDecorations", "selections/selections", "viewCursors/viewCursors", "lineNumbers/lineNumbers"]) {
 		const source = readFileSync(join(editorRoot, `browser/viewparts/${part}.ts`), "utf8");
 		assert.match(source, /new ViewPartRows/u, part);
 	}

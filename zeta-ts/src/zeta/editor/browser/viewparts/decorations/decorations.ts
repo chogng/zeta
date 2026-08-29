@@ -5,18 +5,19 @@ import { type DiagnosticOverviewMarker } from "../overviewRuler/diagnosticOvervi
 import { createStanzaDiagnosticOverviewMarkers } from "../overviewRuler/diagnosticOverviewMarkers.js";
 import { type DiffOverviewMarker } from "../overviewRuler/diffOverviewMarkers.js";
 import { createStanzaDiffOverviewMarkers } from "../overviewRuler/diffOverviewMarkers.js";
-import { type DecorationSource, type ResolvedDecoration } from "../decorations/decorationPresentation.js";
+import { createStanzaVisualDecorationRectangles, type DecorationSource, type ResolvedDecoration } from "../decorations/decorationPresentation.js";
 import { type EditorOverlayContext } from "../../view/renderingContext.js";
-import { projectStanzaDecorationOverlays } from "./decorationProjection.js";
+import { h, reset } from '../../../../base/browser/dom.js';
+import { DecorationPresentation } from './decorationPresentation.js';
 import { DecorationLineIndex } from "./decorationLineIndex.js";
 import { DynamicViewOverlay } from "../../view/dynamicViewOverlay.js";
 import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
 import { ViewPartRows } from '../../view/viewPartRows.js';
 
-export type DecorationsPartMarker = DiagnosticOverviewMarker | DiffOverviewMarker;
+export type DecorationsOverlayMarker = DiagnosticOverviewMarker | DiffOverviewMarker;
 
 /** Owns decoration snapshots, visible-line lookup, inline DOM projection, and overview aggregation. */
-export class DecorationsPart extends DynamicViewOverlay {
+export class DecorationsOverlay extends DynamicViewOverlay {
 	public readonly domNode: HTMLElement;
 	private readonly model: TextModel;
 	private readonly decorationSources: readonly DecorationSource[];
@@ -67,13 +68,13 @@ export class DecorationsPart extends DynamicViewOverlay {
 		return this.resolveVisibleDecorations(context);
 	}
 
-	public overviewMarkers(): readonly DecorationsPartMarker[] {
+	public overviewMarkers(): readonly DecorationsOverlayMarker[] {
 		this.synchronizeDecorationSnapshots();
 		const decorations = this.allDecorations().filter(decoration => decoration.overviewRuler !== false);
 		return markersForDecorations(decorations, this.model.lineCount);
 	}
 
-	public minimapMarkers(): readonly DecorationsPartMarker[] {
+	public minimapMarkers(): readonly DecorationsOverlayMarker[] {
 		this.synchronizeDecorationSnapshots();
 		const decorations = this.allDecorations().filter(decoration => decoration.minimap !== false);
 		return markersForDecorations(decorations, this.model.lineCount);
@@ -113,9 +114,56 @@ export class DecorationsPart extends DynamicViewOverlay {
 	}
 }
 
-function markersForDecorations(decorations: readonly ResolvedDecoration[], lineCount: number): readonly DecorationsPartMarker[] {
+function markersForDecorations(decorations: readonly ResolvedDecoration[], lineCount: number): readonly DecorationsOverlayMarker[] {
 	return Object.freeze([
 		...createStanzaDiagnosticOverviewMarkers(decorations, lineCount),
 		...createStanzaDiffOverviewMarkers(decorations, lineCount),
 	]);
+}
+
+function projectStanzaDecorationOverlays(context: EditorOverlayContext, decorations: readonly ResolvedDecoration[], rows: ReadonlyMap<number, HTMLElement>): void {
+	const inlineDecorations = decorations.filter(decoration => (
+		decoration.presentation !== DecorationPresentation.GlyphMargin
+		&& decoration.presentation !== DecorationPresentation.LineDecoration
+	));
+	const rectangles = createStanzaVisualDecorationRectangles(context.model, inlineDecorations, context.visualLineProjection, context.renderLines, context.textLeft, context.textMeasurer);
+	const domRectangles = new Map(inlineDecorations.map(decoration => [decoration.id, context.linesVisibleRangesForRange(decoration.range, false)] as const));
+	const decorationsById = new Map(inlineDecorations.map(decoration => [decoration.id, decoration] as const));
+	for (const row of rows.values()) reset(row);
+	const ownerDocument = context.ownerDocument;
+	for (const rectangle of rectangles) {
+		if (domRectangles.get(rectangle.id)) continue;
+		const row = rows.get(rectangle.visualLineIndex);
+		if (!row) continue;
+		row.append(createDecorationElement(ownerDocument, decorationsById.get(rectangle.id)!, rectangle.left, rectangle.width));
+	}
+	for (const decoration of inlineDecorations) {
+		const geometry = domRectangles.get(decoration.id);
+		if (!geometry) continue;
+		for (const rectangle of geometry) {
+			const row = rows.get(rectangle.visualLineIndex);
+			if (!row) continue;
+			row.append(createDecorationElement(ownerDocument, decoration, rectangle.left, rectangle.width));
+		}
+	}
+}
+
+function createDecorationElement(ownerDocument: Document, decoration: ResolvedDecoration, left: number, width: number): HTMLElement {
+	const element = h(ownerDocument, 'div');
+	element.className = 'stanza-editor-decoration';
+	element.classList.add(decoration.presentation);
+	element.dataset.decorationId = String(decoration.id);
+	if (decoration.hoverText !== undefined) element.title = decoration.hoverText;
+	if (decoration.presentation === DecorationPresentation.ColorSwatch) {
+		element.setAttribute('role', 'button');
+		element.setAttribute('aria-label', decoration.hoverText ?? 'Edit color');
+		element.tabIndex = -1;
+		element.style.setProperty('--stanza-editor-color-swatch', decoration.color!);
+		element.style.left = `${left - 14}px`;
+		element.style.width = '10px';
+	} else {
+		element.style.left = `${left}px`;
+		element.style.width = `${width}px`;
+	}
+	return element;
 }

@@ -11,7 +11,7 @@ export interface EditorRuler {
 	readonly color?: string;
 }
 
-export interface RulersPartOptions {
+export interface RulersOptions {
 	readonly host: HTMLElement;
 	readonly textMeasurer: TextMeasurer;
 	readonly readTextLeft: () => number;
@@ -19,7 +19,7 @@ export interface RulersPartOptions {
 }
 
 /** Projects configured column guides into the scrollable editor content. */
-export class RulersPart extends EditorViewPart {
+export class Rulers extends EditorViewPart {
 	readonly domNode: HTMLDivElement;
 	private readonly root: FastDomNode<HTMLDivElement>;
 	private readonly textMeasurer: TextMeasurer;
@@ -27,7 +27,7 @@ export class RulersPart extends EditorViewPart {
 	private readonly rulers: readonly EditorRuler[];
 	private readonly renderedRulers: FastDomNode<HTMLDivElement>[] = [];
 
-	constructor(options: RulersPartOptions) {
+	constructor(options: RulersOptions) {
 		super();
 		this.textMeasurer = options.textMeasurer;
 		this.readTextLeft = options.readTextLeft;

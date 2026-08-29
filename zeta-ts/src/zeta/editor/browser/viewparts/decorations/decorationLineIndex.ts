@@ -18,7 +18,7 @@ interface DecorationIntervalNode {
  * Immutable interval index owned by the decorations view part.
  *
  * The index stores only the latest presentation snapshot. Decoration sources,
- * source invalidation, and DOM projection remain owned by DecorationsPart.
+ * source invalidation, and DOM projection remain owned by DecorationsOverlay.
  */
 export class DecorationLineIndex {
 	private readonly root: DecorationIntervalNode | undefined;

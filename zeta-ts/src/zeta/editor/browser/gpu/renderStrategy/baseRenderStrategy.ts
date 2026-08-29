@@ -1,6 +1,6 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { fontVariantForCanvas } from '../../config/fontMeasurements.js';
-import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken } from '../../viewparts/semanticTokens/semanticTokenPresentation.js';
+import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken } from '../../viewparts/viewLines/semanticTokenPresentation.js';
 import { createContentSegmenter } from '../contentSegmenter.js';
 import { type ITextureAtlasPageGlyph } from '../atlas/atlas.js';
 import { type GpuRenderFrame, type GpuRenderStrategyInput, type IGpuRenderStrategy } from '../gpu.js';

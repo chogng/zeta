@@ -10,7 +10,7 @@ const GUTTER_HORIZONTAL_PADDING = 16;
 
 export type MarginPresentation = "document" | "embedded";
 
-export interface MarginPartOptions {
+export interface MarginOptions {
 	readonly host: HTMLElement;
 	readonly contentElement: HTMLElement;
 	readonly model: TextModel;
@@ -23,7 +23,7 @@ export interface MarginPartOptions {
 }
 
 /** Owns editor margin geometry and its background. */
-export class MarginPart extends EditorViewPart {
+export class Margin extends EditorViewPart {
 	readonly domNode: HTMLDivElement;
 	private readonly root: FastDomNode<HTMLDivElement>;
 	private readonly host: HTMLElement;
@@ -36,7 +36,7 @@ export class MarginPart extends EditorViewPart {
 	private readonly lineDecorationsWidth: number;
 	private lineHeight: number;
 
-	constructor(options: MarginPartOptions) {
+	constructor(options: MarginOptions) {
 		super();
 		this.host = options.host;
 		this.contentElement = options.contentElement;

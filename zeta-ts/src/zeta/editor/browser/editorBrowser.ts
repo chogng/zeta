@@ -30,7 +30,7 @@ import { type IAccessibilityService } from "../../platform/accessibility/common/
 import { TabFocus } from "./config/tabFocus.js";
 import { resolveEditorConfiguration } from "./config/editorConfiguration.js";
 import { getEditorContributions, type EditorCapability, type TextEditorContributionContext } from "./editorExtensions.js";
-import { type BracketColorizationSource, type SemanticTokenSource } from "./viewparts/semanticTokens/semanticTokenPresentation.js";
+import { type BracketColorizationSource, type SemanticTokenSource } from "./viewparts/viewLines/semanticTokenPresentation.js";
 import { SemanticTokensStylingService } from '../common/services/semanticTokensStylingService.js';
 import { type EditorLineVisibilitySource } from "../common/viewModel/viewModelLines.js";
 import { type LanguageLexicalContextSource } from "../common/languages/languageLexicalContext.js";

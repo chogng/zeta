@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createStanzaIndentationGuides } from "../../../../browser/viewparts/indentGuides/indentationGuides.js";
+import { createStanzaIndentationGuides } from "../../../../browser/viewparts/indentGuides/indentGuides.js";
 
 test("Indentation guides follow complete visual units in mixed leading whitespace", () => {
 	assert.deepEqual(createStanzaIndentationGuides("        value", 4), [

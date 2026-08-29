@@ -4,14 +4,13 @@ import { type EditorSelectionController } from '../../common/cursor/editorSelect
 import { type TextRange } from '../../common/core/text.js';
 import { type TextModel } from '../../common/model/textModel.js';
 import { type DecorationSource } from '../viewparts/decorations/decorationPresentation.js';
-import { BlockDecorationsPart } from '../viewparts/blockDecorations/blockDecorationsPart.js';
-import { CompositionPart } from '../viewparts/composition/compositionPart.js';
-import { DecorationsPart } from '../viewparts/decorations/decorationsPart.js';
-import { IndentGuidesPart } from '../viewparts/indentGuides/indentGuidesPart.js';
-import { LinesDecorationsPart } from '../viewparts/linesDecorations/linesDecorationsPart.js';
-import { MarginDecorationsPart } from '../viewparts/marginDecorations/marginDecorationsPart.js';
-import { SelectionsPart } from '../viewparts/selections/selectionsPart.js';
-import { ViewCursorsPart } from '../viewparts/viewCursors/viewCursorsPart.js';
+import { BlockDecorations } from '../viewparts/blockDecorations/blockDecorations.js';
+import { DecorationsOverlay } from '../viewparts/decorations/decorations.js';
+import { IndentGuidesOverlay } from '../viewparts/indentGuides/indentGuides.js';
+import { LinesDecorationsOverlay } from '../viewparts/linesDecorations/linesDecorations.js';
+import { MarginViewLineDecorationsOverlay } from '../viewparts/marginDecorations/marginDecorations.js';
+import { SelectionsOverlay } from '../viewparts/selections/selections.js';
+import { ViewCursors } from '../viewparts/viewCursors/viewCursors.js';
 import { DynamicViewOverlay } from './dynamicViewOverlay.js';
 import { type EditorRenderingContext, EditorViewContext } from './viewPart.js';
 
@@ -27,47 +26,44 @@ export interface ViewOverlaysOptions {
 /** Coordinates row and block overlays while keeping their concrete projections independent. */
 export class ViewOverlays extends Disposable {
 	readonly domNodes: readonly HTMLElement[];
-	readonly blockDecorationsPart: BlockDecorationsPart;
-	readonly decorationsPart: DecorationsPart;
+	readonly blockDecorations: BlockDecorations;
+	readonly decorations: DecorationsOverlay;
 	readonly onDidChangeDecorations: Event<void>;
 
 	private readonly parts: DynamicViewOverlay[] = [];
-	private readonly selectionsPart: SelectionsPart;
-	private readonly viewCursorsPart: ViewCursorsPart;
-	private readonly compositionPart: CompositionPart;
+	private readonly selections: SelectionsOverlay;
+	private readonly viewCursors: ViewCursors;
 
 	constructor(context: EditorViewContext, options: ViewOverlaysOptions) {
 		super();
-		this.decorationsPart = this.register(new DecorationsPart(
+		this.decorations = this.register(new DecorationsOverlay(
 			context,
 			options.contentElement,
 			options.model,
 			options.decorationSources,
 		));
-		this.onDidChangeDecorations = this.decorationsPart.onDidChange;
-		const linesDecorationsPart = this.register(new LinesDecorationsPart(context, options.contentElement, this.decorationsPart, options.decorationSources));
-		this.blockDecorationsPart = this.register(new BlockDecorationsPart(
+		this.onDidChangeDecorations = this.decorations.onDidChange;
+		const linesDecorations = this.register(new LinesDecorationsOverlay(context, options.contentElement, this.decorations, options.decorationSources));
+		this.blockDecorations = this.register(new BlockDecorations(
 			context,
-			this.decorationsPart,
+			this.decorations,
 			options.contentElement,
 		));
-		const marginDecorationsPart = this.register(new MarginDecorationsPart(context, options.contentElement, this.decorationsPart));
-		const indentGuidesPart = this.register(new IndentGuidesPart(context, {
+		const marginDecorations = this.register(new MarginViewLineDecorationsOverlay(context, options.contentElement, this.decorations));
+		const indentGuides = this.register(new IndentGuidesOverlay(context, {
 			host: options.contentElement,
 			showIndentationGuides: options.showIndentationGuides,
 			tabSize: options.indentationTabSize,
 		}));
-		this.selectionsPart = this.register(new SelectionsPart(context, options.contentElement, options.selectionController));
-		this.viewCursorsPart = this.register(new ViewCursorsPart(context, options.contentElement, options.selectionController));
-		this.compositionPart = this.register(new CompositionPart(context, options.contentElement, options.model));
+		this.selections = this.register(new SelectionsOverlay(context, options.contentElement, options.selectionController));
+		this.viewCursors = this.register(new ViewCursors(context, options.contentElement, options.model, options.selectionController));
 		this.domNodes = Object.freeze([
-			indentGuidesPart.domNode,
-			this.decorationsPart.domNode,
-			this.selectionsPart.domNode,
-			this.compositionPart.domNode,
-			this.viewCursorsPart.domNode,
-			linesDecorationsPart.domNode,
-			marginDecorationsPart.domNode,
+			indentGuides.domNode,
+			this.decorations.domNode,
+			this.selections.domNode,
+			this.viewCursors.domNode,
+			linesDecorations.domNode,
+			marginDecorations.domNode,
 		]);
 	}
 
@@ -84,12 +80,12 @@ export class ViewOverlays extends Disposable {
 	}
 
 	renderSelection(context: EditorRenderingContext): void {
-		this.selectionsPart.renderNow(context);
-		this.viewCursorsPart.renderNow(context);
+		this.selections.renderNow(context);
+		this.viewCursors.renderNow(context);
 	}
 
 	setCompositionRange(range: TextRange | undefined): void {
-		this.compositionPart.setRange(range);
+		this.viewCursors.setCompositionRange(range);
 	}
 
 	private register<TPart extends DynamicViewOverlay>(part: TPart): TPart {

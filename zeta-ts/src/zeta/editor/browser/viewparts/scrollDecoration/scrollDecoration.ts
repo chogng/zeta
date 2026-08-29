@@ -5,7 +5,7 @@ import { toDisposable } from "../../../../base/common/lifecycle.js";
 import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
 
 /** Projects scroll shadows without owning the editor's scroll state. */
-export class ScrollDecorationPart extends EditorViewPart {
+export class ScrollDecorationViewPart extends EditorViewPart {
 	readonly domNode: HTMLDivElement;
 	private readonly root: FastDomNode<HTMLDivElement>;
 	private readonly topShadow: FastDomNode<HTMLDivElement>;

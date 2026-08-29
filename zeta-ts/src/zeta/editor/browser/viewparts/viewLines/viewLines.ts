@@ -5,7 +5,7 @@ import { type EditorLineRange } from '../../../common/viewModel.js';
 import { type TextPosition, type TextRange } from '../../../common/core/text.js';
 import { type ViewportData } from '../../../common/viewLayout/viewLinesViewportData.js';
 import { type TextModel } from '../../../common/model/textModel.js';
-import { type BracketColorizationSource, type ResolvedSemanticToken, type SemanticTokenSource } from '../semanticTokens/semanticTokenPresentation.js';
+import { type BracketColorizationSource, type ResolvedSemanticToken, type SemanticTokenSource } from './semanticTokenPresentation.js';
 import { ViewLine } from './viewLine.js';
 import { type ViewLineOptions } from './viewLineOptions.js';
 import { ViewLayer } from '../../view/viewLayer.js';

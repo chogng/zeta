@@ -1,5 +1,5 @@
 import { type LanguageBracketPairs } from '../../../common/languages/languageBracketPairs.js';
-import { type BracketColorizationSource as EditorBracketColorizationSource, type BracketColorizationSpan } from '../../../browser/viewparts/semanticTokens/semanticTokenPresentation.js';
+import { type BracketColorizationSource as EditorBracketColorizationSource, type BracketColorizationSpan } from '../../../browser/viewparts/viewLines/semanticTokenPresentation.js';
 
 /** Adapts common structural bracket levels into the editor's closed DOM vocabulary. */
 export class BracketColorizationSource implements EditorBracketColorizationSource {

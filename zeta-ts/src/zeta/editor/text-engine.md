@@ -115,7 +115,7 @@ flowchart LR
 - Part 创建稳定根节点并拥有其内部节点、listener 和 disposal。
 - View host 决定根节点挂载位置和 sibling 顺序。Part 不接收 container 只是为了在构造函数中自行 append。
 - Part 可以公开 `domNode` 给 host，但 host 不操作 Part 内部 children。
-- Feature-owned Part 直接接收 feature owner，例如 decoration Part 直接依赖 `DecorationsPart`；不通过共享 context 查找 feature。
+- Feature-owned ViewPart 直接接收 feature owner，例如 glyph margin 直接依赖 `DecorationsOverlay`；不通过共享 context 查找 feature。
 - Render 使用 guard clause 拒绝 stale frame。Model version validation 在 frame/context boundary 只做一次。
 - 短而完整的 reconcile 算法保留在一个方法中；只有共享语义、独立生命周期或独立失效条件才提取 helper。
 
