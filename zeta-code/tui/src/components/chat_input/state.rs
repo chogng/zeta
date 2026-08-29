@@ -3,12 +3,13 @@ use super::attachments::ImagePasteOutcome;
 use super::editor::TextArea;
 use super::editor::TextAreaOutcome;
 use super::editor::TextElementId;
-use super::mentions::MentionPopupView;
-use super::mentions::Mentions;
 use super::pending_pastes::PendingPastes;
-use super::skills::SkillSelector;
-use super::skills::SkillSelectorItem;
-use super::skills::SkillSelectorView;
+use super::suggest::MentionPluginItem;
+use super::suggest::MentionPopupView;
+use super::suggest::Mentions;
+use super::suggest::SkillSelector;
+use super::suggest::SkillSelectorItem;
+use super::suggest::SkillSelectorView;
 use super::wrap::wrap_input;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
@@ -23,24 +24,26 @@ use zeta_slash_commands::{
 const MAX_COMPOSER_HISTORY: usize = 100;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum ComposerOutcome {
+pub(crate) enum ChatInputOutcome {
     Command(SlashCommandInvocation),
     Consumed,
-    Submit(ComposerSubmission),
+    QueryAnswerCancelled,
+    QueryAnswerSubmitted(String),
+    Submit(ChatSubmission),
     Unhandled,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum ComposerInput {
+pub(crate) enum ChatInputItem {
     Text(String),
     Image { url: String },
     Skill { skill: SkillRef },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct ComposerSubmission {
+pub(crate) struct ChatSubmission {
     pub(crate) display_text: String,
-    pub(crate) input: Vec<ComposerInput>,
+    pub(crate) input: Vec<ChatInputItem>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -48,11 +51,11 @@ pub(crate) struct SlashCommandInvocation {
     pub(crate) command: SlashCommandDefinition,
     pub(crate) origin: SlashCommandOrigin,
     pub(crate) display_arguments: String,
-    pub(crate) arguments: Vec<ComposerInput>,
+    pub(crate) arguments: Vec<ChatInputItem>,
 }
 
 impl SlashCommandInvocation {
-    pub(crate) fn into_forwarded_submission(mut self) -> ComposerSubmission {
+    pub(crate) fn into_forwarded_submission(mut self) -> ChatSubmission {
         let command_text = format!("/{}", self.command.name);
         let display_text = if self.display_arguments.is_empty() {
             command_text.clone()
@@ -61,15 +64,15 @@ impl SlashCommandInvocation {
         };
 
         match self.arguments.first_mut() {
-            Some(ComposerInput::Text(text)) => {
+            Some(ChatInputItem::Text(text)) => {
                 *text = format!("{command_text} {text}");
             }
-            Some(ComposerInput::Image { .. }) | Some(ComposerInput::Skill { .. }) | None => {
-                self.arguments.insert(0, ComposerInput::Text(command_text));
+            Some(ChatInputItem::Image { .. }) | Some(ChatInputItem::Skill { .. }) | None => {
+                self.arguments.insert(0, ChatInputItem::Text(command_text));
             }
         }
 
-        ComposerSubmission {
+        ChatSubmission {
             display_text,
             input: self.arguments,
         }
@@ -82,8 +85,9 @@ impl SlashCommandInvocation {
 /// key routing, and turns parsed submissions into command invocations. The text area remains
 /// responsible only for editing state and keymap behavior.
 #[derive(Debug)]
-pub(crate) struct ChatComposer {
+pub(crate) struct ChatInput {
     textarea: TextArea,
+    query_answer: Option<TextArea>,
     slash_commands: SlashCommandsState,
     slash_command_element: Option<TextElementId>,
     mentions: Mentions,
@@ -95,7 +99,7 @@ pub(crate) struct ChatComposer {
     history_draft: String,
 }
 
-impl ChatComposer {
+impl ChatInput {
     #[cfg(test)]
     pub(crate) fn new() -> Self {
         Self::with_slash_commands(super::default_slash_command_catalog())
@@ -104,6 +108,7 @@ impl ChatComposer {
     pub(crate) fn with_slash_commands(slash_commands: SlashCommandCatalog) -> Self {
         Self {
             textarea: TextArea::new(),
+            query_answer: None,
             slash_commands: SlashCommandsState::new(slash_commands),
             slash_command_element: None,
             mentions: Mentions::default(),
@@ -116,32 +121,35 @@ impl ChatComposer {
         }
     }
 
-    pub(crate) fn handle_key(&mut self, key: KeyEvent) -> ComposerOutcome {
+    pub(crate) fn handle_key(&mut self, key: KeyEvent) -> ChatInputOutcome {
+        if self.query_answer.is_some() {
+            return self.handle_query_answer_key(key);
+        }
         if self.skills.view().is_some() {
             match key.code {
                 KeyCode::Esc => {
                     self.skills.dismiss();
-                    return ComposerOutcome::Consumed;
+                    return ChatInputOutcome::Consumed;
                 }
                 KeyCode::Up => {
                     self.skills.select_previous();
-                    return ComposerOutcome::Consumed;
+                    return ChatInputOutcome::Consumed;
                 }
                 KeyCode::Down => {
                     self.skills.select_next();
-                    return ComposerOutcome::Consumed;
+                    return ChatInputOutcome::Consumed;
                 }
                 KeyCode::Tab => {
                     self.skills.complete_selected(&mut self.textarea);
                     self.sync_after_text_change();
-                    return ComposerOutcome::Consumed;
+                    return ChatInputOutcome::Consumed;
                 }
                 KeyCode::Enter
                     if key.modifiers.is_empty()
                         && self.skills.complete_selected(&mut self.textarea) =>
                 {
                     self.sync_after_text_change();
-                    return ComposerOutcome::Consumed;
+                    return ChatInputOutcome::Consumed;
                 }
                 _ => {}
             }
@@ -151,27 +159,27 @@ impl ChatComposer {
             match key.code {
                 KeyCode::Esc => {
                     self.mentions.dismiss();
-                    return ComposerOutcome::Consumed;
+                    return ChatInputOutcome::Consumed;
                 }
                 KeyCode::Up => {
                     self.mentions.select_previous();
-                    return ComposerOutcome::Consumed;
+                    return ChatInputOutcome::Consumed;
                 }
                 KeyCode::Down => {
                     self.mentions.select_next();
-                    return ComposerOutcome::Consumed;
+                    return ChatInputOutcome::Consumed;
                 }
                 KeyCode::Tab => {
                     self.mentions.complete_selected(&mut self.textarea);
                     self.sync_after_text_change();
-                    return ComposerOutcome::Consumed;
+                    return ChatInputOutcome::Consumed;
                 }
                 KeyCode::Enter
                     if key.modifiers.is_empty()
                         && self.mentions.complete_selected(&mut self.textarea) =>
                 {
                     self.sync_after_text_change();
-                    return ComposerOutcome::Consumed;
+                    return ChatInputOutcome::Consumed;
                 }
                 _ => {}
             }
@@ -181,21 +189,21 @@ impl ChatComposer {
             match key.code {
                 KeyCode::Esc => {
                     self.slash_commands.dismiss();
-                    return ComposerOutcome::Consumed;
+                    return ChatInputOutcome::Consumed;
                 }
                 KeyCode::Up => {
                     self.slash_commands.select_previous();
-                    return ComposerOutcome::Consumed;
+                    return ChatInputOutcome::Consumed;
                 }
                 KeyCode::Down => {
                     self.slash_commands.select_next();
-                    return ComposerOutcome::Consumed;
+                    return ChatInputOutcome::Consumed;
                 }
                 KeyCode::Tab => {
                     if let Some(command) = self.slash_commands.selected_command().cloned() {
                         self.complete_slash_command(&command);
                     }
-                    return ComposerOutcome::Consumed;
+                    return ChatInputOutcome::Consumed;
                 }
                 KeyCode::Enter if key.modifiers.is_empty() => {
                     if let Some(command) = self.slash_commands.selected_command().cloned() {
@@ -211,7 +219,7 @@ impl ChatComposer {
             self.reset_history_navigation();
             self.textarea.insert_newline();
             self.sync_after_text_change();
-            return ComposerOutcome::Consumed;
+            return ChatInputOutcome::Consumed;
         }
         if key.code == KeyCode::Enter && key.modifiers.is_empty() {
             return self.submit();
@@ -226,9 +234,9 @@ impl ChatComposer {
             TextAreaOutcome::Consumed => {
                 self.reset_history_navigation();
                 self.sync_after_text_change();
-                ComposerOutcome::Consumed
+                ChatInputOutcome::Consumed
             }
-            TextAreaOutcome::Unhandled => ComposerOutcome::Unhandled,
+            TextAreaOutcome::Unhandled => ChatInputOutcome::Unhandled,
         }
     }
 
@@ -240,6 +248,10 @@ impl ChatComposer {
     }
 
     pub(crate) fn handle_paste(&mut self, pasted: String) -> Result<(), String> {
+        if let Some(query_answer) = self.query_answer.as_mut() {
+            query_answer.insert_text(&pasted);
+            return Ok(());
+        }
         self.reset_history_navigation();
         match self
             .attachments
@@ -256,6 +268,9 @@ impl ChatComposer {
     }
 
     pub(crate) fn attach_image_bytes(&mut self, bytes: Vec<u8>) -> Result<(), String> {
+        if self.query_answer.is_some() {
+            return Err("images are unavailable while answering a question".into());
+        }
         self.reset_history_navigation();
         self.attachments
             .attach_image_bytes(&mut self.textarea, bytes)?;
@@ -264,23 +279,23 @@ impl ChatComposer {
     }
 
     pub(crate) fn text(&self) -> &str {
-        self.textarea.text()
+        self.active_textarea().text()
     }
 
     pub(crate) fn cursor_display_width(&self) -> usize {
-        self.textarea.cursor_display_width()
+        self.active_textarea().cursor_display_width()
     }
 
     pub(crate) fn cursor_line(&self) -> usize {
-        self.textarea.cursor_line()
+        self.active_textarea().cursor_line()
     }
 
     pub(crate) fn desired_height(&self, available_width: u16) -> u16 {
         const MAX_VISIBLE_LINES: usize = 6;
         let rows = wrap_input(
-            self.textarea.text(),
-            self.textarea.cursor_line(),
-            self.textarea.cursor_display_width(),
+            self.active_textarea().text(),
+            self.active_textarea().cursor_line(),
+            self.active_textarea().cursor_display_width(),
             available_width,
         )
         .lines
@@ -309,7 +324,7 @@ impl ChatComposer {
         self.mentions.apply_search_snapshot(snapshot);
     }
 
-    pub(crate) fn activate_slash_command(&mut self, index: usize) -> Option<ComposerOutcome> {
+    pub(crate) fn activate_slash_command(&mut self, index: usize) -> Option<ChatInputOutcome> {
         let command = self.slash_commands.command_at(index)?.clone();
         self.complete_slash_command(&command);
         Some(self.submit())
@@ -343,24 +358,74 @@ impl ChatComposer {
         self.skills.select(index)
     }
 
-    pub(crate) fn replace_composer_catalog(
+    pub(crate) fn replace_chat_input_catalog(
         &mut self,
         slash_commands: SlashCommandCatalog,
         skills: Vec<SkillSelectorItem>,
+        plugins: Vec<MentionPluginItem>,
     ) {
         self.slash_commands.set_catalog(slash_commands);
         self.skills.replace_catalog(skills);
+        self.mentions.replace_plugin_catalog(plugins);
         self.sync_after_text_change();
     }
 
-    fn submit(&mut self) -> ComposerOutcome {
+    pub(crate) fn begin_query_answer(&mut self) {
+        self.query_answer = Some(TextArea::new());
+    }
+
+    pub(crate) fn query_answer_active(&self) -> bool {
+        self.query_answer.is_some()
+    }
+
+    fn active_textarea(&self) -> &TextArea {
+        self.query_answer.as_ref().unwrap_or(&self.textarea)
+    }
+
+    fn handle_query_answer_key(&mut self, key: KeyEvent) -> ChatInputOutcome {
+        if key.code == KeyCode::Esc && key.modifiers.is_empty() {
+            self.query_answer = None;
+            return ChatInputOutcome::QueryAnswerCancelled;
+        }
+        if is_newline_key(key) {
+            if let Some(query_answer) = self.query_answer.as_mut() {
+                query_answer.insert_newline();
+            }
+            return ChatInputOutcome::Consumed;
+        }
+        if key.code == KeyCode::Enter && key.modifiers.is_empty() {
+            let answer = self
+                .query_answer
+                .as_ref()
+                .map(TextArea::text)
+                .unwrap_or_default()
+                .trim()
+                .to_owned();
+            if answer.is_empty() {
+                return ChatInputOutcome::Consumed;
+            }
+            self.query_answer = None;
+            return ChatInputOutcome::QueryAnswerSubmitted(answer);
+        }
+        match self
+            .query_answer
+            .as_mut()
+            .expect("query answer mode must own a text area")
+            .handle_key(key)
+        {
+            TextAreaOutcome::Consumed => ChatInputOutcome::Consumed,
+            TextAreaOutcome::Unhandled => ChatInputOutcome::Unhandled,
+        }
+    }
+
+    fn submit(&mut self) -> ChatInputOutcome {
         let Some(submission) = self.prepare_submission() else {
-            return ComposerOutcome::Consumed;
+            return ChatInputOutcome::Consumed;
         };
         if submission
             .input
             .iter()
-            .all(|input| matches!(input, ComposerInput::Text(_)))
+            .all(|input| matches!(input, ChatInputItem::Text(_)))
         {
             self.record_history(submission.display_text.clone());
         }
@@ -368,14 +433,14 @@ impl ChatComposer {
         self.clear();
         match command {
             Some(command) => match into_command_invocation(submission, command) {
-                Ok(invocation) => ComposerOutcome::Command(invocation),
-                Err(submission) => ComposerOutcome::Submit(submission),
+                Ok(invocation) => ChatInputOutcome::Command(invocation),
+                Err(submission) => ChatInputOutcome::Submit(submission),
             },
-            None => ComposerOutcome::Submit(submission),
+            None => ChatInputOutcome::Submit(submission),
         }
     }
 
-    fn prepare_submission(&self) -> Option<ComposerSubmission> {
+    fn prepare_submission(&self) -> Option<ChatSubmission> {
         let raw_text = self.textarea.text();
         let display_text = self.pending_pastes.expand(&self.textarea);
         let display_text = display_text.trim().to_owned();
@@ -390,7 +455,7 @@ impl ChatComposer {
                 text.push_str(replacement);
             } else if let Some(url) = self.attachments.image_url(element_id) {
                 push_text_input(&mut input, &mut text);
-                input.push(ComposerInput::Image {
+                input.push(ChatInputItem::Image {
                     url: url.to_owned(),
                 });
             } else {
@@ -409,10 +474,10 @@ impl ChatComposer {
             0..0,
             selected_skills
                 .into_iter()
-                .map(|skill| ComposerInput::Skill { skill }),
+                .map(|skill| ChatInputItem::Skill { skill }),
         );
 
-        (!input.is_empty()).then_some(ComposerSubmission {
+        (!input.is_empty()).then_some(ChatSubmission {
             display_text,
             input,
         })
@@ -472,9 +537,9 @@ impl ChatComposer {
         }
     }
 
-    fn previous_history(&mut self) -> ComposerOutcome {
+    fn previous_history(&mut self) -> ChatInputOutcome {
         if self.history.is_empty() {
-            return ComposerOutcome::Consumed;
+            return ChatInputOutcome::Consumed;
         }
         let index = match self.history_index {
             Some(index) => index.saturating_sub(1),
@@ -485,12 +550,12 @@ impl ChatComposer {
         };
         self.history_index = Some(index);
         self.replace_with_history_entry(index);
-        ComposerOutcome::Consumed
+        ChatInputOutcome::Consumed
     }
 
-    fn next_history(&mut self) -> ComposerOutcome {
+    fn next_history(&mut self) -> ChatInputOutcome {
         let Some(index) = self.history_index else {
-            return ComposerOutcome::Consumed;
+            return ChatInputOutcome::Consumed;
         };
         if index + 1 < self.history.len() {
             self.history_index = Some(index + 1);
@@ -501,7 +566,7 @@ impl ChatComposer {
             self.history_draft.clear();
             self.sync_after_text_change();
         }
-        ComposerOutcome::Consumed
+        ChatInputOutcome::Consumed
     }
 
     fn replace_with_history_entry(&mut self, index: usize) {
@@ -531,11 +596,11 @@ impl ChatComposer {
 }
 
 fn into_command_invocation(
-    mut submission: ComposerSubmission,
+    mut submission: ChatSubmission,
     parsed: ParsedSlashCommand,
-) -> Result<SlashCommandInvocation, ComposerSubmission> {
+) -> Result<SlashCommandInvocation, ChatSubmission> {
     let command_prefix = format!("/{}", parsed.command.name);
-    let Some(ComposerInput::Text(first_text)) = submission.input.first_mut() else {
+    let Some(ChatInputItem::Text(first_text)) = submission.input.first_mut() else {
         return Err(submission);
     };
     let Some(arguments) = first_text.strip_prefix(&command_prefix) else {
@@ -556,11 +621,11 @@ fn into_command_invocation(
     })
 }
 
-fn push_text_input(input: &mut Vec<ComposerInput>, text: &mut String) {
+fn push_text_input(input: &mut Vec<ChatInputItem>, text: &mut String) {
     let text = std::mem::take(text);
     let text = text.trim();
     if !text.is_empty() {
-        input.push(ComposerInput::Text(text.to_owned()));
+        input.push(ChatInputItem::Text(text.to_owned()));
     }
 }
 

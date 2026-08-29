@@ -1,6 +1,8 @@
-use super::config_view;
-use super::provider_api_key_view;
-use crate::components::selection::SelectionViewState;
+use super::config_pane_spec;
+use super::provider_api_key_prompt;
+use crate::components::list_selection::ListSelectionState;
+use crate::components::text_prompt::TextPrompt;
+use crate::components::text_prompt::TextPromptOutcome;
 use crate::features::config::ConfigSelectionAction;
 use crate::features::config::TerminalSettings;
 use crate::test_support::empty_config_snapshot;
@@ -52,7 +54,7 @@ fn config_pane_organizes_the_snapshot_into_searchable_tabs() {
     config.revision = 4;
     config.generation = 5;
     let providers = providers();
-    let view = config_view(
+    let view = config_pane_spec(
         &config,
         &providers,
         TerminalSettings::default(),
@@ -60,7 +62,7 @@ fn config_pane_organizes_the_snapshot_into_searchable_tabs() {
         &session_id(),
         &no_additional_directories(),
     );
-    let mut state = SelectionViewState::new(view.model.into_body());
+    let mut state = ListSelectionState::new(view.model.into_body());
 
     assert_eq!(state.title(), "Config");
     assert!(state.search().is_some());
@@ -124,7 +126,7 @@ fn config_pane_uses_an_empty_unicode_checkbox_when_mouse_interactions_are_disabl
     let mut terminal = TerminalSettings::default();
     terminal.set_mouse_interactions(false);
 
-    let view = config_view(
+    let view = config_pane_spec(
         &empty_config_snapshot(),
         &providers(),
         terminal,
@@ -132,7 +134,7 @@ fn config_pane_uses_an_empty_unicode_checkbox_when_mouse_interactions_are_disabl
         &session_id(),
         &no_additional_directories(),
     );
-    let state = SelectionViewState::new(view.model.into_body());
+    let state = ListSelectionState::new(view.model.into_body());
 
     assert_eq!(
         state.visible_items()[0].description(),
@@ -154,7 +156,7 @@ fn add_dir_items_emit_revision_bound_complete_permission_sets() {
             ],
         }],
     };
-    let view = config_view(
+    let view = config_pane_spec(
         &empty_config_snapshot(),
         &providers(),
         TerminalSettings::default(),
@@ -162,7 +164,7 @@ fn add_dir_items_emit_revision_bound_complete_permission_sets() {
         &session_id(),
         &directories,
     );
-    let mut state = SelectionViewState::new(view.model.into_body());
+    let mut state = ListSelectionState::new(view.model.into_body());
     let _ = state.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
 
     assert_eq!(state.visible_items().len(), 24);
@@ -211,29 +213,23 @@ fn add_dir_items_emit_revision_bound_complete_permission_sets() {
 
 #[test]
 fn provider_api_key_input_is_masked_keeps_its_explanation_and_submits_with_enter() {
-    let view = provider_api_key_view("openai".into(), "OpenAI".into());
-    let (model, key_hints) = view.model.into_parts();
-    let mut state = SelectionViewState::new(model);
+    let prompt = provider_api_key_prompt("openai".into(), "OpenAI".into());
+    let (spec, key_hints) = prompt.spec.into_parts();
+    let mut state = TextPrompt::new(spec);
 
     state.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
     state.handle_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::NONE));
     let outcome = state.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    assert!(state.search().unwrap().masked());
+    assert!(state.input().masked());
     assert_eq!(key_hints, "Enter save  ·  Esc cancel");
-    assert_eq!(state.visible_items().len(), 1);
     assert_eq!(
-        state.visible_items()[0].label(),
+        state.explanation(),
         "The key is hidden and stored in the profile secret store"
     );
     assert!(matches!(
         outcome,
-        crate::components::selection::SelectionInputOutcome::ActivateFreeForm { item_id, value }
-            if value == "sk"
-                && matches!(
-                    view.actions.get(&item_id),
-                    Some(ConfigSelectionAction::SetProviderApiKey { provider })
-                        if provider == "openai"
-                )
+        TextPromptOutcome::Submit(value) if value == "sk"
     ));
+    assert_eq!(prompt.provider, "openai");
 }

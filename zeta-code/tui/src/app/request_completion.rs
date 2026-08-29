@@ -1,19 +1,21 @@
 use super::ActiveConversation;
 use super::App;
 use super::AppEvent;
-use super::composer_catalog_snapshot;
+use super::chat_input_catalog_snapshot;
 use super::dispatch::ProductCommandOutput;
 use crate::TuiExit;
 use crate::TuiWorkspaceReconnect;
-use crate::components::composer::ComposerSubmission;
-use crate::components::composer::SkillSelectorItem;
-use crate::components::composer::SlashCommandCatalog;
+use crate::components::chat_input::ChatSubmission;
+use crate::components::chat_input::MentionPluginItem;
+use crate::components::chat_input::SkillSelectorItem;
+use crate::components::chat_input::SlashCommandCatalog;
+use crate::components::chat_input_area::ChatInputAreaInteractionId;
 use crate::features::config;
 use crate::features::interactions::InteractionResponse;
 use crate::features::sessions::ConversationChange;
 use crate::features::sessions::ConversationTranscript;
 use crate::features::skills;
-use crate::features::skills::SkillSelectionView;
+use crate::features::skills::SkillPaneSpec;
 use crate::features::thread::ActiveTurnUpdate;
 use crate::features::thread::LatestThreadSnapshot;
 use crate::features::thread::OlderThreadHistoryPage;
@@ -35,9 +37,11 @@ use zeta_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
 use zeta_app_server_protocol::protocol::turn::TurnStartResult;
 use zeta_protocol::Thread;
+use zeta_protocol::ThreadItem;
 #[cfg(test)]
 use zeta_protocol::Turn;
 use zeta_protocol::TurnId;
+use zeta_protocol::TurnStatus;
 
 pub(super) enum RequestCompletion {
     WorkspaceReconnect(TuiWorkspaceReconnect),
@@ -53,7 +57,10 @@ pub(super) enum RequestCompletion {
     },
     ApprovalModeChanged(Result<ActiveConversation, ClientError>),
     SkillsRefreshed(Result<SkillRequestCompletion, String>),
-    InteractionResolved(Result<LatestThreadSnapshot, ClientError>),
+    InteractionResolved {
+        interaction_id: ChatInputAreaInteractionId,
+        result: Result<LatestThreadSnapshot, ClientError>,
+    },
     ThreadRefreshed(Result<LatestThreadSnapshot, ClientError>),
     ThreadHistoryPage(Result<OlderThreadHistoryPage, ClientError>),
     TurnInterrupted(Result<LatestThreadSnapshot, ClientError>),
@@ -75,13 +82,15 @@ pub(super) struct ProductCommandCompletion {
 pub(super) struct SkillRequestCompletion {
     slash_commands: SlashCommandCatalog,
     skills: Vec<SkillSelectorItem>,
-    view: SkillSelectionView,
+    plugins: Vec<MentionPluginItem>,
+    pane_spec: SkillPaneSpec,
 }
 
 pub(super) fn refresh_skills_and_registry(
     mut client: AppServerRequestHandle,
     server_slash_commands: Vec<SlashCommandDefinition>,
     session_id: zeta_protocol::SessionId,
+    plugins_enabled: bool,
 ) -> Result<SkillRequestCompletion, String> {
     let catalog = client
         .list_skills(SkillListParams {
@@ -89,12 +98,21 @@ pub(super) fn refresh_skills_and_registry(
             session_id: Some(session_id),
         })
         .map_err(|error| error.to_string())?;
-    let registry = composer_catalog_snapshot(&server_slash_commands, &catalog)
+    let plugins = if plugins_enabled {
+        client
+            .list_plugins()
+            .map_err(|error| error.to_string())?
+            .packages
+    } else {
+        Vec::new()
+    };
+    let registry = chat_input_catalog_snapshot(&server_slash_commands, &catalog, &plugins)
         .map_err(|error| error.to_string())?;
     Ok(SkillRequestCompletion {
         slash_commands: registry.catalog,
+        plugins: registry.plugins,
         skills: registry.skills,
-        view: skills::skills_selection_view(&catalog),
+        pane_spec: skills::skills_pane_spec(&catalog),
     })
 }
 
@@ -131,7 +149,7 @@ pub(super) fn interrupt_and_read(
 pub(super) fn start_turn_and_read(
     mut client: AppServerRequestHandle,
     scope: ThreadRequestScope,
-    submission: ComposerSubmission,
+    submission: ChatSubmission,
     history: ThreadSnapshotHistory,
 ) -> Result<(TurnStartResult, LatestThreadSnapshot), ClientError> {
     let session_id = scope.session_id().clone();
@@ -271,15 +289,15 @@ pub(super) fn apply_request_completion(
                 command,
                 result: update.notice,
             });
-            app.update(AppEvent::SelectionViewClosed);
+            app.update(AppEvent::ListSelectionPaneClosed);
         }
         RequestCompletion::PreferredModelUpdated {
             result: Err(error), ..
         } => app.update(AppEvent::FailureReported(error)),
         RequestCompletion::SkillsRefreshed(Ok(refresh)) => {
-            app.replace_composer_catalog(refresh.slash_commands, refresh.skills);
+            app.replace_chat_input_catalog(refresh.slash_commands, refresh.skills, refresh.plugins);
             if app.skills_view_is_active() {
-                app.update(AppEvent::SkillsViewReplaced(refresh.view));
+                app.update(AppEvent::SkillsPaneReplaced(refresh.pane_spec));
             }
         }
         RequestCompletion::SkillsRefreshed(Err(error)) => {
@@ -298,14 +316,23 @@ pub(super) fn apply_request_completion(
         RequestCompletion::TurnStarted(Err(error)) => {
             report_turn_start_failure(app, active_turn, error.to_string());
         }
-        RequestCompletion::InteractionResolved(Ok(snapshot)) => {
+        RequestCompletion::InteractionResolved {
+            interaction_id,
+            result: Ok(snapshot),
+        } => {
             conversation.set_thread_sequence(snapshot.thread.sequence);
             thread_subscription.apply_latest_snapshot(&snapshot.thread, snapshot.boundary);
-            app.update(AppEvent::SelectionViewClosed);
+            app.update(AppEvent::InteractionResolved(interaction_id));
             apply_thread_snapshot(app, active_turn, snapshot.thread, snapshot.transcript);
         }
-        RequestCompletion::InteractionResolved(Err(error)) => {
-            app.update(AppEvent::FailureReported(error.to_string()));
+        RequestCompletion::InteractionResolved {
+            interaction_id,
+            result: Err(error),
+        } => {
+            app.update(AppEvent::InteractionSubmissionFailed {
+                interaction_id,
+                error: error.to_string(),
+            });
         }
         RequestCompletion::ThreadRefreshed(Ok(snapshot)) => {
             if snapshot.thread.session_id != *conversation.session_id()
@@ -423,7 +450,21 @@ pub(super) fn apply_thread_snapshot(
     } else {
         None
     };
+    let (plan, queued_turns) = turn_input_status(active_turn.as_ref(), &snapshot.turns);
+    let pending_interaction = active_turn.as_ref().and_then(|turn_id| {
+        snapshot
+            .turns
+            .iter()
+            .find(|turn| &turn.turn_id == turn_id)
+            .and_then(|turn| {
+                turn.pending_interaction
+                    .as_ref()
+                    .map(|pending| (turn.turn_id.clone(), pending.request_id.clone()))
+            })
+    });
     app.update(AppEvent::ThreadTranscriptSnapshotReceived(transcript));
+    app.update(AppEvent::TurnInputStatusChanged { plan, queued_turns });
+    app.update(AppEvent::PendingInteractionChanged(pending_interaction));
     apply_active_turn_update(app, active_turn_update);
     if let Some(next_active_turn_update) = next_active_turn_update {
         apply_active_turn_update(app, next_active_turn_update);
@@ -436,6 +477,35 @@ pub(super) fn apply_thread_snapshot(
             .map(|turn| turn.approval_mode)
     });
     app.set_current_approval_mode(current_approval_mode);
+}
+
+fn turn_input_status(
+    active_turn: Option<&TurnId>,
+    turns: &[zeta_protocol::Turn],
+) -> (Option<zeta_protocol::PlanUpdate>, Vec<String>) {
+    let plan = active_turn.and_then(|turn_id| {
+        turns
+            .iter()
+            .find(|turn| &turn.turn_id == turn_id)
+            .and_then(|turn| turn.plan.clone())
+    });
+    let queued_turns = turns
+        .iter()
+        .filter(|turn| {
+            turn.status == TurnStatus::Created
+                && active_turn.is_none_or(|turn_id| &turn.turn_id != turn_id)
+        })
+        .map(|turn| {
+            turn.items
+                .iter()
+                .find_map(|item| match item {
+                    ThreadItem::UserMessage { text, .. } => Some(text.clone()),
+                    _ => None,
+                })
+                .unwrap_or_else(|| "Queued turn".into())
+        })
+        .collect();
+    (plan, queued_turns)
 }
 
 enum ConversationCompletionPresentation {
@@ -453,7 +523,7 @@ fn finish_conversation_change(
 ) {
     app.set_next_approval_mode(conversation.next_approval_mode());
     if matches!(presentation, ConversationCompletionPresentation::Command(_)) {
-        app.update(AppEvent::SelectionViewClosed);
+        app.update(AppEvent::ListSelectionPaneClosed);
     }
     if matches!(change.transcript, ConversationTranscript::Clear) {
         app.update(AppEvent::TranscriptCleared);

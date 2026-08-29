@@ -1,8 +1,8 @@
+mod pane;
 mod request;
-mod view;
 
+pub(crate) use pane::McpPaneSpec;
+pub(crate) use pane::McpSelectionAction;
+pub(crate) use pane::mcp_pane_spec;
 pub(crate) use request::load_selection;
 pub(crate) use request::set_enablement;
-pub(crate) use view::McpSelectionAction;
-pub(crate) use view::McpSelectionView;
-pub(crate) use view::mcp_selection_view;

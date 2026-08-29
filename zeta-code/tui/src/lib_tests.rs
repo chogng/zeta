@@ -2,13 +2,14 @@ use super::app::App;
 use super::app::AppEvent;
 use super::app::Status;
 use crate::app::apply_active_turn_snapshot;
-use crate::app::composer_catalog_snapshot;
-use crate::components::transcript::MessageRole;
+use crate::app::chat_input_catalog_snapshot;
+use crate::components::chat_history::MessageRole;
 use crate::features::thread::present_turn_error;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use std::path::PathBuf;
+use zeta_app_server_protocol::protocol::plugins::PluginPackageDto;
 use zeta_app_server_protocol::protocol::skills::SkillCompatibilityDto;
 use zeta_app_server_protocol::protocol::skills::SkillDto;
 use zeta_app_server_protocol::protocol::skills::SkillEnablementDto;
@@ -82,6 +83,8 @@ fn completed_active_turn_only_updates_lifecycle_after_snapshot_mapping() {
     let turn = Turn {
         turn_id: turn_id.clone(),
         status: TurnStatus::Completed,
+        kind: Default::default(),
+        instructions: None,
         model: None,
         tool_profile: None,
         tool_mode: zeta_protocol::ToolMode::Direct,
@@ -139,6 +142,8 @@ fn completed_turn_advances_to_the_next_queued_turn() {
         Turn {
             turn_id: first_id.clone(),
             status: TurnStatus::Completed,
+            kind: Default::default(),
+            instructions: None,
             model: None,
             tool_profile: None,
             tool_mode: zeta_protocol::ToolMode::Direct,
@@ -157,6 +162,8 @@ fn completed_turn_advances_to_the_next_queued_turn() {
         Turn {
             turn_id: second_id.clone(),
             status: TurnStatus::Running,
+            kind: Default::default(),
+            instructions: None,
             model: None,
             tool_profile: None,
             tool_mode: zeta_protocol::ToolMode::Direct,
@@ -184,6 +191,8 @@ fn waiting_active_turn_remains_interruptible() {
     let turn = Turn {
         turn_id,
         status: TurnStatus::WaitingForUserInput,
+        kind: Default::default(),
+        instructions: None,
         model: None,
         tool_profile: None,
         tool_mode: zeta_protocol::ToolMode::Direct,
@@ -214,6 +223,8 @@ fn resumed_active_turn_returns_from_waiting_to_working() {
     let waiting_turn = Turn {
         turn_id: turn_id.clone(),
         status: TurnStatus::WaitingForUserInput,
+        kind: Default::default(),
+        instructions: None,
         model: None,
         tool_profile: None,
         tool_mode: zeta_protocol::ToolMode::Direct,
@@ -230,6 +241,8 @@ fn resumed_active_turn_returns_from_waiting_to_working() {
     let resumed_turn = Turn {
         turn_id,
         status: TurnStatus::Running,
+        kind: Default::default(),
+        instructions: None,
         model: None,
         tool_profile: None,
         tool_mode: zeta_protocol::ToolMode::Direct,
@@ -254,6 +267,8 @@ fn failed_turn_uses_a_friendly_error_instead_of_debug_output() {
     let turn = Turn {
         turn_id,
         status: TurnStatus::Failed,
+        kind: Default::default(),
+        instructions: None,
         model: None,
         tool_profile: None,
         tool_mode: zeta_protocol::ToolMode::Direct,
@@ -285,13 +300,14 @@ fn persistence_failure_explains_that_the_response_was_not_saved() {
 
 #[test]
 fn server_slash_commands_become_the_tui_runtime_registry() {
-    let registry = composer_catalog_snapshot(
+    let registry = chat_input_catalog_snapshot(
         &[SlashCommandDefinition {
             name: "diagnose".into(),
             description: "inspect the current workspace".into(),
             argument_mode: SlashCommandArgumentModeDto::Optional,
         }],
         &empty_skill_catalog(),
+        &[],
     )
     .unwrap();
 
@@ -300,13 +316,14 @@ fn server_slash_commands_become_the_tui_runtime_registry() {
 
 #[test]
 fn server_slash_commands_cannot_shadow_local_builtins() {
-    let Err(error) = composer_catalog_snapshot(
+    let Err(error) = chat_input_catalog_snapshot(
         &[SlashCommandDefinition {
             name: "quit".into(),
             description: "replace local quit".into(),
             argument_mode: SlashCommandArgumentModeDto::None,
         }],
         &empty_skill_catalog(),
+        &[],
     ) else {
         panic!("server slash commands must not shadow local built-ins");
     };
@@ -325,7 +342,7 @@ fn enabled_unique_skills_become_dollar_selector_items() {
         SkillName::new("commit").unwrap(),
     );
     let digest = ContentDigest::sha256(b"commit skill");
-    let registry = crate::app::composer_catalog_snapshot(
+    let registry = crate::app::chat_input_catalog_snapshot(
         &[SlashCommandDefinition {
             name: "commit".into(),
             description: "run the commit product command".into(),
@@ -343,6 +360,7 @@ fn enabled_unique_skills_become_dollar_selector_items() {
             }],
             diagnostics: vec![],
         },
+        &[],
     )
     .unwrap();
 
@@ -353,6 +371,27 @@ fn enabled_unique_skills_become_dollar_selector_items() {
         registry.skills[0].skill(),
         &zeta_protocol::SkillRef::pinned(skill_id, digest)
     );
+}
+
+#[test]
+fn effective_plugins_become_at_mention_items() {
+    let plugin = |id: &str, effective: bool| PluginPackageDto {
+        id: id.into(),
+        version: "1.0.0".into(),
+        digest: "sha256:test".into(),
+        enabled: effective,
+        granted: effective,
+        effective,
+        revoked: false,
+    };
+    let registry = chat_input_catalog_snapshot(
+        &[],
+        &empty_skill_catalog(),
+        &[plugin("acme/review", true), plugin("acme/disabled", false)],
+    )
+    .unwrap();
+
+    assert_eq!(registry.plugins.len(), 1);
 }
 
 fn empty_skill_catalog() -> SkillListResult {

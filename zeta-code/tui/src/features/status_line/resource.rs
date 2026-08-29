@@ -6,9 +6,9 @@ use std::path::PathBuf;
 use zeta_utils_path::write_atomically;
 
 use super::StatusLineItem;
-use super::StatusLineSelectionView;
+use super::StatusLinePaneSpec;
 use super::StatusLineSettings;
-use super::setup::selection_view;
+use super::setup::list_selection;
 
 const MAX_RESOURCE_BYTES: u64 = 64 * 1024;
 
@@ -57,14 +57,14 @@ impl StatusLineResource {
         Ok(settings)
     }
 
-    pub(crate) fn setup_view(&self) -> StatusLineSelectionView {
-        selection_view(self.settings, self.revision)
+    pub(crate) fn setup_pane_spec(&self) -> StatusLinePaneSpec {
+        list_selection(self.settings, self.revision)
     }
 
     pub(crate) fn apply_edit(
         &mut self,
         edit: &StatusLineEdit,
-    ) -> Result<(StatusLineSettings, StatusLineSelectionView), String> {
+    ) -> Result<(StatusLineSettings, StatusLinePaneSpec), String> {
         if edit.expected_revision != self.revision {
             return Err(
                 "status-line settings changed after the editor opened; reopen /statusline and try again"
@@ -91,7 +91,7 @@ impl StatusLineResource {
         self.observed = Some(ResourceSnapshot::Contents(contents));
         self.settings = settings;
         self.revision = self.revision.saturating_add(1);
-        let view = self.setup_view();
+        let view = self.setup_pane_spec();
         Ok((settings, view))
     }
 }

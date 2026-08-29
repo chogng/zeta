@@ -314,6 +314,8 @@ fn turn(turn_id: &str) -> Turn {
     Turn {
         turn_id: TurnId::new(turn_id).unwrap(),
         status: TurnStatus::Completed,
+        kind: Default::default(),
+        instructions: None,
         model: None,
         tool_profile: None,
         tool_mode: zeta_protocol::ToolMode::Direct,

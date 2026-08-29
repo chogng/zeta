@@ -1,6 +1,6 @@
-use super::super::wrap::PROMPT_WIDTH;
-use super::super::wrap::wrap_input;
-use crate::ui::composer_chrome;
+use super::wrap::PROMPT_WIDTH;
+use super::wrap::wrap_input;
+use crate::ui::chat_input_chrome;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
@@ -12,7 +12,7 @@ use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ComposerCursor {
+pub(crate) enum ChatInputCursor {
     Hidden,
     Visible,
 }
@@ -23,7 +23,7 @@ pub(crate) fn draw(
     input: &str,
     cursor_width: usize,
     cursor_line: usize,
-    cursor: ComposerCursor,
+    cursor: ChatInputCursor,
 ) {
     let wrapped = wrap_input(input, cursor_line, cursor_width, area.width);
     let lines = wrapped
@@ -36,7 +36,7 @@ pub(crate) fn draw(
                 Span::styled(
                     prompt,
                     Style::default()
-                        .fg(composer_chrome())
+                        .fg(chat_input_chrome())
                         .add_modifier(Modifier::BOLD),
                 ),
                 Span::raw(line),
@@ -47,16 +47,16 @@ pub(crate) fn draw(
     let scroll_row = wrapped
         .cursor_row
         .saturating_sub(visible_rows.saturating_sub(1));
-    let composer = Paragraph::new(lines)
+    let chat_input = Paragraph::new(lines)
         .scroll((scroll_row.min(u16::MAX as usize) as u16, 0))
         .block(
             Block::default()
                 .borders(Borders::TOP | Borders::BOTTOM)
-                .border_style(Style::default().fg(composer_chrome())),
+                .border_style(Style::default().fg(chat_input_chrome())),
         );
-    frame.render_widget(composer, area);
+    frame.render_widget(chat_input, area);
 
-    if cursor == ComposerCursor::Visible {
+    if cursor == ChatInputCursor::Visible {
         let input_width = wrapped
             .cursor_column
             .min(area.width.saturating_sub(PROMPT_WIDTH as u16 + 1) as usize)

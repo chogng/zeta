@@ -1,10 +1,10 @@
-use super::SelectionActivationMode;
-use super::SelectionInputOutcome;
-use super::SelectionItem;
-use super::SelectionItemId;
-use super::SelectionTab;
-use super::SelectionViewModel;
-use super::SelectionViewState;
+use super::ListSelectionActivationMode;
+use super::ListSelectionGroup;
+use super::ListSelectionInputOutcome;
+use super::ListSelectionItem;
+use super::ListSelectionItemId;
+use super::ListSelectionModel;
+use super::ListSelectionState;
 use crate::components::search_box::SearchBoxModel;
 use crate::mouse::MouseMode;
 use crossterm::event::KeyCode;
@@ -12,23 +12,23 @@ use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use ratatui::layout::Rect;
 
-fn state() -> SelectionViewState {
-    SelectionViewState::new(
-        SelectionViewModel::new(
+fn state() -> ListSelectionState {
+    ListSelectionState::new(
+        ListSelectionModel::new(
             "Help",
             vec![
-                SelectionTab::new(
+                ListSelectionGroup::new(
                     "Commands",
                     vec![
-                        SelectionItem::new("/status").with_description("show status"),
-                        SelectionItem::new("/model").with_description("show model"),
+                        ListSelectionItem::new("/status").with_description("show status"),
+                        ListSelectionItem::new("/model").with_description("show model"),
                     ],
                 ),
-                SelectionTab::new(
+                ListSelectionGroup::new(
                     "Keys",
                     vec![
-                        SelectionItem::new("↑ / ↓").with_description("move selection"),
-                        SelectionItem::new("Esc").with_description("close"),
+                        ListSelectionItem::new("↑ / ↓").with_description("move selection"),
+                        ListSelectionItem::new("Esc").with_description("close"),
                     ],
                 ),
             ],
@@ -41,22 +41,22 @@ fn key(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)
 }
 
-fn active_tab_label(state: &SelectionViewState) -> &str {
+fn active_tab_label(state: &ListSelectionState) -> &str {
     state.active_tab().label()
 }
 
 #[test]
 fn actionable_rows_expose_pointer_mode_hit_testing_and_activation() {
-    let first_id = SelectionItemId::new("first");
-    let second_id = SelectionItemId::new("second");
-    let mut state = SelectionViewState::new(
-        SelectionViewModel::new(
+    let first_id = ListSelectionItemId::new("first");
+    let second_id = ListSelectionItemId::new("second");
+    let mut state = ListSelectionState::new(
+        ListSelectionModel::new(
             "Items",
-            vec![SelectionTab::new(
+            vec![ListSelectionGroup::new(
                 "All",
                 vec![
-                    SelectionItem::new("First").with_id(first_id),
-                    SelectionItem::new("Second").with_id(second_id.clone()),
+                    ListSelectionItem::new("First").with_id(first_id),
+                    ListSelectionItem::new("Second").with_id(second_id.clone()),
                 ],
             )],
         )
@@ -74,16 +74,13 @@ fn actionable_rows_expose_pointer_mode_hit_testing_and_activation() {
 
 #[test]
 fn read_only_rows_leave_drag_selection_to_the_terminal() {
-    let mut state = SelectionViewState::new(
-        SelectionViewModel::new(
-            "Status",
-            vec![SelectionTab::new(
-                "Details",
-                vec![SelectionItem::new("Read only")],
-            )],
-        )
-        .without_selection(),
-    );
+    let mut state = ListSelectionState::new(ListSelectionModel::new(
+        "Status",
+        vec![ListSelectionGroup::new(
+            "Details",
+            vec![ListSelectionItem::new("Read only")],
+        )],
+    ));
 
     assert_eq!(state.mouse_mode(), MouseMode::TerminalSelection);
     assert!(!state.select_visible_item(0));
@@ -152,19 +149,19 @@ fn filtering_and_navigation_keep_selection_in_visible_range() {
 
 #[test]
 fn candidate_ranking_uses_match_quality_and_preserves_equal_model_order() {
-    let mut state = SelectionViewState::new(
-        SelectionViewModel::new(
+    let mut state = ListSelectionState::new(
+        ListSelectionModel::new(
             "Help",
-            vec![SelectionTab::new(
+            vec![ListSelectionGroup::new(
                 "Commands",
                 vec![
-                    SelectionItem::new("show status"),
-                    SelectionItem::new("s-t-a-t-u-s"),
-                    SelectionItem::new("status"),
-                    SelectionItem::new("status line"),
-                    SelectionItem::new("appstatus"),
-                    SelectionItem::new("second description").with_description("status"),
-                    SelectionItem::new("first description").with_description("status"),
+                    ListSelectionItem::new("show status"),
+                    ListSelectionItem::new("s-t-a-t-u-s"),
+                    ListSelectionItem::new("status"),
+                    ListSelectionItem::new("status line"),
+                    ListSelectionItem::new("appstatus"),
+                    ListSelectionItem::new("second description").with_description("status"),
+                    ListSelectionItem::new("first description").with_description("status"),
                 ],
             )],
         )
@@ -181,7 +178,7 @@ fn candidate_ranking_uses_match_quality_and_preserves_equal_model_order() {
         state
             .visible_items()
             .into_iter()
-            .map(SelectionItem::label)
+            .map(ListSelectionItem::label)
             .collect::<Vec<_>>(),
         vec![
             "status",
@@ -203,7 +200,7 @@ fn escape_requests_view_dismissal() {
 
     assert_eq!(
         state.handle_key(key(KeyCode::Esc)),
-        SelectionInputOutcome::Dismiss
+        ListSelectionInputOutcome::Dismiss
     );
 }
 
@@ -213,53 +210,31 @@ fn control_c_also_dismisses_the_active_view() {
 
     assert_eq!(
         state.handle_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)),
-        SelectionInputOutcome::Dismiss
+        ListSelectionInputOutcome::Dismiss
     );
 }
 
 #[test]
 fn enter_and_space_activate_actionable_items() {
-    let item_id = SelectionItemId::new("toggle-skill");
-    let mut actionable = SelectionViewState::new(
-        SelectionViewModel::new(
+    let item_id = ListSelectionItemId::new("toggle-skill");
+    let mut actionable = ListSelectionState::new(
+        ListSelectionModel::new(
             "Skills",
-            vec![SelectionTab::new(
+            vec![ListSelectionGroup::new(
                 "All",
-                vec![SelectionItem::new("review").with_id(item_id.clone())],
+                vec![ListSelectionItem::new("review").with_id(item_id.clone())],
             )],
         )
-        .with_activation_mode(SelectionActivationMode::EnterOrSpace),
+        .with_activation_mode(ListSelectionActivationMode::EnterOrSpace),
     );
 
     assert_eq!(
         actionable.handle_key(key(KeyCode::Enter)),
-        SelectionInputOutcome::Activate(item_id.clone())
+        ListSelectionInputOutcome::Activate(item_id.clone())
     );
     assert_eq!(
         actionable.handle_key(key(KeyCode::Char(' '))),
-        SelectionInputOutcome::Activate(item_id)
-    );
-}
-
-#[test]
-fn free_form_selection_accepts_text_immediately_and_submits_with_control_enter() {
-    let item_id = SelectionItemId::new("free-form-answer");
-    let mut state = SelectionViewState::new(
-        SelectionViewModel::new("Question", vec![SelectionTab::new("Answers", Vec::new())])
-            .with_free_form("Type an answer", item_id.clone()),
-    );
-
-    for character in "custom".chars() {
-        state.handle_key(key(KeyCode::Char(character)));
-    }
-
-    assert_eq!(state.query(), "custom");
-    assert_eq!(
-        state.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL)),
-        SelectionInputOutcome::ActivateFreeForm {
-            item_id,
-            value: "custom".into(),
-        }
+        ListSelectionInputOutcome::Activate(item_id)
     );
 }
 
@@ -271,7 +246,7 @@ fn space_enters_search_before_becoming_search_text() {
     assert!(!read_only.search_active());
     assert_eq!(
         read_only.handle_key(key(KeyCode::Char(' '))),
-        SelectionInputOutcome::Consumed
+        ListSelectionInputOutcome::Consumed
     );
     assert!(read_only.search_active());
     assert_eq!(read_only.query(), "");
@@ -281,12 +256,15 @@ fn space_enters_search_before_becoming_search_text() {
 
 #[test]
 fn enter_only_actions_keep_space_available_for_search() {
-    let mut state = SelectionViewState::new(
-        SelectionViewModel::new(
+    let mut state = ListSelectionState::new(
+        ListSelectionModel::new(
             "Themes",
-            vec![SelectionTab::new(
+            vec![ListSelectionGroup::new(
                 "All",
-                vec![SelectionItem::new("Zeta Code Dark").with_id(SelectionItemId::new("theme"))],
+                vec![
+                    ListSelectionItem::new("Zeta Code Dark")
+                        .with_id(ListSelectionItemId::new("theme")),
+                ],
             )],
         )
         .with_search(SearchBoxModel::new("Search themes")),
@@ -303,11 +281,11 @@ fn enter_only_actions_keep_space_available_for_search() {
 
 #[test]
 fn selection_without_search_ignores_text_and_space() {
-    let mut state = SelectionViewState::new(SelectionViewModel::new(
+    let mut state = ListSelectionState::new(ListSelectionModel::new(
         "Themes",
-        vec![SelectionTab::new(
+        vec![ListSelectionGroup::new(
             "Themes",
-            vec![SelectionItem::new("Dark mode")],
+            vec![ListSelectionItem::new("Dark mode")],
         )],
     ));
 
@@ -327,7 +305,7 @@ fn escape_dismisses_the_view_while_search_is_active() {
 
     assert_eq!(
         state.handle_key(key(KeyCode::Esc)),
-        SelectionInputOutcome::Dismiss
+        ListSelectionInputOutcome::Dismiss
     );
     assert!(state.search_active());
     assert_eq!(state.query(), "s");
@@ -348,8 +326,8 @@ fn paste_only_filters_after_space_enters_search_mode() {
 
 #[test]
 fn view_model_can_name_its_empty_state() {
-    let state = SelectionViewState::new(
-        SelectionViewModel::new("Skills", vec![SelectionTab::new("All", Vec::new())])
+    let state = ListSelectionState::new(
+        ListSelectionModel::new("Skills", vec![ListSelectionGroup::new("All", Vec::new())])
             .with_empty_message("No configured skill sources"),
     );
 

@@ -1,6 +1,6 @@
 use super::ModelSelectionAction;
-use super::model_selection_view;
-use crate::components::selection::SelectionViewState;
+use super::model_pane_spec;
+use crate::components::list_selection::ListSelectionState;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_app_server_protocol::protocol::model::ModelCatalogEntry;
 use zeta_app_server_protocol::protocol::model::ModelListResult;
@@ -36,8 +36,8 @@ fn model_pane_marks_the_preference_and_maps_selection_to_slash_arguments() {
         model: "gpt-zeta".into(),
     };
 
-    let view = model_selection_view(&catalog, Some(&preferred_model));
-    let state = SelectionViewState::new(view.model.into_body());
+    let view = model_pane_spec(&catalog, Some(&preferred_model));
+    let state = ListSelectionState::new(view.model.into_body());
 
     assert_eq!(state.title(), "Model");
     assert_eq!(state.visible_items()[1].label(), "GPT Zeta ✓");

@@ -1,4 +1,4 @@
-//! Unicode display-cell wrapping shared by composer layout and rendering.
+//! Unicode display-cell wrapping shared by chat_input layout and rendering.
 
 use unicode_width::UnicodeWidthChar;
 

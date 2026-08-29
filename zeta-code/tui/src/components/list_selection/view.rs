@@ -1,6 +1,5 @@
-use super::SelectionViewState;
-use super::state::SelectionItem;
-use super::state::SelectionItemDescriptionPresentation;
+use super::ListSelectionState;
+use super::state::ListSelectionItem;
 use crate::components::search_box;
 use crate::components::search_box::SEARCH_BOX_HEIGHT;
 use crate::components::tab_list;
@@ -25,7 +24,7 @@ use unicode_width::UnicodeWidthStr;
 const ITEM_MARKER_WIDTH: u16 = 2;
 const ITEM_COLUMN_GAP: u16 = 4;
 
-pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: &SelectionViewState) {
+pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: &ListSelectionState) {
     let presentation_highlight = view.presentation_highlight().unwrap_or_else(highlight);
     frame.render_widget(
         Block::default()
@@ -149,7 +148,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, view: &SelectionViewState)
     }
 }
 
-impl SelectionViewState {
+impl ListSelectionState {
     pub(crate) fn tab_index_at(&self, area: Rect, column: u16, row: u16) -> Option<usize> {
         if !self.show_tabs() {
             return None;
@@ -200,7 +199,7 @@ fn content_area(area: Rect) -> Rect {
     )
 }
 
-fn selection_areas(content: Rect, view: &SelectionViewState, tab_height: u16) -> Rc<[Rect]> {
+fn selection_areas(content: Rect, view: &ListSelectionState, tab_height: u16) -> Rc<[Rect]> {
     let search_height = view.search().map(|_| SEARCH_BOX_HEIGHT).unwrap_or(0);
     let preview_height = view
         .selected_item()
@@ -232,7 +231,7 @@ struct ItemColumnLayout {
 }
 
 impl ItemColumnLayout {
-    fn new(width: u16, items: &[&SelectionItem]) -> Self {
+    fn new(width: u16, items: &[&ListSelectionItem]) -> Self {
         let desired_leading = items
             .iter()
             .filter_map(|item| item.columns())
@@ -266,7 +265,7 @@ impl ItemColumnLayout {
 fn draw_item(
     frame: &mut Frame<'_>,
     area: Rect,
-    item: &SelectionItem,
+    item: &ListSelectionItem,
     selected: bool,
     column_layout: ItemColumnLayout,
 ) {
@@ -320,7 +319,7 @@ fn draw_item(
 }
 
 fn item_spans<'a>(
-    item: &'a SelectionItem,
+    item: &'a ListSelectionItem,
     marker: &'static str,
     label_style: Style,
 ) -> Vec<Span<'a>> {
@@ -330,24 +329,12 @@ fn item_spans<'a>(
             Span::styled(item.label(), label_style),
         ];
     };
-    match item.description_presentation() {
-        SelectionItemDescriptionPresentation::Muted => vec![
-            Span::styled(marker, label_style),
-            Span::styled(item.label(), label_style),
-            Span::styled("  ·  ", Style::default().fg(muted())),
-            Span::styled(description, Style::default().fg(muted())),
-        ],
-        SelectionItemDescriptionPresentation::Detail => {
-            let detail_label_style = label_style.add_modifier(Modifier::BOLD);
-            vec![
-                Span::styled(marker, Style::default()),
-                Span::styled(item.label(), detail_label_style),
-                Span::styled(":", detail_label_style),
-                Span::raw(" "),
-                Span::raw(description),
-            ]
-        }
-    }
+    vec![
+        Span::styled(marker, label_style),
+        Span::styled(item.label(), label_style),
+        Span::styled("  ·  ", Style::default().fg(muted())),
+        Span::styled(description, Style::default().fg(muted())),
+    ]
 }
 
 fn dashed_rule(width: u16, title: Option<&str>, color: Color) -> Line<'static> {

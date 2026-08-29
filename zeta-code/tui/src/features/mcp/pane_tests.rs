@@ -1,6 +1,6 @@
 use super::McpSelectionAction;
-use super::mcp_selection_view;
-use crate::components::selection::SelectionViewState;
+use super::mcp_pane_spec;
+use crate::components::list_selection::ListSelectionState;
 use std::collections::BTreeMap;
 use zeta_app_server_protocol::protocol::config::McpCredentialBindingDto;
 use zeta_app_server_protocol::protocol::config::McpServerConfigDto;
@@ -24,8 +24,8 @@ fn mcp_pane_filters_servers_and_maps_enter_to_the_opposite_enablement() {
         },
     );
 
-    let view = mcp_selection_view(&servers);
-    let state = SelectionViewState::new(view.model.into_body());
+    let view = mcp_pane_spec(&servers);
+    let state = ListSelectionState::new(view.model.into_body());
 
     assert_eq!(state.title(), "MCP servers");
     assert_eq!(state.tabs()[0].label(), "All (1)");

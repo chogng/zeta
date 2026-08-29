@@ -1,7 +1,7 @@
 use super::export_markdown;
 use super::latest_agent_response;
-use crate::components::transcript::Message;
-use crate::components::transcript::MessageRole;
+use crate::components::chat_history::Message;
+use crate::components::chat_history::MessageRole;
 
 #[test]
 fn latest_agent_response_ignores_tools_and_notices() {

@@ -1,7 +1,6 @@
-use crate::components::pane::PaneViewModel;
-use crate::components::selection::SelectionItem;
-use crate::components::selection::SelectionTab;
-use crate::components::selection::SelectionViewModel;
+use crate::components::detail_list::DetailList;
+use crate::components::detail_list::DetailListRow;
+use crate::components::pane::PaneSpec;
 
 pub(crate) struct StatusViewData<'a> {
     pub(crate) model: &'a str,
@@ -26,40 +25,35 @@ pub(crate) enum RemainingContextWindow {
     Unknown,
 }
 
-pub(crate) fn status_view(data: StatusViewData<'_>) -> PaneViewModel<SelectionViewModel> {
-    PaneViewModel::new(
-        SelectionViewModel::new(
+pub(crate) fn status_pane_spec(data: StatusViewData<'_>) -> PaneSpec<DetailList> {
+    PaneSpec::new(
+        DetailList::new(
             "Status",
-            vec![SelectionTab::new(
-                "Status",
-                vec![
-                    detail("Model", data.model),
-                    detail(
-                        "Full context window",
-                        format_optional_tokens(data.full_context_window),
-                    ),
-                    detail(
-                        "Available context window",
-                        format_optional_tokens(data.available_context_window),
-                    ),
-                    detail(
-                        "Remaining context window",
-                        format_remaining_context(data.remaining_context_window),
-                    ),
-                    detail("Session ID", data.session_id),
-                    detail("Thread ID", data.thread_id),
-                    detail("Thread version", data.thread_sequence.to_string()),
-                ],
-            )],
-        )
-        .without_tab_bar()
-        .without_selection(),
+            vec![
+                detail("Model", data.model),
+                detail(
+                    "Full context window",
+                    format_optional_tokens(data.full_context_window),
+                ),
+                detail(
+                    "Available context window",
+                    format_optional_tokens(data.available_context_window),
+                ),
+                detail(
+                    "Remaining context window",
+                    format_remaining_context(data.remaining_context_window),
+                ),
+                detail("Session ID", data.session_id),
+                detail("Thread ID", data.thread_id),
+                detail("Thread version", data.thread_sequence.to_string()),
+            ],
+        ),
         "Esc back",
     )
 }
 
-fn detail(label: &str, value: impl Into<String>) -> SelectionItem {
-    SelectionItem::detail(label, value)
+fn detail(label: &str, value: impl Into<String>) -> DetailListRow {
+    DetailListRow::new(label, value)
 }
 
 fn format_optional_tokens(tokens: Option<u64>) -> String {
@@ -111,5 +105,5 @@ fn format_tokens(tokens: u64) -> String {
 }
 
 #[cfg(test)]
-#[path = "view_tests.rs"]
+#[path = "pane_tests.rs"]
 mod tests;

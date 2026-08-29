@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 
-use crate::components::pane::PaneViewModel;
-use crate::components::selection::SelectionActivationMode;
-use crate::components::selection::SelectionItem;
-use crate::components::selection::SelectionItemId;
-use crate::components::selection::SelectionTab;
-use crate::components::selection::SelectionViewModel;
+use crate::components::list_selection::ListSelectionActivationMode;
+use crate::components::list_selection::ListSelectionGroup;
+use crate::components::list_selection::ListSelectionItem;
+use crate::components::list_selection::ListSelectionItemId;
+use crate::components::list_selection::ListSelectionModel;
+use crate::components::pane::PaneSpec;
 
 use super::StatusLineEdit;
 use super::StatusLineItem;
@@ -16,21 +16,18 @@ pub(crate) enum StatusLineSelectionAction {
     SetEnabled(StatusLineEdit),
 }
 
-pub(crate) struct StatusLineSelectionView {
-    pub(crate) model: PaneViewModel<SelectionViewModel>,
-    pub(crate) actions: BTreeMap<SelectionItemId, StatusLineSelectionAction>,
+pub(crate) struct StatusLinePaneSpec {
+    pub(crate) model: PaneSpec<ListSelectionModel>,
+    pub(crate) actions: BTreeMap<ListSelectionItemId, StatusLineSelectionAction>,
 }
 
-pub(super) fn selection_view(
-    settings: StatusLineSettings,
-    revision: u64,
-) -> StatusLineSelectionView {
+pub(super) fn list_selection(settings: StatusLineSettings, revision: u64) -> StatusLinePaneSpec {
     let mut actions = BTreeMap::new();
     let items = StatusLineItem::ALL
         .into_iter()
         .map(|item| {
             let enabled = settings.enabled(item);
-            let id = SelectionItemId::new(item.id());
+            let id = ListSelectionItemId::new(item.id());
             actions.insert(
                 id.clone(),
                 StatusLineSelectionAction::SetEnabled(StatusLineEdit {
@@ -39,19 +36,19 @@ pub(super) fn selection_view(
                     enabled: !enabled,
                 }),
             );
-            SelectionItem::new(item.label()).with_id(id).with_columns(
-                item.label(),
-                item.description(),
-                checkbox(enabled),
-            )
+            ListSelectionItem::new(item.label())
+                .with_id(id)
+                .with_columns(item.label(), item.description(), checkbox(enabled))
         })
         .collect();
-    let model =
-        SelectionViewModel::new("Status line", vec![SelectionTab::new("Status line", items)])
-            .without_tab_bar()
-            .with_activation_mode(SelectionActivationMode::EnterOrSpace);
-    StatusLineSelectionView {
-        model: PaneViewModel::new(model, "Enter/Space toggle  ·  ↑/↓ select  ·  Esc back"),
+    let model = ListSelectionModel::new(
+        "Status line",
+        vec![ListSelectionGroup::new("Status line", items)],
+    )
+    .without_tab_bar()
+    .with_activation_mode(ListSelectionActivationMode::EnterOrSpace);
+    StatusLinePaneSpec {
+        model: PaneSpec::new(model, "Enter/Space toggle  ·  ↑/↓ select  ·  Esc back"),
         actions,
     }
 }

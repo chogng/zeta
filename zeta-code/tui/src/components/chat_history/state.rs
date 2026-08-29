@@ -5,11 +5,11 @@ use crossterm::event::KeyModifiers;
 const SCROLL_STEP: usize = 5;
 
 #[derive(Debug, Default)]
-pub(crate) struct TranscriptScroll {
+pub(crate) struct ChatHistoryScroll {
     rows_from_bottom: usize,
 }
 
-impl TranscriptScroll {
+impl ChatHistoryScroll {
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> bool {
         match (key.modifiers, key.code) {
             (KeyModifiers::NONE, KeyCode::PageUp) => {

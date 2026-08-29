@@ -5,13 +5,13 @@ use zeta_app_server_protocol::protocol::connectors::ConnectorConnectionStateDto;
 use zeta_app_server_protocol::protocol::connectors::ConnectorDto;
 use zeta_app_server_protocol::protocol::connectors::ConnectorListResult;
 
-use crate::components::pane::PaneViewModel;
+use crate::components::list_selection::ListSelectionActivationMode;
+use crate::components::list_selection::ListSelectionGroup;
+use crate::components::list_selection::ListSelectionItem;
+use crate::components::list_selection::ListSelectionItemId;
+use crate::components::list_selection::ListSelectionModel;
+use crate::components::pane::PaneSpec;
 use crate::components::search_box::SearchBoxModel;
-use crate::components::selection::SelectionActivationMode;
-use crate::components::selection::SelectionItem;
-use crate::components::selection::SelectionItemId;
-use crate::components::selection::SelectionTab;
-use crate::components::selection::SelectionViewModel;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ConnectorSelectionAction {
@@ -24,12 +24,12 @@ pub(crate) enum ConnectorSelectionAction {
     },
 }
 
-pub(crate) struct ConnectorSelectionView {
-    pub(crate) model: PaneViewModel<SelectionViewModel>,
-    pub(crate) actions: BTreeMap<SelectionItemId, ConnectorSelectionAction>,
+pub(crate) struct ConnectorPaneSpec {
+    pub(crate) model: PaneSpec<ListSelectionModel>,
+    pub(crate) actions: BTreeMap<ListSelectionItemId, ConnectorSelectionAction>,
 }
 
-pub(crate) fn connector_selection_view(catalog: &ConnectorListResult) -> ConnectorSelectionView {
+pub(crate) fn connector_pane_spec(catalog: &ConnectorListResult) -> ConnectorPaneSpec {
     let mut actions = BTreeMap::new();
     let all = catalog
         .connectors
@@ -59,20 +59,20 @@ pub(crate) fn connector_selection_view(catalog: &ConnectorListResult) -> Connect
         })
         .map(|(item, _)| item.clone())
         .collect::<Vec<_>>();
-    ConnectorSelectionView {
-        model: PaneViewModel::new(
-            SelectionViewModel::new(
+    ConnectorPaneSpec {
+        model: PaneSpec::new(
+            ListSelectionModel::new(
                 "Connectors",
                 vec![
-                    SelectionTab::new(format!("All ({})", all.len()), all),
-                    SelectionTab::new(format!("Connected ({})", connected.len()), connected),
-                    SelectionTab::new(
+                    ListSelectionGroup::new(format!("All ({})", all.len()), all),
+                    ListSelectionGroup::new(format!("Connected ({})", connected.len()), connected),
+                    ListSelectionGroup::new(
                         format!("Not connected ({})", disconnected.len()),
                         disconnected,
                     ),
                 ],
             )
-            .with_activation_mode(SelectionActivationMode::Enter)
+            .with_activation_mode(ListSelectionActivationMode::Enter)
             .with_search(SearchBoxModel::new("Search connectors"))
             .with_empty_message("No matching Connectors"),
             "Space search  ·  ←/→ tabs  ·  ↑/↓ select  ·  Enter connect/disconnect  ·  Esc back",
@@ -84,9 +84,9 @@ pub(crate) fn connector_selection_view(catalog: &ConnectorListResult) -> Connect
 fn connector_item(
     index: usize,
     connector: &ConnectorDto,
-    actions: &mut BTreeMap<SelectionItemId, ConnectorSelectionAction>,
-) -> SelectionItem {
-    let item_id = SelectionItemId::new(format!("connector-{index}"));
+    actions: &mut BTreeMap<ListSelectionItemId, ConnectorSelectionAction>,
+) -> ListSelectionItem {
+    let item_id = ListSelectionItemId::new(format!("connector-{index}"));
     if connector
         .available_actions
         .contains(&ConnectorAvailableActionDto::Disconnect)
@@ -115,7 +115,7 @@ fn connector_item(
             },
         );
     }
-    SelectionItem::new(&connector.display_name)
+    ListSelectionItem::new(&connector.display_name)
         .with_id(item_id)
         .with_description(format!(
             "{}  ·  {}",
@@ -139,5 +139,5 @@ fn state_label(state: &ConnectorConnectionStateDto) -> String {
 }
 
 #[cfg(test)]
-#[path = "view_tests.rs"]
+#[path = "pane_tests.rs"]
 mod tests;

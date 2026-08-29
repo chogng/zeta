@@ -1,10 +1,10 @@
-use crate::components::pane::PaneViewModel;
+use crate::components::list_selection::ListSelectionActivationMode;
+use crate::components::list_selection::ListSelectionGroup;
+use crate::components::list_selection::ListSelectionItem;
+use crate::components::list_selection::ListSelectionItemId;
+use crate::components::list_selection::ListSelectionModel;
+use crate::components::pane::PaneSpec;
 use crate::components::search_box::SearchBoxModel;
-use crate::components::selection::SelectionActivationMode;
-use crate::components::selection::SelectionItem;
-use crate::components::selection::SelectionItemId;
-use crate::components::selection::SelectionTab;
-use crate::components::selection::SelectionViewModel;
 use std::collections::BTreeMap;
 use zeta_app_server_protocol::protocol::config::McpServerConfigDto;
 use zeta_app_server_protocol::protocol::config::McpServerEnablementDto;
@@ -18,14 +18,12 @@ pub(crate) enum McpSelectionAction {
     },
 }
 
-pub(crate) struct McpSelectionView {
-    pub(crate) model: PaneViewModel<SelectionViewModel>,
-    pub(crate) actions: BTreeMap<SelectionItemId, McpSelectionAction>,
+pub(crate) struct McpPaneSpec {
+    pub(crate) model: PaneSpec<ListSelectionModel>,
+    pub(crate) actions: BTreeMap<ListSelectionItemId, McpSelectionAction>,
 }
 
-pub(crate) fn mcp_selection_view(
-    servers: &BTreeMap<String, McpServerConfigDto>,
-) -> McpSelectionView {
+pub(crate) fn mcp_pane_spec(servers: &BTreeMap<String, McpServerConfigDto>) -> McpPaneSpec {
     let mut actions = BTreeMap::new();
     let all = servers
         .values()
@@ -47,17 +45,17 @@ pub(crate) fn mcp_selection_view(
     let enabled_count = enabled.len();
     let disabled_count = disabled.len();
 
-    McpSelectionView {
-        model: PaneViewModel::new(
-            SelectionViewModel::new(
+    McpPaneSpec {
+        model: PaneSpec::new(
+            ListSelectionModel::new(
                 "MCP servers",
                 vec![
-                    SelectionTab::new(format!("All ({})", all.len()), all),
-                    SelectionTab::new(format!("Enabled ({enabled_count})"), enabled),
-                    SelectionTab::new(format!("Disabled ({disabled_count})"), disabled),
+                    ListSelectionGroup::new(format!("All ({})", all.len()), all),
+                    ListSelectionGroup::new(format!("Enabled ({enabled_count})"), enabled),
+                    ListSelectionGroup::new(format!("Disabled ({disabled_count})"), disabled),
                 ],
             )
-            .with_activation_mode(SelectionActivationMode::Enter)
+            .with_activation_mode(ListSelectionActivationMode::Enter)
             .with_search(SearchBoxModel::new("Search MCP servers"))
             .with_empty_message("No matching MCP servers"),
             "Space search  ·  ←/→ tabs  ·  ↑/↓ select  ·  Enter toggle  ·  Esc back",
@@ -69,9 +67,9 @@ pub(crate) fn mcp_selection_view(
 fn mcp_item(
     index: usize,
     server: &McpServerConfigDto,
-    actions: &mut BTreeMap<SelectionItemId, McpSelectionAction>,
-) -> SelectionItem {
-    let item_id = SelectionItemId::new(format!("mcp-{index}"));
+    actions: &mut BTreeMap<ListSelectionItemId, McpSelectionAction>,
+) -> ListSelectionItem {
+    let item_id = ListSelectionItemId::new(format!("mcp-{index}"));
     let next_enablement = match server.enablement {
         McpServerEnablementDto::Disabled => McpServerEnablementDto::Enabled,
         McpServerEnablementDto::Enabled => McpServerEnablementDto::Disabled,
@@ -83,7 +81,7 @@ fn mcp_item(
             enablement: next_enablement,
         },
     );
-    SelectionItem::new(&server.display_name)
+    ListSelectionItem::new(&server.display_name)
         .with_id(item_id)
         .with_description(format!(
             "{}  ·  {}  ·  {}",
@@ -111,5 +109,5 @@ fn transport_label(transport: &McpTransportDto) -> String {
 }
 
 #[cfg(test)]
-#[path = "view_tests.rs"]
+#[path = "pane_tests.rs"]
 mod tests;

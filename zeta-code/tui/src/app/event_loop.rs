@@ -2,9 +2,9 @@ use super::ActiveConversation;
 use super::App;
 use super::AppCommand;
 use super::AppEvent;
-use super::ComposerCatalogSnapshot;
+use super::ChatInputCatalogSnapshot;
 use super::Status;
-use super::composer_catalog_snapshot;
+use super::chat_input_catalog_snapshot;
 use super::dispatch::execute_product_command;
 use super::frame;
 use super::request_completion::RequestCompletion;
@@ -21,6 +21,7 @@ use crate::TuiError;
 use crate::TuiExit;
 use crate::TuiOptions;
 use crate::client;
+use crate::components::chat_input_area::ChatInputAreaHeightEntryKind;
 use crate::components::pane;
 use crate::features::additional_directories;
 use crate::features::config;
@@ -84,16 +85,26 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         terminal_settings_path,
         recovery,
     } = options;
-    let server_slash_commands = client.initialization()?.slash_commands.clone();
+    let initialization = client.initialization()?;
+    let server_slash_commands = initialization.slash_commands.clone();
+    let plugins_enabled = initialization.capabilities.plugins;
+    let plugins = if plugins_enabled {
+        client.list_plugins()?.packages
+    } else {
+        Vec::new()
+    };
     let slash_registry = client
         .list_skills(SkillListParams {
             reload: SkillCatalogReloadDto::Cached,
             session_id: None,
         })
         .ok()
-        .and_then(|catalog| composer_catalog_snapshot(&server_slash_commands, &catalog).ok())
-        .unwrap_or(ComposerCatalogSnapshot {
+        .and_then(|catalog| {
+            chat_input_catalog_snapshot(&server_slash_commands, &catalog, &plugins).ok()
+        })
+        .unwrap_or(ChatInputCatalogSnapshot {
             catalog: slash_command_registry(&server_slash_commands)?,
+            plugins: Default::default(),
             skills: Default::default(),
         });
     let mut conversation = match recovery {
@@ -119,7 +130,11 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     let mut keymap_resource = keybindings_path.map(|path| KeymapResource::new(path, now));
     let mut status_line_resource = status_line_path.map(StatusLineResource::new);
     let mut config_resource = terminal_settings_path.map(ConfigResource::new);
-    app.replace_composer_catalog(slash_registry.catalog, slash_registry.skills);
+    app.replace_chat_input_catalog(
+        slash_registry.catalog,
+        slash_registry.skills,
+        slash_registry.plugins,
+    );
     apply_thread_snapshot(
         &mut app,
         &mut active_turn,
@@ -259,7 +274,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                             connector_id,
                                             connection_generation,
                                         )
-                                        .map(AppEvent::ConnectorViewReplaced)
+                                        .map(AppEvent::ConnectorPaneReplaced)
                                         .map_err(|error| error.to_string()),
                                     )
                                 },
@@ -379,8 +394,8 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     }
                     AppCommand::OpenKeymapPane => match keymap_resource.as_ref() {
                         Some(resource) => {
-                            app.update(AppEvent::KeymapViewOpened(
-                                resource.view(&app.app_keymap),
+                            app.update(AppEvent::KeymapPaneOpened(
+                                resource.pane_spec(&app.app_keymap),
                             ));
                         }
                         None => app.update(AppEvent::FailureReported(
@@ -392,7 +407,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         Some(resource) => match resource.refresh() {
                             Ok(settings) => {
                                 app.update(AppEvent::StatusLineSettingsReceived(settings));
-                                app.update(AppEvent::StatusLineViewOpened(resource.setup_view()));
+                                app.update(AppEvent::StatusLinePaneOpened(resource.setup_pane_spec()));
                             }
                             Err(error) => app.update(AppEvent::FailureReported(error)),
                         },
@@ -405,7 +420,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         Some(resource) => match resource.apply_edit(&edit) {
                             Ok((settings, view)) => {
                                 app.update(AppEvent::StatusLineSettingsReceived(settings));
-                                app.update(AppEvent::StatusLineViewReplaced(view));
+                                app.update(AppEvent::StatusLinePaneReplaced(view));
                             }
                             Err(error) => app.update(AppEvent::FailureReported(error)),
                         },
@@ -421,9 +436,9 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             Instant::now(),
                         ) {
                             Ok(notice) => {
-                                app.update(AppEvent::KeymapViewsClosed);
-                                app.update(AppEvent::KeymapViewOpened(
-                                    resource.view(&app.app_keymap),
+                                app.update(AppEvent::KeymapPanesClosed);
+                                app.update(AppEvent::KeymapPaneOpened(
+                                    resource.pane_spec(&app.app_keymap),
                                 ));
                                 app.update(AppEvent::HostOperationCompleted(Ok(notice)));
                             }
@@ -472,8 +487,8 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                         }
                     }
                     AppCommand::OpenCustomThemePane => match ui::theme_catalog() {
-                        Ok(catalog) => app.update(AppEvent::ThemeViewOpened(
-                            theme_feature::custom_theme_selection_view(&catalog),
+                        Ok(catalog) => app.update(AppEvent::ThemePaneOpened(
+                            theme_feature::custom_theme_pane_spec(&catalog),
                         )),
                         Err(error) => app.update(AppEvent::FailureReported(error)),
                     },
@@ -491,7 +506,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                             &session_id,
                                             &thread_id,
                                         )
-                                        .map(AppEvent::RewindViewOpened)
+                                        .map(AppEvent::RewindPaneOpened)
                                         .map_err(|error| error.to_string()),
                                     )
                                 },
@@ -515,7 +530,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                         )
                                         .map(|view| AppEvent::AdditionalDirectoryRemoved {
                                             root: event_root,
-                                            view,
+                                            pane_spec: view,
                                         })
                                         .map_err(|error| error.to_string()),
                                     )
@@ -604,20 +619,22 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     }
                     AppCommand::ResolveInteraction(response) => {
                         if pending_request.is_none() {
+                            let interaction_id = response.interaction_id;
                             let request_client = client.clone();
                             let scope = thread_request_scope(&conversation);
                             let history = thread_subscription.history();
                             pending_request = spawn_request(
                                 "zeta-tui-resolve-interaction",
                                 move || {
-                                    RequestCompletion::InteractionResolved(
-                                        resolve_interaction_and_read(
+                                    RequestCompletion::InteractionResolved {
+                                        interaction_id,
+                                        result: resolve_interaction_and_read(
                                             request_client,
                                             scope,
                                             response,
                                             history,
                                         ),
-                                    )
+                                    }
                                 },
                                 &mut app,
                             );
@@ -634,7 +651,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                             &mut request_client,
                                             connector_id,
                                         )
-                                        .map(AppEvent::ConnectorViewReplaced)
+                                        .map(AppEvent::ConnectorPaneReplaced)
                                         .map_err(|error| error.to_string()),
                                     )
                                 },
@@ -657,7 +674,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                             server_id,
                                             enablement,
                                         )
-                                        .map(AppEvent::McpViewReplaced)
+                                        .map(AppEvent::McpPaneReplaced)
                                         .map_err(|error| error.to_string()),
                                     )
                                 },
@@ -693,7 +710,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                     command,
                                     result: format!("Theme set to {label}"),
                                 });
-                                app.update(AppEvent::ThemeViewClosed);
+                                app.update(AppEvent::ThemePanesClosed);
                             }
                             Err(error) => app.update(AppEvent::FailureReported(error)),
                         }
@@ -707,7 +724,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                     command,
                                     result: format!("Theme set to {label}"),
                                 });
-                                app.update(AppEvent::ThemeViewClosed);
+                                app.update(AppEvent::ThemePanesClosed);
                             }
                             Err(error) => app.update(AppEvent::FailureReported(error)),
                         }
@@ -729,7 +746,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                             skill_id,
                                             enablement,
                                         )
-                                        .map(AppEvent::SkillsViewReplaced)
+                                        .map(AppEvent::SkillsPaneReplaced)
                                         .map_err(|error| error.to_string()),
                                     )
                                 },
@@ -818,6 +835,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             request_client,
                             server_slash_commands,
                             skills_session_id,
+                            plugins_enabled,
                         ))
                     },
                     &mut app,
@@ -833,7 +851,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     move || {
                         RequestCompletion::Presentation(
                             crate::features::connectors::load_selection(&mut request_client)
-                                .map(AppEvent::ConnectorViewReplaced)
+                                .map(AppEvent::ConnectorPaneReplaced)
                                 .map_err(|error| error.to_string()),
                         )
                     },
@@ -860,6 +878,12 @@ fn activate_pointer_item(
     column: u16,
     row: u16,
 ) -> Option<AppCommand> {
+    if frame::height_entry_area(app, area, ChatInputAreaHeightEntryKind::PlanProgress)
+        .is_some_and(|plan_area| plan_area.contains((column, row).into()))
+    {
+        app.toggle_plan_progress();
+        return None;
+    }
     if let Some(index) = selection_tab_index_at(app, area, column, row) {
         app.select_tab(index);
         return None;
@@ -867,16 +891,8 @@ fn activate_pointer_item(
     if let Some(index) = selection_item_index_at(app, area, column, row) {
         return app.activate_visible_item(index);
     }
-    if let Some(index) = frame::skill_index_at(app, area, column, row) {
-        app.activate_skill(index);
-        return None;
-    }
-    if let Some(index) = frame::mention_index_at(app, area, column, row) {
-        app.activate_mention(index);
-        return None;
-    }
-    frame::slash_command_index_at(app, area, column, row)
-        .and_then(|index| app.activate_slash_command(index))
+    frame::input_overlay_index_at(app, area, column, row)
+        .and_then(|index| app.activate_input_overlay_choice(index))
 }
 
 fn selection_tab_index_at(
@@ -885,14 +901,15 @@ fn selection_tab_index_at(
     column: u16,
     row: u16,
 ) -> Option<usize> {
-    let view = app.selection_pane()?;
-    let frame_areas = ui::frame_areas(
-        area,
-        ui::InteractionLayout::Expanded {
-            desired_height: pane::desired_height(view.body().desired_height(area.width)),
-        },
-    );
-    let pane_areas = pane::areas(frame_areas.interaction);
+    let view = app.list_selection_pane()?;
+    let frame_areas = frame::layout(app, area);
+    let pane_area = frame_areas
+        .input
+        .height_entries
+        .iter()
+        .find(|entry| entry.kind == ChatInputAreaHeightEntryKind::Pane)?
+        .area;
+    let pane_areas = pane::areas(pane_area);
     view.body().tab_index_at(pane_areas.body, column, row)
 }
 
@@ -901,12 +918,8 @@ fn select_hovered_popup_item(app: &mut App, area: ratatui::layout::Rect, column:
         app.select_visible_item(index);
         return;
     }
-    if let Some(index) = frame::skill_index_at(app, area, column, row) {
-        app.select_skill(index);
-    } else if let Some(index) = frame::mention_index_at(app, area, column, row) {
-        app.select_mention(index);
-    } else if let Some(index) = frame::slash_command_index_at(app, area, column, row) {
-        app.select_slash_command(index);
+    if let Some(index) = frame::input_overlay_index_at(app, area, column, row) {
+        app.select_input_overlay_choice(index);
     }
 }
 
@@ -916,14 +929,15 @@ fn selection_item_index_at(
     column: u16,
     row: u16,
 ) -> Option<usize> {
-    let view = app.selection_pane()?;
-    let frame_areas = ui::frame_areas(
-        area,
-        ui::InteractionLayout::Expanded {
-            desired_height: pane::desired_height(view.body().desired_height(area.width)),
-        },
-    );
-    let pane_areas = pane::areas(frame_areas.interaction);
+    let view = app.list_selection_pane()?;
+    let frame_areas = frame::layout(app, area);
+    let pane_area = frame_areas
+        .input
+        .height_entries
+        .iter()
+        .find(|entry| entry.kind == ChatInputAreaHeightEntryKind::Pane)?
+        .area;
+    let pane_areas = pane::areas(pane_area);
     view.body().item_index_at(pane_areas.body, column, row)
 }
 
@@ -1014,8 +1028,8 @@ fn refresh_server_event(
                 && request.thread_id == *conversation.thread_id()
             {
                 *active_turn = Some(request.turn_id.clone());
-                match interactions::interaction_selection_view(*request) {
-                    Ok(view) => app.update(AppEvent::InteractionViewOpened(view)),
+                match interactions::interaction_request(*request) {
+                    Ok(request) => app.update(AppEvent::InteractionRequestOpened(request)),
                     Err(error) => app.update(AppEvent::FailureReported(error)),
                 }
             }
@@ -1026,11 +1040,11 @@ fn refresh_server_event(
             ..ServerRefresh::default()
         },
         client::ClientEvent::ConnectorsChanged => ServerRefresh {
-            connectors: app.connector_view_open(),
+            connectors: app.connector_pane_open(),
             ..ServerRefresh::default()
         },
         client::ClientEvent::PackageSourcesChanged => ServerRefresh {
-            connectors: app.connector_view_open(),
+            connectors: app.connector_pane_open(),
             skills: true,
             ..ServerRefresh::default()
         },

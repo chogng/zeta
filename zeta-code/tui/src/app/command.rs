@@ -1,5 +1,5 @@
-use crate::components::composer::ComposerSubmission;
-use crate::components::composer::SlashCommandInvocation;
+use crate::components::chat_input::ChatSubmission;
+use crate::components::chat_input::SlashCommandInvocation;
 use crate::features::config::AdditionalDirectoryPermissionEdit;
 use crate::features::config::ConfigEdit;
 use crate::features::config::ProviderApiKeyEdit;
@@ -72,6 +72,6 @@ pub(crate) enum AppCommand {
     },
     CycleNextApprovalMode,
     SubmitTurn {
-        submission: ComposerSubmission,
+        submission: ChatSubmission,
     },
 }

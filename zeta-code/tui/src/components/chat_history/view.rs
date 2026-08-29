@@ -1,7 +1,7 @@
+use super::ChatHistoryScroll;
 use super::CommandStatus;
 use super::Message;
 use super::MessageRole;
-use super::TranscriptScroll;
 use super::row::estimated_wrapped_rows;
 use crate::components::welcome;
 use crate::components::welcome::WelcomeModel;
@@ -26,7 +26,7 @@ pub(crate) fn draw(
     frame: &mut Frame<'_>,
     area: Rect,
     messages: &[Message],
-    scroll: &TranscriptScroll,
+    scroll: &ChatHistoryScroll,
     welcome: &WelcomeModel,
     presentation_highlight: Color,
 ) {

@@ -1,4 +1,4 @@
-//! Image attachment recognition, encoding, and composer placeholder bookkeeping.
+//! Image attachment recognition, encoding, and chat_input placeholder bookkeeping.
 
 use std::fs::File;
 use std::io::Read;

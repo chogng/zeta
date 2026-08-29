@@ -5,8 +5,8 @@ use zeta_app_server_protocol::protocol::connectors::ConnectorListResult;
 use zeta_app_server_protocol::protocol::connectors::ConnectorOAuthMethodDto;
 
 use super::ConnectorSelectionAction;
-use super::connector_selection_view;
-use crate::components::selection::SelectionViewState;
+use super::connector_pane_spec;
+use crate::components::list_selection::ListSelectionState;
 
 #[test]
 fn connected_connector_is_actionable_while_disconnected_connector_is_read_only() {
@@ -31,8 +31,8 @@ fn connected_connector_is_actionable_while_disconnected_connector_is_read_only()
         ],
     };
 
-    let view = connector_selection_view(&catalog);
-    let state = SelectionViewState::new(view.model.into_body());
+    let view = connector_pane_spec(&catalog);
+    let state = ListSelectionState::new(view.model.into_body());
 
     assert_eq!(state.title(), "Connectors");
     assert_eq!(view.actions.len(), 1);
@@ -50,7 +50,7 @@ fn disconnected_device_oauth_connector_is_actionable() {
         vec![ConnectorAvailableActionDto::ConnectOAuth],
     );
     github.oauth_methods = vec![ConnectorOAuthMethodDto::Device];
-    let view = connector_selection_view(&ConnectorListResult {
+    let view = connector_pane_spec(&ConnectorListResult {
         generation: 4,
         connectors: vec![github],
     });

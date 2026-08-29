@@ -19,7 +19,7 @@ fn context() -> AppKeymapContext {
     AppKeymapContext {
         accepts_input: true,
         has_selection: false,
-        composer_empty: true,
+        chat_input_empty: true,
         is_press: true,
     }
 }

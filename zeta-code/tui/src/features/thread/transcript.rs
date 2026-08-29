@@ -1,5 +1,5 @@
-use crate::components::transcript::Message;
-use crate::components::transcript::MessageRole;
+use crate::components::chat_history::Message;
+use crate::components::chat_history::MessageRole;
 use std::collections::BTreeSet;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptChange;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptEntry;

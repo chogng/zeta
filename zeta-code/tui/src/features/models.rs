@@ -1,7 +1,7 @@
+mod pane;
 mod request;
-mod view;
 
+pub(crate) use pane::ModelPaneSpec;
+pub(crate) use pane::ModelSelectionAction;
+pub(crate) use pane::model_pane_spec;
 pub(crate) use request::load_selection;
-pub(crate) use view::ModelSelectionAction;
-pub(crate) use view::ModelSelectionView;
-pub(crate) use view::model_selection_view;

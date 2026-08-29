@@ -1,9 +1,9 @@
-use crate::components::pane::PaneViewModel;
+use crate::components::list_selection::ListSelectionGroup;
+use crate::components::list_selection::ListSelectionItem;
+use crate::components::list_selection::ListSelectionItemId;
+use crate::components::list_selection::ListSelectionModel;
+use crate::components::pane::PaneSpec;
 use crate::components::search_box::SearchBoxModel;
-use crate::components::selection::SelectionItem;
-use crate::components::selection::SelectionItemId;
-use crate::components::selection::SelectionTab;
-use crate::components::selection::SelectionViewModel;
 use std::collections::BTreeMap;
 use zeta_app_server_protocol::protocol::skills::{
     SkillEnablementDto, SkillListResult, SkillSourceKindDto,
@@ -18,20 +18,20 @@ pub(crate) enum SkillSelectionAction {
     },
 }
 
-pub(crate) struct SkillSelectionView {
-    pub(crate) model: PaneViewModel<SelectionViewModel>,
-    pub(crate) actions: BTreeMap<SelectionItemId, SkillSelectionAction>,
+pub(crate) struct SkillPaneSpec {
+    pub(crate) model: PaneSpec<ListSelectionModel>,
+    pub(crate) actions: BTreeMap<ListSelectionItemId, SkillSelectionAction>,
 }
 
-pub(crate) fn skills_selection_view(catalog: &SkillListResult) -> SkillSelectionView {
+pub(crate) fn skills_pane_spec(catalog: &SkillListResult) -> SkillPaneSpec {
     let mut actions = BTreeMap::new();
     let all = catalog
         .skills
         .iter()
         .enumerate()
         .map(|(index, skill)| {
-            let item_id = SelectionItemId::new(format!("skill-{index}"));
-            SelectionItem::new(skill.id.name.as_str())
+            let item_id = ListSelectionItemId::new(format!("skill-{index}"));
+            ListSelectionItem::new(skill.id.name.as_str())
                 .with_id(item_id)
                 .with_description(format!(
                     "{}  ·  {}  ·  {}  ·  {}",
@@ -58,7 +58,7 @@ pub(crate) fn skills_selection_view(catalog: &SkillListResult) -> SkillSelection
         .diagnostics
         .iter()
         .map(|diagnostic| {
-            SelectionItem::new(diagnostic.subject.as_deref().unwrap_or(&diagnostic.source))
+            ListSelectionItem::new(diagnostic.subject.as_deref().unwrap_or(&diagnostic.source))
                 .with_description(&diagnostic.message)
         })
         .collect::<Vec<_>>();
@@ -67,7 +67,7 @@ pub(crate) fn skills_selection_view(catalog: &SkillListResult) -> SkillSelection
         .iter()
         .enumerate()
         .map(|(index, skill)| {
-            let item_id = SelectionItemId::new(format!("manage-skill-{index}"));
+            let item_id = ListSelectionItemId::new(format!("manage-skill-{index}"));
             let enablement = match skill.enablement {
                 SkillEnablementDto::Disabled => SkillEnablementDto::Enabled,
                 SkillEnablementDto::Enabled => SkillEnablementDto::Disabled,
@@ -79,7 +79,7 @@ pub(crate) fn skills_selection_view(catalog: &SkillListResult) -> SkillSelection
                     enablement,
                 },
             );
-            SelectionItem::new(skill.id.name.as_str())
+            ListSelectionItem::new(skill.id.name.as_str())
                 .with_id(item_id)
                 .with_description(format!(
                     "{} → {}  ·  {}",
@@ -93,16 +93,16 @@ pub(crate) fn skills_selection_view(catalog: &SkillListResult) -> SkillSelection
     let disabled_count = disabled.len();
     let error_count = errors.len();
 
-    SkillSelectionView {
-        model: PaneViewModel::new(
-            SelectionViewModel::new(
+    SkillPaneSpec {
+        model: PaneSpec::new(
+            ListSelectionModel::new(
                 "Skills",
                 vec![
-                    SelectionTab::new(format!("All ({})", all.len()), all),
-                    SelectionTab::new(format!("Enabled ({enabled_count})"), enabled),
-                    SelectionTab::new(format!("Disabled ({disabled_count})"), disabled),
-                    SelectionTab::new("Manage", manage),
-                    SelectionTab::new(format!("Errors ({error_count})"), errors),
+                    ListSelectionGroup::new(format!("All ({})", all.len()), all),
+                    ListSelectionGroup::new(format!("Enabled ({enabled_count})"), enabled),
+                    ListSelectionGroup::new(format!("Disabled ({disabled_count})"), disabled),
+                    ListSelectionGroup::new("Manage", manage),
+                    ListSelectionGroup::new(format!("Errors ({error_count})"), errors),
                 ],
             )
             .with_search(SearchBoxModel::new("Search available skills"))

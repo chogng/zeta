@@ -1,10 +1,10 @@
-use crate::components::pane::PaneViewModel;
+use crate::components::list_selection::ListSelectionActivationMode;
+use crate::components::list_selection::ListSelectionGroup;
+use crate::components::list_selection::ListSelectionItem;
+use crate::components::list_selection::ListSelectionItemId;
+use crate::components::list_selection::ListSelectionModel;
+use crate::components::pane::PaneSpec;
 use crate::components::search_box::SearchBoxModel;
-use crate::components::selection::SelectionActivationMode;
-use crate::components::selection::SelectionItem;
-use crate::components::selection::SelectionItemId;
-use crate::components::selection::SelectionTab;
-use crate::components::selection::SelectionViewModel;
 use std::collections::BTreeMap;
 use zeta_protocol::Session;
 use zeta_protocol::SessionStatus;
@@ -14,15 +14,12 @@ pub(crate) enum SessionSelectionAction {
     Resume { session_id: String },
 }
 
-pub(crate) struct SessionSelectionView {
-    pub(crate) model: PaneViewModel<SelectionViewModel>,
-    pub(crate) actions: BTreeMap<SelectionItemId, SessionSelectionAction>,
+pub(crate) struct SessionPaneSpec {
+    pub(crate) model: PaneSpec<ListSelectionModel>,
+    pub(crate) actions: BTreeMap<ListSelectionItemId, SessionSelectionAction>,
 }
 
-pub(crate) fn session_selection_view(
-    sessions: &[Session],
-    active_session_id: &str,
-) -> SessionSelectionView {
+pub(crate) fn session_pane_spec(sessions: &[Session], active_session_id: &str) -> SessionPaneSpec {
     let mut actions = BTreeMap::new();
     let mut selected = 0;
     let all = sessions
@@ -42,18 +39,18 @@ pub(crate) fn session_selection_view(
     let completed_count = completed.len();
     let archived_count = archived.len();
 
-    SessionSelectionView {
-        model: PaneViewModel::new(
-            SelectionViewModel::new(
+    SessionPaneSpec {
+        model: PaneSpec::new(
+            ListSelectionModel::new(
                 "Resume session",
                 vec![
-                    SelectionTab::new(format!("All ({})", all.len()), all),
-                    SelectionTab::new(format!("Active ({active_count})"), active),
-                    SelectionTab::new(format!("Completed ({completed_count})"), completed),
-                    SelectionTab::new(format!("Archived ({archived_count})"), archived),
+                    ListSelectionGroup::new(format!("All ({})", all.len()), all),
+                    ListSelectionGroup::new(format!("Active ({active_count})"), active),
+                    ListSelectionGroup::new(format!("Completed ({completed_count})"), completed),
+                    ListSelectionGroup::new(format!("Archived ({archived_count})"), archived),
                 ],
             )
-            .with_activation_mode(SelectionActivationMode::Enter)
+            .with_activation_mode(ListSelectionActivationMode::Enter)
             .with_initial_selected(selected)
             .with_search(SearchBoxModel::new("Search saved sessions"))
             .with_empty_message("No matching sessions"),
@@ -67,16 +64,16 @@ fn session_item(
     index: usize,
     session: &Session,
     active_session_id: &str,
-    actions: &mut BTreeMap<SelectionItemId, SessionSelectionAction>,
-) -> SelectionItem {
-    let item_id = SelectionItemId::new(format!("session-{index}"));
+    actions: &mut BTreeMap<ListSelectionItemId, SessionSelectionAction>,
+) -> ListSelectionItem {
+    let item_id = ListSelectionItemId::new(format!("session-{index}"));
     actions.insert(
         item_id.clone(),
         SessionSelectionAction::Resume {
             session_id: session.session_id.to_string(),
         },
     );
-    SelectionItem::new(format!(
+    ListSelectionItem::new(format!(
         "{}{}",
         session.title,
         if session.session_id.as_str() == active_session_id {
@@ -95,10 +92,10 @@ fn session_item(
 }
 
 fn filtered_items(
-    items: &[SelectionItem],
+    items: &[ListSelectionItem],
     sessions: &[Session],
     status: SessionStatus,
-) -> Vec<SelectionItem> {
+) -> Vec<ListSelectionItem> {
     items
         .iter()
         .zip(sessions)
@@ -116,5 +113,5 @@ fn status_label(status: SessionStatus) -> &'static str {
 }
 
 #[cfg(test)]
-#[path = "view_tests.rs"]
+#[path = "pane_tests.rs"]
 mod tests;

@@ -1,7 +1,7 @@
+mod pane;
 mod request;
-mod view;
 
+pub(crate) use pane::RewindPaneSpec;
+pub(crate) use pane::RewindSelectionAction;
+pub(crate) use pane::rewind_pane_spec;
 pub(crate) use request::load_selection;
-pub(crate) use view::RewindSelectionAction;
-pub(crate) use view::RewindSelectionView;
-pub(crate) use view::rewind_selection_view;

@@ -89,7 +89,7 @@ pub(crate) struct KeymapActionSnapshot {
 pub(crate) enum AppKeymapCondition {
     Always,
     AcceptsInput,
-    EmptyComposer,
+    EmptyChatInput,
     PressWithInput,
     PressWithInputWithoutSelection,
     Expression(ContextExpression),
@@ -100,7 +100,7 @@ pub(crate) enum AppKeymapCondition {
 pub(crate) struct AppKeymapContext {
     pub(crate) accepts_input: bool,
     pub(crate) has_selection: bool,
-    pub(crate) composer_empty: bool,
+    pub(crate) chat_input_empty: bool,
     pub(crate) is_press: bool,
 }
 
@@ -108,14 +108,14 @@ impl AppKeymapContext {
     fn supports_key(key: &str) -> bool {
         matches!(
             key,
-            "inputFocus" | "composerEmpty" | "selectionVisible" | "keyEventPress"
+            "inputFocus" | "chatInputEmpty" | "selectionVisible" | "keyEventPress"
         )
     }
 
     fn value(self, key: &str) -> Option<ContextValue> {
         match key {
             "inputFocus" => Some(ContextValue::Boolean(self.accepts_input)),
-            "composerEmpty" => Some(ContextValue::Boolean(self.composer_empty)),
+            "chatInputEmpty" => Some(ContextValue::Boolean(self.chat_input_empty)),
             "selectionVisible" => Some(ContextValue::Boolean(self.has_selection)),
             "keyEventPress" => Some(ContextValue::Boolean(self.is_press)),
             _ => None,
@@ -154,7 +154,7 @@ const APP_KEYBINDINGS: &[AppKeybindingSpec] = &[
     AppKeybindingSpec {
         keybinding: "ctrl+d",
         action: AppKeymapAction::InterruptOrQuit,
-        condition: AppKeymapCondition::EmptyComposer,
+        condition: AppKeymapCondition::EmptyChatInput,
     },
     AppKeybindingSpec {
         keybinding: "ctrl+o",
@@ -375,7 +375,7 @@ pub(super) fn condition_matches(
     match condition {
         AppKeymapCondition::Always => true,
         AppKeymapCondition::AcceptsInput => context.accepts_input,
-        AppKeymapCondition::EmptyComposer => context.composer_empty,
+        AppKeymapCondition::EmptyChatInput => context.chat_input_empty,
         AppKeymapCondition::PressWithInput => context.is_press && context.accepts_input,
         AppKeymapCondition::PressWithInputWithoutSelection => {
             context.is_press && context.accepts_input && !context.has_selection

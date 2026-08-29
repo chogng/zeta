@@ -1,6 +1,6 @@
 use super::ThreadFeatureState;
-use crate::components::transcript::CommandStatus;
-use crate::components::transcript::MessageRole;
+use crate::components::chat_history::CommandStatus;
+use crate::components::chat_history::MessageRole;
 use crate::features::thread::ThreadPresentationEvent;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptChange;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptEntry;
@@ -199,6 +199,8 @@ fn thread_snapshot() -> Thread {
         turns: vec![Turn {
             turn_id: turn_id.clone(),
             status: TurnStatus::Completed,
+            kind: Default::default(),
+            instructions: None,
             model: None,
             tool_profile: None,
             tool_mode: zeta_protocol::ToolMode::Direct,
@@ -235,6 +237,8 @@ fn thread_with_item(turn: &str, item: &str, text: &str) -> Thread {
         turns: vec![Turn {
             turn_id: turn_id.clone(),
             status: TurnStatus::Completed,
+            kind: Default::default(),
+            instructions: None,
             model: None,
             tool_profile: None,
             tool_mode: zeta_protocol::ToolMode::Direct,

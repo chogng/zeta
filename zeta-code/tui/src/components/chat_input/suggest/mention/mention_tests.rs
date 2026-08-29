@@ -1,7 +1,9 @@
 use super::Mentions;
 use super::input::active_mention;
+use super::popup::MentionMatchKind;
+use super::popup::MentionPluginItem;
 use super::popup::MentionPopup;
-use crate::components::composer::editor::TextArea;
+use crate::components::chat_input::editor::TextArea;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -69,6 +71,26 @@ fn completing_a_file_replaces_only_the_token_with_an_atomic_path() {
     assert_eq!(textarea.text(), "review src/lib.rs please");
     let (_, range) = textarea.elements().next().unwrap();
     assert_eq!(&textarea.text()[range], "src/lib.rs");
+}
+
+#[test]
+fn plugin_catalog_joins_file_mentions_and_keeps_the_at_prefix() {
+    let mut mentions = Mentions {
+        popup: MentionPopup::default(),
+    };
+    mentions.replace_plugin_catalog(vec![MentionPluginItem::new("acme/review".into())]);
+    let mut textarea = TextArea::new();
+    textarea.insert_text("use @ac");
+    mentions.sync_textarea(&textarea);
+    mentions.apply_search_snapshot(snapshot("ac", &["src/actions.rs"]));
+
+    let view = mentions.view().unwrap();
+    assert_eq!(view.matches.len(), 2);
+    assert_eq!(view.matches[0].kind, MentionMatchKind::Plugin);
+    assert_eq!(view.matches[0].label, "acme/review");
+
+    assert!(mentions.complete_selected(&mut textarea));
+    assert_eq!(textarea.text(), "use @acme/review ");
 }
 
 fn snapshot(query: &str, paths: &[&str]) -> PathSearchSnapshot {

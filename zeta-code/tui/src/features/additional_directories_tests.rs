@@ -1,6 +1,6 @@
 use super::AdditionalDirectorySelectionAction;
-use super::selection_view;
-use crate::components::selection::SelectionViewState;
+use super::list_selection;
+use crate::components::list_selection::ListSelectionState;
 use std::path::PathBuf;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryDto;
 use zeta_app_server_protocol::protocol::workspace::WorkspaceAdditionalDirectoryListResult;
@@ -9,7 +9,7 @@ use zeta_app_server_protocol::protocol::workspace::WorkspaceTrustStateDto;
 
 #[test]
 fn additional_directory_view_maps_exact_roots_to_remove_actions() {
-    let view = selection_view(WorkspaceAdditionalDirectoryListResult {
+    let view = list_selection(WorkspaceAdditionalDirectoryListResult {
         revision: 3,
         directories: vec![WorkspaceAdditionalDirectoryDto {
             contributions: Default::default(),
@@ -20,7 +20,7 @@ fn additional_directory_view_maps_exact_roots_to_remove_actions() {
     });
 
     assert_eq!(
-        SelectionViewState::new(view.model.into_body()).title(),
+        ListSelectionState::new(view.model.into_body()).title(),
         "Additional directories"
     );
     assert!(matches!(

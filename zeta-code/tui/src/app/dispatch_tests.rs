@@ -1,10 +1,12 @@
 use super::ActiveConversation;
-use crate::app::help_selection_view;
+use crate::app::help_pane_spec;
 use crate::app::{App, AppCommand, AppEvent, Status};
-use crate::components::composer::{
-    ComposerInput, SlashCommandInvocation, TuiSlashCommandAction, built_in_catalog_command,
+use crate::components::chat_history::MessageRole;
+use crate::components::chat_input::{
+    ChatInputItem, SlashCommandInvocation, TuiSlashCommandAction, built_in_catalog_command,
 };
-use crate::components::transcript::MessageRole;
+use crate::components::chat_input_area::ChatInputAreaHeightEntryView;
+use crate::components::chat_input_area::PaneEntryView;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::fs;
 use std::ops::Deref;
@@ -38,7 +40,7 @@ use zeta_protocol::ThreadOrigin;
 #[test]
 fn help_lists_only_builtins_with_execution_paths() {
     let help =
-        crate::components::selection::SelectionViewState::new(help_selection_view().into_body());
+        crate::components::list_selection::ListSelectionState::new(help_pane_spec().into_body());
     let help = help
         .visible_items()
         .into_iter()
@@ -186,26 +188,30 @@ fn status_mcp_connectors_skills_and_help_return_real_surfaces() {
         invocation(TuiSlashCommandAction::Status, ""),
         &mut app,
     );
-    assert_eq!(app.selection_view().unwrap().title(), "Status");
-    app.update(AppEvent::SelectionViewClosed);
+    assert!(matches!(
+        app.input_height_entries().as_slice(),
+        [ChatInputAreaHeightEntryView::Pane(PaneEntryView::DetailList(view))]
+            if view.body().title() == "Status"
+    ));
+    app.update(AppEvent::ListSelectionPaneClosed);
 
     conversation.execute(
         &mut client,
         invocation(TuiSlashCommandAction::Mcp, ""),
         &mut app,
     );
-    assert_eq!(app.selection_view().unwrap().title(), "MCP servers");
-    assert!(app.selection_view().unwrap().search().is_some());
-    app.update(AppEvent::SelectionViewClosed);
+    assert_eq!(app.list_selection().unwrap().title(), "MCP servers");
+    assert!(app.list_selection().unwrap().search().is_some());
+    app.update(AppEvent::ListSelectionPaneClosed);
 
     conversation.execute(
         &mut client,
         invocation(TuiSlashCommandAction::Connectors, ""),
         &mut app,
     );
-    assert_eq!(app.selection_view().unwrap().title(), "Connectors");
-    assert!(app.selection_view().unwrap().search().is_some());
-    app.update(AppEvent::SelectionViewClosed);
+    assert_eq!(app.list_selection().unwrap().title(), "Connectors");
+    assert!(app.list_selection().unwrap().search().is_some());
+    app.update(AppEvent::ListSelectionPaneClosed);
 
     conversation.execute(
         &mut client,
@@ -213,7 +219,7 @@ fn status_mcp_connectors_skills_and_help_return_real_surfaces() {
         &mut app,
     );
     assert_eq!(app.status(), &Status::Ready);
-    let selection = app.selection_view().unwrap();
+    let selection = app.list_selection().unwrap();
     assert_eq!(selection.title(), "Skills");
     assert_eq!(selection.active_tab().label(), "All (1)");
     assert_eq!(selection.visible_items()[0].label(), "skill-creator");
@@ -224,7 +230,7 @@ fn status_mcp_connectors_skills_and_help_return_real_surfaces() {
         &mut app,
     );
     assert_eq!(app.status(), &Status::Ready);
-    let selection = app.selection_view().unwrap();
+    let selection = app.list_selection().unwrap();
     assert_eq!(selection.active_tab().label(), "Commands");
     assert_eq!(selection.tabs().len(), 1);
 
@@ -244,7 +250,7 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
         &mut app,
     );
 
-    let all = app.selection_view().unwrap();
+    let all = app.list_selection().unwrap();
     assert_eq!(all.active_tab().label(), "All (1)");
     assert_eq!(
         all.visible_items()
@@ -261,7 +267,7 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
     );
 
     app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
-    let enabled = app.selection_view().unwrap();
+    let enabled = app.list_selection().unwrap();
     assert_eq!(enabled.active_tab().label(), "Enabled (1)");
     assert_eq!(enabled.visible_items()[0].label(), "skill-creator");
 
@@ -287,9 +293,9 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
         enablement,
     )
     .unwrap();
-    app.update(AppEvent::SkillsViewReplaced(view));
+    app.update(AppEvent::SkillsPaneReplaced(view));
     app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
-    let disabled = app.selection_view().unwrap();
+    let disabled = app.list_selection().unwrap();
     assert_eq!(disabled.active_tab().label(), "Disabled (1)");
     assert_eq!(disabled.visible_items()[0].label(), "skill-creator");
 
@@ -359,21 +365,21 @@ fn resume_and_model_without_arguments_open_actionable_panes() {
         invocation(TuiSlashCommandAction::Resume, ""),
         &mut app,
     );
-    assert_eq!(app.selection_view().unwrap().title(), "Resume session");
+    assert_eq!(app.list_selection().unwrap().title(), "Resume session");
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         Some(AppCommand::ResumeSession {
             session_id: current_session,
         })
     );
-    app.update(AppEvent::SelectionViewClosed);
+    app.update(AppEvent::ListSelectionPaneClosed);
 
     conversation.execute(
         &mut client,
         invocation(TuiSlashCommandAction::Model, ""),
         &mut app,
     );
-    assert_eq!(app.selection_view().unwrap().title(), "Model");
+    assert_eq!(app.list_selection().unwrap().title(), "Model");
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         Some(AppCommand::SetPreferredModel {
@@ -397,9 +403,9 @@ fn rewind_without_arguments_opens_the_checkpoint_pane() {
         &mut app,
     );
 
-    assert_eq!(app.selection_view().unwrap().title(), "Rewind");
-    assert!(app.selection_view().unwrap().search().is_some());
-    assert!(app.selection_view().unwrap().visible_items().is_empty());
+    assert_eq!(app.list_selection().unwrap().title(), "Rewind");
+    assert!(app.list_selection().unwrap().search().is_some());
+    assert!(app.list_selection().unwrap().visible_items().is_empty());
 
     drop(client);
     let _ = fs::remove_dir_all(state_root);
@@ -477,7 +483,7 @@ fn add_dir_adds_lists_and_removes_the_exact_session_directory() {
         &mut app,
     );
     assert_eq!(
-        app.selection_view().unwrap().title(),
+        app.list_selection().unwrap().title(),
         "Additional directories"
     );
     assert_eq!(
@@ -500,7 +506,7 @@ fn product_commands_reject_image_arguments_instead_of_silently_dropping_them() {
         command: built_in_catalog_command(TuiSlashCommandAction::Model),
         origin: zeta_slash_commands::SlashCommandOrigin::Local,
         display_arguments: "[Image #1]".into(),
-        arguments: vec![ComposerInput::Image {
+        arguments: vec![ChatInputItem::Image {
             url: "data:image/png;base64,cG5n".into(),
         }],
     };
@@ -527,7 +533,7 @@ fn invocation(command: TuiSlashCommandAction, arguments: &str) -> SlashCommandIn
         origin: zeta_slash_commands::SlashCommandOrigin::Local,
         display_arguments: arguments.into(),
         arguments: (!arguments.is_empty())
-            .then(|| ComposerInput::Text(arguments.into()))
+            .then(|| ChatInputItem::Text(arguments.into()))
             .into_iter()
             .collect(),
     }

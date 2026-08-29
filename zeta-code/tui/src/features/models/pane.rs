@@ -1,10 +1,10 @@
-use crate::components::pane::PaneViewModel;
+use crate::components::list_selection::ListSelectionActivationMode;
+use crate::components::list_selection::ListSelectionGroup;
+use crate::components::list_selection::ListSelectionItem;
+use crate::components::list_selection::ListSelectionItemId;
+use crate::components::list_selection::ListSelectionModel;
+use crate::components::pane::PaneSpec;
 use crate::components::search_box::SearchBoxModel;
-use crate::components::selection::SelectionActivationMode;
-use crate::components::selection::SelectionItem;
-use crate::components::selection::SelectionItemId;
-use crate::components::selection::SelectionTab;
-use crate::components::selection::SelectionViewModel;
 use std::collections::BTreeMap;
 use zeta_app_server_protocol::protocol::config::ModelRefDto;
 use zeta_app_server_protocol::protocol::model::ModelListResult;
@@ -14,18 +14,18 @@ pub(crate) enum ModelSelectionAction {
     Select { preference: String },
 }
 
-pub(crate) struct ModelSelectionView {
-    pub(crate) model: PaneViewModel<SelectionViewModel>,
-    pub(crate) actions: BTreeMap<SelectionItemId, ModelSelectionAction>,
+pub(crate) struct ModelPaneSpec {
+    pub(crate) model: PaneSpec<ListSelectionModel>,
+    pub(crate) actions: BTreeMap<ListSelectionItemId, ModelSelectionAction>,
 }
 
-pub(crate) fn model_selection_view(
+pub(crate) fn model_pane_spec(
     catalog: &ModelListResult,
     preferred_model: Option<&ModelRefDto>,
-) -> ModelSelectionView {
+) -> ModelPaneSpec {
     let current = preferred_model.map(|model| format!("{}/{}", model.provider, model.model));
     let mut actions = BTreeMap::new();
-    let automatic_id = SelectionItemId::new("model-automatic");
+    let automatic_id = ListSelectionItemId::new("model-automatic");
     actions.insert(
         automatic_id.clone(),
         ModelSelectionAction::Select {
@@ -35,7 +35,7 @@ pub(crate) fn model_selection_view(
     let automatic_selected = current.is_none();
     let mut selected = 0;
     let mut items = vec![
-        SelectionItem::new(format!(
+        ListSelectionItem::new(format!(
             "Automatic{}",
             if automatic_selected { " ✓" } else { "" }
         ))
@@ -48,14 +48,14 @@ pub(crate) fn model_selection_view(
         if is_selected {
             selected = index + 1;
         }
-        let item_id = SelectionItemId::new(format!("model-{index}"));
+        let item_id = ListSelectionItemId::new(format!("model-{index}"));
         actions.insert(
             item_id.clone(),
             ModelSelectionAction::Select {
                 preference: preference.clone(),
             },
         );
-        SelectionItem::new(format!(
+        ListSelectionItem::new(format!(
             "{}{}",
             entry.display_name,
             if is_selected { " ✓" } else { "" }
@@ -64,10 +64,10 @@ pub(crate) fn model_selection_view(
         .with_description(preference)
     }));
 
-    ModelSelectionView {
-        model: PaneViewModel::new(
-            SelectionViewModel::new("Model", vec![SelectionTab::new("Models", items)])
-                .with_activation_mode(SelectionActivationMode::Enter)
+    ModelPaneSpec {
+        model: PaneSpec::new(
+            ListSelectionModel::new("Model", vec![ListSelectionGroup::new("Models", items)])
+                .with_activation_mode(ListSelectionActivationMode::Enter)
                 .without_tab_bar()
                 .with_initial_selected(selected)
                 .with_search(SearchBoxModel::new("Search models"))
@@ -79,5 +79,5 @@ pub(crate) fn model_selection_view(
 }
 
 #[cfg(test)]
-#[path = "view_tests.rs"]
+#[path = "pane_tests.rs"]
 mod tests;

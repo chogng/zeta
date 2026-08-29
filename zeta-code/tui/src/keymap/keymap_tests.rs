@@ -22,7 +22,7 @@ fn context() -> AppKeymapContext {
     AppKeymapContext {
         accepts_input: true,
         has_selection: false,
-        composer_empty: true,
+        chat_input_empty: true,
         is_press: true,
     }
 }
@@ -98,7 +98,7 @@ fn root_conditions_preserve_input_selection_and_press_boundaries() {
 }
 
 #[test]
-fn control_d_only_matches_an_empty_composer() {
+fn control_d_only_matches_an_empty_chat_input() {
     let keymap = AppKeymap::default();
     let control_d = control('d');
 
@@ -106,7 +106,7 @@ fn control_d_only_matches_an_empty_composer() {
         keymap.resolve_single(
             &control_d,
             AppKeymapContext {
-                composer_empty: false,
+                chat_input_empty: false,
                 ..context()
             },
         ),
@@ -254,7 +254,7 @@ fn plain_escape_is_reserved_for_cancelling_pending_chords() {
 
 #[test]
 #[should_panic(expected = "must use Control, Alt, Meta, primary, or a non-character prefix")]
-fn plain_character_prefix_cannot_intercept_composer_text() {
+fn plain_character_prefix_cannot_intercept_chat_input_text() {
     AppKeymap::from_specs(&[AppKeybindingSpec {
         keybinding: "k ctrl+o",
         action: AppKeymapAction::CopyLastResponse,

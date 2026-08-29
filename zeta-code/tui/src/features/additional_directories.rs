@@ -1,10 +1,10 @@
-use crate::components::pane::PaneViewModel;
+use crate::components::list_selection::ListSelectionActivationMode;
+use crate::components::list_selection::ListSelectionGroup;
+use crate::components::list_selection::ListSelectionItem;
+use crate::components::list_selection::ListSelectionItemId;
+use crate::components::list_selection::ListSelectionModel;
+use crate::components::pane::PaneSpec;
 use crate::components::search_box::SearchBoxModel;
-use crate::components::selection::SelectionActivationMode;
-use crate::components::selection::SelectionItem;
-use crate::components::selection::SelectionItemId;
-use crate::components::selection::SelectionTab;
-use crate::components::selection::SelectionViewModel;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use zeta_app_server_client::AppServerClient;
@@ -24,15 +24,15 @@ pub(crate) enum AdditionalDirectorySelectionAction {
     Remove { root: PathBuf },
 }
 
-pub(crate) struct AdditionalDirectorySelectionView {
-    pub(crate) model: PaneViewModel<SelectionViewModel>,
-    pub(crate) actions: BTreeMap<SelectionItemId, AdditionalDirectorySelectionAction>,
+pub(crate) struct AdditionalDirectoryPaneSpec {
+    pub(crate) model: PaneSpec<ListSelectionModel>,
+    pub(crate) actions: BTreeMap<ListSelectionItemId, AdditionalDirectorySelectionAction>,
 }
 
 pub(crate) fn load_selection<T>(
     client: &mut AppServerClient<T>,
     session_id: &SessionId,
-) -> Result<AdditionalDirectorySelectionView, ClientError>
+) -> Result<AdditionalDirectoryPaneSpec, ClientError>
 where
     T: JsonRpcTransport,
 {
@@ -40,7 +40,7 @@ where
         .list_workspace_additional_directories(WorkspaceAdditionalDirectoryListParams {
             session_id: session_id.clone(),
         })
-        .map(selection_view)
+        .map(list_selection)
 }
 
 pub(crate) fn add<T>(
@@ -63,7 +63,7 @@ pub(crate) fn remove<T>(
     client: &mut AppServerClient<T>,
     session_id: &SessionId,
     root: PathBuf,
-) -> Result<AdditionalDirectorySelectionView, ClientError>
+) -> Result<AdditionalDirectoryPaneSpec, ClientError>
 where
     T: JsonRpcTransport,
 {
@@ -73,30 +73,28 @@ where
             root,
         })
         .map(|result| {
-            selection_view(WorkspaceAdditionalDirectoryListResult {
+            list_selection(WorkspaceAdditionalDirectoryListResult {
                 revision: result.revision,
                 directories: result.directories,
             })
         })
 }
 
-fn selection_view(
-    result: WorkspaceAdditionalDirectoryListResult,
-) -> AdditionalDirectorySelectionView {
+fn list_selection(result: WorkspaceAdditionalDirectoryListResult) -> AdditionalDirectoryPaneSpec {
     let mut actions = BTreeMap::new();
     let items = result
         .directories
         .into_iter()
         .enumerate()
         .map(|(index, directory)| {
-            let item_id = SelectionItemId::new(format!("additional-directory-{index}"));
+            let item_id = ListSelectionItemId::new(format!("additional-directory-{index}"));
             actions.insert(
                 item_id.clone(),
                 AdditionalDirectorySelectionAction::Remove {
                     root: directory.root.clone(),
                 },
             );
-            SelectionItem::new(directory.root.display().to_string())
+            ListSelectionItem::new(directory.root.display().to_string())
                 .with_id(item_id)
                 .with_description(format!(
                     "{} · {}",
@@ -117,13 +115,13 @@ fn selection_view(
                 ))
         })
         .collect();
-    AdditionalDirectorySelectionView {
-        model: PaneViewModel::new(
-            SelectionViewModel::new(
+    AdditionalDirectoryPaneSpec {
+        model: PaneSpec::new(
+            ListSelectionModel::new(
                 "Additional directories",
-                vec![SelectionTab::new("Directories", items)],
+                vec![ListSelectionGroup::new("Directories", items)],
             )
-            .with_activation_mode(SelectionActivationMode::Enter)
+            .with_activation_mode(ListSelectionActivationMode::Enter)
             .without_tab_bar()
             .with_search(SearchBoxModel::new("Search directories"))
             .with_empty_message("No additional directories"),

@@ -1,13 +1,13 @@
 use super::App;
-use super::SelectionActions;
-use crate::features::config::ConfigSelectionView;
+use super::PaneActions;
+use crate::features::config::ConfigPaneSpec;
 
 impl App {
-    pub(super) fn show_config_view(&mut self, view: ConfigSelectionView) {
-        self.push_selection_view(view.model, SelectionActions::Config(view.actions));
+    pub(super) fn show_config_pane(&mut self, pane_spec: ConfigPaneSpec) {
+        self.push_list_selection_pane(pane_spec.model, PaneActions::Config(pane_spec.actions));
     }
 
-    pub(super) fn replace_config_view(&mut self, view: ConfigSelectionView) {
-        self.replace_selection_view(view.model, SelectionActions::Config(view.actions));
+    pub(super) fn replace_config_pane(&mut self, pane_spec: ConfigPaneSpec) {
+        self.replace_list_selection_pane(pane_spec.model, PaneActions::Config(pane_spec.actions));
     }
 }

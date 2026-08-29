@@ -1,7 +1,7 @@
 //! `$skill` query, completion, and exact Skill binding state.
 
-use super::editor::TextArea;
-use super::editor::TextElementId;
+use super::super::editor::TextArea;
+use super::super::editor::TextElementId;
 use std::ops::Range;
 use zeta_protocol::SkillRef;
 
@@ -42,7 +42,7 @@ pub(crate) struct SkillSelectorView<'a> {
 }
 
 #[derive(Debug, Default, Eq, PartialEq)]
-pub(super) struct SkillSelector {
+pub(in crate::components::chat_input) struct SkillSelector {
     catalog: Vec<SkillSelectorItem>,
     token_range: Option<Range<usize>>,
     query: Option<String>,
@@ -53,12 +53,15 @@ pub(super) struct SkillSelector {
 }
 
 impl SkillSelector {
-    pub(super) fn replace_catalog(&mut self, catalog: Vec<SkillSelectorItem>) {
+    pub(in crate::components::chat_input) fn replace_catalog(
+        &mut self,
+        catalog: Vec<SkillSelectorItem>,
+    ) {
         self.catalog = catalog;
         self.refresh_matches();
     }
 
-    pub(super) fn sync_textarea(&mut self, textarea: &TextArea) {
+    pub(in crate::components::chat_input) fn sync_textarea(&mut self, textarea: &TextArea) {
         self.bindings
             .retain(|(element_id, _)| textarea.has_element(*element_id));
         let Some((range, query)) = active_skill(textarea.text(), textarea.cursor()) else {
@@ -75,14 +78,14 @@ impl SkillSelector {
         self.refresh_matches();
     }
 
-    pub(super) fn view(&self) -> Option<SkillSelectorView<'_>> {
+    pub(in crate::components::chat_input) fn view(&self) -> Option<SkillSelectorView<'_>> {
         (!self.dismissed && self.query.is_some()).then_some(SkillSelectorView {
             items: &self.matches,
             selected: self.selected,
         })
     }
 
-    pub(super) fn select_previous(&mut self) {
+    pub(in crate::components::chat_input) fn select_previous(&mut self) {
         if self.matches.is_empty() {
             return;
         }
@@ -93,13 +96,13 @@ impl SkillSelector {
         };
     }
 
-    pub(super) fn select_next(&mut self) {
+    pub(in crate::components::chat_input) fn select_next(&mut self) {
         if !self.matches.is_empty() {
             self.selected = (self.selected + 1) % self.matches.len();
         }
     }
 
-    pub(super) fn select(&mut self, index: usize) -> bool {
+    pub(in crate::components::chat_input) fn select(&mut self, index: usize) -> bool {
         if !self.view().is_some_and(|view| index < view.items.len()) {
             return false;
         }
@@ -107,15 +110,22 @@ impl SkillSelector {
         true
     }
 
-    pub(super) fn dismiss(&mut self) {
+    pub(in crate::components::chat_input) fn dismiss(&mut self) {
         self.dismissed = true;
     }
 
-    pub(super) fn complete_selected(&mut self, textarea: &mut TextArea) -> bool {
+    pub(in crate::components::chat_input) fn complete_selected(
+        &mut self,
+        textarea: &mut TextArea,
+    ) -> bool {
         self.complete_at(textarea, self.selected)
     }
 
-    pub(super) fn complete_at(&mut self, textarea: &mut TextArea, index: usize) -> bool {
+    pub(in crate::components::chat_input) fn complete_at(
+        &mut self,
+        textarea: &mut TextArea,
+        index: usize,
+    ) -> bool {
         let Some(item) = self.view().and_then(|view| view.items.get(index)).cloned() else {
             return false;
         };
@@ -136,14 +146,17 @@ impl SkillSelector {
         true
     }
 
-    pub(super) fn skill_for(&self, element_id: TextElementId) -> Option<&SkillRef> {
+    pub(in crate::components::chat_input) fn skill_for(
+        &self,
+        element_id: TextElementId,
+    ) -> Option<&SkillRef> {
         self.bindings
             .iter()
             .find(|(candidate, _)| *candidate == element_id)
             .map(|(_, skill)| skill)
     }
 
-    pub(super) fn clear(&mut self) {
+    pub(in crate::components::chat_input) fn clear(&mut self) {
         self.close_popup();
         self.bindings.clear();
     }
@@ -196,5 +209,5 @@ fn active_skill(text: &str, cursor: usize) -> Option<(Range<usize>, &str)> {
 }
 
 #[cfg(test)]
-#[path = "skills_tests.rs"]
+#[path = "skill_tests.rs"]
 mod tests;

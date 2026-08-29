@@ -1,3 +1,4 @@
+use super::super::MentionMatchKind;
 use super::super::MentionPopupView;
 use crate::ui::bottom_anchored_area;
 use crate::ui::horizontal_margin;
@@ -28,9 +29,9 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, popup: Option<MentionPopup
     let lines = if popup.matches.is_empty() {
         vec![Line::from(Span::styled(
             if popup.searching {
-                "Searching workspace files…"
+                "Searching files and plugins…"
             } else {
-                "No matching workspace files"
+                "No matching files or plugins"
             },
             Style::default().fg(muted()),
         ))]
@@ -50,24 +51,26 @@ pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, popup: Option<MentionPopup
                     Style::default().fg(muted())
                 };
                 let mut matched_indices = mention_match.indices.iter().peekable();
-                Line::from(
-                    mention_match
-                        .path
-                        .chars()
-                        .enumerate()
-                        .map(|(char_index, character)| {
-                            let mut style = base_style;
-                            if matched_indices
-                                .peek()
-                                .is_some_and(|matched| **matched == char_index)
-                            {
-                                matched_indices.next();
-                                style = style.add_modifier(Modifier::BOLD);
-                            }
-                            Span::styled(character.to_string(), style)
-                        })
-                        .collect::<Vec<_>>(),
-                )
+                let mut spans = mention_match
+                    .label
+                    .chars()
+                    .enumerate()
+                    .map(|(char_index, character)| {
+                        let mut style = base_style;
+                        if matched_indices
+                            .peek()
+                            .is_some_and(|matched| **matched == char_index)
+                        {
+                            matched_indices.next();
+                            style = style.add_modifier(Modifier::BOLD);
+                        }
+                        Span::styled(character.to_string(), style)
+                    })
+                    .collect::<Vec<_>>();
+                if mention_match.kind == MentionMatchKind::Plugin {
+                    spans.push(Span::styled("  plugin", Style::default().fg(muted())));
+                }
+                Line::from(spans)
             })
             .collect()
     };

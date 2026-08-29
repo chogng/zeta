@@ -53,6 +53,8 @@ fn turn(id: &str, status: TurnStatus) -> Turn {
     Turn {
         turn_id: TurnId::new(id).unwrap(),
         status,
+        kind: Default::default(),
+        instructions: None,
         model: None,
         tool_profile: None,
         tool_mode: zeta_protocol::ToolMode::Direct,

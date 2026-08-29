@@ -2,7 +2,7 @@ use ratatui::style::Color;
 use ratatui::text::Line;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct SelectionPreview {
+pub(crate) struct ListSelectionPreview {
     title: String,
     lines: Vec<Line<'static>>,
     caption: Option<Line<'static>>,
@@ -11,7 +11,7 @@ pub(crate) struct SelectionPreview {
     bottom_margin: usize,
 }
 
-impl SelectionPreview {
+impl ListSelectionPreview {
     pub(crate) fn new(title: impl Into<String>, lines: Vec<Line<'static>>) -> Self {
         Self {
             title: title.into(),

@@ -3,8 +3,8 @@ use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 
 use super::KeymapCaptureOutcome;
-use super::keymap_capture_view;
-use crate::components::selection::SelectionViewState;
+use super::keymap_capture_pane_spec;
+use crate::components::list_selection::ListSelectionState;
 use crate::features::keymap::KeymapCaptureMode;
 use crate::features::keymap::KeymapEditIntent;
 use crate::features::keymap::KeymapEditKind;
@@ -23,7 +23,7 @@ fn copy_action() -> crate::keymap::KeymapActionSnapshot {
 
 #[test]
 fn chord_capture_waits_for_two_strokes_and_emits_canonical_edit() {
-    let (_, mut capture) = keymap_capture_view(
+    let (_, mut capture) = keymap_capture_pane_spec(
         copy_action(),
         4,
         KeymapEditIntent::AddAlternate,
@@ -53,7 +53,7 @@ fn chord_capture_waits_for_two_strokes_and_emits_canonical_edit() {
 
 #[test]
 fn escape_cancels_capture_without_emitting_an_edit() {
-    let (_, mut capture) = keymap_capture_view(
+    let (_, mut capture) = keymap_capture_pane_spec(
         copy_action(),
         1,
         KeymapEditIntent::ReplaceUser,
@@ -67,14 +67,14 @@ fn escape_cancels_capture_without_emitting_an_edit() {
 }
 
 #[test]
-fn keymap_view_lists_keys_before_responsibilities() {
-    let view = super::keymap_view(
+fn keymap_pane_spec_lists_keys_before_responsibilities() {
+    let view = super::keymap_pane_spec(
         AppKeymap::default().setup_actions(),
         std::path::Path::new("/profile/zeta-code/keybindings.json"),
         &[],
         1,
     );
-    let state = SelectionViewState::new(view.model.into_body());
+    let state = ListSelectionState::new(view.model.into_body());
     let labels = state
         .visible_items()
         .into_iter()
@@ -109,18 +109,18 @@ fn shortcut_rows_align_responsibility_and_source_columns_without_command_ids() {
     .unwrap();
     let mut keymap = AppKeymap::default();
     keymap.replace_user_bindings(rules).unwrap();
-    let view = super::keymap_view(
+    let view = super::keymap_pane_spec(
         keymap.setup_actions(),
         std::path::Path::new("/profile/zeta-code/keybindings.json"),
         &[],
         1,
     );
-    let state = SelectionViewState::new(view.model.into_body());
+    let state = ListSelectionState::new(view.model.into_body());
     let backend = TestBackend::new(100, 20);
     let mut terminal = Terminal::new(backend).unwrap();
 
     terminal
-        .draw(|frame| crate::components::selection::draw(frame, frame.area(), &state))
+        .draw(|frame| crate::components::list_selection::draw(frame, frame.area(), &state))
         .unwrap();
 
     let buffer = terminal.backend().buffer();

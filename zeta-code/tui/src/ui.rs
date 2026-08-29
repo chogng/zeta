@@ -1,13 +1,11 @@
 mod layout;
 mod theme;
 
-pub(crate) use layout::InteractionLayout;
 pub(crate) use layout::bottom_anchored_area;
-pub(crate) use layout::frame_areas;
 pub(crate) use layout::horizontal_margin;
 pub(crate) use theme::accent;
 pub(crate) use theme::background;
-pub(crate) use theme::composer_chrome;
+pub(crate) use theme::chat_input_chrome;
 pub(crate) use theme::configure;
 pub(crate) use theme::danger;
 pub(crate) use theme::foreground;

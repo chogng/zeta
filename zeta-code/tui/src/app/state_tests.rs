@@ -2,28 +2,31 @@ use super::App;
 use super::AppCommand;
 use super::Status;
 use crate::app::AppEvent;
-use crate::components::composer::ComposerInput;
-use crate::components::composer::ComposerSubmission;
-use crate::components::composer::built_in_slash_command_definitions;
-use crate::components::pane::PaneViewModel;
-use crate::components::selection::SelectionItem;
-use crate::components::selection::SelectionTab;
-use crate::components::selection::SelectionViewModel;
-use crate::components::transcript::MessageRole;
+use crate::components::chat_history::MessageRole;
+use crate::components::chat_input::ChatInputItem;
+use crate::components::chat_input::ChatSubmission;
+use crate::components::chat_input::SuggestView;
+use crate::components::chat_input::built_in_slash_command_definitions;
+use crate::components::chat_input_area::ChatInputAreaHeightEntryView;
+use crate::components::chat_input_area::PaneEntryView;
+use crate::components::list_selection::ListSelectionGroup;
+use crate::components::list_selection::ListSelectionItem;
+use crate::components::list_selection::ListSelectionModel;
+use crate::components::pane::PaneSpec;
 use crate::features::config::TerminalSettings;
-use crate::features::config::config_view;
+use crate::features::config::config_pane_spec;
 use crate::features::keymap::KeymapEditIntent;
 use crate::features::keymap::KeymapEditKind;
-use crate::features::keymap::keymap_view;
-use crate::features::rewind::rewind_selection_view;
+use crate::features::keymap::keymap_pane_spec;
+use crate::features::rewind::rewind_pane_spec;
 use crate::features::status_line::StatusLineItem;
 use crate::features::status_line::StatusLineResource;
 use crate::features::theme::ThemePickerCatalog;
 use crate::features::theme::ThemePickerChoice;
 use crate::features::theme::ThemePickerTarget;
 use crate::features::theme::ThemePreviewPalette;
-use crate::features::theme::custom_theme_selection_view;
-use crate::features::theme::theme_selection_view;
+use crate::features::theme::custom_theme_pane_spec;
+use crate::features::theme::theme_pane_spec;
 use crate::features::thread::TurnActivity;
 use crate::features::workspace_files::FileSearchManager;
 use crate::keymap::AppKeymap;
@@ -105,11 +108,9 @@ fn blank_input_does_not_start_a_turn() {
 #[test]
 fn selected_theme_closes_the_theme_pane_after_success() {
     let mut app = App::new();
-    app.update(AppEvent::ThemeViewOpened(theme_selection_view(
-        &theme_catalog(),
-    )));
+    app.update(AppEvent::ThemePaneOpened(theme_pane_spec(&theme_catalog())));
 
-    assert_eq!(app.selection_view().unwrap().title(), "Theme");
+    assert_eq!(app.list_selection().unwrap().title(), "Theme");
     let command = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert_eq!(
         command,
@@ -117,21 +118,19 @@ fn selected_theme_closes_the_theme_pane_after_success() {
             preference: "zeta-code-dark".into(),
         })
     );
-    app.update(AppEvent::ThemeViewClosed);
-    assert!(app.selection_view().is_none());
+    app.update(AppEvent::ThemePanesClosed);
+    assert!(app.list_selection().is_none());
 }
 
 #[test]
 fn pointer_activation_uses_the_feature_pane_action_mapping() {
     let mut app = App::new();
-    app.update(AppEvent::ThemeViewOpened(theme_selection_view(
-        &theme_catalog(),
-    )));
+    app.update(AppEvent::ThemePaneOpened(theme_pane_spec(&theme_catalog())));
 
     assert_eq!(app.mouse_mode(), MouseMode::UiClick);
     assert!(app.select_visible_item(1));
     assert_eq!(
-        app.selection_view().unwrap().selected_visible_index(),
+        app.list_selection().unwrap().selected_visible_index(),
         Some(1)
     );
     assert_eq!(
@@ -144,15 +143,13 @@ fn pointer_activation_uses_the_feature_pane_action_mapping() {
 fn selected_custom_theme_closes_the_entire_theme_flow_after_success() {
     let catalog = theme_catalog();
     let mut app = App::new();
-    app.update(AppEvent::ThemeViewOpened(theme_selection_view(&catalog)));
+    app.update(AppEvent::ThemePaneOpened(theme_pane_spec(&catalog)));
     app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         Some(AppCommand::OpenCustomThemePane)
     );
-    app.update(AppEvent::ThemeViewOpened(custom_theme_selection_view(
-        &catalog,
-    )));
+    app.update(AppEvent::ThemePaneOpened(custom_theme_pane_spec(&catalog)));
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         Some(AppCommand::SetCustomTheme {
@@ -160,8 +157,8 @@ fn selected_custom_theme_closes_the_entire_theme_flow_after_success() {
         })
     );
 
-    app.update(AppEvent::ThemeViewClosed);
-    assert!(app.selection_view().is_none());
+    app.update(AppEvent::ThemePanesClosed);
+    assert!(app.list_selection().is_none());
 }
 
 #[test]
@@ -178,6 +175,8 @@ fn selected_rewind_checkpoint_emits_a_typed_rewind_action() {
         turns: vec![Turn {
             turn_id: turn_id.clone(),
             status: TurnStatus::Completed,
+            kind: Default::default(),
+            instructions: None,
             model: None,
             tool_profile: None,
             tool_mode: zeta_protocol::ToolMode::Direct,
@@ -195,7 +194,7 @@ fn selected_rewind_checkpoint_emits_a_typed_rewind_action() {
         }],
     };
     let mut app = App::new();
-    app.update(AppEvent::RewindViewOpened(rewind_selection_view(&thread)));
+    app.update(AppEvent::RewindPaneOpened(rewind_pane_spec(&thread)));
 
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
@@ -342,7 +341,7 @@ fn pasted_image_path_submits_a_structured_image() {
     assert_eq!(submission.input.len(), 1);
     assert!(matches!(
         &submission.input[0],
-        ComposerInput::Image { url } if url.starts_with("data:image/png;base64,")
+        ChatInputItem::Image { url } if url.starts_with("data:image/png;base64,")
     ));
     assert_eq!(app.messages()[0].text, "[Image #1]");
     let _ = fs::remove_file(path);
@@ -456,7 +455,7 @@ fn clipboard_png_submits_through_the_existing_attachment_path() {
     assert_eq!(submission.display_text, "[Image #1]");
     assert!(matches!(
         &submission.input[0],
-        ComposerInput::Image { url } if url.starts_with("data:image/png;base64,")
+        ChatInputItem::Image { url } if url.starts_with("data:image/png;base64,")
     ));
 }
 
@@ -536,7 +535,7 @@ fn config_slash_command_is_owned_by_the_local_host() {
 fn config_mouse_selection_emits_a_revision_bound_edit() {
     let config = empty_config_snapshot();
     let mut app = App::new();
-    app.update(AppEvent::ConfigViewOpened(config_view(
+    app.update(AppEvent::ConfigPaneOpened(config_pane_spec(
         &config,
         &ProviderListResult { providers: vec![] },
         TerminalSettings::default(),
@@ -571,7 +570,7 @@ fn config_directory_permission_selection_emits_a_revision_bound_server_edit() {
         }],
     };
     let mut app = App::new();
-    app.update(AppEvent::ConfigViewOpened(config_view(
+    app.update(AppEvent::ConfigPaneOpened(config_pane_spec(
         &config,
         &ProviderListResult { providers: vec![] },
         TerminalSettings::default(),
@@ -605,7 +604,7 @@ fn config_provider_api_key_enter_saves_and_returns_to_config() {
         }],
     };
     let mut app = App::new();
-    app.update(AppEvent::ConfigViewOpened(config_view(
+    app.update(AppEvent::ConfigPaneOpened(config_pane_spec(
         &config,
         &providers,
         TerminalSettings::default(),
@@ -632,7 +631,7 @@ fn config_provider_api_key_enter_saves_and_returns_to_config() {
 
     app.update(AppEvent::ConfigApiKeySaved {
         provider: "openai".into(),
-        view: config_view(
+        pane_spec: config_pane_spec(
             &config,
             &providers,
             TerminalSettings::default(),
@@ -642,7 +641,7 @@ fn config_provider_api_key_enter_saves_and_returns_to_config() {
         ),
     });
 
-    assert_eq!(app.selection_view().unwrap().title(), "Config");
+    assert_eq!(app.list_selection().unwrap().title(), "Config");
 }
 
 #[test]
@@ -657,7 +656,7 @@ fn one_escape_cancels_provider_api_key_input_and_returns_to_config() {
         }],
     };
     let mut app = App::new();
-    app.update(AppEvent::ConfigViewOpened(config_view(
+    app.update(AppEvent::ConfigPaneOpened(config_pane_spec(
         &config,
         &providers,
         TerminalSettings::default(),
@@ -675,7 +674,7 @@ fn one_escape_cancels_provider_api_key_input_and_returns_to_config() {
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
         None
     );
-    assert_eq!(app.selection_view().unwrap().title(), "Config");
+    assert_eq!(app.list_selection().unwrap().title(), "Config");
 }
 
 #[test]
@@ -695,7 +694,7 @@ fn statusline_selection_emits_a_revision_bound_edit() {
     let mut resource = StatusLineResource::new(directory.path().join("statusline.json"));
     resource.refresh().unwrap();
     let mut app = App::new();
-    app.update(AppEvent::StatusLineViewOpened(resource.setup_view()));
+    app.update(AppEvent::StatusLinePaneOpened(resource.setup_pane_spec()));
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
@@ -711,24 +710,28 @@ fn statusline_selection_emits_a_revision_bound_edit() {
 #[test]
 fn shortcut_capture_emits_a_revision_bound_edit() {
     let mut app = App::new();
-    app.update(AppEvent::KeymapViewOpened(keymap_view(
+    app.update(AppEvent::KeymapPaneOpened(keymap_pane_spec(
         AppKeymap::default().setup_actions(),
         Path::new("/profile/zeta-code/keybindings.json"),
         &[],
         7,
     )));
 
-    assert_eq!(app.selection_view().unwrap().title(), "Keymap");
+    assert_eq!(app.list_selection().unwrap().title(), "Keymap");
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         None
     );
-    assert_eq!(app.selection_view().unwrap().title(), "Cycle approval mode");
+    assert_eq!(app.list_selection().unwrap().title(), "Cycle approval mode");
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         None
     );
-    assert_eq!(app.selection_view().unwrap().title(), "Record shortcut");
+    assert!(matches!(
+        app.input_height_entries().as_slice(),
+        [ChatInputAreaHeightEntryView::Pane(PaneEntryView::KeyCapture(view))]
+            if view.body().title() == "Record shortcut"
+    ));
 
     let edit = app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL));
     assert_eq!(
@@ -761,7 +764,7 @@ fn inline_product_arguments_reach_the_typed_dispatcher() {
     assert_eq!(invocation.display_arguments, "provider/model");
     assert_eq!(
         invocation.arguments,
-        vec![ComposerInput::Text("provider/model".into())]
+        vec![ChatInputItem::Text("provider/model".into())]
     );
     assert_eq!(app.status(), &Status::Ready);
     assert!(app.messages().is_empty());
@@ -790,9 +793,9 @@ fn runtime_command_registry_drives_popup_and_submission_consistently() {
     assert_eq!(
         action,
         Some(AppCommand::SubmitTurn {
-            submission: ComposerSubmission {
+            submission: ChatSubmission {
                 display_text: "/diagnose logs".into(),
-                input: vec![ComposerInput::Text("/diagnose logs".into())],
+                input: vec![ChatInputItem::Text("/diagnose logs".into())],
             },
         })
     );
@@ -818,16 +821,20 @@ fn dollar_skill_selector_submits_exact_skill_ref_with_visible_intent() {
     )
     .unwrap();
     let mut app = App::for_workspace_with_slash_commands(&workspace, registry.clone());
-    app.replace_composer_catalog(
+    app.replace_chat_input_catalog(
         registry,
-        vec![crate::components::composer::SkillSelectorItem::new(
+        vec![crate::components::chat_input::SkillSelectorItem::new(
             "commit".into(),
             "draft a commit message".into(),
             skill.clone(),
         )],
+        Vec::new(),
     );
     app.insert_text("$com");
-    assert_eq!(app.skill_popup().unwrap().items[0].name(), "commit");
+    assert!(matches!(
+        app.suggest(),
+        Some(SuggestView::Skill(view)) if view.items[0].name() == "commit"
+    ));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     app.insert_text("staged changes");
 
@@ -836,11 +843,11 @@ fn dollar_skill_selector_submits_exact_skill_ref_with_visible_intent() {
     assert_eq!(
         action,
         Some(AppCommand::SubmitTurn {
-            submission: ComposerSubmission {
+            submission: ChatSubmission {
                 display_text: "$commit staged changes".into(),
                 input: vec![
-                    ComposerInput::Skill { skill },
-                    ComposerInput::Text("$commit staged changes".into()),
+                    ChatInputItem::Skill { skill },
+                    ChatInputItem::Text("$commit staged changes".into()),
                 ],
             },
         })
@@ -854,7 +861,7 @@ fn activating_a_slash_command_by_index_uses_the_command_dispatch_path() {
     let mut app = App::new();
     app.insert_text("/q");
 
-    let action = app.activate_slash_command(0);
+    let action = app.activate_input_overlay_choice(0);
 
     assert_eq!(action, Some(AppCommand::Quit));
     assert!(app.input().is_empty());
@@ -886,7 +893,7 @@ fn slash_popup_selection_executes_without_an_exact_query() {
 }
 
 #[test]
-fn clickable_composer_popups_declare_ui_click_mouse_mode() {
+fn clickable_chat_input_popups_declare_ui_click_mouse_mode() {
     let mut app = App::new();
     assert_eq!(app.mouse_mode(), MouseMode::TerminalSelection);
 
@@ -940,7 +947,10 @@ fn at_file_popup_completes_an_atomic_workspace_path_before_submission() {
     app.insert_text("review @lib");
     wait_for_mention_results(&mut app, &workspace);
 
-    assert_eq!(app.mention_popup().unwrap().matches[0].path, "src/lib.rs");
+    assert!(matches!(
+        app.suggest(),
+        Some(SuggestView::Mention(view)) if view.matches[0].label == "src/lib.rs"
+    ));
     let completion = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
     assert_eq!(completion, None);
@@ -962,7 +972,7 @@ fn escape_dismisses_an_at_file_popup_and_is_inert_at_the_root() {
     let dismissed = app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
 
     assert_eq!(dismissed, None);
-    assert_eq!(app.mention_popup(), None);
+    assert!(app.suggest().is_none());
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
         None
@@ -1007,10 +1017,13 @@ fn escape_from_a_view_does_not_count_toward_the_root_rewind_sequence() {
         app.handle_key_at(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE), started),
         None
     );
-    app.update(AppEvent::SelectionViewOpened(PaneViewModel::new(
-        SelectionViewModel::new(
+    app.update(AppEvent::ListSelectionPaneOpened(PaneSpec::new(
+        ListSelectionModel::new(
             "Feature",
-            vec![SelectionTab::new("Items", vec![SelectionItem::new("Item")])],
+            vec![ListSelectionGroup::new(
+                "Items",
+                vec![ListSelectionItem::new("Item")],
+            )],
         ),
         "Esc back",
     )));
@@ -1022,7 +1035,7 @@ fn escape_from_a_view_does_not_count_toward_the_root_rewind_sequence() {
         ),
         None
     );
-    assert!(app.selection_view().is_none());
+    assert!(app.list_selection().is_none());
     assert_eq!(
         app.handle_key_at(
             KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE),
@@ -1154,7 +1167,7 @@ fn assert_text_submission(action: Option<AppCommand>, expected: &str) {
     assert_eq!(submission.display_text, expected);
     assert_eq!(
         submission.input,
-        vec![ComposerInput::Text(expected.to_owned())]
+        vec![ChatInputItem::Text(expected.to_owned())]
     );
 }
 
@@ -1183,10 +1196,10 @@ fn wait_for_mention_results(app: &mut App, workspace: &Path) {
         for snapshot in file_search.poll() {
             app.update(AppEvent::FileSearchSnapshotReceived(snapshot));
         }
-        if app
-            .mention_popup()
-            .is_some_and(|popup| !popup.matches.is_empty())
-        {
+        if matches!(
+            app.suggest(),
+            Some(SuggestView::Mention(popup)) if !popup.matches.is_empty()
+        ) {
             return;
         }
         assert!(

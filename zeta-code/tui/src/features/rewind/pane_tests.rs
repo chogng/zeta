@@ -1,6 +1,6 @@
 use super::RewindSelectionAction;
-use super::rewind_selection_view;
-use crate::components::selection::SelectionViewState;
+use super::rewind_pane_spec;
+use crate::components::list_selection::ListSelectionState;
 use zeta_protocol::ItemId;
 use zeta_protocol::SessionId;
 use zeta_protocol::Thread;
@@ -15,8 +15,8 @@ use zeta_protocol::TurnStatus;
 fn rewind_pane_lists_user_message_checkpoints_and_selects_the_latest() {
     let thread = thread(&["first checkpoint", "second checkpoint"]);
 
-    let view = rewind_selection_view(&thread);
-    let state = SelectionViewState::new(view.model.into_body());
+    let view = rewind_pane_spec(&thread);
+    let state = ListSelectionState::new(view.model.into_body());
 
     assert_eq!(state.title(), "Rewind");
     assert!(state.search().is_some());
@@ -56,6 +56,8 @@ fn thread(messages: &[&str]) -> Thread {
                 Turn {
                     turn_id: turn_id.clone(),
                     status: TurnStatus::Completed,
+                    kind: Default::default(),
+                    instructions: None,
                     model: None,
                     tool_profile: None,
                     tool_mode: zeta_protocol::ToolMode::Direct,

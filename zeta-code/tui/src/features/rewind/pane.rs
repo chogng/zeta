@@ -1,10 +1,10 @@
-use crate::components::pane::PaneViewModel;
+use crate::components::list_selection::ListSelectionActivationMode;
+use crate::components::list_selection::ListSelectionGroup;
+use crate::components::list_selection::ListSelectionItem;
+use crate::components::list_selection::ListSelectionItemId;
+use crate::components::list_selection::ListSelectionModel;
+use crate::components::pane::PaneSpec;
 use crate::components::search_box::SearchBoxModel;
-use crate::components::selection::SelectionActivationMode;
-use crate::components::selection::SelectionItem;
-use crate::components::selection::SelectionItemId;
-use crate::components::selection::SelectionTab;
-use crate::components::selection::SelectionViewModel;
 use std::collections::BTreeMap;
 use zeta_protocol::Thread;
 use zeta_protocol::ThreadItem;
@@ -18,12 +18,12 @@ pub(crate) enum RewindSelectionAction {
     },
 }
 
-pub(crate) struct RewindSelectionView {
-    pub(crate) model: PaneViewModel<SelectionViewModel>,
-    pub(crate) actions: BTreeMap<SelectionItemId, RewindSelectionAction>,
+pub(crate) struct RewindPaneSpec {
+    pub(crate) model: PaneSpec<ListSelectionModel>,
+    pub(crate) actions: BTreeMap<ListSelectionItemId, RewindSelectionAction>,
 }
 
-pub(crate) fn rewind_selection_view(thread: &Thread) -> RewindSelectionView {
+pub(crate) fn rewind_pane_spec(thread: &Thread) -> RewindPaneSpec {
     let checkpoints = thread
         .turns
         .iter()
@@ -35,7 +35,7 @@ pub(crate) fn rewind_selection_view(thread: &Thread) -> RewindSelectionView {
         .iter()
         .enumerate()
         .map(|(index, (turn, text))| {
-            let item_id = SelectionItemId::new(format!("rewind-{index}"));
+            let item_id = ListSelectionItemId::new(format!("rewind-{index}"));
             let checkpoint_label = compact_label(text);
             actions.insert(
                 item_id.clone(),
@@ -45,7 +45,7 @@ pub(crate) fn rewind_selection_view(thread: &Thread) -> RewindSelectionView {
                 },
             );
             let removed = total.saturating_sub(index);
-            SelectionItem::new(format!("{}. {checkpoint_label}", index + 1))
+            ListSelectionItem::new(format!("{}. {checkpoint_label}", index + 1))
                 .with_id(item_id)
                 .with_description(format!(
                     "remove this checkpoint and {remaining} later turn{suffix}",
@@ -56,14 +56,17 @@ pub(crate) fn rewind_selection_view(thread: &Thread) -> RewindSelectionView {
         .collect::<Vec<_>>();
     let selected = items.len().saturating_sub(1);
 
-    RewindSelectionView {
-        model: PaneViewModel::new(
-            SelectionViewModel::new("Rewind", vec![SelectionTab::new("Checkpoints", items)])
-                .with_activation_mode(SelectionActivationMode::Enter)
-                .without_tab_bar()
-                .with_initial_selected(selected)
-                .with_search(SearchBoxModel::new("Search message checkpoints"))
-                .with_empty_message("No message checkpoints available"),
+    RewindPaneSpec {
+        model: PaneSpec::new(
+            ListSelectionModel::new(
+                "Rewind",
+                vec![ListSelectionGroup::new("Checkpoints", items)],
+            )
+            .with_activation_mode(ListSelectionActivationMode::Enter)
+            .without_tab_bar()
+            .with_initial_selected(selected)
+            .with_search(SearchBoxModel::new("Search message checkpoints"))
+            .with_empty_message("No message checkpoints available"),
             "Space search  ·  ↑/↓ select  ·  Enter rewind  ·  Esc back",
         ),
         actions,
@@ -101,5 +104,5 @@ fn compact_label(text: &str) -> String {
 }
 
 #[cfg(test)]
-#[path = "view_tests.rs"]
+#[path = "pane_tests.rs"]
 mod tests;

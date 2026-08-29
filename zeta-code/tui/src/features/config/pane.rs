@@ -1,9 +1,10 @@
-use crate::components::pane::PaneViewModel;
+use crate::components::list_selection::ListSelectionGroup;
+use crate::components::list_selection::ListSelectionItem;
+use crate::components::list_selection::ListSelectionItemId;
+use crate::components::list_selection::ListSelectionModel;
+use crate::components::pane::PaneSpec;
 use crate::components::search_box::SearchBoxModel;
-use crate::components::selection::SelectionItem;
-use crate::components::selection::SelectionItemId;
-use crate::components::selection::SelectionTab;
-use crate::components::selection::SelectionViewModel;
+use crate::components::text_prompt::TextPromptSpec;
 use crate::features::config::TerminalSettings;
 use crate::features::config::TerminalSettingsEdit;
 use crate::features::config::preferred_model;
@@ -47,9 +48,6 @@ pub(crate) enum ConfigSelectionAction {
         provider: String,
         display_name: String,
     },
-    SetProviderApiKey {
-        provider: String,
-    },
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -83,21 +81,26 @@ impl fmt::Debug for ProviderApiKeyEdit {
     }
 }
 
-pub(crate) struct ConfigSelectionView {
-    pub(crate) model: PaneViewModel<SelectionViewModel>,
-    pub(crate) actions: BTreeMap<SelectionItemId, ConfigSelectionAction>,
+pub(crate) struct ConfigPaneSpec {
+    pub(crate) model: PaneSpec<ListSelectionModel>,
+    pub(crate) actions: BTreeMap<ListSelectionItemId, ConfigSelectionAction>,
 }
 
-pub(crate) fn config_view(
+pub(crate) struct ProviderApiKeyPrompt {
+    pub(crate) spec: PaneSpec<TextPromptSpec>,
+    pub(crate) provider: String,
+}
+
+pub(crate) fn config_pane_spec(
     config: &ConfigReadResult,
     providers: &ProviderListResult,
     terminal: TerminalSettings,
     terminal_revision: u64,
     session_id: &SessionId,
     additional_directories: &WorkspaceAdditionalDirectoryListResult,
-) -> ConfigSelectionView {
+) -> ConfigPaneSpec {
     let mut actions = BTreeMap::new();
-    let mouse_id = SelectionItemId::new("terminal-mouse-interactions");
+    let mouse_id = ListSelectionItemId::new("terminal-mouse-interactions");
     let mouse_enabled = terminal.mouse_interactions();
     let mut toggled_terminal = terminal;
     toggled_terminal.set_mouse_interactions(!mouse_enabled);
@@ -115,7 +118,7 @@ pub(crate) fn config_view(
         }),
     );
     let mut config_items = vec![
-        SelectionItem::new("Mouse interactions")
+        ListSelectionItem::new("Mouse interactions")
             .with_id(mouse_id)
             .with_columns(
                 "Mouse interactions",
@@ -135,15 +138,15 @@ pub(crate) fn config_view(
         &mut actions,
     );
 
-    ConfigSelectionView {
-        model: PaneViewModel::new(
-            SelectionViewModel::new(
+    ConfigPaneSpec {
+        model: PaneSpec::new(
+            ListSelectionModel::new(
                 "Config",
                 vec![
-                    SelectionTab::new("Config", config_items),
-                    SelectionTab::new("Add-dir", permission_items),
-                    SelectionTab::new("Providers", provider_items),
-                    SelectionTab::new("Language servers", language_servers(config)),
+                    ListSelectionGroup::new("Config", config_items),
+                    ListSelectionGroup::new("Add-dir", permission_items),
+                    ListSelectionGroup::new("Providers", provider_items),
+                    ListSelectionGroup::new("Language servers", language_servers(config)),
                 ],
             )
             .with_search(SearchBoxModel::new("Search configuration"))
@@ -161,12 +164,12 @@ fn additional_directory_permission_items(
     terminal_revision: u64,
     config: &ConfigReadResult,
     providers: &ProviderListResult,
-    actions: &mut BTreeMap<SelectionItemId, ConfigSelectionAction>,
-) -> Vec<SelectionItem> {
+    actions: &mut BTreeMap<ListSelectionItemId, ConfigSelectionAction>,
+) -> Vec<ListSelectionItem> {
     let mut items = Vec::new();
     let default_permissions = terminal.additional_directory_permissions();
     for permission in all_additional_directory_permissions() {
-        let id = SelectionItemId::new(format!(
+        let id = ListSelectionItemId::new(format!(
             "additional-directory-default-{}",
             permission_id(permission)
         ));
@@ -188,14 +191,14 @@ fn additional_directory_permission_items(
             }),
         );
         items.push(
-            SelectionItem::new(permission_title(permission))
+            ListSelectionItem::new(permission_title(permission))
                 .with_id(id)
                 .with_columns(permission_title(permission), "", checkbox(enabled)),
         );
     }
     for (directory_index, directory) in snapshot.directories.iter().enumerate() {
         for permission in all_additional_directory_permissions() {
-            let id = SelectionItemId::new(format!(
+            let id = ListSelectionItemId::new(format!(
                 "additional-directory-{directory_index}-{}",
                 permission_id(permission)
             ));
@@ -218,7 +221,7 @@ fn additional_directory_permission_items(
                 ),
             );
             items.push(
-                SelectionItem::new(format!(
+                ListSelectionItem::new(format!(
                     "{} · {}",
                     permission_title(permission),
                     directory.root.display()
@@ -380,33 +383,25 @@ const fn checkbox(checked: bool) -> &'static str {
     if checked { "[ ✔ ]" } else { "[   ]" }
 }
 
-pub(crate) fn provider_api_key_view(provider: String, display_name: String) -> ConfigSelectionView {
-    let submit_id = SelectionItemId::new(format!("provider-api-key-submit-{provider}"));
-    let actions = BTreeMap::from([(
-        submit_id.clone(),
-        ConfigSelectionAction::SetProviderApiKey { provider },
-    )]);
-    ConfigSelectionView {
-        model: PaneViewModel::new(
-            SelectionViewModel::new(
-                format!("{display_name} API key"),
-                vec![SelectionTab::new(
-                    "API key",
-                    vec![SelectionItem::new(
-                        "The key is hidden and stored in the profile secret store",
-                    )],
-                )],
-            )
-            .without_tab_bar()
-            .without_selection()
-            .with_secret_input("Enter API key", submit_id),
+pub(crate) fn provider_api_key_prompt(
+    provider: String,
+    display_name: String,
+) -> ProviderApiKeyPrompt {
+    ProviderApiKeyPrompt {
+        spec: PaneSpec::new(
+            TextPromptSpec {
+                title: format!("{display_name} API key"),
+                explanation: "The key is hidden and stored in the profile secret store".into(),
+                placeholder: "Enter API key".into(),
+                masked: true,
+            },
             "Enter save  ·  Esc cancel",
         ),
-        actions,
+        provider,
     }
 }
 
-fn overview(config: &ConfigReadResult) -> Vec<SelectionItem> {
+fn overview(config: &ConfigReadResult) -> Vec<ListSelectionItem> {
     vec![
         detail("Revision", config.revision.to_string()),
         detail("Generation", config.generation.to_string()),
@@ -428,8 +423,8 @@ fn overview(config: &ConfigReadResult) -> Vec<SelectionItem> {
 
 fn provider_items(
     catalog: &ProviderListResult,
-    actions: &mut BTreeMap<SelectionItemId, ConfigSelectionAction>,
-) -> Vec<SelectionItem> {
+    actions: &mut BTreeMap<ListSelectionItemId, ConfigSelectionAction>,
+) -> Vec<ListSelectionItem> {
     catalog
         .providers
         .iter()
@@ -439,13 +434,13 @@ fn provider_items(
 
 fn provider_item(
     provider: &ProviderCatalogEntryDto,
-    actions: &mut BTreeMap<SelectionItemId, ConfigSelectionAction>,
-) -> SelectionItem {
-    let item = SelectionItem::new(&provider.display_name);
+    actions: &mut BTreeMap<ListSelectionItemId, ConfigSelectionAction>,
+) -> ListSelectionItem {
+    let item = ListSelectionItem::new(&provider.display_name);
     if provider.api_key_policy == ProviderApiKeyPolicyDto::Unsupported {
         return item;
     }
-    let id = SelectionItemId::new(format!("provider-api-key-{}", provider.provider));
+    let id = ListSelectionItemId::new(format!("provider-api-key-{}", provider.provider));
     actions.insert(
         id.clone(),
         ConfigSelectionAction::OpenProviderApiKey {
@@ -456,7 +451,7 @@ fn provider_item(
     item.with_id(id)
 }
 
-fn language_servers(config: &ConfigReadResult) -> Vec<SelectionItem> {
+fn language_servers(config: &ConfigReadResult) -> Vec<ListSelectionItem> {
     or_empty(
         config
             .language_servers
@@ -490,18 +485,18 @@ fn approval_review_model(selection: &ApprovalReviewModelSelectionDto) -> String 
     }
 }
 
-fn detail(label: &str, value: impl Into<String>) -> SelectionItem {
-    SelectionItem::new(label).with_description(value)
+fn detail(label: &str, value: impl Into<String>) -> ListSelectionItem {
+    ListSelectionItem::new(label).with_description(value)
 }
 
-fn or_empty(items: Vec<SelectionItem>, message: &str) -> Vec<SelectionItem> {
+fn or_empty(items: Vec<ListSelectionItem>, message: &str) -> Vec<ListSelectionItem> {
     if items.is_empty() {
-        vec![SelectionItem::new(message)]
+        vec![ListSelectionItem::new(message)]
     } else {
         items
     }
 }
 
 #[cfg(test)]
-#[path = "view_tests.rs"]
+#[path = "pane_tests.rs"]
 mod tests;

@@ -1,4 +1,4 @@
-//! Unicode-safe composer editor state and atomic element handling.
+//! Unicode-safe chat_input editor state and atomic element handling.
 
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
@@ -26,7 +26,7 @@ struct TextElement {
 /// Owns the editable text buffer, cursor, and editor keymap boundary.
 ///
 /// Vim modes, motions, and operators belong in this component when that capability is added.
-/// Chat-level submission stays in the parent composer; slash parsing stays in the shared core.
+/// Chat-level submission stays in the parent chat_input; slash parsing stays in the shared core.
 #[derive(Debug, Eq, PartialEq)]
 pub(super) struct TextArea {
     text: String,

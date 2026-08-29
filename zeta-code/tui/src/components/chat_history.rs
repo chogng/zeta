@@ -9,5 +9,5 @@ pub(crate) use markdown::latest_agent_response;
 pub(crate) use model::CommandStatus;
 pub(crate) use model::Message;
 pub(crate) use model::MessageRole;
-pub(crate) use state::TranscriptScroll;
+pub(crate) use state::ChatHistoryScroll;
 pub(crate) use view::draw;

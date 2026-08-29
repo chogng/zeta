@@ -1,7 +1,7 @@
 use super::SessionSelectionAction;
-use super::session_selection_view;
-use crate::components::selection::SelectionInputOutcome;
-use crate::components::selection::SelectionViewState;
+use super::session_pane_spec;
+use crate::components::list_selection::ListSelectionInputOutcome;
+use crate::components::list_selection::ListSelectionState;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -23,8 +23,8 @@ fn resume_pane_marks_the_current_session_and_maps_enter_to_its_id() {
         threads: Vec::new(),
     }];
 
-    let view = session_selection_view(&sessions, "session-1");
-    let state = SelectionViewState::new(view.model.into_body());
+    let view = session_pane_spec(&sessions, "session-1");
+    let state = ListSelectionState::new(view.model.into_body());
 
     assert_eq!(state.title(), "Resume session");
     assert_eq!(state.tabs()[0].label(), "All (1)");
@@ -75,8 +75,8 @@ fn resume_pane_groups_statuses_and_activates_the_selected_session() {
         },
     ];
 
-    let view = session_selection_view(&sessions, "session-2");
-    let mut state = SelectionViewState::new(view.model.into_body());
+    let view = session_pane_spec(&sessions, "session-2");
+    let mut state = ListSelectionState::new(view.model.into_body());
 
     assert_eq!(
         state
@@ -90,10 +90,10 @@ fn resume_pane_groups_statuses_and_activates_the_selected_session() {
 
     assert_eq!(
         state.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)),
-        SelectionInputOutcome::Consumed
+        ListSelectionInputOutcome::Consumed
     );
     assert_eq!(state.active_tab().label(), "Active (1)");
-    let SelectionInputOutcome::Activate(item_id) =
+    let ListSelectionInputOutcome::Activate(item_id) =
         state.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
     else {
         panic!("active session selection should produce an activation");

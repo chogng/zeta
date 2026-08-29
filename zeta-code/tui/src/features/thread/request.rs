@@ -1,6 +1,6 @@
 use crate::client::new_command_id;
-use crate::components::composer::ComposerInput;
-use crate::components::composer::ComposerSubmission;
+use crate::components::chat_input::ChatInputItem;
+use crate::components::chat_input::ChatSubmission;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use zeta_app_server_client::AppServerClient;
@@ -64,7 +64,7 @@ impl ThreadRequestScope {
 pub(crate) fn submit_prompt<T>(
     client: &mut AppServerClient<T>,
     scope: ThreadRequestScope,
-    submission: ComposerSubmission,
+    submission: ChatSubmission,
 ) -> Result<TurnStartResult, ClientError>
 where
     T: JsonRpcTransport,
@@ -72,11 +72,11 @@ where
     let mut input = Vec::with_capacity(submission.input.len());
     for item in submission.input {
         input.push(match item {
-            ComposerInput::Text(text) => InputItem::Text { text },
-            ComposerInput::Image { url } => InputItem::ImageAttachment {
+            ChatInputItem::Text(text) => InputItem::Text { text },
+            ChatInputItem::Image { url } => InputItem::ImageAttachment {
                 attachment: materialize_image(client, &url)?,
             },
-            ComposerInput::Skill { skill } => InputItem::Skill { skill },
+            ChatInputItem::Skill { skill } => InputItem::Skill { skill },
         });
     }
     match client.request_session(SessionRequestParams {
@@ -145,10 +145,10 @@ where
 fn decode_image_data_url(url: &str) -> Result<(ImageMediaType, Vec<u8>), ClientError> {
     let rest = url
         .strip_prefix("data:")
-        .ok_or_else(|| ClientError::Protocol("composer image is not a data URL".into()))?;
+        .ok_or_else(|| ClientError::Protocol("chat_input image is not a data URL".into()))?;
     let (metadata, encoded) = rest
         .split_once(',')
-        .ok_or_else(|| ClientError::Protocol("composer image data URL is malformed".into()))?;
+        .ok_or_else(|| ClientError::Protocol("chat_input image data URL is malformed".into()))?;
     let mut metadata = metadata.split(';');
     let media_type = match metadata.next() {
         Some("image/png") => ImageMediaType::Png,
@@ -157,18 +157,18 @@ fn decode_image_data_url(url: &str) -> Result<(ImageMediaType, Vec<u8>), ClientE
         Some("image/webp") => ImageMediaType::WebP,
         _ => {
             return Err(ClientError::Protocol(
-                "composer image MIME type is unsupported".into(),
+                "chat_input image MIME type is unsupported".into(),
             ));
         }
     };
     if !metadata.any(|part| part.eq_ignore_ascii_case("base64")) {
         return Err(ClientError::Protocol(
-            "composer image data URL must use base64".into(),
+            "chat_input image data URL must use base64".into(),
         ));
     }
     let bytes = STANDARD
         .decode(encoded)
-        .map_err(|_| ClientError::Protocol("composer image base64 is invalid".into()))?;
+        .map_err(|_| ClientError::Protocol("chat_input image base64 is invalid".into()))?;
     Ok((media_type, bytes))
 }
 

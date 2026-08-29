@@ -1,8 +1,8 @@
 use super::RemainingContextWindow;
 use super::StatusViewData;
-use super::status_view;
-use crate::components::pane::PaneViewModel;
-use crate::components::selection::SelectionViewModel;
+use super::status_pane_spec;
+use crate::components::detail_list::DetailList;
+use crate::components::pane::PaneSpec;
 use zeta_app_server_client::AppServerClient;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_client::JsonRpcTransport;
@@ -18,10 +18,10 @@ pub(crate) struct StatusRequestScope<'a> {
     pub(crate) model: Option<&'a ModelRef>,
 }
 
-pub(crate) fn load_status_view<T>(
+pub(crate) fn load_status_pane_spec<T>(
     client: &mut AppServerClient<T>,
     scope: StatusRequestScope<'_>,
-) -> Result<PaneViewModel<SelectionViewModel>, ClientError>
+) -> Result<PaneSpec<DetailList>, ClientError>
 where
     T: JsonRpcTransport,
 {
@@ -45,7 +45,7 @@ where
         .map(|model| format!("{}/{}", model.provider, model.model))
         .unwrap_or_else(|| "not configured".into());
 
-    Ok(status_view(StatusViewData {
+    Ok(status_pane_spec(StatusViewData {
         model: &model,
         full_context_window: model_entry
             .and_then(|entry| entry.context_window)

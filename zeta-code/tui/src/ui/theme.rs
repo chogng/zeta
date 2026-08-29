@@ -49,7 +49,7 @@ pub(crate) struct TuiTheme {
     accent: Color,
     background: Color,
     border: Color,
-    composer_chrome: Color,
+    chat_input_chrome: Color,
     danger: Color,
     foreground: Color,
     function: Color,
@@ -84,7 +84,7 @@ impl TuiTheme {
             accent: projected(tokens::ACCENT_FOREGROUND)?,
             background: projected(tokens::TERMINAL_BACKGROUND)?,
             border: projected(tokens::BORDER)?,
-            composer_chrome: projected(tokens::DESCRIPTION_FOREGROUND)?,
+            chat_input_chrome: projected(tokens::DESCRIPTION_FOREGROUND)?,
             danger: projected(tokens::ERROR_FOREGROUND)?,
             foreground: projected(tokens::EDITOR_FOREGROUND)?,
             function: projected(tokens::EDITOR_TOKEN_FUNCTION)?,
@@ -127,7 +127,7 @@ impl TuiTheme {
             accent: Color::Rgb(105, 170, 255),
             background: Color::Rgb(13, 17, 23),
             border: Color::DarkGray,
-            composer_chrome: Color::Rgb(155, 155, 155),
+            chat_input_chrome: Color::Rgb(155, 155, 155),
             foreground: Color::White,
             function: Color::Rgb(210, 168, 255),
             highlight: Color::Rgb(154, 145, 235),
@@ -330,8 +330,8 @@ pub(crate) fn background() -> Color {
     active().background
 }
 
-pub(crate) fn composer_chrome() -> Color {
-    active().composer_chrome
+pub(crate) fn chat_input_chrome() -> Color {
+    active().chat_input_chrome
 }
 
 pub(crate) fn danger() -> Color {

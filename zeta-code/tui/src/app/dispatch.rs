@@ -2,10 +2,10 @@
 
 use crate::TuiWorkspaceReconnect;
 use crate::app::AppEvent;
-use crate::app::help_selection_view;
-use crate::components::composer::ComposerInput;
-use crate::components::composer::SlashCommandInvocation;
-use crate::components::composer::TuiSlashCommandAction;
+use crate::app::help_pane_spec;
+use crate::components::chat_input::ChatInputItem;
+use crate::components::chat_input::SlashCommandInvocation;
+use crate::components::chat_input::TuiSlashCommandAction;
 use crate::features::additional_directories;
 use crate::features::config;
 use crate::features::mcp;
@@ -18,7 +18,7 @@ use crate::features::sessions::NewConversationKind;
 use crate::features::sessions::ResumeOutcome;
 use crate::features::skills::load_selection;
 use crate::features::status;
-use crate::features::theme::theme_selection_view;
+use crate::features::theme::theme_pane_spec;
 use crate::ui;
 use std::fmt;
 use zeta_app_server_client::AppServerClient;
@@ -122,7 +122,7 @@ impl ActiveConversation {
             TuiSlashCommandAction::Status => {
                 output
                     .events
-                    .push(AppEvent::SelectionViewOpened(status::load_status_view(
+                    .push(AppEvent::DetailPaneOpened(status::load_status_pane_spec(
                         client,
                         status::StatusRequestScope {
                             session_id: self.session_id(),
@@ -134,7 +134,7 @@ impl ActiveConversation {
             TuiSlashCommandAction::Skills => {
                 output
                     .events
-                    .push(AppEvent::SkillsViewOpened(load_selection(
+                    .push(AppEvent::SkillsPaneOpened(load_selection(
                         client,
                         self.session_id(),
                         SkillCatalogReloadDto::Refresh,
@@ -143,10 +143,10 @@ impl ActiveConversation {
             TuiSlashCommandAction::Mcp => {
                 output
                     .events
-                    .push(AppEvent::McpViewOpened(mcp::load_selection(client)?));
+                    .push(AppEvent::McpPaneOpened(mcp::load_selection(client)?));
             }
             TuiSlashCommandAction::Connectors => {
-                output.events.push(AppEvent::ConnectorViewOpened(
+                output.events.push(AppEvent::ConnectorPaneOpened(
                     crate::features::connectors::load_selection(client)?,
                 ));
             }
@@ -154,7 +154,7 @@ impl ActiveConversation {
                 if arguments.is_empty() {
                     output
                         .events
-                        .push(AppEvent::SessionViewOpened(sessions::load_selection(
+                        .push(AppEvent::SessionPaneOpened(sessions::load_selection(
                             client,
                             self.session_id().as_str(),
                         )?));
@@ -186,7 +186,7 @@ impl ActiveConversation {
                 if arguments.is_empty() {
                     output
                         .events
-                        .push(AppEvent::RewindViewOpened(rewind::load_selection(
+                        .push(AppEvent::RewindPaneOpened(rewind::load_selection(
                             client,
                             self.session_id(),
                             self.thread_id(),
@@ -218,7 +218,7 @@ impl ActiveConversation {
                 if arguments.is_empty() {
                     output
                         .events
-                        .push(AppEvent::AdditionalDirectoriesViewOpened(
+                        .push(AppEvent::AdditionalDirectoriesPaneOpened(
                             additional_directories::load_selection(client, self.session_id())?,
                         ));
                 } else {
@@ -261,7 +261,7 @@ impl ActiveConversation {
             TuiSlashCommandAction::Help => {
                 output
                     .events
-                    .push(AppEvent::SelectionViewOpened(help_selection_view()));
+                    .push(AppEvent::ListSelectionPaneOpened(help_pane_spec()));
             }
             TuiSlashCommandAction::Copy
             | TuiSlashCommandAction::Config
@@ -276,7 +276,7 @@ impl ActiveConversation {
                 if arguments.is_empty() {
                     output
                         .events
-                        .push(AppEvent::ModelViewOpened(models::load_selection(client)?));
+                        .push(AppEvent::ModelPaneOpened(models::load_selection(client)?));
                 } else {
                     let update = config::set_preferred_model(client, &arguments)
                         .map_err(|error| CommandExecutionError(error.to_string()))?;
@@ -291,7 +291,7 @@ impl ActiveConversation {
                     let catalog = ui::theme_catalog().map_err(CommandExecutionError)?;
                     output
                         .events
-                        .push(AppEvent::ThemeViewOpened(theme_selection_view(&catalog)));
+                        .push(AppEvent::ThemePaneOpened(theme_pane_spec(&catalog)));
                 } else {
                     let command = format!("/theme {arguments}");
                     let label = ui::select_theme(&arguments).map_err(CommandExecutionError)?;
@@ -335,11 +335,11 @@ fn apply_conversation_change(app: &mut App, change: ConversationChange, snapshot
     app.update(AppEvent::ProductNotice(change.notice));
 }
 
-fn text_arguments(arguments: &[ComposerInput]) -> Result<String, CommandExecutionError> {
+fn text_arguments(arguments: &[ChatInputItem]) -> Result<String, CommandExecutionError> {
     if arguments.iter().any(|argument| {
         matches!(
             argument,
-            ComposerInput::Image { .. } | ComposerInput::Skill { .. }
+            ChatInputItem::Image { .. } | ChatInputItem::Skill { .. }
         )
     }) {
         return Err(CommandExecutionError(
@@ -349,8 +349,8 @@ fn text_arguments(arguments: &[ComposerInput]) -> Result<String, CommandExecutio
     Ok(arguments
         .iter()
         .filter_map(|argument| match argument {
-            ComposerInput::Text(text) => Some(text.as_str()),
-            ComposerInput::Image { .. } | ComposerInput::Skill { .. } => None,
+            ChatInputItem::Text(text) => Some(text.as_str()),
+            ChatInputItem::Image { .. } | ChatInputItem::Skill { .. } => None,
         })
         .collect::<Vec<_>>()
         .join(" ")

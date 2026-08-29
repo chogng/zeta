@@ -6,12 +6,13 @@ use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
 
-use crate::components::pane::PaneViewModel;
+use crate::components::key_capture::KeyCapture;
+use crate::components::list_selection::ListSelectionGroup;
+use crate::components::list_selection::ListSelectionItem;
+use crate::components::list_selection::ListSelectionItemId;
+use crate::components::list_selection::ListSelectionModel;
+use crate::components::pane::PaneSpec;
 use crate::components::search_box::SearchBoxModel;
-use crate::components::selection::SelectionItem;
-use crate::components::selection::SelectionItemId;
-use crate::components::selection::SelectionTab;
-use crate::components::selection::SelectionViewModel;
 use crate::keymap::KeymapActionSnapshot;
 use crate::keymap::compose_config_chord;
 use crate::keymap::key_event_to_config_key;
@@ -39,17 +40,17 @@ pub(crate) enum KeymapAction {
     },
 }
 
-pub(crate) struct KeymapView {
-    pub(crate) model: PaneViewModel<SelectionViewModel>,
-    pub(crate) actions: BTreeMap<SelectionItemId, KeymapAction>,
+pub(crate) struct KeymapPaneSpec {
+    pub(crate) model: PaneSpec<ListSelectionModel>,
+    pub(crate) actions: BTreeMap<ListSelectionItemId, KeymapAction>,
 }
 
-pub(crate) fn keymap_view(
+pub(crate) fn keymap_pane_spec(
     actions: Vec<KeymapActionSnapshot>,
     resource_path: &Path,
     diagnostics: &[String],
     revision: u64,
-) -> KeymapView {
+) -> KeymapPaneSpec {
     let mut item_actions = BTreeMap::new();
     let mut all_items = Vec::new();
     let mut user_items = Vec::new();
@@ -76,7 +77,7 @@ pub(crate) fn keymap_view(
     let diagnostic_items = non_empty(
         diagnostics
             .iter()
-            .map(|diagnostic| SelectionItem::new(diagnostic))
+            .map(|diagnostic| ListSelectionItem::new(diagnostic))
             .collect(),
         "No keymap diagnostics",
     );
@@ -84,14 +85,14 @@ pub(crate) fn keymap_view(
         "Space search  ·  ←/→ tabs  ·  Enter edit  ·  Esc back  ·  {}",
         resource_path.display()
     );
-    KeymapView {
-        model: PaneViewModel::new(
-            SelectionViewModel::new(
+    KeymapPaneSpec {
+        model: PaneSpec::new(
+            ListSelectionModel::new(
                 "Keymap",
                 vec![
-                    SelectionTab::new("All", all_items),
-                    SelectionTab::new("User", user_items),
-                    SelectionTab::new("Diagnostics", diagnostic_items),
+                    ListSelectionGroup::new("All", all_items),
+                    ListSelectionGroup::new("User", user_items),
+                    ListSelectionGroup::new("Diagnostics", diagnostic_items),
                 ],
             )
             .with_search(SearchBoxModel::new("Search shortcuts"))
@@ -102,7 +103,7 @@ pub(crate) fn keymap_view(
     }
 }
 
-pub(crate) fn keymap_action_menu(action: KeymapActionSnapshot, revision: u64) -> KeymapView {
+pub(crate) fn keymap_action_menu(action: KeymapActionSnapshot, revision: u64) -> KeymapPaneSpec {
     let mut actions = BTreeMap::new();
     let mut items = Vec::new();
     push_action(
@@ -161,10 +162,13 @@ pub(crate) fn keymap_action_menu(action: KeymapActionSnapshot, revision: u64) ->
         );
     }
     let summary = binding_summary(&action);
-    KeymapView {
-        model: PaneViewModel::new(
-            SelectionViewModel::new(action.label, vec![SelectionTab::new("Actions", items)])
-                .without_tab_bar(),
+    KeymapPaneSpec {
+        model: PaneSpec::new(
+            ListSelectionModel::new(
+                action.label,
+                vec![ListSelectionGroup::new("Actions", items)],
+            )
+            .without_tab_bar(),
             format!("{summary}  ·  Enter choose  ·  Esc back"),
         ),
         actions,
@@ -183,17 +187,17 @@ pub(crate) struct KeymapCaptureState {
 
 #[derive(Debug)]
 pub(crate) enum KeymapCaptureOutcome {
-    Pending(PaneViewModel<SelectionViewModel>),
+    Pending(PaneSpec<KeyCapture>),
     Cancelled,
     Edit(KeymapEdit),
 }
 
-pub(crate) fn keymap_capture_view(
+pub(crate) fn keymap_capture_pane_spec(
     action: KeymapActionSnapshot,
     revision: u64,
     intent: KeymapEditIntent,
     mode: KeymapCaptureMode,
-) -> (PaneViewModel<SelectionViewModel>, KeymapCaptureState) {
+) -> (PaneSpec<KeyCapture>, KeymapCaptureState) {
     let state = KeymapCaptureState {
         action,
         revision,
@@ -247,7 +251,7 @@ impl KeymapCaptureState {
         })
     }
 
-    fn model(&self) -> PaneViewModel<SelectionViewModel> {
+    fn model(&self) -> PaneSpec<KeyCapture> {
         let instruction = match (self.mode, self.first_stroke.as_deref()) {
             (KeymapCaptureMode::SingleKey, _) => {
                 "Press the new key now. Esc or Ctrl-C cancels.".to_owned()
@@ -259,14 +263,12 @@ impl KeymapCaptureState {
                 format!("First key: {first}. Press the second key. Esc or Ctrl-C cancels.")
             }
         };
-        let mut items = vec![SelectionItem::new(instruction)];
+        let mut lines = vec![instruction];
         if let Some(error) = &self.error {
-            items.push(SelectionItem::new(format!("Error: {error}")));
+            lines.push(format!("Error: {error}"));
         }
-        PaneViewModel::new(
-            SelectionViewModel::new("Record shortcut", vec![SelectionTab::new("Capture", items)])
-                .without_tab_bar()
-                .without_selection(),
+        PaneSpec::new(
+            KeyCapture::new("Record shortcut", lines),
             format!(
                 "{}  ·  {}",
                 self.action.label,
@@ -277,12 +279,12 @@ impl KeymapCaptureState {
 }
 
 fn append_action_items(
-    items: &mut Vec<SelectionItem>,
+    items: &mut Vec<ListSelectionItem>,
     action: KeymapActionSnapshot,
     revision: u64,
     include_default: bool,
     include_user: bool,
-    actions: &mut BTreeMap<SelectionItemId, KeymapAction>,
+    actions: &mut BTreeMap<ListSelectionItemId, KeymapAction>,
 ) {
     let default_bindings = if action.default_bindings.is_empty() {
         vec!["unbound".to_owned()]
@@ -324,8 +326,8 @@ fn append_action_items(
 }
 
 fn push_action_item(
-    items: &mut Vec<SelectionItem>,
-    actions: &mut BTreeMap<SelectionItemId, KeymapAction>,
+    items: &mut Vec<ListSelectionItem>,
+    actions: &mut BTreeMap<ListSelectionItemId, KeymapAction>,
     action: &KeymapActionSnapshot,
     revision: u64,
     key: String,
@@ -333,9 +335,9 @@ fn push_action_item(
     source: &'static str,
     suffix: String,
 ) {
-    let item_id = SelectionItemId::new(format!("{}-{suffix}", action.command_id));
+    let item_id = ListSelectionItemId::new(format!("{}-{suffix}", action.command_id));
     items.push(
-        SelectionItem::new(&key)
+        ListSelectionItem::new(&key)
             .with_id(item_id.clone())
             .with_columns(key, responsibility, source),
     );
@@ -370,25 +372,25 @@ fn binding_summary(action: &KeymapActionSnapshot) -> String {
 }
 
 fn push_action(
-    items: &mut Vec<SelectionItem>,
-    actions: &mut BTreeMap<SelectionItemId, KeymapAction>,
+    items: &mut Vec<ListSelectionItem>,
+    actions: &mut BTreeMap<ListSelectionItemId, KeymapAction>,
     label: &str,
     action: KeymapAction,
 ) {
-    let item_id = SelectionItemId::new(format!("keymap-action-{}", items.len()));
-    items.push(SelectionItem::new(label).with_id(item_id.clone()));
+    let item_id = ListSelectionItemId::new(format!("keymap-action-{}", items.len()));
+    items.push(ListSelectionItem::new(label).with_id(item_id.clone()));
     actions.insert(item_id, action);
 }
 
-fn non_empty(items: Vec<SelectionItem>, label: &str) -> Vec<SelectionItem> {
+fn non_empty(items: Vec<ListSelectionItem>, label: &str) -> Vec<ListSelectionItem> {
     if items.is_empty() {
-        vec![SelectionItem::new(label)]
+        vec![ListSelectionItem::new(label)]
     } else {
         items
     }
 }
 
-fn fixed_shortcut_items() -> impl Iterator<Item = SelectionItem> {
+fn fixed_shortcut_items() -> impl Iterator<Item = ListSelectionItem> {
     [
         ("Esc Esc", "open rewind checkpoints from the root view"),
         (
@@ -403,7 +405,7 @@ fn fixed_shortcut_items() -> impl Iterator<Item = SelectionItem> {
         ),
     ]
     .into_iter()
-    .map(|(key, description)| SelectionItem::new(key).with_columns(key, description, "default"))
+    .map(|(key, description)| ListSelectionItem::new(key).with_columns(key, description, "default"))
 }
 
 fn is_cancel(key: KeyEvent) -> bool {
@@ -413,5 +415,5 @@ fn is_cancel(key: KeyEvent) -> bool {
 }
 
 #[cfg(test)]
-#[path = "view_tests.rs"]
+#[path = "pane_tests.rs"]
 mod tests;

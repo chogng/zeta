@@ -1,6 +1,6 @@
 use super::SkillSelector;
 use super::SkillSelectorItem;
-use crate::components::composer::editor::TextArea;
+use crate::components::chat_input::editor::TextArea;
 use zeta_protocol::ContentDigest;
 use zeta_protocol::SkillId;
 use zeta_protocol::SkillName;

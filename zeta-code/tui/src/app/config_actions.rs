@@ -54,7 +54,7 @@ pub(super) fn open_config(
                                         },
                                     )
                                     .map(|additional_directories| {
-                                        AppEvent::ConfigViewOpened(config::config_view(
+                                        AppEvent::ConfigPaneOpened(config::config_pane_spec(
                                             &server_config,
                                             &providers,
                                             settings,
@@ -77,7 +77,7 @@ pub(super) fn edit_config(resource: &mut Option<ConfigResource>, edit: &ConfigEd
     match resource.as_mut() {
         Some(resource) => match resource.apply_edit(&edit.terminal) {
             Ok((settings, revision)) => {
-                let view = config::config_view(
+                let view = config::config_pane_spec(
                     &edit.server_config,
                     &edit.providers,
                     settings,
@@ -86,7 +86,7 @@ pub(super) fn edit_config(resource: &mut Option<ConfigResource>, edit: &ConfigEd
                     &edit.additional_directories,
                 );
                 app.update(AppEvent::ConfigSettingsReceived(settings));
-                app.update(AppEvent::ConfigViewReplaced(view));
+                app.update(AppEvent::ConfigPaneReplaced(view));
             }
             Err(error) => app.update(AppEvent::FailureReported(error)),
         },
@@ -130,7 +130,7 @@ pub(super) fn set_provider_api_key(
                                 )
                                 .map(|additional_directories| AppEvent::ConfigApiKeySaved {
                                     provider: notice_provider,
-                                    view: config::config_view(
+                                    pane_spec: config::config_pane_spec(
                                         &server_config,
                                         &providers,
                                         settings,
@@ -165,7 +165,7 @@ pub(super) fn set_additional_directory_permissions(
                 request_client
                     .set_workspace_additional_directory_permissions(edit.params.clone())
                     .map(|result| {
-                        AppEvent::ConfigViewReplaced(config::config_view(
+                        AppEvent::ConfigPaneReplaced(config::config_pane_spec(
                             &edit.server_config,
                             &edit.providers,
                             edit.terminal,

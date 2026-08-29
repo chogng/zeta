@@ -4,7 +4,7 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 #[test]
-fn pasted_png_path_becomes_an_atomic_composer_attachment() {
+fn pasted_png_path_becomes_an_atomic_chat_input_attachment() {
     let path = temporary_image_path("png");
     fs::write(&path, b"\x89PNG\r\n\x1a\npayload").unwrap();
     let mut attachments = Attachments::default();

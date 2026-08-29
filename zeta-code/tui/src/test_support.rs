@@ -3,7 +3,6 @@ use zeta_app_server_protocol::protocol::config::AgentGrepBackendDto;
 use zeta_app_server_protocol::protocol::config::ApprovalReviewModelSelectionDto;
 use zeta_app_server_protocol::protocol::config::CodebaseAutomaticContextDto;
 use zeta_app_server_protocol::protocol::config::CodebaseConfigDto;
-use zeta_app_server_protocol::protocol::config::CodebaseSemanticSelectionDto;
 use zeta_app_server_protocol::protocol::config::ConfigReadResult;
 use zeta_app_server_protocol::protocol::config::ToolSearchConfigDto;
 use zeta_app_server_protocol::protocol::config::ToolSearchEmbeddingStatusDto;
@@ -15,6 +14,8 @@ pub(crate) fn empty_config_snapshot() -> ConfigReadResult {
         generation: 0,
         preferred_model: None,
         approval_review_model: ApprovalReviewModelSelectionDto::Automatic,
+        commit_message_model: None,
+        commit_message_active_workspace_authorized: false,
         tool_mode: zeta_protocol::ToolMode::Direct,
         agent_grep_backend: AgentGrepBackendDto::Ripgrep,
         providers: BTreeMap::new(),
@@ -29,9 +30,8 @@ pub(crate) fn empty_config_snapshot() -> ConfigReadResult {
             embedding_status: ToolSearchEmbeddingStatusDto::Disabled,
         },
         codebase: CodebaseConfigDto {
-            selection: CodebaseSemanticSelectionDto::Disabled,
+            models: None,
             automatic_context: CodebaseAutomaticContextDto::Off,
-            active_workspace_authorized: false,
         },
         exec_policy_rules: Vec::new(),
     }

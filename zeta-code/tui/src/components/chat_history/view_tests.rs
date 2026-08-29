@@ -1,6 +1,6 @@
 use super::message_lines;
-use crate::components::transcript::Message;
-use crate::components::transcript::MessageRole;
+use crate::components::chat_history::Message;
+use crate::components::chat_history::MessageRole;
 use ratatui::style::Color;
 
 #[test]

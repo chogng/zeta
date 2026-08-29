@@ -66,6 +66,8 @@ fn thread(model: ModelRef) -> Thread {
         turns: vec![Turn {
             turn_id: TurnId::new("turn-1").unwrap(),
             status: TurnStatus::Completed,
+            kind: Default::default(),
+            instructions: None,
             model: Some(model),
             tool_profile: None,
             tool_mode: ToolMode::Direct,

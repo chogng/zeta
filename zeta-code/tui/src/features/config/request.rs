@@ -58,6 +58,7 @@ where
         command_id: new_command_id("model"),
         expected_revision: config.revision,
         preferred_model: preferred_model_patch,
+        commit_message_model: Patch::Missing,
         approval_review_model: Patch::Missing,
         tool_mode: Patch::Missing,
         agent_grep_backend: Patch::Missing,

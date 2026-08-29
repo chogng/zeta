@@ -13,15 +13,15 @@ use zeta_utils_path::write_atomically;
 use crate::keymap::AppKeymap;
 use crate::keymap::compile_app_user_bindings;
 
-mod view;
+mod pane;
 
-pub(crate) use view::KeymapAction;
-pub(crate) use view::KeymapCaptureOutcome;
-pub(crate) use view::KeymapCaptureState;
-pub(crate) use view::KeymapView;
-pub(crate) use view::keymap_action_menu;
-pub(crate) use view::keymap_capture_view;
-pub(crate) use view::keymap_view;
+pub(crate) use pane::KeymapAction;
+pub(crate) use pane::KeymapCaptureOutcome;
+pub(crate) use pane::KeymapCaptureState;
+pub(crate) use pane::KeymapPaneSpec;
+pub(crate) use pane::keymap_action_menu;
+pub(crate) use pane::keymap_capture_pane_spec;
+pub(crate) use pane::keymap_pane_spec;
 
 const MAX_RESOURCE_BYTES: u64 = 1024 * 1024;
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
@@ -128,8 +128,8 @@ impl KeymapResource {
         &self.diagnostics
     }
 
-    pub(crate) fn view(&self, keymap: &AppKeymap) -> KeymapView {
-        keymap_view(
+    pub(crate) fn pane_spec(&self, keymap: &AppKeymap) -> KeymapPaneSpec {
+        keymap_pane_spec(
             keymap.setup_actions(),
             &self.path,
             &self.diagnostics,

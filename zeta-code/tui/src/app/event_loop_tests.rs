@@ -6,11 +6,12 @@ use super::selection_tab_index_at;
 use crate::app::App;
 use crate::app::AppCommand;
 use crate::app::AppEvent;
-use crate::components::pane::PaneViewModel;
-use crate::components::selection::SelectionItem;
-use crate::components::selection::SelectionItemId;
-use crate::components::selection::SelectionTab;
-use crate::components::selection::SelectionViewModel;
+use crate::components::chat_input::SuggestView;
+use crate::components::list_selection::ListSelectionGroup;
+use crate::components::list_selection::ListSelectionItem;
+use crate::components::list_selection::ListSelectionItemId;
+use crate::components::list_selection::ListSelectionModel;
+use crate::components::pane::PaneSpec;
 use crate::mouse::MouseMode;
 use ratatui::layout::Rect;
 use std::collections::VecDeque;
@@ -52,23 +53,23 @@ fn pointer_move_selects_the_hovered_popup_row_and_preserves_it_outside() {
     let area = Rect::new(0, 0, 80, 20);
 
     select_hovered_popup_item(&mut app, area, 2, 12);
-    assert_eq!(app.slash_popup().unwrap().selected, 2);
+    assert!(matches!(app.suggest(), Some(SuggestView::Slash(view)) if view.selected == 2));
 
     select_hovered_popup_item(&mut app, area, 1, 12);
-    assert_eq!(app.slash_popup().unwrap().selected, 2);
+    assert!(matches!(app.suggest(), Some(SuggestView::Slash(view)) if view.selected == 2));
 }
 
 #[test]
 fn pointer_move_selects_an_actionable_row_in_a_generic_feature_pane() {
     let mut app = App::new();
-    app.update(AppEvent::SelectionViewOpened(PaneViewModel::new(
-        SelectionViewModel::new(
+    app.update(AppEvent::ListSelectionPaneOpened(PaneSpec::new(
+        ListSelectionModel::new(
             "Feature",
-            vec![SelectionTab::new(
+            vec![ListSelectionGroup::new(
                 "Items",
                 vec![
-                    SelectionItem::new("First").with_id(SelectionItemId::new("first")),
-                    SelectionItem::new("Second").with_id(SelectionItemId::new("second")),
+                    ListSelectionItem::new("First").with_id(ListSelectionItemId::new("first")),
+                    ListSelectionItem::new("Second").with_id(ListSelectionItemId::new("second")),
                 ],
             )],
         )
@@ -90,7 +91,7 @@ fn pointer_move_selects_an_actionable_row_in_a_generic_feature_pane() {
     select_hovered_popup_item(&mut app, area, column, row);
 
     assert_eq!(
-        app.selection_view().unwrap().selected_visible_index(),
+        app.list_selection().unwrap().selected_visible_index(),
         Some(1)
     );
 }
@@ -98,15 +99,14 @@ fn pointer_move_selects_an_actionable_row_in_a_generic_feature_pane() {
 #[test]
 fn pointer_click_switches_a_selection_tab() {
     let mut app = App::new();
-    app.update(AppEvent::SelectionViewOpened(PaneViewModel::new(
-        SelectionViewModel::new(
+    app.update(AppEvent::ListSelectionPaneOpened(PaneSpec::new(
+        ListSelectionModel::new(
             "Feature",
             vec![
-                SelectionTab::new("First", vec![SelectionItem::new("Read only")]),
-                SelectionTab::new("Second", vec![SelectionItem::new("Another item")]),
+                ListSelectionGroup::new("First", vec![ListSelectionItem::new("Read only")]),
+                ListSelectionGroup::new("Second", vec![ListSelectionItem::new("Another item")]),
             ],
-        )
-        .without_selection(),
+        ),
         "Esc back",
     )));
     let area = Rect::new(0, 0, 80, 24);
@@ -124,5 +124,5 @@ fn pointer_click_switches_a_selection_tab() {
     let (column, row) = target.expect("second selection tab should be clickable");
 
     assert_eq!(activate_pointer_item(&mut app, area, column, row), None);
-    assert_eq!(app.selection_view().unwrap().active_tab().label(), "Second");
+    assert_eq!(app.list_selection().unwrap().active_tab().label(), "Second");
 }

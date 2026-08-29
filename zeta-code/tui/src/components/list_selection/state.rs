@@ -4,7 +4,7 @@ use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
 use ratatui::style::Color;
 
-use super::SelectionPreview;
+use super::ListSelectionPreview;
 use super::matcher::selection_match_score;
 use crate::components::search_box::SEARCH_BOX_HEIGHT;
 use crate::components::search_box::SearchBoxInputOutcome;
@@ -19,63 +19,41 @@ use crate::mouse::MouseMode;
 const MAX_VISIBLE_ROWS: usize = 12;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum SelectionActivationMode {
+pub(crate) enum ListSelectionActivationMode {
     Enter,
     EnterOrSpace,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum SelectionDismissal {
-    Allowed,
-    Blocked,
-}
-
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct SelectionItem {
-    id: Option<SelectionItemId>,
+pub(crate) struct ListSelectionItem {
+    id: Option<ListSelectionItemId>,
     label: String,
     description: Option<String>,
-    description_presentation: SelectionItemDescriptionPresentation,
-    columns: Option<SelectionItemColumns>,
+    columns: Option<ListSelectionItemColumns>,
     selection_foreground: Option<Color>,
-    preview: Option<SelectionPreview>,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum SelectionItemDescriptionPresentation {
-    Muted,
-    Detail,
+    preview: Option<ListSelectionPreview>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(super) struct SelectionItemColumns {
+pub(super) struct ListSelectionItemColumns {
     pub(super) leading: String,
     pub(super) middle: String,
     pub(super) trailing: String,
 }
 
-impl SelectionItem {
+impl ListSelectionItem {
     pub(crate) fn new(label: impl Into<String>) -> Self {
         Self {
             id: None,
             label: label.into(),
             description: None,
-            description_presentation: SelectionItemDescriptionPresentation::Muted,
             columns: None,
             selection_foreground: None,
             preview: None,
         }
     }
 
-    pub(crate) fn detail(label: impl Into<String>, description: impl Into<String>) -> Self {
-        Self {
-            description: Some(description.into()),
-            description_presentation: SelectionItemDescriptionPresentation::Detail,
-            ..Self::new(label)
-        }
-    }
-
-    pub(crate) fn with_id(mut self, id: SelectionItemId) -> Self {
+    pub(crate) fn with_id(mut self, id: ListSelectionItemId) -> Self {
         self.id = Some(id);
         self
     }
@@ -91,7 +69,7 @@ impl SelectionItem {
         middle: impl Into<String>,
         trailing: impl Into<String>,
     ) -> Self {
-        let columns = SelectionItemColumns {
+        let columns = ListSelectionItemColumns {
             leading: leading.into(),
             middle: middle.into(),
             trailing: trailing.into(),
@@ -106,7 +84,7 @@ impl SelectionItem {
         self
     }
 
-    pub(crate) fn with_preview(mut self, preview: SelectionPreview) -> Self {
+    pub(crate) fn with_preview(mut self, preview: ListSelectionPreview) -> Self {
         self.preview = Some(preview);
         self
     }
@@ -119,15 +97,11 @@ impl SelectionItem {
         self.description.as_deref()
     }
 
-    pub(super) const fn description_presentation(&self) -> SelectionItemDescriptionPresentation {
-        self.description_presentation
-    }
-
-    pub(super) fn columns(&self) -> Option<&SelectionItemColumns> {
+    pub(super) fn columns(&self) -> Option<&ListSelectionItemColumns> {
         self.columns.as_ref()
     }
 
-    pub(crate) fn id(&self) -> Option<&SelectionItemId> {
+    pub(crate) fn id(&self) -> Option<&ListSelectionItemId> {
         self.id.as_ref()
     }
 
@@ -135,28 +109,28 @@ impl SelectionItem {
         self.selection_foreground
     }
 
-    pub(crate) fn preview(&self) -> Option<&SelectionPreview> {
+    pub(crate) fn preview(&self) -> Option<&ListSelectionPreview> {
         self.preview.as_ref()
     }
 }
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub(crate) struct SelectionItemId(String);
+pub(crate) struct ListSelectionItemId(String);
 
-impl SelectionItemId {
+impl ListSelectionItemId {
     pub(crate) fn new(value: impl Into<String>) -> Self {
         Self(value.into())
     }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct SelectionTab {
+pub(crate) struct ListSelectionGroup {
     label: String,
-    items: Vec<SelectionItem>,
+    items: Vec<ListSelectionItem>,
 }
 
-impl SelectionTab {
-    pub(crate) fn new(label: impl Into<String>, items: Vec<SelectionItem>) -> Self {
+impl ListSelectionGroup {
+    pub(crate) fn new(label: impl Into<String>, items: Vec<ListSelectionItem>) -> Self {
         Self {
             label: label.into(),
             items,
@@ -168,58 +142,44 @@ impl SelectionTab {
     }
 }
 
-impl TabListItem for SelectionTab {
+impl TabListItem for ListSelectionGroup {
     fn tab_label(&self) -> &str {
         self.label()
     }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct SelectionViewModel {
-    tabs: Vec<SelectionTab>,
-    presentation: SelectionViewPresentation,
+pub(crate) struct ListSelectionModel {
+    tabs: Vec<ListSelectionGroup>,
+    presentation: ListSelectionPresentation,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct SelectionViewPresentation {
+struct ListSelectionPresentation {
     title: String,
     search: Option<SearchBoxModel>,
-    query_mode: SelectionQueryMode,
-    free_form_action: Option<SelectionItemId>,
     empty_message: String,
-    activation_mode: SelectionActivationMode,
-    dismissal: SelectionDismissal,
+    activation_mode: ListSelectionActivationMode,
     show_tabs: bool,
-    selection_enabled: bool,
     initial_selected: usize,
     title_top_margin: usize,
     title_bottom_margin: usize,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum SelectionQueryMode {
-    FilterItems,
-    InputOnly,
-}
-
-impl SelectionViewModel {
-    pub(crate) fn new(title: impl Into<String>, tabs: Vec<SelectionTab>) -> Self {
+impl ListSelectionModel {
+    pub(crate) fn new(title: impl Into<String>, tabs: Vec<ListSelectionGroup>) -> Self {
         assert!(
             !tabs.is_empty(),
             "a selection view requires at least one tab"
         );
         Self {
             tabs,
-            presentation: SelectionViewPresentation {
+            presentation: ListSelectionPresentation {
                 title: title.into(),
                 search: None,
-                query_mode: SelectionQueryMode::FilterItems,
-                free_form_action: None,
                 empty_message: "No matching items".into(),
-                activation_mode: SelectionActivationMode::Enter,
-                dismissal: SelectionDismissal::Allowed,
+                activation_mode: ListSelectionActivationMode::Enter,
                 show_tabs: true,
-                selection_enabled: true,
                 initial_selected: 0,
                 title_top_margin: 0,
                 title_bottom_margin: 0,
@@ -227,23 +187,13 @@ impl SelectionViewModel {
         }
     }
 
-    pub(crate) fn with_activation_mode(mut self, mode: SelectionActivationMode) -> Self {
+    pub(crate) fn with_activation_mode(mut self, mode: ListSelectionActivationMode) -> Self {
         self.presentation.activation_mode = mode;
-        self
-    }
-
-    pub(crate) fn with_dismissal(mut self, dismissal: SelectionDismissal) -> Self {
-        self.presentation.dismissal = dismissal;
         self
     }
 
     pub(crate) fn without_tab_bar(mut self) -> Self {
         self.presentation.show_tabs = false;
-        self
-    }
-
-    pub(crate) fn without_selection(mut self) -> Self {
-        self.presentation.selection_enabled = false;
         self
     }
 
@@ -267,60 +217,33 @@ impl SelectionViewModel {
         self
     }
 
-    pub(crate) fn with_free_form(
-        mut self,
-        placeholder: impl Into<String>,
-        action: SelectionItemId,
-    ) -> Self {
-        self.presentation.search = Some(SearchBoxModel::new(placeholder).initially_active());
-        self.presentation.free_form_action = Some(action);
-        self
-    }
-
-    pub(crate) fn with_secret_input(
-        mut self,
-        placeholder: impl Into<String>,
-        action: SelectionItemId,
-    ) -> Self {
-        self.presentation.search =
-            Some(SearchBoxModel::new(placeholder).initially_active().masked());
-        self.presentation.query_mode = SelectionQueryMode::InputOnly;
-        self.presentation.free_form_action = Some(action);
-        self
-    }
-
     pub(crate) fn with_empty_message(mut self, message: impl Into<String>) -> Self {
         self.presentation.empty_message = message.into();
         self
     }
 
-    fn into_parts(self) -> (SelectionViewPresentation, Vec<SelectionTab>) {
+    fn into_parts(self) -> (ListSelectionPresentation, Vec<ListSelectionGroup>) {
         (self.presentation, self.tabs)
     }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum SelectionInputOutcome {
-    Activate(SelectionItemId),
-    ActivateFreeForm {
-        item_id: SelectionItemId,
-        value: String,
-    },
+pub(crate) enum ListSelectionInputOutcome {
+    Activate(ListSelectionItemId),
     Consumed,
     Dismiss,
-    Unhandled,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct SelectionViewState {
-    model: SelectionViewPresentation,
-    tabs: TabListState<SelectionTab>,
+pub(crate) struct ListSelectionState {
+    model: ListSelectionPresentation,
+    tabs: TabListState<ListSelectionGroup>,
     selected_visible: Option<usize>,
     search: Option<SearchBoxState>,
 }
 
-impl SelectionViewState {
-    pub(crate) fn new(model: SelectionViewModel) -> Self {
+impl ListSelectionState {
+    pub(crate) fn new(model: ListSelectionModel) -> Self {
         let (model, tabs) = model.into_parts();
         let search = model.search.clone().map(SearchBoxState::new);
         let mut state = Self {
@@ -329,17 +252,16 @@ impl SelectionViewState {
             selected_visible: None,
             search,
         };
-        state.selected_visible = (state.model.selection_enabled && state.visible_len() > 0)
-            .then_some(
-                state
-                    .model
-                    .initial_selected
-                    .min(state.visible_len().saturating_sub(1)),
-            );
+        state.selected_visible = (state.visible_len() > 0).then_some(
+            state
+                .model
+                .initial_selected
+                .min(state.visible_len().saturating_sub(1)),
+        );
         state
     }
 
-    pub(crate) fn replace_model(&mut self, model: SelectionViewModel) {
+    pub(crate) fn replace_model(&mut self, model: ListSelectionModel) {
         let (model, tabs) = model.into_parts();
         self.search = match (self.search.take(), model.search.clone()) {
             (Some(mut state), Some(search_model)) => {
@@ -366,7 +288,7 @@ impl SelectionViewState {
         self.model.title_bottom_margin
     }
 
-    pub(crate) fn tabs(&self) -> &[SelectionTab] {
+    pub(crate) fn tabs(&self) -> &[ListSelectionGroup] {
         self.tabs.tabs()
     }
 
@@ -381,7 +303,7 @@ impl SelectionViewState {
         }
     }
 
-    pub(super) fn tab_list(&self) -> &TabListState<SelectionTab> {
+    pub(super) fn tab_list(&self) -> &TabListState<ListSelectionGroup> {
         &self.tabs
     }
 
@@ -411,7 +333,7 @@ impl SelectionViewState {
         &self.model.empty_message
     }
 
-    pub(crate) fn visible_items(&self) -> Vec<&SelectionItem> {
+    pub(crate) fn visible_items(&self) -> Vec<&ListSelectionItem> {
         self.visible_indices()
             .into_iter()
             .filter_map(|index| self.active_tab().items.get(index))
@@ -424,11 +346,10 @@ impl SelectionViewState {
 
     pub(crate) fn mouse_mode(&self) -> MouseMode {
         let tabs_are_clickable = self.model.show_tabs && self.tabs.tabs().len() > 1;
-        let items_are_clickable = self.model.selection_enabled
-            && self
-                .visible_items()
-                .into_iter()
-                .any(|item| item.id().is_some());
+        let items_are_clickable = self
+            .visible_items()
+            .into_iter()
+            .any(|item| item.id().is_some());
         if tabs_are_clickable || items_are_clickable {
             MouseMode::UiClick
         } else {
@@ -437,11 +358,10 @@ impl SelectionViewState {
     }
 
     pub(crate) fn select_visible_item(&mut self, index: usize) -> bool {
-        let selectable = self.model.selection_enabled
-            && self
-                .visible_items()
-                .get(index)
-                .is_some_and(|item| item.id().is_some());
+        let selectable = self
+            .visible_items()
+            .get(index)
+            .is_some_and(|item| item.id().is_some());
         if !selectable {
             return false;
         }
@@ -449,7 +369,7 @@ impl SelectionViewState {
         true
     }
 
-    pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<SelectionItemId> {
+    pub(crate) fn activate_visible_item(&mut self, index: usize) -> Option<ListSelectionItemId> {
         self.select_visible_item(index)
             .then(|| self.selected_item_id())
             .flatten()
@@ -475,8 +395,8 @@ impl SelectionViewState {
         let list_rows = self.visible_len().clamp(1, MAX_VISIBLE_ROWS);
         let preview_rows = self
             .selected_item()
-            .and_then(SelectionItem::preview)
-            .map(SelectionPreview::desired_height)
+            .and_then(ListSelectionItem::preview)
+            .map(ListSelectionPreview::desired_height)
             .unwrap_or_default();
         2u16.saturating_add(self.title_top_margin().min(u16::MAX as usize) as u16)
             .saturating_add(self.title_bottom_margin().min(u16::MAX as usize) as u16)
@@ -486,63 +406,48 @@ impl SelectionViewState {
             .saturating_add(preview_rows.min(u16::MAX as usize) as u16)
     }
 
-    pub(crate) fn handle_key(&mut self, key: KeyEvent) -> SelectionInputOutcome {
+    pub(crate) fn handle_key(&mut self, key: KeyEvent) -> ListSelectionInputOutcome {
         if key.code == KeyCode::Esc && key.modifiers.is_empty() {
             if key.kind != KeyEventKind::Press {
-                return SelectionInputOutcome::Consumed;
+                return ListSelectionInputOutcome::Consumed;
             }
-            return match self.model.dismissal {
-                SelectionDismissal::Allowed => SelectionInputOutcome::Dismiss,
-                SelectionDismissal::Blocked => SelectionInputOutcome::Consumed,
-            };
-        }
-        if key.modifiers == KeyModifiers::CONTROL && key.code == KeyCode::Enter {
-            if let Some(outcome) = self.free_form_outcome() {
-                return outcome;
-            }
-            return SelectionInputOutcome::Consumed;
+            return ListSelectionInputOutcome::Dismiss;
         }
         if key.modifiers.contains(KeyModifiers::CONTROL) && matches!(key.code, KeyCode::Char('c')) {
-            return match self.model.dismissal {
-                SelectionDismissal::Allowed => SelectionInputOutcome::Dismiss,
-                SelectionDismissal::Blocked => SelectionInputOutcome::Unhandled,
-            };
+            return ListSelectionInputOutcome::Dismiss;
         }
         if key.modifiers.contains(KeyModifiers::CONTROL)
             || key.modifiers.contains(KeyModifiers::ALT)
         {
-            return SelectionInputOutcome::Consumed;
+            return ListSelectionInputOutcome::Consumed;
         }
 
         if let Some(search) = self.search.as_mut() {
             match search.handle_key(key) {
-                SearchBoxInputOutcome::Consumed => return SelectionInputOutcome::Consumed,
+                SearchBoxInputOutcome::Consumed => return ListSelectionInputOutcome::Consumed,
                 SearchBoxInputOutcome::QueryChanged => {
                     self.select_first_visible();
-                    return SelectionInputOutcome::Consumed;
+                    return ListSelectionInputOutcome::Consumed;
                 }
                 SearchBoxInputOutcome::Ignored => {}
             }
         }
 
         match key.code {
-            KeyCode::Up => self.move_selection(SelectionDirection::Previous),
-            KeyCode::Down => self.move_selection(SelectionDirection::Next),
+            KeyCode::Up => self.move_selection(ListSelectionDirection::Previous),
+            KeyCode::Down => self.move_selection(ListSelectionDirection::Next),
             KeyCode::Home => self.select_first_visible(),
             KeyCode::End => self.select_last_visible(),
             KeyCode::Enter => {
                 if let Some(id) = self.selected_item_id() {
-                    return SelectionInputOutcome::Activate(id);
-                }
-                if let Some(outcome) = self.free_form_outcome() {
-                    return outcome;
+                    return ListSelectionInputOutcome::Activate(id);
                 }
             }
             KeyCode::Char(' ') => {
-                if self.model.activation_mode == SelectionActivationMode::EnterOrSpace
+                if self.model.activation_mode == ListSelectionActivationMode::EnterOrSpace
                     && let Some(id) = self.selected_item_id()
                 {
-                    return SelectionInputOutcome::Activate(id);
+                    return ListSelectionInputOutcome::Activate(id);
                 }
             }
             _ => {}
@@ -555,7 +460,7 @@ impl SelectionViewState {
             TabListInputOutcome::Unhandled => {}
         }
 
-        SelectionInputOutcome::Consumed
+        ListSelectionInputOutcome::Consumed
     }
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
@@ -566,26 +471,15 @@ impl SelectionViewState {
         }
     }
 
-    pub(crate) fn active_tab(&self) -> &SelectionTab {
+    pub(crate) fn active_tab(&self) -> &ListSelectionGroup {
         self.tabs.active_tab()
     }
 
-    fn free_form_outcome(&self) -> Option<SelectionInputOutcome> {
-        let value = self.query().trim();
-        if value.is_empty() {
-            return None;
-        }
-        Some(SelectionInputOutcome::ActivateFreeForm {
-            item_id: self.model.free_form_action.clone()?,
-            value: value.to_owned(),
-        })
-    }
-
-    fn selected_item_id(&self) -> Option<SelectionItemId> {
+    fn selected_item_id(&self) -> Option<ListSelectionItemId> {
         self.selected_item()?.id().cloned()
     }
 
-    pub(crate) fn selected_item(&self) -> Option<&SelectionItem> {
+    pub(crate) fn selected_item(&self) -> Option<&ListSelectionItem> {
         let selected = self.selected_visible?;
         self.visible_items().get(selected).copied()
     }
@@ -596,7 +490,7 @@ impl SelectionViewState {
 
     fn visible_indices(&self) -> Vec<usize> {
         let normalized_query = self.query().to_lowercase();
-        if normalized_query.is_empty() || self.model.query_mode == SelectionQueryMode::InputOnly {
+        if normalized_query.is_empty() {
             return (0..self.active_tab().items.len()).collect();
         }
         let mut matches = self
@@ -617,10 +511,7 @@ impl SelectionViewState {
         self.visible_indices().len()
     }
 
-    fn move_selection(&mut self, direction: SelectionDirection) {
-        if !self.model.selection_enabled {
-            return;
-        }
+    fn move_selection(&mut self, direction: ListSelectionDirection) {
         let visible_len = self.visible_len();
         if visible_len == 0 {
             self.selected_visible = None;
@@ -628,29 +519,20 @@ impl SelectionViewState {
         }
         let selected = self.selected_visible.unwrap_or(0).min(visible_len - 1);
         self.selected_visible = Some(match direction {
-            SelectionDirection::Previous => selected.checked_sub(1).unwrap_or(visible_len - 1),
-            SelectionDirection::Next => (selected + 1) % visible_len,
+            ListSelectionDirection::Previous => selected.checked_sub(1).unwrap_or(visible_len - 1),
+            ListSelectionDirection::Next => (selected + 1) % visible_len,
         });
     }
 
     fn select_first_visible(&mut self) {
-        self.selected_visible =
-            (self.model.selection_enabled && self.visible_len() > 0).then_some(0);
+        self.selected_visible = (self.visible_len() > 0).then_some(0);
     }
 
     fn select_last_visible(&mut self) {
-        self.selected_visible = self
-            .model
-            .selection_enabled
-            .then(|| self.visible_len().checked_sub(1))
-            .flatten();
+        self.selected_visible = self.visible_len().checked_sub(1);
     }
 
     fn reconcile_selection(&mut self) {
-        if !self.model.selection_enabled {
-            self.selected_visible = None;
-            return;
-        }
         let visible_len = self.visible_len();
         self.selected_visible = match (self.selected_visible, visible_len) {
             (_, 0) => None,
@@ -661,7 +543,7 @@ impl SelectionViewState {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum SelectionDirection {
+enum ListSelectionDirection {
     Previous,
     Next,
 }

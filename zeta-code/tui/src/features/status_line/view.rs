@@ -3,7 +3,7 @@ use super::model::ApprovalModeStatus;
 use super::model::approval_mode_display;
 use super::model::approval_mode_text;
 use crate::ui::accent;
-use crate::ui::composer_chrome;
+use crate::ui::chat_input_chrome;
 use crate::ui::danger;
 use crate::ui::warning;
 use ratatui::Frame;
@@ -31,7 +31,7 @@ pub(crate) fn draw(
 fn styled_line(text: String, approval: ApprovalModeStatus) -> Line<'static> {
     let permission_prefix = approval_mode_text(approval);
     let Some(remainder) = text.strip_prefix(&permission_prefix) else {
-        return Line::styled(text, Style::default().fg(composer_chrome()));
+        return Line::styled(text, Style::default().fg(chat_input_chrome()));
     };
 
     let next = approval_mode_display(approval.next);
@@ -41,12 +41,12 @@ fn styled_line(text: String, approval: ApprovalModeStatus) -> Line<'static> {
             Span::styled(current.icon, Style::default().fg(mode_color(current_mode))),
             Span::styled(
                 format!(" current: {} · ", current.label),
-                Style::default().fg(composer_chrome()),
+                Style::default().fg(chat_input_chrome()),
             ),
             Span::styled(next.icon, Style::default().fg(mode_color(approval.next))),
             Span::styled(
                 format!(" next: {}{remainder}", next.label),
-                Style::default().fg(composer_chrome()),
+                Style::default().fg(chat_input_chrome()),
             ),
         ]);
     }
@@ -55,7 +55,7 @@ fn styled_line(text: String, approval: ApprovalModeStatus) -> Line<'static> {
         Span::styled(next.icon, Style::default().fg(mode_color(approval.next))),
         Span::styled(
             format!(" {}{remainder}", next.label),
-            Style::default().fg(composer_chrome()),
+            Style::default().fg(chat_input_chrome()),
         ),
     ])
 }

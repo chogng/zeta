@@ -1,17 +1,17 @@
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub(super) struct SelectionMatchScore {
-    field: SelectionMatchField,
+pub(super) struct ListSelectionMatchScore {
+    field: ListSelectionMatchField,
     text: TextMatchScore,
 }
 
-impl SelectionMatchScore {
-    fn new(field: SelectionMatchField, text: TextMatchScore) -> Self {
+impl ListSelectionMatchScore {
+    fn new(field: ListSelectionMatchField, text: TextMatchScore) -> Self {
         Self { field, text }
     }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-enum SelectionMatchField {
+enum ListSelectionMatchField {
     Label,
     Description,
 }
@@ -42,13 +42,14 @@ pub(super) fn selection_match_score(
     label: &str,
     description: Option<&str>,
     normalized_query: &str,
-) -> Option<SelectionMatchScore> {
+) -> Option<ListSelectionMatchScore> {
     text_match_score(label, normalized_query)
-        .map(|score| SelectionMatchScore::new(SelectionMatchField::Label, score))
+        .map(|score| ListSelectionMatchScore::new(ListSelectionMatchField::Label, score))
         .or_else(|| {
             description.and_then(|description| {
-                text_match_score(description, normalized_query)
-                    .map(|score| SelectionMatchScore::new(SelectionMatchField::Description, score))
+                text_match_score(description, normalized_query).map(|score| {
+                    ListSelectionMatchScore::new(ListSelectionMatchField::Description, score)
+                })
             })
         })
 }

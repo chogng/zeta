@@ -1,16 +1,19 @@
-use crate::components::composer::SkillSelectorItem;
-use crate::components::composer::SlashCommandCatalog;
-use crate::components::composer::built_in_slash_command_definitions;
+use crate::components::chat_input::MentionPluginItem;
+use crate::components::chat_input::SkillSelectorItem;
+use crate::components::chat_input::SlashCommandCatalog;
+use crate::components::chat_input::built_in_slash_command_definitions;
 use std::collections::BTreeMap;
 use zeta_app_server_client::ClientError;
+use zeta_app_server_protocol::protocol::plugins::PluginPackageDto;
 use zeta_app_server_protocol::protocol::skills::SkillCompatibilityDto;
 use zeta_app_server_protocol::protocol::skills::SkillEnablementDto;
 use zeta_app_server_protocol::protocol::skills::SkillListResult;
 use zeta_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
 use zeta_protocol::SkillRef;
 
-pub(crate) struct ComposerCatalogSnapshot {
+pub(crate) struct ChatInputCatalogSnapshot {
     pub(crate) catalog: SlashCommandCatalog,
+    pub(crate) plugins: Vec<MentionPluginItem>,
     pub(crate) skills: Vec<SkillSelectorItem>,
 }
 
@@ -28,10 +31,11 @@ pub(crate) fn slash_command_registry(
     })
 }
 
-pub(crate) fn composer_catalog_snapshot(
+pub(crate) fn chat_input_catalog_snapshot(
     definitions: &[SlashCommandDefinition],
     skills: &SkillListResult,
-) -> Result<ComposerCatalogSnapshot, ClientError> {
+    plugins: &[PluginPackageDto],
+) -> Result<ChatInputCatalogSnapshot, ClientError> {
     let mut name_counts = BTreeMap::new();
     for skill in skills.skills.iter().filter(|skill| {
         skill.enablement == SkillEnablementDto::Enabled
@@ -56,8 +60,13 @@ pub(crate) fn composer_catalog_snapshot(
             SkillRef::pinned(skill.id.clone(), skill.content_digest.clone()),
         ));
     }
-    Ok(ComposerCatalogSnapshot {
+    Ok(ChatInputCatalogSnapshot {
         catalog: slash_command_registry(definitions)?,
+        plugins: plugins
+            .iter()
+            .filter(|plugin| plugin.effective)
+            .map(|plugin| MentionPluginItem::new(plugin.id.clone()))
+            .collect(),
         skills: selector_items,
     })
 }

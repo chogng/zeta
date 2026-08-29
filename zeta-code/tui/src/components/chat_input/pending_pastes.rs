@@ -12,10 +12,10 @@ struct PendingPaste {
     contents: String,
 }
 
-/// Owns the mapping between atomic composer placeholders and large pasted text payloads.
+/// Owns the mapping between atomic chat_input placeholders and large pasted text payloads.
 ///
 /// Large payloads stay out of the visible text buffer while the user edits the draft. The
-/// placeholders are expanded only when the composer prepares a submission.
+/// placeholders are expanded only when the chat_input prepares a submission.
 #[derive(Debug, Default, Eq, PartialEq)]
 pub(super) struct PendingPastes {
     entries: Vec<PendingPaste>,

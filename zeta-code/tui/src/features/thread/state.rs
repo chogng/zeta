@@ -1,8 +1,8 @@
 use super::ThreadPresentationEvent;
 use super::transcript::TranscriptMessages;
-use crate::components::transcript::CommandStatus;
-use crate::components::transcript::Message;
-use crate::components::transcript::MessageRole;
+use crate::components::chat_history::CommandStatus;
+use crate::components::chat_history::Message;
+use crate::components::chat_history::MessageRole;
 
 /// Owns the transcript rows currently displayed by the TUI.
 #[derive(Debug, Default)]

@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 
 use super::ThemeSelectionAction;
-use super::custom_theme_selection_view;
-use super::theme_selection_view;
-use crate::components::selection::SelectionInputOutcome;
-use crate::components::selection::SelectionItemId;
-use crate::components::selection::SelectionViewState;
+use super::custom_theme_pane_spec;
+use super::theme_pane_spec;
+use crate::components::list_selection::ListSelectionInputOutcome;
+use crate::components::list_selection::ListSelectionItemId;
+use crate::components::list_selection::ListSelectionState;
 use crate::features::theme::ThemePickerCatalog;
 use crate::features::theme::ThemePickerChoice;
 use crate::features::theme::ThemePickerTarget;
@@ -78,9 +78,9 @@ fn catalog() -> ThemePickerCatalog {
 
 #[test]
 fn theme_pane_is_numbered_fixed_and_not_searchable() {
-    let view = theme_selection_view(&catalog());
+    let view = theme_pane_spec(&catalog());
     let (model, key_hints) = view.model.into_parts();
-    let mut state = SelectionViewState::new(model);
+    let mut state = ListSelectionState::new(model);
 
     assert_eq!(state.title(), "Theme");
     assert!(!state.show_tabs());
@@ -124,7 +124,7 @@ fn theme_pane_is_numbered_fixed_and_not_searchable() {
     terminal
         .draw(|frame| {
             let areas = crate::components::pane::areas(frame.area());
-            crate::components::selection::draw(frame, areas.body, &state);
+            crate::components::list_selection::draw(frame, areas.body, &state);
             crate::components::key_hint_bar::draw(frame, areas.key_hint_bar, &key_hints);
         })
         .unwrap();
@@ -168,7 +168,7 @@ fn theme_pane_is_numbered_fixed_and_not_searchable() {
 
     assert_eq!(
         state.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE)),
-        SelectionInputOutcome::Consumed
+        ListSelectionInputOutcome::Consumed
     );
     assert!(!state.search_active());
     assert_eq!(state.query(), "");
@@ -177,20 +177,20 @@ fn theme_pane_is_numbered_fixed_and_not_searchable() {
 #[test]
 fn custom_row_opens_the_custom_theme_model() {
     let catalog = catalog();
-    let view = theme_selection_view(&catalog);
+    let view = theme_pane_spec(&catalog);
     assert_eq!(
-        view.actions.get(&SelectionItemId::new("theme-7")),
+        view.actions.get(&ListSelectionItemId::new("theme-7")),
         Some(&ThemeSelectionAction::OpenCustomThemes)
     );
 
-    let custom = custom_theme_selection_view(&catalog);
-    let state = SelectionViewState::new(custom.model.into_body());
+    let custom = custom_theme_pane_spec(&catalog);
+    let state = ListSelectionState::new(custom.model.into_body());
     assert_eq!(state.title(), "Custom color themes");
     assert_eq!(state.visible_items()[0].label(), "1. Aurora");
     assert_eq!(
         custom.actions,
         BTreeMap::from([(
-            SelectionItemId::new("theme-0"),
+            ListSelectionItemId::new("theme-0"),
             ThemeSelectionAction::SelectCustom {
                 preference: "aurora".into(),
             },

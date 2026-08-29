@@ -1,18 +1,16 @@
 use super::draw;
-use super::mention_index_at;
-use super::slash_command_index_at;
+use super::input_overlay_index_at;
 use crate::app::App;
 use crate::app::AppEvent;
-use crate::components::pane;
-use crate::components::pane::PaneViewModel;
+use crate::components::list_selection::ListSelectionGroup;
+use crate::components::list_selection::ListSelectionItem;
+use crate::components::list_selection::ListSelectionModel;
+use crate::components::pane::PaneSpec;
 use crate::components::search_box::SearchBoxModel;
-use crate::components::selection::SelectionItem;
-use crate::components::selection::SelectionTab;
-use crate::components::selection::SelectionViewModel;
 use crate::features::thread::TurnActivity;
 use crate::features::workspace_files::FileSearchManager;
 use crate::ui::accent;
-use crate::ui::composer_chrome;
+use crate::ui::chat_input_chrome;
 use crate::ui::danger;
 use crate::ui::highlight;
 use crate::ui::muted;
@@ -93,20 +91,23 @@ fn footer_uses_a_distinct_color_for_each_approval_mode_symbol() {
     assert_eq!(ask_permissions[(0, 19)].fg, warning());
     assert_eq!(
         ask_permissions[("⏸".width() as u16, 19)].fg,
-        composer_chrome()
+        chat_input_chrome()
     );
 
     app.set_next_approval_mode(zeta_protocol::ApprovalMode::AutoReview);
     let auto_review = render_buffer(&app, 80, 20);
     assert_eq!(auto_review[(0, 19)].fg, accent());
-    assert_eq!(auto_review[("⏩".width() as u16, 19)].fg, composer_chrome());
+    assert_eq!(
+        auto_review[("⏩".width() as u16, 19)].fg,
+        chat_input_chrome()
+    );
 
     app.set_next_approval_mode(zeta_protocol::ApprovalMode::BypassPermissions);
     let bypass_permissions = render_buffer(&app, 80, 20);
     assert_eq!(bypass_permissions[(0, 19)].fg, danger());
     assert_eq!(
         bypass_permissions[("▶".width() as u16, 19)].fg,
-        composer_chrome()
+        chat_input_chrome()
     );
 }
 
@@ -168,22 +169,22 @@ fn narrow_footer_keeps_the_first_configured_item() {
 }
 
 #[test]
-fn composer_uses_light_gray_edge_to_edge_horizontal_rules_and_prompt() {
+fn chat_input_uses_light_gray_edge_to_edge_horizontal_rules_and_prompt() {
     let buffer = render_buffer(&App::new(), 80, 20);
 
     for y in [16, 18] {
         assert_eq!(buffer[(0, y)].symbol(), "─");
-        assert_eq!(buffer[(0, y)].fg, composer_chrome());
+        assert_eq!(buffer[(0, y)].fg, chat_input_chrome());
         assert_eq!(buffer[(79, y)].symbol(), "─");
-        assert_eq!(buffer[(79, y)].fg, composer_chrome());
+        assert_eq!(buffer[(79, y)].fg, chat_input_chrome());
     }
     assert_eq!(buffer[(0, 17)].symbol(), "❯");
-    assert_eq!(buffer[(0, 17)].fg, composer_chrome());
+    assert_eq!(buffer[(0, 17)].fg, chat_input_chrome());
     assert_eq!(buffer[(79, 17)].symbol(), " ");
 }
 
 #[test]
-fn multiline_composer_grows_upward_and_keeps_all_lines_visible() {
+fn multiline_chat_input_grows_upward_and_keeps_all_lines_visible() {
     let mut app = App::new();
     app.insert_text("first\nsecond\nthird");
 
@@ -210,7 +211,7 @@ fn working_footer_keeps_the_configured_context_without_runtime_text() {
 }
 
 #[test]
-fn composer_soft_wraps_long_lines_instead_of_clipping_them() {
+fn chat_input_soft_wraps_long_lines_instead_of_clipping_them() {
     let mut app = App::new();
     app.insert_text("abcdefghij");
 
@@ -222,12 +223,12 @@ fn composer_soft_wraps_long_lines_instead_of_clipping_them() {
 }
 
 #[test]
-fn selection_view_replaces_the_composer_but_keeps_the_transcript_surface() {
+fn list_selection_pane_stacks_above_chat_input_and_keeps_history_visible() {
     let mut app = App::new();
     app.update(AppEvent::ProductNotice(
         "Conversation remains visible.".into(),
     ));
-    app.update(AppEvent::SelectionViewOpened(help_view()));
+    app.update(AppEvent::ListSelectionPaneOpened(help_view()));
 
     let rendered = render(&app, 80, 24);
 
@@ -249,9 +250,9 @@ fn selection_view_replaces_the_composer_but_keeps_the_transcript_surface() {
 }
 
 #[test]
-fn selection_view_supports_keyboard_tab_switching_and_search() {
+fn list_selection_pane_supports_keyboard_tab_switching_and_search() {
     let mut app = App::new();
-    app.update(AppEvent::SelectionViewOpened(help_view()));
+    app.update(AppEvent::ListSelectionPaneOpened(help_view()));
 
     app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE));
@@ -264,20 +265,20 @@ fn selection_view_supports_keyboard_tab_switching_and_search() {
     assert!(rendered.find("Esc") < rendered.find("move selection"));
 
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
-    assert!(app.selection_view().is_none());
+    assert!(app.list_selection().is_none());
 }
 
 #[test]
 fn selection_candidate_color_repaints_the_pane_and_welcome_frames() {
     let mut app = App::new();
-    app.update(AppEvent::SelectionViewOpened(PaneViewModel::new(
-        SelectionViewModel::new(
+    app.update(AppEvent::ListSelectionPaneOpened(PaneSpec::new(
+        ListSelectionModel::new(
             "Theme",
-            vec![SelectionTab::new(
+            vec![ListSelectionGroup::new(
                 "Themes",
                 vec![
-                    SelectionItem::new("First").with_selection_foreground(Color::Red),
-                    SelectionItem::new("Second").with_selection_foreground(Color::Green),
+                    ListSelectionItem::new("First").with_selection_foreground(Color::Red),
+                    ListSelectionItem::new("Second").with_selection_foreground(Color::Green),
                 ],
             )],
         ),
@@ -285,7 +286,16 @@ fn selection_candidate_color_repaints_the_pane_and_welcome_frames() {
     )));
 
     let first = render_buffer(&app, 80, 24);
-    let interaction_y = 24 - pane::desired_height(app.selection_view().unwrap().desired_height(80));
+    let interaction_y = super::layout(&app, Rect::new(0, 0, 80, 24))
+        .input
+        .height_entries
+        .iter()
+        .find(|entry| {
+            entry.kind == crate::components::chat_input_area::ChatInputAreaHeightEntryKind::Pane
+        })
+        .unwrap()
+        .area
+        .y;
     assert_eq!(first[(2, 1)].fg, Color::Red);
     assert_eq!(first[(0, interaction_y)].fg, Color::Red);
 
@@ -378,16 +388,16 @@ fn slash_popup_hit_testing_maps_visible_rows_and_rejects_outside_clicks() {
     app.insert_text("/");
     let terminal_area = Rect::new(0, 0, 80, 20);
 
-    assert_eq!(slash_command_index_at(&app, terminal_area, 2, 10), Some(0));
-    assert_eq!(slash_command_index_at(&app, terminal_area, 77, 15), Some(5));
-    assert_eq!(slash_command_index_at(&app, terminal_area, 1, 10), None);
-    assert_eq!(slash_command_index_at(&app, terminal_area, 2, 16), None);
+    assert_eq!(input_overlay_index_at(&app, terminal_area, 2, 10), Some(0));
+    assert_eq!(input_overlay_index_at(&app, terminal_area, 77, 15), Some(5));
+    assert_eq!(input_overlay_index_at(&app, terminal_area, 1, 10), None);
+    assert_eq!(input_overlay_index_at(&app, terminal_area, 2, 16), None);
 
     for _ in 0..7 {
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
     }
-    assert_eq!(slash_command_index_at(&app, terminal_area, 2, 10), Some(2));
-    assert_eq!(slash_command_index_at(&app, terminal_area, 2, 15), Some(7));
+    assert_eq!(input_overlay_index_at(&app, terminal_area, 2, 10), Some(2));
+    assert_eq!(input_overlay_index_at(&app, terminal_area, 2, 15), Some(7));
 }
 
 #[test]
@@ -396,7 +406,7 @@ fn empty_slash_popup_has_no_clickable_command_rows() {
     app.insert_text("/unknown");
 
     assert_eq!(
-        slash_command_index_at(&app, Rect::new(0, 0, 80, 20), 2, 15),
+        input_overlay_index_at(&app, Rect::new(0, 0, 80, 20), 2, 15),
         None
     );
 }
@@ -455,9 +465,11 @@ fn mention_popup_renders_workspace_paths_and_exposes_the_same_click_rows() {
     let terminal_area = Rect::new(0, 0, 80, 20);
 
     let buffer = render_buffer(&app, 80, 20);
-    let popup = app.mention_popup().unwrap();
+    let Some(crate::components::chat_input::SuggestView::Mention(popup)) = app.suggest() else {
+        panic!("expected mention suggestions");
+    };
     for (row, matched) in popup.matches.iter().take(2).enumerate() {
-        for (column, character) in matched.path.chars().enumerate() {
+        for (column, character) in matched.label.chars().enumerate() {
             assert_eq!(
                 buffer[(column as u16 + 2, row as u16 + 14)].symbol(),
                 character.to_string()
@@ -466,7 +478,7 @@ fn mention_popup_renders_workspace_paths_and_exposes_the_same_click_rows() {
     }
     let second = &popup.matches[1];
     let matched_index = second.indices[0];
-    let unmatched_index = (0..second.path.chars().count())
+    let unmatched_index = (0..second.label.chars().count())
         .find(|index| !second.indices.contains(index))
         .unwrap();
     assert!(
@@ -479,9 +491,9 @@ fn mention_popup_renders_workspace_paths_and_exposes_the_same_click_rows() {
             .modifier
             .contains(Modifier::BOLD)
     );
-    assert_eq!(mention_index_at(&app, terminal_area, 2, 14), Some(0));
-    assert_eq!(mention_index_at(&app, terminal_area, 2, 15), Some(1));
-    assert_eq!(mention_index_at(&app, terminal_area, 1, 15), None);
+    assert_eq!(input_overlay_index_at(&app, terminal_area, 2, 14), Some(0));
+    assert_eq!(input_overlay_index_at(&app, terminal_area, 2, 15), Some(1));
+    assert_eq!(input_overlay_index_at(&app, terminal_area, 1, 15), None);
     let _ = fs::remove_dir_all(workspace);
 }
 
@@ -497,23 +509,23 @@ fn render(app: &App, width: u16, height: u16) -> String {
         .join("\n")
 }
 
-fn help_view() -> PaneViewModel<SelectionViewModel> {
-    PaneViewModel::new(
-        SelectionViewModel::new(
+fn help_view() -> PaneSpec<ListSelectionModel> {
+    PaneSpec::new(
+        ListSelectionModel::new(
             "Help",
             vec![
-                SelectionTab::new(
+                ListSelectionGroup::new(
                     "Commands",
                     vec![
-                        SelectionItem::new("/status").with_description("show status"),
-                        SelectionItem::new("/model").with_description("show model"),
+                        ListSelectionItem::new("/status").with_description("show status"),
+                        ListSelectionItem::new("/model").with_description("show model"),
                     ],
                 ),
-                SelectionTab::new(
+                ListSelectionGroup::new(
                     "Keys",
                     vec![
-                        SelectionItem::new("↑ / ↓").with_description("move selection"),
-                        SelectionItem::new("Esc").with_description("return to composer"),
+                        ListSelectionItem::new("↑ / ↓").with_description("move selection"),
+                        ListSelectionItem::new("Esc").with_description("return to chat_input"),
                     ],
                 ),
             ],
@@ -535,10 +547,11 @@ fn wait_for_mention_results(app: &mut App, workspace: &Path) {
         for snapshot in file_search.poll() {
             app.update(AppEvent::FileSearchSnapshotReceived(snapshot));
         }
-        if app
-            .mention_popup()
-            .is_some_and(|popup| popup.matches.len() >= 2)
-        {
+        if matches!(
+            app.suggest(),
+            Some(crate::components::chat_input::SuggestView::Mention(popup))
+                if popup.matches.len() >= 2
+        ) {
             return;
         }
         assert!(

@@ -1,7 +1,7 @@
 use super::WelcomeModel;
 use super::draw;
 use crate::ui::accent;
-use crate::ui::composer_chrome;
+use crate::ui::chat_input_chrome;
 use crate::ui::highlight;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -31,7 +31,7 @@ fn wide_banner_uses_the_two_column_welcome_presentation() {
     assert_eq!(buffer[(9, 1)].fg, accent());
     assert!(!buffer[(9, 1)].modifier.contains(Modifier::BOLD));
     assert_eq!(buffer[(19, 1)].symbol(), "v");
-    assert_eq!(buffer[(19, 1)].fg, composer_chrome());
+    assert_eq!(buffer[(19, 1)].fg, chat_input_chrome());
     assert_eq!(buffer[(10, 2)].symbol(), " ");
     assert_eq!(buffer[(11, 3)].symbol(), "W");
 }

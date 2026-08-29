@@ -2,7 +2,7 @@
 
 use super::WelcomeModel;
 use crate::ui::horizontal_margin;
-use crate::ui::{accent, composer_chrome, muted};
+use crate::ui::{accent, chat_input_chrome, muted};
 use ratatui::Frame;
 use ratatui::layout::Alignment;
 use ratatui::layout::Constraint;
@@ -172,7 +172,7 @@ fn draw_title(frame: &mut Frame<'_>, area: Rect) {
             Span::styled("Zeta Code", Style::default().fg(accent())),
             Span::styled(
                 format!(" v{}", env!("CARGO_PKG_VERSION")),
-                Style::default().fg(composer_chrome()),
+                Style::default().fg(chat_input_chrome()),
             ),
             Span::raw(" "),
         ]))
