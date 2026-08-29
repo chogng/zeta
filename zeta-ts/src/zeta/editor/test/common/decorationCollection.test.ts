@@ -107,6 +107,26 @@ test("TextDecorationCollection reports tracked range movement", () => {
 	]);
 });
 
+test("TextDecorationCollection exposes tracked ranges before change listeners finish", () => {
+	using model = new TextModel("abc");
+	let decorations: TextDecorationCollection<string>;
+	let observedRange: TextRange | undefined;
+	using earlyListener = model.onDidChange(() => {
+		observedRange = decorations.decorations[0]?.range;
+	});
+	decorations = new TextDecorationCollection<string>(model);
+	using ownedDecorations = decorations;
+	decorations.add({
+		range: range(1, 2),
+		stickiness: TrackedRangeStickiness.NeverGrowsAtEdges,
+		metadata: "match",
+	});
+
+	model.applyEdits([{ range: range(0, 0), text: "X" }]);
+
+	assert.deepEqual(observedRange, range(2, 3));
+});
+
 test("TextDecorationCollection validates replaceAll atomically", () => {
 	using model = new TextModel("abc");
 	using decorations = new TextDecorationCollection<string>(model);

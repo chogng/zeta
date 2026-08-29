@@ -1,14 +1,13 @@
 .stanza-editor-peek-view {
-  position: absolute;
-  right: 8px;
-  left: 8px;
   z-index: 9;
-  box-sizing: border-box;
-  max-height: 45%;
-  overflow: auto;
   background: var(--zeta-editor-background);
-  border: 1px solid var(--zeta-widget-border);
   box-shadow: 0 6px 18px var(--zeta-widget-shadow);
+}
+
+.stanza-editor-peek-view > .stanza-editor-zone-widget-container {
+  display: flex;
+  flex-direction: column;
+  background: var(--zeta-editor-background);
 }
 
 .stanza-editor-peek-view-header {
@@ -19,6 +18,9 @@
 }
 
 .stanza-editor-peek-view-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
   padding: 8px;
 }
 

@@ -23,6 +23,7 @@ export class DecorationsPart extends DynamicViewOverlay {
 	private readonly decorationSnapshots = new Map<DecorationSource, readonly ResolvedDecoration[]>();
 	private readonly changeEmitter = this._register(new Emitter<void>());
 	private decorationLineIndex = new DecorationLineIndex([]);
+	private decorationModelVersion: number;
 	private markerRevision = 0;
 	private readonly rows: ViewPartRows;
 
@@ -34,25 +35,26 @@ export class DecorationsPart extends DynamicViewOverlay {
 		this.domNode = this.rows.domNode;
 		this.model = model;
 		this.decorationSources = Object.freeze([...decorationSources]);
-		this._register(this.model.onDidChange(() => {
-			this.markerRevision += 1;
-		}));
 		for (const source of this.decorationSources) {
 			this.decorationSnapshots.set(source, source.decorations);
 			this._register(source.onDidChange(() => {
 				this.decorationSnapshots.set(source, source.decorations);
+				this.decorationModelVersion = this.model.version;
 				this.rebuildDecorationLineIndex();
 				this.changeEmitter.fire();
 			}));
 		}
+		this.decorationModelVersion = this.model.version;
 		this.rebuildDecorationLineIndex();
 	}
 
 	public get markersRevision(): number {
+		this.synchronizeDecorationSnapshots();
 		return this.markerRevision;
 	}
 
 	public render(context: EditorRenderingContext): void {
+		this.synchronizeDecorationSnapshots();
 		const overlay = context.overlay;
 		if (!overlay) {
 			return;
@@ -61,15 +63,18 @@ export class DecorationsPart extends DynamicViewOverlay {
 	}
 
 	public visibleDecorations(context: EditorOverlayContext): readonly ResolvedDecoration[] {
+		this.synchronizeDecorationSnapshots();
 		return this.resolveVisibleDecorations(context);
 	}
 
 	public overviewMarkers(): readonly DecorationsPartMarker[] {
+		this.synchronizeDecorationSnapshots();
 		const decorations = this.allDecorations().filter(decoration => decoration.overviewRuler !== false);
 		return markersForDecorations(decorations, this.model.lineCount);
 	}
 
 	public minimapMarkers(): readonly DecorationsPartMarker[] {
+		this.synchronizeDecorationSnapshots();
 		const decorations = this.allDecorations().filter(decoration => decoration.minimap !== false);
 		return markersForDecorations(decorations, this.model.lineCount);
 	}
@@ -81,6 +86,15 @@ export class DecorationsPart extends DynamicViewOverlay {
 	private rebuildDecorationLineIndex(): void {
 		this.decorationLineIndex = new DecorationLineIndex(this.allDecorations());
 		this.markerRevision += 1;
+	}
+
+	private synchronizeDecorationSnapshots(): void {
+		if (this.decorationModelVersion === this.model.version) return;
+		for (const source of this.decorationSources) {
+			this.decorationSnapshots.set(source, source.decorations);
+		}
+		this.decorationModelVersion = this.model.version;
+		this.rebuildDecorationLineIndex();
 	}
 
 	private resolveVisibleDecorations(context: EditorOverlayContext): readonly ResolvedDecoration[] {

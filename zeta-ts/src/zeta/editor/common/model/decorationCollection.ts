@@ -237,7 +237,7 @@ function snapshotEntry<TMetadata>(
 ): TextDecorationSnapshot<TMetadata> {
 	return Object.freeze({
 		id: entry.id,
-		range: entry.lastRange,
+		range: entry.trackedRange.range,
 		metadata: entry.metadata,
 	});
 }
