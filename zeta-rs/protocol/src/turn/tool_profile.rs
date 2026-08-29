@@ -1,6 +1,7 @@
 use crate::ToolName;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use ts_rs::TS;
 
 /// Immutable model-visible tool surface selected for one Turn.

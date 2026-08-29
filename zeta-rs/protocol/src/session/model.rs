@@ -7,7 +7,8 @@ use crate::ThreadId;
 use crate::ThreadOrigin;
 use crate::WorkspaceBinding;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use ts_rs::TS;
 
 /// Canonical user-visible work container and its Thread topology.

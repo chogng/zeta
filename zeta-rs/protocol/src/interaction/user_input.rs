@@ -1,7 +1,8 @@
 use crate::ImageAttachmentRef;
 use crate::SkillRef;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use ts_rs::TS;
 
 /// A provider-independent input supplied by the user for one turn.

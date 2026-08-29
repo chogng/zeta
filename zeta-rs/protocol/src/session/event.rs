@@ -6,7 +6,8 @@ use crate::SessionThread;
 use crate::ThreadId;
 use crate::WorkspaceBinding;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use ts_rs::TS;
 
 /// A durable structural fact in one product Session's event stream.

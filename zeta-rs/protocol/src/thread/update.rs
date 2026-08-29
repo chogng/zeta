@@ -1,6 +1,13 @@
-use crate::{ItemId, SessionId, StreamCursor, ThreadEvent, ThreadId, ThreadItem, TurnId};
+use crate::ItemId;
+use crate::SessionId;
+use crate::StreamCursor;
+use crate::ThreadEvent;
+use crate::ThreadId;
+use crate::ThreadItem;
+use crate::TurnId;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use ts_rs::TS;
 
 /// Consumer-facing update for one Thread.

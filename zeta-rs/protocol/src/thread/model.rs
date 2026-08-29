@@ -1,6 +1,12 @@
-use crate::{ModelUsageSummary, SessionId, ThreadGoal, ThreadId, ThreadStatus, Turn};
+use crate::ModelUsageSummary;
+use crate::SessionId;
+use crate::ThreadGoal;
+use crate::ThreadId;
+use crate::ThreadStatus;
+use crate::Turn;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use ts_rs::TS;
 
 /// Canonical readable state for one independently ordered Agent execution branch.

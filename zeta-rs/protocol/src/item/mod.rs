@@ -1,6 +1,8 @@
 mod plan;
 
-pub use plan::{PlanStep, PlanStepStatus, PlanUpdate};
+pub use plan::PlanStep;
+pub use plan::PlanStepStatus;
+pub use plan::PlanUpdate;
 
 use crate::ContentPart;
 use crate::ImageAttachmentRef;
@@ -10,7 +12,8 @@ use crate::ToolCallId;
 use crate::ToolName;
 use crate::TurnId;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use ts_rs::TS;
 
 /// A normalized, provider-independent item produced or consumed during one Thread turn.

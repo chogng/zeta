@@ -2,7 +2,8 @@ use crate::DelegationId;
 use crate::ThreadId;
 use crate::TurnId;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use ts_rs::TS;
 
 /// How a Thread entered a product Session.

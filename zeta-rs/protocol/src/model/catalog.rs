@@ -1,6 +1,8 @@
 use crate::Personality;
 use schemars::JsonSchema;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
 use std::fmt;
 use ts_rs::TS;
 

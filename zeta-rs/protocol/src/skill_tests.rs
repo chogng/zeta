@@ -1,5 +1,10 @@
-use super::{ContentDigest, SkillRef, SkillVersionSelector};
-use super::{InvalidSkillName, SkillId, SkillName, SkillSourceId};
+use super::ContentDigest;
+use super::InvalidSkillName;
+use super::SkillId;
+use super::SkillName;
+use super::SkillRef;
+use super::SkillSourceId;
+use super::SkillVersionSelector;
 
 #[test]
 fn skill_names_follow_the_agent_skills_contract() {

@@ -1,6 +1,8 @@
-use crate::{SessionEvent, SessionId};
+use crate::SessionEvent;
+use crate::SessionId;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use ts_rs::TS;
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

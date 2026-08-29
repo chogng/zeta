@@ -8,7 +8,8 @@ use crate::TurnId;
 use crate::UserInput;
 use crate::WorkspaceBinding;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use ts_rs::TS;
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

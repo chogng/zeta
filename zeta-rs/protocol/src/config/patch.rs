@@ -1,4 +1,7 @@
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
+use serde::Serializer;
 
 /// A three-state update field that distinguishes omission, explicit clearing, and replacement.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
