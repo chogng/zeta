@@ -29,6 +29,7 @@ import { type IInstantiationService } from "../../platform/instantiation/common/
 import { type IAccessibilityService } from "../../platform/accessibility/common/accessibility.js";
 import { TabFocus } from "./config/tabFocus.js";
 import { resolveEditorConfiguration } from "./config/editorConfiguration.js";
+import { migrateOptions } from "./config/migrateOptions.js";
 import { getEditorContributions, type EditorCapability, type TextEditorContributionContext } from "./editorExtensions.js";
 import { type BracketColorizationSource, type SemanticTokenSource } from "./viewparts/viewLines/viewLine.js";
 import { SemanticTokensStylingService } from '../common/services/semanticTokensStylingService.js';
@@ -153,6 +154,7 @@ export interface EditorBrowserOptions {
 	/** Browser paragraph direction for this editor browser's DOM projection. */
 	readonly textDirection?: EditorTextDirection;
 	readonly experimentalGpuAcceleration?: IEditorOptions['experimentalGpuAcceleration'];
+	readonly renderWhitespace?: IEditorOptions['renderWhitespace'];
 	readonly presentation?: EditorViewportPresentation;
 	/** Host-owned link opening callback; the editor never opens external targets directly. */
 	readonly onOpenLink?: (target: string) => void | Promise<void>;
@@ -203,6 +205,7 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 	constructor(options: EditorBrowserOptions) {
 		super();
 		try {
+			options = migrateOptions(options);
 			validateOptions(options);
 			const configuration = resolveEditorConfiguration(options);
 			const tabFocus = options.tabFocus ?? this._register(new TabFocus());
@@ -309,6 +312,7 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 					activeLineHighlight: options.activeLineHighlight,
 					textDirection: options.textDirection,
 					experimentalGpuAcceleration: options.experimentalGpuAcceleration,
+					renderWhitespace: options.renderWhitespace,
 					presentation: options.presentation,
 					indentation: options.indentation,
 				},
@@ -432,6 +436,9 @@ function validateOptions(options: EditorBrowserOptions): void {
 	}
 	if (options.inlineCompletions !== undefined && !isCompletionsEnablement(options.inlineCompletions)) {
 		throw new TypeError("Editor inline completions option must be boolean or a language enablement map");
+	}
+	if (options.renderWhitespace !== undefined && !['none', 'boundary', 'selection', 'trailing', 'all'].includes(options.renderWhitespace)) {
+		throw new TypeError('Editor whitespace rendering option is invalid');
 	}
 	for (const [name, value] of [
 		["line numbers", options.showLineNumbers],

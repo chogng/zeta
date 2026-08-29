@@ -1,0 +1,15 @@
+.stanza-editor-gpu-mark {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 0;
+	width: 100%;
+	display: inline-block;
+	border-left: solid 2px var(--zeta-warning-foreground);
+	opacity: 0.2;
+	transition: background-color 0.1s linear;
+}
+
+.stanza-editor-gpu-mark.active:hover {
+	background-color: var(--zeta-warning-foreground);
+}

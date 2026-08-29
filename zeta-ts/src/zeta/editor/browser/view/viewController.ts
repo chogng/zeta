@@ -1,4 +1,3 @@
-import { addDisposableListener } from '../../../base/browser/dom.js';
 import { StandardKeyboardEvent } from '../../../base/browser/keyboardEvent.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
@@ -246,7 +245,7 @@ export class ViewController extends Disposable {
 	}
 
 	/** Forwards view-originated input without taking ownership of its policy. */
-	emitKeyDown(event: KeyboardEvent): void {
+	emitKeyDown(event: StandardKeyboardEvent): void {
 		this.userInputEvents.emitKeyDown(event);
 	}
 
@@ -355,6 +354,7 @@ export class KeyboardNavigationController extends Disposable {
 	constructor(
 		private readonly viewport: EditorViewport,
 		private readonly selectionController: EditorSelectionController,
+		userInputEvents: ViewUserInputEvents,
 		options: KeyboardNavigationControllerOptions = {},
 	) {
 		super();
@@ -376,11 +376,19 @@ export class KeyboardNavigationController extends Disposable {
 				"Stanza keyboard and selection controllers must share one text model",
 			);
 		}
-		this._register(addDisposableListener(
-			viewport.element,
-			"keydown",
-			event => this.handleKeydown(event),
-		));
+		const previousKeyDownHandler = userInputEvents.onKeyDown;
+		const keyDownHandler = (event: StandardKeyboardEvent): void => {
+			previousKeyDownHandler?.(event);
+			if (!event.browserEvent.defaultPrevented) {
+				this.handleKeyDown(event);
+			}
+		};
+		userInputEvents.onKeyDown = keyDownHandler;
+		this._register(toDisposable(() => {
+			if (userInputEvents.onKeyDown === keyDownHandler) {
+				userInputEvents.onKeyDown = previousKeyDownHandler;
+			}
+		}));
 		this._register(selectionController.onDidChange(() => {
 			if (!this.applyingNavigation) {
 				this.preferredColumns = undefined;
@@ -389,9 +397,7 @@ export class KeyboardNavigationController extends Disposable {
 		}));
 	}
 
-	private handleKeydown(browserEvent: KeyboardEvent): void {
-		if (browserEvent.defaultPrevented) return;
-		const event = new StandardKeyboardEvent(browserEvent);
+	private handleKeyDown(event: StandardKeyboardEvent): void {
 		const navigation = resolveStanzaKeyboardNavigation(
 			event,
 			this.targetOperatingSystem,

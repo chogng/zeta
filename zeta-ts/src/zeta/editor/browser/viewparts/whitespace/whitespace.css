@@ -1,0 +1,5 @@
+.stanza-editor-whitespace {
+	position: absolute;
+	color: var(--zeta-description-foreground);
+	pointer-events: none;
+}

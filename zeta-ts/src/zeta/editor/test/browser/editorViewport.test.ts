@@ -1051,6 +1051,43 @@ test("Viewport disposal removes DOM without owning the text model", () => {
 	dom.window.close();
 });
 
+test('EditorViewport mounts content and overlay widgets through their VS Code owners', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('alpha');
+	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer() });
+	viewport.layout({ width: 300, height: 100 });
+	const contentDomNode = dom.window.document.createElement('div');
+	const contentWidget = { id: 'content', domNode: contentDomNode, getPosition: () => ({ position: TextPosition.at(0, 1), preference: 'below' as const }) };
+	const overlayDomNode = dom.window.document.createElement('div');
+	const overlayWidget = { id: 'overlay', domNode: overlayDomNode, getPosition: () => 'top-right' as const };
+
+	viewport.addContentWidget(contentWidget);
+	viewport.addOverlayWidget(overlayWidget);
+
+	assert.equal(contentDomNode.parentElement?.className, 'stanza-editor-content-widgets');
+	assert.equal(contentDomNode.hidden, false);
+	assert.equal(overlayDomNode.parentElement?.className, 'stanza-editor-overlay-widgets');
+	assert.equal(overlayDomNode.hidden, false);
+	viewport.removeContentWidget(contentWidget);
+	viewport.removeOverlayWidget(overlayWidget);
+	assert.equal(contentDomNode.isConnected, false);
+	assert.equal(overlayDomNode.isConnected, false);
+	dom.window.close();
+});
+
+test('EditorViewport projects configured whitespace through WhitespaceOverlay', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('a b\t');
+	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer(), renderWhitespace: 'all' });
+
+	viewport.layout({ width: 300, height: 100 });
+
+	assert.deepEqual([...viewport.element.querySelectorAll('.stanza-editor-whitespace')].map(element => element.textContent), ['·', '→']);
+	dom.window.close();
+});
+
 function requiredElement<T extends Element = HTMLElement>(
 	container: ParentNode,
 	selector: string,

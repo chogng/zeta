@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
+import { StandardKeyboardEvent } from "../../../../base/browser/keyboardEvent.js";
 import { OperatingSystem } from "../../../../base/common/platform.js";
 import { type TextMeasurer } from "../../../browser/config/fontMeasurements.js";
 import { resolveStanzaKeyboardNavigation } from "../../../browser/view/viewController.js";
+import { ViewUserInputEvents } from "../../../browser/view/viewUserInputEvents.js";
 import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../../../common/cursor/cursorNavigation.js";
 import { EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
@@ -135,24 +137,32 @@ test("Keyboard controller retains columns, routes multi-selection, and reveals p
 		selectionController: selections,
 	});
 	viewport.layout({ width: 80, height: 40 });
+	const userInputEvents = new ViewUserInputEvents();
+	let forwardedKeyDownCount = 0;
+	const previousKeyDownHandler = (): void => {
+		forwardedKeyDownCount++;
+	};
+	userInputEvents.onKeyDown = previousKeyDownHandler;
 	using keyboard = new KeyboardNavigationController(
 		viewport,
 		selections,
+		userInputEvents,
 		{ operatingSystem: OperatingSystem.Windows },
 	);
 
 	const firstDown = keyboardEvent(dom.window, "ArrowDown");
-	viewport.element.dispatchEvent(firstDown);
-	viewport.element.dispatchEvent(keyboardEvent(dom.window, "ArrowDown"));
+	emitKeyDown(userInputEvents, firstDown);
+	emitKeyDown(userInputEvents, keyboardEvent(dom.window, "ArrowDown"));
 	assert.equal(firstDown.defaultPrevented, true);
+	assert.equal(forwardedKeyDownCount, 2);
 	assert.deepEqual(selections.selections.primary, caret(2, 5));
 
 	selections.setSelections(TextSelectionSet.single(caret(0, 2)));
-	viewport.element.dispatchEvent(keyboardEvent(dom.window, "ArrowDown"));
-	viewport.element.dispatchEvent(keyboardEvent(dom.window, "ArrowDown"));
+	emitKeyDown(userInputEvents, keyboardEvent(dom.window, "ArrowDown"));
+	emitKeyDown(userInputEvents, keyboardEvent(dom.window, "ArrowDown"));
 	assert.deepEqual(selections.selections.primary, caret(2, 2));
 
-	viewport.element.dispatchEvent(keyboardEvent(
+	emitKeyDown(userInputEvents, keyboardEvent(
 		dom.window,
 		"ArrowRight",
 		{ shiftKey: true },
@@ -163,14 +173,14 @@ test("Keyboard controller retains columns, routes multi-selection, and reveals p
 	);
 
 	const textKey = keyboardEvent(dom.window, "a");
-	viewport.element.dispatchEvent(textKey);
+	emitKeyDown(userInputEvents, textKey);
 	assert.equal(textKey.defaultPrevented, false);
 	assert.deepEqual(
 		selections.selections.primary,
 		TextSelection.from(TextPosition.at(2, 2), TextPosition.at(2, 3)),
 	);
 
-	viewport.element.dispatchEvent(keyboardEvent(
+	emitKeyDown(userInputEvents, keyboardEvent(
 		dom.window,
 		"End",
 		{ ctrlKey: true },
@@ -179,7 +189,7 @@ test("Keyboard controller retains columns, routes multi-selection, and reveals p
 	assert.equal(viewport.viewportLayout.scrollPosition.top, 160);
 	assert.ok(viewport.viewportLayout.scrollPosition.left > 0);
 
-	viewport.element.dispatchEvent(keyboardEvent(
+	emitKeyDown(userInputEvents, keyboardEvent(
 		dom.window,
 		"Home",
 		{ ctrlKey: true },
@@ -190,10 +200,10 @@ test("Keyboard controller retains columns, routes multi-selection, and reveals p
 		top: 0,
 	});
 
-	viewport.element.dispatchEvent(keyboardEvent(dom.window, "PageDown"));
+	emitKeyDown(userInputEvents, keyboardEvent(dom.window, "PageDown"));
 	assert.deepEqual(selections.selections.primary, caret(2, 0));
 	assert.equal(viewport.viewportLayout.scrollPosition.top, 20);
-	viewport.element.dispatchEvent(keyboardEvent(dom.window, "PageUp"));
+	emitKeyDown(userInputEvents, keyboardEvent(dom.window, "PageUp"));
 	assert.deepEqual(selections.selections.primary, caret(0, 0));
 	assert.equal(viewport.viewportLayout.scrollPosition.top, 0);
 
@@ -201,15 +211,16 @@ test("Keyboard controller retains columns, routes multi-selection, and reveals p
 		caret(0, 1),
 		caret(1, 1),
 	], 1));
-	viewport.element.dispatchEvent(keyboardEvent(dom.window, "ArrowDown"));
+	emitKeyDown(userInputEvents, keyboardEvent(dom.window, "ArrowDown"));
 	assert.deepEqual(selections.selections, TextSelectionSet.withPrimary([
 		caret(1, 1),
 		caret(2, 1),
 	], 1));
 
 	keyboard.dispose();
+	assert.equal(userInputEvents.onKeyDown, previousKeyDownHandler);
 	const disposedSelections = selections.selections;
-	viewport.element.dispatchEvent(keyboardEvent(dom.window, "ArrowDown"));
+	emitKeyDown(userInputEvents, keyboardEvent(dom.window, "ArrowDown"));
 	assert.equal(selections.selections, disposedSelections);
 
 	dom.window.close();
@@ -235,26 +246,28 @@ test("Keyboard controller moves by measured visual rows when soft wrapping is en
 		minimap: { enabled: false },
 	});
 	viewport.layout({ width: 70, height: 40 });
+	const userInputEvents = new ViewUserInputEvents();
 	using keyboard = new KeyboardNavigationController(
 		viewport,
 		selections,
+		userInputEvents,
 		{ operatingSystem: OperatingSystem.Windows },
 	);
 
-	viewport.element.dispatchEvent(keyboardEvent(dom.window, "ArrowDown"));
+	emitKeyDown(userInputEvents, keyboardEvent(dom.window, "ArrowDown"));
 	assert.deepEqual(selections.selections.primary, caret(0, 3));
-	viewport.element.dispatchEvent(keyboardEvent(dom.window, "ArrowDown"));
+	emitKeyDown(userInputEvents, keyboardEvent(dom.window, "ArrowDown"));
 	assert.deepEqual(selections.selections.primary, caret(0, 5));
-	viewport.element.dispatchEvent(keyboardEvent(dom.window, "ArrowDown"));
+	emitKeyDown(userInputEvents, keyboardEvent(dom.window, "ArrowDown"));
 	assert.deepEqual(selections.selections.primary, caret(1, 1));
-	viewport.element.dispatchEvent(keyboardEvent(dom.window, "ArrowUp"));
+	emitKeyDown(userInputEvents, keyboardEvent(dom.window, "ArrowUp"));
 	assert.deepEqual(selections.selections.primary, caret(0, 5));
 
 	selections.setSelections(TextSelectionSet.single(caret(0, 1)));
-	viewport.element.dispatchEvent(keyboardEvent(dom.window, "PageDown"));
+	emitKeyDown(userInputEvents, keyboardEvent(dom.window, "PageDown"));
 	assert.deepEqual(selections.selections.primary, caret(0, 5));
 	selections.setSelections(TextSelectionSet.single(caret(0, 1)));
-	viewport.element.dispatchEvent(keyboardEvent(
+	emitKeyDown(userInputEvents, keyboardEvent(
 		dom.window,
 		"ArrowDown",
 		{ shiftKey: true },
@@ -289,13 +302,14 @@ test("Keyboard controller rejects cross-model wiring and invalid OS options", ()
 	});
 
 	assert.throws(
-		() => new KeyboardNavigationController(viewport, selections),
+		() => new KeyboardNavigationController(viewport, selections, new ViewUserInputEvents()),
 		/must share one text model/,
 	);
 	assert.throws(
 		() => new KeyboardNavigationController(
 			viewport,
 			ownSelections,
+			new ViewUserInputEvents(),
 			{ operatingSystem: "plan9" as OperatingSystem },
 		),
 		/Unknown Stanza keyboard operating system/,
@@ -311,6 +325,10 @@ interface KeyOptions {
 	readonly metaKey?: boolean;
 	readonly altGraphKey?: boolean;
 	readonly isComposing?: boolean;
+}
+
+function emitKeyDown(userInputEvents: ViewUserInputEvents, event: KeyboardEvent): void {
+	userInputEvents.emitKeyDown(new StandardKeyboardEvent(event));
 }
 
 function key(keyValue: string, options: KeyOptions = {}) {

@@ -51,6 +51,13 @@
   min-width: 100%;
 }
 
+.stanza-editor-content-widgets,
+.stanza-editor-overlay-widgets {
+	position: absolute;
+	top: 0;
+	left: 0;
+}
+
 .stanza-editor-view-zone {
     position: absolute;
     box-sizing: border-box;

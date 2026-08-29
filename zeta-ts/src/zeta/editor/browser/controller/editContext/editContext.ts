@@ -1,4 +1,5 @@
 import { stopEvent } from "../../../../base/browser/dom.js";
+import { StandardKeyboardEvent } from "../../../../base/browser/keyboardEvent.js";
 import { Emitter, Event, type Event as EditorEvent } from "../../../../base/common/event.js";
 import { IME } from "../../../../base/common/ime.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
@@ -235,7 +236,7 @@ export abstract class EditContext extends Disposable {
 
 	private routeKeydown(event: KeyboardEvent, viewController: ViewController): void {
 		if (event.defaultPrevented) return;
-		viewController.emitKeyDown(event);
+		viewController.emitKeyDown(new StandardKeyboardEvent(event));
 		this.willKeydownEmitter.fire(event);
 		if (event.defaultPrevented) return;
 		if (!event.isComposing && !event.getModifierState("AltGraph")) {

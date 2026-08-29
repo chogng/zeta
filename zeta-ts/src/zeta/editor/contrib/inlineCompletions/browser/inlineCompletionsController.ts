@@ -5,7 +5,8 @@ import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { TextRange } from "../../../common/core/text.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
-import { InlineCompletionsService, type LanguageInlineCompletionItem } from "../common/inlineCompletions.js";
+import { InlineCompletionsService } from "../../../browser/services/inlineCompletionsService.js";
+import { type LanguageInlineCompletionItem } from "../common/inlineCompletions.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { isCompletionsEnabled } from "../../../common/services/completionsEnablement.js";
 

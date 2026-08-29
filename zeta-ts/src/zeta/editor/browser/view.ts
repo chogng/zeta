@@ -37,6 +37,8 @@ import { LineNumbersOverlay } from './viewparts/lineNumbers/lineNumbers.js';
 import { Minimap } from './viewparts/minimap/minimap.js';
 import { DecorationsOverviewRuler } from './viewparts/overviewRuler/decorationsOverviewRuler.js';
 import { ScrollDecorationViewPart } from './viewparts/scrollDecoration/scrollDecoration.js';
+import { ViewContentWidgets, type IContentWidget } from './viewparts/contentWidgets/contentWidgets.js';
+import { ViewOverlayWidgets, type IOverlayWidget } from './viewparts/overlayWidgets/overlayWidgets.js';
 import { EditorViewContext, EditorViewPartCollection } from './view/viewPart.js';
 import { ViewOverlays } from './view/viewOverlays.js';
 import { LineWidthIndex, ViewLines } from './viewparts/viewLines/viewLines.js';
@@ -374,6 +376,7 @@ export interface EditorViewportOptions {
 	/** Browser text-direction input; automatic direction is the default. */
 	readonly textDirection?: EditorTextDirection;
 	readonly experimentalGpuAcceleration?: IEditorOptions['experimentalGpuAcceleration'];
+	readonly renderWhitespace?: IEditorOptions['renderWhitespace'];
 }
 
 export interface EditorContentPosition {
@@ -406,6 +409,8 @@ export class View extends Disposable {
 	private readonly viewLines: ViewLines;
 	private readonly viewLinesGpu: ViewLinesGpu | undefined;
 	private readonly viewZones: ViewZones;
+	private readonly contentWidgets: ViewContentWidgets;
+	private readonly overlayWidgets: ViewOverlayWidgets;
 	private readonly margin: Margin;
 	private readonly viewOverlays: ViewOverlays;
 	private readonly textMeasurer: TextMeasurer;
@@ -561,6 +566,8 @@ export class View extends Disposable {
 		);
 		this.viewParts = this._register(new EditorViewPartCollection());
 		this.viewZones = this.viewParts.register(new ViewZones(this.element, this.viewport, () => this.visualProjection.visualLineCount));
+		this.contentWidgets = this.viewParts.register(new ViewContentWidgets(ownerDocument));
+		this.overlayWidgets = this.viewParts.register(new ViewOverlayWidgets(ownerDocument));
 		this.viewLines = this._register(new ViewLines({
 			host: this.contentElement,
 			model: this.model,
@@ -592,6 +599,7 @@ export class View extends Disposable {
 			decorationSources,
 			showIndentationGuides: this.showIndentationGuides,
 			indentationTabSize: this.indentation.tabSize,
+			renderWhitespace: options.renderWhitespace ?? 'none',
 		}));
 		this.margin = this.viewParts.register(new Margin({
 			host: this.element,
@@ -660,6 +668,7 @@ export class View extends Disposable {
 		this.contentElement.append(
 			this.viewLines.domNode,
 			...this.viewOverlays.domNodes,
+			this.contentWidgets.domNode,
 			lineNumbersOverlay.domNode,
 			this.margin.domNode,
 			glyphMarginWidgets.domNode,
@@ -667,6 +676,7 @@ export class View extends Disposable {
 			rulers.domNode,
 		);
 		this.element.append(
+			this.overlayWidgets.domNode,
 			minimapPart.domNode,
 			decorationsOverviewRuler.domNode,
 			scrollDecoration.domNode,
@@ -824,6 +834,24 @@ export class View extends Disposable {
 	/** Mounts one caller-owned view zone and returns its layout lifetime. */
 	addViewZone(zone: EditorViewZone): EditorViewZoneHandle {
 		return this.viewZones.addZone(zone);
+	}
+
+	addContentWidget(widget: IContentWidget): void {
+		this.contentWidgets.addWidget(widget);
+		this.project(this.viewport.layout);
+	}
+
+	removeContentWidget(widget: IContentWidget): void {
+		this.contentWidgets.removeWidget(widget);
+	}
+
+	addOverlayWidget(widget: IOverlayWidget): void {
+		this.overlayWidgets.addWidget(widget);
+		this.project(this.viewport.layout);
+	}
+
+	removeOverlayWidget(widget: IOverlayWidget): void {
+		this.overlayWidgets.removeWidget(widget);
 	}
 
 	scrollTo(position: EditorScrollPosition): EditorViewportLayout {

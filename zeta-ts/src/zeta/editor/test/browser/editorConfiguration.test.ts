@@ -3,6 +3,8 @@ import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { applyEditorFontInfo } from '../../browser/config/domFontInfo.js';
 import { resolveEditorConfiguration } from '../../browser/config/editorConfiguration.js';
+import { migrateOptions } from '../../browser/config/migrateOptions.js';
+import { EditorLineWrapping } from '../../common/config/editorOptions.js';
 import { EDITOR_FONT_DEFAULTS } from '../../common/config/fontInfo.js';
 
 test('browser editor configuration resolves geometry defaults at the composition boundary', () => {
@@ -32,4 +34,37 @@ test('DOM font info applies the shared editor font vocabulary', () => {
 	assert.equal(element.style.fontSize, '15px');
 	assert.equal(element.style.fontVariantLigatures, 'normal');
 	dom.window.close();
+});
+
+test('browser editor option migration converts only supported legacy shapes without mutating the caller', () => {
+	const legacy = {
+		wordWrap: true,
+		lineNumbers: 'off',
+		renderLineHighlight: 'gutter',
+		renderIndentGuides: false,
+		renderWhitespace: true,
+		matchBrackets: false,
+		occurrencesHighlight: true,
+		defaultColorDecorators: false,
+	};
+
+	assert.deepEqual(migrateOptions(legacy), {
+		lineWrapping: EditorLineWrapping.On,
+		showLineNumbers: false,
+		activeLineHighlight: 'on',
+		showIndentationGuides: false,
+		renderWhitespace: 'boundary',
+		matchBrackets: 'never',
+		occurrencesHighlight: 'singleFile',
+		defaultColorDecorators: 'never',
+	});
+	assert.equal(legacy.wordWrap, true);
+});
+
+test('browser editor option migration preserves current values and rejects invalid legacy values', () => {
+	assert.deepEqual(migrateOptions({ wordWrap: false, lineWrapping: EditorLineWrapping.On }), {
+		lineWrapping: EditorLineWrapping.On,
+	});
+	assert.throws(() => migrateOptions({ lineNumbers: 'relative' }), /boolean, on, or off/);
+	assert.throws(() => migrateOptions({ renderLineHighlight: 'blink' }), /highlight option is invalid/);
 });

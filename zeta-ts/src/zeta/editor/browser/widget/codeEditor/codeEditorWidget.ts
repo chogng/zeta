@@ -95,7 +95,7 @@ export class CodeEditorWidget extends Disposable {
 				view: this.view,
 				placeholder: options.placeholder,
 			}, instantiationService, options.contributions, options.onContributionError);
-			this._register(new KeyboardNavigationController(this.viewport, options.selectionController, options.keyboardNavigation));
+			this._register(new KeyboardNavigationController(this.viewport, options.selectionController, this.userInputEvents, options.keyboardNavigation));
 			this._register(new MouseHandler(this.viewport, options.selectionController, options.mouseHandler));
 		} catch (error) {
 			this.dispose();

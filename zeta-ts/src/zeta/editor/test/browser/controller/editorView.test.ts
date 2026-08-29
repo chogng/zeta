@@ -65,12 +65,13 @@ test("Textarea routes navigation, typing, history, deletion, and Tab", () => {
 		selectionController: selections,
 	});
 	viewport.layout({ width: 100, height: 40 });
+	const input = new EditorView(viewport, selections);
 	using keyboard = new KeyboardNavigationController(
 		viewport,
 		selections,
+		input.userInputEvents,
 		{ operatingSystem: OperatingSystem.Windows },
 	);
-	const input = new EditorView(viewport, selections);
 
 	viewport.element.focus();
 	assert.equal(dom.window.document.activeElement, input.textArea!);

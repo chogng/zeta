@@ -12,6 +12,7 @@ import { LinesDecorationsOverlay } from '../viewparts/linesDecorations/linesDeco
 import { MarginViewLineDecorationsOverlay } from '../viewparts/marginDecorations/marginDecorations.js';
 import { SelectionsOverlay } from '../viewparts/selections/selections.js';
 import { ViewCursors } from '../viewparts/viewCursors/viewCursors.js';
+import { WhitespaceOverlay, type WhitespaceRenderingMode } from '../viewparts/whitespace/whitespace.js';
 import { DynamicViewOverlay } from './dynamicViewOverlay.js';
 import { type EditorRenderingContext, EditorViewContext } from './viewPart.js';
 
@@ -22,6 +23,7 @@ export interface ViewOverlaysOptions {
 	readonly decorationSources: readonly DecorationSource[];
 	readonly showIndentationGuides: boolean;
 	readonly indentationTabSize: number;
+	readonly renderWhitespace: WhitespaceRenderingMode;
 }
 
 /** Coordinates row and block overlays while keeping their concrete projections independent. */
@@ -57,11 +59,13 @@ export class ViewOverlays extends Disposable {
 			showIndentationGuides: options.showIndentationGuides,
 			tabSize: options.indentationTabSize,
 		}));
+		const whitespace = this.register(new WhitespaceOverlay(context, options.contentElement, options.model, options.renderWhitespace));
 		this.currentLineHighlight = this.register(new CurrentLineHighlightOverlay(context, options.contentElement, options.selectionController));
 		this.selections = this.register(new SelectionsOverlay(context, options.contentElement, options.selectionController));
 		this.viewCursors = this.register(new ViewCursors(context, options.contentElement, options.model, options.selectionController));
 		this.domNodes = Object.freeze([
 			indentGuides.domNode,
+			whitespace.domNode,
 			this.decorations.domNode,
 			this.currentLineHighlight.domNode,
 			this.selections.domNode,
