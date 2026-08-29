@@ -16,19 +16,16 @@ import { type EditorScrollPosition } from '../common/viewModel.js';
 import { ComputeOptionsMemory, EditorLayoutInfoComputer, EditorLineWrapping, EditorOptions, type EditorMinimapLayoutInfo, type EditorMinimapOptions, type IEditorMinimapOptions, type IEditorOptions, isWrappingIndent, WrappingIndent } from '../common/config/editorOptions.js';
 import { type EditorLineVisibilitySource, ViewModelLines } from '../common/viewModel/viewModelLines.js';
 import { type EditorViewportChange, type EditorViewportLayout, ViewLayout } from '../common/viewLayout/viewLayout.js';
-import { CompositionController } from './controller/compositionController.js';
-import { createEditContext } from './controller/editContext/factory.js';
-import { type EditContext, type EditContextCharacterBounds } from './controller/editContext/editContext.js';
+import { CompositionController, type EditContext, type EditContextCharacterBounds, type EditContextOptions } from './controller/editContext/editContext.js';
+import { createNativeEditContext, supportsNativeEditContext } from './controller/editContext/native/editContextFactory.js';
 import { NativeEditContext } from './controller/editContext/native/nativeEditContext.js';
 import { ScreenReaderSupport } from './controller/editContext/native/screenReaderSupport.js';
-import { TextAreaAccessibilityController } from './controller/editContext/textArea/textAreaAccessibilityController.js';
-import { TextAreaEditContext } from './controller/editContext/textArea/textAreaEditContext.js';
+import { TextAreaAccessibilityController, TextAreaEditContext } from './controller/editContext/textArea/textAreaEditContext.js';
 import { ViewController, type EditorCommandContext, type EditorCommandTransformer, type EditorLanguageEditingAdapter, type EditorViewDidEditEvent, type EditorViewTextUpdateEvent } from './view/viewController.js';
 import { type ClientPoint, type EditorHitTarget, EditorHitTargetKind, hitTestStanzaVisualEditorPoint } from '../common/viewModel/pointerHitTest.js';
 import { applyEditorFontInfo } from './config/domFontInfo.js';
 import { ElementSizeObserver } from './config/elementSizeObserver.js';
 import { DomTextMeasurer, type TextMeasurer } from './config/fontMeasurements.js';
-import { LineWidthIndex } from './measurement/lineWidthIndex.js';
 import { type DecorationSource } from './viewparts/decorations/decorations.js';
 import { type BracketColorizationSource, type SemanticTokenSource } from './viewparts/viewLines/viewLine.js';
 import { getTextGraphemeBoundaries } from '../common/core/textSegmentation.js';
@@ -42,7 +39,7 @@ import { DecorationsOverviewRuler } from './viewparts/overviewRuler/decorationsO
 import { ScrollDecorationViewPart } from './viewparts/scrollDecoration/scrollDecoration.js';
 import { EditorViewContext, EditorViewPartCollection } from './view/viewPart.js';
 import { ViewOverlays } from './view/viewOverlays.js';
-import { ViewLines } from './viewparts/viewLines/viewLines.js';
+import { LineWidthIndex, ViewLines } from './viewparts/viewLines/viewLines.js';
 import { ViewLineOptions, ViewLineTextDirection as EditorTextDirection } from './viewparts/viewLines/viewLineOptions.js';
 import { ViewLinesGpu } from './viewparts/viewLinesGpu/viewLinesGpu.js';
 import { ViewZones, type EditorViewZone, type EditorViewZoneHandle } from './viewparts/viewZones/viewZones.js';
@@ -50,7 +47,7 @@ import { linesDecorationsWidth } from './viewparts/linesDecorations/linesDecorat
 import { createEditorRenderingContext, createEditorViewportData, type ActiveLineHighlight, type EditorOverlayContext, type EditorRenderingContext } from './view/renderingContext.js';
 import { ViewUserInputEvents } from './view/viewUserInputEvents.js';
 import { DOMLineBreaksComputer } from './view/domLineBreaksComputer.js';
-import './media/editorViewport.css';
+import './widget/codeEditor/editor.css';
 
 const DEFAULT_EDITOR_SCROLLBAR = EditorOptions.scrollbar.defaultValue;
 
@@ -1165,3 +1162,18 @@ function nonNegativePaddingValue(value: number, side: keyof EditorViewportPaddin
 
 
 export { View as EditorViewport };
+
+/** Creates the best browser editing surface available for one editor. */
+function createEditContext(
+	container: HTMLElement,
+	options: EditContextOptions = {},
+): EditContext {
+	if (supportsNativeEditContext(container)) {
+		try {
+			return createNativeEditContext(container, options);
+		} catch {
+			// A partially implemented browser API is treated like an unsupported one.
+		}
+	}
+	return new TextAreaEditContext(container, options);
+}

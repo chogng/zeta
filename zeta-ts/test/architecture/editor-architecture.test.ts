@@ -29,7 +29,7 @@ test("Bracket structure, cursor editing, and browser presentation keep separate 
 		"common/cursor/languageAutoClosingTracker.ts",
 		"common/cursor/languagePairEditing.ts",
 		"common/cursor/languageEnter.ts",
-		"browser/controller/languageEditingAdapter.ts",
+		"browser/view/viewController.ts",
 	]) assert.equal(existsSync(join(editorRoot, file)), true, file);
 	for (const file of [
 		"contrib/bracketMatching/common/bracketMatching.ts",
@@ -42,7 +42,7 @@ test("Bracket structure, cursor editing, and browser presentation keep separate 
 	const contribution = readFileSync(join(editorRoot, "contrib/bracketMatching/browser/bracketMatching.contribution.ts"), "utf8");
 	assert.match(contribution, /LanguageBracketPairs/u);
 	assert.doesNotMatch(contribution, /LanguageLexicalContextIndex|TokenAwareLanguageLexicalContext|LanguageEditingAdapter|LanguageAutoClosingTracker/u);
-	const adapter = readFileSync(join(editorRoot, "browser/controller/languageEditingAdapter.ts"), "utf8");
+	const adapter = readFileSync(join(editorRoot, "browser/view/viewController.ts"), "utf8");
 	assert.match(adapter, /common\/cursor\/language(?:AutoClosingTracker|Enter|PairEditing)/u);
 	assert.doesNotMatch(adapter, /\/contrib\//u);
 });
@@ -83,6 +83,7 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/coreCommands.ts",
 		"browser/widget/codeEditor/codeEditorContributions.ts",
 		"browser/widget/codeEditor/codeEditorWidget.ts",
+		"browser/widget/codeEditor/editor.css",
 		"browser/widget/richTextEditor/richTextEditorWidget.ts",
 		"browser/widget/richTextEditor/richTextEditorWidget.css",
 		"browser/view/viewOverlays.ts",
@@ -91,18 +92,16 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/view/domLineBreaksComputer.ts",
 		"browser/view/dynamicViewOverlay.ts",
 		"browser/view/viewUserInputEvents.ts",
-		"browser/controller/compositionController.ts",
 		"browser/view.ts",
 		"browser/view/viewController.ts",
 		"browser/controller/editContext/clipboardUtils.ts",
 		"browser/controller/editContext/editContext.ts",
-		"browser/controller/editContext/factory.ts",
 		"browser/controller/editContext/screenReaderUtils.ts",
 		"browser/controller/editContext/textArea/textAreaEditContext.ts",
+		"browser/controller/editContext/textArea/textAreaEditContext.css",
 		"browser/controller/editContext/textArea/textAreaEditContextInput.ts",
 		"browser/controller/editContext/textArea/textAreaEditContextRegistry.ts",
 		"browser/controller/editContext/textArea/textAreaEditContextState.ts",
-		"browser/controller/editContext/textArea/textAreaAccessibilityController.ts",
 		"browser/controller/editContext/native/nativeEditContext.ts",
 		"browser/controller/editContext/native/nativeEditContextUtils.ts",
 		"browser/controller/editContext/native/nativeEditContextRegistry.ts",
@@ -135,7 +134,6 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"common/services/languageService.ts",
 		"contrib/gotoError/browser/gotoError.ts",
 		"browser/view/viewPart.ts",
-		"browser/view/viewPartRows.ts",
 		"browser/viewparts/viewLines/viewLines.ts",
 		"browser/viewparts/viewLines/viewLine.ts",
 		"browser/viewparts/viewLinesGpu/viewLinesGpu.ts",
@@ -173,7 +171,6 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/config/domFontInfo.ts",
 		"browser/config/elementSizeObserver.ts",
 		"browser/config/tabFocus.ts",
-		"browser/measurement/lineWidthIndex.ts",
 		"common/viewModel/textMeasurer.ts",
 		"common/viewModel/viewModelLines.ts",
 		"common/viewModel/rangeGeometry.ts",
@@ -249,6 +246,14 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/controller/editContext/editContextCompletionController.ts",
 		"browser/controller/editContext/editContextContracts.ts",
 		"browser/controller/editContext/editContextFactory.ts",
+		"browser/controller/editContext/factory.ts",
+		"browser/controller/compositionController.ts",
+		"browser/controller/keyboardNavigationController.ts",
+		"browser/controller/languageEditingAdapter.ts",
+		"browser/controller/editContext/textArea/textAreaAccessibilityController.ts",
+		"browser/measurement/lineWidthIndex.ts",
+		"browser/media/editorViewport.css",
+		"browser/view/viewPartRows.ts",
 		"browser/view/viewInputController.ts",
 		"browser/controller/editContext/compositionController.ts",
 		"browser/controller/textAreaInput.ts",

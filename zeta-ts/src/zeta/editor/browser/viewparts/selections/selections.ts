@@ -5,7 +5,7 @@ import { createStanzaVisualSelectionGeometry } from '../../../common/viewModel/v
 import { type EditorLineVisibleRange, type EditorOverlayContext } from '../../view/renderingContext.js';
 import { DynamicViewOverlay } from "../../view/dynamicViewOverlay.js";
 import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
-import { ViewPartRows } from '../../view/viewPartRows.js';
+import { ViewPartRows } from '../../view/viewLayer.js';
 
 /** Projects selection ranges and current-line state without owning selection state. */
 export class SelectionsOverlay extends DynamicViewOverlay {

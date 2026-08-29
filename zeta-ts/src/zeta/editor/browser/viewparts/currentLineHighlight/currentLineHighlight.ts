@@ -2,7 +2,7 @@ import './currentLineHighlight.css';
 import { type EditorSelectionController } from '../../../common/cursor/editorSelectionController.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
 import { type EditorRenderingContext, EditorViewContext } from '../../view/viewPart.js';
-import { ViewPartRows } from '../../view/viewPartRows.js';
+import { ViewPartRows } from '../../view/viewLayer.js';
 
 /** Projects the active logical line independently from selection ranges. */
 export class CurrentLineHighlightOverlay extends DynamicViewOverlay {

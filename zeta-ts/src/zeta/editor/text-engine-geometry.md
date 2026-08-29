@@ -128,7 +128,7 @@ The following facts describe the current Zeta implementation; they do not redefi
 | DOM font application | Current | `browser/config/domFontInfo.ts` applies the shared editor font vocabulary to viewport and diff surfaces; zoom remains feature-owned and invalidates measurements explicitly |
 | Tab-focus state | Current | `browser/config/tabFocus.ts` owns host-injectable state and change events; the `toggleTabFocusMode` contribution owns keybindings, DOM state, and announcements |
 | Browser font measurement | Current | `browser/config/fontMeasurements.ts` owns `DomTextMeasurer` and the font-environment snapshot; `browser/config/charWidthReader.ts` owns the Canvas width reader |
-| Lazy line-width aggregation | Current | `browser/measurement/lineWidthIndex.ts` performs bounded initial work, cancellable slices, incremental edits, and lower-bound maximum tracking |
+| Lazy line-width aggregation | Current | `browser/viewparts/viewLines/viewLines.ts` performs bounded initial work, cancellable slices, incremental edits, and lower-bound maximum tracking |
 | Virtualized visible rows | Current | `browser/viewparts/viewLines/viewLines.ts` owns rendered row DOM and semantic text projection; text-bearing roots use ordinary layout positioning instead of permanent transform promotion |
 | Browser-shaped visible geometry | Current, partial | `viewLine.ts` owns per-line reads, `CharacterMapping` maps UTF-16 columns to child spans, `rangeUtil.ts` reads and normalizes browser ranges, and `domReadingContext.ts` caches the layout basis |
 | Unified renderer-aware geometry contract | Proposed | Caret, selection, composition, pointer, decoration, and input consumers should use one explicit provider with exact/fallback state |

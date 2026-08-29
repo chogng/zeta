@@ -104,30 +104,6 @@
 
 }
 
-.stanza-editor-input {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 5;
-  box-sizing: border-box;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  overflow: hidden;
-  color: transparent;
-  caret-color: transparent;
-  resize: none;
-  pointer-events: none;
-  opacity: 0;
-  background: transparent;
-  border: 0;
-  outline: none;
-}
-
-.stanza-editor-input.ime-input {
-  width: 2px;
-}
-
 .stanza-editor-text-metrics {
   position: absolute;
   top: 0;

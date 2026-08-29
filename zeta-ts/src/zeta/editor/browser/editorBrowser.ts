@@ -34,7 +34,7 @@ import { type BracketColorizationSource, type SemanticTokenSource } from "./view
 import { SemanticTokensStylingService } from '../common/services/semanticTokensStylingService.js';
 import { type EditorLineVisibilitySource } from "../common/viewModel/viewModelLines.js";
 import { type LanguageLexicalContextSource } from "../common/languages/languageLexicalContext.js";
-import { LanguageEditingAdapter } from "./controller/languageEditingAdapter.js";
+import { LanguageEditingAdapter } from "./view/viewController.js";
 
 export interface EditorContextMenuRequest {
 	readonly position: TextPosition;

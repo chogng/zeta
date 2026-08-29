@@ -8,7 +8,7 @@ import { type TextModel } from "../../../common/model/textModel.js";
 import { type EditorScrollPosition } from "../../../common/viewModel.js";
 import { EditorView, type EditorViewOptions, type EditorViewViewportOptions } from "../../view.js";
 import { type EditorViewport } from "../../view.js";
-import { KeyboardNavigationController, type KeyboardNavigationControllerOptions } from "../../controller/keyboardNavigationController.js";
+import { KeyboardNavigationController, type KeyboardNavigationControllerOptions } from "../../view/viewController.js";
 import { MouseHandler, type MouseHandlerOptions } from "../../controller/mouseHandler.js";
 import { ServiceContainer, type IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import { CodeEditorContributions, type CodeEditorContribution, type CodeEditorContributionDescription } from "./codeEditorContributions.js";

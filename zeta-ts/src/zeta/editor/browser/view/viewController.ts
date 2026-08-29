@@ -1,14 +1,27 @@
+import { addDisposableListener } from '../../../base/browser/dom.js';
+import { StandardKeyboardEvent } from '../../../base/browser/keyboardEvent.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { operatingSystem, OperatingSystem } from '../../../base/common/platform.js';
 import { type EditorEditCommand } from '../../common/commands/editorEditCommand.js';
+import { EditorLineWrapping } from '../../common/config/editorOptions.js';
+import { EditorCursorNavigationCommand, EditorCursorNavigationMode, navigateEditorCursors } from '../../common/cursor/cursorNavigation.js';
 import { createBackspaceCommand, createDeleteForwardCommand, createDeleteToLineEndCommand, createDeleteToLineStartCommand } from '../../common/cursor/cursorDeleteOperations.js';
+import { LanguageAutoClosingTracker } from '../../common/cursor/languageAutoClosingTracker.js';
+import { createLanguageEnterCommand } from '../../common/cursor/languageEnter.js';
+import { createLanguagePairBackspaceCommand, createLanguagePairTypeCommand } from '../../common/cursor/languagePairEditing.js';
 import { createDeleteWordBackwardCommand, createDeleteWordForwardCommand } from '../../common/cursor/cursorWordOperations.js';
 import { type EditorSelectionController } from '../../common/cursor/editorSelectionController.js';
 import { createOvertypeTextCommand } from '../../common/cursor/cursorOvertype.js';
 import { createTypeTextCommand } from '../../common/cursor/cursorTypeOperations.js';
 import { TextSelection, TextSelectionSet } from '../../common/core/selection.js';
 import { type TextModelChange } from '../../common/core/text.js';
+import { resolveEditorIndentationOptions, type EditorIndentationOptions } from '../../common/core/misc/indentation.js';
+import { type LanguageConfigurationSource } from '../../common/languages/languageConfiguration.js';
+import { type LanguageLexicalContextSource, LanguageLexicalContextIndex } from '../../common/languages/languageLexicalContext.js';
+import { assertLanguageId } from '../../common/languages/languageId.js';
 import { type TextModel } from '../../common/model/textModel.js';
+import { navigateStanzaVisualCursors } from '../../common/viewModel/visualCursorNavigation.js';
 import { type EditorViewport } from '../view.js';
 import { type EditContextTextUpdate } from '../controller/editContext/editContext.js';
 import { ViewUserInputEvents, type EditorViewMouseEvent, type EditorViewPartialMouseEvent } from './viewUserInputEvents.js';
@@ -276,4 +289,269 @@ export class ViewController extends Disposable {
 	emitMouseWheel(event: WheelEvent): void {
 		this.userInputEvents.emitMouseWheel(event);
 	}
+}
+
+/** Browser input adapter for DOM-free language editing commands. */
+export class LanguageEditingAdapter extends Disposable implements EditorLanguageEditingAdapter {
+	private readonly autoClosingTracker: LanguageAutoClosingTracker;
+	private readonly lexicalContext: LanguageLexicalContextSource;
+
+	constructor(readonly textModel: TextModel, private readonly selections: EditorSelectionController, private readonly languageId: string, private readonly configurations: LanguageConfigurationSource, lexicalContext: LanguageLexicalContextSource | undefined = undefined, private readonly indentation: EditorIndentationOptions | undefined = undefined) {
+		super();
+		assertLanguageId(languageId);
+		if (!configurations || typeof configurations.getLanguageConfiguration !== "function") throw new TypeError("Stanza text input language requires a configuration source");
+		resolveEditorIndentationOptions(indentation);
+		if (lexicalContext && (lexicalContext.textModel !== textModel || lexicalContext.languageId !== languageId)) throw new TypeError("Stanza text input lexical context must match its model and language");
+		this.lexicalContext = lexicalContext ?? this._register(new LanguageLexicalContextIndex(textModel, languageId, configurations));
+		this.autoClosingTracker = this._register(new LanguageAutoClosingTracker(textModel, selections));
+	}
+
+	createTypeCommand(selections: TextSelectionSet, text: string): EditorLanguageTypeCommand | undefined {
+		const result = createLanguagePairTypeCommand(this.textModel, selections, text, this.configurationAt(selections.primary.active), { autoClosingTrust: this.autoClosingTracker, lexicalContext: this.lexicalContext });
+		if (!result) return undefined;
+		return Object.freeze({
+			command: result.command,
+			insertedText: result.didInsertText,
+			afterExecute: (change: TextModelChange) => {
+				if (result.autoClosingActions.length > 0) this.autoClosingTracker.record(result.autoClosingActions, change.version);
+			},
+		});
+	}
+
+	createEnterCommand(selections: TextSelectionSet): EditorEditCommand {
+		return createLanguageEnterCommand(this.textModel, selections, this.configurationAt(selections.primary.active), { indentation: this.indentation, lexicalContext: this.lexicalContext });
+	}
+
+	createBackspaceCommand(selections: TextSelectionSet): EditorEditCommand | undefined {
+		return createLanguagePairBackspaceCommand(this.textModel, selections, this.configurationAt(selections.primary.active), this.autoClosingTracker);
+	}
+
+	private configurationAt(position: TextSelectionSet["primary"]["active"]) {
+		return this.configurations.getLanguageConfiguration(this.lexicalContext.getLanguageIdAt(position));
+	}
+}
+
+export interface KeyboardNavigationControllerOptions {
+	readonly operatingSystem?: OperatingSystem;
+	/** Resolves the active language word matcher for word navigation. */
+	readonly wordPattern?: () => RegExp | undefined;
+}
+
+export interface KeyboardNavigationCommand {
+	readonly command: EditorCursorNavigationCommand;
+	readonly mode: EditorCursorNavigationMode;
+}
+
+/**
+ * Routes browser keydown navigation into Stanza common selection commands.
+ */
+export class KeyboardNavigationController extends Disposable {
+	private readonly targetOperatingSystem: OperatingSystem;
+	private readonly wordPattern: (() => RegExp | undefined) | undefined;
+	private preferredColumns: readonly number[] | undefined;
+	private preferredVisualHorizontalOffsets: readonly number[] | undefined;
+	private applyingNavigation = false;
+
+	constructor(
+		private readonly viewport: EditorViewport,
+		private readonly selectionController: EditorSelectionController,
+		options: KeyboardNavigationControllerOptions = {},
+	) {
+		super();
+		try {
+			this.targetOperatingSystem = readOperatingSystem(
+				options.operatingSystem,
+			);
+			if (options.wordPattern !== undefined && typeof options.wordPattern !== "function") {
+				throw new TypeError("Stanza keyboard word pattern resolver must be a function");
+			}
+			this.wordPattern = options.wordPattern;
+		} catch (error) {
+			this.dispose();
+			throw error;
+		}
+		if (viewport.textModel !== selectionController.textModel) {
+			this.dispose();
+			throw new TypeError(
+				"Stanza keyboard and selection controllers must share one text model",
+			);
+		}
+		this._register(addDisposableListener(
+			viewport.element,
+			"keydown",
+			event => this.handleKeydown(event),
+		));
+		this._register(selectionController.onDidChange(() => {
+			if (!this.applyingNavigation) {
+				this.preferredColumns = undefined;
+				this.preferredVisualHorizontalOffsets = undefined;
+			}
+		}));
+	}
+
+	private handleKeydown(browserEvent: KeyboardEvent): void {
+		if (browserEvent.defaultPrevented) return;
+		const event = new StandardKeyboardEvent(browserEvent);
+		const navigation = resolveStanzaKeyboardNavigation(
+			event,
+			this.targetOperatingSystem,
+		);
+		if (!navigation) return;
+		event.stop();
+		const layout = this.viewport.viewportLayout;
+		const pageLineCount = Math.max(
+			1,
+			Math.floor(layout.viewportSize.height / layout.lineHeight),
+		);
+		const visualCommand = isVisualVerticalCommand(navigation.command)
+			? navigation.command
+			: undefined;
+		const result = this.viewport.lineWrapping === EditorLineWrapping.On &&
+			visualCommand !== undefined
+			? navigateStanzaVisualCursors(
+				this.viewport.textModel,
+				this.viewport.getVisualLineProjection(),
+				this.selectionController.selections,
+				{
+					command: visualCommand,
+					mode: navigation.mode,
+					pageLineCount,
+					preferredHorizontalOffsets: this.preferredVisualHorizontalOffsets,
+				},
+				text => this.viewport.measureTextWidth(text),
+				{
+					getHorizontalOffset: position => this.viewport.getVisualHorizontalOffset(position),
+					getNearestPosition: (visualLineIndex, horizontalOffset) => this.viewport.getNearestPositionAtVisualHorizontalOffset(visualLineIndex, horizontalOffset),
+				},
+			)
+			: navigateEditorCursors(
+				this.viewport.textModel,
+				this.selectionController.selections,
+				{
+					...navigation,
+					pageLineCount,
+					...(this.wordPattern ? { wordPattern: this.wordPattern() } : {}),
+					preferredColumns: this.preferredColumns,
+				},
+			);
+		this.applyingNavigation = true;
+		try {
+			this.selectionController.setSelections(result.selections);
+		} finally {
+			this.applyingNavigation = false;
+		}
+		if ("preferredHorizontalOffsets" in result) {
+			this.preferredColumns = undefined;
+			this.preferredVisualHorizontalOffsets = result.preferredHorizontalOffsets;
+		} else {
+			this.preferredColumns = result.preferredColumns;
+			this.preferredVisualHorizontalOffsets = undefined;
+		}
+		this.viewport.revealPosition(result.selections.primary.active);
+	}
+}
+
+function isVisualVerticalCommand(command: EditorCursorNavigationCommand): command is EditorCursorNavigationCommand.LineUp | EditorCursorNavigationCommand.LineDown | EditorCursorNavigationCommand.PageUp | EditorCursorNavigationCommand.PageDown {
+	return command === EditorCursorNavigationCommand.LineUp ||
+		command === EditorCursorNavigationCommand.LineDown ||
+		command === EditorCursorNavigationCommand.PageUp ||
+		command === EditorCursorNavigationCommand.PageDown;
+}
+
+export function resolveStanzaKeyboardNavigation(event: Pick<StandardKeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey" | "altGraphKey" | "isComposing">, targetOperatingSystem: OperatingSystem): KeyboardNavigationCommand | undefined {
+	if (event.isComposing || event.altGraphKey) return undefined;
+	const mode = event.shiftKey
+		? EditorCursorNavigationMode.Extend
+		: EditorCursorNavigationMode.Move;
+	const noCommandModifier =
+		!event.ctrlKey && !event.altKey && !event.metaKey;
+	if (noCommandModifier) {
+		const command = unmodifiedCommand(event.key);
+		return command ? { command, mode } : undefined;
+	}
+
+	if (targetOperatingSystem === OperatingSystem.Macintosh) {
+		if (event.altKey && !event.ctrlKey && !event.metaKey) {
+			if (event.key === "ArrowLeft") {
+				return { command: EditorCursorNavigationCommand.WordLeft, mode };
+			}
+			if (event.key === "ArrowRight") {
+				return { command: EditorCursorNavigationCommand.WordRight, mode };
+			}
+		}
+		if (event.metaKey && !event.ctrlKey && !event.altKey) {
+			const command = macCommandCommand(event.key);
+			return command ? { command, mode } : undefined;
+		}
+		return undefined;
+	}
+
+	if (event.ctrlKey && !event.altKey && !event.metaKey) {
+		const command = controlCommand(event.key);
+		return command ? { command, mode } : undefined;
+	}
+	return undefined;
+}
+
+function unmodifiedCommand(key: string): EditorCursorNavigationCommand | undefined {
+	switch (key) {
+		case "ArrowLeft":
+			return EditorCursorNavigationCommand.CharacterLeft;
+		case "ArrowRight":
+			return EditorCursorNavigationCommand.CharacterRight;
+		case "ArrowUp":
+			return EditorCursorNavigationCommand.LineUp;
+		case "ArrowDown":
+			return EditorCursorNavigationCommand.LineDown;
+		case "Home":
+			return EditorCursorNavigationCommand.LineStart;
+		case "End":
+			return EditorCursorNavigationCommand.LineEnd;
+		case "PageUp":
+			return EditorCursorNavigationCommand.PageUp;
+		case "PageDown":
+			return EditorCursorNavigationCommand.PageDown;
+		default:
+			return undefined;
+	}
+}
+
+function controlCommand(key: string): EditorCursorNavigationCommand | undefined {
+	switch (key) {
+		case "ArrowLeft":
+			return EditorCursorNavigationCommand.WordLeft;
+		case "ArrowRight":
+			return EditorCursorNavigationCommand.WordRight;
+		case "Home":
+			return EditorCursorNavigationCommand.DocumentStart;
+		case "End":
+			return EditorCursorNavigationCommand.DocumentEnd;
+		default:
+			return undefined;
+	}
+}
+
+function macCommandCommand(key: string): EditorCursorNavigationCommand | undefined {
+	switch (key) {
+		case "ArrowLeft":
+			return EditorCursorNavigationCommand.LineStart;
+		case "ArrowRight":
+			return EditorCursorNavigationCommand.LineEnd;
+		case "ArrowUp":
+		case "Home":
+			return EditorCursorNavigationCommand.DocumentStart;
+		case "ArrowDown":
+		case "End":
+			return EditorCursorNavigationCommand.DocumentEnd;
+		default:
+			return undefined;
+	}
+}
+
+function readOperatingSystem(value: OperatingSystem | undefined): OperatingSystem {
+	const resolved = value ?? operatingSystem;
+	if (!Object.values(OperatingSystem).includes(resolved)) {
+		throw new TypeError("Unknown Stanza keyboard operating system");
+	}
+	return resolved;
 }

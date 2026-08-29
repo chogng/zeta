@@ -12,7 +12,7 @@ import { TextSelection, TextSelectionSet } from "../../../common/core/selection.
 import { TextPosition, TextRange } from "../../../common/core/text.js";
 import { extendEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { TextModel } from "../../../common/model/textModel.js";
-import { LanguageEditingAdapter } from "../../../browser/controller/languageEditingAdapter.js";
+import { LanguageEditingAdapter } from "../../../browser/view/viewController.js";
 
 class FixedTextMeasurer implements TextMeasurer {
 	readonly horizontalPadding = 24;
@@ -45,7 +45,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorTextDirection, EditorViewport } = await import("../../../browser/view.js");
-const { KeyboardNavigationController } = await import("../../../browser/controller/keyboardNavigationController.js");
+const { KeyboardNavigationController } = await import("../../../browser/view/viewController.js");
 const { EditorView } = await import("../../../browser/view.js");
 
 test("Textarea routes navigation, typing, history, deletion, and Tab", () => {

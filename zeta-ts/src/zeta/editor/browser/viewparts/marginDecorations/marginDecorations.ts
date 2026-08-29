@@ -4,7 +4,7 @@ import { type ResolvedDecoration, DecorationPresentation } from '../decorations/
 import { type EditorOverlayContext } from '../../view/renderingContext.js';
 import { DynamicViewOverlay } from "../../view/dynamicViewOverlay.js";
 import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
-import { ViewPartRows } from '../../view/viewPartRows.js';
+import { ViewPartRows } from '../../view/viewLayer.js';
 
 /** Projects line-level diagnostics into the editor margin. */
 export class MarginViewLineDecorationsOverlay extends DynamicViewOverlay {

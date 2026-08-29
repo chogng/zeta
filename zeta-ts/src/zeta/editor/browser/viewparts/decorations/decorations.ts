@@ -15,7 +15,7 @@ import { type EditorOverlayContext } from "../../view/renderingContext.js";
 import { h, reset } from '../../../../base/browser/dom.js';
 import { DynamicViewOverlay } from "../../view/dynamicViewOverlay.js";
 import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
-import { ViewPartRows } from '../../view/viewPartRows.js';
+import { ViewPartRows } from '../../view/viewLayer.js';
 
 export type DecorationsOverlayMarker = DiagnosticOverviewMarker | DiffOverviewMarker;
 

@@ -5,6 +5,7 @@ import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { type EditorVisualLine, type EditorVisualLineProjection } from '../../common/viewModel/modelLineProjection.js';
 import { type EditorLineRange } from '../../common/viewModel.js';
 import { type ViewportData } from '../../common/viewLayout/viewLinesViewportData.js';
+import { type EditorRenderingContext } from './renderingContext.js';
 
 export interface ViewLayerLineRenderer<TLine> {
 	createLine(visualLineIndex: number): TLine;
@@ -103,4 +104,46 @@ function numberArraysEqual(left: readonly number[] | undefined, right: readonly 
 
 function lineRangesEqual(left: EditorLineRange, right: EditorLineRange): boolean {
 	return left.startLineIndex === right.startLineIndex && left.endLineIndexExclusive === right.endLineIndexExclusive;
+}
+export class ViewPartRows extends Disposable {
+	public readonly domNode: HTMLDivElement;
+	private readonly root: FastDomNode<HTMLDivElement>;
+	private rows = new Map<number, FastDomNode<HTMLDivElement>>();
+
+	constructor(host: HTMLElement, className: string, private readonly rowClassName: string) {
+		super();
+		const domNode = h(host.ownerDocument, 'div');
+		this.domNode = domNode;
+		this.root = new FastDomNode(domNode);
+		this.root.setClassName(`stanza-editor-row-layer ${className}`);
+		this.domNode.setAttribute('role', 'presentation');
+		this.domNode.setAttribute('aria-hidden', 'true');
+		this._register(toDisposable(() => this.domNode.remove()));
+	}
+
+	public render(context: EditorRenderingContext): ReadonlyMap<number, HTMLElement> {
+		const fragment = createFragment(this.domNode.ownerDocument);
+		const next = new Map<number, FastDomNode<HTMLDivElement>>();
+		const projected = new Map<number, HTMLElement>();
+		this.root.setTop(context.layout.renderTop);
+		for (let lineIndex = context.layout.renderLines.startLineIndex; lineIndex < context.layout.renderLines.endLineIndexExclusive; lineIndex += 1) {
+			let row = this.rows.get(lineIndex);
+			if (!row) {
+				const element = h(this.domNode.ownerDocument, 'div');
+				element.className = this.rowClassName;
+				element.dataset.lineIndex = String(lineIndex);
+				row = new FastDomNode(element);
+			}
+			row.setHeight(context.layout.lineHeight);
+			row.setLineHeight(context.layout.lineHeight);
+			row.setPosition('absolute');
+			row.setTop(context.viewportData.getLineTop(lineIndex) - context.layout.renderTop);
+			next.set(lineIndex, row);
+			projected.set(lineIndex, row.domNode);
+			fragment.append(row.domNode);
+		}
+		reset(this.domNode, fragment);
+		this.rows = next;
+		return projected;
+	}
 }

@@ -13,7 +13,7 @@ import { TextSelection, TextSelectionSet } from "../../../../common/core/selecti
 import { TextPosition, TextRange } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { SuggestController } from "../../browser/suggestController.js";
-import { LanguageEditingAdapter } from "../../../../browser/controller/languageEditingAdapter.js";
+import { LanguageEditingAdapter } from "../../../../browser/view/viewController.js";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({

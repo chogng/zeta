@@ -3,7 +3,7 @@ import { h, reset } from "../../../../base/browser/dom.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type EditorVisualLineProjection } from "../../../common/viewModel/modelLineProjection.js";
 import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
-import { ViewPartRows } from "../../view/viewPartRows.js";
+import { ViewPartRows } from "../../view/viewLayer.js";
 
 export interface LineNumbersOverlayOptions {
 	readonly host: HTMLElement;

@@ -3,7 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../../base/common/platform.js";
 import { type TextMeasurer } from "../../../browser/config/fontMeasurements.js";
-import { resolveStanzaKeyboardNavigation } from "../../../browser/controller/keyboardNavigationController.js";
+import { resolveStanzaKeyboardNavigation } from "../../../browser/view/viewController.js";
 import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../../../common/cursor/cursorNavigation.js";
 import { EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
@@ -104,7 +104,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorViewport } = await import("../../../browser/view.js");
-const { KeyboardNavigationController } = await import("../../../browser/controller/keyboardNavigationController.js");
+const { KeyboardNavigationController } = await import("../../../browser/view/viewController.js");
 const { EditorLineWrapping } = await import("../../../common/config/editorOptions.js");
 
 test("Keyboard controller retains columns, routes multi-selection, and reveals primary", () => {

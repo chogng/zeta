@@ -10,7 +10,7 @@ import { createStanzaVisualRangeRectangles } from '../../../common/viewModel/vis
 import { type EditorOverlayContext, type EditorVisiblePosition } from '../../view/renderingContext.js';
 import { DynamicViewOverlay } from "../../view/dynamicViewOverlay.js";
 import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
-import { ViewPartRows } from '../../view/viewPartRows.js';
+import { ViewPartRows } from '../../view/viewLayer.js';
 import { ViewCursor } from './viewCursor.js';
 
 /** Projects primary and secondary carets without owning cursor positions. */

@@ -1,12 +1,16 @@
 import { type GpuRenderFrame, type GpuRenderStrategyInput } from '../gpu.js';
 import { type GlyphRasterizer } from '../raster/glyphRasterizer.js';
+import { createGpuRenderFrame } from '../gpuUtils.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { BaseRenderStrategy } from './baseRenderStrategy.js';
+import { fullFileRenderStrategyWgsl } from './fullFileRenderStrategy.wgsl.js';
 
 export class FullFileRenderStrategy extends BaseRenderStrategy {
 	public static readonly maxSupportedLines = 3_000;
 	public static readonly maxSupportedColumns = 200;
 	public readonly type = 'fullfile';
+	public readonly wgsl = fullFileRenderStrategyWgsl;
+	public readonly bindGroupEntries: readonly GPUBindGroupEntry[] = Object.freeze([]);
 	private cacheKey: string | undefined;
 	private cachedProjection: EditorVisualLineProjection | undefined;
 	private cachedVertices: Float32Array<ArrayBuffer> | undefined;
@@ -21,11 +25,15 @@ export class FullFileRenderStrategy extends BaseRenderStrategy {
 		this.cachedGpuLineIndexes = new Set();
 	}
 
+	public draw(pass: GPURenderPassEncoder, frame: GpuRenderFrame): void {
+		pass.draw(frame.vertices.length / 5);
+	}
+
 	public update(input: GpuRenderStrategyInput): GpuRenderFrame {
 		const key = createCacheKey(input);
 		if (key !== this.cacheKey || input.visualLines !== this.cachedProjection || !this.cachedVertices) {
 			const allLineIndexes = new Set(Array.from({ length: input.visualLines.visualLineCount }, (_, index) => index));
-			const completeFrame = this.createFrame({ ...input, visibleLineIndexes: allLineIndexes }, allLineIndexes);
+			const completeFrame = createGpuRenderFrame(this.glyphRasterizer, { ...input, visibleLineIndexes: allLineIndexes }, allLineIndexes);
 			this.cacheKey = key;
 			this.cachedProjection = input.visualLines;
 			this.cachedVertices = completeFrame.vertices;
