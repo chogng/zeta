@@ -21,3 +21,7 @@ mod tests;
 ```
 
 - Backend-neutral protocols, domains, storage, execution, terminal semantics, and server hosting belong in `zeta-rs`; product presentation and host composition do not.
+
+## Learnings
+
+* 不要按 `state` / `view` 机械拆分小型 Rust 组件。只有子模块拥有独立职责、生命周期或依赖边界时才拆分；否则让同名组件文件直接承载状态、行为和绘制逻辑，避免只含模块声明与重新导出的空壳文件。

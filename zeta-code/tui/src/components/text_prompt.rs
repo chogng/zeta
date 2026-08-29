@@ -1,7 +1,118 @@
-mod state;
-mod view;
+use crate::components::search_box;
+use crate::components::search_box::SearchBoxInputOutcome;
+use crate::components::search_box::SearchBoxModel;
+use crate::components::search_box::SearchBoxState;
+use crate::ui::highlight;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyEventKind;
+use crossterm::event::KeyModifiers;
+use ratatui::Frame;
+use ratatui::layout::Constraint;
+use ratatui::layout::Direction;
+use ratatui::layout::Layout;
+use ratatui::layout::Rect;
+use ratatui::style::Style;
+use ratatui::widgets::Block;
+use ratatui::widgets::Borders;
+use ratatui::widgets::Paragraph;
 
-pub(crate) use state::TextPrompt;
-pub(crate) use state::TextPromptOutcome;
-pub(crate) use state::TextPromptSpec;
-pub(crate) use view::draw;
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct TextPromptSpec {
+    pub(crate) title: String,
+    pub(crate) explanation: String,
+    pub(crate) placeholder: String,
+    pub(crate) masked: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum TextPromptOutcome {
+    Consumed,
+    Dismiss,
+    Submit(String),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct TextPrompt {
+    spec: TextPromptSpec,
+    input: SearchBoxState,
+}
+
+impl TextPrompt {
+    pub(crate) fn new(spec: TextPromptSpec) -> Self {
+        let mut input = SearchBoxModel::new(&spec.placeholder).initially_active();
+        if spec.masked {
+            input = input.masked();
+        }
+        Self {
+            spec,
+            input: SearchBoxState::new(input),
+        }
+    }
+
+    pub(crate) fn handle_key(&mut self, key: KeyEvent) -> TextPromptOutcome {
+        if key.kind != KeyEventKind::Press {
+            return TextPromptOutcome::Consumed;
+        }
+        if key.code == KeyCode::Esc
+            || (key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('c'))
+        {
+            return TextPromptOutcome::Dismiss;
+        }
+        if key.code == KeyCode::Enter && key.modifiers.is_empty() {
+            let value = self.input.query().trim();
+            return if value.is_empty() {
+                TextPromptOutcome::Consumed
+            } else {
+                TextPromptOutcome::Submit(value.into())
+            };
+        }
+        match self.input.handle_key(key) {
+            SearchBoxInputOutcome::Consumed | SearchBoxInputOutcome::QueryChanged => {
+                TextPromptOutcome::Consumed
+            }
+            SearchBoxInputOutcome::Ignored => TextPromptOutcome::Consumed,
+        }
+    }
+
+    pub(crate) fn handle_paste(&mut self, value: String) {
+        self.input.handle_paste(value);
+    }
+
+    pub(crate) fn title(&self) -> &str {
+        &self.spec.title
+    }
+
+    pub(crate) fn explanation(&self) -> &str {
+        &self.spec.explanation
+    }
+
+    pub(crate) fn input(&self) -> &SearchBoxState {
+        &self.input
+    }
+
+    pub(crate) fn desired_height(&self) -> u16 {
+        5
+    }
+}
+
+pub(crate) fn draw(frame: &mut Frame<'_>, area: Rect, prompt: &TextPrompt) {
+    let content = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(2), Constraint::Length(3)])
+        .split(area);
+    frame.render_widget(
+        Paragraph::new(prompt.explanation()).block(
+            Block::default()
+                .title(prompt.title())
+                .borders(Borders::TOP)
+                .border_style(Style::default().fg(highlight())),
+        ),
+        content[0],
+    );
+    search_box::draw(frame, content[1], prompt.input(), highlight());
+}
+
+#[cfg(test)]
+#[path = "text_prompt/state_tests.rs"]
+mod tests;
