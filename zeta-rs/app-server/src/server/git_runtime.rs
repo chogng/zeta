@@ -1,26 +1,59 @@
 use super::update_broker::UpdateBroker;
-use crate::git_service::{GitService, GitServiceCommit, GitServiceError};
+use crate::git_service::GitService;
+use crate::git_service::GitServiceCommit;
+use crate::git_service::GitServiceError;
 use ignore::WalkBuilder;
-use sha2::{Digest, Sha256};
+use sha2::Digest;
+use sha2::Sha256;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::thread::JoinHandle;
 use std::time::Duration;
-use zeta_app_server_protocol::protocol::git::{
-    GitBranchDto, GitChangeFileComparisonDto, GitChangeFileResult, GitChangeStatusDto,
-    GitCommitChangeDto, GitCommitChangesResult, GitCommitFileContentDto, GitCommitFileResult,
-    GitCommitSummaryDto, GitDiffStatisticsDto, GitGraphResult, GitHeadDto, GitReferenceDto,
-    GitReferenceKindDto, GitRemoteDto, GitRemoteProviderDto, GitRepositoriesResult,
-    GitRepositoryChangeDto, GitRepositoryDto, GitRepositoryIdentityDto, GitStatusResult,
-    GitSubmoduleStateDto, GitTextDiffDto, GitTextDiffResult, GitUpstreamDto,
-};
-use zeta_file_watcher::{DebouncedWatchReceiver, FileWatcher, FileWatcherBackend, WatchPath};
-use zeta_git::{
-    GitChangeFileComparison, GitChangeStatus, GitCommitChange, GitGraph, GitGraphCursor, GitHead,
-    GitReferenceKind, GitRemoteProvider, GitRepository, GitRepositoryChange, GitRepositorySnapshot,
-};
+use zeta_app_server_protocol::protocol::git::GitBranchDto;
+use zeta_app_server_protocol::protocol::git::GitChangeFileComparisonDto;
+use zeta_app_server_protocol::protocol::git::GitChangeFileResult;
+use zeta_app_server_protocol::protocol::git::GitChangeStatusDto;
+use zeta_app_server_protocol::protocol::git::GitCommitChangeDto;
+use zeta_app_server_protocol::protocol::git::GitCommitChangesResult;
+use zeta_app_server_protocol::protocol::git::GitCommitFileContentDto;
+use zeta_app_server_protocol::protocol::git::GitCommitFileResult;
+use zeta_app_server_protocol::protocol::git::GitCommitSummaryDto;
+use zeta_app_server_protocol::protocol::git::GitDiffStatisticsDto;
+use zeta_app_server_protocol::protocol::git::GitGraphResult;
+use zeta_app_server_protocol::protocol::git::GitHeadDto;
+use zeta_app_server_protocol::protocol::git::GitReferenceDto;
+use zeta_app_server_protocol::protocol::git::GitReferenceKindDto;
+use zeta_app_server_protocol::protocol::git::GitRemoteDto;
+use zeta_app_server_protocol::protocol::git::GitRemoteProviderDto;
+use zeta_app_server_protocol::protocol::git::GitRepositoriesResult;
+use zeta_app_server_protocol::protocol::git::GitRepositoryChangeDto;
+use zeta_app_server_protocol::protocol::git::GitRepositoryDto;
+use zeta_app_server_protocol::protocol::git::GitRepositoryIdentityDto;
+use zeta_app_server_protocol::protocol::git::GitStatusResult;
+use zeta_app_server_protocol::protocol::git::GitSubmoduleStateDto;
+use zeta_app_server_protocol::protocol::git::GitTextDiffDto;
+use zeta_app_server_protocol::protocol::git::GitTextDiffResult;
+use zeta_app_server_protocol::protocol::git::GitUpstreamDto;
+use zeta_file_watcher::DebouncedWatchReceiver;
+use zeta_file_watcher::FileWatcher;
+use zeta_file_watcher::FileWatcherBackend;
+use zeta_file_watcher::WatchPath;
+use zeta_git::GitChangeFileComparison;
+use zeta_git::GitChangeStatus;
+use zeta_git::GitCommitChange;
+use zeta_git::GitGraph;
+use zeta_git::GitGraphCursor;
+use zeta_git::GitHead;
+use zeta_git::GitReferenceKind;
+use zeta_git::GitRemoteProvider;
+use zeta_git::GitRepository;
+use zeta_git::GitRepositoryChange;
+use zeta_git::GitRepositorySnapshot;
 use zeta_protocol::StreamInstanceId;
 use zeta_workspace::TrustedWorkspace;
 
@@ -827,14 +860,6 @@ impl GitRepositoryRuntime {
     }
 
     fn refresh_from_watcher(&self) {
-        let initialized = self
-            .state
-            .lock()
-            .map(|state| state.repository.is_some())
-            .unwrap_or(false);
-        if initialized {
-            self.invalidate_graphs().ok();
-        }
         let _ = self.status();
     }
 

@@ -1,13 +1,15 @@
 use super::GitRuntime;
 use crate::server::notification_queue::NotificationQueue;
 use crate::server::update_broker::UpdateBroker;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
-use zeta_workspace::{
-    TrustedWorkspace, WorkspaceCapability, WorkspaceRoot, WorkspaceTrustDecision,
-    WorkspaceTrustSource,
-};
+use zeta_workspace::TrustedWorkspace;
+use zeta_workspace::WorkspaceCapability;
+use zeta_workspace::WorkspaceRoot;
+use zeta_workspace::WorkspaceTrustDecision;
+use zeta_workspace::WorkspaceTrustSource;
 
 #[test]
 fn runtime_revisions_and_notifies_only_for_changed_workspace_projection() {
@@ -119,6 +121,40 @@ fn runtime_incarnations_use_distinct_revision_scopes() {
     );
     assert_eq!(first_status.revision, 1);
     assert_eq!(second_status.revision, 1);
+}
+
+#[test]
+fn unchanged_watcher_refresh_keeps_graph_cursor_alive() {
+    let repository = TestRepository::init();
+    repository.write("tracked.txt", "initial\n");
+    repository.git(&["add", "tracked.txt"]);
+    repository.git(&["commit", "-m", "initial"]);
+    repository.write("tracked.txt", "updated\n");
+    repository.git(&["add", "tracked.txt"]);
+    repository.git(&["commit", "-m", "updated"]);
+    let runtime = GitRuntime::new(
+        trusted_workspace(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    runtime.status().unwrap();
+
+    let first_page = runtime
+        .graph(1, std::num::NonZeroUsize::new(1).unwrap(), None)
+        .unwrap();
+    let cursor = first_page.next_cursor.expect("graph continuation cursor");
+
+    runtime.repositories[0].refresh_from_watcher();
+
+    let final_page = runtime
+        .graph(
+            1,
+            std::num::NonZeroUsize::new(1).unwrap(),
+            Some(&cursor),
+        )
+        .unwrap();
+    assert_eq!(final_page.commits.len(), 1);
+    assert!(!final_page.has_more);
 }
 
 #[test]
@@ -339,7 +375,8 @@ impl Drop for TestRepository {
 }
 
 fn unique_sequence() -> u64 {
-    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::atomic::AtomicU64;
+    use std::sync::atomic::Ordering;
     static NEXT: AtomicU64 = AtomicU64::new(1);
     NEXT.fetch_add(1, Ordering::Relaxed)
 }
