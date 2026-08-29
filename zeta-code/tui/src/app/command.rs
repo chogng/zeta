@@ -4,7 +4,7 @@ use crate::features::config::AdditionalDirectoryPermissionEdit;
 use crate::features::config::ConfigEdit;
 use crate::features::config::ProviderApiKeyEdit;
 use crate::features::interactions::InteractionResponse;
-use crate::features::shortcuts::ShortcutEdit;
+use crate::features::keymap::KeymapEdit;
 use crate::features::status_line::StatusLineEdit;
 use std::path::PathBuf;
 use zeta_app_server_protocol::protocol::config::McpServerEnablementDto;
@@ -21,9 +21,9 @@ pub(crate) enum AppCommand {
     Suspend,
     CopyLastResponse,
     OpenConfigPane,
-    OpenShortcutsPane,
+    OpenKeymapPane,
     OpenStatusLinePane,
-    EditShortcut(ShortcutEdit),
+    EditKeymap(KeymapEdit),
     EditConfig(ConfigEdit),
     EditAdditionalDirectoryPermissions(AdditionalDirectoryPermissionEdit),
     SetProviderApiKey(ProviderApiKeyEdit),

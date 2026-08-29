@@ -70,7 +70,7 @@ Tool、approval policy 或 persistence。
   App Server 选中的、声明对应 capability 且订阅该 Thread 的 connection 能 resolve。交互不可用
   Esc 关闭，但可 Ctrl-C interrupt；deadline 由 App Server 执行并投影为稳定 Turn failure；
 - footer 按“权限模式、模型、Git 分支、Git 变更”的固定顺序显示 `/statusline` 启用的项目，不显示 Turn 运行状态，也不常驻展示快捷键；Shift-Tab 通过 typed Session mutation 在 `ask permissions on`、`auto review on` 与 `bypass permissions on` 之间切换后端保存的下一次模式。运行中 Turn 的冻结模式与下一次模式不同时，footer 同时标出 `current` 和 `next`；TUI 不解释策略结果，也不自行签发执行授权；
-- 根级 `keymap.rs` 只保留运行时入口和 `AppKeymap`，`keymap/bindings.rs`、`keymap/chords.rs` 与 `keymap/input.rs` 分别拥有动作绑定、Chord 生命周期和 Crossterm 转换；共享 Resolver 处理 Shift-Tab、根级 Esc 与 Ctrl-C/D/O/V/Z，并生成设置界面只读快照。`features/shortcuts.rs` 读取 `<profile>/zeta-code/keybindings.json`，每秒热重载 User command/blocker、平台覆盖与 `when`，并为 `/shortcuts` 汇总可配置绑定和固定操作键，提供搜索、诊断、单键/两段 Chord 录制、revision 校验和原子保存；坏更新或保存失败保留上一份有效规则。composer 编辑、selection 导航和 transcript 滚动仍由各 component 拥有；
+- 根级 `keymap.rs` 只保留运行时入口和 `AppKeymap`，`keymap/bindings.rs`、`keymap/chords.rs` 与 `keymap/input.rs` 分别拥有动作绑定、Chord 生命周期和 Crossterm 转换；共享 Resolver 处理 Shift-Tab、根级 Esc 与 Ctrl-C/D/O/V/Z，并生成设置界面只读快照。`features/keymap.rs` 读取 `<profile>/zeta-code/keybindings.json`，每秒热重载 User command/blocker、平台覆盖与 `when`，并为 `/shortcuts` 汇总可配置绑定和固定操作键，提供搜索、诊断、单键/两段 Chord 录制、revision 校验和原子保存；坏更新或保存失败保留上一份有效规则。composer 编辑、selection 导航和 transcript 滚动仍由各 component 拥有；
 - composer 保存最近 100 条纯文本提交，Up/Down 可召回并恢复原 draft；transcript 支持
   PageUp/PageDown 与 Ctrl-Home/Ctrl-End。初始 Thread snapshot 只读取最近 50 个 Turn，Ctrl-Home
   通过 App Server 的 durable Turn cursor 请求更早的 50 个 Turn，并在 presentation projection 中
@@ -179,8 +179,8 @@ src/
 │   ├── sessions/                  # active Session/Thread selection and lifecycle requests
 │   ├── thread/                    # canonical snapshot, requests, subscription and projection
 │   ├── skills/                    # skill request and selection presentation mapping
-│   ├── shortcuts.rs               # shortcut catalog, profile polling and atomic edits
-│   ├── shortcuts/                 # searchable view, action menu and key/chord capture
+│   ├── keymap.rs                  # keymap resource, profile polling and atomic edits
+│   ├── keymap/                    # searchable view, action menu and key/chord capture
 │   ├── status_line.rs             # status-line module root
 │   ├── status_line/               # item settings, profile resource, setup view and pure footer view
 │   ├── workspace_files.rs         # file-mention search module root
@@ -223,8 +223,8 @@ src/
 | `App::update` | crate-private | 将一个 `AppEvent` 应用到唯一 presentation state owner | 不执行 I/O、不访问 runtime resource |
 | `App::handle_key` | crate-private | 先路由 Chord prefix；其他键先委托局部输入，再处理未消费的应用级键 | 不直接调用 client |
 | `AppKeymap` | private | 把 Crossterm key 转为共享 `KeyStroke`，解析应用级 action，并拥有 Chord pending/超时/取消/提示生命周期 | 不处理 composer 编辑、selection 导航、滚动、I/O 或命令副作用 |
-| `features::shortcuts::ShortcutResource` | private | 有界读取产品 profile JSON、检测外部修改、revision 校验、原子保存，并在完整编译后替换 User rules | 不解析按键语法、不执行 action、不读取 Remote Workspace 文件 |
-| `features::shortcuts::view` | private | 从 `AppKeymap` 快照和固定操作目录生成 `/shortcuts` 的搜索/诊断列表、动作菜单和临时按键录制状态 | 不执行快捷键、不建立第二套 Resolver |
+| `features::keymap::KeymapResource` | private | 有界读取产品 profile JSON、检测外部修改、revision 校验、原子保存，并在完整编译后替换 User rules | 不解析按键语法、不执行 action、不读取 Remote Workspace 文件 |
+| `features::keymap::view` | private | 从 `AppKeymap` 快照和固定操作目录生成 `/shortcuts` 的搜索/诊断列表、动作菜单和临时按键录制状态 | 不执行快捷键、不建立第二套 Resolver |
 | `App::activate_slash_command` | crate-private | 将鼠标命中的 command index 委托给 composer 并复用 command dispatch | 不计算 terminal geometry |
 | `App::quit_or_interrupt` | private | active state interrupt；idle/error quit | Cancelling 不重复发送 interrupt |
 | `client::EventPump` | crate-private | 独立等待 terminal input、Unix termination signal 与 `AppServerEvents`，通过 1024 项有界队列汇入单写者 loop | Tick 可合并；control/input 不静默丢失；不应用 UI state |
@@ -425,7 +425,7 @@ transient 永远不决定 completed/failed/interrupted。
 
 `AppKeymap` 支持一至四段 Chord，pending 后在 footer 显示已输入前缀和 Esc cancel；1 秒超时、上下文变化、Esc 或 blocker 会清空 pending，错误后续键清空 pending 后继续作为普通输入透传。当前内建表仍只声明单段组合。`Esc Esc` rewind 是独立的根级状态，不属于通用 Chord，因此 Esc 可无歧义地取消 pending。
 
-用户配置不是 `GlobalKeymap`。它以 `BindingSource::User` 合并进同一个 `AppKeymap`；省略 `when` 只表示该规则在 Zeta Code 的所有上下文中适用。`/shortcuts` 以“快捷键、职责、default/user 来源”三列展示应用级绑定和少量固定操作键，内部 command ID 不进入界面；通用方向键由各 component 拥有，不作为快捷键条目；选择可配置 action 后可替换该 action 的 User 项、追加单键或两段 Chord、清除 User 项，但不会移除 default 键位或 `command: null` blocker。直接编辑 JSON 仍支持一至四段 Chord、平台覆盖、`when` 和 blocker。保存先检查界面打开时的资源 revision，再完整编译临时规则并原子替换文件与运行时映射；失败不改变当前映射。完整契约见 [`docs/keybindings.md`](../../docs/keybindings.md)。
+用户配置不是 `GlobalKeymap`。它以 `BindingSource::User` 合并进同一个 `AppKeymap`；省略 `when` 只表示该规则在 Zeta Code 的所有上下文中适用。`/shortcuts` 打开 Keymap 设置界面，以“快捷键、职责、default/user 来源”三列展示应用级绑定和少量固定操作键，内部 command ID 不进入界面；通用方向键由各 component 拥有，不作为快捷键条目；选择可配置 action 后可替换该 action 的 User 项、追加单键或两段 Chord、清除 User 项，但不会移除 default 键位或 `command: null` blocker。直接编辑 JSON 仍支持一至四段 Chord、平台覆盖、`when` 和 blocker。保存先检查界面打开时的资源 revision，再完整编译临时规则并原子替换文件与运行时映射；失败不改变当前映射。完整契约见 [`docs/keybindings.md`](../../docs/keybindings.md)。
 
 ```text
 Ready / Error

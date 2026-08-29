@@ -26,11 +26,11 @@ use crate::features::additional_directories;
 use crate::features::config;
 use crate::features::config::ConfigResource;
 use crate::features::interactions;
+use crate::features::keymap::KeymapResource;
+use crate::features::keymap::KeymapResourcePoll;
 use crate::features::mcp;
 use crate::features::rewind;
 use crate::features::sessions::ResumeOutcome;
-use crate::features::shortcuts::ShortcutResource;
-use crate::features::shortcuts::ShortcutResourcePoll;
 use crate::features::skills;
 use crate::features::status_line::StatusLineResource;
 use crate::features::theme as theme_feature;
@@ -116,7 +116,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     );
     app.set_next_approval_mode(conversation.next_approval_mode());
     let now = Instant::now();
-    let mut keybindings_resource = keybindings_path.map(|path| ShortcutResource::new(path, now));
+    let mut keymap_resource = keybindings_path.map(|path| KeymapResource::new(path, now));
     let mut status_line_resource = status_line_path.map(StatusLineResource::new);
     let mut config_resource = terminal_settings_path.map(ConfigResource::new);
     app.replace_slash_commands(slash_registry.catalog, slash_registry.skills);
@@ -126,7 +126,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
         initial_thread,
         initial_transcript,
     );
-    poll_keybindings_resource(&mut keybindings_resource, &mut app, now);
+    poll_keymap_resource(&mut keymap_resource, &mut app, now);
     if let Some(resource) = config_resource.as_mut() {
         match resource.refresh() {
             Ok(settings) => app.update(AppEvent::ConfigSettingsReceived(settings)),
@@ -183,7 +183,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                 client::RuntimeEvent::Tick => {
                     let now = Instant::now();
                     app.handle_tick(now);
-                    poll_keybindings_resource(&mut keybindings_resource, &mut app, now);
+                    poll_keymap_resource(&mut keymap_resource, &mut app, now);
                     None
                 }
                 client::RuntimeEvent::TerminationRequested => {
@@ -377,10 +377,10 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                             &mut app,
                         );
                     }
-                    AppCommand::OpenShortcutsPane => match keybindings_resource.as_ref() {
+                    AppCommand::OpenKeymapPane => match keymap_resource.as_ref() {
                         Some(resource) => {
-                            app.update(AppEvent::ShortcutViewOpened(
-                                resource.setup_view(&app.app_keymap),
+                            app.update(AppEvent::KeymapViewOpened(
+                                resource.view(&app.app_keymap),
                             ));
                         }
                         None => app.update(AppEvent::FailureReported(
@@ -414,16 +414,16 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                 .to_owned(),
                         )),
                     },
-                    AppCommand::EditShortcut(edit) => match keybindings_resource.as_mut() {
+                    AppCommand::EditKeymap(edit) => match keymap_resource.as_mut() {
                         Some(resource) => match resource.apply_edit(
                             &edit,
                             &mut app.app_keymap,
                             Instant::now(),
                         ) {
                             Ok(notice) => {
-                                app.update(AppEvent::ShortcutViewsClosed);
-                                app.update(AppEvent::ShortcutViewOpened(
-                                    resource.setup_view(&app.app_keymap),
+                                app.update(AppEvent::KeymapViewsClosed);
+                                app.update(AppEvent::KeymapViewOpened(
+                                    resource.view(&app.app_keymap),
                                 ));
                                 app.update(AppEvent::HostOperationCompleted(Ok(notice)));
                             }
@@ -929,18 +929,18 @@ fn draw_terminal(
     terminal.draw(|terminal_frame| frame::draw(terminal_frame, app))
 }
 
-fn poll_keybindings_resource(resource: &mut Option<ShortcutResource>, app: &mut App, now: Instant) {
+fn poll_keymap_resource(resource: &mut Option<KeymapResource>, app: &mut App, now: Instant) {
     let Some(resource) = resource else {
         return;
     };
     match resource.poll(now, &mut app.app_keymap) {
-        ShortcutResourcePoll::Unchanged => {}
-        ShortcutResourcePoll::Updated => {
+        KeymapResourcePoll::Unchanged => {}
+        KeymapResourcePoll::Updated => {
             for diagnostic in resource.diagnostics().to_vec() {
                 app.report_keybinding_diagnostic(diagnostic);
             }
         }
-        ShortcutResourcePoll::Rejected(diagnostic) => {
+        KeymapResourcePoll::Rejected(diagnostic) => {
             app.report_keybinding_diagnostic(diagnostic);
         }
     }
@@ -976,9 +976,9 @@ fn uses_request_task(action: &AppCommand) -> bool {
         AppCommand::Quit
             | AppCommand::Suspend
             | AppCommand::CopyLastResponse
-            | AppCommand::OpenShortcutsPane
+            | AppCommand::OpenKeymapPane
             | AppCommand::OpenStatusLinePane
-            | AppCommand::EditShortcut(_)
+            | AppCommand::EditKeymap(_)
             | AppCommand::EditStatusLine(_)
             | AppCommand::ExportTranscript { .. }
             | AppCommand::ReadClipboardImage

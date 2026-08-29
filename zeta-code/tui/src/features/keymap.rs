@@ -15,13 +15,13 @@ use crate::keymap::compile_app_user_bindings;
 
 mod view;
 
-pub(crate) use view::ShortcutAction;
-pub(crate) use view::ShortcutCaptureOutcome;
-pub(crate) use view::ShortcutCaptureState;
-pub(crate) use view::ShortcutView;
-pub(crate) use view::action_menu;
-pub(crate) use view::capture_view;
-pub(crate) use view::shortcut_view;
+pub(crate) use view::KeymapAction;
+pub(crate) use view::KeymapCaptureOutcome;
+pub(crate) use view::KeymapCaptureState;
+pub(crate) use view::KeymapView;
+pub(crate) use view::keymap_action_menu;
+pub(crate) use view::keymap_capture_view;
+pub(crate) use view::keymap_view;
 
 const MAX_RESOURCE_BYTES: u64 = 1024 * 1024;
 const POLL_INTERVAL: Duration = Duration::from_secs(1);
@@ -33,42 +33,42 @@ enum ResourceSnapshot {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ShortcutCaptureMode {
+pub(crate) enum KeymapCaptureMode {
     SingleKey,
     Chord,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum ShortcutEditIntent {
+pub(crate) enum KeymapEditIntent {
     ReplaceUser,
     AddAlternate,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum ShortcutEditKind {
+pub(crate) enum KeymapEditKind {
     Set {
         key: String,
-        intent: ShortcutEditIntent,
+        intent: KeymapEditIntent,
     },
     ClearUser,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct ShortcutEdit {
+pub(crate) struct KeymapEdit {
     pub(crate) expected_revision: u64,
     pub(crate) command_id: String,
-    pub(crate) kind: ShortcutEditKind,
+    pub(crate) kind: KeymapEditKind,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum ShortcutResourcePoll {
+pub(crate) enum KeymapResourcePoll {
     Unchanged,
     Updated,
     Rejected(String),
 }
 
 /// Host-local, product-scoped user keybindings for the Zeta Code TUI.
-pub(crate) struct ShortcutResource {
+pub(crate) struct KeymapResource {
     path: PathBuf,
     platform: HostPlatform,
     observed: Option<ResourceSnapshot>,
@@ -77,7 +77,7 @@ pub(crate) struct ShortcutResource {
     next_poll: Instant,
 }
 
-impl ShortcutResource {
+impl KeymapResource {
     pub(crate) fn new(path: PathBuf, now: Instant) -> Self {
         Self {
             path,
@@ -89,9 +89,9 @@ impl ShortcutResource {
         }
     }
 
-    pub(crate) fn poll(&mut self, now: Instant, keymap: &mut AppKeymap) -> ShortcutResourcePoll {
+    pub(crate) fn poll(&mut self, now: Instant, keymap: &mut AppKeymap) -> KeymapResourcePoll {
         if now < self.next_poll {
-            return ShortcutResourcePoll::Unchanged;
+            return KeymapResourcePoll::Unchanged;
         }
         self.next_poll = now + POLL_INTERVAL;
         let snapshot = match read_snapshot(&self.path) {
@@ -101,7 +101,7 @@ impl ShortcutResource {
             }
         };
         if self.observed.as_ref() == Some(&snapshot) {
-            return ShortcutResourcePoll::Unchanged;
+            return KeymapResourcePoll::Unchanged;
         }
         self.observed = Some(snapshot.clone());
         self.revision = self.revision.saturating_add(1);
@@ -121,15 +121,15 @@ impl ShortcutResource {
             return self.reject(format!("rejected {}: {error}", self.path.display()));
         }
         self.diagnostics = diagnostics;
-        ShortcutResourcePoll::Updated
+        KeymapResourcePoll::Updated
     }
 
     pub(crate) fn diagnostics(&self) -> &[String] {
         &self.diagnostics
     }
 
-    pub(crate) fn setup_view(&self, keymap: &AppKeymap) -> ShortcutView {
-        shortcut_view(
+    pub(crate) fn view(&self, keymap: &AppKeymap) -> KeymapView {
+        keymap_view(
             keymap.setup_actions(),
             &self.path,
             &self.diagnostics,
@@ -139,7 +139,7 @@ impl ShortcutResource {
 
     pub(crate) fn apply_edit(
         &mut self,
-        edit: &ShortcutEdit,
+        edit: &KeymapEdit,
         keymap: &mut AppKeymap,
         now: Instant,
     ) -> Result<String, String> {
@@ -170,18 +170,18 @@ impl ShortcutResource {
         Ok(notice)
     }
 
-    fn reject(&mut self, diagnostic: String) -> ShortcutResourcePoll {
+    fn reject(&mut self, diagnostic: String) -> KeymapResourcePoll {
         if self.diagnostics.as_slice() == [diagnostic.as_str()] {
-            return ShortcutResourcePoll::Unchanged;
+            return KeymapResourcePoll::Unchanged;
         }
         self.diagnostics = vec![diagnostic.clone()];
-        ShortcutResourcePoll::Rejected(diagnostic)
+        KeymapResourcePoll::Rejected(diagnostic)
     }
 }
 
 fn edited_document(
     snapshot: &ResourceSnapshot,
-    edit: &ShortcutEdit,
+    edit: &KeymapEdit,
 ) -> Result<(Vec<u8>, String), String> {
     let mut document = match snapshot {
         ResourceSnapshot::Missing => Value::Array(Vec::new()),
@@ -197,8 +197,8 @@ fn edited_document(
     };
 
     let notice = match &edit.kind {
-        ShortcutEditKind::Set { key, intent } => {
-            if matches!(intent, ShortcutEditIntent::ReplaceUser) {
+        KeymapEditKind::Set { key, intent } => {
+            if matches!(intent, KeymapEditIntent::ReplaceUser) {
                 entries.retain(|entry| !command_matches(entry));
             } else if entries.iter().any(|entry| {
                 command_matches(entry)
@@ -215,13 +215,13 @@ fn edited_document(
                 "command": edit.command_id,
             }));
             match intent {
-                ShortcutEditIntent::ReplaceUser => format!("Set user shortcut to `{key}`."),
-                ShortcutEditIntent::AddAlternate => {
+                KeymapEditIntent::ReplaceUser => format!("Set user shortcut to `{key}`."),
+                KeymapEditIntent::AddAlternate => {
                     format!("Added user shortcut `{key}`.")
                 }
             }
         }
-        ShortcutEditKind::ClearUser => {
+        KeymapEditKind::ClearUser => {
             let before = entries.len();
             entries.retain(|entry| !command_matches(entry));
             if entries.len() == before {
@@ -272,5 +272,5 @@ fn read_snapshot(path: &Path) -> io::Result<ResourceSnapshot> {
 }
 
 #[cfg(test)]
-#[path = "shortcuts_tests.rs"]
+#[path = "keymap_tests.rs"]
 mod tests;

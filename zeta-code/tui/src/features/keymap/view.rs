@@ -16,13 +16,13 @@ use crate::keymap::KeymapActionSnapshot;
 use crate::keymap::compose_config_chord;
 use crate::keymap::key_event_to_config_key;
 
-use super::ShortcutCaptureMode;
-use super::ShortcutEdit;
-use super::ShortcutEditIntent;
-use super::ShortcutEditKind;
+use super::KeymapCaptureMode;
+use super::KeymapEdit;
+use super::KeymapEditIntent;
+use super::KeymapEditKind;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum ShortcutAction {
+pub(crate) enum KeymapAction {
     OpenAction {
         action: KeymapActionSnapshot,
         revision: u64,
@@ -30,8 +30,8 @@ pub(crate) enum ShortcutAction {
     BeginCapture {
         action: KeymapActionSnapshot,
         revision: u64,
-        intent: ShortcutEditIntent,
-        mode: ShortcutCaptureMode,
+        intent: KeymapEditIntent,
+        mode: KeymapCaptureMode,
     },
     ClearUser {
         command_id: String,
@@ -39,17 +39,17 @@ pub(crate) enum ShortcutAction {
     },
 }
 
-pub(crate) struct ShortcutView {
+pub(crate) struct KeymapView {
     pub(crate) model: PaneViewModel<SelectionViewModel>,
-    pub(crate) actions: BTreeMap<SelectionItemId, ShortcutAction>,
+    pub(crate) actions: BTreeMap<SelectionItemId, KeymapAction>,
 }
 
-pub(crate) fn shortcut_view(
+pub(crate) fn keymap_view(
     actions: Vec<KeymapActionSnapshot>,
     resource_path: &Path,
     diagnostics: &[String],
     revision: u64,
-) -> ShortcutView {
+) -> KeymapView {
     let mut item_actions = BTreeMap::new();
     let mut all_items = Vec::new();
     let mut user_items = Vec::new();
@@ -84,10 +84,10 @@ pub(crate) fn shortcut_view(
         "Space search  ·  ←/→ tabs  ·  Enter edit  ·  Esc back  ·  {}",
         resource_path.display()
     );
-    ShortcutView {
+    KeymapView {
         model: PaneViewModel::new(
             SelectionViewModel::new(
-                "Shortcuts",
+                "Keymap",
                 vec![
                     SelectionTab::new("All", all_items),
                     SelectionTab::new("User", user_items),
@@ -102,51 +102,51 @@ pub(crate) fn shortcut_view(
     }
 }
 
-pub(crate) fn action_menu(action: KeymapActionSnapshot, revision: u64) -> ShortcutView {
+pub(crate) fn keymap_action_menu(action: KeymapActionSnapshot, revision: u64) -> KeymapView {
     let mut actions = BTreeMap::new();
     let mut items = Vec::new();
     push_action(
         &mut items,
         &mut actions,
         "Replace user shortcut with a key",
-        ShortcutAction::BeginCapture {
+        KeymapAction::BeginCapture {
             action: action.clone(),
             revision,
-            intent: ShortcutEditIntent::ReplaceUser,
-            mode: ShortcutCaptureMode::SingleKey,
+            intent: KeymapEditIntent::ReplaceUser,
+            mode: KeymapCaptureMode::SingleKey,
         },
     );
     push_action(
         &mut items,
         &mut actions,
         "Replace user shortcut with a chord",
-        ShortcutAction::BeginCapture {
+        KeymapAction::BeginCapture {
             action: action.clone(),
             revision,
-            intent: ShortcutEditIntent::ReplaceUser,
-            mode: ShortcutCaptureMode::Chord,
+            intent: KeymapEditIntent::ReplaceUser,
+            mode: KeymapCaptureMode::Chord,
         },
     );
     push_action(
         &mut items,
         &mut actions,
         "Add an alternate key",
-        ShortcutAction::BeginCapture {
+        KeymapAction::BeginCapture {
             action: action.clone(),
             revision,
-            intent: ShortcutEditIntent::AddAlternate,
-            mode: ShortcutCaptureMode::SingleKey,
+            intent: KeymapEditIntent::AddAlternate,
+            mode: KeymapCaptureMode::SingleKey,
         },
     );
     push_action(
         &mut items,
         &mut actions,
         "Add an alternate chord",
-        ShortcutAction::BeginCapture {
+        KeymapAction::BeginCapture {
             action: action.clone(),
             revision,
-            intent: ShortcutEditIntent::AddAlternate,
-            mode: ShortcutCaptureMode::Chord,
+            intent: KeymapEditIntent::AddAlternate,
+            mode: KeymapCaptureMode::Chord,
         },
     );
     if !action.user_bindings.is_empty() {
@@ -154,14 +154,14 @@ pub(crate) fn action_menu(action: KeymapActionSnapshot, revision: u64) -> Shortc
             &mut items,
             &mut actions,
             "Clear user shortcuts",
-            ShortcutAction::ClearUser {
+            KeymapAction::ClearUser {
                 command_id: action.command_id.to_owned(),
                 revision,
             },
         );
     }
     let summary = binding_summary(&action);
-    ShortcutView {
+    KeymapView {
         model: PaneViewModel::new(
             SelectionViewModel::new(action.label, vec![SelectionTab::new("Actions", items)])
                 .without_tab_bar(),
@@ -172,29 +172,29 @@ pub(crate) fn action_menu(action: KeymapActionSnapshot, revision: u64) -> Shortc
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct ShortcutCaptureState {
+pub(crate) struct KeymapCaptureState {
     action: KeymapActionSnapshot,
     revision: u64,
-    intent: ShortcutEditIntent,
-    mode: ShortcutCaptureMode,
+    intent: KeymapEditIntent,
+    mode: KeymapCaptureMode,
     first_stroke: Option<String>,
     error: Option<String>,
 }
 
 #[derive(Debug)]
-pub(crate) enum ShortcutCaptureOutcome {
+pub(crate) enum KeymapCaptureOutcome {
     Pending(PaneViewModel<SelectionViewModel>),
     Cancelled,
-    Edit(ShortcutEdit),
+    Edit(KeymapEdit),
 }
 
-pub(crate) fn capture_view(
+pub(crate) fn keymap_capture_view(
     action: KeymapActionSnapshot,
     revision: u64,
-    intent: ShortcutEditIntent,
-    mode: ShortcutCaptureMode,
-) -> (PaneViewModel<SelectionViewModel>, ShortcutCaptureState) {
-    let state = ShortcutCaptureState {
+    intent: KeymapEditIntent,
+    mode: KeymapCaptureMode,
+) -> (PaneViewModel<SelectionViewModel>, KeymapCaptureState) {
+    let state = KeymapCaptureState {
         action,
         revision,
         intent,
@@ -205,42 +205,42 @@ pub(crate) fn capture_view(
     (state.model(), state)
 }
 
-impl ShortcutCaptureState {
-    pub(crate) fn handle_key(&mut self, key: KeyEvent) -> ShortcutCaptureOutcome {
+impl KeymapCaptureState {
+    pub(crate) fn handle_key(&mut self, key: KeyEvent) -> KeymapCaptureOutcome {
         if key.kind != KeyEventKind::Press {
-            return ShortcutCaptureOutcome::Pending(self.model());
+            return KeymapCaptureOutcome::Pending(self.model());
         }
         if is_cancel(key) {
-            return ShortcutCaptureOutcome::Cancelled;
+            return KeymapCaptureOutcome::Cancelled;
         }
         let stroke = match key_event_to_config_key(&key) {
             Ok(stroke) => stroke,
             Err(error) => {
                 self.error = Some(error);
-                return ShortcutCaptureOutcome::Pending(self.model());
+                return KeymapCaptureOutcome::Pending(self.model());
             }
         };
         self.error = None;
         let key = match self.mode {
-            ShortcutCaptureMode::SingleKey => stroke,
-            ShortcutCaptureMode::Chord => match self.first_stroke.take() {
+            KeymapCaptureMode::SingleKey => stroke,
+            KeymapCaptureMode::Chord => match self.first_stroke.take() {
                 None => {
                     self.first_stroke = Some(stroke);
-                    return ShortcutCaptureOutcome::Pending(self.model());
+                    return KeymapCaptureOutcome::Pending(self.model());
                 }
                 Some(first) => match compose_config_chord(&first, &stroke) {
                     Ok(chord) => chord,
                     Err(error) => {
                         self.error = Some(error);
-                        return ShortcutCaptureOutcome::Pending(self.model());
+                        return KeymapCaptureOutcome::Pending(self.model());
                     }
                 },
             },
         };
-        ShortcutCaptureOutcome::Edit(ShortcutEdit {
+        KeymapCaptureOutcome::Edit(KeymapEdit {
             expected_revision: self.revision,
             command_id: self.action.command_id.to_owned(),
-            kind: ShortcutEditKind::Set {
+            kind: KeymapEditKind::Set {
                 key,
                 intent: self.intent,
             },
@@ -249,13 +249,13 @@ impl ShortcutCaptureState {
 
     fn model(&self) -> PaneViewModel<SelectionViewModel> {
         let instruction = match (self.mode, self.first_stroke.as_deref()) {
-            (ShortcutCaptureMode::SingleKey, _) => {
+            (KeymapCaptureMode::SingleKey, _) => {
                 "Press the new key now. Esc or Ctrl-C cancels.".to_owned()
             }
-            (ShortcutCaptureMode::Chord, None) => {
+            (KeymapCaptureMode::Chord, None) => {
                 "Press the first key, then the second. Esc or Ctrl-C cancels.".to_owned()
             }
-            (ShortcutCaptureMode::Chord, Some(first)) => {
+            (KeymapCaptureMode::Chord, Some(first)) => {
                 format!("First key: {first}. Press the second key. Esc or Ctrl-C cancels.")
             }
         };
@@ -282,7 +282,7 @@ fn append_action_items(
     revision: u64,
     include_default: bool,
     include_user: bool,
-    actions: &mut BTreeMap<SelectionItemId, ShortcutAction>,
+    actions: &mut BTreeMap<SelectionItemId, KeymapAction>,
 ) {
     let default_bindings = if action.default_bindings.is_empty() {
         vec!["unbound".to_owned()]
@@ -325,7 +325,7 @@ fn append_action_items(
 
 fn push_action_item(
     items: &mut Vec<SelectionItem>,
-    actions: &mut BTreeMap<SelectionItemId, ShortcutAction>,
+    actions: &mut BTreeMap<SelectionItemId, KeymapAction>,
     action: &KeymapActionSnapshot,
     revision: u64,
     key: String,
@@ -341,7 +341,7 @@ fn push_action_item(
     );
     actions.insert(
         item_id,
-        ShortcutAction::OpenAction {
+        KeymapAction::OpenAction {
             action: action.clone(),
             revision,
         },
@@ -371,9 +371,9 @@ fn binding_summary(action: &KeymapActionSnapshot) -> String {
 
 fn push_action(
     items: &mut Vec<SelectionItem>,
-    actions: &mut BTreeMap<SelectionItemId, ShortcutAction>,
+    actions: &mut BTreeMap<SelectionItemId, KeymapAction>,
     label: &str,
-    action: ShortcutAction,
+    action: KeymapAction,
 ) {
     let item_id = SelectionItemId::new(format!("keymap-action-{}", items.len()));
     items.push(SelectionItem::new(label).with_id(item_id.clone()));

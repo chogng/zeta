@@ -22,6 +22,14 @@ use crate::features::connectors::ConnectorSelectionView;
 use crate::features::interactions::InteractionSelectionOutcome;
 use crate::features::interactions::InteractionSelectionState;
 use crate::features::interactions::InteractionSelectionView;
+use crate::features::keymap::KeymapAction;
+use crate::features::keymap::KeymapCaptureOutcome;
+use crate::features::keymap::KeymapCaptureState;
+use crate::features::keymap::KeymapEdit;
+use crate::features::keymap::KeymapEditKind;
+use crate::features::keymap::KeymapView;
+use crate::features::keymap::keymap_action_menu;
+use crate::features::keymap::keymap_capture_view;
 use crate::features::mcp::McpSelectionAction;
 use crate::features::mcp::McpSelectionView;
 use crate::features::models::ModelSelectionAction;
@@ -30,14 +38,6 @@ use crate::features::rewind::RewindSelectionAction;
 use crate::features::rewind::RewindSelectionView;
 use crate::features::sessions::SessionSelectionAction;
 use crate::features::sessions::SessionSelectionView;
-use crate::features::shortcuts::ShortcutAction;
-use crate::features::shortcuts::ShortcutCaptureOutcome;
-use crate::features::shortcuts::ShortcutCaptureState;
-use crate::features::shortcuts::ShortcutEdit;
-use crate::features::shortcuts::ShortcutEditKind;
-use crate::features::shortcuts::ShortcutView;
-use crate::features::shortcuts::action_menu;
-use crate::features::shortcuts::capture_view;
 use crate::features::skills::{SkillSelectionAction, SkillSelectionView};
 use crate::features::status_line::ApprovalModeStatus;
 use crate::features::status_line::StatusLineModel;
@@ -105,8 +105,8 @@ enum SelectionActions {
     Skills(BTreeMap<SelectionItemId, SkillSelectionAction>),
     StatusLine(BTreeMap<SelectionItemId, StatusLineSelectionAction>),
     Theme(BTreeMap<SelectionItemId, ThemeSelectionAction>),
-    Shortcuts(BTreeMap<SelectionItemId, ShortcutAction>),
-    ShortcutCapture(ShortcutCaptureState),
+    Keymap(BTreeMap<SelectionItemId, KeymapAction>),
+    KeymapCapture(KeymapCaptureState),
 }
 
 impl App {
@@ -161,22 +161,22 @@ impl App {
     fn handle_key_at(&mut self, key: KeyEvent, now: Instant) -> Option<AppCommand> {
         if matches!(
             self.selection_actions.last(),
-            Some(SelectionActions::ShortcutCapture(_))
+            Some(SelectionActions::KeymapCapture(_))
         ) {
             let outcome = match self.selection_actions.last_mut() {
-                Some(SelectionActions::ShortcutCapture(capture)) => capture.handle_key(key),
-                _ => unreachable!("the shortcut capture state was checked above"),
+                Some(SelectionActions::KeymapCapture(capture)) => capture.handle_key(key),
+                _ => unreachable!("the keymap capture state was checked above"),
             };
             return match outcome {
-                ShortcutCaptureOutcome::Pending(model) => {
+                KeymapCaptureOutcome::Pending(model) => {
                     self.interaction_pane.replace_selection_view(model);
                     None
                 }
-                ShortcutCaptureOutcome::Cancelled => {
+                KeymapCaptureOutcome::Cancelled => {
                     self.close_selection_view();
                     None
                 }
-                ShortcutCaptureOutcome::Edit(edit) => Some(AppCommand::EditShortcut(edit)),
+                KeymapCaptureOutcome::Edit(edit) => Some(AppCommand::EditKeymap(edit)),
             };
         }
         let temporary_interaction_active = self.selection_view().is_some()
@@ -243,9 +243,9 @@ impl App {
             let outcome = state.activate_item(item_id)?;
             return self.apply_interaction_selection_outcome(outcome);
         }
-        if let Some(SelectionActions::Shortcuts(actions)) = self.selection_actions.last() {
+        if let Some(SelectionActions::Keymap(actions)) = self.selection_actions.last() {
             let action = actions.get(item_id)?.clone();
-            return self.apply_shortcut_action(action);
+            return self.apply_keymap_action(action);
         }
         match self.selection_actions.last()? {
             SelectionActions::ReadOnly => None,
@@ -343,33 +343,33 @@ impl App {
                 }
                 ThemeSelectionAction::OpenCustomThemes => Some(AppCommand::OpenCustomThemePane),
             },
-            SelectionActions::Shortcuts(_) | SelectionActions::ShortcutCapture(_) => None,
+            SelectionActions::Keymap(_) | SelectionActions::KeymapCapture(_) => None,
         }
     }
 
-    fn apply_shortcut_action(&mut self, action: ShortcutAction) -> Option<AppCommand> {
+    fn apply_keymap_action(&mut self, action: KeymapAction) -> Option<AppCommand> {
         match action {
-            ShortcutAction::OpenAction { action, revision } => {
-                self.show_shortcut_view(action_menu(action, revision));
+            KeymapAction::OpenAction { action, revision } => {
+                self.show_keymap_view(keymap_action_menu(action, revision));
                 None
             }
-            ShortcutAction::BeginCapture {
+            KeymapAction::BeginCapture {
                 action,
                 revision,
                 intent,
                 mode,
             } => {
-                let (model, capture) = capture_view(action, revision, intent, mode);
-                self.push_selection_view(model, SelectionActions::ShortcutCapture(capture));
+                let (model, capture) = keymap_capture_view(action, revision, intent, mode);
+                self.push_selection_view(model, SelectionActions::KeymapCapture(capture));
                 None
             }
-            ShortcutAction::ClearUser {
+            KeymapAction::ClearUser {
                 command_id,
                 revision,
-            } => Some(AppCommand::EditShortcut(ShortcutEdit {
+            } => Some(AppCommand::EditKeymap(KeymapEdit {
                 expected_revision: revision,
                 command_id,
-                kind: ShortcutEditKind::ClearUser,
+                kind: KeymapEditKind::ClearUser,
             })),
         }
     }
@@ -596,8 +596,8 @@ impl App {
         self.push_selection_view(view.model, SelectionActions::Theme(view.actions));
     }
 
-    fn show_shortcut_view(&mut self, view: ShortcutView) {
-        self.push_selection_view(view.model, SelectionActions::Shortcuts(view.actions));
+    fn show_keymap_view(&mut self, view: KeymapView) {
+        self.push_selection_view(view.model, SelectionActions::Keymap(view.actions));
     }
 
     fn show_status_line_view(&mut self, view: StatusLineSelectionView) {
@@ -608,11 +608,11 @@ impl App {
         self.replace_selection_view(view.model, SelectionActions::StatusLine(view.actions));
     }
 
-    fn close_shortcut_views(&mut self) {
+    fn close_keymap_views(&mut self) {
         self.root_escape_sequence.reset();
         while matches!(
             self.selection_actions.last(),
-            Some(SelectionActions::Shortcuts(_) | SelectionActions::ShortcutCapture(_))
+            Some(SelectionActions::Keymap(_) | SelectionActions::KeymapCapture(_))
         ) {
             self.interaction_pane.pop_selection_view();
             self.selection_actions.pop();
@@ -795,8 +795,8 @@ impl App {
                 self.status = Status::Ready;
             }
             AppEvent::InteractionViewOpened(view) => self.show_interaction_view(view),
-            AppEvent::ShortcutViewOpened(view) => self.show_shortcut_view(view),
-            AppEvent::ShortcutViewsClosed => self.close_shortcut_views(),
+            AppEvent::KeymapViewOpened(view) => self.show_keymap_view(view),
+            AppEvent::KeymapViewsClosed => self.close_keymap_views(),
             AppEvent::StatusLineSettingsReceived(settings) => {
                 self.status_line.apply_settings(settings)
             }
@@ -960,7 +960,7 @@ impl App {
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Shortcuts))
                 if invocation.arguments.is_empty() =>
             {
-                Some(AppCommand::OpenShortcutsPane)
+                Some(AppCommand::OpenKeymapPane)
             }
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Config))
                 if invocation.arguments.is_empty() =>

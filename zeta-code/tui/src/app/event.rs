@@ -5,11 +5,11 @@ use crate::features::config::ConfigSelectionView;
 use crate::features::config::TerminalSettings;
 use crate::features::connectors::ConnectorSelectionView;
 use crate::features::interactions::InteractionSelectionView;
+use crate::features::keymap::KeymapView;
 use crate::features::mcp::McpSelectionView;
 use crate::features::models::ModelSelectionView;
 use crate::features::rewind::RewindSelectionView;
 use crate::features::sessions::SessionSelectionView;
-use crate::features::shortcuts::ShortcutView;
 use crate::features::skills::SkillSelectionView;
 use crate::features::status_line::StatusLineSelectionView;
 use crate::features::status_line::StatusLineSettings;
@@ -51,8 +51,8 @@ pub(crate) enum AppEvent {
     InterruptFailed(String),
     ProductNotice(String),
     InteractionViewOpened(InteractionSelectionView),
-    ShortcutViewOpened(ShortcutView),
-    ShortcutViewsClosed,
+    KeymapViewOpened(KeymapView),
+    KeymapViewsClosed,
     StatusLineSettingsReceived(StatusLineSettings),
     StatusLineViewOpened(StatusLineSelectionView),
     StatusLineViewReplaced(StatusLineSelectionView),

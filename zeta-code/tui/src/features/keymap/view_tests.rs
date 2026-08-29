@@ -2,12 +2,12 @@ use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 
-use super::ShortcutCaptureOutcome;
-use super::capture_view;
+use super::KeymapCaptureOutcome;
+use super::keymap_capture_view;
 use crate::components::selection::SelectionViewState;
-use crate::features::shortcuts::ShortcutCaptureMode;
-use crate::features::shortcuts::ShortcutEditIntent;
-use crate::features::shortcuts::ShortcutEditKind;
+use crate::features::keymap::KeymapCaptureMode;
+use crate::features::keymap::KeymapEditIntent;
+use crate::features::keymap::KeymapEditKind;
 use crate::keymap::AppKeymap;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
@@ -23,18 +23,18 @@ fn copy_action() -> crate::keymap::KeymapActionSnapshot {
 
 #[test]
 fn chord_capture_waits_for_two_strokes_and_emits_canonical_edit() {
-    let (_, mut capture) = capture_view(
+    let (_, mut capture) = keymap_capture_view(
         copy_action(),
         4,
-        ShortcutEditIntent::AddAlternate,
-        ShortcutCaptureMode::Chord,
+        KeymapEditIntent::AddAlternate,
+        KeymapCaptureMode::Chord,
     );
 
     assert!(matches!(
         capture.handle_key(KeyEvent::new(KeyCode::Char('k'), KeyModifiers::CONTROL,)),
-        ShortcutCaptureOutcome::Pending(_)
+        KeymapCaptureOutcome::Pending(_)
     ));
-    let ShortcutCaptureOutcome::Edit(edit) =
+    let KeymapCaptureOutcome::Edit(edit) =
         capture.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL))
     else {
         panic!("expected completed chord edit");
@@ -44,31 +44,31 @@ fn chord_capture_waits_for_two_strokes_and_emits_canonical_edit() {
     assert_eq!(edit.command_id, "zetaCode.action.copyLastResponse");
     assert_eq!(
         edit.kind,
-        ShortcutEditKind::Set {
+        KeymapEditKind::Set {
             key: "ctrl+k ctrl+y".into(),
-            intent: ShortcutEditIntent::AddAlternate,
+            intent: KeymapEditIntent::AddAlternate,
         }
     );
 }
 
 #[test]
 fn escape_cancels_capture_without_emitting_an_edit() {
-    let (_, mut capture) = capture_view(
+    let (_, mut capture) = keymap_capture_view(
         copy_action(),
         1,
-        ShortcutEditIntent::ReplaceUser,
-        ShortcutCaptureMode::SingleKey,
+        KeymapEditIntent::ReplaceUser,
+        KeymapCaptureMode::SingleKey,
     );
 
     assert!(matches!(
         capture.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
-        ShortcutCaptureOutcome::Cancelled
+        KeymapCaptureOutcome::Cancelled
     ));
 }
 
 #[test]
-fn shortcut_view_lists_keys_before_responsibilities() {
-    let view = super::shortcut_view(
+fn keymap_view_lists_keys_before_responsibilities() {
+    let view = super::keymap_view(
         AppKeymap::default().setup_actions(),
         std::path::Path::new("/profile/zeta-code/keybindings.json"),
         &[],
@@ -109,7 +109,7 @@ fn shortcut_rows_align_responsibility_and_source_columns_without_command_ids() {
     .unwrap();
     let mut keymap = AppKeymap::default();
     keymap.replace_user_bindings(rules).unwrap();
-    let view = super::shortcut_view(
+    let view = super::keymap_view(
         keymap.setup_actions(),
         std::path::Path::new("/profile/zeta-code/keybindings.json"),
         &[],

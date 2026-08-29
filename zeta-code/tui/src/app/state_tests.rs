@@ -12,10 +12,10 @@ use crate::components::selection::SelectionViewModel;
 use crate::components::transcript::MessageRole;
 use crate::features::config::TerminalSettings;
 use crate::features::config::config_view;
+use crate::features::keymap::KeymapEditIntent;
+use crate::features::keymap::KeymapEditKind;
+use crate::features::keymap::keymap_view;
 use crate::features::rewind::rewind_selection_view;
-use crate::features::shortcuts::ShortcutEditIntent;
-use crate::features::shortcuts::ShortcutEditKind;
-use crate::features::shortcuts::shortcut_view;
 use crate::features::status_line::StatusLineItem;
 use crate::features::status_line::StatusLineResource;
 use crate::features::theme::ThemePickerCatalog;
@@ -517,7 +517,7 @@ fn shortcut_slash_command_is_owned_by_the_local_host() {
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    assert_eq!(action, Some(AppCommand::OpenShortcutsPane));
+    assert_eq!(action, Some(AppCommand::OpenKeymapPane));
     assert!(app.messages().is_empty());
 }
 
@@ -711,14 +711,14 @@ fn statusline_selection_emits_a_revision_bound_edit() {
 #[test]
 fn shortcut_capture_emits_a_revision_bound_edit() {
     let mut app = App::new();
-    app.update(AppEvent::ShortcutViewOpened(shortcut_view(
+    app.update(AppEvent::KeymapViewOpened(keymap_view(
         AppKeymap::default().setup_actions(),
         Path::new("/profile/zeta-code/keybindings.json"),
         &[],
         7,
     )));
 
-    assert_eq!(app.selection_view().unwrap().title(), "Shortcuts");
+    assert_eq!(app.selection_view().unwrap().title(), "Keymap");
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         None
@@ -733,13 +733,13 @@ fn shortcut_capture_emits_a_revision_bound_edit() {
     let edit = app.handle_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::CONTROL));
     assert_eq!(
         edit,
-        Some(AppCommand::EditShortcut(
-            crate::features::shortcuts::ShortcutEdit {
+        Some(AppCommand::EditKeymap(
+            crate::features::keymap::KeymapEdit {
                 expected_revision: 7,
                 command_id: "zetaCode.action.cycleApprovalMode".into(),
-                kind: ShortcutEditKind::Set {
+                kind: KeymapEditKind::Set {
                     key: "ctrl+y".into(),
-                    intent: ShortcutEditIntent::ReplaceUser,
+                    intent: KeymapEditIntent::ReplaceUser,
                 },
             }
         ))
