@@ -41,4 +41,8 @@ test("color identifiers map to stable CSS custom properties", () => {
 		colorCssVariable(ColorId.titleBarForeground),
 		"--zeta-title-bar-foreground",
 	);
+	assert.equal(
+		colorCssVariable(ColorId.editorMultiCursorSecondaryBackground),
+		"--zeta-editor-multi-cursor-secondary-background",
+	);
 });

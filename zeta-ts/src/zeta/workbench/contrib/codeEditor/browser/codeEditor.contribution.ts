@@ -43,6 +43,7 @@ registerEditorPane({
 			renderLineHighlightOnlyWhenFocus: configuration?.getValue(CodeEditorConfiguration.renderLineHighlightOnlyWhenFocus),
 			cursorStyle: configuration?.getValue(CodeEditorConfiguration.cursorStyle),
 			cursorBlinking: configuration?.getValue(CodeEditorConfiguration.cursorBlinking),
+			cursorSmoothCaretAnimation: configuration?.getValue(CodeEditorConfiguration.cursorSmoothCaretAnimation),
 			cursorWidth: configuration?.getValue(CodeEditorConfiguration.cursorWidth),
 			cursorHeight: configuration?.getValue(CodeEditorConfiguration.cursorHeight),
 			lineNumbers: configuration?.getValue(CodeEditorConfiguration.lineNumbers) === false ? 'off' : 'on',

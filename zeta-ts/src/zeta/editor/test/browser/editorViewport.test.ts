@@ -18,6 +18,7 @@ import { TextModel } from "../../common/model/textModel.js";
 import { PositionAffinity } from '../../common/model.js';
 import { TextDecorationCollection } from "../../common/model/decorationCollection.js";
 import { TrackedRangeStickiness } from "../../common/model/trackedRange.js";
+import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken, type SemanticTokenSource } from '../../common/services/semanticTokensStyling.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -179,7 +180,7 @@ test("EditorViewport uses browser range geometry for RTL selections and carets",
 		{ left: "20px", width: "15px" },
 		{ left: "50px", width: "20px" },
 	]);
-	assert.equal(requiredElement<HTMLElement>(requiredPartRow(viewport.element, "stanza-editor-line-cursors", 0), ".stanza-editor-caret").style.left, "34px");
+	assert.equal(requiredElement<HTMLElement>(viewport.element, ".stanza-editor-caret").style.left, "34px");
 	assert.equal(viewport.getPositionContentCoordinates(TextPosition.at(0, 3)).left, 35);
 	dom.window.close();
 });
@@ -882,8 +883,8 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 	);
 	assert.equal(selectionElements.every(element => element.parentElement?.classList.contains("stanza-editor-line-selections")), true);
 	assert.equal(caretElements.length, 2);
-	assert.equal(caretElements.every(element => element.parentElement?.classList.contains("stanza-editor-line-cursors")), true);
-	assert.equal(caretElements[0]?.classList.contains("primary"), true);
+	assert.equal(caretElements.every(element => element.parentElement?.classList.contains("stanza-editor-cursors-layer")), true);
+	assert.equal(caretElements[0]?.classList.contains("cursor-primary"), true);
 	assert.equal(caretElements[0]?.style.left, "67px");
 	assert.equal(
 		lineNumber(requiredLine(viewport.element, 0))
@@ -902,9 +903,7 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 		0,
 	);
 	assert.equal(
-		requiredPartRow(viewport.element, "stanza-editor-line-cursors", 1)
-			.querySelector<HTMLElement>(".stanza-editor-caret")
-			?.style.left,
+		viewport.element.querySelector<HTMLElement>('.stanza-editor-caret[data-selection-index="0"]')?.style.left,
 		"77px",
 	);
 	assert.equal(
@@ -921,9 +920,7 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 
 	assert.equal(controller.selections.primary.active.lineIndex, 2);
 	assert.equal(
-		requiredPartRow(viewport.element, "stanza-editor-line-cursors", 2)
-			.querySelector<HTMLElement>(".stanza-editor-caret")
-			?.style.left,
+		viewport.element.querySelector<HTMLElement>('.stanza-editor-caret[data-selection-index="0"]')?.style.left,
 		"77px",
 	);
 	assert.equal(
@@ -990,7 +987,7 @@ test('EditorViewport places RTL block cursors over their following glyph or trai
 		configurable: true,
 		value: () => testRectangle(100, 0, 300),
 	});
-	const caret = requiredElement<HTMLElement>(requiredPartRow(viewport.element, 'stanza-editor-line-cursors', 0), '.stanza-editor-caret');
+	const caret = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-caret');
 	assert.equal(caret.getAttribute('aria-hidden'), 'true');
 	selections.setSelections(TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	const overGlyph = { left: caret.style.left, width: caret.style.width, text: caret.textContent };
@@ -1063,12 +1060,12 @@ test('EditorViewport preserves line, gutter, focus, and multi-cursor highlight s
 		cursorHeight: 12,
 	});
 	viewport.layout({ width: 300, height: 60 });
-	const primaryCaret = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-caret.primary');
+	const primaryCaret = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-caret.cursor-primary');
 	assert.equal(primaryCaret.classList.contains('cursor-style-block-outline'), true);
 	assert.equal(requiredElement(viewport.element, '.stanza-editor-cursors-layer').classList.contains('cursor-blinking-solid'), true);
 	assert.equal(primaryCaret.style.width, '8px');
 	assert.equal(primaryCaret.style.height, '20px');
-	assert.equal(primaryCaret.style.top, '0px');
+	assert.equal(primaryCaret.style.top, '40px');
 
 	for (const lineIndex of [0, 2]) {
 		const row = requiredPartRow(viewport.element, 'stanza-editor-current-line-highlight', lineIndex);
@@ -1191,6 +1188,140 @@ test('EditorViewport gives every cursor one shared blinking animation', () => {
 		layerExpands: true,
 		animationTime: 0,
 		cursorAnimationClasses: [[], []],
+	});
+	dom.window.close();
+});
+
+test('EditorViewport animates stable explicit cursor movement and pauses cursor-count changes', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('alpha\nbeta');
+	using controller = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using viewport = new EditorViewport({
+		container,
+		model,
+		selectionController: controller,
+		lineHeight: 20,
+		textMeasurer: fixedTextMeasurer(),
+		cursorBlinking: 'solid',
+		cursorSmoothCaretAnimation: 'explicit',
+	});
+	viewport.layout({ width: 200, height: 40 });
+	const layer = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-cursors-layer');
+	const firstCaret = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-caret');
+	const initial = { top: firstCaret.style.top, transitionProperty: firstCaret.style.transitionProperty };
+
+	controller.setCursorSelections(TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(1, 0))));
+	const moved = { top: firstCaret.style.top, transitionProperty: firstCaret.style.transitionProperty };
+	controller.setCursorSelections(TextSelectionSet.withPrimary([
+		TextSelection.collapsedAt(TextPosition.at(0, 0)),
+		TextSelection.collapsedAt(TextPosition.at(1, 0)),
+	], 1));
+
+	assert.deepEqual({
+		smoothClass: layer.classList.contains('cursor-smooth-caret-animation'),
+		initial,
+		moved,
+		multiple: [...viewport.element.querySelectorAll<HTMLElement>('.stanza-editor-caret')].map(caret => ({
+			plurality: caret.classList.contains('cursor-primary') ? 'primary' : 'secondary',
+			transitionProperty: caret.style.transitionProperty,
+		})),
+	}, {
+		smoothClass: true,
+		initial: { top: '0px', transitionProperty: 'none' },
+		moved: { top: '20px', transitionProperty: '' },
+		multiple: [
+			{ plurality: 'secondary', transitionProperty: 'none' },
+			{ plurality: 'primary', transitionProperty: 'none' },
+		],
+	});
+	dom.window.close();
+});
+
+test('EditorViewport snaps line cursors to physical pixels', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	Object.defineProperty(dom.window, 'devicePixelRatio', { configurable: true, value: 1.25 });
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('abc');
+	using controller = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
+	using viewport = new EditorViewport({
+		container,
+		model,
+		selectionController: controller,
+		lineHeight: 20,
+		textMeasurer: fixedTextMeasurer(10, 24),
+		cursorStyle: 'line',
+		cursorBlinking: 'solid',
+		cursorWidth: 2,
+	});
+	viewport.layout({ width: 200, height: 40 });
+	const caret = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-caret');
+
+	assert.deepEqual({ left: caret.style.left, paddingLeft: caret.style.paddingLeft, width: caret.style.width }, {
+		left: '68px',
+		paddingLeft: '0px',
+		width: '1.6px',
+	});
+	dom.window.close();
+});
+
+test('EditorViewport keeps token font styling on characters redrawn inside cursors', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('alpha');
+	using tokenChanges = new Emitter<void>();
+	let tokens: readonly ResolvedSemanticToken[] = Object.freeze([Object.freeze({
+		startColumn: 0,
+		endColumn: 5,
+		presentation: SemanticTokenPresentation.Keyword,
+		modifiers: Object.freeze([SemanticTokenModifier.Declaration, SemanticTokenModifier.Readonly]),
+		syntaxPresentation: Object.freeze({ fontStyle: Object.freeze(['italic', 'bold', 'underline'] as const) }),
+	})]);
+	const semanticTokenSource: SemanticTokenSource = {
+		textModel: model,
+		onDidChange: tokenChanges.event,
+		get lines() { return Object.freeze([Object.freeze({ lineIndex: 0, tokens })]); },
+		getLineTokens: () => tokens,
+	};
+	using controller = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
+	using viewport = new EditorViewport({
+		container,
+		model,
+		selectionController: controller,
+		semanticTokenSource,
+		lineHeight: 20,
+		textMeasurer: fixedTextMeasurer(),
+		cursorStyle: 'block',
+		cursorBlinking: 'solid',
+	});
+	viewport.layout({ width: 200, height: 40 });
+	const caret = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-caret');
+	const styled = {
+		classes: [...caret.classList].filter(className => className.startsWith('token-')),
+		fontStyle: caret.style.fontStyle,
+		fontWeight: caret.style.fontWeight,
+		textDecorationLine: caret.style.textDecorationLine,
+	};
+
+	tokens = Object.freeze([]);
+	tokenChanges.fire();
+
+	assert.deepEqual({
+		styled,
+		cleared: {
+			classes: [...caret.classList].filter(className => className.startsWith('token-')),
+			fontStyle: caret.style.fontStyle,
+			fontWeight: caret.style.fontWeight,
+			textDecorationLine: caret.style.textDecorationLine,
+		},
+	}, {
+		styled: {
+			classes: ['token-keyword', 'token-modifier-declaration', 'token-modifier-readonly'],
+			fontStyle: 'italic',
+			fontWeight: 'bold',
+			textDecorationLine: 'underline',
+		},
+		cleared: { classes: [], fontStyle: '', fontWeight: '', textDecorationLine: '' },
 	});
 	dom.window.close();
 });

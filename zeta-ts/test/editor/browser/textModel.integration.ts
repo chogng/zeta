@@ -5,6 +5,8 @@ import { CodeEditorPane } from "../../../src/zeta/workbench/contrib/codeEditor/b
 import { LanguageConfigurationService } from "../../../src/zeta/editor/common/services/languageConfigurationService.js";
 import { LanguageFeaturesService } from "../../../src/zeta/editor/common/services/languageFeaturesService.js";
 import { LanguageService } from "../../../src/zeta/editor/common/services/languageService.js";
+import { TextPosition } from "../../../src/zeta/editor/common/core/text.js";
+import { TextSelection, TextSelectionSet } from "../../../src/zeta/editor/common/core/selection.js";
 import { BrowserTextResourceStore } from "../../../src/zeta/workbench/contrib/codeEditor/browser/browserTextResourceStore.js";
 import { AppServerSyntaxProviders } from "../../../src/zeta/workbench/services/language/browser/appServerSyntaxProviders.js";
 import { WorkbenchLanguageFeatures } from "../../../src/zeta/workbench/services/language/browser/workbenchLanguageFeatures.js";
@@ -19,6 +21,7 @@ interface IntegrationHarness {
 	save(): Promise<void>;
 	getSavedText(): string;
 	getSyntaxAnalysisCount(): number;
+	setCursors(positions: readonly { readonly lineIndex: number; readonly columnIndex: number }[], primaryIndex?: number): void;
 	dispose(): void;
 }
 
@@ -62,12 +65,17 @@ disposables.add(new AppServerSyntaxProviders(languageFeaturesService, {
 	},
 	selectionRanges: async params => ({ revision: params.revision, ranges: [] }),
 }));
+let editorPart: ReturnType<typeof createBrowserEditorPart> | undefined;
 const pane = disposables.add(new CodeEditorPane(resourceStore, {
 	modelService: models,
-	createPart: createBrowserEditorPart,
+	createPart: options => {
+		editorPart = createBrowserEditorPart(options);
+		return editorPart;
+	},
 	languageResolver: languageService,
 	languageConfigurationService,
 	languageFeaturesService,
+	cursorSmoothCaretAnimation: "explicit",
 }));
 const apiModel = disposables.add(new TextModel("editor-api"));
 
@@ -81,8 +89,17 @@ window.zetaTextModelIntegration = {
 	save: () => pane.save(),
 	getSavedText: () => files.read(resource),
 	getSyntaxAnalysisCount: () => syntaxAnalysisCount,
+	setCursors: (positions, primaryIndex = 0) => requiredEditorPart().selections.setCursorSelections(TextSelectionSet.withPrimary(
+		positions.map(position => TextSelection.collapsedAt(TextPosition.at(position.lineIndex, position.columnIndex))),
+		primaryIndex,
+	)),
 	dispose: () => disposables.dispose(),
 };
+
+function requiredEditorPart(): ReturnType<typeof createBrowserEditorPart> {
+	if (!editorPart) throw new Error("Text model integration editor is missing");
+	return editorPart;
+}
 
 function requiredElement(selector: string): HTMLElement {
 	const element = document.querySelector<HTMLElement>(selector);

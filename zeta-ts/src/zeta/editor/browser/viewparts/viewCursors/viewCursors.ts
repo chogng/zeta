@@ -2,23 +2,26 @@ import "./viewCursors.css";
 import { h, reset } from '../../../../base/browser/dom.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { TextEditorCursorBlinkingStyle, TextEditorCursorStyle } from '../../../common/config/editorOptions.js';
-import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { EditorSelectionChangeReason, type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from '../../../common/core/selection.js';
 import { TextPosition, TextRange } from '../../../common/core/text.js';
 import { getTextGraphemeBoundaries } from '../../../common/core/textSegmentation.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { TrackedRangeStickiness, type TrackedRange } from '../../../common/model/trackedRange.js';
+import { type SemanticTokenSource } from '../../../common/services/semanticTokensStyling.js';
 import { createStanzaVisualSelectionGeometry } from '../../../common/viewModel/visualSelectionGeometry.js';
 import { createStanzaVisualRangeRectangles } from '../../../common/viewModel/visualRangeGeometry.js';
 import { type EditorLineVisibleRange, type EditorOverlayContext, type EditorVisiblePosition } from '../../view/renderingContext.js';
 import { DynamicViewOverlay } from "../../view/dynamicViewOverlay.js";
 import { type EditorRenderingContext, EditorViewContext } from "../../view/viewPart.js";
 import { ViewPartRows } from '../../view/viewLayer.js';
-import { ViewCursor, type ViewCursorOptions } from './viewCursor.js';
+import { ViewCursor, type ViewCursorCharacterPresentation, type ViewCursorOptions, type ViewCursorPlurality } from './viewCursor.js';
 
 export interface ViewCursorsOptions extends ViewCursorOptions {
 	readonly host: HTMLElement;
 	readonly blinking: TextEditorCursorBlinkingStyle;
+	readonly smoothCaretAnimation: 'off' | 'explicit' | 'on';
+	readonly semanticTokenSource?: SemanticTokenSource;
 }
 
 /** Projects primary and secondary carets without owning cursor positions. */
@@ -26,20 +29,34 @@ export class ViewCursors extends DynamicViewOverlay {
 	public readonly domNode: HTMLElement;
 	private readonly model: TextModel;
 	private readonly selectionController: EditorSelectionController | undefined;
-	private readonly rows: ViewPartRows;
+	private readonly semanticTokenSource: SemanticTokenSource | undefined;
+	private readonly compositionRows: ViewPartRows;
+	private readonly smoothCaretAnimation: 'off' | 'explicit' | 'on';
 	private cursorOptions: ViewCursorOptions;
 	private readonly cursors = new Map<number, ViewCursor>();
 	private compositionRange: TrackedRange | undefined;
+	private previousSelectionCount: number;
+	private pauseMovementAnimation = true;
+	private movementRenderGeneration = 0;
 
 	constructor(context: EditorViewContext, options: ViewCursorsOptions, model: TextModel, selectionController: EditorSelectionController | undefined) {
 		super(context);
-		this.rows = this._register(new ViewPartRows(options.host, 'stanza-editor-cursors-layer', 'stanza-editor-line-cursors'));
-		this.domNode = this.rows.domNode;
+		this.domNode = h(options.host.ownerDocument, 'div');
+		this.domNode.className = 'stanza-editor-cursors-layer';
 		this.domNode.classList.add(cursorBlinkingClass(options.blinking));
+		this.domNode.classList.toggle('cursor-smooth-caret-animation', options.smoothCaretAnimation !== 'off');
+		this.domNode.setAttribute('role', 'presentation');
+		this.domNode.setAttribute('aria-hidden', 'true');
+		this.compositionRows = this._register(new ViewPartRows(this.domNode, 'stanza-editor-composition-layer', 'stanza-editor-composition-row'));
+		this.domNode.append(this.compositionRows.domNode);
 		this.model = model;
 		this.selectionController = selectionController;
+		this.semanticTokenSource = options.semanticTokenSource;
+		this.smoothCaretAnimation = options.smoothCaretAnimation;
 		this.cursorOptions = options;
+		this.previousSelectionCount = selectionController?.selections.selections.length ?? 0;
 		this._register(toDisposable(() => this.compositionRange?.dispose()));
+		this._register(toDisposable(() => this.domNode.remove()));
 	}
 
 	public setCompositionRange(range: TextRange | undefined): void {
@@ -64,14 +81,46 @@ export class ViewCursors extends DynamicViewOverlay {
 	}
 
 	public render(context: EditorRenderingContext): void {
+		this.renderCursors(context, this.pauseMovementAnimation);
+	}
+
+	public renderSelection(context: EditorRenderingContext, reason: EditorSelectionChangeReason): void {
+		const selectionCount = this.selectionController?.selections.selections.length ?? 0;
+		this.pauseMovementAnimation = !this.shouldAnimateMovement(reason, selectionCount);
+		this.previousSelectionCount = selectionCount;
+		this.renderCursors(context, this.pauseMovementAnimation);
+		for (const animation of this.domNode.getAnimations?.() ?? []) animation.currentTime = 0;
+		const generation = ++this.movementRenderGeneration;
+		queueMicrotask(() => {
+			if (generation === this.movementRenderGeneration) this.pauseMovementAnimation = true;
+		});
+	}
+
+	public renderTokens(context: EditorRenderingContext): void {
+		this.movementRenderGeneration += 1;
+		this.pauseMovementAnimation = true;
+		this.renderCursors(context, true);
+	}
+
+	private renderCursors(context: EditorRenderingContext, pauseMovementAnimation: boolean): void {
 		const overlay = context.overlay;
 		if (!overlay) {
 			return;
 		}
-		const rows = this.rows.render(context);
+		const rows = this.compositionRows.render(context);
 		for (const row of rows.values()) reset(row);
 		projectStanzaCompositionOverlay(overlay, this.compositionRange?.range, rows);
-		const renderedCursorIndexes = projectStanzaCursorOverlays(overlay, this.selectionController, rows, this.cursors, this.cursorOptions, context.layout.lineHeight);
+		const renderedCursorIndexes = projectStanzaCursorOverlays({
+			renderingContext: context,
+			overlay,
+			controller: this.selectionController,
+			host: this.domNode,
+			cursors: this.cursors,
+			cursorOptions: this.cursorOptions,
+			lineHeight: context.layout.lineHeight,
+			pauseMovementAnimation,
+			semanticTokenSource: this.semanticTokenSource,
+		});
 		for (const [selectionIndex, cursor] of this.cursors) {
 			if (renderedCursorIndexes.has(selectionIndex)) {
 				continue;
@@ -81,9 +130,10 @@ export class ViewCursors extends DynamicViewOverlay {
 		}
 	}
 
-	public renderSelection(context: EditorRenderingContext): void {
-		this.renderNow(context);
-		for (const animation of this.domNode.getAnimations?.() ?? []) animation.currentTime = 0;
+	private shouldAnimateMovement(reason: EditorSelectionChangeReason, selectionCount: number): boolean {
+		if (this.smoothCaretAnimation === 'off' || selectionCount !== this.previousSelectionCount) return false;
+		if (this.smoothCaretAnimation === 'on') return true;
+		return reason === EditorSelectionChangeReason.Explicit || reason === EditorSelectionChangeReason.CursorOperation || reason === EditorSelectionChangeReason.CursorUndo;
 	}
 }
 
@@ -98,26 +148,89 @@ function cursorBlinkingClass(blinking: TextEditorCursorBlinkingStyle): string {
 	}
 }
 
-function projectStanzaCursorOverlays(context: EditorOverlayContext, controller: EditorSelectionController | undefined, rows: ReadonlyMap<number, HTMLElement>, cursors: Map<number, ViewCursor>, cursorOptions: ViewCursorOptions, lineHeight: number): ReadonlySet<number> {
+interface CursorOverlayProjectionOptions {
+	readonly renderingContext: EditorRenderingContext;
+	readonly overlay: EditorOverlayContext;
+	readonly controller: EditorSelectionController | undefined;
+	readonly host: HTMLElement;
+	readonly cursors: Map<number, ViewCursor>;
+	readonly cursorOptions: ViewCursorOptions;
+	readonly lineHeight: number;
+	readonly pauseMovementAnimation: boolean;
+	readonly semanticTokenSource: SemanticTokenSource | undefined;
+}
+
+function projectStanzaCursorOverlays(options: CursorOverlayProjectionOptions): ReadonlySet<number> {
+	const {
+		renderingContext,
+		overlay,
+		controller,
+		host,
+		cursors,
+		cursorOptions,
+		lineHeight,
+		pauseMovementAnimation,
+		semanticTokenSource,
+	} = options;
 	const renderedCursorIndexes = new Set<number>();
 	if (!controller) return renderedCursorIndexes;
-	const cursorGraphemes = controller.selections.selections.map(selection => cursorGrapheme(context, selection.active));
+	const cursorGraphemes = controller.selections.selections.map(selection => cursorGrapheme(overlay, selection.active));
 	const domCarets = new Map<number, DomCaretGeometry>();
 	for (let selectionIndex = 0; selectionIndex < cursorGraphemes.length; selectionIndex += 1) {
-		const geometry = domCaretGeometry(context, cursorGraphemes[selectionIndex]!.position);
+		const geometry = domCaretGeometry(overlay, cursorGraphemes[selectionIndex]!.position);
 		if (geometry) domCarets.set(selectionIndex, geometry);
 	}
 	const cursorSelections = TextSelectionSet.withPrimary(
 		cursorGraphemes.map(grapheme => TextSelection.collapsedAt(grapheme.position)),
 		controller.selections.primaryIndex,
 	);
-	const geometry = createStanzaVisualSelectionGeometry(context.model, cursorSelections, context.visualLineProjection, context.renderLines, context.textLeft, context.textMeasurer);
+	const geometry = createStanzaVisualSelectionGeometry(
+		overlay.model,
+		cursorSelections,
+		overlay.visualLineProjection,
+		overlay.renderLines,
+		overlay.textLeft,
+		overlay.textMeasurer,
+	);
 	for (const rectangle of geometry.carets) {
 		if (domCarets.has(rectangle.selectionIndex)) continue;
-		appendCaret(context, rows, cursors, renderedCursorIndexes, cursorOptions, lineHeight, rectangle.selectionIndex, rectangle.visualLineIndex, rectangle.left, undefined, rectangle.primary, cursorGraphemes[rectangle.selectionIndex]!);
+		appendCaret({
+			renderingContext,
+			overlay,
+			host,
+			cursors,
+			renderedCursorIndexes,
+			cursorOptions,
+			lineHeight,
+			selectionIndex: rectangle.selectionIndex,
+			visualLineIndex: rectangle.visualLineIndex,
+			caretLeft: rectangle.left,
+			primary: rectangle.primary,
+			hasMultipleCursors: cursorGraphemes.length > 1,
+			grapheme: cursorGraphemes[rectangle.selectionIndex]!,
+			pauseMovementAnimation,
+			semanticTokenSource,
+		});
 	}
 	for (const [selectionIndex, rectangle] of domCarets) {
-		appendCaret(context, rows, cursors, renderedCursorIndexes, cursorOptions, lineHeight, selectionIndex, rectangle.visualLineIndex, rectangle.left, rectangle, selectionIndex === controller.selections.primaryIndex, cursorGraphemes[selectionIndex]!);
+		appendCaret({
+			renderingContext,
+			overlay,
+			host,
+			cursors,
+			renderedCursorIndexes,
+			cursorOptions,
+			lineHeight,
+			selectionIndex,
+			visualLineIndex: rectangle.visualLineIndex,
+			caretLeft: rectangle.left,
+			domGeometry: rectangle,
+			primary: selectionIndex === controller.selections.primaryIndex,
+			hasMultipleCursors: cursorGraphemes.length > 1,
+			grapheme: cursorGraphemes[selectionIndex]!,
+			pauseMovementAnimation,
+			semanticTokenSource,
+		});
 	}
 	return renderedCursorIndexes;
 }
@@ -137,15 +250,74 @@ function domCaretGeometry(context: EditorOverlayContext, position: TextPosition)
 	return characterRange ? Object.freeze({ ...caret, characterRange }) : caret;
 }
 
-function appendCaret(context: EditorOverlayContext, rows: ReadonlyMap<number, HTMLElement>, cursors: Map<number, ViewCursor>, renderedCursorIndexes: Set<number>, cursorOptions: ViewCursorOptions, lineHeight: number, selectionIndex: number, visualLineIndex: number, caretLeft: number, domGeometry: DomCaretGeometry | undefined, primary: boolean, grapheme: CursorGrapheme): void {
-	const row = rows.get(visualLineIndex);
-	if (!row) return;
-	const cursor = cursors.get(selectionIndex) ?? new ViewCursor(row, selectionIndex, cursorOptions);
+interface AppendCaretOptions {
+	readonly renderingContext: EditorRenderingContext;
+	readonly overlay: EditorOverlayContext;
+	readonly host: HTMLElement;
+	readonly cursors: Map<number, ViewCursor>;
+	readonly renderedCursorIndexes: Set<number>;
+	readonly cursorOptions: ViewCursorOptions;
+	readonly lineHeight: number;
+	readonly selectionIndex: number;
+	readonly visualLineIndex: number;
+	readonly caretLeft: number;
+	readonly domGeometry?: DomCaretGeometry;
+	readonly primary: boolean;
+	readonly hasMultipleCursors: boolean;
+	readonly grapheme: CursorGrapheme;
+	readonly pauseMovementAnimation: boolean;
+	readonly semanticTokenSource: SemanticTokenSource | undefined;
+}
+
+function appendCaret(options: AppendCaretOptions): void {
+	const {
+		renderingContext,
+		overlay,
+		host,
+		cursors,
+		renderedCursorIndexes,
+		cursorOptions,
+		lineHeight,
+		selectionIndex,
+		visualLineIndex,
+		caretLeft,
+		domGeometry,
+		primary,
+		hasMultipleCursors,
+		grapheme,
+		pauseMovementAnimation,
+		semanticTokenSource,
+	} = options;
+	const cursor = cursors.get(selectionIndex) ?? new ViewCursor(host, selectionIndex, cursorOptions);
 	cursors.set(selectionIndex, cursor);
-	const characterWidth = domGeometry?.characterRange?.width ?? cursorCharacterWidth(context, grapheme);
+	const characterWidth = domGeometry?.characterRange?.width ?? cursorCharacterWidth(overlay, grapheme);
 	const characterLeft = domGeometry?.characterRange?.left ?? (domGeometry?.isRightToLeft ? caretLeft - characterWidth : caretLeft);
-	cursor.render(row, caretLeft, characterLeft, characterWidth, grapheme.character, lineHeight, primary);
+	const plurality: ViewCursorPlurality = hasMultipleCursors ? primary ? 'primary' : 'secondary' : 'single';
+	cursor.render({
+		top: renderingContext.viewportData.getLineTop(visualLineIndex),
+		caretLeft,
+		characterLeft,
+		characterWidth,
+		character: grapheme.character,
+		rowHeight: lineHeight,
+		plurality,
+		pauseMovementAnimation,
+		presentation: cursorCharacterPresentation(semanticTokenSource, grapheme.position),
+	});
 	renderedCursorIndexes.add(selectionIndex);
+}
+
+function cursorCharacterPresentation(source: SemanticTokenSource | undefined, position: TextPosition): ViewCursorCharacterPresentation | undefined {
+	const token = source?.getLineTokens(position.lineIndex).find(candidate => candidate.startColumn <= position.columnIndex && position.columnIndex < candidate.endColumn);
+	if (!token) return undefined;
+	const syntaxFontStyle = token.syntaxPresentation?.fontStyle ?? [];
+	const decorations = syntaxFontStyle.filter(style => style === 'underline' || style === 'strikethrough').map(style => style === 'strikethrough' ? 'line-through' : style);
+	return Object.freeze({
+		classNames: Object.freeze(['stanza-editor-token', ...(token.presentation ? [token.presentation] : []), ...(token.modifiers ?? [])]),
+		...(syntaxFontStyle.includes('italic') ? { fontStyle: 'italic' } : {}),
+		...(syntaxFontStyle.includes('bold') ? { fontWeight: 'bold' } : {}),
+		...(decorations.length > 0 ? { textDecorationLine: decorations.join(' ') } : {}),
+	});
 }
 
 interface CursorGrapheme {

@@ -1,6 +1,7 @@
 import { registerColor } from "../colorRegistry.js";
 import { border as defaultBorder, descriptionForeground as baseDescriptionForeground, errorForeground, foreground, mutedForeground, successForeground, widgetBorder as baseWidgetBorder, widgetShadow as baseWidgetShadow } from "./baseColors.js";
 import { hoverBackground as componentHoverBackground, hoverBorder as componentHoverBorder, hoverForeground as componentHoverForeground, inputBackground as componentInputBackground, listHoverBackground as componentListHoverBackground } from "./componentColors.js";
+import { editorBackground } from "./workbenchColors.js";
 
 const owner = "editor.presentation";
 const color = (id: string, dark: string, light: string, description: string): string => registerColor(id, { dark, light }, { description, owner });
@@ -37,6 +38,16 @@ export const hoverBorder = alias("editor.hoverBorder", componentHoverBorder, "Bo
 export const inlayHintForeground = alias("editor.inlayHintForeground", mutedForeground, "Foreground for editor inlay hints.");
 export const inlineCompletionForeground = alias("editor.inlineCompletionForeground", mutedForeground, "Foreground for inline completions.");
 export const compositionBorder = color("editor.compositionBorder", "#a0a0a0", "#a0a0a0", "Border under text in an active input method composition.");
+export const cursorForeground = registerColor(
+	"editorCursor.foreground",
+	{ dark: "#aeafad", light: "#000000", highContrastDark: "#ffffff", highContrastLight: "#0f4a85" },
+	{ description: "Foreground for the editor cursor.", owner },
+);
+export const cursorBackground = alias("editorCursor.background", editorBackground, "Foreground for a character covered by a block editor cursor.");
+export const multiCursorPrimaryForeground = alias("editorMultiCursor.primary.foreground", cursorForeground, "Foreground for the primary cursor when multiple cursors are active.");
+export const multiCursorPrimaryBackground = alias("editorMultiCursor.primary.background", cursorBackground, "Foreground for a character covered by the primary cursor when multiple cursors are active.");
+export const multiCursorSecondaryForeground = alias("editorMultiCursor.secondary.foreground", cursorForeground, "Foreground for secondary cursors when multiple cursors are active.");
+export const multiCursorSecondaryBackground = alias("editorMultiCursor.secondary.background", cursorBackground, "Foreground for a character covered by a secondary cursor when multiple cursors are active.");
 
 export const diffRemovedLineBackground = color("diffEditor.removedLineBackground", "#4b1818", "#ffebe9", "Background for removed diff lines.");
 export const diffInsertedLineBackground = color("diffEditor.insertedLineBackground", "#173d24", "#dafbe1", "Background for inserted diff lines.");

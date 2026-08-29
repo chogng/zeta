@@ -241,6 +241,7 @@ export interface EditorBrowserOptions {
 	readonly cursorStyle?: IEditorOptions['cursorStyle'];
 	readonly overtypeCursorStyle?: IEditorOptions['overtypeCursorStyle'];
 	readonly cursorBlinking?: IEditorOptions['cursorBlinking'];
+	readonly cursorSmoothCaretAnimation?: IEditorOptions['cursorSmoothCaretAnimation'];
 	readonly cursorWidth?: IEditorOptions['cursorWidth'];
 	readonly cursorHeight?: IEditorOptions['cursorHeight'];
 	readonly allowOverflow?: IEditorOptions['allowOverflow'];
@@ -417,6 +418,7 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 					cursorStyle: options.cursorStyle,
 					overtypeCursorStyle: options.overtypeCursorStyle,
 					cursorBlinking: options.cursorBlinking,
+					cursorSmoothCaretAnimation: options.cursorSmoothCaretAnimation,
 					cursorWidth: options.cursorWidth,
 					cursorHeight: options.cursorHeight,
 					allowOverflow: options.allowOverflow,
@@ -591,6 +593,9 @@ function validateOptions(options: EditorBrowserOptions): void {
 	}
 	if (options.cursorBlinking !== undefined && !['blink', 'smooth', 'phase', 'expand', 'solid'].includes(options.cursorBlinking)) {
 		throw new TypeError('Editor cursor blinking option is invalid');
+	}
+	if (options.cursorSmoothCaretAnimation !== undefined && !['off', 'explicit', 'on'].includes(options.cursorSmoothCaretAnimation)) {
+		throw new TypeError('Editor smooth caret animation option is invalid');
 	}
 	for (const [name, value] of [['cursor width', options.cursorWidth], ['cursor height', options.cursorHeight]] as const) {
 		if (value !== undefined && (!isSafeInteger(value) || value < 0)) throw new RangeError(`Editor ${name} must be a non-negative safe integer`);

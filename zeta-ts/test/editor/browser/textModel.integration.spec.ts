@@ -30,6 +30,7 @@ test("text-model editor public API, pane, undo, save, and browser worker", async
 	await expect(caret).toHaveClass(/cursor-style-line/u);
 	await page.keyboard.press('Insert');
 	await expect(caret).toHaveClass(/cursor-style-block/u);
+	await expect(caret).toHaveClass(/token-keyword/u);
 	await expect(caret).toHaveText('f');
 	await page.keyboard.press('Insert');
 	await expect(caret).toHaveClass(/cursor-style-line/u);
@@ -41,6 +42,46 @@ test("text-model editor public API, pane, undo, save, and browser worker", async
 	await page.evaluate(() => window.zetaTextModelIntegration.save());
 	await expect.poll(() => page.evaluate(() => window.zetaTextModelIntegration.getSavedText())).toBe("fn main() {\n  answer();\n}\n");
 	await expect.poll(() => workers.length).toBeGreaterThan(0);
+});
+
+test("cursor layer retains nodes, animates stable moves, and resolves multi-cursor colors", async ({ page }) => {
+	await page.goto("/textModel.html");
+	await expect(page.locator(".stanza-editor")).toBeVisible();
+	await expect(page.locator(".stanza-editor-token.token-keyword")).toHaveText("fn");
+	const editor = page.locator(".stanza-editor");
+	const layer = editor.locator(".stanza-editor-cursors-layer");
+	const retainedCaret = layer.locator('.stanza-editor-caret[data-selection-index="0"]');
+	await expect(layer).toHaveClass(/cursor-smooth-caret-animation/u);
+	await retainedCaret.evaluate(element => { element.dataset.retainedIdentity = "true"; });
+
+	const stableMove = await page.evaluate(() => {
+		window.zetaTextModelIntegration.setCursors([{ lineIndex: 1, columnIndex: 2 }]);
+		const caret = document.querySelector<HTMLElement>('.stanza-editor-caret[data-selection-index="0"]');
+		if (!caret) throw new Error("Moved cursor is missing");
+		return { top: caret.style.top, transitionProperty: caret.style.transitionProperty };
+	});
+	expect(stableMove).toEqual({ top: "20px", transitionProperty: "" });
+	await expect(retainedCaret).toHaveAttribute("data-retained-identity", "true");
+
+	await editor.evaluate(element => {
+		element.style.setProperty("--zeta-editor-multi-cursor-primary-foreground", "#010203");
+		element.style.setProperty("--zeta-editor-multi-cursor-secondary-foreground", "#040506");
+	});
+	const countChangeTransitions = await page.evaluate(() => {
+		window.zetaTextModelIntegration.setCursors([
+			{ lineIndex: 0, columnIndex: 0 },
+			{ lineIndex: 1, columnIndex: 2 },
+		], 1);
+		return [...document.querySelectorAll<HTMLElement>(".stanza-editor-caret")]
+			.map(caret => caret.style.transitionProperty);
+	});
+	expect(countChangeTransitions).toEqual(["none", "none"]);
+	const primary = layer.locator(".stanza-editor-caret.cursor-primary");
+	const secondary = layer.locator(".stanza-editor-caret.cursor-secondary");
+	await expect(primary).toHaveCount(1);
+	await expect(secondary).toHaveCount(1);
+	await expect(primary).toHaveCSS("background-color", "rgb(1, 2, 3)");
+	await expect(secondary).toHaveCSS("background-color", "rgb(4, 5, 6)");
 });
 
 test("text-model editor projects revision-bound Rust syntax, diagnostics, folding, and symbols", async ({ page }) => {

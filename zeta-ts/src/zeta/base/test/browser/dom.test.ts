@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
-import { addDisposableListener, Dimension, getActiveDocument, getActiveElement, getDocument, getDomNodePagePosition, getShadowRoot, getWindow, h, isEditableElement, isElement, isHTMLElement, isNode, stopEvent, svg } from "../../browser/dom.js";
+import { addDisposableListener, computeScreenAwareSize, Dimension, getActiveDocument, getActiveElement, getDocument, getDomNodePagePosition, getShadowRoot, getWindow, h, isEditableElement, isElement, isHTMLElement, isNode, stopEvent, svg } from "../../browser/dom.js";
 import { registerWindow } from "../../browser/window.js";
 
 test("disposable DOM listeners detach deterministically", () => {
@@ -89,6 +89,20 @@ test("DOM context queries resolve the owning window and document", () => {
 		windowFromNode: ownerWindow,
 		windowFromDocument: ownerWindow,
 		documentFromNode: ownerWindow.document,
+	});
+	ownerWindow.close();
+});
+
+test("screen-aware CSS sizes occupy stable whole physical pixels", () => {
+	const ownerWindow = new JSDOM("<!doctype html><body></body>").window;
+	Object.defineProperty(ownerWindow, "devicePixelRatio", { configurable: true, value: 1.25 });
+
+	assert.deepEqual({
+		thin: computeScreenAwareSize(ownerWindow as unknown as Window, 1),
+		wide: computeScreenAwareSize(ownerWindow as unknown as Window, 2),
+	}, {
+		thin: 0.8,
+		wide: 1.6,
 	});
 	ownerWindow.close();
 });

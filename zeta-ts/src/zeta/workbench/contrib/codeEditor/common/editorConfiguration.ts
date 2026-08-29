@@ -8,6 +8,7 @@ export type ColorDecoratorsActivatedOnSetting = "clickAndHover" | "click" | "hov
 export type DefaultColorDecoratorsSetting = "auto" | "always" | "never";
 export type CursorStyleSetting = 'line' | 'block' | 'underline' | 'line-thin' | 'block-outline' | 'underline-thin';
 export type CursorBlinkingSetting = 'blink' | 'smooth' | 'phase' | 'expand' | 'solid';
+export type CursorSmoothCaretAnimationSetting = 'off' | 'explicit' | 'on';
 export type RenderLineHighlightSetting = 'none' | 'gutter' | 'line' | 'all';
 
 /** Typed user preferences owned by the Workbench code-editor integration. */
@@ -154,6 +155,16 @@ export const CodeEditorConfiguration = Object.freeze({
 			{ value: 'phase', label: 'Phase' },
 			{ value: 'expand', label: 'Expand' },
 			{ value: 'solid', label: 'Solid' },
+		]),
+	}),
+	cursorSmoothCaretAnimation: ConfigurationsRegistry.registerConfiguration<CursorSmoothCaretAnimationSetting>({
+		key: 'editor.cursorSmoothCaretAnimation',
+		defaultValue: 'off',
+		parse: value => parseEnum(value, 'editor.cursorSmoothCaretAnimation', ['off', 'explicit', 'on']),
+		setting: selectSetting('Smooth caret animation', 'Animate cursor movement.', [
+			{ value: 'off', label: 'Off' },
+			{ value: 'explicit', label: 'Explicit cursor movement' },
+			{ value: 'on', label: 'On' },
 		]),
 	}),
 	cursorWidth: ConfigurationsRegistry.registerConfiguration<number>({

@@ -100,7 +100,7 @@ export const SettingsNavigation = [
 				id: 'display',
 				label: 'Display',
 				description: 'Configure line wrapping, guides, highlighting, and scrolling aids.',
-				settings: ['breadcrumbs.enabled', 'editor.wordWrap', 'editor.wrappingIndent', 'editor.lineNumbers', 'editor.cursorStyle', 'editor.cursorBlinking', 'editor.cursorWidth', 'editor.cursorHeight', 'editor.guides.*', 'editor.matchBrackets', 'editor.bracketPairColorization.*', 'editor.stickyScroll.*', 'editor.renderLineHighlight', 'editor.renderLineHighlightOnlyWhenFocus', 'editor.unicodeHighlights'],
+				settings: ['breadcrumbs.enabled', 'editor.wordWrap', 'editor.wrappingIndent', 'editor.lineNumbers', 'editor.cursorStyle', 'editor.cursorBlinking', 'editor.cursorSmoothCaretAnimation', 'editor.cursorWidth', 'editor.cursorHeight', 'editor.guides.*', 'editor.matchBrackets', 'editor.bracketPairColorization.*', 'editor.stickyScroll.*', 'editor.renderLineHighlight', 'editor.renderLineHighlightOnlyWhenFocus', 'editor.unicodeHighlights'],
 			},
 			{
 				id: 'performance',

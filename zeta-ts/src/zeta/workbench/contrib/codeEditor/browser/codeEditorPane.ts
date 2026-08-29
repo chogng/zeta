@@ -76,6 +76,7 @@ export interface EditorPaneOptions {
 	readonly renderLineHighlightOnlyWhenFocus?: EditorBrowserOptions['renderLineHighlightOnlyWhenFocus'];
 	readonly cursorStyle?: EditorBrowserOptions['cursorStyle'];
 	readonly cursorBlinking?: EditorBrowserOptions['cursorBlinking'];
+	readonly cursorSmoothCaretAnimation?: EditorBrowserOptions['cursorSmoothCaretAnimation'];
 	readonly cursorWidth?: EditorBrowserOptions['cursorWidth'];
 	readonly cursorHeight?: EditorBrowserOptions['cursorHeight'];
 	readonly lineNumbers?: EditorBrowserOptions['lineNumbers'];
@@ -190,6 +191,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 				renderLineHighlightOnlyWhenFocus: this.options.renderLineHighlightOnlyWhenFocus,
 				cursorStyle: this.options.cursorStyle,
 				cursorBlinking: this.options.cursorBlinking,
+				cursorSmoothCaretAnimation: this.options.cursorSmoothCaretAnimation,
 				cursorWidth: this.options.cursorWidth,
 				cursorHeight: this.options.cursorHeight,
 				lineNumbers: this.options.lineNumbers,

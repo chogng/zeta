@@ -227,6 +227,7 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 		renderLineHighlightOnlyWhenFocus: true,
 		cursorStyle: 'block-outline',
 		cursorBlinking: 'solid',
+		cursorSmoothCaretAnimation: 'explicit',
 		cursorWidth: 3,
 		cursorHeight: 18,
 		lineNumbers: 'off',
@@ -274,6 +275,7 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 	assert.equal(received?.renderLineHighlightOnlyWhenFocus, true);
 	assert.equal(received?.cursorStyle, 'block-outline');
 	assert.equal(received?.cursorBlinking, 'solid');
+	assert.equal(received?.cursorSmoothCaretAnimation, 'explicit');
 	assert.equal(received?.cursorWidth, 3);
 	assert.equal(received?.cursorHeight, 18);
 	assert.equal(received?.lineNumbers, 'off');

@@ -13,35 +13,57 @@
 .stanza-editor-cursors-layer {
 	--stanza-editor-caret-opacity: 1;
 	--stanza-editor-caret-scale: 1;
+	position: absolute;
+	top: 0;
+	left: 0;
+	box-sizing: border-box;
+	min-width: 100%;
+	z-index: 5;
+	pointer-events: none;
 }
 
-.stanza-editor-line-cursors {
+.stanza-editor-composition-row {
 	position: relative;
 	box-sizing: border-box;
 	min-width: 100%;
-  z-index: 5;
-  pointer-events: none;
 }
 
 .stanza-editor-caret {
+	--stanza-editor-caret-foreground: var(--zeta-editor-cursor-foreground, var(--zeta-editor-foreground));
+	--stanza-editor-caret-background: var(--zeta-editor-cursor-background, var(--zeta-editor-background));
   position: absolute;
   box-sizing: border-box;
-  background: var(--zeta-editor-foreground);
+	background: var(--stanza-editor-caret-foreground);
 	opacity: calc(var(--stanza-editor-caret-opacity) * var(--stanza-editor-caret-base-opacity, 1));
 	transform: scaleY(var(--stanza-editor-caret-scale));
 	transform-origin: center;
 }
 
+.stanza-editor-caret.cursor-primary {
+	--stanza-editor-caret-foreground: var(--zeta-editor-multi-cursor-primary-foreground, var(--zeta-editor-cursor-foreground, var(--zeta-editor-foreground)));
+	--stanza-editor-caret-background: var(--zeta-editor-multi-cursor-primary-background, var(--zeta-editor-cursor-background, var(--zeta-editor-background)));
+}
+
+.stanza-editor-caret.cursor-secondary {
+	--stanza-editor-caret-foreground: var(--zeta-editor-multi-cursor-secondary-foreground, var(--zeta-editor-cursor-foreground, var(--zeta-editor-foreground)));
+	--stanza-editor-caret-background: var(--zeta-editor-multi-cursor-secondary-background, var(--zeta-editor-cursor-background, var(--zeta-editor-background)));
+}
+
 .stanza-editor-caret.cursor-style-line,
 .stanza-editor-caret.cursor-style-block {
-	color: var(--zeta-editor-background);
+	color: var(--stanza-editor-caret-background);
 	white-space: pre;
 	overflow: hidden;
 }
 
+.stanza-editor-caret.cursor-style-line.stanza-editor-token,
+.stanza-editor-caret.cursor-style-block.stanza-editor-token {
+	color: var(--stanza-editor-caret-background);
+}
+
 .stanza-editor-caret.cursor-style-block-outline {
 	background: transparent;
-	border: 1px solid var(--zeta-editor-foreground);
+	border: 1px solid var(--stanza-editor-caret-foreground);
 }
 
 .stanza-editor.composing .stanza-editor-composition {
@@ -49,10 +71,14 @@
 	top: 0;
 	bottom: 1px;
 	box-sizing: border-box;
-	border-bottom: 1px solid var(--zeta-editor-foreground);
+	border-bottom: 1px solid var(--zeta-editor-composition-border, var(--zeta-editor-foreground));
 }
 
 @media (prefers-reduced-motion: no-preference) {
+	.stanza-editor-cursors-layer.cursor-smooth-caret-animation .stanza-editor-caret {
+		transition: top 80ms, left 80ms;
+	}
+
   .stanza-editor:focus-within .stanza-editor-cursors-layer.cursor-blinking-blink {
     animation: stanza-editor-caret-blink 1.2s step-end infinite;
   }
@@ -133,7 +159,14 @@
     color: CanvasText;
   }
 
-	.stanza-editor-caret.cursor-style-block {
+	.stanza-editor-caret.cursor-style-line,
+	.stanza-editor-caret.cursor-style-block,
+	.stanza-editor-caret.stanza-editor-token {
 		color: Canvas;
+	}
+
+	.stanza-editor-caret.cursor-style-block-outline {
+		background: transparent;
+		border-color: CanvasText;
 	}
 }

@@ -1,9 +1,10 @@
 import { type Event } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
-import { type EditorSelectionController } from '../../common/cursor/editorSelectionController.js';
+import { type EditorSelectionChangeReason, type EditorSelectionController } from '../../common/cursor/editorSelectionController.js';
 import { type InternalGuidesOptions, type TextEditorCursorBlinkingStyle, type TextEditorCursorStyle } from '../../common/config/editorOptions.js';
 import { type TextRange } from '../../common/core/text.js';
 import { type TextModel } from '../../common/model/textModel.js';
+import { type SemanticTokenSource } from '../../common/services/semanticTokensStyling.js';
 import { type BracketColorizationSource } from '../viewparts/viewLines/viewLine.js';
 import { type DecorationSource } from '../viewparts/decorations/decorations.js';
 import { BlockDecorations } from '../viewparts/blockDecorations/blockDecorations.js';
@@ -23,6 +24,7 @@ export interface ViewOverlaysOptions {
 	readonly contentElement: HTMLDivElement;
 	readonly model: TextModel;
 	readonly selectionController: EditorSelectionController | undefined;
+	readonly semanticTokenSource: SemanticTokenSource | undefined;
 	readonly bracketColorizationSource: BracketColorizationSource | undefined;
 	readonly decorationSources: readonly DecorationSource[];
 	readonly guides: InternalGuidesOptions;
@@ -30,6 +32,7 @@ export interface ViewOverlaysOptions {
 	readonly renderWhitespace: WhitespaceRenderingMode;
 	readonly cursorStyle: TextEditorCursorStyle;
 	readonly cursorBlinking: TextEditorCursorBlinkingStyle;
+	readonly cursorSmoothCaretAnimation: 'off' | 'explicit' | 'on';
 	readonly cursorWidth: number;
 	readonly cursorHeight: number;
 	readonly readGpuLineIndexes?: () => ReadonlySet<number>;
@@ -79,6 +82,8 @@ export class ViewOverlays extends Disposable {
 			host: options.contentElement,
 			style: options.cursorStyle,
 			blinking: options.cursorBlinking,
+			smoothCaretAnimation: options.cursorSmoothCaretAnimation,
+			semanticTokenSource: options.semanticTokenSource,
 			lineWidth: options.cursorWidth,
 			lineHeight: options.cursorHeight,
 		}, options.model, options.selectionController));
@@ -110,12 +115,16 @@ export class ViewOverlays extends Disposable {
 		}
 	}
 
-	renderSelection(context: EditorRenderingContext): void {
+	renderSelection(context: EditorRenderingContext, reason: EditorSelectionChangeReason): void {
 		this.indentGuides.renderNow(context);
 		this.whitespace.renderNow(context);
 		this.currentLineHighlight.renderNow(context);
 		this.selections.renderNow(context);
-		this.viewCursors.renderSelection(context);
+		this.viewCursors.renderSelection(context, reason);
+	}
+
+	renderCursorTokens(context: EditorRenderingContext): void {
+		this.viewCursors.renderTokens(context);
 	}
 
 	setCompositionRange(range: TextRange | undefined): void {

@@ -383,6 +383,7 @@ export interface EditorViewportOptions {
 	readonly cursorStyle?: IEditorOptions['cursorStyle'];
 	readonly overtypeCursorStyle?: IEditorOptions['overtypeCursorStyle'];
 	readonly cursorBlinking?: IEditorOptions['cursorBlinking'];
+	readonly cursorSmoothCaretAnimation?: IEditorOptions['cursorSmoothCaretAnimation'];
 	readonly cursorWidth?: IEditorOptions['cursorWidth'];
 	readonly cursorHeight?: IEditorOptions['cursorHeight'];
 	readonly allowOverflow?: IEditorOptions['allowOverflow'];
@@ -474,6 +475,9 @@ export class View extends Disposable {
 		this.cursorStyle = EditorOptions.cursorStyle.validate(options.cursorStyle);
 		this.overtypeCursorStyle = EditorOptions.overtypeCursorStyle.validate(options.overtypeCursorStyle);
 		const cursorBlinking = EditorOptions.cursorBlinking.validate(options.cursorBlinking);
+		const cursorSmoothCaretAnimation = EditorOptions.cursorSmoothCaretAnimation.validate(
+			options.cursorSmoothCaretAnimation,
+		) as NonNullable<IEditorOptions['cursorSmoothCaretAnimation']>;
 		this.configuredCursorWidth = EditorOptions.cursorWidth.validate(options.cursorWidth);
 		const cursorHeight = EditorOptions.cursorHeight.validate(options.cursorHeight);
 		this.lineNumbers = EditorOptions.lineNumbers.validate(options.lineNumbers ?? (this.presentation === 'embedded' ? 'off' : 'on'));
@@ -661,6 +665,7 @@ export class View extends Disposable {
 			contentElement: this.contentElement,
 			model: this.model,
 			selectionController: this.selectionController,
+			semanticTokenSource: options.semanticTokenSource,
 			bracketColorizationSource: options.bracketColorizationSource,
 			decorationSources,
 			guides: this.guides,
@@ -668,6 +673,7 @@ export class View extends Disposable {
 			renderWhitespace: options.renderWhitespace ?? 'none',
 			cursorStyle: this.cursorStyle,
 			cursorBlinking,
+			cursorSmoothCaretAnimation,
 			cursorWidth,
 			cursorHeight,
 			...(this.viewLinesGpu ? { readGpuLineIndexes: () => this.viewLinesGpu!.gpuLineIndexes } : {}),
@@ -793,10 +799,10 @@ export class View extends Disposable {
 			viewport.setContentWidth(this.measuredContentWidth);
 		}));
 		if (this.selectionController) {
-			this._register(this.selectionController.onDidChange(() => {
+			this._register(this.selectionController.onDidChange(change => {
 				const context = this.createRenderingContext(viewport.layout);
 				lineNumbersOverlay.renderNow(context);
-				this.viewOverlays.renderSelection(context);
+				this.viewOverlays.renderSelection(context, change.reason);
 				this.updateAccessibilityStatus();
 			}));
 			this.updateAccessibilityStatus();
@@ -806,9 +812,11 @@ export class View extends Disposable {
 			this._register(semanticTokenSource.onDidChange(() => {
 				this.viewLines.renderVisibleLineText();
 				this.viewLinesGpu?.invalidateTokens();
-				this.viewLinesGpu?.render(this.createRenderingContext(this.viewport.layout));
+				const context = this.createRenderingContext(this.viewport.layout);
+				this.viewLinesGpu?.render(context);
+				this.viewOverlays.renderCursorTokens(context);
 				minimapPart.invalidateTokens();
-				minimapPart.renderNow(this.createRenderingContext(this.viewport.layout));
+				minimapPart.renderNow(context);
 			}));
 		}
 		const fontSet = ownerDocument.fonts;

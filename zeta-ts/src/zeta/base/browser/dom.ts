@@ -143,6 +143,11 @@ export function getDocument(source?: Node | Document | UIEvent | Window | null):
 	return getWindow(source).document;
 }
 
+/** Keeps a CSS size on a stable whole-screen-pixel boundary. */
+export function computeScreenAwareSize(targetWindow: Window, cssPixels: number): number {
+	return Math.max(1, Math.floor(targetWindow.devicePixelRatio * cssPixels)) / targetWindow.devicePixelRatio;
+}
+
 function getMainWindow(): BrowserWindow {
 	getWindows();
 	if (!mainWindow) throw new Error("A browser window is required");
