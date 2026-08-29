@@ -18,6 +18,7 @@ url = { workspace = true }
 zeta-http-client = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-utils-image = { workspace = true }
+zeta-utils-path = { workspace = true }
 
 [dev-dependencies]
 image = { workspace = true, features = ["png"] }

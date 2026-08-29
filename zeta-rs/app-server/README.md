@@ -65,6 +65,8 @@ request-ID set、notification queue 与 resource ownership。默认的 `SessionS
 Core/store 继续拥有 Session/Thread durable state；需要进程内生命周期的 host 可以显式选择
 `SessionStateMode::Ephemeral`，此时 coordinator 使用 in-memory stores，Session/Thread 与用户消息
 不会从 profile SQLite 恢复或写入。ConfigStore 仍可按 profile 保存普通配置。
+Workspace 可重建状态另有独立的显式模式：local composition 注入持久 `StateRuntime`；只在进程内使用的
+host 必须调用 `with_ephemeral_workspace_state`。未选择模式时不能安装 local Workspace host。
 
 ## 公共契约
 

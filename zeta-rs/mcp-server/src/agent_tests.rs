@@ -36,7 +36,7 @@ impl ModelService for EchoModel {
                 ModelInputItem::Message(message) => {
                     message.content.iter().find_map(|content| match content {
                         ContentPart::Text(text) => Some(text.as_str()),
-                        ContentPart::ImageUrl { .. } => None,
+                        ContentPart::ImageUrl { .. } | ContentPart::ImageAttachment { .. } => None,
                     })
                 }
                 ModelInputItem::ToolResult(_) => None,

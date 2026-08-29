@@ -199,3 +199,89 @@ fn refuses_to_follow_a_symlink_during_clear() {
     assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
     assert!(outside.path().is_dir());
 }
+
+#[cfg(unix)]
+#[test]
+fn refuses_to_follow_an_ancestor_symlink_during_clear() {
+    use std::os::unix::fs::symlink;
+
+    let profile = TempDir::new().unwrap();
+    let outside = TempDir::new().unwrap();
+    let storage = StateRuntime::open(profile.path()).unwrap();
+    let workspace = workspace_id('9');
+    fs::remove_dir(&storage.workspaces_root).unwrap();
+    symlink(outside.path(), &storage.workspaces_root).unwrap();
+    let outside_index = outside
+        .path()
+        .join("9".repeat(64))
+        .join("indexes/agent-grep");
+    fs::create_dir_all(&outside_index).unwrap();
+    fs::write(outside_index.join("sentinel"), b"outside").unwrap();
+
+    let error = storage
+        .clear_index(&workspace, WorkspaceIndexKind::AgentGrep)
+        .unwrap_err();
+
+    assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+    assert_eq!(
+        fs::read(outside_index.join("sentinel")).unwrap(),
+        b"outside"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn refuses_to_follow_an_ancestor_symlink_during_acquire() {
+    use std::os::unix::fs::symlink;
+
+    let profile = TempDir::new().unwrap();
+    let outside = TempDir::new().unwrap();
+    let storage = StateRuntime::open(profile.path()).unwrap();
+    fs::remove_dir(&storage.workspaces_root).unwrap();
+    symlink(outside.path(), &storage.workspaces_root).unwrap();
+
+    let error = storage
+        .acquire(&workspace_id('8'), WorkspaceIndexKind::Codebase)
+        .unwrap_err();
+
+    assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+    assert!(fs::read_dir(outside.path()).unwrap().next().is_none());
+}
+
+#[cfg(unix)]
+#[test]
+fn refuses_to_open_a_symlinked_lock_file() {
+    use std::os::unix::fs::symlink;
+
+    let profile = TempDir::new().unwrap();
+    let outside = TempDir::new().unwrap();
+    let storage = StateRuntime::open(profile.path()).unwrap();
+    let outside_lock = outside.path().join("outside.lock");
+    fs::write(&outside_lock, b"outside").unwrap();
+    symlink(
+        &outside_lock,
+        storage.locks_root.join(super::GLOBAL_LOCK_FILE),
+    )
+    .unwrap();
+
+    let error = storage.clear_all().unwrap_err();
+
+    assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+    assert_eq!(fs::read(outside_lock).unwrap(), b"outside");
+}
+
+#[cfg(unix)]
+#[test]
+fn open_rejects_a_symlinked_cache_root_before_creating_state_directories() {
+    use std::os::unix::fs::symlink;
+
+    let profile = TempDir::new().unwrap();
+    let outside = TempDir::new().unwrap();
+    symlink(outside.path(), profile.path().join("cache")).unwrap();
+
+    let error = StateRuntime::open(profile.path()).unwrap_err();
+
+    assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+    assert!(!outside.path().join("locks").exists());
+    assert!(!outside.path().join("workspaces").exists());
+}

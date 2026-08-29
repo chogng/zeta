@@ -16,7 +16,7 @@ SQLite 前的历史名称。
 | Symbol | 可见性 | 职责 |
 | --- | --- | --- |
 | `LocalStateRepository` | public | 持有同一数据库的 `SqliteSessionStore`、`SqliteThreadStore` 与同一 profile 的 `LeaseDirectory` |
-| `LocalStateRepository::open` | public | 打开 `<profile_root>/state.sqlite3` 与 `<profile_root>/leases` |
+| `LocalStateRepository::open` | public | 使用同一个 `StateRuntime` 打开 `state.sqlite3` 与 writer lease 目录 |
 | `database_path` | public | 暴露同一 SQLite path，供 Config authority 加入同一 profile 数据库 |
 | `session_store` | public | 以 `Arc<dyn SessionStore>` 暴露 typed history port |
 | `thread_store` | public | 以 `Arc<dyn ThreadStore>` 暴露 typed history port |
@@ -25,10 +25,10 @@ SQLite 前的历史名称。
 | repository fields | private | 防止调用方拆开 recovery generation 或替换其中一个 store |
 
 ```text
-LocalStateRepository::open(profile_root)
-├─ SqliteSessionStore::open(profile_root/state.sqlite3)
-├─ SqliteThreadStore::open(profile_root/state.sqlite3)
-└─ LeaseDirectory::open(profile_root/leases)
+LocalStateRepository::open(state_runtime)
+├─ SqliteSessionStore::open(state_runtime.database_path)
+├─ SqliteThreadStore::open(state_runtime.database_path)
+└─ LeaseDirectory::open(state_runtime.writer_leases_root)
 
 LocalStateRepository::recover_coordinator
 ├─ ThreadController::with_store_and_lease

@@ -1,47 +1,11 @@
 use crate::ConfigError;
-use rusqlite::{Connection, ErrorCode, OptionalExtension, TransactionBehavior, params};
-use std::time::Duration;
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 
 const CONFIG_SQLITE_SCHEMA_VERSION: u32 = 2;
 
 pub(crate) struct LegacyDocument {
     pub schema_version: u32,
     pub document_json: String,
-}
-
-pub(crate) fn configure(connection: &Connection) -> Result<(), ConfigError> {
-    connection
-        .busy_timeout(Duration::from_secs(5))
-        .map_err(sql_error)?;
-    enable_wal(connection)?;
-    connection
-        .execute_batch(
-            "PRAGMA foreign_keys = ON;
-             PRAGMA synchronous = FULL;",
-        )
-        .map_err(sql_error)
-}
-
-fn enable_wal(connection: &Connection) -> Result<(), ConfigError> {
-    for _ in 0..100 {
-        match connection.query_row("PRAGMA journal_mode = WAL", [], |row| {
-            row.get::<_, String>(0)
-        }) {
-            Ok(_) => return Ok(()),
-            Err(rusqlite::Error::SqliteFailure(error, _))
-                if matches!(
-                    error.code,
-                    ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked
-                ) =>
-            {
-                std::thread::sleep(Duration::from_millis(10));
-            }
-            Err(error) => return Err(sql_error(error)),
-        }
-    }
-    Err(ConfigError(
-        "config SQLite schema error: database remained locked while enabling WAL".into(),
-    ))
 }
 
 pub(crate) fn initialize(

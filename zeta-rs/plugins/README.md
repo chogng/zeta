@@ -118,6 +118,7 @@ LocalPluginPackage::load
 
 ```text
 PluginPackageStore::install_local
+├─ reject symlink components below the package-store root
 ├─ create unique staging root
 ├─ snapshot::create_stable_local_snapshot_with_observer (最多三次)
 │  ├─ reset staging

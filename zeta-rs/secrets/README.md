@@ -15,7 +15,7 @@ request signing 和 Provider header materialization 均属于消费它的 domain
 | `DeleteSecretOutcome` | exact delete result | 区分 `Deleted` 与 `NotFound` |
 | `MemorySecretStore` | process-local ephemeral backend | replacement、delete、drop 时 zeroize stored bytes |
 | `UnavailableSecretStore` | explicit fail-closed backend | 所有操作返回 `BackendUnavailable` |
-| `FileSecretStore` | profile-scoped durable backend | hashed filenames、私有权限、有界读取、同步 staging 与 replace |
+| `FileSecretStore` | profile-scoped durable backend | hashed filenames、私有权限、有界读取、同步 staging 与 replace；所有值路径逐级拒绝 symlink |
 | `SecretStoreError` | sanitized error | message 不能包含 secret/header/raw backend response |
 | `SecretStoreErrorKind` | stable caller classification | unavailable、access denied、backend failure |
 
@@ -74,7 +74,7 @@ cargo test -p zeta-secrets
 bazel test //zeta-rs/secrets:secrets-unit-tests
 ```
 
-当前测试覆盖 memory/file round-trip、replace/delete、Debug redaction、key validation、unavailable error、Unix 0700/0600 权限、stale staging cleanup、key filename 隐藏与 1 MiB 上限；Windows 实现 owner-only protected DACL 与 write-through atomic replacement。
+当前测试覆盖 memory/file round-trip、replace/delete、Debug redaction、key validation、unavailable error、Unix 0700/0600 权限、symlink 拒绝、stale staging cleanup、key filename 隐藏与 1 MiB 上限；Windows 实现 owner-only protected DACL 与 write-through atomic replacement。
 新增 backend 时必须补 error/log/debug negative tests，并证明 replacement/delete/drop 的 secret
 buffer 处理。
 

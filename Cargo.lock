@@ -10996,6 +10996,7 @@ dependencies = [
  "zeta-http-client",
  "zeta-protocol",
  "zeta-utils-image",
+ "zeta-utils-path",
 ]
 
 [[package]]
@@ -11190,6 +11191,7 @@ dependencies = [
  "zeta-execpolicy",
  "zeta-model-provider-config",
  "zeta-protocol",
+ "zeta-state",
  "zeta-workspace",
 ]
 
@@ -11217,6 +11219,7 @@ dependencies = [
  "zeta-http-client",
  "zeta-plugins",
  "zeta-secrets",
+ "zeta-state",
  "zeta-tools",
 ]
 
@@ -11740,6 +11743,7 @@ dependencies = [
  "zeta-async-utils",
  "zeta-core",
  "zeta-protocol",
+ "zeta-state",
 ]
 
 [[package]]
@@ -11956,6 +11960,7 @@ dependencies = [
  "tempfile",
  "windows-sys 0.59.0",
  "zeroize",
+ "zeta-utils-path",
 ]
 
 [[package]]
@@ -12093,12 +12098,12 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "zeta-core",
  "zeta-history",
  "zeta-protocol",
  "zeta-session-store",
  "zeta-thread-store",
  "zeta-turn-changes",
+ "zeta-utils-path",
  "zeta-workspace",
 ]
 

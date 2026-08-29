@@ -2,6 +2,7 @@ use super::AppServer;
 use super::AppServerThreadUpdates;
 use super::CodebaseModels;
 use super::RpcError;
+use super::WorkspaceStateMode;
 use super::codebase_runtime::CodebaseRuntime;
 use super::fs_watcher::FileSystemWatcher;
 use super::git_runtime::GitRuntime;
@@ -73,7 +74,6 @@ use zeta_protocol::ProviderId;
 use zeta_protocol::SessionId;
 use zeta_protocol::TurnStatus;
 use zeta_shell_command::RipgrepExecutable;
-use zeta_state::StateRuntime;
 use zeta_tools::ToolRegistryGeneration;
 use zeta_workspace::WorkspaceAuthorization;
 use zeta_workspace::WorkspaceCapability;
@@ -196,7 +196,7 @@ pub(crate) struct WorkspaceRuntimeControl {
     mcp_status: Arc<RwLock<zeta_mcp_extension::McpRuntimeStatusSnapshot>>,
     config: Option<Arc<ConfigStore>>,
     local_tool_config: Arc<RwLock<LocalToolConfig>>,
-    state_runtime: Option<Arc<StateRuntime>>,
+    workspace_state: WorkspaceStateMode,
     fast_regex_worker_command: Option<zeta_fast_regex_search::FastRegexWorkerCommand>,
     codebase_models: Option<CodebaseModels>,
     semantic_model_provider: Option<Arc<dyn SemanticModelProvider>>,
@@ -259,7 +259,7 @@ impl WorkspaceRuntimeControl {
             &local_tool_config,
             session_workspace_access,
             agent_grep,
-            self.state_runtime.clone(),
+            self.workspace_state.runtime(),
             self.fast_regex_worker_command.as_ref(),
         )
         .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
@@ -427,7 +427,7 @@ impl WorkspaceRuntimeControl {
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .agent_grep
                 .clone(),
-            self.state_runtime.clone(),
+            self.workspace_state.runtime(),
             self.fast_regex_worker_command.as_ref(),
         )
         .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
@@ -1054,6 +1054,11 @@ impl AppServer {
                 "local Workspace host is already installed".into(),
             ));
         }
+        if matches!(self.workspace_state, WorkspaceStateMode::Unconfigured) {
+            return Err(WorkspaceRuntimeError::Failed(
+                "local Workspace host requires an explicit Workspace state mode".into(),
+            ));
+        }
         let (search_config, providers, hook_config) = match &self.config {
             Some(config) => {
                 let snapshot = config
@@ -1150,7 +1155,7 @@ impl AppServer {
                 mcp_status: Arc::clone(&self.mcp_status),
                 config: self.config.clone(),
                 local_tool_config: Arc::clone(&self.local_tool_config),
-                state_runtime: self.state_runtime.clone(),
+                workspace_state: self.workspace_state.clone(),
                 fast_regex_worker_command: self.fast_regex_worker_command.clone(),
                 codebase_models: self.codebase_models.clone(),
                 semantic_model_provider: self.semantic_model_provider.clone(),
@@ -1760,7 +1765,7 @@ impl AppServer {
                 &local_tool_config,
                 session_workspace_access,
                 None,
-                self.state_runtime.clone(),
+                self.workspace_state.runtime(),
                 self.fast_regex_worker_command.as_ref(),
             )
             .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
@@ -2152,11 +2157,19 @@ impl AppServer {
         workspace: WorkspaceRoot,
     ) -> Result<Arc<CodebaseRuntime>, WorkspaceRuntimeError> {
         let trust_id = workspace.trust_id();
-        let store = match &self.state_runtime {
-            Some(state) => CodebaseStore::open(state, &trust_id).map_err(|error| {
-                WorkspaceRuntimeError::Failed(format!("failed to lock Codebase storage: {error}"))
-            })?,
-            None => CodebaseStore::memory(),
+        let store = match &self.workspace_state {
+            WorkspaceStateMode::Persistent(state) => CodebaseStore::open(state, &trust_id)
+                .map_err(|error| {
+                    WorkspaceRuntimeError::Failed(format!(
+                        "failed to lock Codebase storage: {error}"
+                    ))
+                })?,
+            WorkspaceStateMode::Ephemeral => CodebaseStore::memory(),
+            WorkspaceStateMode::Unconfigured => {
+                return Err(WorkspaceRuntimeError::Failed(
+                    "Workspace state mode is not configured".into(),
+                ));
+            }
         };
         CodebaseRuntime::open(workspace, Arc::new(store)).map_err(|error| {
             WorkspaceRuntimeError::Failed(format!("failed to open Codebase: {error}"))

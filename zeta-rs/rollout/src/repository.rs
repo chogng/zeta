@@ -1,4 +1,5 @@
 use crate::LocalStateError;
+use crate::lease::LeaseDirectory;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use zeta_attachments::FileImageAttachmentStore;
@@ -6,7 +7,7 @@ use zeta_attachments::ImageAttachments;
 use zeta_core::{SessionCoordinator, ThreadController, ThreadStore, WriterLease};
 use zeta_protocol::SessionId;
 use zeta_session_store::SessionStore;
-use zeta_state::{LeaseDirectory, SqliteSessionStore, SqliteThreadStore, StateRuntime};
+use zeta_state::{SqliteSessionStore, SqliteThreadStore, StateRuntime};
 
 /// Opens and recovers local authoritative Session and Thread state under one profile root.
 ///
@@ -30,7 +31,7 @@ impl LocalStateRepository {
         Ok(Self {
             session_store: Arc::new(SqliteSessionStore::open(&database_path)?),
             thread_store: Arc::new(SqliteThreadStore::open(&database_path)?),
-            writer_lease: Arc::new(LeaseDirectory::open(root.join("leases"))?),
+            writer_lease: Arc::new(LeaseDirectory::open(state.writer_leases_root())?),
             image_attachments: Arc::new(ImageAttachments::new(Arc::new(image_store))),
             database_path,
         })

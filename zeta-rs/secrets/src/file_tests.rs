@@ -82,3 +82,47 @@ fn durable_store_uses_private_unix_permissions() {
         0o600
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn durable_store_rejects_a_symlinked_values_directory() {
+    use std::os::unix::fs::symlink;
+
+    let profile = tempdir().unwrap();
+    let outside = tempdir().unwrap();
+    let root = profile.path().join("secrets");
+    let store = FileSecretStore::open(&root).unwrap();
+    fs::remove_dir(root.join("values")).unwrap();
+    symlink(outside.path(), root.join("values")).unwrap();
+
+    let error = store
+        .store(
+            &SecretKey::new("connector/private").unwrap(),
+            &SecretValue::new(b"secret".to_vec()),
+        )
+        .unwrap_err();
+
+    assert_eq!(error.kind(), SecretStoreErrorKind::BackendFailure);
+    assert!(fs::read_dir(outside.path()).unwrap().next().is_none());
+}
+
+#[cfg(unix)]
+#[test]
+fn durable_store_rejects_a_symlinked_value_file() {
+    use std::os::unix::fs::symlink;
+
+    let root = tempdir().unwrap();
+    let outside = tempdir().unwrap();
+    let store = FileSecretStore::open(root.path()).unwrap();
+    let key = SecretKey::new("connector/private").unwrap();
+    let outside_value = outside.path().join("value");
+    fs::write(&outside_value, b"outside").unwrap();
+    symlink(&outside_value, store.value_path(&key)).unwrap();
+
+    let error = store
+        .store(&key, &SecretValue::new(b"replacement".to_vec()))
+        .unwrap_err();
+
+    assert_eq!(error.kind(), SecretStoreErrorKind::BackendFailure);
+    assert_eq!(fs::read(outside_value).unwrap(), b"outside");
+}

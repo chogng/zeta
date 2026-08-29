@@ -15,6 +15,7 @@
 | `normalize_for_path_comparison` | canonicalize existing path，并应用 WSL mount case 规则 | 路径不存在或无法 canonicalize 时返回 `io::Error` |
 | `paths_match_after_normalization` | 比较两个可能具有 symlink/host alias 的路径 | 任一路径无法规范化时退回原始 `Path` 相等 |
 | `CanonicalPathRoot::new` / `canonicalize_within` | 缓存 canonical root，并验证 existing candidate 的真实 host path containment | candidate 不可用与 canonical path 逃出 root 分别返回 `Unavailable` / `OutsideRoot` |
+| `CanonicalPathRoot::inspect_without_symlinks` | 从 canonical root 到 candidate 逐级读取 metadata，不跟随任何 symlink | 区分 existing、missing、越界、symlink 与 metadata failure；不执行删除或写入 |
 | `normalize_for_native_workdir` | Windows 上移除 verbatim path 语法 | 不访问文件系统 |
 | `resolve_symlink_write_paths` | 跟随相对或绝对 symlink chain | cycle/metadata failure 返回原始 `write_path`，且 `read_path = None` |
 | `write_atomically` / `write_text_atomically` | 同目录临时文件写入、flush、rename、目录 sync | rename 前失败保留旧 destination；rename 后目录 sync 失败会在新内容已可见时返回错误 |
@@ -44,6 +45,11 @@ CanonicalPathRoot::canonicalize_within
   → normalize canonical root + candidate for host comparison
   → component-aware starts_with
 
+CanonicalPathRoot::inspect_without_symlinks
+  → lexical containment
+  → symlink_metadata(root..candidate)
+  → Existing | Missing | OutsideRoot | Symlink | Unavailable
+
 resolve_symlink_write_paths
   → symlink_metadata/read_link loop
   → resolved target | unresolved fallback
@@ -55,8 +61,8 @@ write_atomically
   → sync_parent
 ```
 
-如果这里开始保存 Session 状态、解析 URI、决定 workspace grant，或把 symlink 是否允许等领域
-policy 固化进 containment primitive，表示 ownership 已经漂移。
+如果这里开始保存 Session 状态、解析 URI、决定 workspace grant 或决定哪个目录可以删除，表示
+ownership 已经漂移。`inspect_without_symlinks` 只报告路径事实，是否允许操作仍由 caller 决定。
 
 ## 集成与测试
 
@@ -69,13 +75,14 @@ bazel test //zeta-rs/utils/path-utils:path-utils-unit-tests
 ```
 
 修改 WSL、containment、symlink 或 atomic-write failure semantics 时必须同步更新
-`path_utils_tests.rs` 和本 README。[`zeta-agent-import`](../../agent-import/README.md) 当前消费
-canonical containment API，并在自己的测试中覆盖外部来源的 symlink 与 escape policy。
+`path_utils_tests.rs` 和本 README。`zeta-agent-import` 消费 canonical containment；`zeta-state`、`zeta-secrets`、`zeta-attachments` 与 `zeta-plugins` 消费 no-follow inspection，并分别拥有索引、secret、attachment 与 package store 的操作策略。
 
 ## 当前限制与扩展点
 
 - Current：只比较当前 host 上可 canonicalize 的真实路径；不存在路径只做原始相等比较。
-- Current：canonical containment 跟随 symlink；是否允许 symlink 由 consumer 在调用前决定。
+- Current：`canonicalize_within` 跟随 symlink；需要禁止 symlink 的 consumer 使用独立的
+  `inspect_without_symlinks`，两种策略不互相替代。
+- Current：no-follow 检查与后续 caller 操作之间仍存在文件系统竞态；需要抵抗同用户并发篡改的操作应使用平台级目录句柄方案。
 - Current：atomic replace 不提供跨进程 locking，caller 必须自行拥有并发控制。
 - Current：Windows 不尝试 sync directory handle。
 - Extension point：Session cwd filter 可复用比较 API，但其产品语义不能进入本 crate。

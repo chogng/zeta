@@ -101,7 +101,7 @@ fn server_with_model(model: Arc<dyn ModelService>) -> AppServer {
         Arc::new(InMemorySessionStore::default()),
         threads,
     ));
-    AppServer::new(sessions, model)
+    AppServer::new(sessions, model).with_ephemeral_workspace_state()
 }
 
 fn server() -> AppServer {

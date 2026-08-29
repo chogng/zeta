@@ -1,9 +1,16 @@
-use super::*;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::fs;
+use std::path::PathBuf;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
+
+use zeta_core::WriterLease;
+use zeta_protocol::ThreadId;
+
+use super::LeaseDirectory;
 
 fn lease_directory(label: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
-        "zeta-state-{label}-{}-{}",
+        "zeta-rollout-{label}-{}-{}",
         std::process::id(),
         SystemTime::now()
             .duration_since(UNIX_EPOCH)

@@ -23,6 +23,7 @@ sha2 = { workspace = true }
 zeta-app-server-client = { workspace = true }
 zeta-app-server-protocol = { workspace = true }
 zeta-protocol = { workspace = true }
+zeta-state = { workspace = true }
 
 [lints]
 workspace = true

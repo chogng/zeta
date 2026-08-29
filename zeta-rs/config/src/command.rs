@@ -28,6 +28,8 @@ pub struct PreferencesUpdate {
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub approval_review_model: Patch<ApprovalReviewModelSelection>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    pub commit_message_model: Patch<ModelRef>,
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub tool_mode: Patch<ToolMode>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub grep_backend: Patch<AgentGrepBackend>,
@@ -102,6 +104,12 @@ pub enum UserConfigCommand {
     },
     ConfigureToolSearch {
         config: ToolSearchConfig,
+    },
+    AuthorizeCommitMessageEgress {
+        workspace: WorkspaceTrustId,
+    },
+    RevokeCommitMessageEgress {
+        workspace: WorkspaceTrustId,
     },
     SetWorkspaceTrust {
         workspace: WorkspaceTrustId,

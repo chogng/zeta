@@ -5,6 +5,7 @@ use tempfile::TempDir;
 use zeta_codebase::Codebase;
 use zeta_codebase::CodebaseLimits;
 use zeta_codebase::SymbolIndexQuery;
+use zeta_codebase_store::CodebaseStore;
 use zeta_workspace::WorkspaceRoot;
 
 use super::SymbolIndexRuntime;

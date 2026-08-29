@@ -14,6 +14,8 @@ use zeta_app_server_protocol::protocol::config::CodebaseAutomaticContextDto;
 use zeta_app_server_protocol::protocol::config::CodebaseConfigDto;
 use zeta_app_server_protocol::protocol::config::CodebaseConfigureParams;
 use zeta_app_server_protocol::protocol::config::CodebaseModelsDto;
+use zeta_app_server_protocol::protocol::config::CommitMessageAuthorizeParams;
+use zeta_app_server_protocol::protocol::config::CommitMessageRevokeParams;
 use zeta_app_server_protocol::protocol::config::ConfigCommandDispositionDto;
 use zeta_app_server_protocol::protocol::config::ConfigCommandResult;
 use zeta_app_server_protocol::protocol::config::ConfigReadResult;
@@ -107,6 +109,7 @@ impl AppServer {
             .map_err(config_error)?;
         result(&config_read_result(
             snapshot,
+            self.active_workspace_trust_id().as_ref(),
             self.tool_search_embedding_status(),
         ))
     }
@@ -156,6 +159,7 @@ impl AppServer {
                     approval_review_model: approval_review_model_update_from_dto(
                         params.approval_review_model,
                     )?,
+                    commit_message_model: model_ref_update_from_dto(params.commit_message_model)?,
                     tool_mode: params.tool_mode,
                     grep_backend: params.agent_grep_backend.map(agent_grep_backend_from_dto),
                 }),
@@ -180,6 +184,7 @@ impl AppServer {
                 command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                     preferred_model: Patch::Missing,
                     approval_review_model: Patch::Missing,
+                    commit_message_model: Patch::Missing,
                     tool_mode: Patch::Missing,
                     grep_backend: Patch::Value(AgentGrepBackend::Ripgrep),
                 }),
@@ -190,12 +195,18 @@ impl AppServer {
             .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodebaseUnavailable))?
             .reconcile_local_tool_config(&snapshot.values)
             .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodebaseOperationFailed))?;
-        let deletion = self
-            .state_runtime
-            .as_ref()
-            .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodebaseUnavailable))?
-            .clear_index(&workspace, WorkspaceIndexKind::AgentGrep)
-            .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodebaseOperationFailed))?;
+        let deletion = match &self.workspace_state {
+            super::WorkspaceStateMode::Persistent(state) => state
+                .clear_index(&workspace, WorkspaceIndexKind::AgentGrep)
+                .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodebaseOperationFailed))?,
+            super::WorkspaceStateMode::Ephemeral => ClearOutcome::AlreadyAbsent,
+            super::WorkspaceStateMode::Unconfigured => {
+                return Err(RpcError::new(
+                    -32090,
+                    AppServerErrorName::CodebaseUnavailable,
+                ));
+            }
+        };
         result(&FastRegexDisableAndDeleteResult {
             config: config_command_result(outcome),
             deletion: match deletion {
@@ -267,6 +278,44 @@ impl AppServer {
         }
         self.reconcile_codebase_runtime()
             .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodebaseOperationFailed))?;
+        result(&config_command_result(outcome))
+    }
+
+    pub(super) fn commit_message_authorize(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: CommitMessageAuthorizeParams = decode(params)?;
+        let workspace = self
+            .active_workspace_trust_id()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let store = self
+            .config
+            .clone()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let outcome = store
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: UserConfigCommand::AuthorizeCommitMessageEgress { workspace },
+            })
+            .map_err(config_operation_error)?;
+        result(&config_command_result(outcome))
+    }
+
+    pub(super) fn commit_message_revoke(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: CommitMessageRevokeParams = decode(params)?;
+        let workspace = self
+            .active_workspace_trust_id()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let store = self
+            .config
+            .clone()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let outcome = store
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: UserConfigCommand::RevokeCommitMessageEgress { workspace },
+            })
+            .map_err(config_operation_error)?;
         result(&config_command_result(outcome))
     }
 
@@ -478,8 +527,20 @@ pub(super) fn config_operation_error(error: ConfigCommandError) -> RpcError {
 
 fn config_read_result(
     snapshot: ResolvedConfigSnapshot,
+    active_workspace: Option<&zeta_workspace::WorkspaceTrustId>,
     tool_search_status: ToolSearchEmbeddingStatus,
 ) -> ConfigReadResult {
+    let commit_message_active_workspace_authorized = active_workspace.is_some_and(|workspace| {
+        snapshot
+            .values
+            .commit_messages
+            .authorized_model(
+                workspace,
+                snapshot.values.commit_message_model.as_ref(),
+                &snapshot.values.providers,
+            )
+            .is_some()
+    });
     let codebase = CodebaseConfigDto {
         models: snapshot
             .values
@@ -506,6 +567,8 @@ fn config_read_result(
         generation: snapshot.generation.get(),
         preferred_model: snapshot.values.preferred_model.map(model_ref_dto),
         approval_review_model: approval_review_model_dto(snapshot.values.approval_review_model),
+        commit_message_model: snapshot.values.commit_message_model.map(model_ref_dto),
+        commit_message_active_workspace_authorized,
         tool_mode: snapshot.values.tool_mode,
         agent_grep_backend: agent_grep_backend_dto(snapshot.values.agent_grep_backend),
         providers: snapshot

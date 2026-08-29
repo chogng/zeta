@@ -66,8 +66,9 @@ ZETA_MCP_BEARER_TOKEN=<at-least-32-visible-ASCII-characters> \
 - App Server 协议定义；
 - OAuth、租户配置、TLS 终止或远程 App Server 后端。
 
-如果本 crate 直接打开产品存储、构造 `TurnExecutor`、调用供应商或写入 Thread 事件，就说明
-架构所有权已经漂移。这些操作必须继续位于 App Server 客户端之后。
+如果本 crate 写入 Session/Thread 产品表、构造 `TurnExecutor`、调用供应商或写入 Thread 事件，就说明
+架构所有权已经漂移。这些操作必须继续位于 App Server 客户端之后。进程入口只通过
+`StateRuntime` 取得共享数据库位置和统一 SQLite 打开规则，receipt 仍只拥有自己的表。
 
 ## 3. 模块与关键符号
 
@@ -129,7 +130,7 @@ run_stdio 或 run_http
 `invocationId` 与 MCP JSON-RPC 请求 ID 以及所有 Zeta 产品身份互相独立。适配器为 Session、
 Thread、Turn、交互解决和取消派生按主体命名空间隔离的稳定 App Server 命令 ID。
 
-回执以 SQLite 事务持久化到 `<ZETA_PROFILE_ROOT>/state.sqlite3` 的
+回执通过 `StateRuntime::database_path` 定位 `<ZETA_PROFILE_ROOT>/state.sqlite3`，并以 SQLite 事务持久化其中的
 `mcp_invocation_receipts` / `mcp_thread_bindings`，并按主体隔离：
 
 - stdio 使用本地用户主体；

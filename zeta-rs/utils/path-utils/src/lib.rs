@@ -8,6 +8,8 @@ mod persistence;
 
 pub use canonical_root::CanonicalContainmentError;
 pub use canonical_root::CanonicalPathRoot;
+pub use canonical_root::NoSymlinkPathError;
+pub use canonical_root::NoSymlinkPathStatus;
 pub use comparison::normalize_for_native_workdir;
 pub use comparison::normalize_for_path_comparison;
 pub use comparison::paths_match_after_normalization;

@@ -26,10 +26,7 @@ pub use server::McpServerError;
 /// and durable state remain owned by the App Server composition root.
 pub fn run_stdio(options: McpServerOptions) -> Result<(), McpServerError> {
     options.validate().map_err(McpServerError::configuration)?;
-    let receipts = Arc::new(
-        ReceiptStore::open(options.profile_root().join("state.sqlite3"))
-            .map_err(McpServerError::receipt)?,
-    );
+    let receipts = open_receipts(options.profile_root())?;
     let client = start_in_process_client(
         InProcessClientOptions::new(
             options.profile_root(),
@@ -59,10 +56,7 @@ pub fn run_http(
     http_options
         .validate()
         .map_err(McpServerError::configuration)?;
-    let receipts = Arc::new(
-        ReceiptStore::open(options.profile_root().join("state.sqlite3"))
-            .map_err(McpServerError::receipt)?,
-    );
+    let receipts = open_receipts(options.profile_root())?;
     let host = open_in_process_app_server(
         InProcessClientOptions::new(
             options.profile_root(),
@@ -75,4 +69,11 @@ pub fn run_http(
     )
     .map_err(McpServerError::app_server)?;
     http::serve(host, options.runtime_limits(), receipts, http_options)
+}
+
+fn open_receipts(profile_root: &std::path::Path) -> Result<Arc<ReceiptStore>, McpServerError> {
+    let state = zeta_state::StateRuntime::open(profile_root).map_err(McpServerError::receipt)?;
+    ReceiptStore::open(state.database_path())
+        .map(Arc::new)
+        .map_err(McpServerError::receipt)
 }

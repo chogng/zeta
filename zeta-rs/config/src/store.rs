@@ -92,9 +92,9 @@ impl ConfigStore {
         let mut document = read_document_and_migrate(&config_path)?;
         let initial_digest = crate::store_file::document_digest(&document)?;
 
-        prepare_private_database_file(&database_path)?;
-        let mut connection = Connection::open(&database_path).map_err(sql_error)?;
-        crate::store_schema::configure(&connection)?;
+        let mut connection =
+            zeta_state::open_sqlite_database(&database_path, zeta_state::SqliteDurability::Durable)
+                .map_err(ConfigError)?;
         let legacy = crate::store_schema::initialize(
             &mut connection,
             CONFIG_DOCUMENT_SCHEMA_VERSION,
@@ -126,8 +126,9 @@ impl ConfigStore {
         let subscribers = Arc::new(Mutex::new(Vec::new()));
         let last_published = Arc::new(Mutex::new(initial_change));
         let (monitor_shutdown, monitor_receiver) = mpsc::channel();
-        let monitor_connection = Connection::open(&database_path).map_err(sql_error)?;
-        crate::store_schema::configure(&monitor_connection)?;
+        let monitor_connection =
+            zeta_state::open_sqlite_database(&database_path, zeta_state::SqliteDurability::Durable)
+                .map_err(ConfigError)?;
         let monitor_thread = crate::store_monitor::start(
             monitor_connection,
             config_path.clone(),
@@ -469,23 +470,6 @@ fn from_sql_integer(value: i64) -> Result<u64, ConfigError> {
 
 fn io_error(error: impl std::fmt::Display) -> ConfigError {
     ConfigError(error.to_string())
-}
-
-fn prepare_private_database_file(path: &Path) -> Result<(), ConfigError> {
-    let mut options = fs::OpenOptions::new();
-    options.create(true).append(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    options.open(path).map_err(io_error)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(path, fs::Permissions::from_mode(0o600)).map_err(io_error)?;
-    }
-    Ok(())
 }
 
 fn sql_error(error: impl std::fmt::Display) -> ConfigError {

@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use std::fs;
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -42,12 +41,9 @@ impl SqliteAuthority {
         path: &Path,
         definitions: Vec<ConnectorDefinition>,
     ) -> Result<LoadedAuthority, ConnectorAuthorityError> {
-        if let Some(parent) = path.parent()
-            && !parent.as_os_str().is_empty()
-        {
-            fs::create_dir_all(parent).map_err(io_error)?;
-        }
-        let connection = Connection::open(path).map_err(sql_error)?;
+        let connection =
+            zeta_state::open_sqlite_database(path, zeta_state::SqliteDurability::Durable)
+                .map_err(|error| persistence_error(error.to_string()))?;
         initialize(&connection)?;
         let records = load_latest_records(&connection)?;
         let max_generation = records
@@ -514,8 +510,4 @@ fn from_i64(value: i64) -> Result<u64, ConnectorAuthorityError> {
 
 fn sql_error(error: rusqlite::Error) -> ConnectorAuthorityError {
     persistence_error(format!("Connector authority database failure: {error}"))
-}
-
-fn io_error(error: std::io::Error) -> ConnectorAuthorityError {
-    persistence_error(format!("Connector authority storage failure: {error}"))
 }

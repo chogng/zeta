@@ -733,6 +733,93 @@ fn local_composition_installs_models_before_workspace_activation() {
 }
 
 #[test]
+fn local_composition_restores_codebase_generation_after_reopen() {
+    let profile = tempfile::tempdir().unwrap();
+    let workspace = tempfile::tempdir().unwrap();
+    std::fs::create_dir(workspace.path().join(".git")).unwrap();
+    std::fs::write(
+        workspace.path().join("lib.rs"),
+        "pub fn restored_after_reopen() -> bool { true }\n",
+    )
+    .unwrap();
+    let open = || {
+        open_local_app_server(
+            LocalAppServerOptions::new(profile.path())
+                .with_workspace_root(workspace.path())
+                .without_built_in_skills()
+                .with_session_state_mode(SessionStateMode::Ephemeral),
+        )
+        .unwrap()
+    };
+
+    let server = open();
+    let mut connection = server.connection();
+    let initialized = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":1,"method":"initialize",
+            "params":{"clientInfo":{"name":"state-reopen-test","version":"1"},"capabilities":{}}
+        }),
+    );
+    assert_eq!(initialized["result"]["capabilities"]["codebase"], true);
+    let rebuilt = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"workspace/codebase/rebuild","params":{}
+        }),
+    );
+    let generation = rebuilt["result"]["generation"].as_u64().unwrap();
+    assert!(generation > 0);
+    assert_eq!(rebuilt["result"]["state"], "ready");
+    drop(connection);
+    drop(server);
+
+    {
+        let workspace_root = zeta_workspace::WorkspaceRoot::open(workspace.path()).unwrap();
+        let state = zeta_state::StateRuntime::open(profile.path()).unwrap();
+        let store =
+            zeta_codebase_store::CodebaseStore::open(&state, &workspace_root.trust_id()).unwrap();
+        let restored = store
+            .open_codebase(workspace_root, zeta_codebase::CodebaseLimits::default())
+            .unwrap()
+            .snapshot()
+            .unwrap();
+        assert_eq!(restored.generation, generation);
+    }
+
+    let reopened = open();
+    let mut reopened_connection = reopened.connection();
+    local_call(
+        &reopened,
+        &mut reopened_connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":1,"method":"initialize",
+            "params":{"clientInfo":{"name":"state-reopen-test","version":"1"},"capabilities":{}}
+        }),
+    );
+    let status = local_call(
+        &reopened,
+        &mut reopened_connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"workspace/codebase/status","params":{}
+        }),
+    );
+    assert_eq!(status["result"]["state"], "ready");
+    assert!(status["result"]["generation"].as_u64().unwrap() >= generation);
+    let search = local_call(
+        &reopened,
+        &mut reopened_connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":3,"method":"workspace/codebase/search",
+            "params":{"query":"restored_after_reopen","maxResults":10}
+        }),
+    );
+    assert_eq!(search["result"]["hits"][0]["path"], "lib.rs");
+}
+
+#[test]
 fn user_config_initial_workspace_fails_closed_without_host_trust() {
     let profile = tempfile::tempdir().unwrap();
     let workspace = tempfile::tempdir().unwrap();

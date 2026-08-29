@@ -111,6 +111,61 @@ fn corrupted_file_store_objects_are_rejected_on_read() {
     assert!(service.materialize_data_url(&reference).is_err());
 }
 
+#[cfg(unix)]
+#[test]
+fn file_store_rejects_a_symlinked_digest_directory() {
+    use std::os::unix::fs::symlink;
+
+    let root = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let service = ImageAttachments::new(Arc::new(
+        FileImageAttachmentStore::open(root.path()).unwrap(),
+    ));
+    let first = service
+        .import_bytes(test_png(2, 2), ImageDetail::Auto)
+        .unwrap();
+    std::fs::remove_dir_all(root.path().join("sha256")).unwrap();
+    symlink(outside.path(), root.path().join("sha256")).unwrap();
+
+    let error = service
+        .import_bytes(test_png(3, 3), ImageDetail::Auto)
+        .unwrap_err();
+
+    assert!(matches!(error, crate::AttachmentError::Corrupt));
+    assert!(std::fs::read_dir(outside.path()).unwrap().next().is_none());
+    assert!(service.materialize_data_url(&first).is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn file_store_rejects_a_symlinked_attachment_object() {
+    use std::os::unix::fs::symlink;
+
+    let root = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let service = ImageAttachments::new(Arc::new(
+        FileImageAttachmentStore::open(root.path()).unwrap(),
+    ));
+    let reference = service
+        .import_bytes(test_png(2, 2), ImageDetail::Auto)
+        .unwrap();
+    let hex = reference
+        .content_digest
+        .as_str()
+        .strip_prefix("sha256:")
+        .unwrap();
+    let object = root.path().join("sha256").join(&hex[..2]).join(hex);
+    let outside_object = outside.path().join("object");
+    std::fs::write(&outside_object, test_png(2, 2)).unwrap();
+    std::fs::remove_file(&object).unwrap();
+    symlink(&outside_object, &object).unwrap();
+
+    let error = service.materialize_data_url(&reference).unwrap_err();
+
+    assert!(matches!(error, crate::AttachmentError::Corrupt));
+    assert!(outside_object.is_file());
+}
+
 #[test]
 fn remote_redirects_are_revalidated_without_forwarding_credentials() {
     let client = Arc::new(ScriptedHttpClient::new(vec![

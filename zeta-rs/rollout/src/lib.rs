@@ -4,6 +4,7 @@
 //! repository and recovers the runtime in dependency order: every Thread before every Session.
 
 mod error;
+mod lease;
 mod repository;
 
 pub use error::LocalStateError;

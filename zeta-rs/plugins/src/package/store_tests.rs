@@ -227,3 +227,82 @@ fn activated_package_keeps_its_snapshot_after_the_source_changes() {
         "# Installed"
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn package_store_rejects_a_symlinked_objects_directory_during_install() {
+    use std::os::unix::fs::symlink;
+
+    let temporary = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let source = temporary.path().join("source");
+    package(&source, "# Review");
+    let local = LocalPluginPackage::load(&source).unwrap();
+    let root = temporary.path().join("store");
+    let store = PluginPackageStore::open(&root).unwrap();
+    fs::remove_dir(root.join("objects")).unwrap();
+    symlink(outside.path(), root.join("objects")).unwrap();
+
+    let error = store.install_local(&local).unwrap_err();
+
+    assert_eq!(error.kind(), PluginErrorKind::PackageUnsafe);
+    assert!(fs::read_dir(outside.path()).unwrap().next().is_none());
+}
+
+#[cfg(unix)]
+#[test]
+fn package_store_rejects_an_ancestor_symlink_during_object_removal() {
+    use std::os::unix::fs::symlink;
+
+    let temporary = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let source = temporary.path().join("source");
+    package(&source, "# Review");
+    let local = LocalPluginPackage::load(&source).unwrap();
+    let root = temporary.path().join("store");
+    let store = PluginPackageStore::open(&root).unwrap();
+    let installed = store.install_local(&local).unwrap();
+    fs::remove_dir_all(root.join("objects")).unwrap();
+    symlink(outside.path(), root.join("objects")).unwrap();
+    let outside_object = outside
+        .path()
+        .join(installed.digest.as_str().trim_start_matches("sha256:"));
+    fs::create_dir(&outside_object).unwrap();
+    fs::write(outside_object.join("sentinel"), b"outside").unwrap();
+
+    let error = store.remove_object(&installed.digest).unwrap_err();
+
+    assert_eq!(error.kind(), PluginErrorKind::PackageUnsafe);
+    assert_eq!(
+        fs::read(outside_object.join("sentinel")).unwrap(),
+        b"outside"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn activated_package_rejects_an_internal_ancestor_symlink() {
+    use std::os::unix::fs::symlink;
+
+    let temporary = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let source = temporary.path().join("source");
+    package(&source, "# Installed");
+    let local = LocalPluginPackage::load(&source).unwrap();
+    let store = PluginPackageStore::open(temporary.path().join("store")).unwrap();
+    let installed = store.install_local(&local).unwrap();
+    let activated = store.activate(&installed).unwrap();
+    fs::remove_dir_all(activated.package_root().join("skills")).unwrap();
+    symlink(outside.path(), activated.package_root().join("skills")).unwrap();
+    fs::create_dir(outside.path().join("review")).unwrap();
+    fs::write(outside.path().join("review/SKILL.md"), "# Outside").unwrap();
+
+    let error = activated
+        .read_utf8_file(
+            &crate::PluginPath::new("skills/review/SKILL.md").unwrap(),
+            1024,
+        )
+        .unwrap_err();
+
+    assert_eq!(error.kind(), PluginErrorKind::PackageUnsafe);
+}

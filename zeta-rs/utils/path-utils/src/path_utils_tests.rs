@@ -61,6 +61,55 @@ fn canonical_path_root_reports_unavailable_candidates() {
     ));
 }
 
+#[test]
+fn canonical_path_root_inspects_existing_and_missing_paths_without_symlinks() {
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let existing = directory.path().join("nested").join("item");
+    std::fs::create_dir_all(&existing).expect("nested directory");
+    let root = CanonicalPathRoot::new(directory.path()).expect("canonical root");
+
+    assert_eq!(
+        root.inspect_without_symlinks(&existing)
+            .expect("existing path inspection"),
+        NoSymlinkPathStatus::Existing
+    );
+    assert_eq!(
+        root.inspect_without_symlinks(directory.path().join("missing/item"))
+            .expect("missing path inspection"),
+        NoSymlinkPathStatus::Missing
+    );
+}
+
+#[test]
+fn canonical_path_root_rejects_lexical_parent_escape_without_filesystem_access() {
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let root = CanonicalPathRoot::new(directory.path()).expect("canonical root");
+
+    assert!(matches!(
+        root.inspect_without_symlinks(directory.path().join("nested/../../outside")),
+        Err(NoSymlinkPathError::OutsideRoot(_))
+    ));
+}
+
+#[cfg(unix)]
+#[test]
+fn canonical_path_root_rejects_any_ancestor_symlink_without_following_it() {
+    use std::os::unix::fs::symlink;
+
+    let directory = tempfile::tempdir().expect("temporary directory");
+    let target = directory.path().join("target");
+    let target_item = target.join("item");
+    std::fs::create_dir_all(&target_item).expect("target item");
+    let alias = directory.path().join("alias");
+    symlink(&target, &alias).expect("ancestor symlink");
+    let root = CanonicalPathRoot::new(directory.path()).expect("canonical root");
+
+    assert!(matches!(
+        root.inspect_without_symlinks(alias.join("item")),
+        Err(NoSymlinkPathError::Symlink(path)) if path == alias
+    ));
+}
+
 #[cfg(unix)]
 #[test]
 fn canonical_path_root_rejects_ancestor_symlink_escape() {

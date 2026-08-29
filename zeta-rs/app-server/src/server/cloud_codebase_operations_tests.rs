@@ -301,6 +301,7 @@ fn server() -> AppServer {
         sessions,
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
     )
+    .with_ephemeral_workspace_state()
 }
 
 fn call(

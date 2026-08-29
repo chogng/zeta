@@ -245,8 +245,8 @@ impl LocalAppServerOptions {
         activation: &PluginActivationSnapshot,
         secrets: Arc<dyn SecretStore>,
     ) -> Result<Self, OpenAppServerError> {
-        let runtime =
-            LocalConnectorRuntime::from_plugin_activation(&self.profile_root, activation, secrets)?;
+        let state = zeta_state::StateRuntime::open(&self.profile_root).map_err(open_error)?;
+        let runtime = LocalConnectorRuntime::from_plugin_activation(&state, activation, secrets)?;
         Ok(self.with_connector_runtime(runtime))
     }
 
@@ -256,8 +256,8 @@ impl LocalAppServerOptions {
         authority: PluginActivationAuthority,
         secrets: Arc<dyn SecretStore>,
     ) -> Result<Self, OpenAppServerError> {
-        let runtime =
-            LocalConnectorRuntime::from_plugin_authority(&self.profile_root, authority, secrets)?;
+        let state = zeta_state::StateRuntime::open(&self.profile_root).map_err(open_error)?;
+        let runtime = LocalConnectorRuntime::from_plugin_authority(&state, authority, secrets)?;
         Ok(self.with_connector_runtime(runtime))
     }
 
@@ -495,14 +495,14 @@ impl LocalConnectorRuntime {
 
     /// Builds the canonical local Connector runtime from an exact Plugin activation snapshot.
     pub fn from_plugin_activation(
-        profile_root: impl AsRef<Path>,
+        state: &zeta_state::StateRuntime,
         activation: &PluginActivationSnapshot,
         secrets: Arc<dyn SecretStore>,
     ) -> Result<Self, OpenAppServerError> {
         let catalog = zeta_connectors_extension::ConnectorCatalog::from_activation(activation)
             .map_err(|error| OpenAppServerError(error.to_string()))?;
         let authority = zeta_connectors_extension::ConnectorAuthority::open_sqlite(
-            profile_root.as_ref().join("connectors.sqlite3"),
+            state.connectors_database_path(),
             catalog
                 .snapshot()
                 .entries()
@@ -521,7 +521,7 @@ impl LocalConnectorRuntime {
 
     /// Builds a reloadable Connector/MCP projection from one live Plugin authority.
     pub fn from_plugin_authority(
-        profile_root: impl AsRef<Path>,
+        state: &zeta_state::StateRuntime,
         plugin_authority: PluginActivationAuthority,
         secrets: Arc<dyn SecretStore>,
     ) -> Result<Self, OpenAppServerError> {
@@ -530,7 +530,7 @@ impl LocalConnectorRuntime {
             zeta_connectors_extension::ConnectorCatalog::from_activation(snapshot.activation())
                 .map_err(|error| OpenAppServerError(error.to_string()))?;
         let authority = zeta_connectors_extension::ConnectorAuthority::open_sqlite(
-            profile_root.as_ref().join("connectors.sqlite3"),
+            state.connectors_database_path(),
             catalog
                 .snapshot()
                 .entries()
@@ -1001,7 +1001,7 @@ pub fn open_local_app_server_with_codebase_providers(
                 PluginActivationAuthority::open(options.profile_root.join("plugins"))
                     .map_err(|error| OpenAppServerError(error.to_string()))?;
             Some(LocalConnectorRuntime::from_plugin_authority(
-                &options.profile_root,
+                &state_runtime,
                 plugin_authority,
                 Arc::clone(&profile_secrets),
             )?)
@@ -1125,6 +1125,7 @@ pub fn open_local_app_server_with_codebase_providers(
     } else {
         None
     };
+    let cloud_codebase_root = state_runtime.cloud_codebase_root().to_path_buf();
     let state_runtime = Arc::clone(&state_runtime);
     let mut server = match &profile_runtime {
         Some(runtime) => AppServer::new_with_updates(
@@ -1148,7 +1149,7 @@ pub fn open_local_app_server_with_codebase_providers(
     .with_slash_command_catalog(options.slash_commands)
     .with_state_runtime(state_runtime)
     .with_semantic_model_provider(model_provider)
-    .with_cloud_codebase_storage_root(options.profile_root.join("state").join("cloud-codebase"))
+    .with_cloud_codebase_storage_root(cloud_codebase_root)
     .with_cloud_codebase_providers(providers.cloud)
     .with_extension_roots(extension_roots)
     .with_skill_runtime(

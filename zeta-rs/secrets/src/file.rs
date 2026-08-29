@@ -9,6 +9,9 @@ use std::sync::Mutex;
 use sha2::Digest;
 use sha2::Sha256;
 use zeroize::Zeroize;
+use zeta_utils_path::CanonicalPathRoot;
+use zeta_utils_path::NoSymlinkPathError;
+use zeta_utils_path::NoSymlinkPathStatus;
 
 use crate::DeleteSecretOutcome;
 use crate::SecretKey;
@@ -32,14 +35,16 @@ const KEY_DOMAIN: &[u8] = b"zeta-file-secret-store-key-v1\0";
 /// protected DACL and write-through atomic replacement. Other platforms fail closed.
 pub struct FileSecretStore {
     values: PathBuf,
+    boundary: CanonicalPathRoot,
     operations: Mutex<()>,
 }
 
 impl FileSecretStore {
     pub fn open(root: impl AsRef<Path>) -> Result<Self, SecretStoreError> {
-        let values = prepare_values_directory(root.as_ref())?;
+        let (values, boundary) = prepare_values_directory(root.as_ref())?;
         Ok(Self {
             values,
+            boundary,
             operations: Mutex::new(()),
         })
     }
@@ -49,33 +54,23 @@ impl FileSecretStore {
     }
 }
 
-#[cfg(unix)]
-fn prepare_values_directory(root: &Path) -> Result<PathBuf, SecretStoreError> {
-    fs::create_dir_all(root).map_err(store_io)?;
-    set_private_directory_permissions(root)?;
-    let root = root.canonicalize().map_err(store_io)?;
+#[cfg(any(unix, windows))]
+fn prepare_values_directory(root: &Path) -> Result<(PathBuf, CanonicalPathRoot), SecretStoreError> {
+    let root = std::path::absolute(root).map_err(store_io)?;
+    fs::create_dir_all(&root).map_err(store_io)?;
+    let boundary = CanonicalPathRoot::new(&root).map_err(store_io)?;
+    require_existing_path(&boundary, &root)?;
+    set_private_directory_permissions(&root)?;
     let values = root.join("values");
-    fs::create_dir_all(&values).map_err(store_io)?;
+    ensure_directory_without_symlinks(&boundary, &values)?;
     set_private_directory_permissions(&values)?;
     cleanup_staging_files(&values)?;
     sync_directory(&values)?;
-    Ok(values)
-}
-
-#[cfg(windows)]
-fn prepare_values_directory(root: &Path) -> Result<PathBuf, SecretStoreError> {
-    fs::create_dir_all(root).map_err(store_io)?;
-    windows::set_private_directory_permissions(root).map_err(store_io)?;
-    let root = root.canonicalize().map_err(store_io)?;
-    let values = root.join("values");
-    fs::create_dir_all(&values).map_err(store_io)?;
-    windows::set_private_directory_permissions(&values).map_err(store_io)?;
-    cleanup_staging_files(&values)?;
-    Ok(values)
+    Ok((values, boundary))
 }
 
 #[cfg(not(any(unix, windows)))]
-fn prepare_values_directory(_: &Path) -> Result<PathBuf, SecretStoreError> {
+fn prepare_values_directory(_: &Path) -> Result<(PathBuf, CanonicalPathRoot), SecretStoreError> {
     Err(SecretStoreError::new(
         SecretStoreErrorKind::BackendUnavailable,
         "private file secret storage is unavailable on this platform",
@@ -86,10 +81,9 @@ impl SecretStore for FileSecretStore {
     fn load(&self, key: &SecretKey) -> Result<Option<SecretValue>, SecretStoreError> {
         let _guard = self.operations.lock().map_err(lock_error)?;
         let path = self.value_path(key);
-        let metadata = match fs::symlink_metadata(&path) {
-            Ok(metadata) => metadata,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(error) => return Err(store_io(error)),
+        let metadata = match inspect_path(&self.boundary, &path)? {
+            NoSymlinkPathStatus::Existing => fs::symlink_metadata(&path).map_err(store_io)?,
+            NoSymlinkPathStatus::Missing => return Ok(None),
         };
         if !metadata.file_type().is_file() || metadata.len() > MAX_SECRET_BYTES {
             return Err(backend_failure(
@@ -115,15 +109,18 @@ impl SecretStore for FileSecretStore {
         }
         let _guard = self.operations.lock().map_err(lock_error)?;
         let destination = self.value_path(key);
-        match fs::symlink_metadata(&destination) {
-            Ok(metadata) if !metadata.file_type().is_file() => {
+        match inspect_path(&self.boundary, &destination)? {
+            NoSymlinkPathStatus::Existing
+                if !fs::symlink_metadata(&destination)
+                    .map_err(store_io)?
+                    .file_type()
+                    .is_file() =>
+            {
                 return Err(backend_failure(
                     "secret store destination is not a regular file",
                 ));
             }
-            Ok(_) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(store_io(error)),
+            NoSymlinkPathStatus::Existing | NoSymlinkPathStatus::Missing => {}
         }
         let staging = self.values.join(staging_filename()?);
         let result = (|| {
@@ -149,6 +146,9 @@ impl SecretStore for FileSecretStore {
     fn delete(&self, key: &SecretKey) -> Result<DeleteSecretOutcome, SecretStoreError> {
         let _guard = self.operations.lock().map_err(lock_error)?;
         let path = self.value_path(key);
+        if inspect_path(&self.boundary, &path)? == NoSymlinkPathStatus::Missing {
+            return Ok(DeleteSecretOutcome::NotFound);
+        }
         match fs::remove_file(path) {
             Ok(()) => {
                 sync_directory(&self.values)?;
@@ -200,6 +200,54 @@ fn cleanup_staging_files(values: &Path) -> Result<(), SecretStoreError> {
     Ok(())
 }
 
+fn inspect_path(
+    boundary: &CanonicalPathRoot,
+    path: &Path,
+) -> Result<NoSymlinkPathStatus, SecretStoreError> {
+    boundary
+        .inspect_without_symlinks(path)
+        .map_err(no_symlink_path_error)
+}
+
+fn require_existing_path(
+    boundary: &CanonicalPathRoot,
+    path: &Path,
+) -> Result<(), SecretStoreError> {
+    if inspect_path(boundary, path)? != NoSymlinkPathStatus::Existing {
+        return Err(backend_failure("secret store path is unavailable"));
+    }
+    Ok(())
+}
+
+fn ensure_directory_without_symlinks(
+    boundary: &CanonicalPathRoot,
+    path: &Path,
+) -> Result<(), SecretStoreError> {
+    if inspect_path(boundary, path)? == NoSymlinkPathStatus::Missing {
+        fs::create_dir_all(path).map_err(store_io)?;
+    }
+    require_existing_path(boundary, path)?;
+    if !fs::symlink_metadata(path)
+        .map_err(store_io)?
+        .file_type()
+        .is_dir()
+    {
+        return Err(backend_failure(
+            "secret store path is not a private directory",
+        ));
+    }
+    Ok(())
+}
+
+fn no_symlink_path_error(error: NoSymlinkPathError) -> SecretStoreError {
+    match error {
+        NoSymlinkPathError::Unavailable { source, .. } => store_io(source),
+        NoSymlinkPathError::OutsideRoot(_) | NoSymlinkPathError::Symlink(_) => {
+            backend_failure("secret store path contains a symbolic link")
+        }
+    }
+}
+
 #[cfg(not(windows))]
 fn promote_file(staging: &Path, destination: &Path) -> Result<(), SecretStoreError> {
     fs::rename(staging, destination).map_err(store_io)
@@ -215,6 +263,11 @@ fn set_private_directory_permissions(path: &Path) -> Result<(), SecretStoreError
     use std::os::unix::fs::PermissionsExt;
 
     fs::set_permissions(path, fs::Permissions::from_mode(0o700)).map_err(store_io)
+}
+
+#[cfg(windows)]
+fn set_private_directory_permissions(path: &Path) -> Result<(), SecretStoreError> {
+    windows::set_private_directory_permissions(path).map_err(store_io)
 }
 
 #[cfg(unix)]

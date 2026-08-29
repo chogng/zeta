@@ -15,10 +15,7 @@ local bytes / remote URL / Tool image
   -> verified read and provider-policy downsampled ephemeral data URL at model invocation
 ```
 
-`FileImageAttachmentStore` writes content-addressed objects below `attachments/sha256`, fsyncs a
-same-directory temporary file, and publishes it without replacing an existing object. A failed
-Thread append can leave a harmless unreferenced object; garbage collection is intentionally a
-separate maintenance operation.
+`FileImageAttachmentStore` writes content-addressed objects below `attachments/sha256`, rejects every symlink component below its root, fsyncs a same-directory temporary file, and publishes it without replacing an existing object. A failed Thread append can leave a harmless unreferenced object; garbage collection is intentionally a separate maintenance operation.
 
 `ImageAttachments` is the canonical admission/read service. `reference_for_image` derives trusted
 metadata only after `zeta-utils-image` validation; `verify_reference_bytes` rechecks digest, byte

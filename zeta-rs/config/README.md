@@ -55,7 +55,8 @@ ConfigStore::apply
 `store_schema` 拥有 `config_metadata`、`config_command_receipts` 和 component migration gate；
 metadata 不含 document 正文。`store_file` 拥有 strict TOML、semantic digest 与 temp-file rename。
 `store_monitor` 同时观察 TOML semantic change 与 SQLite `data_version`，并按 revision/generation
-去重。连接启用 WAL、foreign keys、`synchronous=FULL` 与 5 秒 busy timeout。
+去重。数据库文件权限、WAL、foreign keys、`synchronous=FULL` 与 busy timeout 统一由
+`zeta-state` 的 durable SQLite 打开规则提供。
 
 ## Resolution 与运行时边界
 

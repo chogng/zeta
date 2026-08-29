@@ -9,12 +9,16 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
+use zeta_utils_path::CanonicalPathRoot;
+use zeta_utils_path::NoSymlinkPathError;
+use zeta_utils_path::NoSymlinkPathStatus;
 
 /// Immutable package object selected for one Plugin activation generation.
 #[derive(Clone, Debug)]
 pub struct InstalledPluginPackage {
     package: LocalPluginPackage,
     object_root: PathBuf,
+    object_boundary: CanonicalPathRoot,
 }
 
 impl InstalledPluginPackage {
@@ -42,6 +46,7 @@ impl InstalledPluginPackage {
     /// Resolves one validated regular file inside this immutable object.
     pub fn resolve_file(&self, path: &crate::PluginPath) -> Result<PathBuf, PluginError> {
         let candidate = self.object_root.join(path.to_platform_path());
+        require_existing_store_path(&self.object_boundary, &candidate)?;
         let canonical = candidate.canonicalize().map_err(store_io)?;
         if !canonical.starts_with(&self.object_root)
             || !fs::symlink_metadata(&candidate)
@@ -59,6 +64,7 @@ impl InstalledPluginPackage {
     /// Resolves one validated directory inside this immutable object.
     pub fn resolve_directory(&self, path: &crate::PluginPath) -> Result<PathBuf, PluginError> {
         let candidate = self.object_root.join(path.to_platform_path());
+        require_existing_store_path(&self.object_boundary, &candidate)?;
         let canonical = candidate.canonicalize().map_err(store_io)?;
         if !canonical.starts_with(&self.object_root)
             || !fs::symlink_metadata(&candidate).map_err(store_io)?.is_dir()
@@ -101,16 +107,21 @@ impl InstalledPluginPackage {
 #[derive(Clone, Debug)]
 pub struct PluginPackageStore {
     root: PathBuf,
+    boundary: CanonicalPathRoot,
 }
 
 impl PluginPackageStore {
     pub fn open(root: impl AsRef<Path>) -> Result<Self, PluginError> {
-        let root = root.as_ref().to_path_buf();
-        fs::create_dir_all(root.join("objects")).map_err(store_io)?;
-        fs::create_dir_all(root.join("staging")).map_err(store_io)?;
-        let root = root.canonicalize().map_err(store_io)?;
+        let requested_root = std::path::absolute(root.as_ref()).map_err(store_io)?;
+        fs::create_dir_all(&requested_root).map_err(store_io)?;
+        let requested_boundary = CanonicalPathRoot::new(&requested_root).map_err(store_io)?;
+        require_existing_store_path(&requested_boundary, &requested_root)?;
+        let root = requested_boundary.path().to_path_buf();
+        let boundary = CanonicalPathRoot::new(&root).map_err(store_io)?;
+        ensure_store_directory(&boundary, &root.join("objects"))?;
+        ensure_store_directory(&boundary, &root.join("staging"))?;
         sync_directory(&root)?;
-        Ok(Self { root })
+        Ok(Self { root, boundary })
     }
 
     /// Removes only transient staging leftovers from an interrupted installation.
@@ -120,10 +131,12 @@ impl PluginPackageStore {
     /// preparing its durable Install command.
     pub(crate) fn recover_orphans(&self) -> Result<(), PluginError> {
         let staging = self.root.join("staging");
+        require_existing_store_path(&self.boundary, &staging)?;
         for entry in fs::read_dir(&staging).map_err(store_io)? {
             let entry = entry.map_err(store_io)?;
             let metadata = entry.file_type().map_err(store_io)?;
             if metadata.is_dir() {
+                require_existing_store_path(&self.boundary, &entry.path())?;
                 fs::remove_dir_all(entry.path()).map_err(store_io)?;
             } else {
                 return Err(PluginError::new(
@@ -157,6 +170,7 @@ impl PluginPackageStore {
         let operation_id = new_operation_id()?;
         let staging = self.root.join("staging").join(&operation_id);
         let result = (|| {
+            require_existing_store_path(&self.boundary, &self.root.join("staging"))?;
             let installed = create_stable_local_snapshot_with_observer(
                 package,
                 canonical_path,
@@ -164,18 +178,24 @@ impl PluginPackageStore {
                 &mut after_snapshot,
             )?;
             let object = self.object_path(installed.package_digest());
-            if object.exists() {
-                validate_object(&object, &installed)?;
-            } else {
-                sync_directory_tree(&staging)?;
-                if let Err(error) = fs::rename(&staging, &object) {
-                    if object.exists() {
-                        validate_object(&object, &installed)?;
-                    } else {
-                        return Err(store_io(error));
+            match inspect_store_path(&self.boundary, &object)? {
+                NoSymlinkPathStatus::Existing => validate_object(&object, &installed)?,
+                NoSymlinkPathStatus::Missing => {
+                    sync_directory_tree(&staging)?;
+                    if let Err(error) = fs::rename(&staging, &object) {
+                        if inspect_store_path(&self.boundary, &object)?
+                            != NoSymlinkPathStatus::Existing
+                        {
+                            return Err(store_io(error));
+                        }
                     }
+                    require_existing_store_path(&self.boundary, &object)?;
+                    if !fs::symlink_metadata(&object).map_err(store_io)?.is_dir() {
+                        return Err(unsafe_store_path());
+                    }
+                    validate_object(&object, &installed)?;
+                    sync_directory(&self.root.join("objects"))?;
                 }
-                sync_directory(&self.root.join("objects"))?;
             }
             Ok(InstalledPluginRef {
                 id: installed.manifest().id.clone(),
@@ -183,7 +203,8 @@ impl PluginPackageStore {
                 digest: installed.package_digest().clone(),
             })
         })();
-        if staging.exists() {
+        if inspect_store_path(&self.boundary, &staging).ok() == Some(NoSymlinkPathStatus::Existing)
+        {
             let _ = fs::remove_dir_all(&staging);
         }
         result
@@ -191,6 +212,12 @@ impl PluginPackageStore {
 
     pub fn read(&self, installed: &InstalledPluginRef) -> Result<LocalPluginPackage, PluginError> {
         let root = self.object_path(&installed.digest);
+        if inspect_store_path(&self.boundary, &root)? == NoSymlinkPathStatus::Missing {
+            return Err(PluginError::new(
+                PluginErrorKind::PackageConflict,
+                "installed Plugin object does not match its recorded digest",
+            ));
+        }
         let package = [
             crate::PluginPackageDigestAlgorithm::LegacyZetaV1,
             crate::PluginPackageDigestAlgorithm::MarketplaceV1,
@@ -225,26 +252,30 @@ impl PluginPackageStore {
         installed: &InstalledPluginRef,
     ) -> Result<InstalledPluginPackage, PluginError> {
         let package = self.read(installed)?;
+        let object_root = self.object_path(&installed.digest);
+        let object_boundary = CanonicalPathRoot::new(&object_root).map_err(store_io)?;
         Ok(InstalledPluginPackage {
             package,
-            object_root: self.object_path(&installed.digest),
+            object_root,
+            object_boundary,
         })
     }
 
     /// Removes one exact immutable object after its authority reference has been removed.
     pub(crate) fn remove_object(&self, digest: &PluginPackageDigest) -> Result<(), PluginError> {
         let object = self.object_path(digest);
-        match fs::symlink_metadata(&object) {
-            Ok(metadata) if metadata.is_dir() && !metadata.file_type().is_symlink() => {
+        match inspect_store_path(&self.boundary, &object)? {
+            NoSymlinkPathStatus::Existing
+                if fs::symlink_metadata(&object).map_err(store_io)?.is_dir() =>
+            {
                 fs::remove_dir_all(&object).map_err(store_io)?;
                 sync_directory(&self.root.join("objects"))
             }
-            Ok(_) => Err(PluginError::new(
+            NoSymlinkPathStatus::Existing => Err(PluginError::new(
                 PluginErrorKind::PackageUnsafe,
                 "Plugin object path is not a regular directory",
             )),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(error) => Err(store_io(error)),
+            NoSymlinkPathStatus::Missing => Ok(()),
         }
     }
 
@@ -256,6 +287,48 @@ impl PluginPackageStore {
                 .expect("validated digest has a SHA-256 prefix"),
         )
     }
+}
+
+fn inspect_store_path(
+    boundary: &CanonicalPathRoot,
+    path: &Path,
+) -> Result<NoSymlinkPathStatus, PluginError> {
+    boundary
+        .inspect_without_symlinks(path)
+        .map_err(|error| match error {
+            NoSymlinkPathError::Unavailable { source, .. } => store_io(source),
+            NoSymlinkPathError::OutsideRoot(_) | NoSymlinkPathError::Symlink(_) => {
+                unsafe_store_path()
+            }
+        })
+}
+
+fn require_existing_store_path(
+    boundary: &CanonicalPathRoot,
+    path: &Path,
+) -> Result<(), PluginError> {
+    if inspect_store_path(boundary, path)? != NoSymlinkPathStatus::Existing {
+        return Err(unsafe_store_path());
+    }
+    Ok(())
+}
+
+fn ensure_store_directory(boundary: &CanonicalPathRoot, path: &Path) -> Result<(), PluginError> {
+    if inspect_store_path(boundary, path)? == NoSymlinkPathStatus::Missing {
+        fs::create_dir_all(path).map_err(store_io)?;
+    }
+    require_existing_store_path(boundary, path)?;
+    if !fs::symlink_metadata(path).map_err(store_io)?.is_dir() {
+        return Err(unsafe_store_path());
+    }
+    Ok(())
+}
+
+fn unsafe_store_path() -> PluginError {
+    PluginError::new(
+        PluginErrorKind::PackageUnsafe,
+        "Plugin package store path contains a symbolic link",
+    )
 }
 
 fn validate_object(object: &Path, snapshot: &LocalPluginPackage) -> Result<(), PluginError> {

@@ -48,6 +48,8 @@ ConnectorAuthority::open_sqlite
 `authority::event_for_request` 拥有 command 到 durable event 的绑定；`SqliteAuthority::persist` 拥有
 event/receipt 原子性；`auth::credential_key` 只生成 hashed non-PII key。若这些 helper 开始读取 token bytes、
 启动 MCP，或 App Server 直接写 SQLite，即表示 ownership 漂移。
+`ConnectorAuthority::open_sqlite` 只定义 Connector 表和事务；文件权限、WAL、同步级别与 busy timeout
+使用 `zeta-state` 的 durable SQLite 打开规则。数据库路径由 App Server 注入的 `StateRuntime` 决定。
 
 当前实现 API-token adapter、browser-code OAuth 的通用 PKCE 状态机与 device grant 状态机。`oauth::PendingOAuthAttempt`
 只在内存保存 flow ID、state 和 verifier；`ConnectorOAuthService::complete` 一次性消费 callback，

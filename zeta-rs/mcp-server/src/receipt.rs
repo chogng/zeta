@@ -1,10 +1,8 @@
 use crate::agent::{AgentCallError, AgentOutcome, InvocationFingerprint};
-use rusqlite::{Connection, ErrorCode, OptionalExtension, TransactionBehavior, params};
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use std::collections::BTreeSet;
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Mutex;
-use std::time::Duration;
 use zeta_protocol::{SessionId, ThreadId};
 
 const RECEIPT_SQLITE_SCHEMA_VERSION: u32 = 1;
@@ -24,24 +22,21 @@ struct ReceiptState {
 }
 
 impl ReceiptStore {
-    pub(crate) fn open(path: impl Into<PathBuf>) -> Result<Self, AgentCallError> {
-        let path = path.into();
-        if let Some(parent) = path.parent()
-            && !parent.as_os_str().is_empty()
-        {
-            fs::create_dir_all(parent).map_err(receipt_error)?;
-        }
-        prepare_private_database_file(&path)?;
-        let mut connection = Connection::open(&path).map_err(receipt_error)?;
-        configure(&connection)?;
+    pub(crate) fn open(path: &Path) -> Result<Self, AgentCallError> {
+        let mut connection =
+            zeta_state::open_sqlite_database(path, zeta_state::SqliteDurability::Durable)
+                .map_err(receipt_error)?;
+        prepare_schema_registry(&connection)?;
         initialize_schema(&mut connection)?;
         Ok(Self::from_connection(connection))
     }
 
     #[cfg(test)]
     pub(crate) fn memory() -> Self {
-        let mut connection = Connection::open_in_memory().expect("open in-memory receipt database");
-        configure(&connection).expect("configure in-memory receipt database");
+        let mut connection =
+            zeta_state::open_in_memory_database(zeta_state::SqliteDurability::Durable)
+                .expect("open in-memory receipt database");
+        prepare_schema_registry(&connection).expect("prepare receipt schema registry");
         initialize_schema(&mut connection).expect("initialize in-memory receipt schema");
         Self::from_connection(connection)
     }
@@ -235,43 +230,15 @@ impl ReceiptStore {
     }
 }
 
-fn configure(connection: &Connection) -> Result<(), AgentCallError> {
-    connection
-        .busy_timeout(Duration::from_secs(5))
-        .map_err(receipt_error)?;
-    enable_wal(connection)?;
+fn prepare_schema_registry(connection: &Connection) -> Result<(), AgentCallError> {
     connection
         .execute_batch(
-            "PRAGMA foreign_keys = ON;
-             PRAGMA synchronous = FULL;
-             CREATE TABLE IF NOT EXISTS zeta_schema_migrations (
+            "CREATE TABLE IF NOT EXISTS zeta_schema_migrations (
                  component TEXT PRIMARY KEY,
                  version INTEGER NOT NULL
              );",
         )
         .map_err(receipt_error)
-}
-
-fn enable_wal(connection: &Connection) -> Result<(), AgentCallError> {
-    for _ in 0..100 {
-        match connection.query_row("PRAGMA journal_mode = WAL", [], |row| {
-            row.get::<_, String>(0)
-        }) {
-            Ok(_) => return Ok(()),
-            Err(rusqlite::Error::SqliteFailure(error, _))
-                if matches!(
-                    error.code,
-                    ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked
-                ) =>
-            {
-                std::thread::sleep(Duration::from_millis(10));
-            }
-            Err(error) => return Err(receipt_error(error)),
-        }
-    }
-    Err(AgentCallError::AppServer(
-        "MCP SQLite receipt database remained locked while enabling WAL".into(),
-    ))
 }
 
 fn initialize_schema(connection: &mut Connection) -> Result<(), AgentCallError> {
@@ -326,23 +293,6 @@ fn initialize_schema(connection: &mut Connection) -> Result<(), AgentCallError> 
         }
     }
     transaction.commit().map_err(receipt_error)
-}
-
-fn prepare_private_database_file(path: &Path) -> Result<(), AgentCallError> {
-    let mut options = fs::OpenOptions::new();
-    options.create(true).append(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    options.open(path).map_err(receipt_error)?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(path, fs::Permissions::from_mode(0o600)).map_err(receipt_error)?;
-    }
-    Ok(())
 }
 
 fn receipt_lock_error() -> AgentCallError {

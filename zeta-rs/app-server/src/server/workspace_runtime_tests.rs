@@ -192,6 +192,22 @@ fn workspace_runtime_replaces_authority_without_replacing_connection_owned_servi
 }
 
 #[test]
+fn local_workspace_host_rejects_an_unconfigured_state_mode() {
+    let mut server = server();
+    server.workspace_state = WorkspaceStateMode::Unconfigured;
+
+    let error = match server.with_local_workspace_host(None, host_trust()) {
+        Ok(_) => panic!("unconfigured Workspace state should be rejected"),
+        Err(error) => error,
+    };
+
+    assert_eq!(
+        error.to_string(),
+        "local Workspace host requires an explicit Workspace state mode"
+    );
+}
+
+#[test]
 fn workspace_switch_rpc_requires_a_local_workspace_host() {
     let server = server();
     let mut connection = server.connection();
@@ -1679,6 +1695,7 @@ fn server() -> AppServer {
         sessions,
         Arc::new(ProviderModelService::new(Arc::new(EchoModel))),
     )
+    .with_ephemeral_workspace_state()
 }
 
 fn test_local_tools() -> LocalToolComposition {

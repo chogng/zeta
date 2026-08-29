@@ -9,6 +9,9 @@ use std::sync::Mutex;
 use zeta_protocol::ContentDigest;
 use zeta_protocol::ImageAttachmentRef;
 use zeta_utils_image::EncodedImage;
+use zeta_utils_path::CanonicalPathRoot;
+use zeta_utils_path::NoSymlinkPathError;
+use zeta_utils_path::NoSymlinkPathStatus;
 
 use crate::AttachmentError;
 use crate::service::reference_for_image;
@@ -58,13 +61,18 @@ impl ImageAttachmentStore for MemoryImageAttachmentStore {
 /// Crash-safe content-addressed store rooted under one application profile.
 pub struct FileImageAttachmentStore {
     root: PathBuf,
+    boundary: CanonicalPathRoot,
 }
 
 impl FileImageAttachmentStore {
     pub fn open(root: impl Into<PathBuf>) -> Result<Self, AttachmentError> {
-        let root = root.into();
+        let root = std::path::absolute(root.into())
+            .map_err(|source| AttachmentError::storage("attachments", source))?;
         create_private_directory(&root)?;
-        Ok(Self { root })
+        let boundary = CanonicalPathRoot::new(&root)
+            .map_err(|source| AttachmentError::storage(&root, source))?;
+        require_existing_path(&boundary, &root)?;
+        Ok(Self { root, boundary })
     }
 
     fn path_for(&self, digest: &ContentDigest) -> PathBuf {
@@ -80,7 +88,7 @@ impl ImageAttachmentStore for FileImageAttachmentStore {
     fn put(&self, image: &EncodedImage) -> Result<ImageAttachmentRef, AttachmentError> {
         let reference = reference_for_image(image)?;
         let path = self.path_for(&reference.content_digest);
-        if path.exists() {
+        if inspect_path(&self.boundary, &path)? == NoSymlinkPathStatus::Existing {
             let bytes = read_regular_file(&path)?;
             verify_reference_bytes(&reference, &bytes)?;
             return Ok(reference);
@@ -88,7 +96,7 @@ impl ImageAttachmentStore for FileImageAttachmentStore {
         let parent = path
             .parent()
             .expect("attachment paths always have a parent");
-        create_private_directory(parent)?;
+        ensure_directory_without_symlinks(&self.boundary, parent)?;
         let mut temporary = tempfile::Builder::new()
             .prefix(".attachment-")
             .tempfile_in(parent)
@@ -114,6 +122,9 @@ impl ImageAttachmentStore for FileImageAttachmentStore {
 
     fn read(&self, reference: &ImageAttachmentRef) -> Result<Arc<[u8]>, AttachmentError> {
         let path = self.path_for(&reference.content_digest);
+        if inspect_path(&self.boundary, &path)? == NoSymlinkPathStatus::Missing {
+            return Err(AttachmentError::NotFound);
+        }
         let bytes = read_regular_file(&path)?;
         verify_reference_bytes(reference, &bytes)?;
         Ok(bytes.into())
@@ -139,6 +150,51 @@ fn create_private_directory(path: &Path) -> Result<(), AttachmentError> {
     let metadata =
         fs::symlink_metadata(path).map_err(|source| AttachmentError::storage(path, source))?;
     if !metadata.file_type().is_dir() || metadata.file_type().is_symlink() {
+        return Err(AttachmentError::Corrupt);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o700))
+            .map_err(|source| AttachmentError::storage(path, source))?;
+    }
+    Ok(())
+}
+
+fn inspect_path(
+    boundary: &CanonicalPathRoot,
+    path: &Path,
+) -> Result<NoSymlinkPathStatus, AttachmentError> {
+    boundary
+        .inspect_without_symlinks(path)
+        .map_err(|error| match error {
+            NoSymlinkPathError::Unavailable { path, source } => {
+                AttachmentError::storage(path, source)
+            }
+            NoSymlinkPathError::OutsideRoot(_) | NoSymlinkPathError::Symlink(_) => {
+                AttachmentError::Corrupt
+            }
+        })
+}
+
+fn require_existing_path(boundary: &CanonicalPathRoot, path: &Path) -> Result<(), AttachmentError> {
+    if inspect_path(boundary, path)? != NoSymlinkPathStatus::Existing {
+        return Err(AttachmentError::Corrupt);
+    }
+    Ok(())
+}
+
+fn ensure_directory_without_symlinks(
+    boundary: &CanonicalPathRoot,
+    path: &Path,
+) -> Result<(), AttachmentError> {
+    if inspect_path(boundary, path)? == NoSymlinkPathStatus::Missing {
+        fs::create_dir_all(path).map_err(|source| AttachmentError::storage(path, source))?;
+    }
+    require_existing_path(boundary, path)?;
+    let metadata =
+        fs::symlink_metadata(path).map_err(|source| AttachmentError::storage(path, source))?;
+    if !metadata.file_type().is_dir() {
         return Err(AttachmentError::Corrupt);
     }
     #[cfg(unix)]

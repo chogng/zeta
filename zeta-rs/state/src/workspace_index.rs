@@ -6,6 +6,9 @@ use std::fs::{self, File, OpenOptions};
 use std::io;
 use std::path::{Path, PathBuf};
 
+use zeta_utils_path::CanonicalPathRoot;
+use zeta_utils_path::NoSymlinkPathError;
+use zeta_utils_path::NoSymlinkPathStatus;
 use zeta_workspace::WorkspaceTrustId;
 
 const INDEXES_DIRECTORY: &str = "indexes";
@@ -51,7 +54,11 @@ pub enum ClearOutcome {
 pub struct StateRuntime {
     profile_root: PathBuf,
     database_path: PathBuf,
+    connectors_database_path: PathBuf,
+    cloud_codebase_root: PathBuf,
+    writer_leases_root: PathBuf,
     cache_root: PathBuf,
+    cache_boundary: CanonicalPathRoot,
     locks_root: PathBuf,
     workspaces_root: PathBuf,
 }
@@ -63,12 +70,20 @@ impl StateRuntime {
         let cache_root = profile_root.join("cache");
         let locks_root = cache_root.join(LOCKS_DIRECTORY);
         let workspaces_root = cache_root.join(WORKSPACES_DIRECTORY);
-        fs::create_dir_all(locks_root.join(WORKSPACES_DIRECTORY))?;
-        fs::create_dir_all(&workspaces_root)?;
+        let profile_boundary = CanonicalPathRoot::new(&profile_root)?;
+        ensure_directory_without_symlinks(&profile_boundary, &cache_root)?;
+        let cache_boundary = CanonicalPathRoot::new(&cache_root)?;
+        ensure_directory_without_symlinks(&cache_boundary, &locks_root)?;
+        ensure_directory_without_symlinks(&cache_boundary, &locks_root.join(WORKSPACES_DIRECTORY))?;
+        ensure_directory_without_symlinks(&cache_boundary, &workspaces_root)?;
         Ok(Self {
             database_path: profile_root.join("state.sqlite3"),
+            connectors_database_path: profile_root.join("connectors.sqlite3"),
+            cloud_codebase_root: profile_root.join("state").join("cloud-codebase"),
+            writer_leases_root: profile_root.join("leases"),
             profile_root,
             cache_root,
+            cache_boundary,
             locks_root,
             workspaces_root,
         })
@@ -82,6 +97,21 @@ impl StateRuntime {
     /// Returns the single durable profile database path.
     pub fn database_path(&self) -> &Path {
         &self.database_path
+    }
+
+    /// Returns the durable Connector authority database path for this profile.
+    pub fn connectors_database_path(&self) -> &Path {
+        &self.connectors_database_path
+    }
+
+    /// Returns the root containing durable Cloud Codebase state for this profile.
+    pub fn cloud_codebase_root(&self) -> &Path {
+        &self.cloud_codebase_root
+    }
+
+    /// Returns the directory containing Session and Thread writer lease files.
+    pub fn writer_leases_root(&self) -> &Path {
+        &self.writer_leases_root
     }
 
     pub fn cache_root(&self) -> &Path {
@@ -100,7 +130,7 @@ impl StateRuntime {
         fs2::FileExt::lock_shared(&index_lock)?;
 
         let directory = self.index_directory(workspace, kind);
-        fs::create_dir_all(&directory)?;
+        ensure_directory_without_symlinks(&self.cache_boundary, &directory)?;
         Ok(WorkspaceIndexLease {
             directory,
             _global_lock: global_lock,
@@ -120,7 +150,7 @@ impl StateRuntime {
         if !try_lock_exclusive(&index_lock)? {
             return Ok(ClearOutcome::InUse);
         }
-        remove_directory(&self.index_directory(workspace, kind))
+        remove_directory(&self.cache_boundary, &self.index_directory(workspace, kind))
     }
 
     pub fn clear_workspace(&self, workspace: &WorkspaceTrustId) -> io::Result<ClearOutcome> {
@@ -135,7 +165,7 @@ impl StateRuntime {
             }
             index_locks.push(lock);
         }
-        remove_directory(&self.workspace_directory(workspace))
+        remove_directory(&self.cache_boundary, &self.workspace_directory(workspace))
     }
 
     pub fn clear_all(&self) -> io::Result<ClearOutcome> {
@@ -143,8 +173,8 @@ impl StateRuntime {
         if !try_lock_exclusive(&global_lock)? {
             return Ok(ClearOutcome::InUse);
         }
-        let outcome = remove_directory(&self.workspaces_root)?;
-        fs::create_dir_all(&self.workspaces_root)?;
+        let outcome = remove_directory(&self.cache_boundary, &self.workspaces_root)?;
+        ensure_directory_without_symlinks(&self.cache_boundary, &self.workspaces_root)?;
         Ok(outcome)
     }
 
@@ -163,7 +193,10 @@ impl StateRuntime {
     }
 
     fn open_global_lock(&self) -> io::Result<File> {
-        open_lock_file(&self.locks_root.join(GLOBAL_LOCK_FILE))
+        open_lock_file(
+            &self.cache_boundary,
+            &self.locks_root.join(GLOBAL_LOCK_FILE),
+        )
     }
 
     fn open_index_lock(
@@ -172,6 +205,7 @@ impl StateRuntime {
         kind: WorkspaceIndexKind,
     ) -> io::Result<File> {
         open_lock_file(
+            &self.cache_boundary,
             &self
                 .locks_root
                 .join(WORKSPACES_DIRECTORY)
@@ -202,10 +236,13 @@ fn workspace_digest(workspace: &WorkspaceTrustId) -> &str {
         .expect("WorkspaceTrustId always contains the sha256 prefix")
 }
 
-fn open_lock_file(path: &Path) -> io::Result<File> {
+fn open_lock_file(boundary: &CanonicalPathRoot, path: &Path) -> io::Result<File> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
+        ensure_directory_without_symlinks(boundary, parent)?;
     }
+    boundary
+        .inspect_without_symlinks(path)
+        .map_err(no_symlink_path_error)?;
     OpenOptions::new()
         .create(true)
         .truncate(false)
@@ -222,25 +259,49 @@ fn try_lock_exclusive(file: &File) -> io::Result<bool> {
     }
 }
 
-fn remove_directory(path: &Path) -> io::Result<ClearOutcome> {
-    match fs::symlink_metadata(path) {
-        Ok(metadata) if metadata.file_type().is_symlink() => Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!(
-                "refusing to delete symlinked index directory: {}",
-                path.display()
-            ),
-        )),
-        Ok(_) => match fs::remove_dir_all(path) {
+fn remove_directory(boundary: &CanonicalPathRoot, path: &Path) -> io::Result<ClearOutcome> {
+    match boundary
+        .inspect_without_symlinks(path)
+        .map_err(no_symlink_path_error)?
+    {
+        NoSymlinkPathStatus::Existing => match fs::remove_dir_all(path) {
             Ok(()) => Ok(ClearOutcome::Cleared),
             Err(error) if error.kind() == io::ErrorKind::NotFound => {
                 Ok(ClearOutcome::AlreadyAbsent)
             }
             Err(error) => Err(error),
         },
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(ClearOutcome::AlreadyAbsent),
-        Err(error) => Err(error),
+        NoSymlinkPathStatus::Missing => Ok(ClearOutcome::AlreadyAbsent),
     }
+}
+
+fn ensure_directory_without_symlinks(boundary: &CanonicalPathRoot, path: &Path) -> io::Result<()> {
+    let status = boundary
+        .inspect_without_symlinks(path)
+        .map_err(no_symlink_path_error)?;
+    if status == NoSymlinkPathStatus::Missing {
+        fs::create_dir_all(path)?;
+    }
+    let status = boundary
+        .inspect_without_symlinks(path)
+        .map_err(no_symlink_path_error)?;
+    if status != NoSymlinkPathStatus::Existing || !fs::symlink_metadata(path)?.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("state path is not a directory: {}", path.display()),
+        ));
+    }
+    Ok(())
+}
+
+fn no_symlink_path_error(error: NoSymlinkPathError) -> io::Error {
+    let kind = match &error {
+        NoSymlinkPathError::Unavailable { source, .. } => source.kind(),
+        NoSymlinkPathError::OutsideRoot(_) | NoSymlinkPathError::Symlink(_) => {
+            io::ErrorKind::InvalidData
+        }
+    };
+    io::Error::new(kind, error)
 }
 
 #[cfg(test)]

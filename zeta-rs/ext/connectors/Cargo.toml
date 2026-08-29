@@ -23,6 +23,7 @@ zeta-connectors = { workspace = true }
 zeta-http-client = { workspace = true }
 zeta-plugins = { workspace = true }
 zeta-secrets = { workspace = true }
+zeta-state = { workspace = true }
 zeta-tools = { workspace = true }
 
 [dev-dependencies]
