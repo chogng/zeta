@@ -1,0 +1,6 @@
+load("//:defs.bzl", "zeta_rust_crate")
+
+zeta_rust_crate(
+    name = "json-to-toml",
+    crate_name = "zeta_utils_json_to_toml",
+)
