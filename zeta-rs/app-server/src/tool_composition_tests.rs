@@ -2,11 +2,20 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
-use zeta_action_policy::{
-    ActionDigest, ActionKind, ActionPolicyRevision, ActionProvenance, ActionReviewRequest,
-    ActionSource, ApprovalRequest, Capability, CapabilityKind, CapabilitySet, ExecutionDecision,
-    GrantId, ResolvedAction, SandboxCompatibility,
-};
+use zeta_action_policy::ActionDigest;
+use zeta_action_policy::ActionKind;
+use zeta_action_policy::ActionPolicyRevision;
+use zeta_action_policy::ActionProvenance;
+use zeta_action_policy::ActionReviewRequest;
+use zeta_action_policy::ActionSource;
+use zeta_action_policy::ApprovalRequest;
+use zeta_action_policy::Capability;
+use zeta_action_policy::CapabilityKind;
+use zeta_action_policy::CapabilitySet;
+use zeta_action_policy::ExecutionDecision;
+use zeta_action_policy::GrantId;
+use zeta_action_policy::ResolvedAction;
+use zeta_action_policy::SandboxCompatibility;
 use zeta_async_utils::CancellationToken;
 use zeta_config::ToolSearchModeConfig;
 use zeta_core::ActionPolicyService;
@@ -23,8 +32,11 @@ use zeta_model_provider::EmbeddingRequest;
 use zeta_model_provider::EmbeddingResponse;
 use zeta_model_provider::EmbeddingVector;
 use zeta_model_provider::ModelProviderError;
+use zeta_protocol::ToolCall;
+use zeta_protocol::ToolDefinition;
+use zeta_protocol::ToolExecutionOutput;
+use zeta_protocol::ToolName;
 use zeta_protocol::ToolOutputStream;
-use zeta_protocol::{ToolCall, ToolDefinition, ToolExecutionOutput, ToolName};
 use zeta_tools::ToolExposure;
 
 use super::CombinedToolPorts;

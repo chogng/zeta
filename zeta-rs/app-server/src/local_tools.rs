@@ -1,15 +1,29 @@
 use serde_json::json;
 use std::fmt;
-use std::path::{Component, Path};
+use std::path::Component;
+use std::path::Path;
 use std::sync::Arc;
 use std::sync::LazyLock;
 use std::time::Duration;
-use zeta_action_policy::{
-    ActionClassifier, ActionDigest, ActionKind, ActionPolicyEngine, ActionPolicyRevision,
-    ActionProvenance, ActionReviewRequest, ActionSource, AssessmentId, Capability, CapabilityKind,
-    CapabilitySet, ClassifierAssessment, ClassifierRecommendation, ExecutionDecision,
-    ProcessInvocationKind, ResolvedAction, ReviewFailurePolicy, SandboxCompatibility,
-};
+use zeta_action_policy::ActionClassifier;
+use zeta_action_policy::ActionDigest;
+use zeta_action_policy::ActionKind;
+use zeta_action_policy::ActionPolicyEngine;
+use zeta_action_policy::ActionPolicyRevision;
+use zeta_action_policy::ActionProvenance;
+use zeta_action_policy::ActionReviewRequest;
+use zeta_action_policy::ActionSource;
+use zeta_action_policy::AssessmentId;
+use zeta_action_policy::Capability;
+use zeta_action_policy::CapabilityKind;
+use zeta_action_policy::CapabilitySet;
+use zeta_action_policy::ClassifierAssessment;
+use zeta_action_policy::ClassifierRecommendation;
+use zeta_action_policy::ExecutionDecision;
+use zeta_action_policy::ProcessInvocationKind;
+use zeta_action_policy::ResolvedAction;
+use zeta_action_policy::ReviewFailurePolicy;
+use zeta_action_policy::SandboxCompatibility;
 use zeta_apply_patch::ApplyPatchLimits;
 use zeta_apply_patch::ApplyPatchTool;
 use zeta_async_utils::CancellationToken;
@@ -18,10 +32,12 @@ use zeta_config::ResolvedConfig;
 use zeta_config::UserExecPolicyConfig;
 use zeta_config::WorkspaceExecPolicyConfig;
 use zeta_config::WorkspaceId;
-use zeta_core::{
-    ActionPolicyService, CoreError, ToolAuthorization, ToolExecutionFacts, ToolOutputSink,
-    ToolService,
-};
+use zeta_core::ActionPolicyService;
+use zeta_core::CoreError;
+use zeta_core::ToolAuthorization;
+use zeta_core::ToolExecutionFacts;
+use zeta_core::ToolOutputSink;
+use zeta_core::ToolService;
 use zeta_execpolicy::ExecPolicyActionKind;
 use zeta_execpolicy::ExecPolicyDefault;
 use zeta_execpolicy::ExecPolicyEffect;
@@ -32,16 +48,32 @@ use zeta_execpolicy::ExecPolicyRule;
 use zeta_execpolicy::ExecPolicyRuleId;
 use zeta_execpolicy::ExecPolicySelector;
 use zeta_execpolicy::ExecPolicySnapshot;
-use zeta_install_context::{ExecutableCandidates, InstallContext, ManagedExecutable};
-use zeta_protocol::{ToolCall, ToolDefinition, ToolExecutionOutput, ToolOutputStream};
-use zeta_sandboxing::{FileSystemAccess, NetworkAccess, SandboxBackend, SandboxPolicy};
-use zeta_shell_command::{
-    ApprovalPolicy, ApprovalRequirement, CommandExecutionAuthority, CommandExecutionOutcome,
-    ExecutionError, RipgrepDiscoveryError, RipgrepExecutable, ShellCommandLimits,
-    ShellCommandRequest, ShellCommandTool,
-};
-use zeta_tools::{ToolPayload, to_protocol_tool_definition};
-use zeta_workspace::{TrustedWorkspace, WorkspaceCapability, WorkspaceRoot};
+use zeta_install_context::ExecutableCandidates;
+use zeta_install_context::InstallContext;
+use zeta_install_context::ManagedExecutable;
+use zeta_protocol::ToolCall;
+use zeta_protocol::ToolDefinition;
+use zeta_protocol::ToolExecutionOutput;
+use zeta_protocol::ToolOutputStream;
+use zeta_sandboxing::FileSystemAccess;
+use zeta_sandboxing::NetworkAccess;
+use zeta_sandboxing::SandboxBackend;
+use zeta_sandboxing::SandboxPolicy;
+use zeta_shell_command::ApprovalPolicy;
+use zeta_shell_command::ApprovalRequirement;
+use zeta_shell_command::CommandExecutionAuthority;
+use zeta_shell_command::CommandExecutionOutcome;
+use zeta_shell_command::ExecutionError;
+use zeta_shell_command::RipgrepDiscoveryError;
+use zeta_shell_command::RipgrepExecutable;
+use zeta_shell_command::ShellCommandLimits;
+use zeta_shell_command::ShellCommandRequest;
+use zeta_shell_command::ShellCommandTool;
+use zeta_tools::ToolPayload;
+use zeta_tools::to_protocol_tool_definition;
+use zeta_workspace::TrustedWorkspace;
+use zeta_workspace::WorkspaceCapability;
+use zeta_workspace::WorkspaceRoot;
 
 use crate::session_workspace_access::SessionWorkspaceAccess;
 use crate::tool_composition::ToolCompositionError;

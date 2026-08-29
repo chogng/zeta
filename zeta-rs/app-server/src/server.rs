@@ -3,8 +3,10 @@ use crate::attachment_upload_store::AttachmentUploadStore;
 use crate::browser_host::BrowserHost;
 use crate::browser_tool::BrowserToolPolicy;
 use crate::browser_tool::BrowserToolService;
-use crate::model_catalog::{ModelCatalog, unavailable_model_catalog};
-use crate::resource_store::{ResourceError, ResourceStore};
+use crate::model_catalog::ModelCatalog;
+use crate::model_catalog::unavailable_model_catalog;
+use crate::resource_store::ResourceError;
+use crate::resource_store::ResourceStore;
 use crate::review::ApprovalModeActionPolicyService;
 use crate::review::ProviderReviewModel;
 use serde::Deserialize;
@@ -13,29 +15,41 @@ use std::collections::BTreeSet;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Write;
+use std::sync::Arc;
 use std::sync::Condvar;
+use std::sync::Mutex;
+use std::sync::RwLock;
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::time::Duration;
 use zeroize::Zeroize;
-use zeta_app_server_protocol::protocol::error::{AppServerError, AppServerErrorName};
+use zeta_app_server_protocol::protocol::error::AppServerError;
+use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_app_server_protocol::protocol::registry::ClientMethod;
 use zeta_app_server_protocol::protocol::registry::client_method;
 use zeta_app_server_protocol::protocol::registry::client_method_definition;
-use zeta_app_server_protocol::rpc::{
-    JsonRpcFailure, JsonRpcId, JsonRpcNotification, JsonRpcRequest, JsonRpcSuccess, JsonRpcVersion,
-};
+use zeta_app_server_protocol::rpc::JsonRpcFailure;
+use zeta_app_server_protocol::rpc::JsonRpcId;
+use zeta_app_server_protocol::rpc::JsonRpcNotification;
+use zeta_app_server_protocol::rpc::JsonRpcRequest;
+use zeta_app_server_protocol::rpc::JsonRpcSuccess;
+use zeta_app_server_protocol::rpc::JsonRpcVersion;
 use zeta_app_server_transport::DEFAULT_MAX_MESSAGE_BYTES;
 use zeta_app_server_transport::JsonlReader;
 use zeta_app_server_transport::JsonlWriter;
 use zeta_async_utils::CancellationToken;
 use zeta_config::ConfigStore;
-use zeta_core::{
-    ActionPolicyService, AgentTreeLimits, CancelTurnInteractionRequest, CoreError, ModelService,
-    MultiAgentCoordinator, SessionCoordinator, ThreadUpdateSink, ToolService, TurnExecutionBackend,
-    TurnExecutor,
-};
+use zeta_core::ActionPolicyService;
+use zeta_core::AgentTreeLimits;
+use zeta_core::CancelTurnInteractionRequest;
+use zeta_core::CoreError;
+use zeta_core::ModelService;
+use zeta_core::MultiAgentCoordinator;
+use zeta_core::SessionCoordinator;
+use zeta_core::ThreadUpdateSink;
+use zeta_core::ToolService;
+use zeta_core::TurnExecutionBackend;
+use zeta_core::TurnExecutor;
 use zeta_extension_api::ExtensionRegistry;
 use zeta_extensions::ExtensionCatalog;
 use zeta_extensions::ExtensionRoot;
@@ -120,12 +134,14 @@ const CONNECTION_REQUEST_WORKERS: usize = 4;
 use crate::mcp_runtime::McpRuntimeIntents;
 use notification_queue::NotificationListener;
 use notification_queue::NotificationQueue;
-use request_serialization::{RequestCancellationRegistry, RequestScheduler};
+use request_serialization::RequestCancellationRegistry;
+use request_serialization::RequestScheduler;
 use update_broker::UpdateBroker;
-use workspace_runtime::{LocalWorkspaceHost, WorkspaceRuntime};
-pub(crate) use workspace_runtime::{
-    WorkspaceRuntimeControl, WorkspaceSwitchTrustPolicy, WorkspaceToolPorts,
-};
+use workspace_runtime::LocalWorkspaceHost;
+use workspace_runtime::WorkspaceRuntime;
+pub(crate) use workspace_runtime::WorkspaceRuntimeControl;
+pub(crate) use workspace_runtime::WorkspaceSwitchTrustPolicy;
+pub(crate) use workspace_runtime::WorkspaceToolPorts;
 
 /// Immutable model selection used by the local semantic code-index pipeline.
 #[derive(Clone)]

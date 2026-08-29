@@ -1,7 +1,6 @@
 use std::collections::VecDeque;
-use zeta_app_server_protocol::protocol::terminal::{
-    TerminalCommandStatus, TerminalCommandStatusEvent,
-};
+use zeta_app_server_protocol::protocol::terminal::TerminalCommandStatus;
+use zeta_app_server_protocol::protocol::terminal::TerminalCommandStatusEvent;
 
 const OSC_633_PREFIX: &[u8] = b"\x1b]633;";
 const MAX_COMMAND_EVENTS: usize = 1_024;

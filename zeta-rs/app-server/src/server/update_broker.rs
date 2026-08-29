@@ -17,10 +17,10 @@ use zeta_app_server_protocol::protocol::config::ConfigChanged;
 use zeta_app_server_protocol::protocol::connectors::ConnectorsChanged;
 use zeta_app_server_protocol::protocol::extension_host::ExtensionHostChanged;
 use zeta_app_server_protocol::protocol::fs::FsChanged;
-use zeta_app_server_protocol::protocol::git::{GitStatusChanged, GitStatusResult};
-use zeta_app_server_protocol::protocol::goal::{
-    ThreadGoalClearedNotification, ThreadGoalUpdatedNotification,
-};
+use zeta_app_server_protocol::protocol::git::GitStatusChanged;
+use zeta_app_server_protocol::protocol::git::GitStatusResult;
+use zeta_app_server_protocol::protocol::goal::ThreadGoalClearedNotification;
+use zeta_app_server_protocol::protocol::goal::ThreadGoalUpdatedNotification;
 use zeta_app_server_protocol::protocol::language::LanguageDiagnosticsNotification;
 use zeta_app_server_protocol::protocol::language::LanguageServerMessageNotification;
 use zeta_app_server_protocol::protocol::language::LanguageServerProgressNotification;

@@ -1,7 +1,11 @@
+use super::AppServer;
+use super::AppServerThreadUpdates;
 use super::CodeIndexSemanticModels;
+use super::RpcError;
 use super::code_index_runtime::CodeIndexRuntime;
 use super::fs_watcher::FileSystemWatcher;
-use super::git_runtime::{GitRuntime, GitWatcher};
+use super::git_runtime::GitRuntime;
+use super::git_runtime::GitWatcher;
 use super::goal_tool::GoalToolService;
 use super::multi_agent_tools::MultiAgentToolService;
 use super::semantic_index_job::AppServerSemanticIndexMetrics;
@@ -9,7 +13,6 @@ use super::semantic_index_job::SemanticIndexJobController;
 use super::symbol_index_runtime::SymbolIndexRuntime;
 use super::update_plan_tool::UpdatePlanToolService;
 use super::workspace_customizations::WorkspaceCustomizations;
-use super::{AppServer, AppServerThreadUpdates, RpcError};
 use crate::code_retrieval_context::CodeRetrievalContextSource;
 use crate::code_retrieval_tool::CodeRetrievalTool;
 use crate::dynamic_tools::DynamicToolCompositionError;
@@ -31,7 +34,9 @@ use sha2::Sha256;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::RwLock;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
 use zeta_code_index::CodeIndexStorage;
 use zeta_code_index_cloud::CloudCodeIndexController;
@@ -44,12 +49,17 @@ use zeta_code_index_semantic::SqliteCodeIndexVectorStore;
 use zeta_config::ConfigStore;
 use zeta_config::SemanticCodeIndexModelSelection;
 use zeta_config::ToolSearchConfig;
-use zeta_config::{WorkspaceConfigScope, WorkspaceConfigStore, WorkspaceId};
-use zeta_core::{
-    InterruptTurnRequest, MultiAgentCoordinator, SequenceExpectation, SessionCoordinator,
-    ThreadController, TurnExecutor,
-};
-use zeta_file_system::{LocalFileSystem, WorkspaceFileSystem};
+use zeta_config::WorkspaceConfigScope;
+use zeta_config::WorkspaceConfigStore;
+use zeta_config::WorkspaceId;
+use zeta_core::InterruptTurnRequest;
+use zeta_core::MultiAgentCoordinator;
+use zeta_core::SequenceExpectation;
+use zeta_core::SessionCoordinator;
+use zeta_core::ThreadController;
+use zeta_core::TurnExecutor;
+use zeta_file_system::LocalFileSystem;
+use zeta_file_system::WorkspaceFileSystem;
 use zeta_hooks::DeclarativeHookRuntime;
 use zeta_model_provider::EmbeddingInvoker;
 use zeta_model_provider::EmbeddingRequest;
@@ -62,16 +72,19 @@ use zeta_model_provider::RerankResponse;
 use zeta_model_provider::RerankRuntimeRequest;
 use zeta_model_provider::SemanticModelProvider;
 use zeta_model_provider_config::ModelProviderConfig;
+use zeta_protocol::CommandId;
 use zeta_protocol::ProviderId;
-use zeta_protocol::{CommandId, SessionId, TurnStatus};
-use zeta_workspace_search::WorkspaceSearchService;
+use zeta_protocol::SessionId;
+use zeta_protocol::TurnStatus;
 use zeta_shell_command::RipgrepExecutable;
 use zeta_symbol_index::SymbolIndexStorage;
 use zeta_tools::ToolRegistryGeneration;
-use zeta_workspace::{
-    WorkspaceAuthorization, WorkspaceCapability, WorkspaceRoot, WorkspaceTrustDecision,
-};
+use zeta_workspace::WorkspaceAuthorization;
+use zeta_workspace::WorkspaceCapability;
+use zeta_workspace::WorkspaceRoot;
+use zeta_workspace::WorkspaceTrustDecision;
 use zeta_workspace_access::WorkspaceAccessMutation;
+use zeta_workspace_search::WorkspaceSearchService;
 
 pub(super) struct WorkspaceRuntime {
     pub(super) authorization: Option<WorkspaceAuthorization>,

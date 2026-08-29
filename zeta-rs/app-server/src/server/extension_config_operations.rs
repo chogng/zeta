@@ -1,18 +1,37 @@
-use super::config_operations::{config_command_result, config_operation_error};
-use super::{AppServer, RpcError, decode, result};
+use super::AppServer;
+use super::RpcError;
+use super::config_operations::config_command_result;
+use super::config_operations::config_operation_error;
+use super::decode;
+use super::result;
 use serde_json::Value;
-use zeta_app_server_protocol::protocol::config::{
-    HookActionDto, HookConfigDto, HookEnablementDto, HookEventDto, HookMatcherDto,
-    HookRemoveParams, HookSetEnablementParams, HookUpsertParams, PluginRequestDto,
-    PluginRequestEnablementDto, PluginRequestRemoveParams, PluginRequestSetEnablementParams,
-    PluginRequestUpsertParams,
-};
+use zeta_app_server_protocol::protocol::config::HookActionDto;
+use zeta_app_server_protocol::protocol::config::HookConfigDto;
+use zeta_app_server_protocol::protocol::config::HookEnablementDto;
+use zeta_app_server_protocol::protocol::config::HookEventDto;
+use zeta_app_server_protocol::protocol::config::HookMatcherDto;
+use zeta_app_server_protocol::protocol::config::HookRemoveParams;
+use zeta_app_server_protocol::protocol::config::HookSetEnablementParams;
+use zeta_app_server_protocol::protocol::config::HookUpsertParams;
+use zeta_app_server_protocol::protocol::config::PluginRequestDto;
+use zeta_app_server_protocol::protocol::config::PluginRequestEnablementDto;
+use zeta_app_server_protocol::protocol::config::PluginRequestRemoveParams;
+use zeta_app_server_protocol::protocol::config::PluginRequestSetEnablementParams;
+use zeta_app_server_protocol::protocol::config::PluginRequestUpsertParams;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
-use zeta_config::{
-    ConfigCommandRequest, ConfigRevision, HookAction, HookConfig, HookEnablement, HookEvent,
-    HookId, HookMatcher, PluginId, PluginRequest, PluginRequestEnablement, PluginVersion,
-    UserConfigCommand,
-};
+use zeta_config::ConfigCommandRequest;
+use zeta_config::ConfigRevision;
+use zeta_config::HookAction;
+use zeta_config::HookConfig;
+use zeta_config::HookEnablement;
+use zeta_config::HookEvent;
+use zeta_config::HookId;
+use zeta_config::HookMatcher;
+use zeta_config::PluginId;
+use zeta_config::PluginRequest;
+use zeta_config::PluginRequestEnablement;
+use zeta_config::PluginVersion;
+use zeta_config::UserConfigCommand;
 
 impl AppServer {
     pub(super) fn plugin_request_upsert(&self, params: &Value) -> Result<Value, RpcError> {

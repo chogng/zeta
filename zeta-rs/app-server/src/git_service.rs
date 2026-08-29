@@ -3,12 +3,26 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use tokio::runtime::Runtime;
-use zeta_git::{
-    GitBranch, GitChangeFile, GitChangeFileComparison, GitChangeStatus, GitClient, GitCommitChange,
-    GitCommitFile, GitCommitRequest, GitCommitSummary, GitError, GitGraph, GitGraphCursor,
-    GitPathspecSet, GitRepository, GitRepositorySnapshot, GitTextDiffLimits, GitTextDiffSnapshot,
-};
-use zeta_workspace::{TrustedWorkspace, WorkspaceCapability, WorkspaceRoot};
+use zeta_git::GitBranch;
+use zeta_git::GitChangeFile;
+use zeta_git::GitChangeFileComparison;
+use zeta_git::GitChangeStatus;
+use zeta_git::GitClient;
+use zeta_git::GitCommitChange;
+use zeta_git::GitCommitFile;
+use zeta_git::GitCommitRequest;
+use zeta_git::GitCommitSummary;
+use zeta_git::GitError;
+use zeta_git::GitGraph;
+use zeta_git::GitGraphCursor;
+use zeta_git::GitPathspecSet;
+use zeta_git::GitRepository;
+use zeta_git::GitRepositorySnapshot;
+use zeta_git::GitTextDiffLimits;
+use zeta_git::GitTextDiffSnapshot;
+use zeta_workspace::TrustedWorkspace;
+use zeta_workspace::WorkspaceCapability;
+use zeta_workspace::WorkspaceRoot;
 
 const MAX_TEXT_DIFF_FILE_BYTES: usize = 2 * 1024 * 1024;
 const MAX_COMMIT_FILE_BYTES: usize = 2 * 1024 * 1024;

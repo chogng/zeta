@@ -2,19 +2,29 @@ use super::*;
 use crate::ConnectionState;
 use std::collections::BTreeMap;
 use std::path::Path;
-use std::sync::{Condvar, Mutex};
+use std::sync::Condvar;
+use std::sync::Mutex;
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 use zeta_async_utils::CancellationSource;
-use zeta_config::{
-    ConfigCommandRequest, ConfigRevision, PreferencesUpdate, ResolvedConfig, UserConfigCommand,
-    WorkspaceConfigScope, WorkspaceConfigStore, WorkspaceId,
-};
+use zeta_config::ConfigCommandRequest;
+use zeta_config::ConfigRevision;
+use zeta_config::PreferencesUpdate;
+use zeta_config::ResolvedConfig;
+use zeta_config::UserConfigCommand;
+use zeta_config::WorkspaceConfigScope;
+use zeta_config::WorkspaceConfigStore;
+use zeta_config::WorkspaceId;
 use zeta_model_provider::EmbeddingInvoker;
 use zeta_model_provider::EmbeddingRequest;
 use zeta_model_provider::EmbeddingResponse;
 use zeta_model_provider::EmbeddingVector;
-use zeta_model_provider::{ModelId, ModelInvoker, ModelProviderError, ProviderId};
+use zeta_model_provider::ModelId;
+use zeta_model_provider::ModelInvoker;
+use zeta_model_provider::ModelProviderError;
+use zeta_model_provider::ProviderId;
 use zeta_model_provider_config::ApiProfile;
 use zeta_model_provider_config::EndpointPolicy;
 use zeta_model_provider_config::ModelCatalogPolicy;
@@ -27,9 +37,14 @@ use zeta_plugins::PluginAuthorityCommand;
 use zeta_plugins::PluginAuthorityCommandId;
 use zeta_plugins::PluginAuthorityCommandRequest;
 use zeta_plugins::PluginPackageStore;
-use zeta_protocol::{
-    CommandId, ImageDetail, ModelRef, ModelRequest, ModelResponse, Patch, ResponseItem, StopReason,
-};
+use zeta_protocol::CommandId;
+use zeta_protocol::ImageDetail;
+use zeta_protocol::ModelRef;
+use zeta_protocol::ModelRequest;
+use zeta_protocol::ModelResponse;
+use zeta_protocol::Patch;
+use zeta_protocol::ResponseItem;
+use zeta_protocol::StopReason;
 use zeta_secrets::MemorySecretStore;
 use zeta_web_search_extension::WebSearchBackend;
 use zeta_web_search_extension::WebSearchError;
@@ -811,7 +826,6 @@ fn model_invocations_use_latest_config_without_mutating_an_in_flight_snapshot() 
         models_manager: ModelsManager::new(provider_configs),
         resolver: Arc::new(RecordingSnapshotResolver { gate: gate.clone() }),
     });
-
     let in_flight_model = model.clone();
     let in_flight = thread::spawn(move || invoke_text(in_flight_model.as_ref(), "first"));
     gate.wait_until_entered();

@@ -6,7 +6,8 @@ use std::sync::Mutex;
 
 use zeta_app_server_protocol::protocol::registry::ClientRequestSerializationScope;
 use zeta_app_server_protocol::protocol::registry::SerializationAccess;
-use zeta_async_utils::{CancellationSource, CancellationToken};
+use zeta_async_utils::CancellationSource;
+use zeta_async_utils::CancellationToken;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 enum RequestSerializationKey {

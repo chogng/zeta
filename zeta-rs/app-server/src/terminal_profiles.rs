@@ -1,7 +1,10 @@
 use crate::terminal_environment::TerminalEnvironment;
-use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
-use zeta_app_server_protocol::protocol::terminal::{TerminalProfile, TerminalProfileSelection};
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::path::Path;
+use std::path::PathBuf;
+use zeta_app_server_protocol::protocol::terminal::TerminalProfile;
+use zeta_app_server_protocol::protocol::terminal::TerminalProfileSelection;
 
 /// Frozen trusted shell catalog used by one local Terminal service.
 pub(crate) struct TerminalProfileCatalog {

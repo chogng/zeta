@@ -3,9 +3,9 @@ use std::path::Path;
 
 use serde_json::Value;
 use zeta_app_server_protocol::protocol::error::AppServerErrorName;
-use zeta_app_server_protocol::protocol::fs::{
-    FsDeleteMode, FsExistingTargetBehavior, FsMissingTargetBehavior,
-};
+use zeta_app_server_protocol::protocol::fs::FsDeleteMode;
+use zeta_app_server_protocol::protocol::fs::FsExistingTargetBehavior;
+use zeta_app_server_protocol::protocol::fs::FsMissingTargetBehavior;
 use zeta_app_server_protocol::protocol::language::LanguageCloseParams;
 use zeta_app_server_protocol::protocol::language::LanguageCodeActionDiagnosticDto;
 use zeta_app_server_protocol::protocol::language::LanguageCodeActionDto;
@@ -78,10 +78,12 @@ use zeta_lsp_manager::LanguageCompletionInsertTextFormat;
 use zeta_lsp_manager::LanguageCompletionItem;
 use zeta_lsp_manager::LanguageCompletionItemKind;
 use zeta_lsp_manager::LanguageCompletionTrigger;
+use zeta_lsp_manager::LanguageDeleteMode;
 use zeta_lsp_manager::LanguageDiagnostic;
 use zeta_lsp_manager::LanguageDiagnosticSeverity;
 use zeta_lsp_manager::LanguageDocumentPosition;
 use zeta_lsp_manager::LanguageDocumentRevision;
+use zeta_lsp_manager::LanguageExistingTargetBehavior;
 use zeta_lsp_manager::LanguageFormattingOptions;
 use zeta_lsp_manager::LanguageHierarchyEntry;
 use zeta_lsp_manager::LanguageHierarchyItem;
@@ -89,17 +91,15 @@ use zeta_lsp_manager::LanguageInlayHintKind;
 use zeta_lsp_manager::LanguageLocationPosition;
 use zeta_lsp_manager::LanguageLocationRange;
 use zeta_lsp_manager::LanguageLocationTarget;
+use zeta_lsp_manager::LanguageMissingTargetBehavior;
 use zeta_lsp_manager::LanguagePositionEncoding;
 use zeta_lsp_manager::LanguagePulledDiagnosticReport;
 use zeta_lsp_manager::LanguageSignatureHelpTrigger;
 use zeta_lsp_manager::LanguageTextRange;
 use zeta_lsp_manager::LanguageWorkspaceEdit;
+use zeta_lsp_manager::LanguageWorkspaceEditEntry;
 use zeta_lsp_manager::LspDocumentSnapshot;
 use zeta_lsp_manager::LspManagerRequestResult;
-use zeta_lsp_manager::{
-    LanguageDeleteMode, LanguageExistingTargetBehavior, LanguageMissingTargetBehavior,
-    LanguageWorkspaceEditEntry,
-};
 
 use super::AppServer;
 use super::RpcError;
