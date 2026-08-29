@@ -1,3 +1,4 @@
+import { type FastDomNode } from '../../../base/browser/fastDomNode.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { type EditorViewportLayout } from '../../common/viewLayout/viewLayout.js';
 import { type EditorRenderingContext } from './renderingContext.js';
@@ -29,6 +30,33 @@ export abstract class EditorViewPart extends Disposable {
 	}
 
 	public abstract render(context: EditorRenderingContext): void;
+}
+
+export const enum PartFingerprint {
+	None,
+	ContentWidgets,
+	OverflowingContentWidgets,
+}
+
+export class PartFingerprints {
+	public static write(target: Element | FastDomNode<HTMLElement>, fingerprint: PartFingerprint): void {
+		target.setAttribute('data-mprt', String(fingerprint));
+	}
+
+	public static read(target: Element): PartFingerprint {
+		const value = target.getAttribute('data-mprt');
+		return value === null ? PartFingerprint.None : Number.parseInt(value, 10);
+	}
+
+	public static collect(child: Element | null, stopAt: Element): Uint8Array {
+		const fingerprints: PartFingerprint[] = [];
+		while (child && child !== child.ownerDocument.body) {
+			if (child === stopAt) break;
+			fingerprints.push(this.read(child));
+			child = child.parentElement;
+		}
+		return Uint8Array.from(fingerprints.reverse());
+	}
 }
 
 export class EditorViewPartCollection extends Disposable {

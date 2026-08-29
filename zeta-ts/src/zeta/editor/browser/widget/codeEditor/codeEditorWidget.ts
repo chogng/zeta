@@ -6,6 +6,7 @@ import { TextSelection, TextSelectionSet } from "../../../common/core/selection.
 import { TextPosition, type TextRange } from "../../../common/core/text.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type EditorScrollPosition } from "../../../common/viewModel.js";
+import type { IContentWidget } from '../../editorBrowser.js';
 import { EditorView, type EditorViewOptions, type EditorViewViewportOptions } from "../../view.js";
 import { type EditorViewport } from "../../view.js";
 import { KeyboardNavigationController, type KeyboardNavigationControllerOptions } from "../../view/viewController.js";
@@ -113,6 +114,18 @@ export class CodeEditorWidget extends Disposable {
 
 	focus(): void {
 		this.view.focus();
+	}
+
+	addContentWidget(widget: IContentWidget): void {
+		this.viewport.addContentWidget(widget);
+	}
+
+	layoutContentWidget(widget: IContentWidget): void {
+		this.viewport.layoutContentWidget(widget);
+	}
+
+	removeContentWidget(widget: IContentWidget): void {
+		this.viewport.removeContentWidget(widget);
 	}
 
 	announceAccessibilityStatus(message: string): void {

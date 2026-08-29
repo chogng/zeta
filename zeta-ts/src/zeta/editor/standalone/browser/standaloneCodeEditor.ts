@@ -2,7 +2,7 @@ import type { IDimension } from '../../../base/browser/geometry.js';
 import type { Event } from '../../../base/common/event.js';
 import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { bindColorTheme } from '../../../platform/theme/browser/themeStyles.js';
-import { EditorBrowser, type EditorBrowserOptions, type EditorTextViewState, type IEditorBrowser } from '../../browser/editorBrowser.js';
+import { EditorBrowser, type EditorBrowserOptions, type EditorTextViewState, type IContentWidget, type IEditorBrowser } from '../../browser/editorBrowser.js';
 import type { EditorView, EditorViewport } from '../../browser/view.js';
 import type { CodeEditorWidget } from '../../browser/widget/codeEditor/codeEditorWidget.js';
 import type { EditorSelectionController } from '../../common/cursor/editorSelectionController.js';
@@ -53,5 +53,8 @@ export class StandaloneCodeEditor extends Disposable implements IStandaloneCodeE
 	public revealRange(range: TextRange): void { this.editor.revealRange(range); }
 	public getViewState(): EditorTextViewState { return this.editor.getViewState(); }
 	public restoreViewState(state: EditorTextViewState): void { this.editor.restoreViewState(state); }
+	public addContentWidget(widget: IContentWidget): void { this.editor.addContentWidget(widget); }
+	public layoutContentWidget(widget: IContentWidget): void { this.editor.layoutContentWidget(widget); }
+	public removeContentWidget(widget: IContentWidget): void { this.editor.removeContentWidget(widget); }
 	public prepareSave(): Promise<void> { return this.editor.prepareSave(); }
 }

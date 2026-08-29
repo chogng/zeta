@@ -38,9 +38,10 @@ import { LineNumbersOverlay } from './viewparts/lineNumbers/lineNumbers.js';
 import { Minimap } from './viewparts/minimap/minimap.js';
 import { DecorationsOverviewRuler } from './viewparts/overviewRuler/decorationsOverviewRuler.js';
 import { ScrollDecorationViewPart } from './viewparts/scrollDecoration/scrollDecoration.js';
-import { ViewContentWidgets, type IContentWidget } from './viewparts/contentWidgets/contentWidgets.js';
+import { ViewContentWidgets } from './viewparts/contentWidgets/contentWidgets.js';
 import { ViewOverlayWidgets, type IOverlayWidget } from './viewparts/overlayWidgets/overlayWidgets.js';
 import { EditorViewContext, EditorViewPartCollection } from './view/viewPart.js';
+import type { IContentWidget } from './editorBrowser.js';
 import { ViewOverlays } from './view/viewOverlays.js';
 import { LineWidthIndex, ViewLines } from './viewparts/viewLines/viewLines.js';
 import { ViewLineOptions, ViewLineTextDirection as EditorTextDirection } from './viewparts/viewLines/viewLineOptions.js';
@@ -378,6 +379,8 @@ export interface EditorViewportOptions {
 	readonly textDirection?: EditorTextDirection;
 	readonly experimentalGpuAcceleration?: IEditorOptions['experimentalGpuAcceleration'];
 	readonly renderWhitespace?: IEditorOptions['renderWhitespace'];
+	readonly allowOverflow?: IEditorOptions['allowOverflow'];
+	readonly fixedOverflowWidgets?: IEditorOptions['fixedOverflowWidgets'];
 }
 
 export interface EditorContentPosition {
@@ -571,7 +574,13 @@ export class View extends Disposable {
 		);
 		this.viewParts = this._register(new EditorViewPartCollection());
 		this.viewZones = this.viewParts.register(new ViewZones(this.element, this.viewport, () => this.visualProjection.visualLineCount));
-		this.contentWidgets = this.viewParts.register(new ViewContentWidgets(this.element));
+		this.contentWidgets = this.viewParts.register(new ViewContentWidgets({
+			viewDomNode: this.element,
+			allowOverflow: options.allowOverflow ?? true,
+			fixedOverflowWidgets: options.fixedOverflowWidgets ?? false,
+			readContentLeft: () => this.contentOffsetLeft,
+			readContentWidth: () => Math.max(0, this.viewport.layout.viewportSize.width - this.contentOffsetLeft),
+		}));
 		this.overlayWidgets = this.viewParts.register(new ViewOverlayWidgets(this.element));
 		this.viewLines = this._register(new ViewLines({
 			host: this.contentElement,
@@ -673,7 +682,7 @@ export class View extends Disposable {
 		this.contentElement.append(
 			this.viewLines.domNode,
 			...this.viewOverlays.domNodes,
-			this.contentWidgets.domNode,
+			this.contentWidgets.domNode.domNode,
 			lineNumbersOverlay.domNode,
 			this.margin.domNode,
 			glyphMarginWidgets.domNode,
@@ -687,6 +696,7 @@ export class View extends Disposable {
 			scrollDecoration.domNode,
 			this.viewZones.domNode,
 		);
+		ownerDocument.body.append(this.contentWidgets.overflowingContentWidgetsDomNode.domNode);
 		this._register(this.viewModelLines.onDidChange(() => this.project(viewport.layout)));
 		this._register(this.viewOverlays.onDidChangeDecorations(() => this.project(viewport.layout)));
 		viewport.setContentWidth(this.measuredContentWidth);
@@ -844,6 +854,11 @@ export class View extends Disposable {
 
 	addContentWidget(widget: IContentWidget): void {
 		this.contentWidgets.addWidget(widget);
+		this.layoutContentWidget(widget);
+	}
+
+	layoutContentWidget(widget: IContentWidget): void {
+		this.contentWidgets.setWidgetPosition(widget, widget.getPosition());
 		this.project(this.viewport.layout);
 	}
 

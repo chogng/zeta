@@ -4,6 +4,7 @@ import { JSDOM } from "jsdom";
 import { h } from "../../../../base/browser/dom.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { MouseTargetFactory, MouseTargetKind } from "../../../browser/controller/mouseTarget.js";
+import { PartFingerprint, PartFingerprints } from '../../../browser/view/viewPart.js';
 import { TextPosition } from "../../../common/core/text.js";
 import { EditorHitTargetKind } from "../../../common/viewModel/pointerHitTest.js";
 
@@ -57,6 +58,11 @@ test("MouseTargetFactory preserves editor targets and classifies browser-owned r
 	assert.equal(factory.create(mouseEvent(node("stanza-editor-scrollbar-track stanza-editor-scrollbar-track-vertical")))?.kind, MouseTargetKind.Scrollbar);
 	assert.equal(factory.create(mouseEvent(node("stanza-editor-zone-widget")))?.kind, MouseTargetKind.ViewZone);
 	assert.equal(factory.create(mouseEvent(node("stanza-editor-content-widget")))?.kind, MouseTargetKind.Widget);
+	const contentWidgets = node('stanza-editor-content-widgets');
+	PartFingerprints.write(contentWidgets, PartFingerprint.ContentWidgets);
+	const fingerprintedWidget = h(dom.window.document, 'button');
+	contentWidgets.append(fingerprintedWidget);
+	assert.equal(factory.create(mouseEvent(fingerprintedWidget))?.kind, MouseTargetKind.Widget);
 
 	const textTarget = factory.create(mouseEvent(node("stanza-editor-text")));
 	assert.equal(textTarget?.kind, MouseTargetKind.Text);

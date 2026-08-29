@@ -6,6 +6,7 @@ import { isFiniteNumber, isSafeInteger } from "../../base/common/numbers.js";
 import type { URI } from "../../base/common/uri.js";
 import { EditorSelectionController } from "../common/cursor/editorSelectionController.js";
 import { TextSelection, TextSelectionSet } from "../common/core/selection.js";
+import type { IPosition } from '../common/core/position.js';
 import { TextPosition, type TextRange } from "../common/core/text.js";
 import { type LanguageCompletionWorkerFactory } from "../common/languages/completion/languageCompletionService.js";
 import { type SyntaxWorkerFactory } from "../common/languages/syntax/syntaxService.js";
@@ -42,6 +43,34 @@ export interface EditorContextMenuRequest {
 	readonly target: EditorHitTarget | undefined;
 	readonly clientX: number;
 	readonly clientY: number;
+}
+
+export enum ContentWidgetPositionPreference {
+	EXACT,
+	ABOVE,
+	BELOW,
+}
+
+export interface IContentWidgetPosition {
+	readonly position: IPosition | null;
+	readonly secondaryPosition?: IPosition | null;
+	readonly preference: readonly ContentWidgetPositionPreference[];
+}
+
+export interface IContentWidgetRenderedCoordinate {
+	readonly top: number;
+	readonly left: number;
+}
+
+export interface IContentWidget {
+	readonly allowEditorOverflow?: boolean;
+	readonly useDisplayNone?: boolean;
+	readonly suppressMouseDown?: boolean;
+	getId(): string;
+	getDomNode(): HTMLElement;
+	getPosition(): IContentWidgetPosition | null;
+	beforeRender?(): IDimension | null;
+	afterRender?(position: ContentWidgetPositionPreference | null, coordinate: IContentWidgetRenderedCoordinate | null): void;
 }
 
 export type EditorTextViewPositionState = CodeEditorViewPositionState;
@@ -155,6 +184,8 @@ export interface EditorBrowserOptions {
 	readonly textDirection?: EditorTextDirection;
 	readonly experimentalGpuAcceleration?: IEditorOptions['experimentalGpuAcceleration'];
 	readonly renderWhitespace?: IEditorOptions['renderWhitespace'];
+	readonly allowOverflow?: IEditorOptions['allowOverflow'];
+	readonly fixedOverflowWidgets?: IEditorOptions['fixedOverflowWidgets'];
 	readonly presentation?: EditorViewportPresentation;
 	/** Host-owned link opening callback; the editor never opens external targets directly. */
 	readonly onOpenLink?: (target: string) => void | Promise<void>;
@@ -189,6 +220,9 @@ export interface IEditorBrowser extends IDisposable {
 	revealRange(range: TextRange): void;
 	getViewState(): EditorTextViewState;
 	restoreViewState(state: EditorTextViewState): void;
+	addContentWidget(widget: IContentWidget): void;
+	layoutContentWidget(widget: IContentWidget): void;
+	removeContentWidget(widget: IContentWidget): void;
 	/** Runs editor-local formatting and normalization before the host persists the model. */
 	prepareSave(): Promise<void>;
 }
@@ -313,6 +347,8 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 					textDirection: options.textDirection,
 					experimentalGpuAcceleration: options.experimentalGpuAcceleration,
 					renderWhitespace: options.renderWhitespace,
+					allowOverflow: options.allowOverflow,
+					fixedOverflowWidgets: options.fixedOverflowWidgets,
 					presentation: options.presentation,
 					indentation: options.indentation,
 				},
@@ -380,6 +416,9 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 	revealRange(range: TextRange): void { this.codeEditor.revealRange(range); }
 	getViewState(): EditorTextViewState { return this.codeEditor.saveViewState(); }
 	restoreViewState(state: EditorTextViewState): void { this.codeEditor.restoreViewState(state); }
+	addContentWidget(widget: IContentWidget): void { this.codeEditor.addContentWidget(widget); }
+	layoutContentWidget(widget: IContentWidget): void { this.codeEditor.layoutContentWidget(widget); }
+	removeContentWidget(widget: IContentWidget): void { this.codeEditor.removeContentWidget(widget); }
 	async prepareSave(): Promise<void> {
 		for (const hook of [...this.beforeSaveHooks]) await hook();
 	}
@@ -454,6 +493,8 @@ function validateOptions(options: EditorBrowserOptions): void {
 		["format on save", options.formatOnSave],
 		["selection highlight", options.selectionHighlight],
 		["multiline selection highlight", options.selectionHighlightMultiline],
+		['content widget overflow', options.allowOverflow],
+		['fixed content widget overflow', options.fixedOverflowWidgets],
 	] as const) {
 		if (value !== undefined && typeof value !== "boolean") throw new TypeError(`Editor ${name} option must be boolean`);
 	}

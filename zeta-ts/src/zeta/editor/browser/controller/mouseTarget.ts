@@ -2,6 +2,7 @@ import { type EditorViewport } from '../view.js';
 import { type ClientPoint, type EditorHitTarget, EditorHitTargetKind } from '../../common/viewModel/pointerHitTest.js';
 import { type TextDecorationId } from '../../common/model/decorationCollection.js';
 import { GlyphMarginLane } from '../viewparts/decorations/decorations.js';
+import { PartFingerprint, PartFingerprints } from '../view/viewPart.js';
 
 /** Identifies the browser-owned semantic area under one mouse or pointer event. */
 export enum MouseTargetKind {
@@ -31,7 +32,7 @@ export class MouseTargetFactory {
 
 	create(event: Pick<MouseEvent, 'clientX' | 'clientY' | 'target'>, nearest = false): MouseTarget | undefined {
 		const element = eventTargetElement(event.target, this.viewport.element.ownerDocument);
-		const elementTarget = classifyElement(element);
+		const elementTarget = classifyElement(element, this.viewport.element);
 		const editorTarget = nearest
 			? this.viewport.getNearestTargetAtClientPoint(event)
 			: this.viewport.getTargetAtClientPoint(event);
@@ -59,13 +60,14 @@ interface ElementMouseTarget {
 	readonly glyphMarginLane?: GlyphMarginLane;
 }
 
-function classifyElement(element: Element | undefined): ElementMouseTarget | undefined {
+function classifyElement(element: Element | undefined, editorDomNode: HTMLElement): ElementMouseTarget | undefined {
 	if (!element) return undefined;
 	if (element.closest('.stanza-editor-scrollbar-track, .zeta-scrollbar-track, [role="scrollbar"]')) {
 		return { kind: MouseTargetKind.Scrollbar };
 	}
 	if (element.closest('.stanza-editor-zone-widget')) return { kind: MouseTargetKind.ViewZone };
-	if (element.closest('.stanza-editor-widget, .stanza-editor-content-widget, .stanza-editor-overlay-widget')) {
+	const fingerprints = PartFingerprints.collect(element, editorDomNode);
+	if (fingerprints.includes(PartFingerprint.ContentWidgets) || fingerprints.includes(PartFingerprint.OverflowingContentWidgets) || element.closest('.stanza-editor-widget, .stanza-editor-content-widget, .stanza-editor-overlay-widget')) {
 		return { kind: MouseTargetKind.Widget };
 	}
 	if (element.closest('.stanza-editor-line-number')) return { kind: MouseTargetKind.LineNumber };

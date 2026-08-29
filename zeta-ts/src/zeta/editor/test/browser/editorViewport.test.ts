@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { h } from "../../../base/browser/dom.js";
+import { ContentWidgetPositionPreference, type IContentWidgetPosition } from '../../browser/editorBrowser.js';
 import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
 import { createStanzaDecorationSource, DecorationPresentation, GlyphMarginLane } from "../../browser/viewparts/decorations/decorations.js";
 import { EditorSelectionController } from "../../common/cursor/editorSelectionController.js";
@@ -1059,7 +1060,15 @@ test('EditorViewport mounts content and overlay widgets through their VS Code ow
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer() });
 	viewport.layout({ width: 300, height: 100 });
 	const contentDomNode = h(dom.window.document, 'div');
-	const contentWidget = { id: 'content', domNode: contentDomNode, getPosition: () => ({ position: TextPosition.at(0, 1), preference: 'below' as const }) };
+	let contentPosition: IContentWidgetPosition = { position: { lineIndex: 0, columnIndex: 1 }, preference: [ContentWidgetPositionPreference.ABOVE, ContentWidgetPositionPreference.BELOW] };
+	let renderedPosition: ContentWidgetPositionPreference | null = null;
+	const contentWidget = {
+		getId: () => 'content',
+		getDomNode: () => contentDomNode,
+		getPosition: () => contentPosition,
+		beforeRender: () => ({ width: 60, height: 30 }),
+		afterRender: (position: ContentWidgetPositionPreference | null) => { renderedPosition = position; },
+	};
 	const overlayDomNode = h(dom.window.document, 'div');
 	const overlayWidget = { id: 'overlay', domNode: overlayDomNode, getPosition: () => 'top-right' as const };
 
@@ -1067,13 +1076,60 @@ test('EditorViewport mounts content and overlay widgets through their VS Code ow
 	viewport.addOverlayWidget(overlayWidget);
 
 	assert.equal(contentDomNode.parentElement?.className, 'stanza-editor-content-widgets');
-	assert.equal(contentDomNode.hidden, false);
+	assert.equal(contentDomNode.style.display, 'block');
+	assert.equal(contentDomNode.style.visibility, 'inherit');
+	assert.equal(contentDomNode.style.top, '20px');
+	assert.equal(renderedPosition, ContentWidgetPositionPreference.BELOW);
 	assert.equal(overlayDomNode.parentElement?.className, 'stanza-editor-overlay-widgets');
 	assert.equal(overlayDomNode.hidden, false);
+	contentPosition = { position: { lineIndex: 0, columnIndex: 1 }, preference: [ContentWidgetPositionPreference.EXACT] };
+	viewport.layoutContentWidget(contentWidget);
+	assert.equal(contentDomNode.style.top, '0px');
+	assert.equal(renderedPosition, ContentWidgetPositionPreference.EXACT);
 	viewport.removeContentWidget(contentWidget);
 	viewport.removeOverlayWidget(overlayWidget);
 	assert.equal(contentDomNode.isConnected, false);
 	assert.equal(overlayDomNode.isConnected, false);
+	dom.window.close();
+});
+
+test('EditorViewport preserves focused overflow content widgets off screen and suppresses their mouse down', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('alpha\nbeta');
+	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer(), fixedOverflowWidgets: true });
+	viewport.layout({ width: 300, height: 20 });
+	const contentDomNode = h(dom.window.document, 'button');
+	let position: IContentWidgetPosition = { position: TextPosition.at(0, 1), preference: [ContentWidgetPositionPreference.EXACT] };
+	let renderedPosition: ContentWidgetPositionPreference | null = null;
+	const contentWidget = {
+		allowEditorOverflow: true,
+		suppressMouseDown: true,
+		getId: () => 'overflow-content',
+		getDomNode: () => contentDomNode,
+		getPosition: () => position,
+		beforeRender: () => ({ width: 80, height: 24 }),
+		afterRender: (nextPosition: ContentWidgetPositionPreference | null) => { renderedPosition = nextPosition; },
+	};
+
+	viewport.addContentWidget(contentWidget);
+	assert.equal(contentDomNode.parentElement?.className, 'stanza-editor-overflowing-content-widgets');
+	assert.equal(contentDomNode.style.position, 'fixed');
+	assert.equal(renderedPosition, ContentWidgetPositionPreference.EXACT);
+	const mouseDown = new dom.window.MouseEvent('mousedown', { bubbles: true, cancelable: true });
+	contentDomNode.dispatchEvent(mouseDown);
+	assert.equal(mouseDown.defaultPrevented, true);
+
+	contentDomNode.focus();
+	position = { position: TextPosition.at(1, 0), preference: [ContentWidgetPositionPreference.BELOW] };
+	viewport.layoutContentWidget(contentWidget);
+	assert.equal(contentDomNode.style.top, '-1000px');
+	assert.equal(contentDomNode.style.visibility, 'inherit');
+	assert.equal(dom.window.document.activeElement, contentDomNode);
+	assert.equal(renderedPosition, null);
+
+	viewport.removeContentWidget(contentWidget);
+	assert.equal(contentDomNode.isConnected, false);
 	dom.window.close();
 });
 

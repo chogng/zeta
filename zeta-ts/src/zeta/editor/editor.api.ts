@@ -13,6 +13,8 @@ export type { IDisposable } from "../base/common/lifecycle.js";
 export { EditorLineWrapping, WrappingIndent } from "./common/config/editorOptions.js";
 export type { IEditorMinimapOptions } from './common/config/editorOptions.js';
 export { EditorTextDirection } from "./browser/view.js";
+export { ContentWidgetPositionPreference } from './browser/editorBrowser.js';
+export type { IContentWidget, IContentWidgetPosition, IContentWidgetRenderedCoordinate } from './browser/editorBrowser.js';
 export { ColorScheme } from "../platform/theme/common/theme.js";
 export type { IStandaloneCodeEditor } from './standalone/browser/standaloneCodeEditor.js';
 export type { IStandaloneEditorApi, IStandaloneEditorConstructionOptions } from "./standalone/browser/standaloneEditor.js";
