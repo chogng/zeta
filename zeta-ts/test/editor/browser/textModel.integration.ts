@@ -18,10 +18,12 @@ import { MemoryTextFiles } from "./memoryTextFiles.js";
 interface IntegrationHarness {
 	readonly apiText: string;
 	getValue(): string;
+	setValue(value: string): void;
 	save(): Promise<void>;
 	getSavedText(): string;
 	getSyntaxAnalysisCount(): number;
 	setCursors(positions: readonly { readonly lineIndex: number; readonly columnIndex: number }[], primaryIndex?: number): void;
+	revealPosition(lineIndex: number, columnIndex: number): void;
 	dispose(): void;
 }
 
@@ -86,6 +88,7 @@ await pane.setInput({ resource, label: "main.rs" }, new AbortController().signal
 window.zetaTextModelIntegration = {
 	apiText: apiModel.getText(),
 	getValue: () => pane.getValue(),
+	setValue: value => requiredEditorPart().setValue(value),
 	save: () => pane.save(),
 	getSavedText: () => files.read(resource),
 	getSyntaxAnalysisCount: () => syntaxAnalysisCount,
@@ -93,6 +96,7 @@ window.zetaTextModelIntegration = {
 		positions.map(position => TextSelection.collapsedAt(TextPosition.at(position.lineIndex, position.columnIndex))),
 		primaryIndex,
 	)),
+	revealPosition: (lineIndex, columnIndex) => requiredEditorPart().view.revealPosition(TextPosition.at(lineIndex, columnIndex)),
 	dispose: () => disposables.dispose(),
 };
 

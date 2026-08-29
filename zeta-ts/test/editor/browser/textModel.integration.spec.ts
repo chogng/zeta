@@ -82,6 +82,16 @@ test("cursor layer retains nodes, animates stable moves, and resolves multi-curs
 	await expect(secondary).toHaveCount(1);
 	await expect(primary).toHaveCSS("background-color", "rgb(1, 2, 3)");
 	await expect(secondary).toHaveCSS("background-color", "rgb(4, 5, 6)");
+
+	await page.evaluate(() => {
+		window.zetaTextModelIntegration.setValue(Array.from({ length: 60 }, (_, index) => `fn main() { answer(); } // ${index}`).join("\n"));
+		window.zetaTextModelIntegration.setCursors([{ lineIndex: 59, columnIndex: 0 }]);
+	});
+	await expect(retainedCaret).toHaveAttribute("data-retained-identity", "true");
+	await expect(retainedCaret).toHaveCSS("display", "none");
+	await page.evaluate(() => window.zetaTextModelIntegration.revealPosition(59, 0));
+	await expect(retainedCaret).toHaveCSS("display", "block");
+	await expect(retainedCaret).toHaveAttribute("data-retained-identity", "true");
 });
 
 test("text-model editor projects revision-bound Rust syntax, diagnostics, folding, and symbols", async ({ page }) => {
