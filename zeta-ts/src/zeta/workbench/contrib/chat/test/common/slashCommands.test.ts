@@ -29,27 +29,6 @@ test("Slash Command catalog composes local and server definitions", () => {
 	assert.equal(parseSlashCommandInput("/diagnose now", catalog).kind, "command");
 });
 
-test("enabled Skill commands share the direct slash catalog with exact bindings", () => {
-	const catalog = new SlashCommandCatalog(local, [{ name: "diagnose", description: "Inspect workspace", argumentMode: "optional" }]);
-	const skill = {
-		id: { source: "user:skill-source:test", name: "commit" },
-		version: { type: "pinnedDigest" as const, digest: "sha256:commit" },
-	};
-	catalog.setSkillCommands([
-		{ name: "history", description: "Must not shadow a local command", source: "workspace", skill: { ...skill, id: { ...skill.id, name: "history" } } },
-		{ name: "diagnose", description: "Must not shadow a server command", source: "workspace", skill: { ...skill, id: { ...skill.id, name: "diagnose" } } },
-		{ name: "commit", description: "Draft a commit message", source: "user", skill },
-	]);
-
-	assert.deepEqual(catalog.commands.map(command => command.name), ["history", "diagnose", "commit"]);
-	assert.deepEqual(parseSlashCommandInput("/commit staged changes", catalog), {
-		kind: "command",
-		command: { name: "commit", description: "Draft a commit message", argumentMode: "optional" },
-		binding: { origin: "skill", skill, source: "user" },
-		argumentsText: "staged changes",
-	});
-});
-
 test("Slash Command catalog rejects invalid and colliding definitions", () => {
 	assert.throws(() => new SlashCommandCatalog(local, [{ name: "history", description: "Collision", argumentMode: "none" }]), /Duplicate/);
 	assert.throws(() => new SlashCommandCatalog([], [{ name: "Invalid", description: "Bad name", argumentMode: "none" }]), /Invalid/);

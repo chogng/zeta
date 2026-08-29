@@ -18,6 +18,7 @@ for (const [name, value] of Object.entries({
 
 const { ChatInputEditor } = await import("../../browser/input/stanzaChatInputEditor.js");
 const { DesktopSlashCommands, SlashCommandCatalog } = await import("../../common/slashCommands.js");
+const { SkillSelectorCatalog } = await import('../../common/skillSelectors.js');
 
 test.after(() => browserEnvironment.window.close());
 
@@ -25,7 +26,7 @@ test("Stanza Chat input completes slash commands before submitting", async () =>
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
-	using editor = new ChatInputEditor({ container, placeholder: "Ask Zeta", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []) });
+	using editor = new ChatInputEditor({ container, placeholder: "Ask Zeta", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
 	let submissions = 0;
 	using submitListener = editor.onDidSubmit(() => submissions += 1);
 	const input = requiredElement<HTMLTextAreaElement>(editor.element, ".stanza-editor-input");
@@ -55,13 +56,14 @@ test("Stanza Chat input completes slash commands before submitting", async () =>
 	dom.window.close();
 });
 
-test("Stanza Chat input discovers dynamically projected Skill commands", async () => {
+test('Stanza Chat input discovers Skills only through the `$` selector', async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	const catalog = new SlashCommandCatalog(DesktopSlashCommands, []);
-	using editor = new ChatInputEditor({ container, placeholder: "Ask Zeta", ariaLabel: "Chat message", slashCommands: catalog });
-	catalog.setSkillCommands([{
+	const skills = new SkillSelectorCatalog();
+	using editor = new ChatInputEditor({ container, placeholder: "Ask Zeta", ariaLabel: "Chat message", slashCommands: catalog, skills });
+	skills.setSkills([{
 		name: "commit",
 		description: "Draft a commit message",
 		source: "user",
@@ -69,10 +71,14 @@ test("Stanza Chat input discovers dynamically projected Skill commands", async (
 	}]);
 	const input = requiredElement<HTMLTextAreaElement>(editor.element, ".stanza-editor-input");
 
-	input.dispatchEvent(beforeInputEvent(dom.window, "/"));
-	await waitFor(() => completionLabels(editor.element).length === 3);
+	input.dispatchEvent(beforeInputEvent(dom.window, '$'));
+	await waitFor(() => completionLabels(editor.element).length === 1);
 
-	assert.deepEqual(completionLabels(editor.element), ["/new", "/history", "/commit"]);
+	assert.deepEqual(completionLabels(editor.element), ['$commit']);
+	const accept = keyboardEvent(dom.window, 'Enter');
+	input.dispatchEvent(accept);
+	assert.equal(editor.value, '$commit ');
+
 	dom.window.close();
 });
 
@@ -80,7 +86,7 @@ test("Stanza Chat input restores message behavior when the slash is deleted", as
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
-	using editor = new ChatInputEditor({ container, placeholder: "Ask Zeta", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []) });
+	using editor = new ChatInputEditor({ container, placeholder: "Ask Zeta", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
 	const changes: string[] = [];
 	using changeListener = editor.onDidChange(value => changes.push(value));
 	const input = requiredElement<HTMLTextAreaElement>(editor.element, ".stanza-editor-input");
@@ -107,7 +113,7 @@ test("Stanza Chat input starts at the InputPart default height and still grows w
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
-	using editor = new ChatInputEditor({ container, placeholder: "Ask Zeta", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []) });
+	using editor = new ChatInputEditor({ container, placeholder: "Ask Zeta", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
 
 	assert.equal(editor.element.style.height, "106px");
 	editor.value = Array.from({ length: 12 }, (_, index) => `Line ${index + 1}`).join("\n");

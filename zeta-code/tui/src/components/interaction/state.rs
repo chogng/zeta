@@ -2,6 +2,8 @@ use crate::components::composer::ChatComposer;
 use crate::components::composer::ComposerOutcome;
 use crate::components::composer::ComposerSubmission;
 use crate::components::composer::MentionPopupView;
+use crate::components::composer::SkillSelectorItem;
+use crate::components::composer::SkillSelectorView;
 use crate::components::composer::SlashCommandCatalog;
 use crate::components::composer::SlashCommandInvocation;
 use crate::components::composer::SlashCommandsView;
@@ -13,9 +15,7 @@ use crate::components::selection::SelectionViewModel;
 use crate::components::selection::SelectionViewState;
 use crate::mouse::MouseMode;
 use crossterm::event::KeyEvent;
-use std::collections::BTreeMap;
 use zeta_file_search::PathSearchSnapshot;
-use zeta_protocol::SkillRef;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum InteractionPaneOutcome {
@@ -99,13 +99,13 @@ impl InteractionPane {
         self.composer.attach_image_bytes(bytes)
     }
 
-    pub(crate) fn replace_slash_commands(
+    pub(crate) fn replace_composer_catalog(
         &mut self,
         slash_commands: SlashCommandCatalog,
-        skill_commands: BTreeMap<String, SkillRef>,
+        skills: Vec<SkillSelectorItem>,
     ) {
         self.composer
-            .replace_slash_commands(slash_commands, skill_commands);
+            .replace_composer_catalog(slash_commands, skills);
     }
 
     pub(crate) fn text(&self) -> &str {
@@ -138,11 +138,21 @@ impl InteractionPane {
         self.composer.mention_popup()
     }
 
+    pub(crate) fn skill_popup(&self) -> Option<SkillSelectorView<'_>> {
+        if !self.views.is_empty() {
+            return None;
+        }
+        self.composer.skill_popup()
+    }
+
     pub(crate) fn mouse_mode(&self) -> MouseMode {
         if let Some(InteractionView::Selection(view)) = self.views.last() {
             return view.body().mouse_mode();
         }
-        if self.slash_popup().is_some() || self.mention_popup().is_some() {
+        if self.slash_popup().is_some()
+            || self.mention_popup().is_some()
+            || self.skill_popup().is_some()
+        {
             MouseMode::UiClick
         } else {
             MouseMode::TerminalSelection
@@ -185,6 +195,14 @@ impl InteractionPane {
 
     pub(crate) fn select_mention(&mut self, index: usize) -> bool {
         self.views.is_empty() && self.composer.select_mention(index)
+    }
+
+    pub(crate) fn activate_skill(&mut self, index: usize) -> bool {
+        self.views.is_empty() && self.composer.activate_skill(index)
+    }
+
+    pub(crate) fn select_skill(&mut self, index: usize) -> bool {
+        self.views.is_empty() && self.composer.select_skill(index)
     }
 
     pub(crate) fn select_visible_item(&mut self, index: usize) -> bool {

@@ -6,11 +6,13 @@ use super::editor::TextElementId;
 use super::mentions::MentionPopupView;
 use super::mentions::Mentions;
 use super::pending_pastes::PendingPastes;
+use super::skills::SkillSelector;
+use super::skills::SkillSelectorItem;
+use super::skills::SkillSelectorView;
 use super::wrap::wrap_input;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
-use std::collections::BTreeMap;
 use zeta_file_search::PathSearchSnapshot;
 use zeta_protocol::SkillRef;
 use zeta_slash_commands::{
@@ -85,12 +87,12 @@ pub(crate) struct ChatComposer {
     slash_commands: SlashCommandsState,
     slash_command_element: Option<TextElementId>,
     mentions: Mentions,
+    skills: SkillSelector,
     pending_pastes: PendingPastes,
     attachments: Attachments,
     history: Vec<String>,
     history_index: Option<usize>,
     history_draft: String,
-    skill_commands: BTreeMap<String, SkillRef>,
 }
 
 impl ChatComposer {
@@ -105,16 +107,46 @@ impl ChatComposer {
             slash_commands: SlashCommandsState::new(slash_commands),
             slash_command_element: None,
             mentions: Mentions::default(),
+            skills: SkillSelector::default(),
             pending_pastes: PendingPastes::default(),
             attachments: Attachments::default(),
             history: Vec::new(),
             history_index: None,
             history_draft: String::new(),
-            skill_commands: BTreeMap::new(),
         }
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> ComposerOutcome {
+        if self.skills.view().is_some() {
+            match key.code {
+                KeyCode::Esc => {
+                    self.skills.dismiss();
+                    return ComposerOutcome::Consumed;
+                }
+                KeyCode::Up => {
+                    self.skills.select_previous();
+                    return ComposerOutcome::Consumed;
+                }
+                KeyCode::Down => {
+                    self.skills.select_next();
+                    return ComposerOutcome::Consumed;
+                }
+                KeyCode::Tab => {
+                    self.skills.complete_selected(&mut self.textarea);
+                    self.sync_after_text_change();
+                    return ComposerOutcome::Consumed;
+                }
+                KeyCode::Enter
+                    if key.modifiers.is_empty()
+                        && self.skills.complete_selected(&mut self.textarea) =>
+                {
+                    self.sync_after_text_change();
+                    return ComposerOutcome::Consumed;
+                }
+                _ => {}
+            }
+        }
+
         if self.mentions.view().is_some() {
             match key.code {
                 KeyCode::Esc => {
@@ -265,6 +297,10 @@ impl ChatComposer {
         self.mentions.view()
     }
 
+    pub(crate) fn skill_popup(&self) -> Option<SkillSelectorView<'_>> {
+        self.skills.view()
+    }
+
     pub(crate) fn mention_query(&self) -> Option<&str> {
         self.mentions.query()
     }
@@ -295,13 +331,25 @@ impl ChatComposer {
         self.mentions.select(index)
     }
 
-    pub(crate) fn replace_slash_commands(
+    pub(crate) fn activate_skill(&mut self, index: usize) -> bool {
+        let completed = self.skills.complete_at(&mut self.textarea, index);
+        if completed {
+            self.sync_after_text_change();
+        }
+        completed
+    }
+
+    pub(crate) fn select_skill(&mut self, index: usize) -> bool {
+        self.skills.select(index)
+    }
+
+    pub(crate) fn replace_composer_catalog(
         &mut self,
         slash_commands: SlashCommandCatalog,
-        skill_commands: BTreeMap<String, SkillRef>,
+        skills: Vec<SkillSelectorItem>,
     ) {
         self.slash_commands.set_catalog(slash_commands);
-        self.skill_commands = skill_commands;
+        self.skills.replace_catalog(skills);
         self.sync_after_text_change();
     }
 
@@ -319,12 +367,6 @@ impl ChatComposer {
         let command = self.slash_commands.invocation(&submission.display_text);
         self.clear();
         match command {
-            Some(command) if command.origin == SlashCommandOrigin::Skill => {
-                match into_skill_submission(submission, command, &self.skill_commands) {
-                    Ok(submission) => ComposerOutcome::Submit(submission),
-                    Err(submission) => ComposerOutcome::Submit(submission),
-                }
-            }
             Some(command) => match into_command_invocation(submission, command) {
                 Ok(invocation) => ComposerOutcome::Command(invocation),
                 Err(submission) => ComposerOutcome::Submit(submission),
@@ -338,6 +380,7 @@ impl ChatComposer {
         let display_text = self.pending_pastes.expand(&self.textarea);
         let display_text = display_text.trim().to_owned();
         let mut input = Vec::new();
+        let mut selected_skills = Vec::new();
         let mut text = String::new();
         let mut cursor = 0;
 
@@ -352,11 +395,22 @@ impl ChatComposer {
                 });
             } else {
                 text.push_str(&raw_text[range.clone()]);
+                if let Some(skill) = self.skills.skill_for(element_id)
+                    && !selected_skills.contains(skill)
+                {
+                    selected_skills.push(skill.clone());
+                }
             }
             cursor = range.end;
         }
         text.push_str(&raw_text[cursor..]);
         push_text_input(&mut input, &mut text);
+        input.splice(
+            0..0,
+            selected_skills
+                .into_iter()
+                .map(|skill| ComposerInput::Skill { skill }),
+        );
 
         (!input.is_empty()).then_some(ComposerSubmission {
             display_text,
@@ -369,6 +423,7 @@ impl ChatComposer {
         self.slash_commands.clear();
         self.slash_command_element = None;
         self.mentions.clear();
+        self.skills.clear();
         self.pending_pastes.clear();
         self.attachments.clear();
         self.reset_history_navigation();
@@ -389,6 +444,7 @@ impl ChatComposer {
         self.attachments.reconcile(&mut self.textarea);
         self.sync_slash_command_element();
         self.mentions.sync_textarea(&self.textarea);
+        self.skills.sync_textarea(&self.textarea);
         if self.slash_command_element.is_some() {
             self.slash_commands.clear();
         } else {
@@ -454,6 +510,7 @@ impl ChatComposer {
         self.attachments.clear();
         self.slash_command_element = None;
         self.mentions.clear();
+        self.skills.clear();
         self.slash_commands.clear();
         self.sync_after_text_change();
     }
@@ -497,18 +554,6 @@ fn into_command_invocation(
         display_arguments: submission.display_text[parsed.arguments_range].to_owned(),
         arguments: submission.input,
     })
-}
-
-fn into_skill_submission(
-    mut submission: ComposerSubmission,
-    parsed: ParsedSlashCommand,
-    skill_commands: &BTreeMap<String, SkillRef>,
-) -> Result<ComposerSubmission, ComposerSubmission> {
-    let Some(skill) = skill_commands.get(&parsed.command.name).cloned() else {
-        return Err(submission);
-    };
-    submission.input.insert(0, ComposerInput::Skill { skill });
-    Ok(submission)
 }
 
 fn push_text_input(input: &mut Vec<ComposerInput>, text: &mut String) {

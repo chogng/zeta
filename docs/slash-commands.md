@@ -10,16 +10,14 @@
 
 ## 快速理解
 
-Slash Command 是一种真正可调用的命令；斜杠启动面板只是用户输入 `/` 后出现的快速选择器。面板
-可以展示命令、Skills 或其他产品列表，选中什么由列表来源解释，不能因为它们出现在同一个面板里
-就都变成 Slash Command。
+Slash Command 是一种真正可调用的命令；斜杠启动面板只是用户输入 `/` 后出现的命令选择器。Skill 使用独立 `$name` selector，文件和 Plugin 上下文使用 `@`，三条入口不共享命名空间。
 
 | 用户看到或产品要做的事 | 正确抽象 | 谁决定内容 |
 | --- | --- | --- |
 | 输入 `/` 后出现快速选择面板 | Slash Launcher | 产品选择并组合列表 |
 | TUI 展示可执行 `/command` | Slash Command list | `zeta-code` 的命令 adapter |
-| Desktop 展示可调用 Skills | Skill list | Desktop 的 Skill adapter |
-| app 同时展示命令、Skills 或其他动作 | 多列表 Launcher | app 选择所需列表及顺序 |
+| TUI/Desktop 展示可调用 Skills | `$name` Skill selector | 客户端的 Skill adapter |
+| app 展示文件或 Plugin 上下文 | `@` context selector | 对应上下文来源 |
 | 选中一项后真正执行或注入上下文 | 来源自己的 typed binding | 对应产品/领域 owner |
 
 App Server 当前在 `initialize.slashCommands` 发布 server commands；每个 client 再与自身真正可执行的
@@ -29,13 +27,11 @@ local commands 合并。命令定义、名称冲突、补全和提交解析属�
 
 ## Launcher 分层
 
-`zeta-slash-launcher` 只接受产品构造的 `SlashLauncherList`，并返回稳定的
-`(list_id, item_id)` 选择。它不依赖 `zeta-slash-commands` 或 `zeta-skills`，因此产品可以自由选择：
+`zeta-slash-launcher` 只接受产品构造的 `SlashLauncherList`，并返回稳定的 `(list_id, item_id)` 选择。它不依赖 `zeta-slash-commands`，但产品的 `/` 入口只传 Slash Command list：
 
-- TUI 只传 Slash Command list；
-- Desktop 只传 Skill list；
-- app 或未来产品按需拼接多个列表；
-- 新列表通过产品 adapter 加入，不修改 Launcher 的领域模型。
+- TUI、Desktop 和 app 都只传 Slash Command list；
+- `$` Skill selector 和 `@` context selector 使用各自的 catalog、typed binding 与输入状态；
+- 新命令列表通过产品 adapter 加入，不修改 Launcher 的领域模型。
 
 选中项的业务 target、执行 handler、Skill 上下文注入和授权都留在列表来源。Launcher 不允许按展示
 名称猜测业务对象，也不拥有 App Server protocol。
@@ -46,12 +42,11 @@ local commands 合并。命令定义、名称冲突、补全和提交解析属�
 
 | 现有 Surface | Catalog 来源 | Core/adapter | Renderer owner |
 | --- | --- | --- | --- |
-| TUI | built-ins + initialize snapshot + enabled Skill metadata | 直接使用 `zeta-slash-commands`；Skill target 保存在 client binding | Ratatui popup |
+| TUI | built-ins + initialize snapshot | 直接使用 `zeta-slash-commands` | Ratatui popup |
 | Native zeta-ui-components | local `/model` + initialize snapshot | 直接使用 `zeta-slash-commands`；Native 另拥有 model picker | WGPU composer interaction rows |
-| Desktop Chat | Workbench actions + initialize snapshot + enabled Skill metadata | canonical generated `SlashCommandDefinition` + separate action/Skill binding | Stanza completion widget；textarea/legacy editor runtime 可复用同一 catalog |
+| Desktop Chat | Workbench actions + initialize snapshot | canonical generated `SlashCommandDefinition` + action binding | Stanza completion widget；textarea/legacy editor runtime 可复用同一 catalog |
 
-TUI 与 Desktop 已把用户可调用 Skill 以 `/name` 投影到同一补全菜单。启动与刷新只读取 Skill
-metadata；entry 绑定 exact pinned `SkillRef`，不会把 Skill 正文复制成 command definition。
+TUI 与 Desktop 的 Skill adapter 独立消费 `skills/list` metadata，并为 `$name` 候选绑定 exact pinned `SkillRef`；Skill 不再生成 command definition，也不参与 Slash Command 冲突检查。
 
 ## 所有权与执行
 
@@ -65,13 +60,10 @@ App Server composition
   → activation
       local  → client product command
       server → name-specific binding（`/compact` → CompactContext；prompt command → StartTurn text）
-      skill  → exact SkillRef + unchanged /name text in session/request StartTurn.input
 ```
 
 `SlashCommandDefinition` 是三端共享的 Slash Command catalog entry model，不是被调用对象的领域
-model。`origin`、Workbench `actionId`、TUI dispatcher identity 和 Skill `SkillRef` 都是与 entry
-分离的 client binding，不能包装成另一种 Slash Command。Skill authority 继续拥有 enablement、
-compatibility 和 activation validation。
+model。`origin`、Workbench `actionId` 和 TUI dispatcher identity 都是与 entry 分离的 client binding。Skill `SkillRef` 属于 `$` selector，不能包装成 Slash Command。Skill authority 继续拥有 enablement、compatibility 和 activation validation。
 
 Server-advertised Slash Command 必须有真实执行语义，不能仅凭 origin 猜测统一分发。当前内置
 `/compact` 由 Desktop 直接调用 `SessionRequest::CompactContext`，以独立 Turn 执行并把成功或失败留在
@@ -82,15 +74,12 @@ Workbench command mapping；Native 的 `/model` 属于 Session model selector；
 device-local presentation preference：无参数时打开由 `features/theme` 拥有的固定 Zeta Code
 Theme Pane，带 ID 时静默直接切换；Theme Pane 不启用搜索，通用 Selection Pane 则以显式
 `Space search` 进入搜索模式。其他 built-ins 属于 TUI coordination。任意 local/server 同名都拒绝
-整份合并结果，不按客户端优先级静默覆盖。Skill 是动态投影：只有 enabled、compatible、名称唯一且
-不与 local/server command 冲突的 entry 才进入 `/name`；冲突项保留在 `/skills` 管理与诊断目录，
-不会覆盖已有命令或任意选择一个 source。
+整份合并结果，不按客户端优先级静默覆盖。Skill 与命令使用不同前缀；同名 Skill 仍因来源歧义不进入无来源限定的 `$name` 候选，但不会覆盖或屏蔽 `/name` 命令。
 
 ## Config 边界
 
 `initialize.slashCommands` 不进入通用 config，也不由 slash command view 读取 config。它是 connection
-初始化时冻结的 server capability snapshot。Skill command 是 client 从 `skills/list` metadata 生成的
-动态 projection；`skills/changed` 会使客户端重建这部分 catalog，不修改 server snapshot。
+初始化时冻结的 server capability snapshot。`skills/changed` 只使客户端重建独立 `$` selector catalog，不修改 Slash Command catalog 或 server snapshot。
 
 ## 当前限制
 

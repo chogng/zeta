@@ -15,6 +15,7 @@ import { TextPosition, TextRange } from "../../../../../editor/common/core/text.
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { type ChatInputEditorOptions, type IChatInputEditor } from "./chatInputEditor.js";
 import { CHAT_INPUT_LANGUAGE_ID, createStanzaChatCommandCompletionProvider } from "./stanzaChatCommandCompletion.js";
+import { createStanzaChatSkillCompletionProvider } from "./stanzaChatSkillCompletion.js";
 
 const CHAT_INPUT_LINE_HEIGHT = 20;
 const CHAT_INPUT_EDITOR_PADDING = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
@@ -42,6 +43,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 		options.container.append(this.element);
 		const providers = this._register(new LanguageCompletionProviderRegistry());
 		this._register(providers.register(createStanzaChatCommandCompletionProvider(options.slashCommands)));
+		this._register(providers.register(createStanzaChatSkillCompletionProvider(options.skills)));
 		const completions = this._register(new LanguageCompletionService(this.model, providers));
 		const completionSession = this._register(new LanguageCompletionSessionController(completions.results, this.selections, { resolver: completions }));
 		this.editor = this._register(new CodeEditorWidget({

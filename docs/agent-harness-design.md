@@ -382,12 +382,13 @@ instructions（下一个 model safe point 重新冻结）
 把断点向前滚动时，Anthropic 在新断点前回看已缓存的稳定前缀。观测：`cached_input_tokens` 已解析；
 在 TTL 内且达到供应商最小 token 条件的连续 Turn 应出现 cache read；fixture 用稳定序列化防止组装层引入前缀抖动（§14）。
 
-## 12. Skills 与 slash commands
+## 12. Skills 与命令入口
 
 - **slash commands**（`zeta-rs/slash-commands` 已有 catalog）：在 `session/request` StartTurn 之前由
   App Server 展开，展开后的正文作为 durable UserMessage 进入 Turn 输入；消息内保留
   `<command-name>` 标注供模型识别来源。不在模型侧解析斜杠语法。
 - **Skills**（`zeta-rs/skills` 已有 runtime；发现/信任归 [`skills.md`](skills.md)）：
+  - 用户入口使用独立 `$name` selector；`/` 只触发产品和服务命令，`@` 留给文件与 Plugin 上下文；
   - v1 已实现：用户提交 exact `SkillRef`，App Server 冻结 digest/generation/reason，Core 在每个
     model safe point 重载 exact `SKILL.md`，以 `ActivatedSkill` instruction layer 注入；raw path
     输入被拒绝；
@@ -455,7 +456,7 @@ M0–M6 只表示本文行为规格的覆盖状态，不再承担实际构建顺
 | M3（实现完成）限幅/预算/压缩 | ContextPlan、逐项输入限幅、配置窗口、preflight、自动/手动 durable compaction、模型调用 usage 账本、跨 Turn 累计的 Thread Goal token 预算已实现；限幅、预算和压缩由现有测试覆盖 | ContextPlan 选入路径、checkpoint、usage 与 Goal 持久化 | 现有行为测试 |
 | M4（完成）缓存 | Anthropic tools/system/滚动 user 三断点、字节稳定、cached usage 观测，以及模型/profile/压缩 cache scope 回归已接通 | `anthropic_messages` adapter、conformance fixture | 无 |
 | M5（完成）MCP 策略 | registry snapshot、≤15/≤5k 平铺阈值、超阈值整体 `search_tools`/`call_mcp_tool` 与 catalog/definition digest binding 已实现 | MCP registry 之上的冻结暴露策略 | ToolProfile contract |
-| M6（完成）Skills/slash | slash、explicit SkillRef、frozen activation、`skills-read`、Desktop 显式选择与仅限 verified built-in 的 metadata 自动 selector 已接通 | App Server 展开、Skill metadata selector、ActivatedSkill layer | 评测与信任策略 |
+| M6（完成）Skills/commands | `$name` 显式 SkillRef、slash commands、frozen activation、`skills-read`、Desktop 显式选择与仅限 verified built-in 的 metadata 自动 selector 已接通 | App Server 展开、Skill metadata selector、ActivatedSkill layer | 评测与信任策略 |
 
 当前已经具备“接入已配置模型即可 coding”的最小闭环；后续目标是将该闭环收口为可观测、可恢复、跨 Provider 一致的产品能力。真实模型 benchmark 属于后置的产品度量工作，不阻塞本地闭环。实施时必须按 [`agent-harness-implementation-plan.md`](agent-harness-implementation-plan.md) 的工作项 ID 和完成纪律更新状态。
 

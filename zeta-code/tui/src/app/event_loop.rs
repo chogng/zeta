@@ -2,8 +2,9 @@ use super::ActiveConversation;
 use super::App;
 use super::AppCommand;
 use super::AppEvent;
+use super::ComposerCatalogSnapshot;
 use super::Status;
-use super::TuiSlashCommandRegistry;
+use super::composer_catalog_snapshot;
 use super::dispatch::execute_product_command;
 use super::frame;
 use super::request_completion::RequestCompletion;
@@ -15,7 +16,6 @@ use super::request_completion::interrupt_and_read;
 use super::request_completion::refresh_skills_and_registry;
 use super::request_completion::resolve_interaction_and_read;
 use super::request_completion::start_turn_and_read;
-use super::skill_slash_command_registry;
 use super::slash_command_registry;
 use crate::TuiError;
 use crate::TuiExit;
@@ -91,8 +91,8 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
             session_id: None,
         })
         .ok()
-        .and_then(|catalog| skill_slash_command_registry(&server_slash_commands, &catalog).ok())
-        .unwrap_or(TuiSlashCommandRegistry {
+        .and_then(|catalog| composer_catalog_snapshot(&server_slash_commands, &catalog).ok())
+        .unwrap_or(ComposerCatalogSnapshot {
             catalog: slash_command_registry(&server_slash_commands)?,
             skills: Default::default(),
         });
@@ -119,7 +119,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     let mut keymap_resource = keybindings_path.map(|path| KeymapResource::new(path, now));
     let mut status_line_resource = status_line_path.map(StatusLineResource::new);
     let mut config_resource = terminal_settings_path.map(ConfigResource::new);
-    app.replace_slash_commands(slash_registry.catalog, slash_registry.skills);
+    app.replace_composer_catalog(slash_registry.catalog, slash_registry.skills);
     apply_thread_snapshot(
         &mut app,
         &mut active_turn,
@@ -867,6 +867,10 @@ fn activate_pointer_item(
     if let Some(index) = selection_item_index_at(app, area, column, row) {
         return app.activate_visible_item(index);
     }
+    if let Some(index) = frame::skill_index_at(app, area, column, row) {
+        app.activate_skill(index);
+        return None;
+    }
     if let Some(index) = frame::mention_index_at(app, area, column, row) {
         app.activate_mention(index);
         return None;
@@ -897,7 +901,9 @@ fn select_hovered_popup_item(app: &mut App, area: ratatui::layout::Rect, column:
         app.select_visible_item(index);
         return;
     }
-    if let Some(index) = frame::mention_index_at(app, area, column, row) {
+    if let Some(index) = frame::skill_index_at(app, area, column, row) {
+        app.select_skill(index);
+    } else if let Some(index) = frame::mention_index_at(app, area, column, row) {
         app.select_mention(index);
     } else if let Some(index) = frame::slash_command_index_at(app, area, column, row) {
         app.select_slash_command(index);

@@ -2,12 +2,15 @@ mod attachments;
 mod editor;
 mod mentions;
 mod pending_pastes;
+mod skills;
 mod slash_commands;
 mod state;
 mod view;
 mod wrap;
 
 pub(crate) use mentions::MentionPopupView;
+pub(crate) use skills::SkillSelectorItem;
+pub(crate) use skills::SkillSelectorView;
 pub(crate) use slash_commands::TuiSlashCommandAction;
 #[cfg(test)]
 pub(crate) use slash_commands::built_in_catalog_command;
@@ -24,6 +27,9 @@ pub(crate) use view::ComposerCursor;
 pub(crate) use view::command_index_at;
 pub(crate) use view::draw_composer;
 pub(crate) use view::draw_mention_popup;
+pub(crate) use view::draw_skill_popup;
 pub(crate) use view::draw_slash_popup;
 pub(crate) use view::mention_index_at;
-pub(crate) use zeta_slash_commands::{SlashCommandCatalog, SlashCommandsView};
+pub(crate) use view::skill_index_at;
+pub(crate) use zeta_slash_commands::SlashCommandCatalog;
+pub(crate) use zeta_slash_commands::SlashCommandsView;

@@ -803,8 +803,8 @@ fn runtime_command_registry_drives_popup_and_submission_consistently() {
 }
 
 #[test]
-fn direct_skill_slash_command_submits_exact_skill_ref_with_visible_intent() {
-    let workspace = temporary_workspace("direct-skill-command");
+fn dollar_skill_selector_submits_exact_skill_ref_with_visible_intent() {
+    let workspace = temporary_workspace("skill-selector");
     let skill = SkillRef::pinned(
         SkillId::new(
             SkillSourceId::new("user:skill-source:test").unwrap(),
@@ -812,22 +812,24 @@ fn direct_skill_slash_command_submits_exact_skill_ref_with_visible_intent() {
         ),
         ContentDigest::sha256(b"commit skill"),
     );
-    let registry = SlashCommandCatalog::with_local_server_and_skills(
+    let registry = SlashCommandCatalog::with_local_and_server(
         built_in_slash_command_definitions(),
         std::iter::empty(),
-        [SlashCommandDefinition {
-            name: "commit".into(),
-            description: "draft a commit message".into(),
-            argument_mode: SlashCommandArgumentMode::Optional,
-        }],
     )
     .unwrap();
     let mut app = App::for_workspace_with_slash_commands(&workspace, registry.clone());
-    app.replace_slash_commands(
+    app.replace_composer_catalog(
         registry,
-        [("commit".into(), skill.clone())].into_iter().collect(),
+        vec![crate::components::composer::SkillSelectorItem::new(
+            "commit".into(),
+            "draft a commit message".into(),
+            skill.clone(),
+        )],
     );
-    app.insert_text("/commit staged changes");
+    app.insert_text("$com");
+    assert_eq!(app.skill_popup().unwrap().items[0].name(), "commit");
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    app.insert_text("staged changes");
 
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
@@ -835,15 +837,15 @@ fn direct_skill_slash_command_submits_exact_skill_ref_with_visible_intent() {
         action,
         Some(AppCommand::SubmitTurn {
             submission: ComposerSubmission {
-                display_text: "/commit staged changes".into(),
+                display_text: "$commit staged changes".into(),
                 input: vec![
                     ComposerInput::Skill { skill },
-                    ComposerInput::Text("/commit staged changes".into()),
+                    ComposerInput::Text("$commit staged changes".into()),
                 ],
             },
         })
     );
-    assert_eq!(app.messages()[0].text, "/commit staged changes");
+    assert_eq!(app.messages()[0].text, "$commit staged changes");
     let _ = fs::remove_dir_all(workspace);
 }
 

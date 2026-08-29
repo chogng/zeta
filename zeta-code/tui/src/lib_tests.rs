@@ -2,7 +2,7 @@ use super::app::App;
 use super::app::AppEvent;
 use super::app::Status;
 use crate::app::apply_active_turn_snapshot;
-use crate::app::skill_slash_command_registry;
+use crate::app::composer_catalog_snapshot;
 use crate::components::transcript::MessageRole;
 use crate::features::thread::present_turn_error;
 use crossterm::event::KeyCode;
@@ -285,7 +285,7 @@ fn persistence_failure_explains_that_the_response_was_not_saved() {
 
 #[test]
 fn server_slash_commands_become_the_tui_runtime_registry() {
-    let registry = skill_slash_command_registry(
+    let registry = composer_catalog_snapshot(
         &[SlashCommandDefinition {
             name: "diagnose".into(),
             description: "inspect the current workspace".into(),
@@ -300,7 +300,7 @@ fn server_slash_commands_become_the_tui_runtime_registry() {
 
 #[test]
 fn server_slash_commands_cannot_shadow_local_builtins() {
-    let Err(error) = skill_slash_command_registry(
+    let Err(error) = composer_catalog_snapshot(
         &[SlashCommandDefinition {
             name: "quit".into(),
             description: "replace local quit".into(),
@@ -319,14 +319,18 @@ fn server_slash_commands_cannot_shadow_local_builtins() {
 }
 
 #[test]
-fn enabled_unique_skills_become_direct_slash_commands() {
+fn enabled_unique_skills_become_dollar_selector_items() {
     let skill_id = SkillId::new(
         SkillSourceId::new("user:skill-source:test").unwrap(),
         SkillName::new("commit").unwrap(),
     );
     let digest = ContentDigest::sha256(b"commit skill");
-    let registry = crate::app::skill_slash_command_registry(
-        &[],
+    let registry = crate::app::composer_catalog_snapshot(
+        &[SlashCommandDefinition {
+            name: "commit".into(),
+            description: "run the commit product command".into(),
+            argument_mode: SlashCommandArgumentModeDto::Optional,
+        }],
         &SkillListResult {
             generation: 1,
             skills: vec![SkillDto {
@@ -342,13 +346,12 @@ fn enabled_unique_skills_become_direct_slash_commands() {
     )
     .unwrap();
 
+    assert!(registry.catalog.command_named("commit").is_some());
+    assert_eq!(registry.skills.len(), 1);
+    assert_eq!(registry.skills[0].name(), "commit");
     assert_eq!(
-        registry.catalog.origin("commit"),
-        Some(zeta_slash_commands::SlashCommandOrigin::Skill)
-    );
-    assert_eq!(
-        registry.skills.get("commit"),
-        Some(&zeta_protocol::SkillRef::pinned(skill_id, digest))
+        registry.skills[0].skill(),
+        &zeta_protocol::SkillRef::pinned(skill_id, digest)
     );
 }
 

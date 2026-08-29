@@ -3,7 +3,7 @@
 > 物理位置：`zeta-rs/skills/`
 > Rust crate：`zeta_skills`
 > 当前状态：Phase S0、S1 显式选择、可信 built-in metadata 自动 selector、模型按需读取、通用 package resource、有界文本模型切片与 binary asset Resource materialization 已实现；Renderer preview、script execution adapter 与 S3–S4 仍为 Proposed。TUI 与 Desktop 已把
-> 可直接调用的 Skill 投影为统一斜杠面板中的 `/name`；`/skills` 只承担目录管理。
+> 可直接调用的 Skill 通过独立的 `$name` 选择器调用；`/skills` 只承担目录管理。
 > Crate 实现契约：[`zeta-rs/skills/README.md`](../zeta-rs/skills/README.md)
 > Runtime extension 实现契约：[`zeta-rs/ext/skills/README.md`](../zeta-rs/ext/skills/README.md)
 > 通用扩展生命周期：[`zeta-rs/ext/extension-api/README.md`](../zeta-rs/ext/extension-api/README.md)
@@ -27,7 +27,7 @@ Skill 是按任务逐步加载的工作方法和参考资料，不是工具权�
 | 发生的事情 | 加载什么 | 安全边界 |
 | --- | --- | --- |
 | 启动或刷新 Skill 目录 | 只读取名称、描述和来源等元数据 | 不把全部正文塞入上下文 |
-| 用户输入 `/commit` 等 Skill 命令 | 接受 Turn 时完整读取对应 `SKILL.md` | 斜杠面板只持有元数据和精确 `SkillRef` |
+| 用户输入 `$commit` 等 Skill 选择 | 接受 Turn 时完整读取对应 `SKILL.md` | `$` 候选只持有元数据和精确 `SkillRef` |
 | Turn 文本唯一高置信匹配 verified built-in Skill | host 只用有界 metadata 选择，冻结 exact `SkillRef` 后才读取正文 | 歧义、低置信、user/Workspace/Plugin/Marketplace 来源都不自动激活 |
 | 用户打开 `/skills` | 浏览、启用、禁用和查看诊断 | 不从管理面板直接执行 Skill |
 | 模型按需选择 Skill | 模型先看到有界元数据目录，再调用 `skills-read` 加载正文 | 后端不做关键词分类，也不暴露本地路径 |
@@ -79,9 +79,7 @@ invalidation 会触发完整重扫；只有 entry、diagnostic 或 enablement �
 变化才推进 runtime generation。共享的 `SkillName`、`SkillSourceId` 与 `SkillId` 已下沉到
 `zeta-protocol`，因此 config、catalog、App Server 与客户端不再靠 raw string 隐式绑定。
 
-TUI 与 Desktop 消费同一 typed catalog，并把 enabled、compatible、名称无歧义且不与已有命令
-冲突的 Skill 直接投影为 `/name`。选择 `/commit` 后，客户端保留用户可见的 `/commit …` 文本，
-同时提交 exact pinned `SkillRef`；目录发现阶段不读取正文。`skills/changed` 会刷新动态命令列表。
+TUI 与 Desktop 消费同一 typed catalog，并把 enabled、compatible、名称无歧义的 Skill 显示为 `$name` 候选。选择 `$commit` 后，客户端保留用户可见的 `$commit …` 文本，同时提交 exact pinned `SkillRef`；目录发现阶段不读取正文。Skill 与 Slash Command 使用不同前缀，因此同名不会冲突。`skills/changed` 会刷新 `$` 候选列表。
 
 TUI `/skills` 提供 All/Enabled/Disabled/Manage/Errors tabs、搜索、左右切页和上下选择；只有 Manage
 中的动作修改后续 catalog eligibility。它是管理入口，不是日常执行 Skill 的二级 picker。
@@ -360,7 +358,7 @@ Watcher backend 无法启动时不会阻止 App Server 启动，调用方仍可�
 
 ### 8.1 显式选择
 
-用户通过统一斜杠面板中的 `/name`，或直接通过 `session/request` `StartTurn` typed input 选择 exact
+用户通过独立 Skill selector 中的 `$name`，或直接通过 `session/request` `StartTurn` typed input 选择 exact
 `SkillRef`。显式选择：
 
 - 由用户预先固定，不依赖模型是否决定读取某个 Skill；
@@ -378,7 +376,7 @@ UserInput::Skill {
 ```
 
 旧 `name + path` serde shape 会被拒绝，不保留双入口。App Server schema、generated TypeScript、
-Core、TUI 和 Desktop 共享同一 `SkillRef` contract。TUI 与 Desktop 的斜杠目录只加载 metadata，
+Core、TUI 和 Desktop 共享同一 `SkillRef` contract。TUI 与 Desktop 的 `$` 候选目录只加载 metadata，
 真正接受 Turn 时才由 App Server 加载完整 `SKILL.md`。
 
 ### 8.2 模型按需选择（已实现）
@@ -490,7 +488,7 @@ filesystem enumeration order。
 - bounded body；
 - `Required / BestEffort` context retention。
 
-catalog generation、activation reason、斜杠或 picker 等入口信息留在 durable provenance 和外部
+catalog generation、activation reason、`$` selector 等入口信息留在 durable provenance 和外部
 selection/runtime，不写入模型可见 Skill 正文。外部 adapter 负责把具体选择策略映射为
 `Required / BestEffort`；Core 不解释 Skill 是显式还是自动选中的。
 
@@ -693,9 +691,7 @@ Skill install/remove 不属于 Skill manager：
 - user/workspace standalone Skill 通过明确的 source/config 或将来 artifact import 管理；
 - 客户端不能向 `skill/read` 传 arbitrary filesystem path。
 
-客户端斜杠面板展示 name 和 description，并在独立管理界面展示 source、version/digest 摘要、
-compatibility、availability 和 trust。同名 Skill 不静默合并；名称有歧义或与已有命令冲突时不投影
-为无来源限定的 `/name`。自动激活结果在 Turn/status 中可解释，但 UI 不需要显示 Skill 正文。
+客户端 `$` 候选展示 name 和 description，并在独立管理界面展示 source、version/digest 摘要、compatibility、availability 和 trust。同名 Skill 不静默合并；名称有歧义时不提供无来源限定的 `$name`。Skill 与 `/name` 命令不共享命名空间。自动激活结果在 Turn/status 中可解释，但 UI 不需要显示 Skill 正文。
 
 ### 15.1 外部 Agent Skill 导入（仅限 Desktop）
 
@@ -828,13 +824,12 @@ catalog/selection/activation 拆分；新 trait 必须有职责和实现约束 d
 - 激活时完整、安全地加载 `SKILL.md` 并冻结 digest；
 - `TurnAccepted` durable provenance 与 recovery fail-closed；
 - Core ContextAssembler layering、budget 和 provenance；
-- App Server/generated contract，以及 TUI/Desktop 统一斜杠面板中的直接 Skill 命令；
+- App Server/generated contract，以及 TUI/Desktop 独立 `$name` Skill selector；
 - TUI `/skills` 目录管理和 enablement mutation。
 
 完成条件：客户端不能通过 raw path 激活 catalog 外文件，已开始 invocation 使用 frozen digest。
 
-当前限制：同名 Skill 或与 local/server command 同名的 Skill 不投影为无歧义的 `/name`；调用这类
-Skill 需要未来带来源限定的选择交互。CLI 没有独立可视化目录浏览器，但 typed protocol 入口不受影响。
+当前限制：同名 Skill 不提供无歧义的 `$name`；调用这类 Skill 需要未来带来源限定的选择交互。与 local/server command 同名不影响 `$name` 选择。CLI 的 `/skills` 提供目录管理，但当前 `$` 候选本身不展示来源限定；typed protocol 入口不受影响。
 
 ### 阶段 S1.5：模型按需读取（当前状态）
 

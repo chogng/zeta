@@ -11,8 +11,8 @@ mod request_completion;
 mod state;
 
 pub(crate) use crate::features::sessions::ActiveConversation;
-pub(crate) use bootstrap::TuiSlashCommandRegistry;
-pub(crate) use bootstrap::skill_slash_command_registry;
+pub(crate) use bootstrap::ComposerCatalogSnapshot;
+pub(crate) use bootstrap::composer_catalog_snapshot;
 pub(crate) use bootstrap::slash_command_registry;
 pub(crate) use command::AppCommand;
 pub(crate) use event::AppEvent;

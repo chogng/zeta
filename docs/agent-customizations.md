@@ -26,7 +26,7 @@ Zeta 只把 Instructions、Skills 和 Agents 作为 Agent 自定义领域对象�
 | “这类工作应该怎样完成” | Skills | 被用户选择或模型匹配后渐进加载 | picker、Slash Command 或模型选择 |
 | “由哪种执行配置来工作” | Agents | 启动主执行者或委托执行者时冻结配置引用 | Agent picker 或 delegation |
 | “现在请完成这件事” | 当前 Turn 的用户输入 | 构造本次 `ModelRequest` 时 | 普通消息 |
-| “快速调用某个能力” | 不是新对象 | 解析后调用已有 Skill 或产品命令 | `/name` |
+| “快速调用某个能力” | 不是新对象 | `$name` 选择已有 Skill，`/name` 调用产品命令 | `$review`、`/status` |
 | “把别的 Agent 配置带进来” | Import workflow | 用户确认并由目标 authority 发布后 | Desktop import |
 
 ## 1. 领域对象只有三类
@@ -206,9 +206,7 @@ Core 不读取 customization 文件，也不在组装模型请求时扫描目录
 Instructions、Agent references、已激活 Skill 内容、用户消息和 Tool results，但它仍是
 `ModelRequest`，不是一个需要持久化的 Prompt artifact。
 
-Slash Command catalog 同样只做调用投影：产品命令绑定到 product action，用户可调用 Skill 绑定到
-稳定 `SkillRef`。Slash Command 名称、补全和展示状态不能代替目标对象的 identity、权限或
-activation validation。
+Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill selector 把用户选择绑定到稳定 `SkillRef`。两种入口的名称、补全和展示状态都不能代替目标对象的 identity、权限或 activation validation。文件和 Plugin 提供的上下文继续使用 `@`，不进入 Skill selector。
 
 ## 7. 当前状态与实施顺序
 
@@ -223,7 +221,7 @@ activation validation。
 | Workspace Agents authority | 部分具备 | catalog/refresh、spawn 显式/自动选择、reference/capability freezing 已实现；list/picker API 未实现 |
 | `.zeta/{instructions,skills,agents}` loader | 已实现 | 固定原生 roots、有界校验、Workspace activation 与 watcher refresh |
 | External parser、preview 与 apply | 尚未完成 | typed fragments、digest、wire contract、transaction/receipt |
-| Skill → Slash Command 动态投影 | 已实现 | TUI/Desktop `/name` 绑定 stable `SkillRef`；`/skills` 只管理 |
+| `$name` Skill selector | 已实现 | TUI/Desktop `$name` 绑定 stable `SkillRef`；`/skills` 只管理，`@` 留给文件和 Plugin 上下文 |
 
 实施顺序：
 

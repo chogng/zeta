@@ -234,8 +234,8 @@ component 被至少两个真实消费者使用、API 变化频率下降且抽取
 ```text
 zeta-code/tui/
 ├── src/
+│   ├── app.rs
 │   ├── app/
-│   │   ├── mod.rs
 │   │   ├── state.rs
 │   │   ├── event.rs
 │   │   ├── command.rs
@@ -300,13 +300,15 @@ zeta-code/tui/
 │   │   │   ├── state.rs
 │   │   │   ├── view_stack.rs
 │   │   │   └── interaction_tests.rs
+│   │   ├── composer.rs
 │   │   ├── composer/
-│   │   │   ├── mod.rs
 │   │   │   ├── state.rs
 │   │   │   ├── editor.rs
 │   │   │   ├── attachments.rs
 │   │   │   ├── pending_pastes.rs
 │   │   │   ├── slash_commands.rs    # TUI-local command execution metadata only
+│   │   │   ├── skills.rs
+│   │   │   ├── mentions.rs
 │   │   │   ├── view.rs
 │   │   │   └── composer_tests.rs
 │   │   ├── transcript/
@@ -907,7 +909,6 @@ features/
 └── keymap/
     └── view.rs
 app/
-├── mod.rs
 ├── bootstrap.rs
 ├── command.rs
 ├── dispatch.rs
@@ -918,6 +919,7 @@ app/
 ├── request_completion.rs
 ├── state.rs
 └── state_tests.rs
+app.rs
 client/
 ├── mod.rs
 ├── command_id.rs
@@ -1012,9 +1014,9 @@ lib_tests.rs
 - update-driven snapshot resync 先应用完整 canonical Thread，再把
   completed/waiting/failed/interrupted 映射为 presentation lifecycle；active Turn 的定时
   snapshot polling 已移除，Turn completion 不再单独追加 agent 文本；
-- `InteractionPane` 保留 composer 并拥有 temporary view stack；generic selection view 已组合 `tab_list` 支持横向切页，并继续拥有直接输入搜索、过滤、循环选择和 Esc/Ctrl-C 出栈；`/help` 只提供命令列表，`/shortcuts` 提供统一快捷键目录，`/skills` 从 typed `skills/list` 提供
+- `InteractionPane` 保留 composer 并拥有 temporary view stack；generic selection view 已组合 `tab_list` 支持横向切页，并继续拥有直接输入搜索、过滤、循环选择和 Esc/Ctrl-C 出栈；composer 的 `$` Skill selector 与 `/` command popup 相互独立，`@` 继续拥有上下文入口，当前 TUI 仍只提供文件候选，Plugin 不迁入 `$`；`/help` 只提供命令列表，`/shortcuts` 提供统一快捷键目录，`/skills` 从 typed `skills/list` 提供
   All/Enabled/Disabled/Errors catalog tabs；
-- `/skills` 只消费 App Server catalog snapshot，不读取 `zeta-skills` filesystem；
+- `$name` 候选和 `/skills` 都只消费 App Server catalog snapshot，不读取 `zeta-skills` filesystem；候选选中后保留原子 `$name` 文本并绑定 exact pinned `SkillRef`；
   `Space` 将 exact `SkillId` 转成 revision-checked `skill/enablement/set`，成功后刷新页面；
   `skills/changed` 也会刷新前台页面。enablement 不等于正文 activation，TUI 当前没有
   Skill context injection；

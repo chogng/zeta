@@ -5,9 +5,11 @@ import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { ChatInputEditorRegistry, type ChatInputEditorOptions, type IChatInputEditor } from "../../../../../workbench/contrib/chat/browser/input/chatInputEditor.js";
 import { SlashCommandCatalog } from "../../../../../workbench/contrib/chat/common/slashCommands.js";
+import { SkillSelectorCatalog } from '../../../../../workbench/contrib/chat/common/skillSelectors.js';
 import { h } from "../../../../../base/browser/dom.js";
 
 const slashCommands = new SlashCommandCatalog([], []);
+const skills = new SkillSelectorCatalog();
 
 test("Chat input editor fallback owns multiline change and submit gestures", () => {
 	const dom = new JSDOM("<!doctype html><body><div id='host'></div></body>");
@@ -19,6 +21,7 @@ test("Chat input editor fallback owns multiline change and submit gestures", () 
 		placeholder: "Ask Zeta",
 		ariaLabel: "Chat message",
 		slashCommands,
+		skills,
 	});
 	const changes: string[] = [];
 	let submissions = 0;
@@ -78,6 +81,7 @@ test("Chat input editor registry selects and releases a product provider", () =>
 		placeholder: "Prompt",
 		ariaLabel: "Prompt editor",
 		slashCommands,
+		skills,
 	});
 	assert.ok(editor instanceof FakeChatInputEditor);
 	assert.equal(created.length, 1);

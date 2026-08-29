@@ -8,7 +8,7 @@ import type { IModelApi, IThreadApi, ITurnApi } from "../../../../platform/sessi
 import type { ISkillApi } from "../../../../platform/skills/common/skillApi.js";
 import type { ITurnChangesApi } from "../../../../platform/turnChanges/common/turnChangesApi.js";
 import type { ModelRef, SessionId, ThreadId } from "../../../../sessions/services/sessions/common/session.js";
-import type { CompactContextOptions, IChatService, InterruptTurnOptions, ModelCatalogEntry, ResolveInteractionOptions, SkillCommandDefinition, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadItem, ThreadSubscription, ThreadTranscriptEntry, ThreadTranscriptSnapshot, ThreadTranscriptUpdateEnvelope, ThreadUpdate, ThreadUpdateEnvelope, TurnChangeDetails, TurnChangeSetSummary, TurnChangesUpdate } from "../common/chatService.js";
+import type { CompactContextOptions, IChatService, InterruptTurnOptions, ModelCatalogEntry, ResolveInteractionOptions, SkillSelectorDefinition, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadItem, ThreadSubscription, ThreadTranscriptEntry, ThreadTranscriptSnapshot, ThreadTranscriptUpdateEnvelope, ThreadUpdate, ThreadUpdateEnvelope, TurnChangeDetails, TurnChangeSetSummary, TurnChangesUpdate } from "../common/chatService.js";
 import { ModelCatalogConfiguration, modelRefIdentity } from "../common/modelCatalog.js";
 
 export interface ChatServiceOptions {
@@ -117,7 +117,7 @@ export class ChatService extends Disposable implements IChatService {
 		return commands.map((command) => ({ ...command }));
 	}
 
-	async listSkillCommands(): Promise<readonly SkillCommandDefinition[]> {
+	async listSkillSelectors(): Promise<readonly SkillSelectorDefinition[]> {
 		const catalog = await this.options.skillApi.list("cached");
 		const counts = new Map<string, number>();
 		for (const skill of catalog.skills.filter(skill => skill.enabled && skill.compatible)) counts.set(skill.id.name, (counts.get(skill.id.name) ?? 0) + 1);

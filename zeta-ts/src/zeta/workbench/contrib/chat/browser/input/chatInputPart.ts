@@ -18,6 +18,7 @@ import type { ChatContextAttachment, IChatContextPickService } from "../../../..
 import { modelAccessLabel } from "../../../../services/chat/common/modelCatalog.js";
 import type { ModelRef } from "../../../../../sessions/services/sessions/common/session.js";
 import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog } from "../../common/slashCommands.js";
+import { SkillSelectorCatalog } from "../../common/skillSelectors.js";
 import type { ChatInputDelegate, ChatInputState } from "./chatInput.js";
 import { ChatInputEditors, type IChatInputEditor } from "./chatInputEditor.js";
 
@@ -54,10 +55,11 @@ export class ChatInputPart extends Disposable {
 	private readonly input: IChatInputEditor;
 	private readonly inputToolbar: WorkbenchToolBar;
 	private readonly slashCommands = new SlashCommandCatalog(DesktopSlashCommands, []);
-	private state: ChatInputState = { phase: "loading", canInterrupt: false, models: [], slashCommands: [], skillCommands: [] };
+	private readonly skills = new SkillSelectorCatalog();
+	private state: ChatInputState = { phase: "loading", canInterrupt: false, models: [], slashCommands: [], skillSelectors: [] };
 	private toolbarState: ChatInputToolbarState = { canSubmit: false, canInterrupt: false, inputKind: "message", models: [] };
 	private serverSlashCommands: ChatInputState["slashCommands"] = [];
-	private skillCommands: ChatInputState["skillCommands"] = [];
+	private skillSelectors: ChatInputState["skillSelectors"] = [];
 	private mode: ChatInputMode = "agent";
 
 	constructor(container: HTMLElement, delegate: ChatInputDelegate, contextMenuService: IContextMenuService, contextViewService: IContextViewService, private readonly contextPickService: IChatContextPickService, private readonly quickInputService: IQuickInputService) {
@@ -85,6 +87,7 @@ export class ChatInputPart extends Disposable {
 			placeholder: "Ask Zeta",
 			ariaLabel: "Chat message",
 			slashCommands: this.slashCommands,
+			skills: this.skills,
 		}));
 		this.inputToolbar = this._register(new WorkbenchToolBar(this.inputContainer, contextMenuService, {
 			ariaLabel: "Chat input actions",
@@ -154,9 +157,9 @@ export class ChatInputPart extends Disposable {
 			await this.submit(inputValue, [], this.delegate.executeServerCommand({ name: input.command.name, argumentsText: input.argumentsText }));
 			return;
 		}
-		const skills = input.kind === "command" && input.binding.origin === "skill" ? [input.binding.skill] : undefined;
+		const skills = this.skills.referencesIn(inputValue);
 		const contexts = [...this.attachments.values()];
-		await this.submit(inputValue, contexts, this.delegate.send(inputValue, skills, contexts));
+		await this.submit(inputValue, contexts, this.delegate.send(inputValue, skills.length > 0 ? skills : undefined, contexts));
 	}
 
 	openModelSelector(): void {
@@ -178,9 +181,9 @@ export class ChatInputPart extends Disposable {
 			this.slashCommands.setServerCommands(state.slashCommands);
 			this.serverSlashCommands = state.slashCommands;
 		}
-		if (this.skillCommands !== state.skillCommands) {
-			this.slashCommands.setSkillCommands(state.skillCommands);
-			this.skillCommands = state.skillCommands;
+		if (this.skillSelectors !== state.skillSelectors) {
+			this.skills.setSkills(state.skillSelectors);
+			this.skillSelectors = state.skillSelectors;
 		}
 		this.state = state;
 		this.status.textContent = this.statusText(state);

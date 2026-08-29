@@ -157,7 +157,7 @@ ContextPlan 必须可诊断：
 Skill 的发现、启用、模型选择和入口解析不属于上下文系统。外部 runtime 根据 durable activation
 解析出 `PromptFragment { source, layer, retention, body }`，也可以贡献 metadata-only catalog
 fragment；Core 只校验 fragment provenance，按 Skill layer、`Required / BestEffort` 预算语义
-注入。模型随后通过普通 Tool Call/Result 按需读取 Skill 正文。catalog generation、斜杠入口和
+注入。模型随后通过普通 Tool Call/Result 按需读取 Skill 正文。catalog generation、`$` 选择入口和
 activation reason 不进入模型可见 Skill 正文。
 
 它不要求成为公共 wire model。测试和诊断可以使用 Core-private readable view。

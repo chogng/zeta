@@ -42,6 +42,7 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
     } else {
         composer::draw_slash_popup(frame, areas.history, app.slash_popup());
         composer::draw_mention_popup(frame, areas.history, app.mention_popup());
+        composer::draw_skill_popup(frame, areas.history, app.skill_popup());
         let cursor = if app.accepts_input() {
             composer::ComposerCursor::Visible
         } else {
@@ -67,6 +68,16 @@ pub(crate) fn mention_index_at(
 ) -> Option<usize> {
     let areas = frame_areas(terminal_area, interaction_layout(app, terminal_area));
     composer::mention_index_at(areas.history, app.mention_popup(), column, row)
+}
+
+pub(crate) fn skill_index_at(
+    app: &App,
+    terminal_area: Rect,
+    column: u16,
+    row: u16,
+) -> Option<usize> {
+    let areas = frame_areas(terminal_area, interaction_layout(app, terminal_area));
+    composer::skill_index_at(areas.history, app.skill_popup(), column, row)
 }
 
 pub(crate) fn slash_command_index_at(

@@ -60,7 +60,7 @@ When a request mentions Workbench, Sessions, or another frontend concept, locate
 
 Workspace owns source scanning, ignore rules, reads, chunking, revision, and chunk identity. A cloud CodeIndex may prepare model input, perform vector retrieval, call rerank, and sort/filter/truncate by model score, but it may consume only exact Workspace-authorized chunks. `model-provider` owns model invocation, not indexing or retrieval policy; cross-source result fusion belongs to retrieval.
 
-Callable Skills appear as dynamic commands in the unified slash panel, such as `/commit`. `/skills` owns browsing, enablement, and diagnostics. Skill lists load metadata only; full `SKILL.md` content loads after selection or automatic activation.
+Callable Skills use the dedicated `$name` selector, such as `$commit`. Slash Commands remain product or server commands, while `@` remains the selector prefix for files and Plugin-provided context. `/skills` owns browsing, enablement, and diagnostics. Skill lists load metadata only; full `SKILL.md` content loads after selection or automatic activation.
 
 Generic Marketplace infrastructure and templates must not hardcode a repository owner, personal namespace, or product identity. Publisher identity comes from repository configuration; product-specific manifests belong only to optional consumer adapters. Marketplace validation and publication must not require any consuming product source tree or release state.
 

@@ -157,7 +157,7 @@ export class ChatPane extends Disposable {
 			canInterrupt: this.model.canInterrupt,
 			models: this.model.models,
 			slashCommands: this.model.slashCommands,
-			skillCommands: this.model.skillCommands,
+			skillSelectors: this.model.skillSelectors,
 			selectedModel: this.model.selectedModel,
 			interaction: this.model.interaction,
 		});

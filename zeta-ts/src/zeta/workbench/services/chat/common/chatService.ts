@@ -21,7 +21,7 @@ export interface SlashCommandDefinition {
 	readonly argumentMode: "none" | "optional";
 }
 
-export interface SkillCommandDefinition {
+export interface SkillSelectorDefinition {
 	readonly name: string;
 	readonly description: string;
 	readonly source: string;
@@ -292,7 +292,7 @@ export interface IChatService {
 	isModelVisible(model: ModelRef): boolean;
 	setModelVisible(model: ModelRef, visible: boolean): Promise<void>;
 	listSlashCommands(): Promise<readonly SlashCommandDefinition[]>;
-	listSkillCommands(): Promise<readonly SkillCommandDefinition[]>;
+	listSkillSelectors(): Promise<readonly SkillSelectorDefinition[]>;
 	readThread(sessionId: SessionId, threadId: ThreadId): Promise<ThreadRead>;
 	subscribeThread(sessionId: SessionId, threadId: ThreadId, afterSequence: number): Promise<ThreadSubscription>;
 	unsubscribeThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;

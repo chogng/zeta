@@ -104,7 +104,7 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
 		isModelVisible() { return true; },
 		async setModelVisible() {},
 		async listSlashCommands() { return []; },
-		async listSkillCommands() { return []; },
+		async listSkillSelectors() { return []; },
 		async readThread() { throw new Error("No active Thread"); },
 		async subscribeThread() { throw new Error("No active Thread"); },
 		async unsubscribeThread() {},

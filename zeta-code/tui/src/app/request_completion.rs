@@ -1,11 +1,12 @@
 use super::ActiveConversation;
 use super::App;
 use super::AppEvent;
+use super::composer_catalog_snapshot;
 use super::dispatch::ProductCommandOutput;
-use super::skill_slash_command_registry;
 use crate::TuiExit;
 use crate::TuiWorkspaceReconnect;
 use crate::components::composer::ComposerSubmission;
+use crate::components::composer::SkillSelectorItem;
 use crate::components::composer::SlashCommandCatalog;
 use crate::features::config;
 use crate::features::interactions::InteractionResponse;
@@ -25,7 +26,6 @@ use crate::features::thread::read_thread_history;
 use crate::features::thread::recover_active_turn;
 use crate::features::thread::resolve_interaction;
 use crate::features::thread::submit_prompt;
-use std::collections::BTreeMap;
 use zeta_app_server_client::AppServerRequestHandle;
 use zeta_app_server_client::ClientError;
 use zeta_app_server_protocol::protocol::session::ThreadSnapshotHistory;
@@ -34,7 +34,6 @@ use zeta_app_server_protocol::protocol::skills::SkillListParams;
 use zeta_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
 use zeta_app_server_protocol::protocol::turn::TurnStartResult;
-use zeta_protocol::SkillRef;
 use zeta_protocol::Thread;
 #[cfg(test)]
 use zeta_protocol::Turn;
@@ -75,7 +74,7 @@ pub(super) struct ProductCommandCompletion {
 
 pub(super) struct SkillRequestCompletion {
     slash_commands: SlashCommandCatalog,
-    skill_commands: BTreeMap<String, SkillRef>,
+    skills: Vec<SkillSelectorItem>,
     view: SkillSelectionView,
 }
 
@@ -90,11 +89,11 @@ pub(super) fn refresh_skills_and_registry(
             session_id: Some(session_id),
         })
         .map_err(|error| error.to_string())?;
-    let registry = skill_slash_command_registry(&server_slash_commands, &catalog)
+    let registry = composer_catalog_snapshot(&server_slash_commands, &catalog)
         .map_err(|error| error.to_string())?;
     Ok(SkillRequestCompletion {
         slash_commands: registry.catalog,
-        skill_commands: registry.skills,
+        skills: registry.skills,
         view: skills::skills_selection_view(&catalog),
     })
 }
@@ -278,7 +277,7 @@ pub(super) fn apply_request_completion(
             result: Err(error), ..
         } => app.update(AppEvent::FailureReported(error)),
         RequestCompletion::SkillsRefreshed(Ok(refresh)) => {
-            app.replace_slash_commands(refresh.slash_commands, refresh.skill_commands);
+            app.replace_composer_catalog(refresh.slash_commands, refresh.skills);
             if app.skills_view_is_active() {
                 app.update(AppEvent::SkillsViewReplaced(refresh.view));
             }

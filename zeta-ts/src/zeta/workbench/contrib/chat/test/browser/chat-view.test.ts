@@ -1389,9 +1389,9 @@ test("Chat service projects unique enabled Skills and submits the exact pinned r
 	] });
 	using chat = createChatService(fake.api);
 
-	const commands = await chat.listSkillCommands();
+	const selectors = await chat.listSkillSelectors();
 
-	assert.deepEqual(commands, [{
+	assert.deepEqual(selectors, [{
 		name: "commit",
 		description: "Draft a commit message",
 		source: "user:skill-source:test",
@@ -1400,10 +1400,10 @@ test("Chat service projects unique enabled Skills and submits the exact pinned r
 			version: { type: "pinnedDigest", digest: "sha256:commit" },
 		},
 	}]);
-	await chat.startTurn({ sessionId: "session-1", threadId: "thread-1", expectedSequence: 1, text: "/commit staged changes", skills: [commands[0]!.skill] });
+	await chat.startTurn({ sessionId: "session-1", threadId: "thread-1", expectedSequence: 1, text: "$commit staged changes", skills: [selectors[0]!.skill] });
 	assert.deepEqual(fake.turnStartRequests[0]?.input, [
-		{ type: "skill", skill: commands[0]!.skill },
-		{ type: "text", text: "/commit staged changes" },
+		{ type: "skill", skill: selectors[0]!.skill },
+		{ type: "text", text: "$commit staged changes" },
 	]);
 });
 

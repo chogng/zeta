@@ -33,7 +33,7 @@ Zeta 已经具备可持续运行、调用工具、等待批准、运行中追问
 | Thread Goal 预算 | 已实现 | 每个 Thread 最多一个 Goal；可选 token budget 跨 Turn 累计，缺失 usage 不伪造精确值，达到预算后收口当前 Turn 并停止自动继续 | `zeta-rs/protocol/src/thread/goal.rs`、`zeta-rs/core/src/thread_reducer.rs`、`zeta-rs/core/src/thread_controller.rs` |
 | 流式传输与 Desktop gap 恢复 | 已实现 | Core transient cursor、App Server 独立 writer、Desktop 去重和 canonical read | `zeta-rs/app-server/src/server.rs`、`zeta-ts/src/zeta/workbench/contrib/chat/browser/pane/chatPaneModel.ts` |
 | 本地 coding 工具闭环 | 已实现 | `coding-v1` 在 Turn 接受时冻结 exact 工具名、顺序、schema digest 与并行调用设置；canonical `read_file`/`write_file`/`edit`/`grep`/`glob`、`apply_patch`、`shell-command` 与 `update_plan` 已接线 | `zeta-rs/core/src/tool_profile.rs`、`zeta-rs/app-server/src/local_tools.rs` |
-| Skills 与 MCP | 已具备 S6 基线 | slash、显式 SkillRef、可信 metadata 自动 selector、`skills-read`、registry snapshot，以及 MCP direct/meta 阈值切换已接通 | `zeta-rs/skills`、`zeta-rs/ext/skills`、`zeta-rs/app-server` |
+| Skills 与 MCP | 已具备 S6 基线 | `$name` 显式 SkillRef、可信 metadata 自动 selector、`skills-read`、registry snapshot，以及 MCP direct/meta 阈值切换已接通；slash 只负责命令 | `zeta-rs/skills`、`zeta-rs/ext/skills`、`zeta-rs/app-server` |
 | ChatGPT 订阅执行 | 基础具备 | native device OAuth、SecretStore、refresh、固定 Responses target 与本地 Agent Loop 已接通；API key 与订阅凭据严格分离 | `zeta-rs/chatgpt/`、`zeta-rs/model-provider/src/providers/openai.rs` |
 | Kimi 订阅执行 | 基础具备 | native device OAuth、SecretStore、refresh、Kimi Coding Chat Completions 与本地 Agent Loop 已接通；`access` 与 execution runtime 已解耦 | `zeta-rs/kimi/`、`zeta-rs/model-provider/src/providers/kimi.rs` |
 | 多 Agent | 部分具备 | spawn/message/wait、Fresh/ForkedPrefix、all/any/quorum、取消树和恢复已实现 | `zeta-rs/core/src/multi_agent/`、`zeta-rs/app-server/src/server/multi_agent_tools.rs` |

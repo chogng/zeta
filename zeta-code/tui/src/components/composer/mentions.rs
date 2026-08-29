@@ -85,5 +85,5 @@ fn insert_path(textarea: &mut TextArea, range: std::ops::Range<usize>, path: &st
 }
 
 #[cfg(test)]
-#[path = "mentions_tests.rs"]
+#[path = "mentions/mentions_tests.rs"]
 mod tests;

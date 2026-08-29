@@ -1,4 +1,4 @@
-import type { AgentResponse, ModelCatalogEntry, SkillCommandDefinition, SlashCommandDefinition, TurnInteraction } from "../../../../services/chat/common/chatService.js";
+import type { AgentResponse, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, TurnInteraction } from "../../../../services/chat/common/chatService.js";
 import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
 import type { ModelRef } from "../../../../../sessions/services/sessions/common/session.js";
 import type { ChatContextAttachment } from "../../../../services/chat/common/chatContextService.js";
@@ -22,7 +22,7 @@ export interface ChatInputState {
 	readonly canInterrupt: boolean;
 	readonly models: readonly ModelCatalogEntry[];
 	readonly slashCommands: readonly SlashCommandDefinition[];
-	readonly skillCommands: readonly SkillCommandDefinition[];
+	readonly skillSelectors: readonly SkillSelectorDefinition[];
 	readonly selectedModel?: ModelRef;
 	readonly interaction?: TurnInteraction;
 }

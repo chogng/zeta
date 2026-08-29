@@ -1,6 +1,6 @@
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
-import type { AgentResponse, IChatService, ModelCatalogEntry, SkillCommandDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, TurnChangeSetSummary, TurnInteraction } from "../../../../services/chat/common/chatService.js";
+import type { AgentResponse, IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, TurnChangeSetSummary, TurnInteraction } from "../../../../services/chat/common/chatService.js";
 import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
 import type { ResolvedChatContext } from "../../../../services/chat/common/chatContextService.js";
 import type { IActiveSessionThread, IUntitledChatSession, ModelRef, Session, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
@@ -41,7 +41,7 @@ export class ChatPaneModel extends Disposable {
 	private subscriptionPromise: Promise<void> | undefined;
 	private _models: readonly ModelCatalogEntry[] = [];
 	private _slashCommands: readonly SlashCommandDefinition[] = [];
-	private _skillCommands: readonly SkillCommandDefinition[] = [];
+	private _skillSelectors: readonly SkillSelectorDefinition[] = [];
 	private _changeSets: readonly TurnChangeSetSummary[] = [];
 	private readonly changeDetails = new Map<string, TurnChangeDetails>();
 	private changesGeneration = 0;
@@ -62,7 +62,7 @@ export class ChatPaneModel extends Disposable {
 		}));
 		this._register(chatService.onDidBecomeReady(() => void this.reconnect()));
 		this._register(chatService.onDidChangeModels(() => void this.loadModels()));
-		this._register(chatService.onDidChangeSkills(() => void this.loadSkillCommands()));
+		this._register(chatService.onDidChangeSkills(() => void this.loadSkillSelectors()));
 		this._register(chatService.onDidUpdateTurnChanges((update) => {
 			if (update.sessionId !== this.sessionId || update.threadId !== this.threadId) return;
 			this.acceptChangeSets(update.changeSets);
@@ -116,8 +116,8 @@ export class ChatPaneModel extends Disposable {
 		return this._slashCommands;
 	}
 
-	get skillCommands(): readonly SkillCommandDefinition[] {
-		return this._skillCommands;
+	get skillSelectors(): readonly SkillSelectorDefinition[] {
+		return this._skillSelectors;
 	}
 
 	get selectedModel(): ModelRef | undefined {
@@ -360,10 +360,10 @@ export class ChatPaneModel extends Disposable {
 	}
 
 	private async loadCatalogs(): Promise<void> {
-		const [models, slashCommands, skillCommands] = await Promise.allSettled([this.modelEntries(), this.chatService.listSlashCommands(), this.chatService.listSkillCommands()]);
+		const [models, slashCommands, skillSelectors] = await Promise.allSettled([this.modelEntries(), this.chatService.listSlashCommands(), this.chatService.listSkillSelectors()]);
 		if (models.status === "fulfilled") this._models = models.value;
 		if (slashCommands.status === "fulfilled") this._slashCommands = slashCommands.value;
-		if (skillCommands.status === "fulfilled") this._skillCommands = skillCommands.value;
+		if (skillSelectors.status === "fulfilled") this._skillSelectors = skillSelectors.value;
 		this._onDidChange.fire();
 	}
 
@@ -389,9 +389,9 @@ export class ChatPaneModel extends Disposable {
 		return [...visible, selectedEntry];
 	}
 
-	private async loadSkillCommands(): Promise<void> {
+	private async loadSkillSelectors(): Promise<void> {
 		try {
-			this._skillCommands = await this.chatService.listSkillCommands();
+			this._skillSelectors = await this.chatService.listSkillSelectors();
 			this._onDidChange.fire();
 		} catch {
 			// Keep the last valid catalog when a transient refresh fails.

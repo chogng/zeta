@@ -6,7 +6,7 @@ import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { IMenu, IMenuService } from "../../../../../platform/actions/common/menuService.js";
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
-import type { IChatService, ModelCatalogEntry, SkillCommandDefinition, SlashCommandDefinition, ThreadRead, ThreadSubscription, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope } from "../../../../services/chat/common/chatService.js";
+import type { IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, ThreadRead, ThreadSubscription, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope } from "../../../../services/chat/common/chatService.js";
 import type { IWorkbenchLayoutService, WorkbenchPartId, WorkbenchPartVisibilityChangeEvent } from "../../../../services/layout/browser/layoutService.js";
 import type { ApprovalMode, IActiveSessionThread, IUntitledChatSession, ModelRef, Session, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
 import type { ISessionsManagementService, SessionsManagementState } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
@@ -131,7 +131,7 @@ function unavailableChatService(): IChatService {
 		isModelVisible: () => true,
 		setModelVisible: () => pending as Promise<void>,
 		listSlashCommands: () => pending as Promise<readonly SlashCommandDefinition[]>,
-		listSkillCommands: () => pending as Promise<readonly SkillCommandDefinition[]>,
+		listSkillSelectors: () => pending as Promise<readonly SkillSelectorDefinition[]>,
 		readThread: (_sessionId: SessionId, _threadId: ThreadId) => pending as Promise<ThreadRead>,
 		subscribeThread: (_sessionId: SessionId, _threadId: ThreadId, _afterSequence: number) => pending as Promise<ThreadSubscription>,
 		unsubscribeThread: (_sessionId: SessionId, _threadId: ThreadId) => pending as Promise<void>,

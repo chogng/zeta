@@ -28,9 +28,7 @@ Tool、approval policy 或 persistence。
   结构化提交路径；
 - `@` 在当前 workspace 打开 mention popup；`zeta-file-search::PathSearchHandle` 使用与 Codex file search 相同 revision 的完整 `nucleo` engine，在后台增量扫描和匹配路径，支持 fuzzy 排序、命中字符高亮、循环选择、鼠标 hover 跟随选中、Tab/Enter completion、Esc dismiss 和左键选择；选中路径作为原子文本插入；
 - `/` 打开 command popup，支持 cursor-aware prefix filtering、循环选择、保留已有参数尾部的 Tab completion、Esc dismiss、鼠标 hover 跟随选中与左键单击可见命令；
-- enabled、compatible、名称无歧义且不与已有命令冲突的 Skill 直接显示为 `/name`；提交时保留
-  `/name …` 用户文本并附加 exact pinned `SkillRef`，完整 `SKILL.md` 只在 App Server 接受 Turn
-  后按需加载；`skills/changed` 会刷新这部分动态命令；
+- `$` 打开独立 Skill selector；enabled、compatible 且名称无歧义的 Skill 显示为 `$name`，Tab/Enter 或鼠标选中后作为原子文本插入。提交时保留 `$name …` 用户文本并附加 exact pinned `SkillRef`，完整 `SKILL.md` 只在 App Server 接受 Turn 后按需加载；Skill 与 `/name` 命令不冲突，`skills/changed` 会刷新候选；
 - `/resume`、`/rewind`、`/clear`、`/add-dir`、`/fork`、`/model`、`/theme` 与 `/new` 可解析 inline arguments，并在执行前展开 large-paste placeholder；product command 明确拒绝 image arguments；
 - command popup 只注册已有真实执行流的 built-ins：`/status`、`/statusline`、`/skills`、`/mcp`、`/connectors`、`/resume`、`/archive`、`/rewind`、`/clear`、`/config`、`/add-dir`、`/fork`、`/help`、`/shortcuts`、`/copy`、`/export`、`/model`、`/theme`、`/new` 与 `/quit`；
 - `/status` 展示当前 Session 实际模型、完整上下文窗口、扣除 output reservation、safety margin 与 auto-compaction 边界后的可用窗口、最近一次同模型调用后的剩余窗口，以及 Session ID、Thread ID 和 Thread sequence；provider usage 不完整时剩余值标记为估算，尚无可信值时显示 unknown；
@@ -163,12 +161,14 @@ src/
 │   ├── bootstrap.rs / help.rs     # startup registry validation / help model
 │   ├── frame.rs                   # top-level frame assembly
 │   └── frame/                     # footer content selection and frame tests
+├── app.rs                         # application module root and public crate surface
 ├── client/
 │   ├── command_id.rs              # stable logical command identity allocation
 │   ├── event_pump.rs              # terminal + AppServerEvents wakeup/multiplexing
 │   └── notification.rs            # typed ServerNotification → ClientEvent mapping
 ├── components/
-│   ├── composer/                  # editor, attachments, paste, slash/mention state and views
+│   ├── composer.rs                # composer module root and public component surface
+│   ├── composer/                  # editor, attachments, paste, `/`, `$`, `@` state and views
 │   ├── interaction/               # composer-preserving temporary view stack
 │   ├── selection/                 # reusable selection state and view
 │   ├── tab_list.rs                # reusable horizontal tab state, mouse/keyboard input, wrapping and view
@@ -237,12 +237,13 @@ src/
 | `components::tab_list::TabListState<T>` | crate-private | 拥有 tab 集合和当前项，处理左右/Tab 循环切换与鼠标命中，并由同模块按 Unicode 宽度统一换行和绘制 | 不拥有 pane 内容、搜索、选择或产品 action |
 | `components::selection::SelectionViewState` | crate-private | 可配置 search/titled preview、Space search mode、过滤索引、候选 presentation highlight、选择与循环导航，并组合 `TabListState<SelectionTab>` 切换候选集合 | 不执行 action、不依赖产品 ID 或 App Server |
 | `components::selection::draw` | crate-private | generic title/search/items、可配置间距的水平分隔 preview、caption/footer Ratatui surface，并把 tab 区域委托给 `components::tab_list::draw` | 只读 selection state、不解释产品 action |
-| `ChatComposer` | private | blank/trim/submit、多行换行、paste routing、slash completion application、参数结构化与 local dispatch | 不自行实现 slash grammar，不拥有 cursor、Vim state 或 RPC |
+| `ChatComposer` | private | blank/trim/submit、多行换行、paste routing、`/`/`$`/`@` 输入路由、参数结构化与 local dispatch | 不自行实现 slash grammar，不拥有 cursor、Vim state 或 RPC |
 | `Attachments` | private | 图片 bytes/path、共享格式识别/data URL helper 与原子占位符绑定、删除后重新编号 | 不解码或缩放图片、不替代 Core 权威校验、不直接读取系统 clipboard、不发 RPC、不渲染 |
 | `host::clipboard::read_image` | crate-private | 从本机 clipboard 文件列表/RGBA image 读取并统一编码 PNG | 不改变 composer、不发 RPC、不持久化临时文件 |
 | `host::clipboard::write_text` / `host::transcript_export::write` | crate-private | command-based response copy 与 workspace-bounded Markdown export | 不拥有 transcript、不覆盖文件、不实现任意屏幕文本 selection |
 | `FileSearchManager` | crate-private | event loop 持有的 workspace search runtime；非阻塞 drain snapshot 并丢弃旧 query 结果 | 不进入 `App` state、不解析输入、不保存 popup state |
 | `Mentions` / `MentionPopup` | private | `@token` query/range、异步结果应用、选择/关闭和原子路径补全 | 不扫描 workspace、不拥有 worker、不构造结构化 app/plugin Mention |
+| `SkillSelector` | private | `$token` query/range、metadata 过滤、选择/关闭、原子 `$name` 与 exact `SkillRef` 绑定 | 不读取 Skill filesystem、不加载 `SKILL.md`、不占用 `/` 或 `@` |
 | `PendingPastes` | private | 超过 1000 字符的 text-paste payload、唯一占位符与提交时展开 | 不识别或保存图片，不解释 slash、不渲染、不直接提交 |
 | `zeta_slash_commands::SlashCommandsState` | shared public type | 拥有 cursor query、matches、selection、dismissal 与 completion | TUI 不保存第二份 Slash query/selection authority；可见范围与滚动仍由 Ratatui renderer 负责 |
 | `zeta_slash_commands::{SlashCommandInput,SlashCommandCatalog}` | shared public types | 统一输入 grammar，并合并 built-in 与 server metadata | TUI 不重新校验名称、不执行 App Server operation |
@@ -257,7 +258,7 @@ src/
 | `present_turn_error` | private | stable Turn error code → user-facing recovery message | 不显示 Rust Debug/provider secret |
 | `client::new_command_id` | private | process ID + wall-clock nanos 分配 `CommandId` | 一次逻辑 command 一个新 ID |
 | `app::frame::draw` | crate-private | frame 分区并协调 feature/component renderer | 不改变 App state |
-| `app::frame::{slash_command_index_at,mention_index_at}` | crate-private | 复用 popup geometry 映射可见行点击 | 不执行命令、不改变选择状态 |
+| `app::frame::{slash_command_index_at,mention_index_at,skill_index_at}` | crate-private | 复用 popup geometry 映射可见行点击 | 不执行命令、不改变选择状态 |
 | `components::transcript::row::estimated_wrapped_rows` | private | Unicode display-width based scroll estimate | width 0 不 panic |
 | `TerminalSession::open` | crate-private | 进入 raw/alternate/paste mode 并创建 backend | partial failure 必须 rollback；默认不捕获鼠标 |
 | `MouseMode` | crate-private | 页面声明 `TerminalSelection` 或 `UiClick`，供 App 与终端共享同一鼠标模式契约 | 不执行终端副作用、不保存页面身份 |
@@ -306,8 +307,9 @@ run(session, options)
       │  ├─ Quit → return
       │  ├─ SubmitTurn → RequestTask(submit_prompt + canonical read)
       │  └─ Interrupt → RequestTask(interrupt_turn + canonical read)
-      ├─ left mouse down → generic Selection / mention / slash hit testing
+      ├─ left mouse down → generic Selection / Skill / mention / slash hit testing
       │  ├─ Selection item hit → App::activate_visible_item → existing feature action mapping
+      │  ├─ Skill hit → App::activate_skill → atomic `$name` + exact `SkillRef`
       │  ├─ mention hit → App::activate_mention → atomic path completion
       │  └─ slash hit → App::activate_slash_command → existing command dispatch
       ├─ mouse moved → same hit testing → existing selected item
@@ -386,8 +388,8 @@ dispatcher 内等待 RPC。查询命令读取 authoritative config，`/model` �
 mutation 更新 preferred model。`/help` 和 `/skills` 复用 generic interaction selection surface；关闭
 它们会恢复一直保留的 composer。`/skills` 映射 App Server 的 immutable catalog snapshot；Manage
 tab 的 `Enter` 产生 source-qualified `SkillId` enablement intent，成功写入 config 后重新读取页面。
-catalog/file watcher 变化通过 `skills/changed` 同时刷新管理页面和动态 Skill commands。TUI 不读取
-Skill filesystem；`/name` 只提交 typed `SkillRef`，正文 activation/context injection 仍由 App
+catalog/file watcher 变化通过 `skills/changed` 同时刷新管理页面和 `$` Skill 候选。TUI 不读取
+Skill filesystem；`$name` 只提交 typed `SkillRef`，正文 activation/context injection 仍由 App
 Server 与 Core 拥有。没有对应 typed contract 的产品命令不进入
 registry，不显示占位提示，也不转成普通 prompt 冒充成功。
 
@@ -436,8 +438,9 @@ Ready / Error
 ├─ Enter(其他 built-in command) → structured invocation → typed command dispatcher
 ├─ Enter(server dynamic command) → preserve /name + ordered arguments → Submit
 ├─ /query → cursor-aware popup；↑/↓ select；Tab range completion；Esc dismiss
+├─ $query → Skill popup；↑/↓ select；Tab/Enter exact binding；Esc dismiss
 ├─ @query → workspace file popup；↑/↓ select；Tab/Enter complete；Esc dismiss
-├─ popup 可见行左键单击 → 补全 mention 或执行 slash command
+├─ popup 可见行左键单击 → 补全 Skill/mention 或执行 slash command
 ├─ Esc / Ctrl-C / empty Ctrl-D → Quit
 └─ typing/paste/cursor movement/editing accepted
 

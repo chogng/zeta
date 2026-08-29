@@ -3,6 +3,8 @@ use super::escape::RootEscapeOutcome;
 use super::escape::RootEscapeSequence;
 use super::event::AppEvent;
 use crate::components::composer::ComposerInput;
+use crate::components::composer::SkillSelectorItem;
+use crate::components::composer::SkillSelectorView;
 use crate::components::interaction::InteractionPane;
 use crate::components::interaction::InteractionPaneOutcome;
 use crate::components::pane::PaneView;
@@ -181,7 +183,8 @@ impl App {
         }
         let temporary_interaction_active = self.selection_view().is_some()
             || self.slash_popup().is_some()
-            || self.mention_popup().is_some();
+            || self.mention_popup().is_some()
+            || self.skill_popup().is_some();
         let is_root_escape_press = key.kind == KeyEventKind::Press
             && key.code == KeyCode::Esc
             && key.modifiers.is_empty()
@@ -422,13 +425,13 @@ impl App {
         self.accepts_input() && self.interaction_pane.select_slash_command(index)
     }
 
-    pub(crate) fn replace_slash_commands(
+    pub(crate) fn replace_composer_catalog(
         &mut self,
         slash_commands: SlashCommandCatalog,
-        skill_commands: BTreeMap<String, zeta_protocol::SkillRef>,
+        skills: Vec<SkillSelectorItem>,
     ) {
         self.interaction_pane
-            .replace_slash_commands(slash_commands, skill_commands);
+            .replace_composer_catalog(slash_commands, skills);
     }
 
     #[cfg(test)]
@@ -488,6 +491,10 @@ impl App {
 
     pub(crate) fn mention_popup(&self) -> Option<MentionPopupView<'_>> {
         self.interaction_pane.mention_popup()
+    }
+
+    pub(crate) fn skill_popup(&self) -> Option<SkillSelectorView<'_>> {
+        self.interaction_pane.skill_popup()
     }
 
     pub(crate) fn mouse_mode(&self) -> MouseMode {
@@ -651,6 +658,14 @@ impl App {
 
     pub(crate) fn select_mention(&mut self, index: usize) -> bool {
         self.accepts_input() && self.interaction_pane.select_mention(index)
+    }
+
+    pub(crate) fn activate_skill(&mut self, index: usize) -> bool {
+        self.accepts_input() && self.interaction_pane.activate_skill(index)
+    }
+
+    pub(crate) fn select_skill(&mut self, index: usize) -> bool {
+        self.accepts_input() && self.interaction_pane.select_skill(index)
     }
 
     pub(crate) fn select_visible_item(&mut self, index: usize) -> bool {
@@ -980,7 +995,6 @@ impl App {
                 self.status = Status::Working;
                 Some(AppCommand::SubmitTurn { submission })
             }
-            (SlashCommandOrigin::Skill, _) => None,
             (SlashCommandOrigin::Local, Some(_)) => {
                 Some(AppCommand::ExecuteProductCommand(invocation))
             }
