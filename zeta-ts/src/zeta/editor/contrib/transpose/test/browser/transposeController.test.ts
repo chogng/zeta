@@ -23,7 +23,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { EditorViewport } = await import("../../../../browser/view.js");
-const { TransposeController } = await import("../../browser/transposeController.js");
+const { TransposeCommandId, TransposeController } = await import("../../browser/transposeController.js");
 
 test("Transpose consumes Ctrl+T only for the VS Code macOS binding", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -34,12 +34,17 @@ test("Transpose consumes Ctrl+T only for the VS Code macOS binding", () => {
 	viewport.layout({ width: 200, height: 60 });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);
-	using controller = new TransposeController(input, viewport, selections, { operatingSystem: OperatingSystem.Macintosh });
+	const executedCommands: string[] = [];
+	using controller = new TransposeController(input, viewport, selections, { operatingSystem: OperatingSystem.Macintosh }, (commandId, operation) => {
+		executedCommands.push(commandId);
+		return operation();
+	});
 
 	const transpose = keydown(dom.window, "t", { ctrlKey: true });
 	input.dispatchEvent(transpose);
 	assert.equal(transpose.defaultPrevented, true);
 	assert.equal(model.getText(), "bac");
+	assert.deepEqual(executedCommands, [TransposeCommandId]);
 	const other = keydown(dom.window, "t", { ctrlKey: true, metaKey: true });
 	input.dispatchEvent(other);
 	assert.equal(other.defaultPrevented, false);

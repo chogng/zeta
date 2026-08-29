@@ -8,6 +8,9 @@ import { createEditorEditCommand } from "../../../common/commands/editorCommand.
 import { type EditorViewport } from "../../../browser/view.js";
 import { RenameService } from "../common/rename.js";
 import { type LanguageWorkspaceEdit } from "../../../common/languages/languageWorkspaceEdit.js";
+import { type EditorCommandExecutor } from '../../../browser/editorExtensions.js';
+
+export const RenameCommandId = 'editor.action.rename';
 
 /** Owns the local rename input and applies provider edits through the cursor command contract. */
 export class RenameController extends Disposable {
@@ -16,7 +19,7 @@ export class RenameController extends Disposable {
 	private readonly status: HTMLSpanElement;
 	private request: AbortController | undefined;
 
-	constructor(private readonly editorInput: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: RenameService, private readonly languageId: string, private readonly resource: URI, private readonly applyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor rename failed", error)) {
+	constructor(private readonly editorInput: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: RenameService, private readonly languageId: string, private readonly resource: URI, private readonly applyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor rename failed", error), private readonly executeCommand: EditorCommandExecutor = (_commandId, operation) => operation()) {
 		super();
 		if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza rename dependencies must share one text model");
 		const ownerDocument = viewport.element.ownerDocument;
@@ -88,14 +91,16 @@ export class RenameController extends Disposable {
 			const active = this.selections.selections.primary.active;
 			const edit = await this.service.provideRenameEdits(this.languageId, active, newName, request.signal);
 			if (request.signal.aborted) return;
-			if (this.applyWorkspaceEdit) {
-				await this.applyWorkspaceEdit(edit);
-			} else {
+			await this.executeCommand(RenameCommandId, async () => {
+				if (this.applyWorkspaceEdit) {
+					await this.applyWorkspaceEdit(edit);
+					return;
+				}
 				const documentEdit = edit.entries.find(candidate => candidate.kind === "textDocument" && candidate.resource.toString() === this.resource.toString());
 				if (edit.entries.length !== 1 || !documentEdit || documentEdit.kind !== "textDocument") throw new Error("This editor host cannot apply a multi-resource rename");
 				const command = createEditorEditCommand(this.viewport.textModel, this.selections.selections, documentEdit.edits);
 				if (command) this.selections.execute(command);
-			}
+			});
 			this.close();
 		} catch (error) {
 			if (!request.signal.aborted) this.onError(error);
@@ -114,8 +119,8 @@ export class RenameController extends Disposable {
 	}
 }
 
-registerEditorContribution({ id: "editor.contrib.rename", install: context => {
+registerEditorContribution({ id: "editor.contrib.rename", commands: [{ id: RenameCommandId, canTriggerInlineEdits: true }], install: context => {
 	if (context.kind !== "text") return;
 	const service = context.register(new RenameService(context.model, context.options.input.resource, context.languageFeaturesService.renameProvider));
-	context.register(new RenameController(context.view.element, context.viewport, context.selections, service, context.languageId, context.options.input.resource, context.options.onApplyWorkspaceEdit, context.onLanguageError));
+	context.register(new RenameController(context.view.element, context.viewport, context.selections, service, context.languageId, context.options.input.resource, context.options.onApplyWorkspaceEdit, context.onLanguageError, context.executeCommand));
 } });

@@ -6,16 +6,31 @@ import { resolveEditorIndentationOptions, type EditorIndentationOptions, type Re
 import { createDeleteLinesCommand, createDuplicateLinesCommand, createInsertLineCommand, createMoveLinesCommand, EditorLineDuplicateDirection, EditorLineInsertDirection, EditorLineMoveDirection } from "./linesOperations.js";
 import { createLineIndentCommand, EditorLineIndentDirection } from "./lineIndentCommands.js";
 import { type EditorViewport } from "../../../browser/view.js";
+import { type EditorCommandExecutor } from '../../../browser/editorExtensions.js';
+
+export const EditorLineOperationCommandId = Object.freeze({
+	indent: 'editor.action.indentLines',
+	outdent: 'editor.action.outdentLines',
+	delete: 'editor.action.deleteLines',
+	insertBefore: 'editor.action.insertLineBefore',
+	insertAfter: 'editor.action.insertLineAfter',
+	moveUp: 'editor.action.moveLinesUpAction',
+	moveDown: 'editor.action.moveLinesDownAction',
+	copyUp: 'editor.action.copyLinesUpAction',
+	copyDown: 'editor.action.copyLinesDownAction',
+});
 
 export interface LineOperationsControllerOptions {
 	readonly operatingSystem?: OperatingSystem;
 	readonly indentation?: EditorIndentationOptions;
+	readonly executeCommand?: EditorCommandExecutor;
 }
 
 /** Routes VS Code-compatible physical-line operation and indentation chords locally. */
 export class LineOperationsController extends Disposable {
 	private readonly targetOperatingSystem: OperatingSystem;
 	private readonly indentation: ResolvedEditorIndentationOptions;
+	private readonly executeCommand: EditorCommandExecutor;
 
 	constructor(
 		input: HTMLElement,
@@ -27,6 +42,7 @@ export class LineOperationsController extends Disposable {
 		try {
 			this.targetOperatingSystem = readOperatingSystem(options.operatingSystem);
 			this.indentation = resolveEditorIndentationOptions(options.indentation);
+			this.executeCommand = options.executeCommand ?? ((_commandId, operation) => operation());
 			if (viewport.textModel !== selections.textModel) {
 				throw new TypeError("Stanza line operation dependencies must share one text model");
 			}
@@ -43,32 +59,37 @@ export class LineOperationsController extends Disposable {
 			const hasRange = this.selections.selections.selections.some(selection => !selection.collapsed);
 			if (event.shiftKey || hasRange) {
 				stopEvent(event);
-				this.selections.execute(createLineIndentCommand(
+				const direction = event.shiftKey ? EditorLineIndentDirection.Outdent : EditorLineIndentDirection.Indent;
+				const command = createLineIndentCommand(
 					this.viewport.textModel,
 					this.selections.selections,
-					event.shiftKey ? EditorLineIndentDirection.Outdent : EditorLineIndentDirection.Indent,
+					direction,
 					this.indentation,
-				));
+				);
+				this.executeCommand(direction === EditorLineIndentDirection.Outdent ? EditorLineOperationCommandId.outdent : EditorLineOperationCommandId.indent, () => this.selections.execute(command));
 				this.viewport.revealPosition(this.selections.selections.primary.active);
 			}
 			return;
 		}
 		if ((event.ctrlKey || event.metaKey) && event.shiftKey && !event.altKey && event.key.toLowerCase() === "k") {
 			stopEvent(event);
-			this.selections.execute(createDeleteLinesCommand(
+			const command = createDeleteLinesCommand(
 				this.viewport.textModel,
 				this.selections.selections,
-			));
+			);
+			this.executeCommand(EditorLineOperationCommandId.delete, () => this.selections.execute(command));
 			this.viewport.revealPosition(this.selections.selections.primary.active);
 			return;
 		}
 		if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key === "Enter") {
 			stopEvent(event);
-			this.selections.execute(createInsertLineCommand(
+			const direction = event.shiftKey ? EditorLineInsertDirection.Before : EditorLineInsertDirection.After;
+			const command = createInsertLineCommand(
 				this.viewport.textModel,
 				this.selections.selections,
-				event.shiftKey ? EditorLineInsertDirection.Before : EditorLineInsertDirection.After,
-			));
+				direction,
+			);
+			this.executeCommand(direction === EditorLineInsertDirection.Before ? EditorLineOperationCommandId.insertBefore : EditorLineOperationCommandId.insertAfter, () => this.selections.execute(command));
 			this.viewport.revealPosition(this.selections.selections.primary.active);
 			return;
 		}
@@ -82,22 +103,24 @@ export class LineOperationsController extends Disposable {
 					: undefined;
 			if (!moveDirection) return;
 			stopEvent(event);
-			this.selections.execute(createMoveLinesCommand(
+			const command = createMoveLinesCommand(
 				this.viewport.textModel,
 				this.selections.selections,
 				moveDirection,
-			));
+			);
+			this.executeCommand(moveDirection === EditorLineMoveDirection.Up ? EditorLineOperationCommandId.moveUp : EditorLineOperationCommandId.moveDown, () => this.selections.execute(command));
 			this.viewport.revealPosition(this.selections.selections.primary.active);
 			return;
 		}
 		const duplicateDirection = resolveStanzaDuplicateLineDirection(event, this.targetOperatingSystem);
 		if (!duplicateDirection) return;
 		stopEvent(event);
-		this.selections.execute(createDuplicateLinesCommand(
+		const command = createDuplicateLinesCommand(
 			this.viewport.textModel,
 			this.selections.selections,
 			duplicateDirection,
-		));
+		);
+		this.executeCommand(duplicateDirection === EditorLineDuplicateDirection.Up ? EditorLineOperationCommandId.copyUp : EditorLineOperationCommandId.copyDown, () => this.selections.execute(command));
 		this.viewport.revealPosition(this.selections.selections.primary.active);
 	}
 }

@@ -5,6 +5,9 @@ import { type EditorSelectionController } from "../../../common/cursor/editorSel
 import { type LanguageConfigurationSource } from "../../../common/languages/languageConfiguration.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { type LanguageLexicalContextSource } from "../../../common/languages/languageLexicalContext.js";
+import { type EditorCommandExecutor } from '../../../browser/editorExtensions.js';
+
+export const ToggleBlockCommentCommandId = 'editor.action.blockComment';
 
 export interface BlockCommentControllerOptions {
 	readonly languageId: string;
@@ -19,6 +22,7 @@ export class BlockCommentController extends Disposable {
 		private readonly viewport: EditorViewport,
 		private readonly selections: EditorSelectionController,
 		private readonly options: BlockCommentControllerOptions,
+		private readonly executeCommand: EditorCommandExecutor = (_commandId, operation) => operation(),
 	) {
 		super();
 		try {
@@ -40,11 +44,12 @@ export class BlockCommentController extends Disposable {
 		const blockComment = this.options.configurations.getLanguageConfiguration(languageId).comments.blockComment;
 		if (!blockComment) return;
 		stopEvent(event);
-		this.selections.execute(createToggleBlockCommentCommand(
+		const command = createToggleBlockCommentCommand(
 			this.viewport.textModel,
 			this.selections.selections,
 			blockComment,
-		));
+		);
+		this.executeCommand(ToggleBlockCommentCommandId, () => this.selections.execute(command));
 		this.viewport.revealPosition(this.selections.selections.primary.active);
 	}
 }

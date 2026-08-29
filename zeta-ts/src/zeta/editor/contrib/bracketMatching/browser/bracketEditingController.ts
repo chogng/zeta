@@ -4,6 +4,9 @@ import { createRemoveMatchingBracketsCommand } from "../common/bracketEditing.js
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type LanguageBracketPairs } from "../../../common/languages/languageBracketPairs.js";
 import { type EditorViewport } from "../../../browser/view.js";
+import { type EditorCommandExecutor } from '../../../browser/editorExtensions.js';
+
+export const RemoveBracketsCommandId = 'editor.action.removeBrackets';
 
 /** Routes the VS Code remove-brackets chord through the shared structural bracket index. */
 export class BracketEditingController extends Disposable {
@@ -12,6 +15,7 @@ export class BracketEditingController extends Disposable {
 		private readonly viewport: EditorViewport,
 		private readonly selections: EditorSelectionController,
 		private readonly bracketPairs: LanguageBracketPairs,
+		private readonly executeCommand: EditorCommandExecutor = (_commandId, operation) => operation(),
 	) {
 		super();
 		try {
@@ -31,7 +35,7 @@ export class BracketEditingController extends Disposable {
 		const command = createRemoveMatchingBracketsCommand(this.bracketPairs, this.selections.selections);
 		if (!command) return;
 		stopEvent(event);
-		this.selections.execute(command);
+		this.executeCommand(RemoveBracketsCommandId, () => this.selections.execute(command));
 		this.viewport.revealPosition(this.selections.selections.primary.active);
 	}
 }

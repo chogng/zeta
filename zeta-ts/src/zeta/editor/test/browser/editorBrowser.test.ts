@@ -330,6 +330,47 @@ test("Code editor keeps large files editable while disabling full-document backg
 	}
 });
 
+test('editor command events publish only after asynchronous command work completes', async () => {
+	const { registerEditorContribution } = await import('../../browser/editorExtensions.js');
+	const commandId = 'editor.test.asynchronousCommand';
+	const resource = URI.file('C:\\project\\command.txt');
+	const events: string[] = [];
+	let releaseCommand: (() => void) | undefined;
+	let commandResult: Promise<number> | undefined;
+	registerEditorContribution({
+		id: 'editor.contrib.asynchronousCommand.test',
+		commands: [{ id: commandId, canTriggerInlineEdits: true }],
+		install: context => {
+			if (context.kind !== 'text' || context.options.input.resource.toString() !== resource.toString()) return;
+			context.register(context.onDidExecuteCommand(event => events.push(event.commandId)));
+			commandResult = context.executeCommand(commandId, async () => {
+				await new Promise<void>(resolve => {
+					releaseCommand = resolve;
+				});
+				return 7;
+			});
+		},
+	});
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const model = new TextModel('command');
+	const editor = new EditorBrowser({
+		container: dom.window.document.querySelector<HTMLElement>('main')!,
+		input: { resource },
+		languageId: 'plaintext',
+		model,
+	});
+
+	assert.ok(commandResult);
+	assert.deepEqual(events, []);
+	releaseCommand?.();
+	assert.equal(await commandResult, 7);
+	assert.deepEqual(events, [commandId]);
+	editor.dispose();
+	model.dispose();
+	dom.window.close();
+});
+
 test("constructor-backed editor contributions receive editor context and window services", async () => {
 const [{ EditorContributionInstantiation, registerEditorContribution }, { createServiceIdentifier, ServiceContainer, SyncDescriptor }] = await Promise.all([
 		import("../../browser/editorExtensions.js"),

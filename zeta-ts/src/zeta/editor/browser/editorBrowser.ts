@@ -1,6 +1,6 @@
 import { type IDimension } from "../../base/browser/geometry.js";
 import { isNonEmptyArray } from "../../base/common/arrays.js";
-import { type Event } from "../../base/common/event.js";
+import { Emitter, type Event } from "../../base/common/event.js";
 import { Disposable, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { isFiniteNumber, isSafeInteger } from "../../base/common/numbers.js";
 import type { URI } from "../../base/common/uri.js";
@@ -32,7 +32,7 @@ import { type IAccessibilityService } from "../../platform/accessibility/common/
 import { TabFocus } from "./config/tabFocus.js";
 import { resolveEditorConfiguration } from "./config/editorConfiguration.js";
 import { migrateOptions } from "./config/migrateOptions.js";
-import { getEditorContributions, type EditorCapability, type TextEditorContributionContext } from "./editorExtensions.js";
+import { getEditorContributions, type EditorCapability, type EditorCommandEvent, type TextEditorContributionContext } from "./editorExtensions.js";
 import { type BracketColorizationSource, type SemanticTokenSource } from "./viewparts/viewLines/viewLine.js";
 import { SemanticTokensStylingService } from '../common/services/semanticTokensStylingService.js';
 import { type EditorLineVisibilitySource } from "../common/viewModel/viewModelLines.js";
@@ -323,6 +323,8 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 				{ readOnly: options.input.readOnly },
 			));
 			const contributionCapabilities = new Map<string, unknown>();
+			const commandEmitter = this._register(new Emitter<EditorCommandEvent>());
+			const executeCommand = <T>(commandId: string, operation: () => T): T => executeEditorCommand(commandEmitter, commandId, operation);
 			const getCapability = <T>(capability: EditorCapability<T>): T => {
 				if (!contributionCapabilities.has(capability.id)) throw new ReferenceError(`Text editor capability '${capability.id}' is unavailable`);
 				return contributionCapabilities.get(capability.id) as T;
@@ -446,6 +448,8 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 				selections: this.selections,
 				tabFocus,
 				onLanguageError,
+				onDidExecuteCommand: commandEmitter.event,
+				executeCommand,
 				getCapability,
 				getOptionalCapability,
 				registerBeforeSave: hook => {
@@ -507,6 +511,18 @@ function isViewScrollPosition(value: unknown): value is EditorTextViewState["scr
 	if (!value || typeof value !== "object") return false;
 	const position = value as Partial<EditorTextViewState["scrollPosition"]>;
 	return isFiniteNumber(position.left) && position.left! >= 0 && isFiniteNumber(position.top) && position.top! >= 0;
+}
+
+function executeEditorCommand<T>(emitter: Emitter<EditorCommandEvent>, commandId: string, operation: () => T): T {
+	const result = operation();
+	if (result && typeof (result as { readonly then?: unknown }).then === 'function') {
+		return Promise.resolve(result).then(value => {
+			emitter.fire(Object.freeze({ commandId }));
+			return value;
+		}) as T;
+	}
+	emitter.fire(Object.freeze({ commandId }));
+	return result;
 }
 
 function validateOptions(options: EditorBrowserOptions): void {

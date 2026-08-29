@@ -5,6 +5,9 @@ import { operatingSystem, OperatingSystem } from "../../../../base/common/platfo
 import { createTransposeCharactersCommand } from "../../../common/cursor/cursorTranspose.js";
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
 import { type EditorViewport } from "../../../browser/view.js";
+import { type EditorCommandExecutor } from '../../../browser/editorExtensions.js';
+
+export const TransposeCommandId = 'editor.action.transpose';
 
 export interface TransposeControllerOptions {
 	readonly operatingSystem?: OperatingSystem;
@@ -19,6 +22,7 @@ export class TransposeController extends Disposable {
 		private readonly viewport: EditorViewport,
 		private readonly selections: EditorSelectionController,
 		options: TransposeControllerOptions = {},
+		private readonly executeCommand: EditorCommandExecutor = (_commandId, operation) => operation(),
 	) {
 		super();
 		try {
@@ -39,14 +43,17 @@ export class TransposeController extends Disposable {
 		const command = createTransposeCharactersCommand(this.viewport.textModel, this.selections.selections);
 		if (!command) return;
 		stopEvent(event);
-		this.selections.execute(command);
+		this.executeCommand(TransposeCommandId, () => this.selections.execute(command));
 		this.viewport.revealPosition(this.selections.selections.primary.active);
 	}
 }
 
-registerEditorContribution({ id: "editor.contrib.transpose", install: context => {
+registerEditorContribution({
+	id: 'editor.contrib.transpose',
+	commands: [{ id: TransposeCommandId, canTriggerInlineEdits: true }],
+	install: context => {
 	if (context.kind !== "text") return;
-	context.register(new TransposeController(context.view.element, context.viewport, context.selections));
+	context.register(new TransposeController(context.view.element, context.viewport, context.selections, {}, context.executeCommand));
 } });
 
 function readOperatingSystem(value: OperatingSystem | undefined): OperatingSystem {

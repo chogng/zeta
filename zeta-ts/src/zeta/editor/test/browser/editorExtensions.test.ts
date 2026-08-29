@@ -3,6 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { registerEditorContribution } from "../../browser/editorExtensions.js";
 import { getEditorContributions } from "../../browser/editorExtensions.js";
+import { TriggerInlineEditCommandsRegistry } from '../../browser/triggerInlineEditCommandsRegistry.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 Object.defineProperty(globalThis, "window", { configurable: true, value: browserEnvironment.window });
@@ -44,4 +45,21 @@ test("Code bundle explicitly registers independently selectable editor capabilit
 		assert.equal(ids.has(id), true, id);
 	}
 	assert.equal(ids.has("editor.contrib.documentFormatting"), false);
+	const triggerCommands = new Set(TriggerInlineEditCommandsRegistry.getRegisteredCommands());
+	for (const id of [
+		'editor.action.removeBrackets',
+		'editor.action.commentLine',
+		'editor.action.blockComment',
+		'editor.action.joinLines',
+		'editor.action.rename',
+		'editor.action.transpose',
+	]) assert.equal(triggerCommands.has(id), true, id);
+});
+
+test('Inline edit trigger command metadata validates IDs and deduplicates registrations', () => {
+	const id = 'editor.test.triggerInlineEdit';
+	TriggerInlineEditCommandsRegistry.registerCommand(id);
+	TriggerInlineEditCommandsRegistry.registerCommand(id);
+	assert.equal(TriggerInlineEditCommandsRegistry.getRegisteredCommands().filter(candidate => candidate === id).length, 1);
+	assert.throws(() => TriggerInlineEditCommandsRegistry.registerCommand(''), /non-empty string/);
 });

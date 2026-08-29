@@ -9,6 +9,9 @@ import { InlineCompletionsService } from "../../../browser/services/inlineComple
 import { type LanguageInlineCompletionItem } from "../common/inlineCompletions.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { isCompletionsEnabled } from "../../../common/services/completionsEnablement.js";
+import { type Event } from '../../../../base/common/event.js';
+import { type EditorCommandEvent } from '../../../browser/editorExtensions.js';
+import { TriggerInlineEditCommandsRegistry } from '../../../browser/triggerInlineEditCommandsRegistry.js';
 
 /** Owns ghost-text projection and explicit acceptance of one inline completion. */
 export class InlineCompletionsController extends Disposable {
@@ -16,7 +19,7 @@ export class InlineCompletionsController extends Disposable {
 	private request: AbortController | undefined;
 	private item: LanguageInlineCompletionItem | undefined;
 
-	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: InlineCompletionsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza inline completion failed", error)) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: InlineCompletionsService, private readonly languageId: string, onDidExecuteCommand?: Event<EditorCommandEvent>, private readonly onError: (error: unknown) => void = error => console.error("Stanza inline completion failed", error)) {
 		super();
 		const element = this.element = h(viewport.element.ownerDocument, "span");
 		element.className = "stanza-editor-inline-completion";
@@ -36,6 +39,13 @@ export class InlineCompletionsController extends Disposable {
 		this._register(selections.onDidChange(() => this.clear()));
 		this._register(viewport.onDidChangeLayout(() => this.render()));
 		this._register(viewport.textModel.onDidChange(() => this.clear()));
+		if (onDidExecuteCommand) {
+			const triggerCommands = new Set(TriggerInlineEditCommandsRegistry.getRegisteredCommands());
+			this._register(onDidExecuteCommand(event => {
+				if (!triggerCommands.has(event.commandId)) return;
+				void this.refresh('automatic');
+			}));
+		}
 	}
 
 	private async refresh(triggerKind: "automatic" | "explicit"): Promise<void> {
@@ -91,5 +101,5 @@ export class InlineCompletionsController extends Disposable {
 registerEditorContribution({ id: "editor.contrib.inlineCompletions", install: context => {
 	if (context.kind !== "text" || (context.options.inlineCompletions !== undefined && !isCompletionsEnabled(context.options.inlineCompletions, context.languageId))) return;
 	const service = context.register(new InlineCompletionsService(context.model, context.languageFeaturesService.inlineCompletionsProvider));
-	context.register(new InlineCompletionsController(context.view.element, context.viewport, context.selections, service, context.languageId, context.onLanguageError));
+	context.register(new InlineCompletionsController(context.view.element, context.viewport, context.selections, service, context.languageId, context.onDidExecuteCommand, context.onLanguageError));
 } });

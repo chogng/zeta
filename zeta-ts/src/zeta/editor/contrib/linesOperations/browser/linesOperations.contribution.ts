@@ -1,9 +1,12 @@
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
-import { LineJoinController } from "./lineJoinController.js";
-import { LineOperationsController } from "./lineOperationsController.js";
+import { JoinLinesCommandId, LineJoinController } from "./lineJoinController.js";
+import { EditorLineOperationCommandId, LineOperationsController } from "./lineOperationsController.js";
 
-registerEditorContribution({ id: "editor.contrib.linesOperations", install: context => {
+registerEditorContribution({ id: "editor.contrib.linesOperations", commands: [
+	...Object.values(EditorLineOperationCommandId).map(id => ({ id, canTriggerInlineEdits: true })),
+	{ id: JoinLinesCommandId, canTriggerInlineEdits: true },
+], install: context => {
 	if (context.kind !== "text") return;
-	context.register(new LineOperationsController(context.view.element, context.viewport, context.selections, { indentation: context.options.indentation }));
-	context.register(new LineJoinController(context.view.element, context.viewport, context.selections));
+	context.register(new LineOperationsController(context.view.element, context.viewport, context.selections, { indentation: context.options.indentation, executeCommand: context.executeCommand }));
+	context.register(new LineJoinController(context.view.element, context.viewport, context.selections, { executeCommand: context.executeCommand }));
 } });

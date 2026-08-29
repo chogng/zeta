@@ -1,4 +1,5 @@
 import { type IDisposable } from "../../base/common/lifecycle.js";
+import { type Event } from '../../base/common/event.js';
 import { type SyncDescriptor } from "../../platform/instantiation/common/instantiation.js";
 import { type EditorSelectionController } from "../common/cursor/editorSelectionController.js";
 import { type LanguageConfigurationSource } from "../common/languages/languageConfiguration.js";
@@ -18,6 +19,18 @@ import { type LanguageLexicalContextSource } from "../common/languages/languageL
 import { type BracketColorizationSource, type SemanticTokenSource } from "./viewparts/viewLines/viewLine.js";
 import { type TabFocus } from "./config/tabFocus.js";
 import { type IEditorWorkerClient } from "../common/services/editorWorker.js";
+import { TriggerInlineEditCommandsRegistry } from './triggerInlineEditCommandsRegistry.js';
+
+export interface EditorCommandEvent {
+	readonly commandId: string;
+}
+
+export interface EditorCommandMetadata {
+	readonly id: string;
+	readonly canTriggerInlineEdits?: boolean;
+}
+
+export type EditorCommandExecutor = <T>(commandId: string, operation: () => T) => T;
 
 /** Stable text-model mount point exposed to optional editor extensions. */
 export interface EditorCapability<T> {
@@ -62,6 +75,8 @@ export interface TextEditorContributionContext {
 	readonly selections: EditorSelectionController;
 	readonly tabFocus: TabFocus;
 	readonly onLanguageError: (error: unknown) => void;
+	readonly onDidExecuteCommand: Event<EditorCommandEvent>;
+	readonly executeCommand: EditorCommandExecutor;
 	readonly getCapability: <T>(capability: EditorCapability<T>) => T;
 	readonly getOptionalCapability: <T>(capability: EditorCapability<T>) => T | undefined;
 	readonly registerBeforeSave: (hook: () => void | Promise<void>) => IDisposable;
@@ -135,6 +150,7 @@ export interface TextEditorRuntimeContributionRegistration {
 /** Installs one statically selected capability at its supported editor mount point. */
 export interface EditorContribution {
 	readonly id: string;
+	readonly commands?: readonly EditorCommandMetadata[];
 	configure?(context: TextEditorContributionConfigurationContext): void;
 	install?(context: EditorContributionContext): void;
 	/** Optional constructor-backed runtime for services that need editor-local state and DI. */
@@ -151,6 +167,10 @@ export function registerEditorContribution(contribution: EditorContribution): vo
 		throw new TypeError("Editor runtime contribution is invalid");
 	}
 	if (contributionIds.has(contribution.id)) throw new RangeError(`Duplicate editor contribution '${contribution.id}'`);
+	for (const command of contribution.commands ?? []) {
+		if (!command || typeof command.id !== 'string' || command.id.trim().length === 0) throw new TypeError('Editor command metadata is invalid');
+		if (command.canTriggerInlineEdits) TriggerInlineEditCommandsRegistry.registerCommand(command.id);
+	}
 	contributionIds.add(contribution.id);
 	contributions.push(contribution);
 }

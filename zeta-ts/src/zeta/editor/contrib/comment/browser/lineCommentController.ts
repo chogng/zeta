@@ -5,6 +5,9 @@ import { createToggleLineCommentCommand } from "../common/lineCommentCommands.js
 import { type LanguageConfigurationSource } from "../../../common/languages/languageConfiguration.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { type LanguageLexicalContextSource } from "../../../common/languages/languageLexicalContext.js";
+import { type EditorCommandExecutor } from '../../../browser/editorExtensions.js';
+
+export const ToggleLineCommentCommandId = 'editor.action.commentLine';
 
 export interface LineCommentControllerOptions {
 	readonly languageId: string;
@@ -20,6 +23,7 @@ export class LineCommentController extends Disposable {
 		private readonly viewport: EditorViewport,
 		private readonly selections: EditorSelectionController,
 		private readonly options: LineCommentControllerOptions,
+		private readonly executeCommand: EditorCommandExecutor = (_commandId, operation) => operation(),
 	) {
 		super();
 		try {
@@ -41,14 +45,15 @@ export class LineCommentController extends Disposable {
 		const lineComment = this.options.configurations.getLanguageConfiguration(languageId).comments.lineComment;
 		if (!lineComment) return;
 		stopEvent(event);
-		this.selections.execute(createToggleLineCommentCommand(
+		const command = createToggleLineCommentCommand(
 			this.viewport.textModel,
 			this.selections.selections,
 			{
 				lineComment,
 				insertSpace: this.options.insertSpace,
 			},
-		));
+		);
+		this.executeCommand(ToggleLineCommentCommandId, () => this.selections.execute(command));
 		this.viewport.revealPosition(this.selections.selections.primary.active);
 	}
 }

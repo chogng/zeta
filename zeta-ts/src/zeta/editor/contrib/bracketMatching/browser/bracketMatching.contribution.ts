@@ -4,12 +4,13 @@ import { LanguageBracketPairs } from '../../../common/languages/languageBracketP
 import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
 import { TextEditorCapability } from '../../textEditorCapabilities.js';
 import { BracketColorizationSource } from './bracketColorizationPresentation.js';
-import { BracketEditingController } from './bracketEditingController.js';
+import { BracketEditingController, RemoveBracketsCommandId } from './bracketEditingController.js';
 import { BracketMatchController } from './bracketMatchController.js';
 import { BracketNavigationController } from './bracketNavigationController.js';
 
 registerEditorContribution({
 	id: 'editor.contrib.bracketMatching',
+	commands: [{ id: RemoveBracketsCommandId, canTriggerInlineEdits: true }],
 	configure: context => {
 		const lexicalContext = context.getCapability(TextEditorCapability.languageLexicalContext);
 		const largeFile = context.model.largeFile.tooLargeForTokenization;
@@ -29,6 +30,6 @@ registerEditorContribution({
 		const bracketPairs = context.getCapability(TextEditorCapability.bracketPairs);
 		context.register(new BracketMatchController(context.selections, bracketPairs, context.getCapability(TextEditorCapability.bracketDecorations), context.options.matchBrackets ?? 'always'));
 		context.register(new BracketNavigationController(context.view.element, context.viewport, context.selections, bracketPairs));
-		context.register(new BracketEditingController(context.view.element, context.viewport, context.selections, bracketPairs));
+		context.register(new BracketEditingController(context.view.element, context.viewport, context.selections, bracketPairs, context.executeCommand));
 	},
 });

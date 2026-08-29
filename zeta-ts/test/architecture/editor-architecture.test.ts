@@ -80,6 +80,7 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/editorBrowser.ts",
 		"browser/editorDom.ts",
 		"browser/editorExtensions.ts",
+		"browser/triggerInlineEditCommandsRegistry.ts",
 		"browser/coreCommands.ts",
 		"browser/widget/codeEditor/codeEditorContributions.ts",
 		"browser/widget/codeEditor/codeEditorWidget.ts",
