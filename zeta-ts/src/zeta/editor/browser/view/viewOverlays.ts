@@ -122,6 +122,10 @@ export class ViewOverlays extends Disposable {
 		this.viewCursors.setCompositionRange(range);
 	}
 
+	setCursorStyle(style: TextEditorCursorStyle): void {
+		this.viewCursors.setStyle(style);
+	}
+
 	private register<TPart extends DynamicViewOverlay>(part: TPart): TPart {
 		this.parts.push(part);
 		this._register(part);

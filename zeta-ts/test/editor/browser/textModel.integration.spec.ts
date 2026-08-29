@@ -26,6 +26,13 @@ test("text-model editor public API, pane, undo, save, and browser worker", async
 	const input = page.locator(".stanza-editor-input");
 	await input.focus();
 	await page.keyboard.press("Control+Home");
+	const caret = page.locator('.stanza-editor-caret.primary');
+	await expect(caret).toHaveClass(/cursor-style-line/u);
+	await page.keyboard.press('Insert');
+	await expect(caret).toHaveClass(/cursor-style-block/u);
+	await expect(caret).toHaveText('f');
+	await page.keyboard.press('Insert');
+	await expect(caret).toHaveClass(/cursor-style-line/u);
 	await page.keyboard.type("/* integrated */ ");
 	await expect.poll(() => page.evaluate(() => window.zetaTextModelIntegration.getValue())).toBe("/* integrated */ fn main() {\n  answer();\n}\n");
 
@@ -87,6 +94,7 @@ test("glyph margin, line numbers, and folding controls keep VS Code gutter order
 	await expect(glyphMargin).toBeVisible();
 	await expect(foldingControl).toBeVisible();
 	const firstLine = page.locator(".stanza-editor-line[data-logical-line-index='0']");
+	await expect(page.locator('.stanza-editor-lines')).toHaveCSS('cursor', 'text');
 	const firstLineNumber = page.locator(".stanza-editor-line-margin[data-line-index='0'] .stanza-editor-line-number");
 	await expect(firstLineNumber).toHaveText("1");
 	const foldingBox = await foldingControl.boundingBox();

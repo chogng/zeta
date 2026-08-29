@@ -1699,7 +1699,7 @@ const editorOptions = {
 	accessibilitySupport: register(new EditorOptionDefinition(EditorOption.accessibilitySupport, 'accessibilitySupport', AccessibilitySupport.Unknown, validateAccessibilitySupport, undefined, (environment, _options, value) => value === AccessibilitySupport.Unknown ? environment.accessibilitySupport : value)),
 	accessibilityPageSize: register(new EditorOptionDefinition(EditorOption.accessibilityPageSize, 'accessibilityPageSize', 500, input => boundedInteger(input, 500, 1, 10_000))),
 	tabFocusMode: register(new EditorOptionDefinition(EditorOption.tabFocusMode, 'tabFocusMode', false, input => booleanValue(input, false))),
-	effectiveCursorStyle: register(new EditorOptionDefinition(EditorOption.effectiveCursorStyle, 'effectiveCursorStyle', TextEditorCursorStyle.Line, validateCursorStyle, undefined, (environment, options, _value) => environment.inputMode === 'overtype' ? options.get(EditorOption.overtypeCursorStyle) : options.get(EditorOption.cursorStyle))),
+	effectiveCursorStyle: register(new EditorOptionDefinition(EditorOption.effectiveCursorStyle, 'effectiveCursorStyle', TextEditorCursorStyle.Line, input => validateCursorStyle(input, TextEditorCursorStyle.Line), undefined, (environment, options, _value) => environment.inputMode === 'overtype' ? options.get(EditorOption.overtypeCursorStyle) : options.get(EditorOption.cursorStyle))),
 	editorClassName: register(new EditorOptionDefinition(EditorOption.editorClassName, 'editorClassName', '', input => stringValue(input, ''), undefined, computeEditorClassName)),
 	pixelRatio: register(new EditorOptionDefinition(EditorOption.pixelRatio, 'pixelRatio', 1, input => boundedNumber(input, 1, 0.1, 10), undefined, (environment, _options, _value) => environment.pixelRatio)),
 	layoutInfo: register(new EditorLayoutInfoComputer()),
@@ -1717,9 +1717,10 @@ const editorOptions = {
 	selectionClipboard: register(new EditorOptionDefinition(EditorOption.selectionClipboard, 'selectionClipboard', true, input => booleanValue(input, true))),
 	emptySelectionClipboard: register(new EditorOptionDefinition(EditorOption.emptySelectionClipboard, 'emptySelectionClipboard', true, input => booleanValue(input, true), undefined, (environment, _options, value) => value && environment.emptySelectionClipboard)),
 	roundedSelection: register(new EditorOptionDefinition(EditorOption.roundedSelection, 'roundedSelection', true, input => booleanValue(input, true))),
-	cursorStyle: register(new EditorOptionDefinition(EditorOption.cursorStyle, 'cursorStyle', TextEditorCursorStyle.Line, validateCursorStyle)),
+	cursorStyle: register(new EditorOptionDefinition(EditorOption.cursorStyle, 'cursorStyle', TextEditorCursorStyle.Line, input => validateCursorStyle(input, TextEditorCursorStyle.Line))),
 	cursorBlinking: register(new EditorOptionDefinition(EditorOption.cursorBlinking, 'cursorBlinking', TextEditorCursorBlinkingStyle.Blink, validateCursorBlinkingStyle)),
-	overtypeCursorStyle: register(new EditorOptionDefinition(EditorOption.overtypeCursorStyle, 'overtypeCursorStyle', TextEditorCursorStyle.Block, validateCursorStyle)),
+	overtypeCursorStyle: register(new EditorOptionDefinition(EditorOption.overtypeCursorStyle, 'overtypeCursorStyle', TextEditorCursorStyle.Block, input => validateCursorStyle(input, TextEditorCursorStyle.Block))),
+	mouseStyle: register(new EditorOptionDefinition(EditorOption.mouseStyle, 'mouseStyle', 'text' as const, input => enumValue(input, 'text' as const, ['text', 'default', 'copy'] as const))),
 	multiCursorModifier: register(new EditorOptionDefinition(EditorOption.multiCursorModifier, 'multiCursorModifier', isMacintosh ? 'altKey' as const : 'altKey' as const, validateMultiCursorModifier)),
 	wordSegmenterLocales: register(new EditorOptionDefinition(EditorOption.wordSegmenterLocales, 'wordSegmenterLocales', Object.freeze([]) as readonly string[], validateWordSegmenterLocales)),
 	wrappingIndent: register(new EditorOptionDefinition(EditorOption.wrappingIndent, 'wrappingIndent', WrappingIndent.Same, validateWrappingIndent, undefined, (environment, options, value) => options.get(EditorOption.accessibilitySupport) === AccessibilitySupport.Enabled ? WrappingIndent.None : value)),
@@ -1748,9 +1749,11 @@ type EditorOptionsCollection = Record<string, IEditorOption<EditorOption, unknow
 	readonly letterSpacing: IEditorOption<EditorOption.letterSpacing, number>;
 	readonly lineNumbers: IEditorOption<EditorOption.lineNumbers, InternalEditorRenderLineNumbersOptions>;
 	readonly cursorStyle: IEditorOption<EditorOption.cursorStyle, TextEditorCursorStyle>;
+	readonly overtypeCursorStyle: IEditorOption<EditorOption.overtypeCursorStyle, TextEditorCursorStyle>;
 	readonly cursorBlinking: IEditorOption<EditorOption.cursorBlinking, TextEditorCursorBlinkingStyle>;
 	readonly cursorWidth: IEditorOption<EditorOption.cursorWidth, number>;
 	readonly cursorHeight: IEditorOption<EditorOption.cursorHeight, number>;
+	readonly mouseStyle: IEditorOption<EditorOption.mouseStyle, 'text' | 'default' | 'copy'>;
 	readonly guides: IEditorOption<EditorOption.guides, InternalGuidesOptions>;
 	readonly accessibilitySupport: IEditorOption<EditorOption.accessibilitySupport, AccessibilitySupport>;
 	readonly scrollbar: IEditorOption<EditorOption.scrollbar, InternalEditorScrollbarOptions>;
@@ -2062,14 +2065,14 @@ export function stringSet<T extends string>(value: unknown, defaultValue: T, all
 	return allowedValues.includes(value as T) ? value as T : defaultValue;
 }
 
-function validateCursorStyle(input: unknown): TextEditorCursorStyle {
+function validateCursorStyle(input: unknown, defaultValue: TextEditorCursorStyle): TextEditorCursorStyle {
 	if (typeof input === 'number' && input >= TextEditorCursorStyle.Line && input <= TextEditorCursorStyle.UnderlineThin) {
 		return input as TextEditorCursorStyle;
 	}
-	if (typeof input === 'string') {
+	if (typeof input === 'string' && ['line', 'block', 'underline', 'line-thin', 'block-outline', 'underline-thin'].includes(input)) {
 		return cursorStyleFromString(input as Parameters<typeof cursorStyleFromString>[0]);
 	}
-	return TextEditorCursorStyle.Line;
+	return defaultValue;
 }
 
 function validateCursorBlinkingStyle(input: unknown): TextEditorCursorBlinkingStyle {

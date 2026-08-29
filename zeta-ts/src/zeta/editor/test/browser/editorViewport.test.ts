@@ -939,6 +939,22 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 	dom.window.close();
 });
 
+test('EditorViewport projects the configured mouse style onto its text layer', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('alpha');
+	using viewport = new EditorViewport({
+		container,
+		model,
+		lineHeight: 20,
+		textMeasurer: fixedTextMeasurer(),
+		mouseStyle: 'copy',
+	});
+
+	assert.equal(viewport.element.classList.contains('stanza-editor-mouse-copy'), true);
+	dom.window.close();
+});
+
 test('EditorViewport places RTL block cursors over their following glyph or trailing space', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
@@ -975,13 +991,14 @@ test('EditorViewport places RTL block cursors over their following glyph or trai
 		value: () => testRectangle(100, 0, 300),
 	});
 	const caret = requiredElement<HTMLElement>(requiredPartRow(viewport.element, 'stanza-editor-line-cursors', 0), '.stanza-editor-caret');
+	assert.equal(caret.getAttribute('aria-hidden'), 'true');
 	selections.setSelections(TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
-	const overGlyph = { left: caret.style.left, width: caret.style.width };
+	const overGlyph = { left: caret.style.left, width: caret.style.width, text: caret.textContent };
 	selections.setSelections(TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
 
-	assert.deepEqual({ overGlyph, afterLine: { left: caret.style.left, width: caret.style.width } }, {
-		overGlyph: { left: '20px', width: '8px' },
-		afterLine: { left: '12px', width: '8px' },
+	assert.deepEqual({ overGlyph, afterLine: { left: caret.style.left, width: caret.style.width, text: caret.textContent } }, {
+		overGlyph: { left: '20px', width: '8px', text: '讗' },
+		afterLine: { left: '12px', width: '8px', text: '\u00a0' },
 	});
 	dom.window.close();
 });
@@ -1050,8 +1067,8 @@ test('EditorViewport preserves line, gutter, focus, and multi-cursor highlight s
 	assert.equal(primaryCaret.classList.contains('cursor-style-block-outline'), true);
 	assert.equal(requiredElement(viewport.element, '.stanza-editor-cursors-layer').classList.contains('cursor-blinking-solid'), true);
 	assert.equal(primaryCaret.style.width, '8px');
-	assert.equal(primaryCaret.style.height, '12px');
-	assert.equal(primaryCaret.style.top, '4px');
+	assert.equal(primaryCaret.style.height, '20px');
+	assert.equal(primaryCaret.style.top, '0px');
 
 	for (const lineIndex of [0, 2]) {
 		const row = requiredPartRow(viewport.element, 'stanza-editor-current-line-highlight', lineIndex);
@@ -1067,6 +1084,32 @@ test('EditorViewport preserves line, gutter, focus, and multi-cursor highlight s
 	], 1));
 	assert.equal(requiredPartRow(viewport.element, 'stanza-editor-current-line-highlight', 0).classList.contains('highlight-line'), true);
 	assert.equal(requiredPartRow(viewport.element, 'stanza-editor-current-line-highlight', 2).classList.contains('highlight-line'), true);
+	dom.window.close();
+});
+
+test('EditorViewport normalizes a block cursor to the complete containing grapheme', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('a😊b');
+	using controller = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 2))));
+	using viewport = new EditorViewport({
+		container,
+		model,
+		selectionController: controller,
+		lineHeight: 20,
+		textMeasurer: fixedTextMeasurer(),
+		cursorStyle: 'block',
+		cursorBlinking: 'solid',
+	});
+	viewport.layout({ width: 200, height: 40 });
+	const caret = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-caret');
+	const insideGrapheme = { left: caret.style.left, width: caret.style.width, text: caret.textContent };
+	controller.setSelections(TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
+
+	assert.deepEqual({ insideGrapheme, atGraphemeStart: { left: caret.style.left, width: caret.style.width, text: caret.textContent } }, {
+		insideGrapheme: { left: '64px', width: '8px', text: '😊' },
+		atGraphemeStart: { left: '64px', width: '8px', text: '😊' },
+	});
 	dom.window.close();
 });
 

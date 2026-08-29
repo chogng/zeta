@@ -188,7 +188,13 @@ test("Textarea keyboard fallback routes undo and redo without browser history in
 	assert.ok(container);
 	using model = new TextModel("value");
 	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 5)));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new EditorViewport({
+		container,
+		model,
+		lineHeight: 20,
+		textMeasurer: new FixedTextMeasurer(),
+		selectionController: selections,
+	});
 	using input = new EditorView(viewport, selections);
 
 	input.textArea!.dispatchEvent(beforeInput(dom.window, "insertText", "!"));
@@ -337,20 +343,34 @@ test("Textarea toggles transient overtype mode for ordinary input", () => {
 	assert.ok(container);
 	using model = new TextModel("a😊bc");
 	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 1)));
-	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	using viewport = new EditorViewport({
+		container,
+		model,
+		lineHeight: 20,
+		textMeasurer: new FixedTextMeasurer(),
+		selectionController: selections,
+		cursorStyle: 'line-thin',
+		overtypeCursorStyle: 'underline',
+	});
+	viewport.layout({ width: 100, height: 40 });
 	using input = new EditorView(viewport, selections);
+	const cursor = viewport.element.querySelector<HTMLElement>('.stanza-editor-caret');
+	assert.ok(cursor);
+	assert.equal(cursor.classList.contains('cursor-style-line-thin'), true);
 
 	const enable = keyboardEvent(dom.window, "Insert");
 	input.textArea!.dispatchEvent(enable);
 	assert.equal(enable.defaultPrevented, true);
 	assert.equal(input.overtyping, true);
 	assert.equal(viewport.element.classList.contains("overtype"), true);
+	assert.equal(cursor.classList.contains('cursor-style-underline'), true);
 	input.textArea!.dispatchEvent(beforeInput(dom.window, "insertText", "X"));
 	assert.equal(model.getText(), "aXbc");
 	assert.deepEqual(selections.selections.primary, caret(0, 2));
 
 	input.textArea!.dispatchEvent(keyboardEvent(dom.window, "Insert"));
 	assert.equal(input.overtyping, false);
+	assert.equal(cursor.classList.contains('cursor-style-line-thin'), true);
 	input.textArea!.dispatchEvent(beforeInput(dom.window, "insertText", "Y"));
 	assert.equal(model.getText(), "aXYbc");
 	dom.window.close();

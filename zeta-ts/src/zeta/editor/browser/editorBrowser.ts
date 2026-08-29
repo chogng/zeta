@@ -235,7 +235,9 @@ export interface EditorBrowserOptions {
 	readonly textDirection?: EditorTextDirection;
 	readonly experimentalGpuAcceleration?: IEditorOptions['experimentalGpuAcceleration'];
 	readonly renderWhitespace?: IEditorOptions['renderWhitespace'];
+	readonly mouseStyle?: IEditorOptions['mouseStyle'];
 	readonly cursorStyle?: IEditorOptions['cursorStyle'];
+	readonly overtypeCursorStyle?: IEditorOptions['overtypeCursorStyle'];
 	readonly cursorBlinking?: IEditorOptions['cursorBlinking'];
 	readonly cursorWidth?: IEditorOptions['cursorWidth'];
 	readonly cursorHeight?: IEditorOptions['cursorHeight'];
@@ -409,7 +411,9 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 					textDirection: options.textDirection,
 					experimentalGpuAcceleration: options.experimentalGpuAcceleration,
 					renderWhitespace: options.renderWhitespace,
+					mouseStyle: options.mouseStyle,
 					cursorStyle: options.cursorStyle,
+					overtypeCursorStyle: options.overtypeCursorStyle,
 					cursorBlinking: options.cursorBlinking,
 					cursorWidth: options.cursorWidth,
 					cursorHeight: options.cursorHeight,
@@ -568,6 +572,9 @@ function validateOptions(options: EditorBrowserOptions): void {
 	if (options.renderWhitespace !== undefined && !['none', 'boundary', 'selection', 'trailing', 'all'].includes(options.renderWhitespace)) {
 		throw new TypeError('Editor whitespace rendering option is invalid');
 	}
+	if (options.mouseStyle !== undefined && !['text', 'default', 'copy'].includes(options.mouseStyle)) {
+		throw new TypeError('Editor mouse style option is invalid');
+	}
 	if (options.lineNumbers !== undefined && typeof options.lineNumbers !== 'function' && !['on', 'off', 'relative', 'interval'].includes(options.lineNumbers)) {
 		throw new TypeError('Editor line numbers option is invalid');
 	}
@@ -576,6 +583,9 @@ function validateOptions(options: EditorBrowserOptions): void {
 	}
 	if (options.cursorStyle !== undefined && !['line', 'block', 'underline', 'line-thin', 'block-outline', 'underline-thin'].includes(options.cursorStyle)) {
 		throw new TypeError('Editor cursor style option is invalid');
+	}
+	if (options.overtypeCursorStyle !== undefined && !['line', 'block', 'underline', 'line-thin', 'block-outline', 'underline-thin'].includes(options.overtypeCursorStyle)) {
+		throw new TypeError('Editor overtype cursor style option is invalid');
 	}
 	if (options.cursorBlinking !== undefined && !['blink', 'smooth', 'phase', 'expand', 'solid'].includes(options.cursorBlinking)) {
 		throw new TypeError('Editor cursor blinking option is invalid');

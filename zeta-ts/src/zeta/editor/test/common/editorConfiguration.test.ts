@@ -38,6 +38,10 @@ test('common editor options preserve VS Code internal enum and nested option con
 	assert.equal(EditorOptions.accessibilitySupport.validate('on'), AccessibilitySupport.Enabled);
 	assert.equal(EditorOptions.cursorStyle.validate('block'), TextEditorCursorStyle.Block);
 	assert.equal(EditorOptions.cursorStyle.validate('not-a-cursor-style'), TextEditorCursorStyle.Line);
+	assert.equal(EditorOptions.overtypeCursorStyle.validate(undefined), TextEditorCursorStyle.Block);
+	assert.equal(EditorOptions.overtypeCursorStyle.validate('not-a-cursor-style'), TextEditorCursorStyle.Block);
+	assert.equal(EditorOptions.mouseStyle.validate(undefined), 'text');
+	assert.equal(EditorOptions.mouseStyle.validate('not-a-mouse-style'), 'text');
 	assert.equal(EditorOptions.lineNumbers.validate('relative').renderType, RenderLineNumbersType.Relative);
 	assert.equal(EditorOptions.wrappingIndent.validate('deepIndent'), WrappingIndent.DeepIndent);
 

@@ -14,7 +14,7 @@ import { TextPosition, type TextRange } from '../common/core/text.js';
 import { type TextModel } from '../common/model/textModel.js';
 import { type EditorVisualLineProjection } from '../common/viewModel/modelLineProjection.js';
 import { type EditorScrollPosition } from '../common/viewModel.js';
-import { ComputeOptionsMemory, EditorLayoutInfoComputer, EditorLineWrapping, EditorOptions, type EditorMinimapLayoutInfo, type EditorMinimapOptions, type IEditorMinimapOptions, type IEditorOptions, type InternalEditorRenderLineNumbersOptions, type InternalGuidesOptions, RenderLineNumbersType, isWrappingIndent, WrappingIndent } from '../common/config/editorOptions.js';
+import { ComputeOptionsMemory, EditorLayoutInfoComputer, EditorLineWrapping, EditorOptions, type EditorMinimapLayoutInfo, type EditorMinimapOptions, type IEditorMinimapOptions, type IEditorOptions, type InternalEditorRenderLineNumbersOptions, type InternalGuidesOptions, RenderLineNumbersType, isWrappingIndent, TextEditorCursorStyle, WrappingIndent } from '../common/config/editorOptions.js';
 import { type EditorLineVisibilitySource, ViewModelLines } from '../common/viewModel/viewModelLines.js';
 import { type EditorViewportChange, type EditorViewportLayout, ViewLayout } from '../common/viewLayout/viewLayout.js';
 import { CompositionController, type EditContext, type EditContextCharacterBounds, type EditContextOptions } from './controller/editContext/editContext.js';
@@ -183,6 +183,7 @@ export class EditorView extends Disposable {
 			this.onDidEdit = this.viewController.onDidEdit;
 			this._register(this.viewController.onDidChangeOvertype(overtyping => {
 				this.viewport.element.classList.toggle('overtype', overtyping);
+				this.viewport.setOvertype(overtyping);
 			}));
 
 			if (this.editContext instanceof NativeEditContext) {
@@ -215,6 +216,7 @@ export class EditorView extends Disposable {
 			this._register(toDisposable(() => {
 				this.viewport.element.classList.remove('input-focused');
 				this.viewport.element.classList.remove('overtype');
+				this.viewport.setOvertype(false);
 			}));
 			this._register(addDisposableListener(this.viewport.element, 'focus', event => {
 				if (event.target === this.viewport.element) this.focus();
@@ -377,7 +379,9 @@ export interface EditorViewportOptions {
 	readonly textDirection?: EditorTextDirection;
 	readonly experimentalGpuAcceleration?: IEditorOptions['experimentalGpuAcceleration'];
 	readonly renderWhitespace?: IEditorOptions['renderWhitespace'];
+	readonly mouseStyle?: IEditorOptions['mouseStyle'];
 	readonly cursorStyle?: IEditorOptions['cursorStyle'];
+	readonly overtypeCursorStyle?: IEditorOptions['overtypeCursorStyle'];
 	readonly cursorBlinking?: IEditorOptions['cursorBlinking'];
 	readonly cursorWidth?: IEditorOptions['cursorWidth'];
 	readonly cursorHeight?: IEditorOptions['cursorHeight'];
@@ -427,6 +431,8 @@ export class View extends Disposable {
 	private readonly focusOutlineOwner: EditorFocusOutlineOwner;
 	private readonly renderLineHighlight: NonNullable<IEditorOptions['renderLineHighlight']>;
 	private readonly renderLineHighlightOnlyWhenFocus: boolean;
+	private readonly cursorStyle: TextEditorCursorStyle;
+	private readonly overtypeCursorStyle: TextEditorCursorStyle;
 	private readonly lineNumbers: InternalEditorRenderLineNumbersOptions;
 	private readonly showGlyphMargin: boolean;
 	private readonly guides: InternalGuidesOptions;
@@ -463,9 +469,11 @@ export class View extends Disposable {
 		this.focusOutlineOwner = options.focusOutlineOwner ?? "editor";
 		this.renderLineHighlight = options.renderLineHighlight ?? (this.presentation === 'embedded' ? 'none' : 'line');
 		this.renderLineHighlightOnlyWhenFocus = options.renderLineHighlightOnlyWhenFocus ?? false;
-		const cursorStyle = EditorOptions.cursorStyle.validate(options.cursorStyle);
+		const mouseStyle = EditorOptions.mouseStyle.validate(options.mouseStyle);
+		this.cursorStyle = EditorOptions.cursorStyle.validate(options.cursorStyle);
+		this.overtypeCursorStyle = EditorOptions.overtypeCursorStyle.validate(options.overtypeCursorStyle);
 		const cursorBlinking = EditorOptions.cursorBlinking.validate(options.cursorBlinking);
-		const cursorWidth = EditorOptions.cursorWidth.validate(options.cursorWidth);
+		const configuredCursorWidth = EditorOptions.cursorWidth.validate(options.cursorWidth);
 		const cursorHeight = EditorOptions.cursorHeight.validate(options.cursorHeight);
 		this.lineNumbers = EditorOptions.lineNumbers.validate(options.lineNumbers ?? (this.presentation === 'embedded' ? 'off' : 'on'));
 		this.showGlyphMargin = this.presentation !== 'embedded' && (options.glyphMargin ?? true);
@@ -519,6 +527,7 @@ export class View extends Disposable {
 		this.element.classList.add(`stanza-editor-${this.presentation}`);
 		this.element.classList.add(`stanza-editor-focus-owner-${this.focusOutlineOwner}`);
 		this.element.classList.add(`stanza-editor-direction-${this.viewLineOptions.textDirection}`);
+		this.element.classList.add(`stanza-editor-mouse-${mouseStyle}`);
 		this.element.classList.toggle("hide-line-numbers", this.lineNumbers.renderType === RenderLineNumbersType.Off);
 		applyEditorFontInfo(this.element, {
 			fontFamily: options.fontFamily,
@@ -546,6 +555,10 @@ export class View extends Disposable {
 		this.textMeasurer =
 			options.textMeasurer ??
 			new DomTextMeasurer(this.textMetricsElement);
+		const cursorWidth = Math.min(
+			configuredCursorWidth,
+			Math.max(1, this.textMeasurer.measureLineWidth(' ')),
+		);
 		this.lineWidths = this._register(new LineWidthIndex(
 			this.model,
 			this.textMeasurer,
@@ -652,7 +665,7 @@ export class View extends Disposable {
 			guides: this.guides,
 			indentationTabSize: this.indentation.tabSize,
 			renderWhitespace: options.renderWhitespace ?? 'none',
-			cursorStyle,
+			cursorStyle: this.cursorStyle,
 			cursorBlinking,
 			cursorWidth,
 			cursorHeight,
@@ -1034,6 +1047,10 @@ export class View extends Disposable {
 
 	setCompositionRange(range: TextRange | undefined): void {
 		this.viewOverlays.setCompositionRange(range);
+	}
+
+	setOvertype(overtyping: boolean): void {
+		this.viewOverlays.setCursorStyle(overtyping ? this.overtypeCursorStyle : this.cursorStyle);
 	}
 
 	getTargetAtClientPoint(

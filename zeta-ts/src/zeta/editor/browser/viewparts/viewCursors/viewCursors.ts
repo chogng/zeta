@@ -1,8 +1,9 @@
 import "./viewCursors.css";
 import { h, reset } from '../../../../base/browser/dom.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
-import { TextEditorCursorBlinkingStyle } from '../../../common/config/editorOptions.js';
+import { TextEditorCursorBlinkingStyle, TextEditorCursorStyle } from '../../../common/config/editorOptions.js';
 import { type EditorSelectionController } from "../../../common/cursor/editorSelectionController.js";
+import { TextSelection, TextSelectionSet } from '../../../common/core/selection.js';
 import { TextPosition, TextRange } from '../../../common/core/text.js';
 import { getTextGraphemeBoundaries } from '../../../common/core/textSegmentation.js';
 import { type TextModel } from '../../../common/model/textModel.js';
@@ -26,7 +27,7 @@ export class ViewCursors extends DynamicViewOverlay {
 	private readonly model: TextModel;
 	private readonly selectionController: EditorSelectionController | undefined;
 	private readonly rows: ViewPartRows;
-	private readonly cursorOptions: ViewCursorOptions;
+	private cursorOptions: ViewCursorOptions;
 	private readonly cursors = new Map<number, ViewCursor>();
 	private compositionRange: TrackedRange | undefined;
 
@@ -45,6 +46,13 @@ export class ViewCursors extends DynamicViewOverlay {
 		const next = range ? this.model.trackRange(range, TrackedRangeStickiness.NeverGrowsAtEdges) : undefined;
 		this.compositionRange?.dispose();
 		this.compositionRange = next;
+		this.renderNow(this.context.renderingContext);
+	}
+
+	public setStyle(style: TextEditorCursorStyle): void {
+		if (style === this.cursorOptions.style) return;
+		this.cursorOptions = Object.freeze({ ...this.cursorOptions, style });
+		for (const cursor of this.cursors.values()) cursor.setStyle(style);
 		this.renderNow(this.context.renderingContext);
 	}
 
@@ -86,18 +94,23 @@ function cursorBlinkingClass(blinking: TextEditorCursorBlinkingStyle): string {
 function projectStanzaCursorOverlays(context: EditorOverlayContext, controller: EditorSelectionController | undefined, rows: ReadonlyMap<number, HTMLElement>, cursors: Map<number, ViewCursor>, cursorOptions: ViewCursorOptions, lineHeight: number): ReadonlySet<number> {
 	const renderedCursorIndexes = new Set<number>();
 	if (!controller) return renderedCursorIndexes;
+	const cursorGraphemes = controller.selections.selections.map(selection => cursorGrapheme(context, selection.active));
 	const domCarets = new Map<number, DomCaretGeometry>();
-	for (let selectionIndex = 0; selectionIndex < controller.selections.selections.length; selectionIndex += 1) {
-		const geometry = domCaretGeometry(context, controller.selections.selections[selectionIndex]!.active);
+	for (let selectionIndex = 0; selectionIndex < cursorGraphemes.length; selectionIndex += 1) {
+		const geometry = domCaretGeometry(context, cursorGraphemes[selectionIndex]!.position);
 		if (geometry) domCarets.set(selectionIndex, geometry);
 	}
-	const geometry = createStanzaVisualSelectionGeometry(context.model, controller.selections, context.visualLineProjection, context.renderLines, context.textLeft, context.textMeasurer);
+	const cursorSelections = TextSelectionSet.withPrimary(
+		cursorGraphemes.map(grapheme => TextSelection.collapsedAt(grapheme.position)),
+		controller.selections.primaryIndex,
+	);
+	const geometry = createStanzaVisualSelectionGeometry(context.model, cursorSelections, context.visualLineProjection, context.renderLines, context.textLeft, context.textMeasurer);
 	for (const rectangle of geometry.carets) {
 		if (domCarets.has(rectangle.selectionIndex)) continue;
-		appendCaret(context, rows, cursors, renderedCursorIndexes, cursorOptions, lineHeight, rectangle.selectionIndex, rectangle.visualLineIndex, rectangle.left, undefined, rectangle.primary, controller.selections.selections[rectangle.selectionIndex]!.active);
+		appendCaret(context, rows, cursors, renderedCursorIndexes, cursorOptions, lineHeight, rectangle.selectionIndex, rectangle.visualLineIndex, rectangle.left, undefined, rectangle.primary, cursorGraphemes[rectangle.selectionIndex]!);
 	}
 	for (const [selectionIndex, rectangle] of domCarets) {
-		appendCaret(context, rows, cursors, renderedCursorIndexes, cursorOptions, lineHeight, selectionIndex, rectangle.visualLineIndex, rectangle.left, rectangle, selectionIndex === controller.selections.primaryIndex, controller.selections.selections[selectionIndex]!.active);
+		appendCaret(context, rows, cursors, renderedCursorIndexes, cursorOptions, lineHeight, selectionIndex, rectangle.visualLineIndex, rectangle.left, rectangle, selectionIndex === controller.selections.primaryIndex, cursorGraphemes[selectionIndex]!);
 	}
 	return renderedCursorIndexes;
 }
@@ -117,27 +130,45 @@ function domCaretGeometry(context: EditorOverlayContext, position: TextPosition)
 	return characterRange ? Object.freeze({ ...caret, characterRange }) : caret;
 }
 
-function appendCaret(context: EditorOverlayContext, rows: ReadonlyMap<number, HTMLElement>, cursors: Map<number, ViewCursor>, renderedCursorIndexes: Set<number>, cursorOptions: ViewCursorOptions, lineHeight: number, selectionIndex: number, visualLineIndex: number, caretLeft: number, domGeometry: DomCaretGeometry | undefined, primary: boolean, position: TextPosition): void {
+function appendCaret(context: EditorOverlayContext, rows: ReadonlyMap<number, HTMLElement>, cursors: Map<number, ViewCursor>, renderedCursorIndexes: Set<number>, cursorOptions: ViewCursorOptions, lineHeight: number, selectionIndex: number, visualLineIndex: number, caretLeft: number, domGeometry: DomCaretGeometry | undefined, primary: boolean, grapheme: CursorGrapheme): void {
 	const row = rows.get(visualLineIndex);
 	if (!row) return;
 	const cursor = cursors.get(selectionIndex) ?? new ViewCursor(row, selectionIndex, cursorOptions);
 	cursors.set(selectionIndex, cursor);
-	const characterWidth = domGeometry?.characterRange?.width ?? cursorCharacterWidth(context, position);
+	const characterWidth = domGeometry?.characterRange?.width ?? cursorCharacterWidth(context, grapheme);
 	const characterLeft = domGeometry?.characterRange?.left ?? (domGeometry?.isRightToLeft ? caretLeft - characterWidth : caretLeft);
-	cursor.render(row, caretLeft, characterLeft, characterWidth, lineHeight, primary);
+	cursor.render(row, caretLeft, characterLeft, characterWidth, grapheme.character, lineHeight, primary);
 	renderedCursorIndexes.add(selectionIndex);
 }
 
-function cursorCharacterWidth(context: EditorOverlayContext, position: TextPosition): number {
+interface CursorGrapheme {
+	readonly position: TextPosition;
+	readonly character: string;
+}
+
+function cursorGrapheme(context: EditorOverlayContext, position: TextPosition): CursorGrapheme {
 	const line = context.model.getLineContent(position.lineIndex);
-	const nextBoundary = getTextGraphemeBoundaries(line).find(boundary => boundary > position.columnIndex) ?? position.columnIndex;
+	const boundaries = getTextGraphemeBoundaries(line);
+	let startColumn = 0;
+	for (const boundary of boundaries) {
+		if (boundary > position.columnIndex) break;
+		startColumn = boundary;
+	}
+	const nextBoundary = boundaries.find(boundary => boundary > startColumn);
+	return Object.freeze({
+		position: TextPosition.at(position.lineIndex, startColumn),
+		character: nextBoundary === undefined ? '\u00a0' : line.slice(startColumn, nextBoundary),
+	});
+}
+
+function cursorCharacterWidth(context: EditorOverlayContext, grapheme: CursorGrapheme): number {
+	const position = grapheme.position;
+	const line = context.model.getLineContent(position.lineIndex);
 	const visualLineIndex = context.visualLineProjection.visualLineIndexAt(position);
 	const visualLine = context.visualLineProjection.lineAt(visualLineIndex);
 	const startColumn = visualLine?.logicalLineIndex === position.lineIndex ? visualLine.startColumn : 0;
 	const prefix = line.slice(startColumn, position.columnIndex);
-	const throughCursor = nextBoundary > position.columnIndex
-		? line.slice(startColumn, nextBoundary)
-		: `${prefix} `;
+	const throughCursor = grapheme.character === '\u00a0' ? `${prefix} ` : `${prefix}${grapheme.character}`;
 	return Math.max(1, context.textMeasurer.measureLineWidth(throughCursor) - context.textMeasurer.measureLineWidth(prefix));
 }
 

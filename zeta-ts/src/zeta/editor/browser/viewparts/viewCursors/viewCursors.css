@@ -33,7 +33,9 @@
 }
 
 .stanza-editor-caret.cursor-style-block {
-	--stanza-editor-caret-base-opacity: 0.5;
+	color: var(--zeta-editor-background);
+	white-space: pre;
+	overflow: hidden;
 }
 
 .stanza-editor-caret.cursor-style-block-outline {
@@ -129,4 +131,8 @@
     background: CanvasText;
     color: CanvasText;
   }
+
+	.stanza-editor-caret.cursor-style-block {
+		color: Canvas;
+	}
 }
