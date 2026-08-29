@@ -11,6 +11,7 @@ use zeta_app_server_client::local_profile_root;
 use zeta_app_server_daemon::ConnectionOptions;
 use zeta_app_server_daemon::DAEMON_PATH_ENV;
 use zeta_app_server_daemon::LifecycleCommand;
+use zeta_fast_regex_search::FastRegexWorkerCommand;
 
 const WORKSPACE_TRUST_SOURCE: &str = "ZETA_WORKSPACE_TRUST_SOURCE";
 
@@ -165,7 +166,11 @@ pub(super) enum WorkspaceTrustSource {
 }
 
 pub(super) fn open_server(host: &AppServerHostOptions) -> Result<AppServer, String> {
-    let mut options = LocalAppServerOptions::new(host.profile_root());
+    let mut options = LocalAppServerOptions::new(host.profile_root())
+        .with_fast_regex_worker_command(FastRegexWorkerCommand::new(
+            env::current_exe().map_err(|error| error.to_string())?,
+            ["fast-regex-worker"],
+        ));
     if let Some(workspace_root) = host.workspace_root() {
         options = match host.workspace_trust_source() {
             WorkspaceTrustSource::UserConfig => {

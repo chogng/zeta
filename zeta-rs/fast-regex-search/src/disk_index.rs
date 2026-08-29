@@ -6,20 +6,20 @@ use crate::storage::header_length;
 use crate::storage::io_error;
 use crate::storage::read_u32;
 use crate::storage::read_u64;
+use memmap2::Mmap;
+use memmap2::MmapOptions;
 use std::collections::BTreeSet;
-use std::io::Read;
-use std::io::Seek;
-use std::io::SeekFrom;
+use std::fs;
+use std::io;
 use std::path::Path;
 use std::path::PathBuf;
-use std::sync::Mutex;
-use zeta_immutable_generation_store::MappedGenerationFile;
 use zeta_immutable_generation_store::OpenGenerationFile;
 use zeta_immutable_generation_store::PublishedSnapshot;
 
 pub(crate) struct DiskBaseIndex {
-    lookup: MappedGenerationFile,
-    postings: Mutex<OpenGenerationFile>,
+    lookup: Mmap,
+    _lookup_file: OpenGenerationFile,
+    postings: OpenGenerationFile,
     postings_path: PathBuf,
     postings_len: u64,
     paths: Vec<PathBuf>,
@@ -34,15 +34,17 @@ impl DiskBaseIndex {
     ) -> Result<Self, FastRegexError> {
         let lookup_path = storage_path.join("lookup.bin");
         let postings_path = storage_path.join("postings.bin");
-        let lookup = snapshot
-            .map_base("lookup.bin")
+        let lookup_file = snapshot
+            .open_base("lookup.bin")
             .map_err(|source| io_error(&lookup_path, source))?;
+        let lookup = map_lookup(&lookup_file, &lookup_path)?;
         validate_generation_header(&lookup_path, &lookup, generation)?;
         let (postings, postings_len) = open_generation_file(snapshot, &postings_path, generation)?;
         validate_disk_lookup(&lookup_path, &lookup, postings_len)?;
         Ok(Self {
             lookup,
-            postings: Mutex::new(postings),
+            _lookup_file: lookup_file,
+            postings,
             postings_path,
             postings_len,
             paths,
@@ -120,13 +122,8 @@ impl DiskBaseIndex {
             return Err(corrupt(&self.postings_path));
         }
         let mut bytes = vec![0; byte_count];
-        let mut postings = self
-            .postings
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        postings
-            .seek(SeekFrom::Start(start))
-            .and_then(|_| postings.read_exact(&mut bytes))
+        self.postings
+            .read_exact_at(start, &mut bytes)
             .map_err(|source| io_error(&self.postings_path, source))?;
         if read_u32(&bytes, 0) != Some(expected_count as u32) {
             return Err(corrupt(&self.postings_path));
@@ -191,15 +188,37 @@ fn open_generation_file(
     path: &Path,
     generation: u64,
 ) -> Result<(OpenGenerationFile, u64), FastRegexError> {
-    let mut file = snapshot
+    let file = snapshot
         .open_base("postings.bin")
         .map_err(|source| io_error(path, source))?;
     let length = file.length().map_err(|source| io_error(path, source))?;
     let mut header = vec![0; header_length()];
-    file.read_exact(&mut header)
+    file.read_exact_at(0, &mut header)
         .map_err(|source| io_error(path, source))?;
     validate_generation_header(path, &header, generation)?;
     Ok((file, length))
+}
+
+fn map_lookup(file: &OpenGenerationFile, path: &Path) -> Result<Mmap, FastRegexError> {
+    let length = file.length().map_err(|source| io_error(path, source))?;
+    if length == 0 {
+        return Err(corrupt(path));
+    }
+    let length = usize::try_from(length).map_err(|_| corrupt(path))?;
+    let mapping =
+        map_immutable_file(file.as_file(), length).map_err(|source| io_error(path, source))?;
+    if file.length().map_err(|source| io_error(path, source))? != length as u64 {
+        return Err(corrupt(path));
+    }
+    Ok(mapping)
+}
+
+#[allow(unsafe_code)]
+fn map_immutable_file(file: &fs::File, length: usize) -> io::Result<Mmap> {
+    // SAFETY: This crate maps only a published immutable-generation file. OpenGenerationFile
+    // retains the generation lease for the lifetime of DiskBaseIndex, so cleanup cannot remove
+    // the file while the mapping is reachable, and generation files are never modified in place.
+    unsafe { MmapOptions::new().len(length).map(file) }
 }
 
 fn validate_generation_header(

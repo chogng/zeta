@@ -1,18 +1,39 @@
+use super::ExpectedCurrent;
 use super::GenerationFile;
 use super::ImmutableGenerationStore;
+use super::PublishError;
+use super::PublishOutcome;
+use super::PublishStage;
 use std::fs;
+use std::path::Path;
+use std::path::PathBuf;
+use std::process::Command;
+use std::process::Stdio;
+use std::time::Duration;
+use std::time::Instant;
+
+const ABORT_STAGE_ENV: &str = "ZETA_IMMUTABLE_STORE_ABORT_STAGE";
+const CHILD_CONTENT_ENV: &str = "ZETA_IMMUTABLE_STORE_CHILD_CONTENT";
+const CHILD_READY_ENV: &str = "ZETA_IMMUTABLE_STORE_CHILD_READY";
+const CHILD_RELEASE_ENV: &str = "ZETA_IMMUTABLE_STORE_CHILD_RELEASE";
+const CHILD_RESULT_ENV: &str = "ZETA_IMMUTABLE_STORE_CHILD_RESULT";
+const CHILD_ROOT_ENV: &str = "ZETA_IMMUTABLE_STORE_CHILD_ROOT";
+const CHILD_START_ENV: &str = "ZETA_IMMUTABLE_STORE_CHILD_START";
 
 #[test]
 fn publishes_and_reads_a_consistent_base_and_layer_snapshot() {
     let directory = tempfile::tempdir().expect("store directory");
     let store = ImmutableGenerationStore::open(directory.path()).expect("store");
-    store
+    let report = store
         .publish_base(
+            ExpectedCurrent::Empty,
             1,
             &[GenerationFile::new("lookup.bin", b"lookup one")],
             &[GenerationFile::new("delta.bin", b"delta one")],
         )
         .expect("publish base");
+    assert!(matches!(report.outcome, PublishOutcome::Published));
+    assert!(report.cleanup_error.is_none());
 
     let snapshot = store
         .open_current()
@@ -20,11 +41,14 @@ fn publishes_and_reads_a_consistent_base_and_layer_snapshot() {
         .expect("published snapshot");
     assert_eq!(snapshot.generation(), 1);
     assert_eq!(snapshot.base_generation(), 1);
-    let lookup = snapshot.map_base("lookup.bin").expect("mapped lookup");
-    let delta = snapshot.read_layer("delta.bin").expect("delta");
-    let value = (lookup.as_slice().to_vec(), delta);
+    let lookup = snapshot.open_base("lookup.bin").expect("open lookup");
+    let mut bytes = vec![0; lookup.length().unwrap() as usize];
+    lookup
+        .read_exact_at(0, &mut bytes)
+        .expect("positioned read");
 
-    assert_eq!(value, (b"lookup one".to_vec(), b"delta one".to_vec()));
+    assert_eq!(bytes, b"lookup one");
+    assert_eq!(snapshot.read_layer("delta.bin").unwrap(), b"delta one");
 }
 
 #[test]
@@ -33,59 +57,177 @@ fn layer_publication_reuses_the_immutable_base() {
     let store = ImmutableGenerationStore::open(directory.path()).expect("store");
     store
         .publish_base(
+            ExpectedCurrent::Empty,
             4,
             &[GenerationFile::new("lookup.bin", b"base four")],
             &[GenerationFile::new("delta.bin", b"delta four")],
         )
         .expect("publish base");
     store
-        .publish_layer(5, &[GenerationFile::new("delta.bin", b"delta five")])
+        .publish_layer(
+            ExpectedCurrent::Snapshot(4),
+            5,
+            &[GenerationFile::new("delta.bin", b"delta five")],
+        )
         .expect("publish layer");
 
     let snapshot = store.open_current().unwrap().unwrap();
-    let value = (
-        snapshot.generation(),
-        snapshot.base_generation(),
-        snapshot.read_base("lookup.bin").unwrap(),
-        snapshot.read_layer("delta.bin").unwrap(),
-    );
-
-    assert_eq!(value, (5, 4, b"base four".to_vec(), b"delta five".to_vec()));
+    assert_eq!(snapshot.generation(), 5);
+    assert_eq!(snapshot.base_generation(), 4);
+    assert_eq!(snapshot.read_base("lookup.bin").unwrap(), b"base four");
+    assert_eq!(snapshot.read_layer("delta.bin").unwrap(), b"delta five");
 }
 
 #[test]
-fn mapped_reader_keeps_an_old_base_until_its_lease_is_dropped() {
+fn identical_publication_is_idempotent_but_different_content_conflicts() {
+    let directory = tempfile::tempdir().expect("store directory");
+    let store = ImmutableGenerationStore::open(directory.path()).expect("store");
+    let base = [GenerationFile::new("lookup.bin", b"same lookup")];
+    let layer = [GenerationFile::new("delta.bin", b"same delta")];
+    store
+        .publish_base(ExpectedCurrent::Empty, 7, &base, &layer)
+        .expect("first publication");
+
+    let retry = store
+        .publish_base(ExpectedCurrent::Empty, 7, &base, &layer)
+        .expect("idempotent retry");
+    assert!(matches!(retry.outcome, PublishOutcome::AlreadyPublished));
+
+    let wrong_precondition = store
+        .publish_base(ExpectedCurrent::Snapshot(6), 7, &base, &layer)
+        .unwrap_err();
+    assert!(matches!(
+        wrong_precondition,
+        PublishError::Conflict { current: Some(7) }
+    ));
+
+    let conflict = store
+        .publish_base(
+            ExpectedCurrent::Empty,
+            7,
+            &[GenerationFile::new("lookup.bin", b"different lookup")],
+            &layer,
+        )
+        .unwrap_err();
+    assert!(matches!(
+        conflict,
+        PublishError::Conflict { current: Some(7) }
+    ));
+}
+
+#[test]
+fn compare_and_set_prevents_lost_updates() {
     let directory = tempfile::tempdir().expect("store directory");
     let store = ImmutableGenerationStore::open(directory.path()).expect("store");
     store
         .publish_base(
+            ExpectedCurrent::Empty,
+            1,
+            &[GenerationFile::new("lookup.bin", b"lookup")],
+            &[GenerationFile::new("delta.bin", b"first")],
+        )
+        .expect("base");
+    store
+        .publish_layer(
+            ExpectedCurrent::Snapshot(1),
+            2,
+            &[GenerationFile::new("delta.bin", b"writer one")],
+        )
+        .expect("first writer");
+
+    let second_writer = store
+        .publish_layer(
+            ExpectedCurrent::Snapshot(1),
+            3,
+            &[GenerationFile::new("delta.bin", b"writer two")],
+        )
+        .unwrap_err();
+    assert!(matches!(
+        second_writer,
+        PublishError::Conflict { current: Some(2) }
+    ));
+}
+
+#[test]
+fn open_reader_keeps_an_old_base_until_its_lease_is_dropped() {
+    let directory = tempfile::tempdir().expect("store directory");
+    let store = ImmutableGenerationStore::open(directory.path()).expect("store");
+    store
+        .publish_base(
+            ExpectedCurrent::Empty,
             1,
             &[GenerationFile::new("lookup.bin", b"old lookup")],
             &[GenerationFile::new("delta.bin", b"old delta")],
         )
         .expect("old base");
-    let old_mapping = store
+    let old_reader = store
         .open_current()
         .unwrap()
         .unwrap()
-        .map_base("lookup.bin")
+        .open_base("lookup.bin")
         .unwrap();
 
     store
         .publish_base(
+            ExpectedCurrent::Snapshot(1),
             2,
             &[GenerationFile::new("lookup.bin", b"new lookup")],
             &[GenerationFile::new("delta.bin", b"new delta")],
         )
         .expect("new base");
 
-    assert_eq!(old_mapping.as_slice(), b"old lookup");
+    let mut bytes = vec![0; old_reader.length().unwrap() as usize];
+    old_reader.read_exact_at(0, &mut bytes).unwrap();
+    assert_eq!(bytes, b"old lookup");
     assert!(directory.path().join("bases/00000000000000000001").exists());
-    drop(old_mapping);
-    store
-        .publish_layer(3, &[GenerationFile::new("delta.bin", b"third delta")])
-        .expect("trigger cleanup");
+    drop(old_reader);
+    store.cleanup_stale().expect("cleanup");
     assert!(!directory.path().join("bases/00000000000000000001").exists());
+}
+
+#[test]
+fn cleanup_removes_manifest_before_unleased_data() {
+    let directory = tempfile::tempdir().expect("store directory");
+    let store = ImmutableGenerationStore::open(directory.path()).expect("store");
+    store
+        .publish_base(
+            ExpectedCurrent::Empty,
+            1,
+            &[GenerationFile::new("lookup.bin", b"old")],
+            &[GenerationFile::new("delta.bin", b"old")],
+        )
+        .expect("old");
+    let old_snapshot = store.open_current().unwrap().unwrap();
+    store
+        .publish_base(
+            ExpectedCurrent::Snapshot(1),
+            2,
+            &[GenerationFile::new("lookup.bin", b"new")],
+            &[GenerationFile::new("delta.bin", b"new")],
+        )
+        .expect("new");
+    assert!(
+        directory
+            .path()
+            .join("manifests/00000000000000000001.manifest")
+            .exists()
+    );
+
+    drop(old_snapshot);
+    let cleanup = store.cleanup_stale().expect("cleanup");
+    assert_eq!(cleanup.manifests_removed, 1);
+    assert!(
+        !directory
+            .path()
+            .join("manifests/00000000000000000001.manifest")
+            .exists()
+    );
+    assert!(
+        !directory
+            .path()
+            .join("layers/00000000000000000001")
+            .exists()
+    );
 }
 
 #[test]
@@ -105,6 +247,7 @@ fn a_newer_directory_without_a_manifest_does_not_replace_the_current_snapshot() 
     let store = ImmutableGenerationStore::open(directory.path()).expect("store");
     store
         .publish_base(
+            ExpectedCurrent::Empty,
             1,
             &[GenerationFile::new("lookup.bin", b"published")],
             &[GenerationFile::new("delta.bin", b"published delta")],
@@ -116,7 +259,6 @@ fn a_newer_directory_without_a_manifest_does_not_replace_the_current_snapshot() 
     fs::write(orphan.join("delta.bin"), b"not published").expect("orphan delta");
 
     let snapshot = store.open_current().unwrap().unwrap();
-
     assert_eq!(snapshot.generation(), 1);
     assert_eq!(
         snapshot.read_layer("delta.bin").unwrap(),
@@ -125,59 +267,22 @@ fn a_newer_directory_without_a_manifest_does_not_replace_the_current_snapshot() 
 }
 
 #[test]
-fn an_open_snapshot_keeps_its_layer_until_the_snapshot_is_dropped() {
+fn empty_files_support_positioned_reads() {
     let directory = tempfile::tempdir().expect("store directory");
     let store = ImmutableGenerationStore::open(directory.path()).expect("store");
     store
         .publish_base(
-            1,
-            &[GenerationFile::new("lookup.bin", b"lookup")],
-            &[GenerationFile::new("delta.bin", b"first")],
-        )
-        .expect("base");
-    let old_snapshot = store.open_current().unwrap().unwrap();
-
-    store
-        .publish_layer(2, &[GenerationFile::new("delta.bin", b"second")])
-        .expect("second layer");
-
-    assert_eq!(old_snapshot.read_layer("delta.bin").unwrap(), b"first");
-    assert!(
-        directory
-            .path()
-            .join("layers/00000000000000000001")
-            .exists()
-    );
-    drop(old_snapshot);
-    store
-        .publish_layer(3, &[GenerationFile::new("delta.bin", b"third")])
-        .expect("third layer");
-    assert!(
-        !directory
-            .path()
-            .join("layers/00000000000000000001")
-            .exists()
-    );
-}
-
-#[test]
-fn empty_files_can_be_read_but_are_rejected_for_mapping() {
-    let directory = tempfile::tempdir().expect("store directory");
-    let store = ImmutableGenerationStore::open(directory.path()).expect("store");
-    store
-        .publish_base(
+            ExpectedCurrent::Empty,
             1,
             &[GenerationFile::new("empty.bin", b"")],
             &[GenerationFile::new("delta.bin", b"delta")],
         )
         .expect("base");
     let snapshot = store.open_current().unwrap().unwrap();
+    let empty = snapshot.open_base("empty.bin").unwrap();
 
-    assert!(snapshot.read_base("empty.bin").unwrap().is_empty());
-    assert_eq!(
-        snapshot.map_base("empty.bin").unwrap_err().kind(),
-        std::io::ErrorKind::InvalidData
-    );
+    assert_eq!(empty.length().unwrap(), 0);
+    empty.read_exact_at(0, &mut []).unwrap();
 }
 
 #[test]
@@ -191,6 +296,7 @@ fn retries_a_generation_left_unpublished_after_interruption() {
 
     store
         .publish_base(
+            ExpectedCurrent::Empty,
             1,
             &[GenerationFile::new("lookup.bin", b"complete")],
             &[GenerationFile::new("delta.bin", b"delta")],
@@ -202,26 +308,220 @@ fn retries_a_generation_left_unpublished_after_interruption() {
 }
 
 #[test]
-fn rejects_non_monotonic_snapshots_and_unsafe_file_names() {
+fn rejects_unsafe_file_names_before_commit() {
     let directory = tempfile::tempdir().expect("store directory");
+    let store = ImmutableGenerationStore::open(directory.path()).expect("store");
+    let error = store
+        .publish_base(
+            ExpectedCurrent::Empty,
+            1,
+            &[GenerationFile::new("../lookup.bin", b"escaped")],
+            &[GenerationFile::new("delta.bin", b"delta")],
+        )
+        .unwrap_err();
+
+    assert!(matches!(
+        error,
+        PublishError::BeforeCommit { source }
+            if source.kind() == std::io::ErrorKind::InvalidInput
+    ));
+}
+
+#[test]
+fn process_abort_recovery_matches_the_typed_publish_stages() {
+    for stage in [
+        PublishStage::GenerationWritten,
+        PublishStage::GenerationSynced,
+        PublishStage::PendingManifestWritten,
+        PublishStage::PendingManifestSynced,
+        PublishStage::ManifestRenamed,
+        PublishStage::ManifestDirectorySynced,
+    ] {
+        let directory = tempfile::tempdir().expect("store directory");
+        let status = helper_command("store::tests::publication_abort_child")
+            .env(CHILD_ROOT_ENV, directory.path())
+            .env(ABORT_STAGE_ENV, stage.name())
+            .status()
+            .expect("abort child");
+        assert!(!status.success(), "{stage:?} must abort the child");
+
+        let store = ImmutableGenerationStore::open(directory.path()).expect("reopen store");
+        let current = store.open_current().expect("open current");
+        if matches!(
+            stage,
+            PublishStage::ManifestRenamed | PublishStage::ManifestDirectorySynced
+        ) {
+            assert_eq!(current.expect("committed snapshot").generation(), 1);
+        } else {
+            assert!(current.is_none(), "{stage:?} committed too early");
+        }
+    }
+
+    // process::abort verifies process-crash recovery only. It cannot model lost device caches or
+    // prove that a rename survives machine power loss before the manifest-directory sync.
+}
+
+#[test]
+fn publication_abort_child() {
+    let Some(root) = std::env::var_os(CHILD_ROOT_ENV) else {
+        return;
+    };
+    let store = ImmutableGenerationStore::open(root).expect("child store");
+    let _ = store.publish_base(
+        ExpectedCurrent::Empty,
+        1,
+        &[GenerationFile::new("lookup.bin", b"lookup")],
+        &[GenerationFile::new("delta.bin", b"delta")],
+    );
+}
+
+#[test]
+fn a_cross_process_lease_keeps_the_old_generation_alive() {
+    let directory = tempfile::tempdir().expect("store directory");
+    let coordination = tempfile::tempdir().expect("coordination directory");
+    let ready = coordination.path().join("ready");
+    let release = coordination.path().join("release");
     let store = ImmutableGenerationStore::open(directory.path()).expect("store");
     store
         .publish_base(
-            8,
-            &[GenerationFile::new("lookup.bin", b"lookup")],
-            &[GenerationFile::new("delta.bin", b"delta")],
+            ExpectedCurrent::Empty,
+            1,
+            &[GenerationFile::new("lookup.bin", b"old")],
+            &[GenerationFile::new("delta.bin", b"old")],
         )
-        .expect("base");
+        .expect("old generation");
+    let mut child = helper_command("store::tests::lease_holder_child")
+        .env(CHILD_ROOT_ENV, directory.path())
+        .env(CHILD_READY_ENV, &ready)
+        .env(CHILD_RELEASE_ENV, &release)
+        .spawn()
+        .expect("lease child");
+    wait_for_path(&ready);
 
-    let repeated = store.publish_layer(8, &[GenerationFile::new("delta.bin", b"repeated")]);
-    let escaped = store.publish_layer(9, &[GenerationFile::new("../delta.bin", b"escaped")]);
+    store
+        .publish_base(
+            ExpectedCurrent::Snapshot(1),
+            2,
+            &[GenerationFile::new("lookup.bin", b"new")],
+            &[GenerationFile::new("delta.bin", b"new")],
+        )
+        .expect("new generation");
+    assert!(directory.path().join("bases/00000000000000000001").exists());
 
-    assert_eq!(
-        repeated.unwrap_err().kind(),
-        std::io::ErrorKind::AlreadyExists
-    );
-    assert_eq!(
-        escaped.unwrap_err().kind(),
-        std::io::ErrorKind::InvalidInput
-    );
+    fs::write(&release, []).expect("release child");
+    assert!(child.wait().expect("wait child").success());
+    store.cleanup_stale().expect("cleanup");
+    assert!(!directory.path().join("bases/00000000000000000001").exists());
+}
+
+#[test]
+fn lease_holder_child() {
+    let Some(root) = std::env::var_os(CHILD_ROOT_ENV) else {
+        return;
+    };
+    let ready = PathBuf::from(std::env::var_os(CHILD_READY_ENV).expect("ready path"));
+    let release = PathBuf::from(std::env::var_os(CHILD_RELEASE_ENV).expect("release path"));
+    let store = ImmutableGenerationStore::open(root).expect("child store");
+    let _snapshot = store.open_current().unwrap().expect("current snapshot");
+    fs::write(ready, []).expect("signal ready");
+    wait_for_path(&release);
+}
+
+#[test]
+fn same_generation_cross_process_writers_are_idempotent_or_conflicting_by_digest() {
+    let identical = run_competing_publishers("same", "same");
+    assert_eq!(identical, ["AlreadyPublished", "Published"]);
+
+    let different = run_competing_publishers("first", "second");
+    assert_eq!(different, ["Conflict", "Published"]);
+}
+
+#[test]
+fn competing_publisher_child() {
+    let Some(root) = std::env::var_os(CHILD_ROOT_ENV) else {
+        return;
+    };
+    let ready = PathBuf::from(std::env::var_os(CHILD_READY_ENV).expect("ready path"));
+    let start = PathBuf::from(std::env::var_os(CHILD_START_ENV).expect("start path"));
+    let result = PathBuf::from(std::env::var_os(CHILD_RESULT_ENV).expect("result path"));
+    let content = std::env::var(CHILD_CONTENT_ENV).expect("content");
+    let store = ImmutableGenerationStore::open(root).expect("child store");
+    fs::write(ready, []).expect("signal ready");
+    wait_for_path(&start);
+    let outcome = match store.publish_base(
+        ExpectedCurrent::Empty,
+        9,
+        &[GenerationFile::new("lookup.bin", content.as_bytes())],
+        &[GenerationFile::new("delta.bin", b"delta")],
+    ) {
+        Ok(report) if matches!(report.outcome, PublishOutcome::Published) => "Published",
+        Ok(report) if matches!(report.outcome, PublishOutcome::AlreadyPublished) => {
+            "AlreadyPublished"
+        }
+        Err(PublishError::Conflict { .. }) => "Conflict",
+        other => panic!("unexpected publication result: {other:?}"),
+    };
+    fs::write(result, outcome).expect("write outcome");
+}
+
+fn run_competing_publishers(left: &str, right: &str) -> [&'static str; 2] {
+    let directory = tempfile::tempdir().expect("store directory");
+    let coordination = tempfile::tempdir().expect("coordination directory");
+    let start = coordination.path().join("start");
+    let mut children = Vec::new();
+    for (index, content) in [left, right].into_iter().enumerate() {
+        let ready = coordination.path().join(format!("ready-{index}"));
+        let result = coordination.path().join(format!("result-{index}"));
+        let child = helper_command("store::tests::competing_publisher_child")
+            .env(CHILD_ROOT_ENV, directory.path())
+            .env(CHILD_READY_ENV, &ready)
+            .env(CHILD_START_ENV, &start)
+            .env(CHILD_RESULT_ENV, &result)
+            .env(CHILD_CONTENT_ENV, content)
+            .spawn()
+            .expect("publisher child");
+        children.push((child, ready, result));
+    }
+    for (_, ready, _) in &children {
+        wait_for_path(ready);
+    }
+    fs::write(&start, []).expect("start publishers");
+    let mut outcomes = Vec::new();
+    for (mut child, _, result) in children {
+        assert!(child.wait().expect("wait publisher").success());
+        outcomes.push(fs::read_to_string(result).expect("read outcome"));
+    }
+    outcomes.sort();
+    outcomes
+        .into_iter()
+        .map(|outcome| match outcome.as_str() {
+            "AlreadyPublished" => "AlreadyPublished",
+            "Conflict" => "Conflict",
+            "Published" => "Published",
+            _ => panic!("unknown outcome"),
+        })
+        .collect::<Vec<_>>()
+        .try_into()
+        .expect("two outcomes")
+}
+
+fn helper_command(test: &str) -> Command {
+    let mut command = Command::new(std::env::current_exe().expect("test executable"));
+    command
+        .args(["--exact", test, "--nocapture"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    command
+}
+
+fn wait_for_path(path: &Path) {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !path.exists() {
+        assert!(
+            Instant::now() < deadline,
+            "timed out waiting for {}",
+            path.display()
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
 }

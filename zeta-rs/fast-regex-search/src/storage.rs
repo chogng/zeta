@@ -14,8 +14,13 @@ use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
+use zeta_immutable_generation_store::ExpectedCurrent;
 use zeta_immutable_generation_store::GenerationFile;
 use zeta_immutable_generation_store::ImmutableGenerationStore;
+use zeta_immutable_generation_store::PublishError;
+use zeta_immutable_generation_store::PublishOutcome;
+use zeta_immutable_generation_store::PublishReport;
 
 pub(crate) const STORE_VERSION: &[u8] = b"zeta-fast-regex-v5\0";
 const DELTA_FILE: &str = "delta.bin";
@@ -66,7 +71,7 @@ pub(crate) fn load(storage: &FastRegexSearchStorage) -> Result<Option<IndexState
         folded_postings: HashMap::new(),
         overlays: BTreeMap::new(),
         dirty_paths: BTreeSet::new(),
-        disk_base: Some(disk_base),
+        disk_base: Some(Arc::new(disk_base)),
         requires_rebuild: false,
     };
     let delta_path = directory.join(DELTA_FILE);
@@ -80,9 +85,10 @@ pub(crate) fn load(storage: &FastRegexSearchStorage) -> Result<Option<IndexState
 pub(crate) fn persist(
     storage: &FastRegexSearchStorage,
     state: &IndexState,
-) -> Result<(), FastRegexError> {
+    expected_generation: u64,
+) -> Result<Option<FastRegexError>, FastRegexError> {
     let FastRegexSearchStorage::Persistent(directory) = storage else {
-        return Ok(());
+        return Ok(None);
     };
     let mut ids = BTreeMap::new();
     let mut documents = generation_header(state.generation);
@@ -109,6 +115,7 @@ pub(crate) fn persist(
     let delta = delta_header(state.generation, state.generation, 0);
     open_store(directory)?
         .publish_base(
+            expected_current(expected_generation),
             state.generation,
             &[
                 GenerationFile::new(DOCUMENTS_FILE, &documents),
@@ -118,15 +125,17 @@ pub(crate) fn persist(
             ],
             &[GenerationFile::new(DELTA_FILE, &delta)],
         )
-        .map_err(|source| store_error(directory, source))
+        .map(|report| publication_error(directory, report))
+        .map_err(|source| publish_error(directory, source))
 }
 
 pub(crate) fn persist_delta(
     storage: &FastRegexSearchStorage,
     state: &IndexState,
-) -> Result<(), FastRegexError> {
+    expected_generation: u64,
+) -> Result<Option<FastRegexError>, FastRegexError> {
     let FastRegexSearchStorage::Persistent(directory) = storage else {
-        return Ok(());
+        return Ok(None);
     };
     let mut bytes = delta_header(
         state.base_generation,
@@ -149,8 +158,13 @@ pub(crate) fn persist_delta(
         write_grams(&mut bytes, &document.folded_grams);
     }
     open_store(directory)?
-        .publish_layer(state.generation, &[GenerationFile::new(DELTA_FILE, &bytes)])
-        .map_err(|source| store_error(directory, source))
+        .publish_layer(
+            expected_current(expected_generation),
+            state.generation,
+            &[GenerationFile::new(DELTA_FILE, &bytes)],
+        )
+        .map(|report| publication_error(directory, report))
+        .map_err(|source| publish_error(directory, source))
 }
 
 fn apply_delta(path: &Path, bytes: &[u8], state: &mut IndexState) -> Result<(), FastRegexError> {
@@ -405,6 +419,38 @@ fn store_error(path: &Path, source: std::io::Error) -> FastRegexError {
         corrupt(path)
     } else {
         io_error(path, source)
+    }
+}
+
+fn expected_current(generation: u64) -> ExpectedCurrent {
+    if generation == 0 {
+        ExpectedCurrent::Empty
+    } else {
+        ExpectedCurrent::Snapshot(generation)
+    }
+}
+
+fn publish_error(path: &Path, error: PublishError) -> FastRegexError {
+    match error {
+        PublishError::Conflict { current } => FastRegexError::PublishConflict { current },
+        PublishError::BeforeCommit { source } => store_error(path, source),
+    }
+}
+
+fn publication_error(path: &Path, report: PublishReport) -> Option<FastRegexError> {
+    match report.outcome {
+        PublishOutcome::PublishedButDurabilityUnknown { source } => {
+            Some(FastRegexError::PublishedButDurabilityUnknown {
+                path: path.to_path_buf(),
+                source,
+            })
+        }
+        PublishOutcome::Published | PublishOutcome::AlreadyPublished => {
+            report.cleanup_error.map(|source| FastRegexError::Cleanup {
+                path: path.to_path_buf(),
+                source,
+            })
+        }
     }
 }
 

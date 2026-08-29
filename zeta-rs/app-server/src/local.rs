@@ -115,6 +115,7 @@ pub struct LocalAppServerOptions {
     language_server_providers: zeta_lsp_server_provider::LspServerProviders,
     product_services: Option<crate::LocalProductServicesConfig>,
     profile_runtime: Option<Arc<LocalProfileRuntime>>,
+    fast_regex_worker_command: Option<zeta_fast_regex_search::FastRegexWorkerCommand>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -143,6 +144,7 @@ impl LocalAppServerOptions {
             language_server_providers: zeta_lsp_server_provider::LspServerProviders::new(),
             product_services: None,
             profile_runtime: None,
+            fast_regex_worker_command: None,
         }
     }
 
@@ -189,6 +191,15 @@ impl LocalAppServerOptions {
     /// Reuses one process-wide profile authority while composing a Workspace-scoped runtime.
     pub fn with_profile_runtime(mut self, runtime: Arc<LocalProfileRuntime>) -> Self {
         self.profile_runtime = Some(runtime);
+        self
+    }
+
+    /// Runs Fast Regex indexing and mmap-backed search in a private long-lived process.
+    pub fn with_fast_regex_worker_command(
+        mut self,
+        command: zeta_fast_regex_search::FastRegexWorkerCommand,
+    ) -> Self {
+        self.fast_regex_worker_command = Some(command);
         self
     }
 
@@ -338,6 +349,10 @@ impl fmt::Debug for LocalAppServerOptions {
                 "product_services_injected",
                 &self.product_services.is_some(),
             )
+            .field(
+                "fast_regex_worker_injected",
+                &self.fast_regex_worker_command.is_some(),
+            )
             .finish()
     }
 }
@@ -394,6 +409,7 @@ impl PartialEq for LocalAppServerOptions {
                 .language_server_providers
                 .ptr_eq(&other.language_server_providers)
             && self.product_services == other.product_services
+            && self.fast_regex_worker_command == other.fast_regex_worker_command
     }
 }
 
@@ -838,6 +854,7 @@ pub fn open_local_app_server_with_code_index_providers(
     providers: LocalCodeIndexProviders,
 ) -> Result<AppServer, OpenAppServerError> {
     let product_services = options.product_services.take();
+    let fast_regex_worker_command = options.fast_regex_worker_command.take();
     if options.marketplace_manager_client.is_none()
         && let Some(registry) = product_services
             .as_ref()
@@ -1119,6 +1136,9 @@ pub fn open_local_app_server_with_code_index_providers(
         options.web_search_backend.take(),
     )
     .map_err(OpenAppServerError)?;
+    if let Some(command) = fast_regex_worker_command {
+        server = server.with_fast_regex_worker_command(command);
+    }
     if let Some(models) = providers.semantic_models {
         server = server.with_code_index_semantic_models(models);
     }

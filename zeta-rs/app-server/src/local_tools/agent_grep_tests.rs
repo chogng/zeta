@@ -1,4 +1,5 @@
 use super::*;
+use std::ffi::OsString;
 use std::fs;
 use std::sync::Arc;
 
@@ -59,6 +60,50 @@ fn fast_regex_backend_is_agent_scoped_and_tracks_watcher_changes() {
     assert_eq!(ripgrep_service.backend, AgentGrepBackend::Ripgrep);
     assert!(Arc::ptr_eq(&service.indexes, &ripgrep_service.indexes));
     assert!(!service.watches_fast_regex());
+    assert!(!service.has_active_index(&root));
+}
+
+#[test]
+fn fast_regex_backend_uses_the_private_worker_client() {
+    let (directory, root, resolved) = workspace();
+    let storage = tempfile::tempdir().unwrap();
+    fs::write(directory.path().join("source.rs"), "worker_marker\n").unwrap();
+    let ripgrep = RipgrepExecutable::from_path(std::env::current_exe().unwrap()).unwrap();
+    let command = FastRegexWorkerCommand::new(
+        std::env::current_exe().unwrap(),
+        [
+            OsString::from("--exact"),
+            OsString::from("local_tools::agent_grep::tests::fast_regex_worker_child"),
+            OsString::from("--nocapture"),
+        ],
+    );
+    let service = AgentGrepService::new_with_worker(
+        AgentGrepBackend::FastRegex,
+        ripgrep,
+        storage.path().to_path_buf(),
+        command,
+    );
+
+    let output = service
+        .execute(
+            "worker_marker".into(),
+            &resolved,
+            None,
+            false,
+            &zeta_async_utils::CancellationSource::new().token(),
+        )
+        .unwrap();
+
+    assert!(matches!(output, ToolExecutionOutput::Success(text) if text.contains("worker_marker")));
+    assert!(service.has_active_index(&root));
+}
+
+#[test]
+fn fast_regex_worker_child() {
+    if std::env::var_os("ZETA_FAST_REGEX_WORKER_ENDPOINT").is_none() {
+        return;
+    }
+    zeta_fast_regex_search::serve_worker_from_environment().expect("serve worker");
 }
 
 #[test]

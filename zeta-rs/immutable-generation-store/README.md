@@ -1,5 +1,5 @@
 # `zeta-immutable-generation-store`
 
-1. The store publishes immutable base generations and immutable change-layer snapshots into generation-specific directories; a versioned manifest is written last, and a store-wide file lock serializes readers with publishers across processes.
-2. `PublishedSnapshot` reads or opens files only from the selected base and layer. Mapped base files retain a shared generation lease, so cleanup cannot remove their generation until every reader drops it; published files are never truncated or overwritten in place.
-3. This crate owns persistence publication, leases and the sole audited file-mapping operation for application-owned cache files that outside processes must not rewrite. It is not a sandbox and does not own path authorization, index formats, file watching or corrupt-data recovery policy.
+1. The store publishes immutable base generations and change-layer snapshots under a cross-process write lock. Publication uses compare-and-set against the expected snapshot, records a content digest for exact retries, and distinguishes pre-commit failure from a committed manifest whose directory durability is unknown.
+2. `PublishedSnapshot` retains shared generation leases and exposes full reads or positioned `read_exact_at` access. This crate contains no mmap, shared file cursor, or unsafe code; a format-specific consumer may map an opened immutable file while retaining its lease.
+3. Cleanup removes stale manifests and syncs that directory before deleting unreferenced layer/base data, treats missing paths as success, and returns cleanup facts or errors to its caller. Process-abort tests cover process-crash recovery; they do not claim to simulate machine power loss.

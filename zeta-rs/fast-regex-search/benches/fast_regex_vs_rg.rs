@@ -10,13 +10,15 @@ use tempfile::TempDir;
 use zeta_fast_regex_search::FastRegexCaseSensitivity;
 use zeta_fast_regex_search::FastRegexPattern;
 use zeta_fast_regex_search::FastRegexQuery;
-use zeta_fast_regex_search::FastRegexSearch;
 use zeta_fast_regex_search::FastRegexSearchLimits;
-use zeta_fast_regex_search::FastRegexSearchStorage;
+use zeta_fast_regex_search::FastRegexWorkerClient;
+use zeta_fast_regex_search::FastRegexWorkerCommand;
+use zeta_fast_regex_search::serve_worker_from_environment;
 use zeta_workspace::WorkspaceRoot;
 
 const DEFAULT_FILE_COUNT: usize = 8_000;
 const DEFAULT_RUN_COUNT: usize = 15;
+const AGENT_RESULT_LIMIT: usize = 100;
 
 #[derive(Clone, Copy)]
 struct BenchmarkCase {
@@ -29,8 +31,10 @@ struct Measurement {
     name: &'static str,
     candidates: usize,
     matches: usize,
-    fast_median: Duration,
-    rg_median: Duration,
+    fast_p50: Duration,
+    fast_p95: Duration,
+    rg_p50: Duration,
+    rg_p95: Duration,
 }
 
 struct RipgrepResult {
@@ -39,28 +43,49 @@ struct RipgrepResult {
 }
 
 fn main() {
-    let require_faster = std::env::args().any(|argument| argument == "--require-faster");
+    let arguments = std::env::args().collect::<Vec<_>>();
+    if arguments
+        .iter()
+        .any(|argument| argument == "--fast-regex-worker")
+    {
+        serve_worker_from_environment().expect("serve benchmark worker");
+        return;
+    }
+    let require_faster = arguments
+        .iter()
+        .any(|argument| argument == "--require-faster");
     let file_count = environment_usize("FAST_REGEX_BENCH_FILES", DEFAULT_FILE_COUNT);
     let run_count = environment_usize("FAST_REGEX_BENCH_RUNS", DEFAULT_RUN_COUNT);
     let rg = std::env::var_os("RG").unwrap_or_else(|| "rg".into());
     let workspace = build_corpus(file_count);
     let storage = tempfile::tempdir().expect("benchmark index storage");
-    let max_results = file_count.saturating_mul(25).saturating_add(100);
+    let max_results = AGENT_RESULT_LIMIT;
     let limits = FastRegexSearchLimits {
         max_files: file_count + 10,
         max_results,
         max_total_source_bytes: 2 * 1024 * 1024 * 1024,
         ..FastRegexSearchLimits::default()
     };
-    let index = FastRegexSearch::open(
-        WorkspaceRoot::open(workspace.path()).expect("benchmark workspace root"),
-        FastRegexSearchStorage::Persistent(storage.path().to_path_buf()),
+    let root = WorkspaceRoot::open(workspace.path()).expect("benchmark workspace root");
+    let worker_command = FastRegexWorkerCommand::new(
+        std::env::current_exe().expect("benchmark executable"),
+        ["--fast-regex-worker"],
+    );
+    let cold_open_started = Instant::now();
+    let index = FastRegexWorkerClient::open(
+        worker_command.clone(),
+        &root,
+        storage.path(),
         limits.clone(),
     )
-    .expect("open fast regex index");
+    .expect("open fast regex worker");
+    let cold_open_elapsed = cold_open_started.elapsed();
     let build_started = Instant::now();
     let snapshot = index.rebuild().expect("build fast regex index");
     let build_elapsed = build_started.elapsed();
+    let lookup_bytes = lookup_size(storage.path(), snapshot.generation);
+    let built_parent_rss = process_rss_kib(std::process::id());
+    let built_worker_rss = index.process_id().and_then(process_rss_kib);
     let cases = [
         BenchmarkCase {
             name: "rare-prefix-suffix",
@@ -103,14 +128,12 @@ fn main() {
     let refresh_elapsed = refresh_started.elapsed();
     drop(index);
     let reopen_started = Instant::now();
-    let reopened = FastRegexSearch::open(
-        WorkspaceRoot::open(workspace.path()).expect("reopened benchmark workspace root"),
-        FastRegexSearchStorage::Persistent(storage.path().to_path_buf()),
-        limits,
-    )
-    .expect("reopen fast regex index");
+    let reopened = FastRegexWorkerClient::open(worker_command, &root, storage.path(), limits)
+        .expect("reopen fast regex index");
     let reopen_elapsed = reopen_started.elapsed();
-    assert_ne!(reopened.snapshot().generation, 0);
+    assert_ne!(reopened.snapshot().expect("snapshot").generation, 0);
+    let warm_parent_rss = process_rss_kib(std::process::id());
+    let warm_worker_rss = reopened.process_id().and_then(process_rss_kib);
     for case in cases {
         measurements.push(measure_case(
             "reopened",
@@ -124,10 +147,12 @@ fn main() {
     }
 
     println!(
-        "indexed {} files / {} MiB in {:.3}s",
+        "cold worker open: {:.3} ms; indexed {} files / {} MiB in {:.3}s; lookup: {:.2} MiB",
+        milliseconds(cold_open_elapsed),
         snapshot.indexed_file_count,
         snapshot.indexed_source_bytes / (1024 * 1024),
-        build_elapsed.as_secs_f64()
+        build_elapsed.as_secs_f64(),
+        lookup_bytes as f64 / (1024.0 * 1024.0),
     );
     println!(
         "one-file refresh: {:.3} ms; validated reopen: {:.3} ms",
@@ -135,25 +160,42 @@ fn main() {
         milliseconds(reopen_elapsed)
     );
     println!(
-        "{:<9} {:<24} {:>11} {:>9} {:>12} {:>12} {:>9}",
-        "state", "case", "candidates", "matches", "fast median", "rg median", "ratio"
+        "RSS KiB after build parent/worker: {}/{}; after warm reopen parent/worker: {}/{}",
+        display_rss(built_parent_rss),
+        display_rss(built_worker_rss),
+        display_rss(warm_parent_rss),
+        display_rss(warm_worker_rss),
+    );
+    println!(
+        "{:<9} {:<24} {:>11} {:>9} {:>11} {:>11} {:>11} {:>11} {:>9}",
+        "state",
+        "case",
+        "candidates",
+        "matches",
+        "fast p50",
+        "fast p95",
+        "rg p50",
+        "rg p95",
+        "ratio"
     );
     for measurement in &measurements {
         println!(
-            "{:<9} {:<24} {:>11} {:>9} {:>9.3} ms {:>9.3} ms {:>8.2}x",
+            "{:<9} {:<24} {:>11} {:>9} {:>8.3} ms {:>8.3} ms {:>8.3} ms {:>8.3} ms {:>8.2}x",
             measurement.source,
             measurement.name,
             measurement.candidates,
             measurement.matches,
-            milliseconds(measurement.fast_median),
-            milliseconds(measurement.rg_median),
-            measurement.rg_median.as_secs_f64() / measurement.fast_median.as_secs_f64(),
+            milliseconds(measurement.fast_p50),
+            milliseconds(measurement.fast_p95),
+            milliseconds(measurement.rg_p50),
+            milliseconds(measurement.rg_p95),
+            measurement.rg_p50.as_secs_f64() / measurement.fast_p50.as_secs_f64(),
         );
     }
     if require_faster {
         let failures = measurements
             .iter()
-            .filter(|measurement| measurement.fast_median >= measurement.rg_median)
+            .filter(|measurement| measurement.fast_p50 >= measurement.rg_p50)
             .map(|measurement| measurement.name)
             .collect::<Vec<_>>();
         assert!(
@@ -166,7 +208,7 @@ fn main() {
 
 fn measure_case(
     source: &'static str,
-    index: &FastRegexSearch,
+    index: &FastRegexWorkerClient,
     root: &Path,
     rg: &std::ffi::OsStr,
     max_results: usize,
@@ -184,13 +226,17 @@ fn measure_case(
     };
     let fast_warmup = index.search(&query).expect("fast regex warmup");
     let rg_warmup = run_rg(root, rg, case.pattern);
-    assert_eq!(matched_paths(&fast_warmup.matches), rg_warmup.paths);
     assert_eq!(
         fast_warmup.matches.len(),
-        rg_warmup.matching_lines,
-        "matching-line count differs from rg for {}",
+        rg_warmup.matching_lines.min(max_results),
+        "bounded matching-line count differs from rg for {}",
         case.name
     );
+    let fast_paths = matched_paths(&fast_warmup.matches);
+    assert!(fast_paths.is_subset(&rg_warmup.paths));
+    if rg_warmup.matching_lines <= max_results {
+        assert_eq!(fast_paths, rg_warmup.paths);
+    }
     let mut fast_samples = Vec::with_capacity(run_count);
     let mut rg_samples = Vec::with_capacity(run_count);
     for _ in 0..run_count {
@@ -208,8 +254,10 @@ fn measure_case(
         name: case.name,
         candidates: fast_warmup.statistics.candidate_file_count,
         matches: fast_warmup.matches.len(),
-        fast_median: median(&mut fast_samples),
-        rg_median: median(&mut rg_samples),
+        fast_p50: percentile(&mut fast_samples, 50),
+        fast_p95: percentile(&mut fast_samples, 95),
+        rg_p50: percentile(&mut rg_samples, 50),
+        rg_p95: percentile(&mut rg_samples, 95),
     }
 }
 
@@ -259,9 +307,15 @@ fn build_corpus(file_count: usize) -> TempDir {
         fs::create_dir_all(absolute.parent().expect("module parent")).expect("module directory");
         let mut content = String::with_capacity(2_048);
         for line_index in 0..24 {
-            content.push_str(&format!(
-                "fn common_workspace_function_{line_index}(value: usize) -> usize {{ value + {file_index} }}\n"
-            ));
+            if line_index == 0 {
+                content.push_str(&format!(
+                    "fn common_workspace_function(value: usize) -> usize {{ value + {file_index} }}\n"
+                ));
+            } else {
+                content.push_str(&format!(
+                    "let common_workspace_value_{line_index}: usize = {file_index};\n"
+                ));
+            }
         }
         if file_index % 1_997 == 0 {
             content.push_str(&format!(
@@ -284,11 +338,46 @@ fn environment_usize(name: &str, default: usize) -> usize {
         .unwrap_or(default)
 }
 
-fn median(samples: &mut [Duration]) -> Duration {
+fn percentile(samples: &mut [Duration], percentile: usize) -> Duration {
     samples.sort_unstable();
-    samples[samples.len() / 2]
+    let index = samples
+        .len()
+        .saturating_mul(percentile)
+        .div_ceil(100)
+        .saturating_sub(1);
+    samples[index]
 }
 
 fn milliseconds(duration: Duration) -> f64 {
     duration.as_secs_f64() * 1_000.0
+}
+
+fn lookup_size(storage: &Path, generation: u64) -> u64 {
+    fs::metadata(
+        storage
+            .join("bases")
+            .join(format!("{generation:020}"))
+            .join("lookup.bin"),
+    )
+    .expect("lookup metadata")
+    .len()
+}
+
+#[cfg(unix)]
+fn process_rss_kib(process_id: u32) -> Option<u64> {
+    let output = Command::new("ps")
+        .args(["-o", "rss=", "-p", &process_id.to_string()])
+        .output()
+        .ok()?;
+    output.status.success().then_some(())?;
+    String::from_utf8(output.stdout).ok()?.trim().parse().ok()
+}
+
+#[cfg(not(unix))]
+fn process_rss_kib(_process_id: u32) -> Option<u64> {
+    None
+}
+
+fn display_rss(rss: Option<u64>) -> String {
+    rss.map_or_else(|| "unavailable".to_owned(), |rss| rss.to_string())
 }

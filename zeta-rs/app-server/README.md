@@ -33,7 +33,7 @@ JSONL / in-process caller
    ├─ optional WorkspaceFileSystem + filesystem watcher
    ├─ optional GitRuntime → zeta-file-watcher + GitService → zeta-git
    ├─ optional WorkspaceSearchService → zeta-workspace-search
-   ├─ AgentGrepService → frozen rg | zeta-fast-regex-search
+   ├─ AgentGrepService → frozen rg | private UDS client → zeta-fast-regex-search worker
    ├─ optional CodeIndexRuntime → zeta-code-index + filesystem watcher
    ├─ optional SymbolIndexRuntime → zeta-symbol-index + CodeIndex source/overlay authority
    ├─ optional CodeIndexSemanticService → local SQLite vectors + host model adapters

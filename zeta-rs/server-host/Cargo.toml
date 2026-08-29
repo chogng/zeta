@@ -21,6 +21,7 @@ zeta-app-server = { workspace = true }
 zeta-app-server-client = { workspace = true }
 zeta-app-server-daemon = { workspace = true }
 zeta-app-server-protocol = { workspace = true }
+zeta-fast-regex-search = { workspace = true }
 zeta-remote = { workspace = true }
 zeta-remote-connections = { workspace = true }
 zeta-remote-server = { workspace = true }

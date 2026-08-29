@@ -13,12 +13,16 @@ path = "src/lib.rs"
 [dependencies]
 globset = { workspace = true }
 ignore = { workspace = true }
+memmap2 = { workspace = true }
 regex = { workspace = true }
 regex-syntax = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 zeta-workspace = { workspace = true }
 zeta-immutable-generation-store = { workspace = true }
+zeta-uds = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
@@ -27,5 +31,7 @@ tempfile = { workspace = true }
 name = "fast_regex_vs_rg"
 harness = false
 
-[lints]
-workspace = true
+[lints.rust]
+# This crate is the narrow Fast Regex mmap boundary. The only unsafe operation maps a published
+# immutable lookup file while retaining its generation lease.
+unsafe_code = "allow"

@@ -201,6 +201,7 @@ pub(crate) struct WorkspaceRuntimeControl {
     config: Option<Arc<ConfigStore>>,
     local_tool_config: Arc<RwLock<LocalToolConfig>>,
     fast_regex_search_storage_root: Option<PathBuf>,
+    fast_regex_worker_command: Option<zeta_fast_regex_search::FastRegexWorkerCommand>,
     code_index_semantic_storage_root: Option<PathBuf>,
     code_index_semantic_models: Option<CodeIndexSemanticModels>,
     semantic_model_provider: Option<Arc<dyn SemanticModelProvider>>,
@@ -264,6 +265,7 @@ impl WorkspaceRuntimeControl {
             session_workspace_access,
             agent_grep,
             self.fast_regex_search_storage_root.as_deref(),
+            self.fast_regex_worker_command.as_ref(),
         )
         .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
         if let Some(code_index) = code_index {
@@ -434,6 +436,7 @@ impl WorkspaceRuntimeControl {
                 .agent_grep
                 .clone(),
             self.fast_regex_search_storage_root.as_deref(),
+            self.fast_regex_worker_command.as_ref(),
         )
         .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
         let action_policy_revision = local.action_policy_revision().clone();
@@ -1183,6 +1186,7 @@ impl AppServer {
                 config: self.config.clone(),
                 local_tool_config: Arc::clone(&self.local_tool_config),
                 fast_regex_search_storage_root: self.fast_regex_search_storage_root.clone(),
+                fast_regex_worker_command: self.fast_regex_worker_command.clone(),
                 code_index_semantic_storage_root: self.code_index_semantic_storage_root.clone(),
                 code_index_semantic_models: self.code_index_semantic_models.clone(),
                 semantic_model_provider: self.semantic_model_provider.clone(),
@@ -1793,6 +1797,7 @@ impl AppServer {
                 session_workspace_access,
                 None,
                 self.fast_regex_search_storage_root.as_deref(),
+                self.fast_regex_worker_command.as_ref(),
             )
             .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
             self.commit_trusted_workspace_runtime(authorization, local, host)

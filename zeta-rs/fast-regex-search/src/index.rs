@@ -35,6 +35,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
 use zeta_workspace::WorkspaceRoot;
@@ -50,7 +51,7 @@ pub struct FastRegexSearch {
     state: RwLock<IndexState>,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(crate) struct IndexState {
     pub(crate) generation: u64,
     pub(crate) base_generation: u64,
@@ -62,10 +63,11 @@ pub(crate) struct IndexState {
     pub(crate) folded_postings: HashMap<u64, BTreeSet<u32>>,
     pub(crate) overlays: BTreeMap<PathBuf, String>,
     pub(crate) dirty_paths: BTreeSet<PathBuf>,
-    pub(crate) disk_base: Option<DiskBaseIndex>,
+    pub(crate) disk_base: Option<Arc<DiskBaseIndex>>,
     pub(crate) requires_rebuild: bool,
 }
 
+#[derive(Clone)]
 pub(crate) struct IndexedDocument {
     pub(crate) id: u32,
     pub(crate) revision: String,
@@ -134,8 +136,19 @@ impl FastRegexSearch {
             .unwrap_or_else(|error| error.into_inner());
         next.generation = state.generation.saturating_add(1);
         next.base_generation = next.generation;
-        next.overlays = std::mem::take(&mut state.overlays);
-        storage::persist(&self.storage, &next)?;
+        next.overlays = state.overlays.clone();
+        let post_commit_error = storage::persist(&self.storage, &next, state.generation)?;
+        let mut reload_error = None;
+        if let FastRegexSearchStorage::Persistent(path) = &self.storage {
+            match storage::load(&self.storage) {
+                Ok(Some(mut loaded)) => {
+                    loaded.overlays = next.overlays;
+                    next = loaded;
+                }
+                Ok(None) => reload_error = Some(FastRegexError::CorruptIndex(path.clone())),
+                Err(error) => reload_error = Some(error),
+            }
+        }
         *state = next;
         *self
             .ignore_matcher
@@ -146,7 +159,14 @@ impl FastRegexSearch {
                 .into_iter()
                 .next()
                 .expect("workspace walk has exactly one root");
-        Ok(snapshot(&state))
+        let snapshot = snapshot(&state);
+        if let Some(error) = reload_error {
+            return Err(error);
+        }
+        if let Some(error) = post_commit_error {
+            return Err(error);
+        }
+        Ok(snapshot)
     }
 
     pub fn refresh_observed_paths(
@@ -173,17 +193,19 @@ impl FastRegexSearch {
             .state
             .write()
             .unwrap_or_else(|error| error.into_inner());
+        let expected_generation = state.generation;
+        let mut next = state.clone();
         let mut changed = false;
         for path in paths {
             let absolute = self.root.canonical_path().join(&path);
             if !absolute.is_file() {
-                if remove_document(&mut state, &path) {
-                    state.dirty_paths.insert(path);
+                if remove_document(&mut next, &path) {
+                    next.dirty_paths.insert(path);
                     changed = true;
                 }
                 continue;
             }
-            if !state.documents.contains_key(&path) {
+            if !next.documents.contains_key(&path) {
                 if !self.is_indexable_path(&path) {
                     continue;
                 }
@@ -192,36 +214,36 @@ impl FastRegexSearch {
                 else {
                     continue;
                 };
-                if state.documents.len() == self.limits.max_files
-                    || state.source_bytes.saturating_add(content.len())
+                if next.documents.len() == self.limits.max_files
+                    || next.source_bytes.saturating_add(content.len())
                         > self.limits.max_total_source_bytes
                 {
                     drop(state);
                     return self.rebuild().map(FastRegexUpdateOutcome::Rebuilt);
                 }
-                insert_document(&mut state, path.clone(), content, stamp);
-                state.dirty_paths.insert(path);
+                insert_document(&mut next, path.clone(), content, stamp);
+                next.dirty_paths.insert(path);
                 changed = true;
                 continue;
             }
             match read_text_file_with_stamp(&absolute, self.limits.max_file_bytes)? {
                 Some((content, stamp)) => {
                     let current_revision = revision(&content);
-                    if state
+                    if next
                         .documents
                         .get(&path)
                         .is_some_and(|document| document.revision == current_revision)
                     {
                         continue;
                     }
-                    remove_document(&mut state, &path);
-                    insert_document(&mut state, path.clone(), content, stamp);
-                    state.dirty_paths.insert(path);
+                    remove_document(&mut next, &path);
+                    insert_document(&mut next, path.clone(), content, stamp);
+                    next.dirty_paths.insert(path);
                     changed = true;
                 }
                 None => {
-                    if remove_document(&mut state, &path) {
-                        state.dirty_paths.insert(path);
+                    if remove_document(&mut next, &path) {
+                        next.dirty_paths.insert(path);
                         changed = true;
                     }
                 }
@@ -230,13 +252,18 @@ impl FastRegexSearch {
         if !changed {
             return Ok(FastRegexUpdateOutcome::NoChange);
         }
-        if self.should_compact_delta(&state) {
+        if self.should_compact_delta(&next) {
             drop(state);
             return self.rebuild().map(FastRegexUpdateOutcome::Rebuilt);
         }
-        state.generation = state.generation.saturating_add(1);
-        storage::persist_delta(&self.storage, &state)?;
-        Ok(FastRegexUpdateOutcome::Published(snapshot(&state)))
+        next.generation = next.generation.saturating_add(1);
+        let post_commit_error = storage::persist_delta(&self.storage, &next, expected_generation)?;
+        let published = FastRegexUpdateOutcome::Published(snapshot(&next));
+        *state = next;
+        if let Some(error) = post_commit_error {
+            return Err(error);
+        }
+        Ok(published)
     }
 
     pub fn synchronize_overlay(
@@ -344,18 +371,20 @@ impl FastRegexSearch {
             .state
             .write()
             .unwrap_or_else(|error| error.into_inner());
-        let mut paths = state.documents.keys().cloned().collect::<BTreeSet<_>>();
+        let expected_generation = state.generation;
+        let mut next = state.clone();
+        let mut paths = next.documents.keys().cloned().collect::<BTreeSet<_>>();
         paths.extend(current.keys().cloned());
         let mut changed = false;
         for path in paths {
             let Some(stamp) = current.get(&path).copied() else {
-                if remove_document(&mut state, &path) {
-                    state.dirty_paths.insert(path);
+                if remove_document(&mut next, &path) {
+                    next.dirty_paths.insert(path);
                     changed = true;
                 }
                 continue;
             };
-            if state
+            if next
                 .documents
                 .get(&path)
                 .is_some_and(|document| document.stamp == stamp)
@@ -364,32 +393,37 @@ impl FastRegexSearch {
             }
             let absolute = self.root.canonical_path().join(&path);
             let content = read_text_file_with_stamp(&absolute, self.limits.max_file_bytes)?;
-            if state.documents.contains_key(&path) {
-                remove_document(&mut state, &path);
-                state.dirty_paths.insert(path.clone());
+            if next.documents.contains_key(&path) {
+                remove_document(&mut next, &path);
+                next.dirty_paths.insert(path.clone());
                 changed = true;
             }
             let Some((content, stamp)) = content else {
                 continue;
             };
-            if state.documents.len() == self.limits.max_files
-                || state.source_bytes.saturating_add(content.len())
+            if next.documents.len() == self.limits.max_files
+                || next.source_bytes.saturating_add(content.len())
                     > self.limits.max_total_source_bytes
             {
                 drop(state);
                 self.rebuild()?;
                 return Ok(());
             }
-            insert_document(&mut state, path.clone(), content, stamp);
-            state.dirty_paths.insert(path);
+            insert_document(&mut next, path.clone(), content, stamp);
+            next.dirty_paths.insert(path);
             changed = true;
         }
-        if self.should_compact_delta(&state) {
+        if self.should_compact_delta(&next) {
             drop(state);
             self.rebuild()?;
         } else if changed {
-            state.generation = state.generation.saturating_add(1);
-            storage::persist_delta(&self.storage, &state)?;
+            next.generation = next.generation.saturating_add(1);
+            let post_commit_error =
+                storage::persist_delta(&self.storage, &next, expected_generation)?;
+            *state = next;
+            if let Some(error) = post_commit_error {
+                return Err(error);
+            }
         }
         Ok(())
     }

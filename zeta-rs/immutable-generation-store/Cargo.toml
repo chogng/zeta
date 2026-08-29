@@ -12,12 +12,10 @@ path = "src/lib.rs"
 
 [dependencies]
 fs2 = { workspace = true }
-memmap2 = { workspace = true }
+sha2 = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
 
-[lints.rust]
-# This crate is the narrow immutable-generation mmap boundary. The single mapping operation is
-# audited in `mapped_file.rs`; all publication, locking and lifetime rules stay behind safe APIs.
-unsafe_code = "allow"
+[lints]
+workspace = true

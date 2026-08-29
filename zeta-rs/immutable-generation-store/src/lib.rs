@@ -2,12 +2,16 @@
 
 #![deny(unsafe_code)]
 
+mod generation_file;
 mod layout;
-mod mapped_file;
 mod store;
 
-pub use mapped_file::MappedGenerationFile;
-pub use mapped_file::OpenGenerationFile;
+pub use generation_file::OpenGenerationFile;
+pub use store::CleanupReport;
+pub use store::ExpectedCurrent;
 pub use store::GenerationFile;
 pub use store::ImmutableGenerationStore;
+pub use store::PublishError;
+pub use store::PublishOutcome;
+pub use store::PublishReport;
 pub use store::PublishedSnapshot;

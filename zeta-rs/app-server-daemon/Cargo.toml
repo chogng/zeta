@@ -25,6 +25,7 @@ signal-hook = { workspace = true }
 zeta-app-server = { workspace = true }
 zeta-app-server-client = { workspace = true }
 zeta-app-server-protocol = { workspace = true }
+zeta-fast-regex-search = { workspace = true }
 zeta-uds = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]

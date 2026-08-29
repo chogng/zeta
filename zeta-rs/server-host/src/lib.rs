@@ -15,6 +15,8 @@ pub fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
     };
     match command.as_str() {
         "app-server" => run_app_server(arguments),
+        "fast-regex-worker" => zeta_fast_regex_search::serve_worker_from_environment()
+            .map_err(|error| error.to_string()),
         "remote" => run_remote(arguments),
         "remote-server" => zeta_remote_server::run_from_environment_with_product_services(
             arguments,

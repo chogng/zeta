@@ -148,6 +148,7 @@ pub(crate) fn compose_local_tools_with_config(
     session_workspace_access: Arc<SessionWorkspaceAccess>,
     existing_agent_grep: Option<Arc<AgentGrepService>>,
     fast_regex_storage_root: Option<&Path>,
+    fast_regex_worker_command: Option<&zeta_fast_regex_search::FastRegexWorkerCommand>,
 ) -> Result<LocalToolComposition, LocalToolError> {
     if workspace.capability() != WorkspaceCapability::ExecuteProcess {
         return Err(LocalToolError::trust(
@@ -203,11 +204,19 @@ pub(crate) fn compose_local_tools_with_config(
     )?;
     let agent_grep = Arc::new(match existing_agent_grep {
         Some(existing) => existing.reconfigured(config.agent_grep_backend, ripgrep.clone()),
-        None => AgentGrepService::new(
-            config.agent_grep_backend,
-            ripgrep.clone(),
-            fast_regex_storage_root.map(Path::to_path_buf),
-        ),
+        None => match (fast_regex_storage_root, fast_regex_worker_command) {
+            (Some(storage_root), Some(worker_command)) => AgentGrepService::new_with_worker(
+                config.agent_grep_backend,
+                ripgrep.clone(),
+                storage_root.to_path_buf(),
+                worker_command.clone(),
+            ),
+            _ => AgentGrepService::new(
+                config.agent_grep_backend,
+                ripgrep.clone(),
+                fast_regex_storage_root.map(Path::to_path_buf),
+            ),
+        },
     });
     let service = LocalToolSuite::new(
         shell,

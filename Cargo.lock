@@ -10937,6 +10937,7 @@ dependencies = [
  "zeta-app-server",
  "zeta-app-server-client",
  "zeta-app-server-protocol",
+ "zeta-fast-regex-search",
  "zeta-uds",
 ]
 
@@ -11373,12 +11374,16 @@ version = "0.1.0"
 dependencies = [
  "globset",
  "ignore",
+ "memmap2",
  "regex",
  "regex-syntax",
+ "serde",
+ "serde_json",
  "sha2 0.10.9",
  "tempfile",
  "thiserror 2.0.19",
  "zeta-immutable-generation-store",
+ "zeta-uds",
  "zeta-workspace",
 ]
 
@@ -11506,7 +11511,7 @@ name = "zeta-immutable-generation-store"
 version = "0.1.0"
 dependencies = [
  "fs2",
- "memmap2",
+ "sha2 0.10.9",
  "tempfile",
 ]
 
@@ -11966,6 +11971,7 @@ dependencies = [
  "zeta-app-server-client",
  "zeta-app-server-daemon",
  "zeta-app-server-protocol",
+ "zeta-fast-regex-search",
  "zeta-remote",
  "zeta-remote-connections",
  "zeta-remote-server",

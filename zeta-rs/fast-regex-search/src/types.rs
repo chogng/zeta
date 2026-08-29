@@ -1,59 +1,63 @@
+use serde::Deserialize;
+use serde::Serialize;
 use std::fmt;
 use std::path::PathBuf;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum FastRegexPattern {
     Literal,
     Regex,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum FastRegexCaseSensitivity {
     Smart,
     Sensitive,
     Insensitive,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FastRegexQuery {
     pub query: String,
     pub pattern: FastRegexPattern,
     pub case_sensitivity: FastRegexCaseSensitivity,
+    #[serde(with = "crate::worker::serde_path")]
     pub scope: PathBuf,
     pub include_patterns: Vec<String>,
     pub exclude_patterns: Vec<String>,
     pub max_results: usize,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FastRegexRange {
     pub start_byte: usize,
     pub end_byte: usize,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FastRegexMatch {
+    #[serde(with = "crate::worker::serde_path")]
     pub path: PathBuf,
     pub line_number: usize,
     pub preview: String,
     pub ranges: Vec<FastRegexRange>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FastRegexSearchResult {
     pub matches: Vec<FastRegexMatch>,
     pub limit_hit: bool,
     pub statistics: FastRegexSearchStatistics,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FastRegexSearchStatistics {
     pub indexed_file_count: usize,
     pub candidate_file_count: usize,
     pub scanned_file_count: usize,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FastRegexSearchSnapshot {
     pub generation: u64,
     pub indexed_file_count: usize,
@@ -66,7 +70,7 @@ pub enum FastRegexSearchStorage {
     Persistent(PathBuf),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FastRegexSearchLimits {
     pub max_files: usize,
     pub max_file_bytes: usize,
@@ -87,7 +91,7 @@ impl Default for FastRegexSearchLimits {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum FastRegexUpdateOutcome {
     NoChange,
     Published(FastRegexSearchSnapshot),
@@ -106,6 +110,18 @@ pub enum FastRegexError {
         path: PathBuf,
         source: std::io::Error,
     },
+    PublishConflict {
+        current: Option<u64>,
+    },
+    PublishedButDurabilityUnknown {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+    Cleanup {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+    Worker(String),
     Regex(regex::Error),
 }
 
@@ -127,12 +143,39 @@ impl fmt::Display for FastRegexError {
                 write!(formatter, "indexed source is stale: {}", path.display())
             }
             Self::Io { path, source } => write!(formatter, "{}: {source}", path.display()),
+            Self::PublishConflict { current } => {
+                write!(
+                    formatter,
+                    "fast regex publication conflict; current snapshot is {current:?}"
+                )
+            }
+            Self::PublishedButDurabilityUnknown { path, source } => write!(
+                formatter,
+                "fast regex snapshot was published but durability is unknown at {}: {source}",
+                path.display()
+            ),
+            Self::Cleanup { path, source } => write!(
+                formatter,
+                "fast regex snapshot was published but stale data cleanup failed at {}: {source}",
+                path.display()
+            ),
+            Self::Worker(message) => write!(formatter, "fast regex worker failed: {message}"),
             Self::Regex(error) => write!(formatter, "regular expression is invalid: {error}"),
         }
     }
 }
 
-impl std::error::Error for FastRegexError {}
+impl std::error::Error for FastRegexError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Io { source, .. }
+            | Self::PublishedButDurabilityUnknown { source, .. }
+            | Self::Cleanup { source, .. } => Some(source),
+            Self::Regex(error) => Some(error),
+            _ => None,
+        }
+    }
+}
 
 impl From<regex::Error> for FastRegexError {
     fn from(error: regex::Error) -> Self {

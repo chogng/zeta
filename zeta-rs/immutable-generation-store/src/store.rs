@@ -1,11 +1,14 @@
+use crate::generation_file::GenerationLease;
+use crate::generation_file::OpenGenerationFile;
 use crate::layout::generation_name;
 use crate::layout::parse_generation_name;
 use crate::layout::parse_manifest_name;
-use crate::mapped_file::GenerationLease;
-use crate::mapped_file::MappedGenerationFile;
-use crate::mapped_file::OpenGenerationFile;
+use sha2::Digest;
+use sha2::Sha256;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
+use std::error::Error;
+use std::fmt;
 use std::fs;
 use std::io;
 use std::io::Read;
@@ -20,7 +23,7 @@ const LAYERS_DIRECTORY: &str = "layers";
 const LEASE_FILE: &str = ".lease";
 const LOCK_FILE: &str = "store.lock";
 const MANIFESTS_DIRECTORY: &str = "manifests";
-const MANIFEST_VERSION: &[u8] = b"zeta-immutable-generation-v1\0";
+const MANIFEST_VERSION: &[u8] = b"zeta-immutable-generation-v3\0";
 
 /// A named byte file to publish inside an immutable base or change layer.
 #[derive(Clone, Copy)]
@@ -33,6 +36,86 @@ impl<'a> GenerationFile<'a> {
     pub fn new(name: &'a str, contents: &'a [u8]) -> Self {
         Self { name, contents }
     }
+}
+
+/// The manifest state a writer used while preparing its next snapshot.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ExpectedCurrent {
+    Empty,
+    Snapshot(u64),
+}
+
+impl ExpectedCurrent {
+    fn matches(self, current: Option<Manifest>) -> bool {
+        match (self, current) {
+            (Self::Empty, None) => true,
+            (Self::Snapshot(expected), Some(current)) => expected == current.snapshot,
+            _ => false,
+        }
+    }
+
+    fn snapshot(self) -> Option<u64> {
+        match self {
+            Self::Empty => None,
+            Self::Snapshot(snapshot) => Some(snapshot),
+        }
+    }
+}
+
+/// The commit state observed by a publication attempt.
+#[derive(Debug)]
+pub enum PublishOutcome {
+    Published,
+    AlreadyPublished,
+    PublishedButDurabilityUnknown { source: io::Error },
+}
+
+/// Publication state plus any best-effort stale-generation cleanup failure.
+#[derive(Debug)]
+pub struct PublishReport {
+    pub outcome: PublishOutcome,
+    pub cleanup_error: Option<io::Error>,
+}
+
+/// A publication failure known to have happened before the manifest commit point.
+#[derive(Debug)]
+pub enum PublishError {
+    Conflict { current: Option<u64> },
+    BeforeCommit { source: io::Error },
+}
+
+impl fmt::Display for PublishError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Conflict { current } => write!(
+                formatter,
+                "generation publication conflicts with current snapshot {current:?}"
+            ),
+            Self::BeforeCommit { source } => {
+                write!(
+                    formatter,
+                    "generation publication failed before commit: {source}"
+                )
+            }
+        }
+    }
+}
+
+impl Error for PublishError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Conflict { .. } => None,
+            Self::BeforeCommit { source } => Some(source),
+        }
+    }
+}
+
+/// Facts reported after removing stale manifests and unreferenced generation directories.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct CleanupReport {
+    pub manifests_removed: usize,
+    pub layers_removed: usize,
+    pub bases_removed: usize,
 }
 
 /// Owns immutable base generations, change-layer snapshots, manifests and process coordination.
@@ -63,66 +146,162 @@ impl ImmutableGenerationStore {
 
     pub fn publish_base(
         &self,
+        expected_current: ExpectedCurrent,
         snapshot: u64,
         base_files: &[GenerationFile<'_>],
         layer_files: &[GenerationFile<'_>],
-    ) -> io::Result<()> {
-        let lock = self.lock_exclusive()?;
-        self.ensure_new_snapshot(snapshot)?;
-        validate_files(base_files)?;
-        validate_files(layer_files)?;
-        self.remove_pending(snapshot)?;
-        self.remove_unpublished_generation(&self.base_directory(snapshot))?;
-        self.remove_unpublished_generation(&self.layer_directory(snapshot))?;
-        let base = self.write_generation_directory(self.pending_base(snapshot), base_files)?;
-        let layer = self.write_generation_directory(self.pending_layer(snapshot), layer_files)?;
-        let base_target = self.base_directory(snapshot);
-        let layer_target = self.layer_directory(snapshot);
-        fs::rename(&base, &base_target)?;
-        fs::rename(&layer, &layer_target)?;
-        sync_directory(&self.base_root())?;
-        sync_directory(&self.layer_root())?;
-        self.publish_manifest(Manifest {
+    ) -> Result<PublishReport, PublishError> {
+        let _lock = self.lock_exclusive().map_err(before_commit)?;
+        validate_files(base_files).map_err(before_commit)?;
+        validate_files(layer_files).map_err(before_commit)?;
+        let next = Manifest {
             snapshot,
             base: snapshot,
-        })?;
-        let _ = self.cleanup_stale(Manifest {
-            snapshot,
-            base: snapshot,
-        });
-        drop(lock);
-        Ok(())
+            previous: expected_current.snapshot(),
+            content_digest: publication_digest(
+                PublicationKind::Base,
+                expected_current,
+                snapshot,
+                snapshot,
+                base_files,
+                layer_files,
+            ),
+        };
+        let current = self.latest_manifest().map_err(before_commit)?;
+        if let Some(report) = self.resolve_existing_or_conflict(expected_current, current, next)? {
+            return Ok(report);
+        }
+
+        let prepare = || -> io::Result<()> {
+            self.remove_pending(snapshot)?;
+            self.remove_unpublished_generation(&self.base_directory(snapshot))?;
+            self.remove_unpublished_generation(&self.layer_directory(snapshot))?;
+            let base = self.write_generation_directory(self.pending_base(snapshot), base_files)?;
+            let layer =
+                self.write_generation_directory(self.pending_layer(snapshot), layer_files)?;
+            reached_publish_stage(PublishStage::GenerationWritten);
+            sync_directory(&base)?;
+            sync_directory(&layer)?;
+            reached_publish_stage(PublishStage::GenerationSynced);
+            fs::rename(base, self.base_directory(snapshot))?;
+            fs::rename(layer, self.layer_directory(snapshot))?;
+            sync_directory(&self.base_root())?;
+            sync_directory(&self.layer_root())?;
+            self.write_pending_manifest(next)
+        };
+        prepare().map_err(before_commit)?;
+        self.commit_manifest(next)
     }
 
     pub fn publish_layer(
         &self,
+        expected_current: ExpectedCurrent,
         snapshot: u64,
         layer_files: &[GenerationFile<'_>],
-    ) -> io::Result<()> {
-        let lock = self.lock_exclusive()?;
-        let current = self.latest_manifest()?.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::NotFound, "no base generation is published")
-        })?;
-        if snapshot <= current.snapshot {
-            return Err(io::Error::new(
-                io::ErrorKind::AlreadyExists,
-                "snapshot generation must increase",
-            ));
-        }
-        validate_files(layer_files)?;
-        self.remove_pending(snapshot)?;
-        self.remove_unpublished_generation(&self.layer_directory(snapshot))?;
-        let layer = self.write_generation_directory(self.pending_layer(snapshot), layer_files)?;
-        fs::rename(&layer, self.layer_directory(snapshot))?;
-        sync_directory(&self.layer_root())?;
+    ) -> Result<PublishReport, PublishError> {
+        let _lock = self.lock_exclusive().map_err(before_commit)?;
+        validate_files(layer_files).map_err(before_commit)?;
+        let current = self.latest_manifest().map_err(before_commit)?;
+        let Some(current_manifest) = current else {
+            return Err(before_commit(io::Error::new(
+                io::ErrorKind::NotFound,
+                "no base generation is published",
+            )));
+        };
         let next = Manifest {
             snapshot,
-            base: current.base,
+            base: current_manifest.base,
+            previous: expected_current.snapshot(),
+            content_digest: publication_digest(
+                PublicationKind::Layer,
+                expected_current,
+                snapshot,
+                current_manifest.base,
+                &[],
+                layer_files,
+            ),
         };
-        self.publish_manifest(next)?;
-        let _ = self.cleanup_stale(next);
-        drop(lock);
-        Ok(())
+        if let Some(report) = self.resolve_existing_or_conflict(expected_current, current, next)? {
+            return Ok(report);
+        }
+
+        let prepare = || -> io::Result<()> {
+            self.remove_pending(snapshot)?;
+            self.remove_unpublished_generation(&self.layer_directory(snapshot))?;
+            let layer =
+                self.write_generation_directory(self.pending_layer(snapshot), layer_files)?;
+            reached_publish_stage(PublishStage::GenerationWritten);
+            sync_directory(&layer)?;
+            reached_publish_stage(PublishStage::GenerationSynced);
+            fs::rename(layer, self.layer_directory(snapshot))?;
+            sync_directory(&self.layer_root())?;
+            self.write_pending_manifest(next)
+        };
+        prepare().map_err(before_commit)?;
+        self.commit_manifest(next)
+    }
+
+    pub fn cleanup_stale(&self) -> io::Result<CleanupReport> {
+        let _lock = self.lock_exclusive()?;
+        let current = self.latest_manifest()?;
+        self.cleanup_stale_locked(current)
+    }
+
+    fn resolve_existing_or_conflict(
+        &self,
+        expected_current: ExpectedCurrent,
+        current: Option<Manifest>,
+        next: Manifest,
+    ) -> Result<Option<PublishReport>, PublishError> {
+        if let Some(current) = current.filter(|current| current.snapshot == next.snapshot) {
+            if current == next {
+                let outcome = match sync_directory(&self.manifest_root()) {
+                    Ok(()) => PublishOutcome::AlreadyPublished,
+                    Err(source) => PublishOutcome::PublishedButDurabilityUnknown { source },
+                };
+                let cleanup_error = matches!(outcome, PublishOutcome::AlreadyPublished)
+                    .then(|| self.cleanup_stale_locked(Some(current)).err())
+                    .flatten();
+                return Ok(Some(PublishReport {
+                    outcome,
+                    cleanup_error,
+                }));
+            }
+            return Err(PublishError::Conflict {
+                current: Some(current.snapshot),
+            });
+        }
+        if !expected_current.matches(current)
+            || current.is_some_and(|current| next.snapshot <= current.snapshot)
+        {
+            return Err(PublishError::Conflict {
+                current: current.map(|manifest| manifest.snapshot),
+            });
+        }
+        Ok(None)
+    }
+
+    fn commit_manifest(&self, manifest: Manifest) -> Result<PublishReport, PublishError> {
+        fs::rename(
+            self.pending_manifest(manifest.snapshot),
+            self.manifest_path(manifest.snapshot),
+        )
+        .map_err(before_commit)?;
+        reached_publish_stage(PublishStage::ManifestRenamed);
+        let outcome = match sync_directory(&self.manifest_root()) {
+            Ok(()) => {
+                reached_publish_stage(PublishStage::ManifestDirectorySynced);
+                PublishOutcome::Published
+            }
+            Err(source) => PublishOutcome::PublishedButDurabilityUnknown { source },
+        };
+        let cleanup_error = matches!(outcome, PublishOutcome::Published)
+            .then(|| self.cleanup_stale_locked(Some(manifest)).err())
+            .flatten();
+        Ok(PublishReport {
+            outcome,
+            cleanup_error,
+        })
     }
 
     fn open_snapshot(&self, manifest: Manifest) -> io::Result<PublishedSnapshot> {
@@ -140,19 +319,6 @@ impl ImmutableGenerationStore {
         })
     }
 
-    fn ensure_new_snapshot(&self, snapshot: u64) -> io::Result<()> {
-        if self
-            .latest_manifest()?
-            .is_some_and(|current| snapshot <= current.snapshot)
-        {
-            return Err(io::Error::new(
-                io::ErrorKind::AlreadyExists,
-                "snapshot generation must increase",
-            ));
-        }
-        Ok(())
-    }
-
     fn write_generation_directory(
         &self,
         directory: PathBuf,
@@ -163,20 +329,26 @@ impl ImmutableGenerationStore {
         for file in files {
             write_synced_file(&directory.join(file.name), file.contents)?;
         }
-        sync_directory(&directory)?;
         Ok(directory)
     }
 
-    fn publish_manifest(&self, manifest: Manifest) -> io::Result<()> {
-        let pending = self.pending_manifest(manifest.snapshot);
-        let target = self.manifest_path(manifest.snapshot);
-        let mut contents = Vec::with_capacity(MANIFEST_VERSION.len() + 16);
+    fn write_pending_manifest(&self, manifest: Manifest) -> io::Result<()> {
+        let mut contents = Vec::with_capacity(MANIFEST_VERSION.len() + 57);
         contents.extend_from_slice(MANIFEST_VERSION);
         contents.extend_from_slice(&manifest.snapshot.to_le_bytes());
         contents.extend_from_slice(&manifest.base.to_le_bytes());
-        write_synced_file(&pending, &contents)?;
-        fs::rename(pending, target)?;
-        sync_directory(&self.manifest_root())
+        contents.push(u8::from(manifest.previous.is_some()));
+        contents.extend_from_slice(&manifest.previous.unwrap_or_default().to_le_bytes());
+        contents.extend_from_slice(&manifest.content_digest);
+        let mut file = fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(self.pending_manifest(manifest.snapshot))?;
+        file.write_all(&contents)?;
+        reached_publish_stage(PublishStage::PendingManifestWritten);
+        file.sync_all()?;
+        reached_publish_stage(PublishStage::PendingManifestSynced);
+        Ok(())
     }
 
     fn latest_manifest(&self) -> io::Result<Option<Manifest>> {
@@ -199,53 +371,103 @@ impl ImmutableGenerationStore {
         Ok(manifests)
     }
 
-    fn cleanup_stale(&self, current: Manifest) -> io::Result<()> {
-        let manifests = self.manifests()?;
-        let mut retained_bases = BTreeSet::from([current.base]);
-        for (snapshot, path) in manifests {
-            if snapshot == current.snapshot {
+    fn cleanup_stale_locked(&self, current: Option<Manifest>) -> io::Result<CleanupReport> {
+        let mut report = CleanupReport::default();
+        let mut retained_layers = current
+            .map(|manifest| BTreeSet::from([manifest.snapshot]))
+            .unwrap_or_default();
+        let mut retained_bases = current
+            .map(|manifest| BTreeSet::from([manifest.base]))
+            .unwrap_or_default();
+        let mut removable_layers = Vec::new();
+
+        for (snapshot, path) in self.manifests()? {
+            if current.is_some_and(|current| snapshot == current.snapshot) {
                 continue;
             }
             let manifest = read_manifest(&path, snapshot)?;
-            let layer = self.layer_directory(snapshot);
-            if generation_is_idle(&layer)? {
-                fs::remove_dir_all(&layer)?;
-                fs::remove_file(path)?;
-            } else {
-                retained_bases.insert(manifest.base);
+            let directory = self.layer_directory(snapshot);
+            match try_lock_generation_exclusive(&directory)? {
+                GenerationLock::Busy => {
+                    retained_layers.insert(snapshot);
+                    retained_bases.insert(manifest.base);
+                }
+                GenerationLock::Acquired(lease) => {
+                    remove_file_if_present(&path)?;
+                    report.manifests_removed += 1;
+                    removable_layers.push((snapshot, directory, lease));
+                }
             }
         }
+
+        if report.manifests_removed > 0 {
+            sync_directory(&self.manifest_root())?;
+        }
+
+        for (snapshot, directory, _lease) in removable_layers {
+            if remove_directory_if_present(&directory)? {
+                report.layers_removed += 1;
+            }
+            retained_layers.remove(&snapshot);
+        }
+
+        for entry in fs::read_dir(self.layer_root())? {
+            let entry = entry?;
+            let Some(snapshot) = parse_generation_name(&entry.file_name()) else {
+                continue;
+            };
+            if retained_layers.contains(&snapshot) {
+                continue;
+            }
+            if let GenerationLock::Acquired(_lease) = try_lock_generation_exclusive(&entry.path())?
+                && remove_directory_if_present(&entry.path())?
+            {
+                report.layers_removed += 1;
+            }
+        }
+
         for entry in fs::read_dir(self.base_root())? {
             let entry = entry?;
             let Some(base) = parse_generation_name(&entry.file_name()) else {
                 continue;
             };
-            if !retained_bases.contains(&base) && generation_is_idle(&entry.path())? {
-                fs::remove_dir_all(entry.path())?;
+            if retained_bases.contains(&base) {
+                continue;
+            }
+            if let GenerationLock::Acquired(_lease) = try_lock_generation_exclusive(&entry.path())?
+                && remove_directory_if_present(&entry.path())?
+            {
+                report.bases_removed += 1;
             }
         }
-        sync_directory(&self.manifest_root())?;
-        sync_directory(&self.layer_root())?;
-        sync_directory(&self.base_root())
+
+        if report.layers_removed > 0 {
+            sync_directory(&self.layer_root())?;
+        }
+        if report.bases_removed > 0 {
+            sync_directory(&self.base_root())?;
+        }
+        Ok(report)
     }
 
     fn remove_pending(&self, snapshot: u64) -> io::Result<()> {
         remove_directory_if_present(&self.pending_base(snapshot))?;
         remove_directory_if_present(&self.pending_layer(snapshot))?;
-        remove_file_if_present(&self.pending_manifest(snapshot))
+        remove_file_if_present(&self.pending_manifest(snapshot))?;
+        Ok(())
     }
 
     fn remove_unpublished_generation(&self, directory: &Path) -> io::Result<()> {
-        if !directory.exists() {
-            return Ok(());
-        }
-        if !generation_is_idle(directory)? {
-            return Err(io::Error::new(
+        match try_lock_generation_exclusive(directory)? {
+            GenerationLock::Acquired(_lease) => {
+                remove_directory_if_present(directory)?;
+                Ok(())
+            }
+            GenerationLock::Busy => Err(io::Error::new(
                 io::ErrorKind::WouldBlock,
                 "unpublished generation is still leased",
-            ));
+            )),
         }
-        fs::remove_dir_all(directory)
     }
 
     fn open_lock(&self) -> io::Result<fs::File> {
@@ -339,12 +561,6 @@ impl PublishedSnapshot {
         fs::read(self.layer_directory.join(name))
     }
 
-    pub fn map_base(&self, name: &str) -> io::Result<MappedGenerationFile> {
-        validate_name(name)?;
-        let file = fs::File::open(self.base_directory.join(name))?;
-        MappedGenerationFile::open(file, Arc::clone(&self.base_lease))
-    }
-
     pub fn open_base(&self, name: &str) -> io::Result<OpenGenerationFile> {
         validate_name(name)?;
         let file = fs::File::open(self.base_directory.join(name))?;
@@ -352,10 +568,102 @@ impl PublishedSnapshot {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct Manifest {
     snapshot: u64,
     base: u64,
+    previous: Option<u64>,
+    content_digest: [u8; 32],
+}
+
+#[derive(Clone, Copy)]
+enum PublicationKind {
+    Base = 1,
+    Layer = 2,
+}
+
+enum GenerationLock {
+    Acquired(Option<fs::File>),
+    Busy,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PublishStage {
+    GenerationWritten,
+    GenerationSynced,
+    PendingManifestWritten,
+    PendingManifestSynced,
+    ManifestRenamed,
+    ManifestDirectorySynced,
+}
+
+#[cfg(test)]
+fn reached_publish_stage(stage: PublishStage) {
+    let Some(configured) = std::env::var_os("ZETA_IMMUTABLE_STORE_ABORT_STAGE") else {
+        return;
+    };
+    if configured == stage.name() {
+        std::process::abort();
+    }
+}
+
+#[cfg(not(test))]
+fn reached_publish_stage(_stage: PublishStage) {}
+
+#[cfg(test)]
+impl PublishStage {
+    fn name(self) -> &'static str {
+        match self {
+            Self::GenerationWritten => "generation-written",
+            Self::GenerationSynced => "generation-synced",
+            Self::PendingManifestWritten => "pending-manifest-written",
+            Self::PendingManifestSynced => "pending-manifest-synced",
+            Self::ManifestRenamed => "manifest-renamed",
+            Self::ManifestDirectorySynced => "manifest-directory-synced",
+        }
+    }
+}
+
+fn publication_digest(
+    kind: PublicationKind,
+    expected_current: ExpectedCurrent,
+    snapshot: u64,
+    base: u64,
+    base_files: &[GenerationFile<'_>],
+    layer_files: &[GenerationFile<'_>],
+) -> [u8; 32] {
+    let mut digest = Sha256::new();
+    digest.update(MANIFEST_VERSION);
+    digest.update([kind as u8]);
+    digest.update([u8::from(expected_current.snapshot().is_some())]);
+    digest.update(
+        expected_current
+            .snapshot()
+            .unwrap_or_default()
+            .to_le_bytes(),
+    );
+    digest.update(snapshot.to_le_bytes());
+    digest.update(base.to_le_bytes());
+    update_files_digest(&mut digest, 1, base_files);
+    update_files_digest(&mut digest, 2, layer_files);
+    digest.finalize().into()
+}
+
+fn update_files_digest(digest: &mut Sha256, role: u8, files: &[GenerationFile<'_>]) {
+    let mut files = files.iter().collect::<Vec<_>>();
+    files.sort_unstable_by_key(|file| file.name);
+    digest.update([role]);
+    digest.update((files.len() as u64).to_le_bytes());
+    for file in files {
+        digest.update((file.name.len() as u64).to_le_bytes());
+        digest.update(file.name.as_bytes());
+        digest.update((file.contents.len() as u64).to_le_bytes());
+        digest.update(file.contents);
+    }
+}
+
+fn before_commit(source: io::Error) -> PublishError {
+    PublishError::BeforeCommit { source }
 }
 
 fn lock_generation(directory: &Path) -> io::Result<Arc<GenerationLease>> {
@@ -367,23 +675,21 @@ fn lock_generation(directory: &Path) -> io::Result<Arc<GenerationLease>> {
     Ok(Arc::new(GenerationLease { _file: file }))
 }
 
-fn generation_is_idle(directory: &Path) -> io::Result<bool> {
-    let lease_path = directory.join(LEASE_FILE);
+fn try_lock_generation_exclusive(directory: &Path) -> io::Result<GenerationLock> {
     let file = match fs::OpenOptions::new()
         .read(true)
         .write(true)
-        .open(&lease_path)
+        .open(directory.join(LEASE_FILE))
     {
         Ok(file) => file,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(true),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            return Ok(GenerationLock::Acquired(None));
+        }
         Err(error) => return Err(error),
     };
     match fs2::FileExt::try_lock_exclusive(&file) {
-        Ok(()) => {
-            fs2::FileExt::unlock(&file)?;
-            Ok(true)
-        }
-        Err(error) if error.kind() == io::ErrorKind::WouldBlock => Ok(false),
+        Ok(()) => Ok(GenerationLock::Acquired(Some(file))),
+        Err(error) if error.kind() == io::ErrorKind::WouldBlock => Ok(GenerationLock::Busy),
         Err(error) => Err(error),
     }
 }
@@ -419,18 +725,34 @@ fn validate_name(name: &str) -> io::Result<()> {
 fn read_manifest(path: &Path, expected_snapshot: u64) -> io::Result<Manifest> {
     let mut bytes = Vec::new();
     fs::File::open(path)?.read_to_end(&mut bytes)?;
-    if bytes.len() != MANIFEST_VERSION.len() + 16 || !bytes.starts_with(MANIFEST_VERSION) {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "generation manifest is corrupt",
-        ));
+    if bytes.len() != MANIFEST_VERSION.len() + 57 || !bytes.starts_with(MANIFEST_VERSION) {
+        return Err(corrupt_manifest());
     }
     let snapshot = read_u64(&bytes, MANIFEST_VERSION.len()).ok_or_else(corrupt_manifest)?;
     let base = read_u64(&bytes, MANIFEST_VERSION.len() + 8).ok_or_else(corrupt_manifest)?;
-    if snapshot != expected_snapshot || base > snapshot {
+    let previous_value =
+        read_u64(&bytes, MANIFEST_VERSION.len() + 17).ok_or_else(corrupt_manifest)?;
+    let previous = match bytes.get(MANIFEST_VERSION.len() + 16) {
+        Some(0) if previous_value == 0 => None,
+        Some(1) => Some(previous_value),
+        _ => return Err(corrupt_manifest()),
+    };
+    let content_digest = bytes
+        .get(MANIFEST_VERSION.len() + 25..MANIFEST_VERSION.len() + 57)
+        .and_then(|bytes| bytes.try_into().ok())
+        .ok_or_else(corrupt_manifest)?;
+    if snapshot != expected_snapshot
+        || base > snapshot
+        || previous.is_some_and(|previous| previous >= snapshot)
+    {
         return Err(corrupt_manifest());
     }
-    Ok(Manifest { snapshot, base })
+    Ok(Manifest {
+        snapshot,
+        base,
+        previous,
+        content_digest,
+    })
 }
 
 fn corrupt_manifest() -> io::Error {
@@ -457,23 +779,38 @@ fn sync_directory(path: &Path) -> io::Result<()> {
     fs::File::open(path)?.sync_all()
 }
 
-#[cfg(not(unix))]
-fn sync_directory(_path: &Path) -> io::Result<()> {
-    Ok(())
+#[cfg(windows)]
+fn sync_directory(path: &Path) -> io::Result<()> {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+    fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+        .open(path)?
+        .sync_all()
 }
 
-fn remove_directory_if_present(path: &Path) -> io::Result<()> {
+#[cfg(not(any(unix, windows)))]
+fn sync_directory(_path: &Path) -> io::Result<()> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "directory durability is unsupported on this platform",
+    ))
+}
+
+fn remove_directory_if_present(path: &Path) -> io::Result<bool> {
     match fs::remove_dir_all(path) {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Ok(()) => Ok(true),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
         Err(error) => Err(error),
     }
 }
 
-fn remove_file_if_present(path: &Path) -> io::Result<()> {
+fn remove_file_if_present(path: &Path) -> io::Result<bool> {
     match fs::remove_file(path) {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Ok(()) => Ok(true),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
         Err(error) => Err(error),
     }
 }

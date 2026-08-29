@@ -215,6 +215,7 @@ pub struct AppServer {
     browser_tool_port: crate::tool_composition::ToolPort,
     code_index_storage_root: Option<std::path::PathBuf>,
     fast_regex_search_storage_root: Option<std::path::PathBuf>,
+    fast_regex_worker_command: Option<zeta_fast_regex_search::FastRegexWorkerCommand>,
     symbol_index_storage_root: Option<std::path::PathBuf>,
     code_index_semantic_storage_root: Option<std::path::PathBuf>,
     code_index_semantic_models: Option<CodeIndexSemanticModels>,
@@ -494,6 +495,7 @@ impl AppServer {
             browser_tool_port,
             code_index_storage_root: None,
             fast_regex_search_storage_root: None,
+            fast_regex_worker_command: None,
             symbol_index_storage_root: None,
             code_index_semantic_storage_root: None,
             code_index_semantic_models: None,
@@ -1014,6 +1016,14 @@ impl AppServer {
         storage_root: impl Into<std::path::PathBuf>,
     ) -> Self {
         self.fast_regex_search_storage_root = Some(storage_root.into());
+        self
+    }
+
+    pub(crate) fn with_fast_regex_worker_command(
+        mut self,
+        command: zeta_fast_regex_search::FastRegexWorkerCommand,
+    ) -> Self {
+        self.fast_regex_worker_command = Some(command);
         self
     }
 

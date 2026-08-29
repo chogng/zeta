@@ -1,5 +1,7 @@
 //! Local sparse n-gram acceleration for exact workspace text and regular-expression search.
 
+#![deny(unsafe_code)]
+
 mod binary_codec;
 mod disk_index;
 mod file_stamp;
@@ -8,6 +10,7 @@ mod ngram;
 mod path_codec;
 mod storage;
 mod types;
+mod worker;
 mod workspace_files;
 
 pub use index::FastRegexSearch;
@@ -23,3 +26,6 @@ pub use types::FastRegexSearchSnapshot;
 pub use types::FastRegexSearchStatistics;
 pub use types::FastRegexSearchStorage;
 pub use types::FastRegexUpdateOutcome;
+pub use worker::FastRegexWorkerClient;
+pub use worker::FastRegexWorkerCommand;
+pub use worker::serve_worker_from_environment;
