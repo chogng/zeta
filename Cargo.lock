@@ -10899,6 +10899,7 @@ dependencies = [
  "zeta-windows-sandbox",
  "zeta-workspace",
  "zeta-workspace-access",
+ "zeta-workspace-index-storage",
  "zeta-workspace-search",
 ]
 
@@ -12473,6 +12474,15 @@ dependencies = [
 name = "zeta-workspace-access"
 version = "0.1.0"
 dependencies = [
+ "tempfile",
+ "zeta-workspace",
+]
+
+[[package]]
+name = "zeta-workspace-index-storage"
+version = "0.1.0"
+dependencies = [
+ "fs2",
  "tempfile",
  "zeta-workspace",
 ]

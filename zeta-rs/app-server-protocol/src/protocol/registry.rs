@@ -53,6 +53,10 @@ use crate::protocol::code_index::CodeRetrievalHitDto;
 use crate::protocol::code_index::CodeRetrievalOriginDto;
 use crate::protocol::code_index::CodeRetrievalParams;
 use crate::protocol::code_index::CodeRetrievalResult;
+use crate::protocol::code_index::FastRegexDisableAndDeleteParams;
+use crate::protocol::code_index::FastRegexDisableAndDeleteResult;
+use crate::protocol::code_index::FastRegexIndexStatusResult;
+use crate::protocol::code_index::LocalIndexClearOutcomeDto;
 use crate::protocol::code_index::SemanticCodeIndexStateDto;
 use crate::protocol::code_index::SemanticCodeIndexStatusDto;
 use crate::protocol::collaboration::DocumentCollaborationOpenParams;
@@ -1849,6 +1853,21 @@ client_methods! {
         response: CodeIndexStatusResult,
         serialization: GlobalExclusive,
     },
+    FastRegexIndexStatus => "workspace/agentGrep/fastRegex/status" {
+        params: EmptyParams,
+        response: FastRegexIndexStatusResult,
+        serialization: GlobalSharedRead,
+    },
+    FastRegexIndexRebuild => "workspace/agentGrep/fastRegex/rebuild" {
+        params: EmptyParams,
+        response: FastRegexIndexStatusResult,
+        serialization: GlobalExclusive,
+    },
+    FastRegexDisableAndDelete => "workspace/agentGrep/fastRegex/disableAndDelete" {
+        params: FastRegexDisableAndDeleteParams,
+        response: FastRegexDisableAndDeleteResult,
+        serialization: GlobalExclusive,
+    },
     SemanticCodeIndexCancel => "workspace/codeIndex/semantic/cancel" {
         params: EmptyParams,
         response: CodeIndexStatusResult,
@@ -2861,6 +2880,10 @@ typescript_bindings! {
     WorkspaceSearchCancelParams,
     CodeIndexStateDto,
     CodeIndexStatusResult,
+    FastRegexIndexStatusResult,
+    FastRegexDisableAndDeleteParams,
+    FastRegexDisableAndDeleteResult,
+    LocalIndexClearOutcomeDto,
     SemanticCodeIndexStateDto,
     SemanticCodeIndexStatusDto,
     CodeIndexSearchParams,

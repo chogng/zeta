@@ -11,6 +11,7 @@ use zeta_symbol_index::SymbolIndexRefreshOutcome;
 use zeta_symbol_index::SymbolIndexSnapshot;
 use zeta_symbol_index::SymbolIndexStorage;
 use zeta_symbol_index::SymbolSearchHit;
+use zeta_workspace_index_storage::WorkspaceIndexLease;
 
 /// App Server-owned lifecycle projection for one workspace symbol index.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -29,12 +30,29 @@ pub(super) struct SymbolIndexRuntime {
     index: Arc<SymbolIndex>,
     operation: Mutex<()>,
     state: RwLock<SymbolIndexRuntimeState>,
+    _storage_lease: Option<WorkspaceIndexLease>,
 }
 
 impl SymbolIndexRuntime {
     pub fn open(
         source_index: Arc<CodeIndex>,
         storage: SymbolIndexStorage,
+    ) -> Result<Arc<Self>, SymbolIndexError> {
+        Self::open_inner(source_index, storage, None)
+    }
+
+    pub(super) fn open_with_lease(
+        source_index: Arc<CodeIndex>,
+        storage: SymbolIndexStorage,
+        storage_lease: WorkspaceIndexLease,
+    ) -> Result<Arc<Self>, SymbolIndexError> {
+        Self::open_inner(source_index, storage, Some(storage_lease))
+    }
+
+    fn open_inner(
+        source_index: Arc<CodeIndex>,
+        storage: SymbolIndexStorage,
+        storage_lease: Option<WorkspaceIndexLease>,
     ) -> Result<Arc<Self>, SymbolIndexError> {
         let index = Arc::new(SymbolIndex::open(
             Arc::clone(&source_index),
@@ -52,6 +70,7 @@ impl SymbolIndexRuntime {
             index,
             operation: Mutex::new(()),
             state: RwLock::new(state),
+            _storage_lease: storage_lease,
         }))
     }
 

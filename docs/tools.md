@@ -295,6 +295,11 @@ containment；调用方仍拥有项目根语义和搜索边界。实现与错误
 
 `fastRegex` 必须先用覆盖 n-gram 和 posting 交集缩小候选，再读取当前文件做精确验证。产品 App Server 通过私有 UDS 调用按 Workspace 常驻的 Fast Regex 子进程，lookup 的 mmap、posting 读取和完整查询都留在子进程，主进程只接收有上限的最终结果。短查询、纯字符类和其他没有必需文字的正则仍会扫描全部已索引文件，但它们也进入与 `rg --line-number` 等价输出的性能底线；稀有、无命中和全量扫描用例任一不快于 `rg`，基准就失败。执行方式在 Tool generation 冻结后不会按单次查询暗中切换。基准入口和当前存储契约由 [`zeta-fast-regex-search`](../zeta-rs/fast-regex-search/README.md) 维护。
 
+普通文件变化直接写 delta；`.gitignore`、`.ignore`、`.git/info/exclude` 变化或 watcher overflow 会重新核对
+当前可索引文件集合，只发布实际增删改。只有 delta 需要压缩、格式不兼容、索引损坏或无法可靠计算差异时
+才重建 base。手动重建期间旧 generation 继续服务；普通“关闭”切回 `rg` 并保留磁盘数据，“关闭并删除”
+在配置提交后释放 worker，再通过跨进程独占锁删除。
+
 `zeta-file-watcher` 同样不是搜索或读取接口。它只把 OS mutation/error 转成
 `PathsChanged`/`RescanRequired`；consumer 必须重新扫描并校验 own state。其 ref-count、路径匹配、
 RAII 与 failure contract 由

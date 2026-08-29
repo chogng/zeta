@@ -678,6 +678,7 @@ impl std::error::Error for OpenAppServerError {}
 /// instances.
 pub struct LocalProfileRuntime {
     profile_root: PathBuf,
+    workspace_index_storage: Arc<zeta_workspace_index_storage::WorkspaceIndexStorage>,
     database_path: PathBuf,
     sessions: Arc<SessionCoordinator>,
     config: Arc<ConfigStore>,
@@ -734,8 +735,13 @@ impl LocalProfileRuntime {
             FileSecretStore::open(profile_root.join("secrets"))
                 .map_err(|error| OpenAppServerError(error.to_string()))?,
         );
+        let workspace_index_storage = Arc::new(
+            zeta_workspace_index_storage::WorkspaceIndexStorage::open(&profile_root)
+                .map_err(open_error)?,
+        );
         Ok(Self {
             profile_root,
+            workspace_index_storage,
             database_path,
             sessions,
             config,
@@ -749,6 +755,25 @@ impl LocalProfileRuntime {
     /// Returns the one secret store used by every Workspace runtime in this profile authority.
     pub fn secret_store(&self) -> Arc<dyn SecretStore> {
         Arc::clone(&self.secrets)
+    }
+
+    fn workspace_index_storage(&self) -> Arc<zeta_workspace_index_storage::WorkspaceIndexStorage> {
+        Arc::clone(&self.workspace_index_storage)
+    }
+
+    /// Explicitly clears all rebuildable local indexes for one inactive Workspace.
+    pub fn clear_workspace_indexes(
+        &self,
+        workspace: &zeta_workspace::WorkspaceTrustId,
+    ) -> std::io::Result<zeta_workspace_index_storage::ClearOutcome> {
+        self.workspace_index_storage.clear_workspace(workspace)
+    }
+
+    /// Explicitly clears every rebuildable local Workspace index in this profile.
+    pub fn clear_all_workspace_indexes(
+        &self,
+    ) -> std::io::Result<zeta_workspace_index_storage::ClearOutcome> {
+        self.workspace_index_storage.clear_all()
     }
 
     fn scoped_updates(
@@ -1102,6 +1127,13 @@ pub fn open_local_app_server_with_code_index_providers(
     } else {
         None
     };
+    let workspace_index_storage = match &profile_runtime {
+        Some(runtime) => runtime.workspace_index_storage(),
+        None => Arc::new(
+            zeta_workspace_index_storage::WorkspaceIndexStorage::open(&options.profile_root)
+                .map_err(open_error)?,
+        ),
+    };
     let mut server = match &profile_runtime {
         Some(runtime) => AppServer::new_with_updates(
             sessions,
@@ -1122,10 +1154,7 @@ pub fn open_local_app_server_with_code_index_providers(
     .with_login_service(login_service)
     .with_language_server_providers(options.language_server_providers)
     .with_slash_command_catalog(options.slash_commands)
-    .with_code_index_storage_root(options.profile_root.join("code-index"))
-    .with_fast_regex_search_storage_root(options.profile_root.join("fast-regex-search"))
-    .with_symbol_index_storage_root(options.profile_root.join("symbol-index"))
-    .with_code_index_semantic_storage_root(options.profile_root.join("code-index-semantic"))
+    .with_workspace_index_storage(workspace_index_storage)
     .with_semantic_model_provider(model_provider)
     .with_cloud_code_index_storage_root(options.profile_root.join("code-index-cloud"))
     .with_cloud_code_index_providers(providers.cloud)

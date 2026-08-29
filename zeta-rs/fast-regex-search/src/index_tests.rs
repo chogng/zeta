@@ -916,7 +916,7 @@ fn incremental_refresh_does_not_publish_gitignored_new_files() {
 }
 
 #[test]
-fn changing_git_info_exclude_rebuilds_the_ignore_matcher_and_index() {
+fn changing_git_info_exclude_reconciles_the_ignore_matcher_and_index() {
     let directory = workspace();
     fs::create_dir_all(directory.path().join(".git/info")).expect("git info directory");
     let exclude = directory.path().join(".git/info/exclude");
@@ -941,7 +941,7 @@ fn changing_git_info_exclude_rebuilds_the_ignore_matcher_and_index() {
         .refresh_observed_paths(&[exclude])
         .expect("refresh ignore control");
 
-    assert!(matches!(outcome, FastRegexUpdateOutcome::Rebuilt(_)));
+    assert!(matches!(outcome, FastRegexUpdateOutcome::Published(_)));
     assert_eq!(
         index
             .search(&query("git_info_marker"))
@@ -950,6 +950,45 @@ fn changing_git_info_exclude_rebuilds_the_ignore_matcher_and_index() {
             .len(),
         1
     );
+}
+
+#[test]
+fn nested_ignore_change_publishes_only_the_affected_file_delta() {
+    let directory = workspace();
+    fs::create_dir_all(directory.path().join("nested")).unwrap();
+    let source = directory.path().join("nested/source.rs");
+    fs::write(&source, "nested_ignore_marker\n").unwrap();
+    let index = search(&directory, FastRegexSearchStorage::Memory);
+    let before = index.rebuild().unwrap();
+
+    let ignore = directory.path().join("nested/.ignore");
+    fs::write(&ignore, "source.rs\n").unwrap();
+    let outcome = index.refresh_observed_paths(&[ignore]).unwrap();
+
+    let FastRegexUpdateOutcome::Published(after) = outcome else {
+        panic!("ignore reconciliation should publish a delta");
+    };
+    assert_eq!(after.generation, before.generation + 1);
+    assert!(
+        index
+            .search(&query("nested_ignore_marker"))
+            .unwrap()
+            .matches
+            .is_empty()
+    );
+}
+
+#[test]
+fn full_reconciliation_does_not_publish_when_the_file_set_is_unchanged() {
+    let directory = workspace();
+    fs::write(directory.path().join("source.rs"), "stable_marker\n").unwrap();
+    let index = search(&directory, FastRegexSearchStorage::Memory);
+    let before = index.rebuild().unwrap();
+
+    let outcome = index.reconcile_workspace().unwrap();
+
+    assert_eq!(outcome, FastRegexUpdateOutcome::NoChange);
+    assert_eq!(index.snapshot().generation, before.generation);
 }
 
 #[test]

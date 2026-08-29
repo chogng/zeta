@@ -189,7 +189,9 @@ impl ImmutableGenerationStore {
             sync_directory(&self.layer_root())?;
             self.write_pending_manifest(next)
         };
-        prepare().map_err(before_commit)?;
+        if let Err(source) = prepare() {
+            return Err(before_commit(self.discard_failed_base(snapshot, source)));
+        }
         self.commit_manifest(next)
     }
 
@@ -237,7 +239,9 @@ impl ImmutableGenerationStore {
             sync_directory(&self.layer_root())?;
             self.write_pending_manifest(next)
         };
-        prepare().map_err(before_commit)?;
+        if let Err(source) = prepare() {
+            return Err(before_commit(self.discard_failed_layer(snapshot, source)));
+        }
         self.commit_manifest(next)
     }
 
@@ -457,6 +461,28 @@ impl ImmutableGenerationStore {
         Ok(())
     }
 
+    fn discard_failed_base(&self, snapshot: u64, source: io::Error) -> io::Error {
+        let cleanup = (|| -> io::Result<()> {
+            self.remove_pending(snapshot)?;
+            self.remove_unpublished_generation(&self.base_directory(snapshot))?;
+            self.remove_unpublished_generation(&self.layer_directory(snapshot))?;
+            sync_directory(&self.base_root())?;
+            sync_directory(&self.layer_root())?;
+            sync_directory(&self.manifest_root())
+        })();
+        combine_prepare_and_cleanup_errors(source, cleanup.err())
+    }
+
+    fn discard_failed_layer(&self, snapshot: u64, source: io::Error) -> io::Error {
+        let cleanup = (|| -> io::Result<()> {
+            self.remove_pending(snapshot)?;
+            self.remove_unpublished_generation(&self.layer_directory(snapshot))?;
+            sync_directory(&self.layer_root())?;
+            sync_directory(&self.manifest_root())
+        })();
+        combine_prepare_and_cleanup_errors(source, cleanup.err())
+    }
+
     fn remove_unpublished_generation(&self, directory: &Path) -> io::Result<()> {
         match try_lock_generation_exclusive(directory)? {
             GenerationLock::Acquired(_lease) => {
@@ -530,6 +556,16 @@ impl ImmutableGenerationStore {
         self.manifest_root()
             .join(format!(".pending-{}.manifest", generation_name(generation)))
     }
+}
+
+fn combine_prepare_and_cleanup_errors(source: io::Error, cleanup: Option<io::Error>) -> io::Error {
+    let Some(cleanup) = cleanup else {
+        return source;
+    };
+    io::Error::new(
+        source.kind(),
+        format!("{source}; removing the unpublished generation also failed: {cleanup}"),
+    )
 }
 
 /// A consistent base generation and change-layer snapshot selected under the store lock.

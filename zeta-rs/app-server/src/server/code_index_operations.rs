@@ -13,6 +13,7 @@ use zeta_app_server_protocol::protocol::code_index::CodeIndexSearchParams;
 use zeta_app_server_protocol::protocol::code_index::CodeIndexSearchResult;
 use zeta_app_server_protocol::protocol::code_index::CodeIndexStateDto;
 use zeta_app_server_protocol::protocol::code_index::CodeIndexStatusResult;
+use zeta_app_server_protocol::protocol::code_index::FastRegexIndexStatusResult;
 use zeta_app_server_protocol::protocol::code_index::SemanticCodeIndexStateDto;
 use zeta_app_server_protocol::protocol::code_index::SemanticCodeIndexStatusDto;
 use zeta_app_server_protocol::protocol::common::EmptyParams;
@@ -73,6 +74,27 @@ impl AppServer {
             job.schedule();
         }
         result(&self.project_code_index_status(&runtime))
+    }
+
+    pub(super) fn fast_regex_index_status(&self, params: &Value) -> Result<Value, RpcError> {
+        let _: EmptyParams = decode(params)?;
+        let (service, root) = self.agent_grep_index_context()?;
+        let snapshot = service
+            .fast_regex_snapshot(&root)
+            .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodeIndexOperationFailed))?;
+        result(&project_fast_regex_status(
+            service.watches_fast_regex(),
+            snapshot,
+        ))
+    }
+
+    pub(super) fn fast_regex_index_rebuild(&self, params: &Value) -> Result<Value, RpcError> {
+        let _: EmptyParams = decode(params)?;
+        let (service, root) = self.agent_grep_index_context()?;
+        let snapshot = service
+            .rebuild_fast_regex(&root)
+            .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodeIndexOperationFailed))?;
+        result(&project_fast_regex_status(true, Some(snapshot)))
     }
 
     pub(super) fn semantic_code_index_cancel(&self, params: &Value) -> Result<Value, RpcError> {
@@ -140,6 +162,23 @@ impl AppServer {
                     }
                 });
         status
+    }
+}
+
+fn project_fast_regex_status(
+    enabled: bool,
+    snapshot: Option<zeta_fast_regex_search::FastRegexSearchSnapshot>,
+) -> FastRegexIndexStatusResult {
+    FastRegexIndexStatusResult {
+        enabled,
+        active: snapshot.is_some(),
+        generation: snapshot.as_ref().map(|snapshot| snapshot.generation),
+        indexed_file_count: snapshot
+            .as_ref()
+            .map_or(0, |snapshot| snapshot.indexed_file_count),
+        indexed_source_bytes: snapshot
+            .as_ref()
+            .map_or(0, |snapshot| snapshot.indexed_source_bytes),
     }
 }
 

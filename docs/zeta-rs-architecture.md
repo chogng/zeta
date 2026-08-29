@@ -49,6 +49,7 @@ zeta-rs/
 ├── slash-commands/       # headless catalog, input grammar and interaction state
 ├── slash-launcher/       # product-selected list composition, slash query and selection state
 ├── file-watcher/         # shared filesystem invalidation hints
+├── workspace-index-storage/ # profile-local Workspace index paths and cross-process lifecycle locks
 ├── git/                  # bounded Git repository operations and structured parsing
 ├── diff/                 # shared bounded line/inline diff mapping for Native and TUI
 ├── syntax/               # bounded incremental tree-sitter analysis；不拥有文件、索引或 presentation

@@ -42,6 +42,16 @@ struct RipgrepResult {
     matching_lines: usize,
 }
 
+struct IndexFileSizes {
+    documents_bytes: u64,
+    lookup_bytes: u64,
+    postings_bytes: u64,
+    delta_bytes: u64,
+    published_index_bytes: u64,
+    pending_generation_bytes: u64,
+    peak_rebuild_disk_bytes: u64,
+}
+
 fn main() {
     let arguments = std::env::args().collect::<Vec<_>>();
     if arguments
@@ -81,9 +91,10 @@ fn main() {
     .expect("open fast regex worker");
     let cold_open_elapsed = cold_open_started.elapsed();
     let build_started = Instant::now();
+    let old_index_bytes = directory_size(storage.path());
     let snapshot = index.rebuild().expect("build fast regex index");
     let build_elapsed = build_started.elapsed();
-    let lookup_bytes = lookup_size(storage.path(), snapshot.generation);
+    let index_sizes = index_file_sizes(storage.path(), snapshot.generation, old_index_bytes);
     let built_parent_rss = process_rss_kib(std::process::id());
     let built_worker_rss = index.process_id().and_then(process_rss_kib);
     let cases = [
@@ -147,12 +158,21 @@ fn main() {
     }
 
     println!(
-        "cold worker open: {:.3} ms; indexed {} files / {} MiB in {:.3}s; lookup: {:.2} MiB",
+        "cold worker open: {:.3} ms; indexed {} files / {} MiB in {:.3}s",
         milliseconds(cold_open_elapsed),
         snapshot.indexed_file_count,
         snapshot.indexed_source_bytes / (1024 * 1024),
         build_elapsed.as_secs_f64(),
-        lookup_bytes as f64 / (1024.0 * 1024.0),
+    );
+    println!(
+        "index bytes documents/lookup/postings/delta/published/pending/peak: {}/{}/{}/{}/{}/{}/{}",
+        index_sizes.documents_bytes,
+        index_sizes.lookup_bytes,
+        index_sizes.postings_bytes,
+        index_sizes.delta_bytes,
+        index_sizes.published_index_bytes,
+        index_sizes.pending_generation_bytes,
+        index_sizes.peak_rebuild_disk_bytes,
     );
     println!(
         "one-file refresh: {:.3} ms; validated reopen: {:.3} ms",
@@ -352,15 +372,42 @@ fn milliseconds(duration: Duration) -> f64 {
     duration.as_secs_f64() * 1_000.0
 }
 
-fn lookup_size(storage: &Path, generation: u64) -> u64 {
-    fs::metadata(
-        storage
-            .join("bases")
-            .join(format!("{generation:020}"))
-            .join("lookup.bin"),
-    )
-    .expect("lookup metadata")
-    .len()
+fn index_file_sizes(storage: &Path, generation: u64, old_index_bytes: u64) -> IndexFileSizes {
+    let base = storage.join("bases").join(format!("{generation:020}"));
+    let layer = storage.join("layers").join(format!("{generation:020}"));
+    let documents_bytes = file_size(&base.join("documents.bin"));
+    let lookup_bytes = file_size(&base.join("lookup.bin"));
+    let postings_bytes = file_size(&base.join("postings.bin"));
+    let delta_bytes = file_size(&layer.join("delta.bin"));
+    let pending_generation_bytes = directory_size(&base).saturating_add(directory_size(&layer));
+    let published_index_bytes = directory_size(storage);
+    IndexFileSizes {
+        documents_bytes,
+        lookup_bytes,
+        postings_bytes,
+        delta_bytes,
+        published_index_bytes,
+        pending_generation_bytes,
+        peak_rebuild_disk_bytes: old_index_bytes.saturating_add(pending_generation_bytes),
+    }
+}
+
+fn file_size(path: &Path) -> u64 {
+    fs::metadata(path).expect("index file metadata").len()
+}
+
+fn directory_size(path: &Path) -> u64 {
+    let Ok(entries) = fs::read_dir(path) else {
+        return 0;
+    };
+    entries
+        .filter_map(Result::ok)
+        .map(|entry| match entry.file_type() {
+            Ok(kind) if kind.is_dir() => directory_size(&entry.path()),
+            Ok(kind) if kind.is_file() => file_size(&entry.path()),
+            _ => 0,
+        })
+        .sum()
 }
 
 #[cfg(unix)]

@@ -5,7 +5,9 @@ use crate::server::WorkspaceSwitchTrustPolicy;
 use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use zeta_config::AgentGrepBackend;
 use zeta_config::ConfigStore;
+use zeta_config::ResolvedConfig;
 use zeta_core::InMemorySessionStore;
 use zeta_core::InMemoryThreadStore;
 use zeta_core::SessionCoordinator;
@@ -21,6 +23,7 @@ use zeta_model_provider::RerankInvoker;
 use zeta_model_provider::RerankRuntimeRequest;
 use zeta_model_provider::SemanticModelProvider;
 use zeta_workspace::WorkspaceTrustSource;
+use zeta_workspace_index_storage::WorkspaceIndexKind;
 
 struct SemanticTestEmbedding;
 
@@ -170,6 +173,113 @@ fn rpc_reports_generation_and_returns_revision_bound_local_chunks() {
         serde_json::json!({"unexpected": true}),
     );
     assert_eq!(invalid_empty_params["error"]["message"], "InvalidParams");
+}
+
+#[test]
+fn fast_regex_rpc_rebuilds_then_disables_and_deletes_the_project_index() {
+    let workspace = tempfile::tempdir().unwrap();
+    let profile = tempfile::tempdir().unwrap();
+    std::fs::create_dir(workspace.path().join(".git")).unwrap();
+    std::fs::write(
+        workspace.path().join("source.rs"),
+        "fast_regex_rpc_marker\n",
+    )
+    .unwrap();
+    let config = Arc::new(ConfigStore::open(profile.path().join("config.sqlite3")).unwrap());
+    let index_storage = Arc::new(
+        zeta_workspace_index_storage::WorkspaceIndexStorage::open(profile.path()).unwrap(),
+    );
+    let resolved = ResolvedConfig {
+        agent_grep_backend: AgentGrepBackend::FastRegex,
+        ..ResolvedConfig::default()
+    };
+    let server = server()
+        .with_config_store(config)
+        .with_workspace_index_storage(Arc::clone(&index_storage))
+        .with_local_tool_config(crate::local_tools::LocalToolConfig::from_resolved(
+            &resolved,
+        ))
+        .with_local_workspace_host(
+            None,
+            WorkspaceSwitchTrustPolicy::TrustHostSelectedRoots(
+                WorkspaceTrustSource::HostConfiguration,
+            ),
+        )
+        .unwrap();
+    server
+        .switch_local_workspace_root(workspace.path().to_path_buf())
+        .unwrap();
+    let workspace_id = server.active_workspace_trust_id().unwrap();
+    let index_directory =
+        index_storage.index_directory(&workspace_id, WorkspaceIndexKind::AgentGrep);
+    let mut connection = server.connection();
+    call(
+        &server,
+        &mut connection,
+        1,
+        "initialize",
+        serde_json::json!({
+            "clientInfo": {"name": "test", "version": "1"},
+            "capabilities": {}
+        }),
+    );
+    let enabled = call(
+        &server,
+        &mut connection,
+        2,
+        "config/update",
+        serde_json::json!({
+            "commandId": "enable-fast-regex",
+            "expectedRevision": 0,
+            "agentGrepBackend": "fastRegex"
+        }),
+    );
+    assert_eq!(enabled["result"]["revision"], 1);
+
+    let initial = call(
+        &server,
+        &mut connection,
+        3,
+        "workspace/agentGrep/fastRegex/status",
+        serde_json::json!({}),
+    );
+    assert_eq!(initial["result"]["enabled"], true);
+    assert_eq!(initial["result"]["active"], false);
+
+    let rebuilt = call(
+        &server,
+        &mut connection,
+        4,
+        "workspace/agentGrep/fastRegex/rebuild",
+        serde_json::json!({}),
+    );
+    assert_eq!(rebuilt["result"]["active"], true);
+    assert!(rebuilt["result"]["generation"].as_u64().unwrap() >= 1);
+    assert!(index_directory.join("manifests").is_dir());
+
+    let deleted = call(
+        &server,
+        &mut connection,
+        5,
+        "workspace/agentGrep/fastRegex/disableAndDelete",
+        serde_json::json!({
+            "commandId": "disable-delete-fast-regex",
+            "expectedRevision": 1
+        }),
+    );
+    assert_eq!(deleted["result"]["config"]["revision"], 2);
+    assert_eq!(deleted["result"]["deletion"], "cleared");
+    assert!(!index_directory.exists());
+
+    let disabled = call(
+        &server,
+        &mut connection,
+        6,
+        "workspace/agentGrep/fastRegex/status",
+        serde_json::json!({}),
+    );
+    assert_eq!(disabled["result"]["enabled"], false);
+    assert_eq!(disabled["result"]["active"], false);
 }
 
 #[test]

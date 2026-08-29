@@ -3,6 +3,9 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::path::PathBuf;
 use ts_rs::TS;
+use zeta_protocol::CommandId;
+
+use crate::protocol::config::ConfigCommandResult;
 
 /// Lifecycle state of the workspace-side code-index projection.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -31,6 +34,45 @@ pub struct CodeIndexStatusResult {
     pub file_limit_hit: bool,
     pub source_bytes_limit_hit: bool,
     pub semantic: SemanticCodeIndexStatusDto,
+}
+
+/// Current state of the optional Fast Regex index used by Agent grep.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FastRegexIndexStatusResult {
+    pub enabled: bool,
+    pub active: bool,
+    #[ts(type = "number | null")]
+    pub generation: Option<u64>,
+    pub indexed_file_count: usize,
+    pub indexed_source_bytes: usize,
+}
+
+/// Starts the durable “disable and delete” Agent grep operation.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FastRegexDisableAndDeleteParams {
+    pub command_id: CommandId,
+    #[schemars(range(min = 0))]
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+}
+
+/// Result of an explicit local-index deletion request.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum LocalIndexClearOutcomeDto {
+    Cleared,
+    AlreadyAbsent,
+    InUse,
+}
+
+/// Confirms the configuration commit separately from deletion of rebuildable data.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct FastRegexDisableAndDeleteResult {
+    pub config: ConfigCommandResult,
+    pub deletion: LocalIndexClearOutcomeDto,
 }
 
 /// Lifecycle state of the local semantic projection for the active Workspace.

@@ -213,11 +213,9 @@ pub struct AppServer {
     extension_tool_port: Option<crate::tool_composition::ToolPort>,
     browser_host: Arc<BrowserHost>,
     browser_tool_port: crate::tool_composition::ToolPort,
-    code_index_storage_root: Option<std::path::PathBuf>,
-    fast_regex_search_storage_root: Option<std::path::PathBuf>,
+    workspace_index_storage:
+        Option<std::sync::Arc<zeta_workspace_index_storage::WorkspaceIndexStorage>>,
     fast_regex_worker_command: Option<zeta_fast_regex_search::FastRegexWorkerCommand>,
-    symbol_index_storage_root: Option<std::path::PathBuf>,
-    code_index_semantic_storage_root: Option<std::path::PathBuf>,
     code_index_semantic_models: Option<CodeIndexSemanticModels>,
     semantic_model_provider: Option<Arc<dyn zeta_model_provider::SemanticModelProvider>>,
     cloud_code_index_storage_root: Option<std::path::PathBuf>,
@@ -493,11 +491,8 @@ impl AppServer {
             extension_tool_port: None,
             browser_host,
             browser_tool_port,
-            code_index_storage_root: None,
-            fast_regex_search_storage_root: None,
+            workspace_index_storage: None,
             fast_regex_worker_command: None,
-            symbol_index_storage_root: None,
-            code_index_semantic_storage_root: None,
             code_index_semantic_models: None,
             semantic_model_provider: None,
             cloud_code_index_storage_root: None,
@@ -1003,19 +998,11 @@ impl AppServer {
         self
     }
 
-    pub(crate) fn with_code_index_storage_root(
+    pub(crate) fn with_workspace_index_storage(
         mut self,
-        storage_root: impl Into<std::path::PathBuf>,
+        storage: std::sync::Arc<zeta_workspace_index_storage::WorkspaceIndexStorage>,
     ) -> Self {
-        self.code_index_storage_root = Some(storage_root.into());
-        self
-    }
-
-    pub(crate) fn with_fast_regex_search_storage_root(
-        mut self,
-        storage_root: impl Into<std::path::PathBuf>,
-    ) -> Self {
-        self.fast_regex_search_storage_root = Some(storage_root.into());
+        self.workspace_index_storage = Some(storage);
         self
     }
 
@@ -1024,22 +1011,6 @@ impl AppServer {
         command: zeta_fast_regex_search::FastRegexWorkerCommand,
     ) -> Self {
         self.fast_regex_worker_command = Some(command);
-        self
-    }
-
-    pub(crate) fn with_code_index_semantic_storage_root(
-        mut self,
-        storage_root: impl Into<std::path::PathBuf>,
-    ) -> Self {
-        self.code_index_semantic_storage_root = Some(storage_root.into());
-        self
-    }
-
-    pub(crate) fn with_symbol_index_storage_root(
-        mut self,
-        storage_root: impl Into<std::path::PathBuf>,
-    ) -> Self {
-        self.symbol_index_storage_root = Some(storage_root.into());
         self
     }
 
@@ -1998,6 +1969,15 @@ impl AppServer {
             }
             Some(ClientMethod::CodeIndexRetrieve) => self.code_retrieve(&request.params),
             Some(ClientMethod::CodeIndexRebuild) => self.code_index_rebuild(&request.params),
+            Some(ClientMethod::FastRegexIndexStatus) => {
+                self.fast_regex_index_status(&request.params)
+            }
+            Some(ClientMethod::FastRegexIndexRebuild) => {
+                self.fast_regex_index_rebuild(&request.params)
+            }
+            Some(ClientMethod::FastRegexDisableAndDelete) => {
+                self.fast_regex_disable_and_delete(&request.params)
+            }
             Some(ClientMethod::SemanticCodeIndexCancel) => {
                 self.semantic_code_index_cancel(&request.params)
             }

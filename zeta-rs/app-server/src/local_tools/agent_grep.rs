@@ -31,6 +31,9 @@ use zeta_file_watcher::FileWatcherEvent;
 use zeta_shell_command::RipgrepExecutable;
 use zeta_workspace::WorkspaceRoot;
 use zeta_workspace::WorkspaceTrustId;
+use zeta_workspace_index_storage::WorkspaceIndexKind;
+use zeta_workspace_index_storage::WorkspaceIndexLease;
+use zeta_workspace_index_storage::WorkspaceIndexStorage;
 
 const SEARCH_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_AGENT_MATCHES: usize = 100;
@@ -48,13 +51,18 @@ pub(crate) struct AgentGrepService {
 
 struct FastRegexIndexes {
     enabled: AtomicBool,
-    storage_root: Option<PathBuf>,
+    storage: Option<Arc<WorkspaceIndexStorage>>,
     worker_command: Option<FastRegexWorkerCommand>,
     indexes: Mutex<BTreeMap<WorkspaceTrustId, Arc<ManagedFastRegexSearch>>>,
 }
 
-enum ManagedFastRegexSearch {
-    InProcess(FastRegexSearch),
+struct ManagedFastRegexSearch {
+    search: FastRegexSearchHandle,
+    _lease: Option<WorkspaceIndexLease>,
+}
+
+enum FastRegexSearchHandle {
+    InProcess(Box<FastRegexSearch>),
     Worker(FastRegexWorkerClient),
 }
 
@@ -62,14 +70,14 @@ impl AgentGrepService {
     pub(crate) fn new(
         backend: AgentGrepBackend,
         ripgrep: RipgrepExecutable,
-        storage_root: Option<PathBuf>,
+        storage: Option<Arc<WorkspaceIndexStorage>>,
     ) -> Self {
         Self {
             backend,
             ripgrep,
             indexes: Arc::new(FastRegexIndexes {
                 enabled: AtomicBool::new(backend == AgentGrepBackend::FastRegex),
-                storage_root,
+                storage,
                 worker_command: None,
                 indexes: Mutex::new(BTreeMap::new()),
             }),
@@ -79,7 +87,7 @@ impl AgentGrepService {
     pub(crate) fn new_with_worker(
         backend: AgentGrepBackend,
         ripgrep: RipgrepExecutable,
-        storage_root: PathBuf,
+        storage: Arc<WorkspaceIndexStorage>,
         worker_command: FastRegexWorkerCommand,
     ) -> Self {
         Self {
@@ -87,7 +95,7 @@ impl AgentGrepService {
             ripgrep,
             indexes: Arc::new(FastRegexIndexes {
                 enabled: AtomicBool::new(backend == AgentGrepBackend::FastRegex),
-                storage_root: Some(storage_root),
+                storage: Some(storage),
                 worker_command: Some(worker_command),
                 indexes: Mutex::new(BTreeMap::new()),
             }),
@@ -149,9 +157,7 @@ impl AgentGrepService {
         };
         let update = match event {
             FileWatcherEvent::PathsChanged { paths } => index.refresh_observed_paths(paths),
-            FileWatcherEvent::RescanRequired { .. } => {
-                index.rebuild().map(FastRegexUpdateOutcome::Rebuilt)
-            }
+            FileWatcherEvent::RescanRequired { .. } => index.reconcile_workspace(),
         };
         if let Err(error) = update {
             log::warn!("fast regex index refresh failed: {error}");
@@ -161,6 +167,30 @@ impl AgentGrepService {
 
     pub(crate) fn watches_fast_regex(&self) -> bool {
         self.indexes.enabled.load(Ordering::Acquire)
+    }
+
+    pub(crate) fn fast_regex_snapshot(
+        &self,
+        root: &WorkspaceRoot,
+    ) -> Result<Option<FastRegexSearchSnapshot>, FastRegexError> {
+        let index = self
+            .indexes
+            .indexes
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get(&root.trust_id())
+            .cloned();
+        index.map(|index| index.snapshot()).transpose()
+    }
+
+    pub(crate) fn rebuild_fast_regex(
+        &self,
+        root: &WorkspaceRoot,
+    ) -> Result<FastRegexSearchSnapshot, FastRegexError> {
+        if !self.watches_fast_regex() {
+            return Err(FastRegexError::NotReady);
+        }
+        self.index_for(root)?.rebuild()
     }
 
     #[cfg(test)]
@@ -299,17 +329,27 @@ impl AgentGrepService {
         if let Some(index) = indexes.get(&trust_id) {
             return Ok(Arc::clone(index));
         }
-        let storage = self.indexes.storage_root.as_ref().map_or(
-            FastRegexSearchStorage::Memory,
-            |storage_root| {
-                FastRegexSearchStorage::Persistent(
-                    storage_root.join(trust_id.to_string().replace(':', "-")),
-                )
-            },
-        );
-        let index = Arc::new(match (&self.indexes.worker_command, storage) {
+        let lease = self
+            .indexes
+            .storage
+            .as_ref()
+            .map(|storage| {
+                storage
+                    .acquire(&trust_id, WorkspaceIndexKind::AgentGrep)
+                    .map_err(|source| FastRegexError::Io {
+                        path: storage.index_directory(&trust_id, WorkspaceIndexKind::AgentGrep),
+                        source,
+                    })
+            })
+            .transpose()?;
+        let search_storage = lease
+            .as_ref()
+            .map_or(FastRegexSearchStorage::Memory, |lease| {
+                FastRegexSearchStorage::Persistent(lease.directory().to_path_buf())
+            });
+        let search = match (&self.indexes.worker_command, search_storage) {
             (Some(command), FastRegexSearchStorage::Persistent(storage)) => {
-                ManagedFastRegexSearch::Worker(FastRegexWorkerClient::open(
+                FastRegexSearchHandle::Worker(FastRegexWorkerClient::open(
                     command.clone(),
                     root,
                     storage,
@@ -321,11 +361,15 @@ impl AgentGrepService {
                     "worker-backed search requires persistent storage".to_owned(),
                 ));
             }
-            (None, storage) => ManagedFastRegexSearch::InProcess(FastRegexSearch::open(
+            (None, storage) => FastRegexSearchHandle::InProcess(Box::new(FastRegexSearch::open(
                 root.clone(),
                 storage,
                 FastRegexSearchLimits::default(),
-            )?),
+            )?)),
+        };
+        let index = Arc::new(ManagedFastRegexSearch {
+            search,
+            _lease: lease,
         });
         if index.snapshot()?.generation == 0 {
             index.rebuild()?;
@@ -337,16 +381,16 @@ impl AgentGrepService {
 
 impl ManagedFastRegexSearch {
     fn snapshot(&self) -> Result<FastRegexSearchSnapshot, FastRegexError> {
-        match self {
-            Self::InProcess(search) => Ok(search.snapshot()),
-            Self::Worker(search) => search.snapshot(),
+        match &self.search {
+            FastRegexSearchHandle::InProcess(search) => Ok(search.snapshot()),
+            FastRegexSearchHandle::Worker(search) => search.snapshot(),
         }
     }
 
     fn rebuild(&self) -> Result<FastRegexSearchSnapshot, FastRegexError> {
-        match self {
-            Self::InProcess(search) => search.rebuild(),
-            Self::Worker(search) => search.rebuild(),
+        match &self.search {
+            FastRegexSearchHandle::InProcess(search) => search.rebuild(),
+            FastRegexSearchHandle::Worker(search) => search.rebuild(),
         }
     }
 
@@ -354,16 +398,23 @@ impl ManagedFastRegexSearch {
         &self,
         paths: &[PathBuf],
     ) -> Result<FastRegexUpdateOutcome, FastRegexError> {
-        match self {
-            Self::InProcess(search) => search.refresh_observed_paths(paths),
-            Self::Worker(search) => search.refresh_observed_paths(paths),
+        match &self.search {
+            FastRegexSearchHandle::InProcess(search) => search.refresh_observed_paths(paths),
+            FastRegexSearchHandle::Worker(search) => search.refresh_observed_paths(paths),
+        }
+    }
+
+    fn reconcile_workspace(&self) -> Result<FastRegexUpdateOutcome, FastRegexError> {
+        match &self.search {
+            FastRegexSearchHandle::InProcess(search) => search.reconcile_workspace(),
+            FastRegexSearchHandle::Worker(search) => search.reconcile_workspace(),
         }
     }
 
     fn search(&self, query: &FastRegexQuery) -> Result<FastRegexSearchResult, FastRegexError> {
-        match self {
-            Self::InProcess(search) => search.search(query),
-            Self::Worker(search) => search.search(query),
+        match &self.search {
+            FastRegexSearchHandle::InProcess(search) => search.search(query),
+            FastRegexSearchHandle::Worker(search) => search.search(query),
         }
     }
 }

@@ -187,7 +187,7 @@ impl FastRegexSearch {
                 || is_ignore_control(path)
                 || self.root.canonical_path().join(path).is_dir()
         }) {
-            return self.rebuild().map(FastRegexUpdateOutcome::Rebuilt);
+            return self.reconcile_workspace();
         }
         let mut state = self
             .state
@@ -365,7 +365,7 @@ impl FastRegexSearch {
             .is_ignore()
     }
 
-    fn reconcile_workspace(&self) -> Result<(), FastRegexError> {
+    pub fn reconcile_workspace(&self) -> Result<FastRegexUpdateOutcome, FastRegexError> {
         let current = scan_workspace_stamps(&self.root, &self.limits)?;
         let mut state = self
             .state
@@ -406,8 +406,7 @@ impl FastRegexSearch {
                     > self.limits.max_total_source_bytes
             {
                 drop(state);
-                self.rebuild()?;
-                return Ok(());
+                return self.rebuild().map(FastRegexUpdateOutcome::Rebuilt);
             }
             insert_document(&mut next, path.clone(), content, stamp);
             next.dirty_paths.insert(path);
@@ -415,17 +414,33 @@ impl FastRegexSearch {
         }
         if self.should_compact_delta(&next) {
             drop(state);
-            self.rebuild()?;
+            return self.rebuild().map(FastRegexUpdateOutcome::Rebuilt);
         } else if changed {
             next.generation = next.generation.saturating_add(1);
             let post_commit_error =
                 storage::persist_delta(&self.storage, &next, expected_generation)?;
+            let outcome = FastRegexUpdateOutcome::Published(snapshot(&next));
             *state = next;
+            self.refresh_ignore_matcher();
             if let Some(error) = post_commit_error {
                 return Err(error);
             }
+            return Ok(outcome);
         }
-        Ok(())
+        self.refresh_ignore_matcher();
+        Ok(FastRegexUpdateOutcome::NoChange)
+    }
+
+    fn refresh_ignore_matcher(&self) {
+        *self
+            .ignore_matcher
+            .lock()
+            .unwrap_or_else(|error| error.into_inner()) =
+            workspace_walk_builder(self.root.canonical_path())
+                .build_matchers()
+                .into_iter()
+                .next()
+                .expect("workspace walk has exactly one root");
     }
 
     fn should_compact_delta(&self, state: &IndexState) -> bool {

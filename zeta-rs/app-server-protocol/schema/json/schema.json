@@ -4923,6 +4923,54 @@
         {
           "properties": {
             "method": {
+              "const": "workspace/agentGrep/fastRegex/status",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workspace/agentGrep/fastRegex/rebuild",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workspace/agentGrep/fastRegex/disableAndDelete",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/FastRegexDisableAndDeleteParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "workspace/codeIndex/semantic/cancel",
               "type": "string"
             },
@@ -8100,6 +8148,54 @@
             },
             "result": {
               "$ref": "#/$defs/CodeIndexStatusResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workspace/agentGrep/fastRegex/status",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/FastRegexIndexStatusResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workspace/agentGrep/fastRegex/rebuild",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/FastRegexIndexStatusResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workspace/agentGrep/fastRegex/disableAndDelete",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/FastRegexDisableAndDeleteResult"
             }
           },
           "required": [
@@ -12125,6 +12221,76 @@
         "user"
       ],
       "type": "string"
+    },
+    "FastRegexDisableAndDeleteParams": {
+      "description": "Starts the durable “disable and delete” Agent grep operation.",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision"
+      ],
+      "type": "object"
+    },
+    "FastRegexDisableAndDeleteResult": {
+      "description": "Confirms the configuration commit separately from deletion of rebuildable data.",
+      "properties": {
+        "config": {
+          "$ref": "#/$defs/ConfigCommandResult"
+        },
+        "deletion": {
+          "$ref": "#/$defs/LocalIndexClearOutcomeDto"
+        }
+      },
+      "required": [
+        "config",
+        "deletion"
+      ],
+      "type": "object"
+    },
+    "FastRegexIndexStatusResult": {
+      "description": "Current state of the optional Fast Regex index used by Agent grep.",
+      "properties": {
+        "active": {
+          "type": "boolean"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "generation": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "indexedFileCount": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "indexedSourceBytes": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "enabled",
+        "active",
+        "indexedFileCount",
+        "indexedSourceBytes"
+      ],
+      "type": "object"
     },
     "ForkedAgentContext": {
       "description": "Selection policy for inheriting a fixed prefix of parent Thread history.",
@@ -16597,6 +16763,15 @@
         "symbols"
       ],
       "type": "object"
+    },
+    "LocalIndexClearOutcomeDto": {
+      "description": "Result of an explicit local-index deletion request.",
+      "enum": [
+        "cleared",
+        "alreadyAbsent",
+        "inUse"
+      ],
+      "type": "string"
     },
     "MarketplaceAcquireCapabilityParams": {
       "properties": {

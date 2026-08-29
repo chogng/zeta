@@ -143,6 +143,24 @@ impl FastRegexWorkerClient {
         }
     }
 
+    pub fn reconcile_workspace(&self) -> Result<FastRegexUpdateOutcome, FastRegexError> {
+        let _mutation = self
+            .mutation
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        match self.request(WorkerRequest::ReconcileWorkspace)? {
+            WorkerValue::Update(outcome) => {
+                if matches!(outcome, FastRegexUpdateOutcome::Rebuilt(_)) {
+                    self.restart_worker()?;
+                }
+                Ok(outcome)
+            }
+            _ => Err(protocol_error(
+                "worker returned the wrong reconciliation response",
+            )),
+        }
+    }
+
     pub fn search(&self, query: &FastRegexQuery) -> Result<FastRegexSearchResult, FastRegexError> {
         match self.request(WorkerRequest::Search {
             query: query.clone(),
@@ -368,6 +386,7 @@ fn handle_connection(mut stream: UnixStream, search: &FastRegexSearch, stopping:
         WorkerRequest::RefreshObservedPaths { paths } => search
             .refresh_observed_paths(&paths)
             .map(WorkerValue::Update),
+        WorkerRequest::ReconcileWorkspace => search.reconcile_workspace().map(WorkerValue::Update),
         WorkerRequest::Search { query } => search.search(&query).map(WorkerValue::Search),
         WorkerRequest::Shutdown => {
             stopping.store(true, Ordering::Release);
@@ -430,6 +449,7 @@ enum WorkerRequest {
         #[serde(with = "serde_paths")]
         paths: Vec<PathBuf>,
     },
+    ReconcileWorkspace,
     Search {
         query: FastRegexQuery,
     },

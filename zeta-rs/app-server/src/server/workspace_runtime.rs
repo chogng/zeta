@@ -84,6 +84,8 @@ use zeta_workspace::WorkspaceCapability;
 use zeta_workspace::WorkspaceRoot;
 use zeta_workspace::WorkspaceTrustDecision;
 use zeta_workspace_access::WorkspaceAccessMutation;
+use zeta_workspace_index_storage::WorkspaceIndexKind;
+use zeta_workspace_index_storage::WorkspaceIndexStorage;
 use zeta_workspace_search::WorkspaceSearchService;
 
 pub(super) struct WorkspaceRuntime {
@@ -200,9 +202,8 @@ pub(crate) struct WorkspaceRuntimeControl {
     mcp_status: Arc<RwLock<zeta_mcp_extension::McpRuntimeStatusSnapshot>>,
     config: Option<Arc<ConfigStore>>,
     local_tool_config: Arc<RwLock<LocalToolConfig>>,
-    fast_regex_search_storage_root: Option<PathBuf>,
+    workspace_index_storage: Option<Arc<WorkspaceIndexStorage>>,
     fast_regex_worker_command: Option<zeta_fast_regex_search::FastRegexWorkerCommand>,
-    code_index_semantic_storage_root: Option<PathBuf>,
     code_index_semantic_models: Option<CodeIndexSemanticModels>,
     semantic_model_provider: Option<Arc<dyn SemanticModelProvider>>,
     extension_hosts: Option<super::extension_host_runtime::ExtensionHostRuntime>,
@@ -264,7 +265,7 @@ impl WorkspaceRuntimeControl {
             &local_tool_config,
             session_workspace_access,
             agent_grep,
-            self.fast_regex_search_storage_root.as_deref(),
+            self.workspace_index_storage.clone(),
             self.fast_regex_worker_command.as_ref(),
         )
         .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
@@ -401,8 +402,8 @@ impl WorkspaceRuntimeControl {
             self.code_index_semantic_models.as_ref(),
             self.semantic_model_provider.as_ref(),
             self.config.as_ref(),
-            self.code_index_semantic_storage_root.as_ref(),
-        );
+            self.workspace_index_storage.as_ref(),
+        )?;
         let semantic_job = semantic.as_ref().and_then(|service| {
             match SemanticIndexJobController::start(Arc::clone(service)) {
                 Ok(job) => Some(job),
@@ -435,7 +436,7 @@ impl WorkspaceRuntimeControl {
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .agent_grep
                 .clone(),
-            self.fast_regex_search_storage_root.as_deref(),
+            self.workspace_index_storage.clone(),
             self.fast_regex_worker_command.as_ref(),
         )
         .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
@@ -1185,9 +1186,8 @@ impl AppServer {
                 mcp_status: Arc::clone(&self.mcp_status),
                 config: self.config.clone(),
                 local_tool_config: Arc::clone(&self.local_tool_config),
-                fast_regex_search_storage_root: self.fast_regex_search_storage_root.clone(),
+                workspace_index_storage: self.workspace_index_storage.clone(),
                 fast_regex_worker_command: self.fast_regex_worker_command.clone(),
-                code_index_semantic_storage_root: self.code_index_semantic_storage_root.clone(),
                 code_index_semantic_models: self.code_index_semantic_models.clone(),
                 semantic_model_provider: self.semantic_model_provider.clone(),
                 extension_hosts: self.extension_hosts.clone(),
@@ -1796,7 +1796,7 @@ impl AppServer {
                 &local_tool_config,
                 session_workspace_access,
                 None,
-                self.fast_regex_search_storage_root.as_deref(),
+                self.workspace_index_storage.clone(),
                 self.fast_regex_worker_command.as_ref(),
             )
             .map_err(|error| WorkspaceRuntimeError::Failed(error.to_string()))?;
@@ -1920,7 +1920,7 @@ impl AppServer {
             Arc::new(LocalFileSystem::new(workspace.clone()));
         let code_index = self.open_code_index_runtime(workspace.clone())?;
         let symbol_index = self.open_symbol_index_runtime(&code_index)?;
-        let code_index_semantic = self.open_code_index_semantic(&code_index);
+        let code_index_semantic = self.open_code_index_semantic(&code_index)?;
         let code_index_semantic_job =
             code_index_semantic.as_ref().and_then(
                 |service| match SemanticIndexJobController::start(Arc::clone(service)) {
@@ -2187,29 +2187,22 @@ impl AppServer {
         workspace: WorkspaceRoot,
     ) -> Result<Arc<CodeIndexRuntime>, WorkspaceRuntimeError> {
         let trust_id = workspace.trust_id();
-        let digest = trust_id
-            .as_str()
-            .strip_prefix("sha256:")
-            .unwrap_or(trust_id.as_str());
-        let storage = self.code_index_storage_root.as_ref().map_or(
-            CodeIndexStorage::Memory,
-            |storage_root| {
-                CodeIndexStorage::Persistent(storage_root.join(format!("{digest}.sqlite3")))
-            },
-        );
-        match CodeIndexRuntime::open(workspace.clone(), storage) {
-            Ok(runtime) => Ok(runtime),
-            Err(persistent_error) if self.code_index_storage_root.is_some() => {
-                log::warn!(
-                    "persistent code-index cache is unavailable; using memory projection: {persistent_error}"
-                );
-                CodeIndexRuntime::open(workspace, CodeIndexStorage::Memory).map_err(|error| {
-                    WorkspaceRuntimeError::Failed(format!("failed to open code index: {error}"))
-                })
-            }
-            Err(error) => Err(WorkspaceRuntimeError::Failed(format!(
-                "failed to open code index: {error}"
-            ))),
+        if let Some(index_storage) = &self.workspace_index_storage {
+            let lease = index_storage
+                .acquire(&trust_id, WorkspaceIndexKind::Lexical)
+                .map_err(|error| {
+                    WorkspaceRuntimeError::Failed(format!(
+                        "failed to lock lexical index storage: {error}"
+                    ))
+                })?;
+            let storage = CodeIndexStorage::Persistent(lease.directory().join("index.sqlite3"));
+            CodeIndexRuntime::open_with_lease(workspace, storage, lease).map_err(|error| {
+                WorkspaceRuntimeError::Failed(format!("failed to open code index: {error}"))
+            })
+        } else {
+            CodeIndexRuntime::open(workspace, CodeIndexStorage::Memory).map_err(|error| {
+                WorkspaceRuntimeError::Failed(format!("failed to open code index: {error}"))
+            })
         }
     }
 
@@ -2222,38 +2215,50 @@ impl AppServer {
             .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodeIndexUnavailable))
     }
 
+    pub(super) fn agent_grep_index_context(
+        &self,
+    ) -> Result<(Arc<AgentGrepService>, WorkspaceRoot), RpcError> {
+        let runtime = self
+            .workspace_runtime
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let root = runtime
+            .authorization
+            .as_ref()
+            .map(|authorization| authorization.root().clone())
+            .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodeIndexUnavailable))?;
+        let service = runtime
+            .agent_grep
+            .clone()
+            .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodeIndexUnavailable))?;
+        Ok((service, root))
+    }
+
     fn open_symbol_index_runtime(
         &self,
         code_index: &Arc<CodeIndexRuntime>,
     ) -> Result<Arc<SymbolIndexRuntime>, WorkspaceRuntimeError> {
         let trust_id = code_index.root().trust_id();
-        let digest = trust_id
-            .as_str()
-            .strip_prefix("sha256:")
-            .unwrap_or(trust_id.as_str());
-        let storage = self.symbol_index_storage_root.as_ref().map_or(
-            SymbolIndexStorage::Memory,
-            |storage_root| {
-                SymbolIndexStorage::Persistent(storage_root.join(format!("{digest}.sqlite3")))
-            },
-        );
-        match SymbolIndexRuntime::open(code_index.index(), storage) {
-            Ok(runtime) => Ok(runtime),
-            Err(persistent_error) if self.symbol_index_storage_root.is_some() => {
-                log::warn!(
-                    "persistent symbol-index cache is unavailable; using memory projection: {persistent_error}"
-                );
-                SymbolIndexRuntime::open(code_index.index(), SymbolIndexStorage::Memory).map_err(
-                    |error| {
-                        WorkspaceRuntimeError::Failed(format!(
-                            "failed to open symbol index: {error}"
-                        ))
-                    },
-                )
-            }
-            Err(error) => Err(WorkspaceRuntimeError::Failed(format!(
-                "failed to open symbol index: {error}"
-            ))),
+        if let Some(index_storage) = &self.workspace_index_storage {
+            let lease = index_storage
+                .acquire(&trust_id, WorkspaceIndexKind::Symbols)
+                .map_err(|error| {
+                    WorkspaceRuntimeError::Failed(format!(
+                        "failed to lock symbol index storage: {error}"
+                    ))
+                })?;
+            let storage = SymbolIndexStorage::Persistent(lease.directory().join("index.sqlite3"));
+            SymbolIndexRuntime::open_with_lease(code_index.index(), storage, lease).map_err(
+                |error| {
+                    WorkspaceRuntimeError::Failed(format!("failed to open symbol index: {error}"))
+                },
+            )
+        } else {
+            SymbolIndexRuntime::open(code_index.index(), SymbolIndexStorage::Memory).map_err(
+                |error| {
+                    WorkspaceRuntimeError::Failed(format!("failed to open symbol index: {error}"))
+                },
+            )
         }
     }
 
@@ -2269,13 +2274,13 @@ impl AppServer {
     fn open_code_index_semantic(
         &self,
         code_index: &Arc<CodeIndexRuntime>,
-    ) -> Option<Arc<CodeIndexSemanticService>> {
+    ) -> Result<Option<Arc<CodeIndexSemanticService>>, WorkspaceRuntimeError> {
         open_code_index_semantic_runtime(
             code_index,
             self.code_index_semantic_models.as_ref(),
             self.semantic_model_provider.as_ref(),
             self.config.as_ref(),
-            self.code_index_semantic_storage_root.as_ref(),
+            self.workspace_index_storage.as_ref(),
         )
     }
 
@@ -2739,48 +2744,56 @@ fn open_code_index_semantic_runtime(
     fixed_models: Option<&CodeIndexSemanticModels>,
     provider: Option<&Arc<dyn SemanticModelProvider>>,
     config: Option<&Arc<ConfigStore>>,
-    storage_root: Option<&PathBuf>,
-) -> Option<Arc<CodeIndexSemanticService>> {
+    index_storage: Option<&Arc<WorkspaceIndexStorage>>,
+) -> Result<Option<Arc<CodeIndexSemanticService>>, WorkspaceRuntimeError> {
     let configured_models;
     let models = match fixed_models {
         Some(models) => models,
         None => {
-            configured_models =
-                resolve_configured_code_index_semantic_models(code_index, provider?, config?)?;
+            let (Some(provider), Some(config)) = (provider, config) else {
+                return Ok(None);
+            };
+            let Some(resolved) =
+                resolve_configured_code_index_semantic_models(code_index, provider, config)
+            else {
+                return Ok(None);
+            };
+            configured_models = resolved;
             &configured_models
         }
     };
     let trust_id = code_index.root().trust_id();
-    let digest = trust_id
-        .as_str()
-        .strip_prefix("sha256:")
-        .unwrap_or(trust_id.as_str());
-    let storage = storage_root.map_or(CodeIndexSemanticStorage::Memory, |root| {
-        CodeIndexSemanticStorage::Persistent(root.join(format!("{digest}.sqlite3")))
-    });
-    let store: Arc<dyn CodeIndexVectorStore> = match SqliteCodeIndexVectorStore::open(&storage) {
-        Ok(store) => Arc::new(store),
-        Err(error) => {
-            log::warn!("persistent semantic code-index is unavailable: {error}");
-            Arc::new(
-                SqliteCodeIndexVectorStore::open(&CodeIndexSemanticStorage::Memory)
-                    .expect("in-memory semantic store must open"),
-            )
-        }
-    };
+    let lease = index_storage
+        .map(|storage| storage.acquire(&trust_id, WorkspaceIndexKind::Semantic))
+        .transpose()
+        .map_err(|error| {
+            WorkspaceRuntimeError::Failed(format!("failed to lock semantic index storage: {error}"))
+        })?;
+    let storage = lease
+        .as_ref()
+        .map_or(CodeIndexSemanticStorage::Memory, |lease| {
+            CodeIndexSemanticStorage::Persistent(lease.directory().join("index.sqlite3"))
+        });
+    let store: Arc<dyn CodeIndexVectorStore> =
+        Arc::new(SqliteCodeIndexVectorStore::open(&storage).map_err(|error| {
+            WorkspaceRuntimeError::Failed(format!("failed to open semantic code index: {error}"))
+        })?);
     let service = CodeIndexSemanticService::new(
         code_index.index(),
         models.model_id.clone(),
         Arc::clone(&models.embedding),
         store,
     );
-    let service = match &models.rerank {
+    let mut service = match &models.rerank {
         Some(rerank) => service.with_rerank(Arc::clone(rerank)),
         None => service,
     };
-    Some(Arc::new(
+    if let Some(lease) = lease {
+        service = service.with_storage_lease(Arc::new(lease));
+    }
+    Ok(Some(Arc::new(
         service.with_metrics(Arc::new(AppServerSemanticIndexMetrics)),
-    ))
+    )))
 }
 
 fn resolve_configured_code_index_semantic_models(

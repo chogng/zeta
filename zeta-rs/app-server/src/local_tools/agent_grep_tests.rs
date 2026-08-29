@@ -80,7 +80,9 @@ fn fast_regex_backend_uses_the_private_worker_client() {
     let service = AgentGrepService::new_with_worker(
         AgentGrepBackend::FastRegex,
         ripgrep,
-        storage.path().to_path_buf(),
+        Arc::new(
+            zeta_workspace_index_storage::WorkspaceIndexStorage::open(storage.path()).unwrap(),
+        ),
         command,
     );
 
@@ -96,6 +98,45 @@ fn fast_regex_backend_uses_the_private_worker_client() {
 
     assert!(matches!(output, ToolExecutionOutput::Success(text) if text.contains("worker_marker")));
     assert!(service.has_active_index(&root));
+}
+
+#[test]
+fn disabling_fast_regex_releases_but_preserves_its_project_index() {
+    let (directory, root, resolved) = workspace();
+    let profile = tempfile::tempdir().unwrap();
+    fs::write(directory.path().join("source.rs"), "disable_marker\n").unwrap();
+    let ripgrep = RipgrepExecutable::from_path(std::env::current_exe().unwrap()).unwrap();
+    let storage = Arc::new(
+        zeta_workspace_index_storage::WorkspaceIndexStorage::open(profile.path()).unwrap(),
+    );
+    let service = AgentGrepService::new(
+        AgentGrepBackend::FastRegex,
+        ripgrep.clone(),
+        Some(Arc::clone(&storage)),
+    );
+    service
+        .execute(
+            "disable_marker".into(),
+            &resolved,
+            None,
+            false,
+            &zeta_async_utils::CancellationSource::new().token(),
+        )
+        .unwrap();
+    let index_directory = storage.index_directory(&root.trust_id(), WorkspaceIndexKind::AgentGrep);
+    assert!(index_directory.join("manifests").is_dir());
+
+    let disabled = service.reconfigured(AgentGrepBackend::Ripgrep, ripgrep);
+
+    assert!(!disabled.watches_fast_regex());
+    assert!(!disabled.has_active_index(&root));
+    assert!(index_directory.is_dir());
+    assert_eq!(
+        storage
+            .clear_index(&root.trust_id(), WorkspaceIndexKind::AgentGrep)
+            .unwrap(),
+        zeta_workspace_index_storage::ClearOutcome::Cleared
+    );
 }
 
 #[test]

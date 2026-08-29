@@ -135,14 +135,18 @@ local semantic 或 remote source 失败不会吞掉 FTS，而会返回独立的
 
 | projection | 默认路径 | 内容 |
 | --- | --- | --- |
-| lexical | `<profile>/code-index/<root-digest>.sqlite3` | chunks、generation、FTS |
-| symbols | `<profile>/symbol-index/<root-digest>.sqlite3` | source revisions、syntax declarations、generation；dirty overlay 不持久化 |
-| local semantic | `<profile>/code-index-semantic/<root-digest>.sqlite3` | chunks、model ID、embeddings |
+| lexical | `<profile>/cache/workspaces/<root-digest>/indexes/lexical/index.sqlite3` | chunks、generation、FTS |
+| symbols | `<profile>/cache/workspaces/<root-digest>/indexes/symbols/index.sqlite3` | source revisions、syntax declarations、generation；dirty overlay 不持久化 |
+| local semantic | `<profile>/cache/workspaces/<root-digest>/indexes/semantic/index.sqlite3` | chunks、model ID、embeddings |
 | remote control state | `<profile>/code-index-cloud/<root-digest>.sqlite3` | grant/phase/generation metadata；不保存源码/secret |
 
 Unix persistent files 固定为普通文件和 `0600`。lexical/semantic 都是可重建 projection，不提升为源码
 authority。restricted Workspace 可继续 lexical；当前 semantic invoker 和 remote controller 只在 Trusted
 Workspace 安装。
+
+四类本地索引以项目摘要为单位长期保存，不记录最近使用时间，也不做 TTL、LRU 或容量驱动的后台删除。
+项目路径消失或信任记录变化不会自动删除索引；调用方需要显式调用单项目或全局清理入口。跨进程生命周期锁位于
+`<profile>/cache/locks`，不放进可删除的索引目录；云端授权与删除状态仍留在 durable profile state。
 
 ## 一致性与安全
 

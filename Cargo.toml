@@ -117,6 +117,7 @@ members = [
     "zeta-rs/windows-sandbox-rs",
     "zeta-rs/workspace",
     "zeta-rs/workspace-access",
+    "zeta-rs/workspace-index-storage",
     "zeta-rs/worktree",
     "zeta-rs/workspace-search",
     "zeta-rs/server-host",
@@ -412,6 +413,7 @@ zeta-utils-pty = { path = "zeta-rs/utils/pty" }
 zeta-windows-sandbox = { path = "zeta-rs/windows-sandbox-rs" }
 zeta-workspace = { path = "zeta-rs/workspace" }
 zeta-workspace-access = { path = "zeta-rs/workspace-access" }
+zeta-workspace-index-storage = { path = "zeta-rs/workspace-index-storage" }
 zeta-worktree = { path = "zeta-rs/worktree" }
 zui = { path = "app/zui", default-features = false }
 

@@ -39,6 +39,7 @@ pub struct CodeIndexSemanticService {
     embedding: Arc<dyn EmbeddingInvoker>,
     rerank: Option<Arc<dyn RerankInvoker>>,
     store: Arc<dyn CodeIndexVectorStore>,
+    _storage_lease: Option<Arc<dyn Send + Sync>>,
     sync_operation: Mutex<()>,
     metrics: Option<Arc<dyn CodeIndexSemanticMetricsSink>>,
 }
@@ -56,6 +57,7 @@ impl CodeIndexSemanticService {
             embedding,
             rerank: None,
             store,
+            _storage_lease: None,
             sync_operation: Mutex::new(()),
             metrics: None,
         }
@@ -70,6 +72,12 @@ impl CodeIndexSemanticService {
     /// Installs a privacy-safe metrics sink without changing indexing behavior.
     pub fn with_metrics(mut self, metrics: Arc<dyn CodeIndexSemanticMetricsSink>) -> Self {
         self.metrics = Some(metrics);
+        self
+    }
+
+    /// Keeps the external storage lifecycle lock alive for as long as this service can access it.
+    pub fn with_storage_lease(mut self, lease: Arc<dyn Send + Sync>) -> Self {
+        self._storage_lease = Some(lease);
         self
     }
 

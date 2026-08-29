@@ -13,6 +13,7 @@ use zeta_code_index::RefreshOutcome;
 use zeta_code_index::SearchHit;
 use zeta_file_watcher::FileWatcherEvent;
 use zeta_workspace::WorkspaceRoot;
+use zeta_workspace_index_storage::WorkspaceIndexLease;
 
 /// App Server-owned lifecycle projection for one workspace-side code index.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -30,12 +31,29 @@ pub(super) struct CodeIndexRuntime {
     index: Arc<CodeIndex>,
     operation: Mutex<()>,
     state: RwLock<CodeIndexRuntimeState>,
+    _storage_lease: Option<WorkspaceIndexLease>,
 }
 
 impl CodeIndexRuntime {
     pub fn open(
         workspace: WorkspaceRoot,
         storage: CodeIndexStorage,
+    ) -> Result<Arc<Self>, CodeIndexError> {
+        Self::open_inner(workspace, storage, None)
+    }
+
+    pub(super) fn open_with_lease(
+        workspace: WorkspaceRoot,
+        storage: CodeIndexStorage,
+        storage_lease: WorkspaceIndexLease,
+    ) -> Result<Arc<Self>, CodeIndexError> {
+        Self::open_inner(workspace, storage, Some(storage_lease))
+    }
+
+    fn open_inner(
+        workspace: WorkspaceRoot,
+        storage: CodeIndexStorage,
+        storage_lease: Option<WorkspaceIndexLease>,
     ) -> Result<Arc<Self>, CodeIndexError> {
         let index = Arc::new(CodeIndex::open(
             workspace,
@@ -52,6 +70,7 @@ impl CodeIndexRuntime {
             index,
             operation: Mutex::new(()),
             state: RwLock::new(state),
+            _storage_lease: storage_lease,
         }))
     }
 

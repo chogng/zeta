@@ -1,0 +1,6 @@
+load("//:defs.bzl", "zeta_rust_crate")
+
+zeta_rust_crate(
+    name = "workspace-index-storage",
+    crate_name = "zeta_workspace_index_storage",
+)

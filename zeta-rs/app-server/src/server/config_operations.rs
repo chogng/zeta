@@ -5,6 +5,9 @@ use super::extension_config_operations::hook_config_dto;
 use super::extension_config_operations::plugin_request_dto;
 use super::result;
 use serde_json::Value;
+use zeta_app_server_protocol::protocol::code_index::FastRegexDisableAndDeleteParams;
+use zeta_app_server_protocol::protocol::code_index::FastRegexDisableAndDeleteResult;
+use zeta_app_server_protocol::protocol::code_index::LocalIndexClearOutcomeDto;
 use zeta_app_server_protocol::protocol::config::AgentGrepBackendDto;
 use zeta_app_server_protocol::protocol::config::ApprovalReviewModelSelectionDto;
 use zeta_app_server_protocol::protocol::config::ConfigCommandDispositionDto;
@@ -75,6 +78,8 @@ use zeta_model_provider::ProviderId;
 use zeta_model_provider_config::ModelContextConfig;
 use zeta_model_provider_config::ModelProviderConfig;
 use zeta_protocol::Patch;
+use zeta_workspace_index_storage::ClearOutcome;
+use zeta_workspace_index_storage::WorkspaceIndexKind;
 
 use crate::tool_search_models::ToolSearchEmbeddingStatus;
 use crate::tool_search_models::resolve_tool_search;
@@ -162,6 +167,48 @@ impl AppServer {
             })
             .map_err(config_operation_error)?;
         result(&config_command_result(outcome))
+    }
+
+    pub(super) fn fast_regex_disable_and_delete(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: FastRegexDisableAndDeleteParams = decode(params)?;
+        let workspace = self
+            .active_workspace_trust_id()
+            .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodeIndexUnavailable))?;
+        let store = self
+            .config
+            .clone()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let outcome = store
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                    preferred_model: Patch::Missing,
+                    approval_review_model: Patch::Missing,
+                    tool_mode: Patch::Missing,
+                    grep_backend: Patch::Value(AgentGrepBackend::Ripgrep),
+                }),
+            })
+            .map_err(config_operation_error)?;
+        let snapshot = store.read_snapshot().map_err(config_error)?;
+        self.workspace_runtime_control()
+            .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodeIndexUnavailable))?
+            .reconcile_local_tool_config(&snapshot.values)
+            .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodeIndexOperationFailed))?;
+        let deletion = self
+            .workspace_index_storage
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodeIndexUnavailable))?
+            .clear_index(&workspace, WorkspaceIndexKind::AgentGrep)
+            .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodeIndexOperationFailed))?;
+        result(&FastRegexDisableAndDeleteResult {
+            config: config_command_result(outcome),
+            deletion: match deletion {
+                ClearOutcome::Cleared => LocalIndexClearOutcomeDto::Cleared,
+                ClearOutcome::AlreadyAbsent => LocalIndexClearOutcomeDto::AlreadyAbsent,
+                ClearOutcome::InUse => LocalIndexClearOutcomeDto::InUse,
+            },
+        })
     }
 
     pub(super) fn exec_policy_rule_upsert(&self, params: &Value) -> Result<Value, RpcError> {
