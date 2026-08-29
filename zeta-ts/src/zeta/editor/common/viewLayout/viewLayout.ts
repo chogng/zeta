@@ -135,14 +135,14 @@ export class ViewLayout extends Disposable {
 		return this.currentLayout;
 	}
 
-	public addViewZone(afterLineIndex: number, heightInPixels: number): string {
-		const id = this.linesLayout.addViewZone(afterLineIndex, heightInPixels);
+	public addViewZone(afterLineIndex: number, heightInPixels: number, ordinal?: number): string {
+		const id = this.linesLayout.addViewZone(afterLineIndex, heightInPixels, ordinal);
 		this.publish(EditorViewportChangeReason.ViewZones);
 		return id;
 	}
 
-	public changeViewZone(id: string, afterLineIndex: number, heightInPixels: number): EditorViewportLayout {
-		if (!this.linesLayout.changeViewZone(id, afterLineIndex, heightInPixels)) return this.currentLayout;
+	public changeViewZone(id: string, afterLineIndex: number, heightInPixels: number, ordinal?: number): EditorViewportLayout {
+		if (!this.linesLayout.changeViewZone(id, afterLineIndex, heightInPixels, ordinal)) return this.currentLayout;
 		this.publish(EditorViewportChangeReason.ViewZones);
 		return this.currentLayout;
 	}

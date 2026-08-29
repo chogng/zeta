@@ -22,9 +22,12 @@ export interface LinesLayoutViewport {
 interface ViewZoneData {
 	readonly id: string;
 	readonly ordinal: number;
+	readonly creationOrder: number;
 	readonly afterLineIndex: number;
 	readonly heightInPixels: number;
 }
+
+const DefaultViewZoneOrdinal = 10_000;
 
 /**
  * Calculates line positions and virtualized line ranges.
@@ -107,24 +110,27 @@ export class LinesLayout {
 		return hadAChange;
 	}
 
-	public addViewZone(afterLineIndex: number, heightInPixels: number): string {
-		validateViewZone(afterLineIndex, heightInPixels, this.lineCount);
+	public addViewZone(afterLineIndex: number, heightInPixels: number, ordinal?: number): string {
+		validateViewZone(afterLineIndex, heightInPixels, ordinal, this.lineCount);
 		const id = `view-zone-${++this.nextViewZoneId}`;
+		const creationOrder = ++this.nextViewZoneOrdinal;
 		this.viewZones.set(id, Object.freeze({
 			id,
-			ordinal: ++this.nextViewZoneOrdinal,
+			ordinal: ordinal ?? DefaultViewZoneOrdinal,
+			creationOrder,
 			afterLineIndex,
 			heightInPixels,
 		}));
 		return id;
 	}
 
-	public changeViewZone(id: string, afterLineIndex: number, heightInPixels: number): boolean {
-		validateViewZone(afterLineIndex, heightInPixels, this.lineCount);
+	public changeViewZone(id: string, afterLineIndex: number, heightInPixels: number, ordinal?: number): boolean {
+		validateViewZone(afterLineIndex, heightInPixels, ordinal, this.lineCount);
 		const current = this.viewZones.get(id);
 		if (!current) throw new Error(`Unknown editor view zone: ${id}`);
-		if (current.afterLineIndex === afterLineIndex && current.heightInPixels === heightInPixels) return false;
-		this.viewZones.set(id, Object.freeze({ ...current, afterLineIndex, heightInPixels }));
+		const nextOrdinal = ordinal ?? DefaultViewZoneOrdinal;
+		if (current.afterLineIndex === afterLineIndex && current.heightInPixels === heightInPixels && current.ordinal === nextOrdinal) return false;
+		this.viewZones.set(id, Object.freeze({ ...current, afterLineIndex, heightInPixels, ordinal: nextOrdinal }));
 		return true;
 	}
 
@@ -230,13 +236,14 @@ export class LinesLayout {
 	}
 
 	private get sortedViewZones(): readonly ViewZoneData[] {
-		return [...this.viewZones.values()].sort((left, right) => left.afterLineIndex - right.afterLineIndex || left.ordinal - right.ordinal);
+		return [...this.viewZones.values()].sort((left, right) => left.afterLineIndex - right.afterLineIndex || left.ordinal - right.ordinal || left.creationOrder - right.creationOrder);
 	}
 }
 
-function validateViewZone(afterLineIndex: number, heightInPixels: number, lineCount: number): void {
+function validateViewZone(afterLineIndex: number, heightInPixels: number, ordinal: number | undefined, lineCount: number): void {
 	if (!Number.isSafeInteger(afterLineIndex) || afterLineIndex < -1 || afterLineIndex >= lineCount) throw new RangeError('View zone line index is outside the line collection');
 	if (!isFiniteNumber(heightInPixels) || heightInPixels <= 0) throw new RangeError('View zone height must be finite and positive');
+	if (ordinal !== undefined && !isFiniteNumber(ordinal)) throw new RangeError('View zone ordinal must be finite');
 }
 
 export function getVisibleLineRange(

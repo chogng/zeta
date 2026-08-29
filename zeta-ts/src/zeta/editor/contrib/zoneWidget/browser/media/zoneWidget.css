@@ -1,7 +1,33 @@
 .stanza-editor-zone-widget {
   position: absolute;
-  z-index: 9;
+  z-index: 10;
   box-sizing: border-box;
-  max-width: calc(100% - 8px);
   pointer-events: auto;
+}
+
+.stanza-editor-zone-widget-container {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  overflow: hidden;
+  border-top: 0 solid transparent;
+  border-bottom: 0 solid transparent;
+}
+
+.stanza-editor-zone-widget.show-frame .stanza-editor-zone-widget-container {
+  border-top-color: var(--stanza-zone-widget-frame-color, var(--zeta-focus-border));
+  border-bottom-color: var(--stanza-zone-widget-frame-color, var(--zeta-focus-border));
+}
+
+.stanza-editor-zone-widget-arrow {
+  position: absolute;
+  top: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-color: transparent;
+  border-width: var(--stanza-zone-widget-arrow-size);
+  border-bottom-color: var(--stanza-zone-widget-arrow-color, var(--zeta-focus-border));
+  transform: translate(-50%, -50%);
+  pointer-events: none;
 }

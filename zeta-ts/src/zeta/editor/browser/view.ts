@@ -388,6 +388,7 @@ export interface EditorContentPosition {
 export interface EditorViewZone {
 	afterLineIndex: number;
 	heightInPixels: number;
+	ordinal?: number;
 	readonly domNode: HTMLElement;
 }
 
@@ -841,7 +842,7 @@ export class View extends Disposable {
 	addViewZone(zone: EditorViewZone): EditorViewZoneHandle {
 		this.assertNotDisposed();
 		this.validateViewZone(zone);
-		const id = this.viewport.addViewZone(zone.afterLineIndex, zone.heightInPixels);
+		const id = this.viewport.addViewZone(zone.afterLineIndex, zone.heightInPixels, zone.ordinal);
 		this.viewZones.set(id, zone);
 		zone.domNode.classList.add('stanza-editor-view-zone');
 		this.element.append(zone.domNode);
@@ -1099,7 +1100,7 @@ export class View extends Disposable {
 		const zone = this.viewZones.get(id);
 		if (!zone) return;
 		this.validateViewZone(zone);
-		this.viewport.changeViewZone(id, zone.afterLineIndex, zone.heightInPixels);
+		this.viewport.changeViewZone(id, zone.afterLineIndex, zone.heightInPixels, zone.ordinal);
 		this.layoutViewZones(this.viewport.layout);
 	}
 
@@ -1127,6 +1128,7 @@ export class View extends Disposable {
 		if (!zone || !(zone.domNode instanceof this.element.ownerDocument.defaultView!.HTMLElement)) throw new TypeError('Editor view zone requires a DOM root from the editor document');
 		if (!Number.isSafeInteger(zone.afterLineIndex) || zone.afterLineIndex < -1 || zone.afterLineIndex >= this.visualProjection.visualLineCount) throw new RangeError('Editor view zone line index is outside the visual line collection');
 		if (!isFiniteNumber(zone.heightInPixels) || zone.heightInPixels <= 0) throw new RangeError('Editor view zone height must be finite and positive');
+		if (zone.ordinal !== undefined && !isFiniteNumber(zone.ordinal)) throw new RangeError('Editor view zone ordinal must be finite');
 	}
 
 	private observeRenderedLineWidths(layout: EditorViewportLayout): void {

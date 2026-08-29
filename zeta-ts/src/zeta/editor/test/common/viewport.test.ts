@@ -141,6 +141,27 @@ test('ViewLayout reserves independently addressable view zones between lines', (
 	});
 });
 
+test('ViewLayout orders same-line view zones by explicit ordinal and creation order', () => {
+	using model = new TextModel(lines(2));
+	using viewport = new ViewLayout(model, { lineHeight: 20 });
+	const defaultOrdinal = viewport.addViewZone(0, 5);
+	const later = viewport.addViewZone(0, 7, 20);
+	const earlier = viewport.addViewZone(0, 3, 10);
+
+	assert.deepEqual(viewport.layout.viewZones, [
+		{ id: earlier, afterLineIndex: 0, top: 20, heightInPixels: 3 },
+		{ id: later, afterLineIndex: 0, top: 23, heightInPixels: 7 },
+		{ id: defaultOrdinal, afterLineIndex: 0, top: 30, heightInPixels: 5 },
+	]);
+
+	viewport.changeViewZone(defaultOrdinal, 0, 5, 0);
+	assert.deepEqual(viewport.layout.viewZones, [
+		{ id: defaultOrdinal, afterLineIndex: 0, top: 20, heightInPixels: 5 },
+		{ id: earlier, afterLineIndex: 0, top: 25, heightInPixels: 3 },
+		{ id: later, afterLineIndex: 0, top: 28, heightInPixels: 7 },
+	]);
+});
+
 test("Viewport resize and line-height changes preserve a stable top line", () => {
 	using model = new TextModel(lines(100));
 	using viewport = new ViewLayout(model, {
