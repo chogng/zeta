@@ -6,8 +6,9 @@
 mod service;
 mod types;
 
-pub use service::SearchService;
+pub use service::WorkspaceSearchService;
 pub use types::{
-    SearchCaseSensitivity, SearchError, SearchMatch, SearchMatchRange, SearchOwner, SearchPage,
-    SearchPattern, SearchQuery,
+    WorkspaceSearchCaseSensitivity, WorkspaceSearchError, WorkspaceSearchMatch,
+    WorkspaceSearchMatchRange, WorkspaceSearchOwner, WorkspaceSearchPage, WorkspaceSearchPattern,
+    WorkspaceSearchQuery,
 };

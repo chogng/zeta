@@ -33,8 +33,8 @@ const MAX_RESULT_LINE_CHARS: usize = 500;
 
 /// Selects and owns the implementation used only by the Agent `grep` Tool.
 ///
-/// Workspace Search does not depend on this service and always executes its frozen ripgrep
-/// command through `zeta-search`.
+/// Workspace Search is implemented by `zeta-workspace-search`; this service has its own Agent grep
+/// execution path and may select `zeta-fast-regex-search`.
 pub(crate) struct AgentGrepService {
     backend: AgentGrepBackend,
     ripgrep: RipgrepExecutable,

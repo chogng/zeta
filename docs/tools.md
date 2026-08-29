@@ -287,7 +287,7 @@ containment；调用方仍拥有项目根语义和搜索边界。实现与错误
 | Surface | 所有权 | 模型可见 |
 | --- | --- | --- |
 | App Server `LocalToolSuite::grep` | Agent 内容搜索；由 `agent.grepBackend` 在冻结 `rg` 与 `zeta-fast-regex-search` 间选择 | `grep` Tool |
-| `zeta-search` + `rg` | 编辑器工作区内容搜索、分页和取消；不读取 Agent grep 配置 | 否 |
+| `zeta-workspace-search` + `rg` | 编辑器工作区内容搜索、分页和取消；不读取 Agent grep 配置 | 否 |
 | `zeta-file-search` | ignore-aware 路径索引、fuzzy matching、`PathSearchHandle` 和 CLI | 否 |
 | `zeta-file-watcher` | 多订阅者路径失效提示、missing-path fallback、throttle/debounce 与 overflow rescan hint | 否 |
 

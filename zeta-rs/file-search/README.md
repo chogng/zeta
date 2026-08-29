@@ -3,7 +3,7 @@
 > 本 README 是 workspace 文件路径 fuzzy search 的实现契约。TUI `@file` 交互由
 > [`zeta-code/tui/README.md`](../../zeta-code/tui/README.md) 维护。模型侧的文件内容搜索通过
 > Agent 的文件内容搜索由 App Server 的 `grep` Tool 完成，编辑器工作区搜索见
-> [`zeta-rs/search/README.md`](../search/README.md)；可执行文件的
+> [`zeta-rs/workspace-search/README.md`](../workspace-search/README.md)；可执行文件的
 > discovery 与冻结边界见 [`zeta-rs/shell-command/README.md`](../shell-command/README.md)。
 
 `zeta-file-search` 只拥有 workspace-relative 文件路径的后台索引、增量 fuzzy matching 和独立

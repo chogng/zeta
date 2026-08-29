@@ -10882,7 +10882,7 @@ dependencies = [
  "zeta-rmcp-client",
  "zeta-rollout",
  "zeta-sandboxing",
- "zeta-search",
+ "zeta-workspace-search",
  "zeta-secrets",
  "zeta-shell-command",
  "zeta-skills",
@@ -11931,16 +11931,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "zeta-search"
-version = "0.1.0"
-dependencies = [
- "serde_json",
- "zeta-async-utils",
- "zeta-shell-command",
- "zeta-workspace",
-]
-
-[[package]]
 name = "zeta-secrets"
 version = "0.1.0"
 dependencies = [
@@ -12464,6 +12454,16 @@ name = "zeta-workspace-access"
 version = "0.1.0"
 dependencies = [
  "tempfile",
+ "zeta-workspace",
+]
+
+[[package]]
+name = "zeta-workspace-search"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "zeta-async-utils",
+ "zeta-shell-command",
  "zeta-workspace",
 ]
 

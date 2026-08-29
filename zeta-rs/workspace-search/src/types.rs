@@ -3,14 +3,14 @@ use std::path::PathBuf;
 
 /// Selects whether a search query is interpreted literally or as a regular expression.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SearchPattern {
+pub enum WorkspaceSearchPattern {
     Literal,
     Regex,
 }
 
 /// Selects how character case is matched for one search query.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SearchCaseSensitivity {
+pub enum WorkspaceSearchCaseSensitivity {
     Smart,
     Sensitive,
     Insensitive,
@@ -18,14 +18,14 @@ pub enum SearchCaseSensitivity {
 
 /// Validated intent for one bounded content search.
 ///
-/// [`SearchService::start`](crate::SearchService::start) validates the string and glob limits
+/// [`WorkspaceSearchService::start`](crate::WorkspaceSearchService::start) validates the string and glob limits
 /// before it starts a process. Callers may construct this value from their own protocol or UI
 /// types.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SearchQuery {
+pub struct WorkspaceSearchQuery {
     pub query: String,
-    pub pattern: SearchPattern,
-    pub case_sensitivity: SearchCaseSensitivity,
+    pub pattern: WorkspaceSearchPattern,
+    pub case_sensitivity: WorkspaceSearchCaseSensitivity,
     pub include_patterns: Vec<String>,
     pub exclude_patterns: Vec<String>,
     pub max_results: usize,
@@ -36,9 +36,9 @@ pub struct SearchQuery {
 /// The search crate compares this value when a job is read or cancelled; it does not interpret
 /// the value as an App Server connection, user, or session identity.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct SearchOwner(u64);
+pub struct WorkspaceSearchOwner(u64);
 
-impl SearchOwner {
+impl WorkspaceSearchOwner {
     pub const fn new(value: u64) -> Self {
         Self(value)
     }
@@ -46,24 +46,24 @@ impl SearchOwner {
 
 /// UTF-16 offsets for one match within a returned preview line.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct SearchMatchRange {
+pub struct WorkspaceSearchMatchRange {
     pub start: usize,
     pub end: usize,
 }
 
 /// One matching line in a workspace-relative file.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SearchMatch {
+pub struct WorkspaceSearchMatch {
     pub path: PathBuf,
     pub line_number: usize,
     pub preview: String,
-    pub ranges: Vec<SearchMatchRange>,
+    pub ranges: Vec<WorkspaceSearchMatchRange>,
 }
 
 /// One bounded read of a running or completed search job.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SearchPage {
-    pub matches: Vec<SearchMatch>,
+pub struct WorkspaceSearchPage {
+    pub matches: Vec<WorkspaceSearchMatch>,
     pub next_match: usize,
     pub completed: bool,
     pub limit_hit: bool,
@@ -72,7 +72,7 @@ pub struct SearchPage {
 
 /// Failure while validating, locating, reading, or cancelling a search job.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SearchError {
+pub enum WorkspaceSearchError {
     InvalidInput,
     NotFound,
     NotOwner,
@@ -80,7 +80,7 @@ pub enum SearchError {
     Unavailable,
 }
 
-impl fmt::Display for SearchError {
+impl fmt::Display for WorkspaceSearchError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidInput => formatter.write_str("search input is invalid"),
@@ -92,4 +92,4 @@ impl fmt::Display for SearchError {
     }
 }
 
-impl std::error::Error for SearchError {}
+impl std::error::Error for WorkspaceSearchError {}

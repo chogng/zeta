@@ -24,15 +24,18 @@ fn parses_utf8_match_ranges_as_utf16_offsets() {
     assert_eq!(parsed.path, Path::new("src/lib.rs"));
     assert_eq!(parsed.line_number, 7);
     assert_eq!(parsed.preview, "let 搜索 = \"needle\";");
-    assert_eq!(parsed.ranges, [SearchMatchRange { start: 10, end: 16 }]);
+    assert_eq!(
+        parsed.ranges,
+        [WorkspaceSearchMatchRange { start: 10, end: 16 }]
+    );
 }
 
 #[test]
 fn builds_typed_ripgrep_arguments_without_shell_parsing() {
-    let arguments = search_arguments(&SearchQuery {
+    let arguments = search_arguments(&WorkspaceSearchQuery {
         query: "needle".into(),
-        pattern: SearchPattern::Literal,
-        case_sensitivity: SearchCaseSensitivity::Insensitive,
+        pattern: WorkspaceSearchPattern::Literal,
+        case_sensitivity: WorkspaceSearchCaseSensitivity::Insensitive,
         include_patterns: vec!["src/**".into()],
         exclude_patterns: vec!["**/*.test.ts".into()],
         max_results: 20,
@@ -51,7 +54,10 @@ fn builds_typed_ripgrep_arguments_without_shell_parsing() {
 #[test]
 fn rejects_globs_that_can_invert_or_escape_the_typed_filter() {
     for pattern in ["!src/**", "../outside", "/absolute", "C:/absolute"] {
-        assert_eq!(validate_glob(pattern), Err(SearchError::InvalidInput));
+        assert_eq!(
+            validate_glob(pattern),
+            Err(WorkspaceSearchError::InvalidInput)
+        );
     }
 }
 
@@ -72,7 +78,7 @@ fn result_limit_is_reported_only_when_an_additional_match_exists() {
     })
     .to_string();
 
-    let exact_state = Arc::new(Mutex::new(SearchJobState::default()));
+    let exact_state = Arc::new(Mutex::new(WorkspaceSearchJobState::default()));
     let exact_cancellation = CancellationSource::new();
     parse_stdout(
         Cursor::new(format!("{match_line}\n")),
@@ -84,7 +90,7 @@ fn result_limit_is_reported_only_when_an_additional_match_exists() {
     assert_eq!(exact_state.lock().unwrap().matches.len(), 1);
     assert!(!exact_state.lock().unwrap().limit_hit);
 
-    let overflow_state = Arc::new(Mutex::new(SearchJobState::default()));
+    let overflow_state = Arc::new(Mutex::new(WorkspaceSearchJobState::default()));
     let overflow_cancellation = CancellationSource::new();
     parse_stdout(
         Cursor::new(format!("{match_line}\n{match_line}\n")),

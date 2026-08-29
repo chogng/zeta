@@ -1,5 +1,6 @@
 use super::*;
-use zeta_search::{SearchMatch, SearchMatchRange};
+use zeta_workspace_search::WorkspaceSearchMatch;
+use zeta_workspace_search::WorkspaceSearchMatchRange;
 
 #[test]
 fn maps_protocol_query_to_workspace_search_query() {
@@ -8,7 +9,7 @@ fn maps_protocol_query_to_workspace_search_query() {
         session_directory: None,
         query: "needle".into(),
         pattern_kind: WorkspaceSearchPatternKind::Regex,
-        case_sensitivity: WorkspaceSearchCaseSensitivity::Insensitive,
+        case_sensitivity: WorkspaceSearchProtocolCaseSensitivity::Insensitive,
         include_patterns: vec!["src/**".into()],
         exclude_patterns: vec!["**/*.test.rs".into()],
         max_results: 400,
@@ -16,10 +17,10 @@ fn maps_protocol_query_to_workspace_search_query() {
 
     assert_eq!(
         query,
-        SearchQuery {
+        WorkspaceSearchQuery {
             query: "needle".into(),
-            pattern: SearchPattern::Regex,
-            case_sensitivity: SearchCaseSensitivity::Insensitive,
+            pattern: WorkspaceSearchPattern::Regex,
+            case_sensitivity: WorkspaceSearchCaseSensitivity::Insensitive,
             include_patterns: vec!["src/**".into()],
             exclude_patterns: vec!["**/*.test.rs".into()],
             max_results: 400,
@@ -31,12 +32,12 @@ fn maps_protocol_query_to_workspace_search_query() {
 fn maps_workspace_search_page_to_protocol_result() {
     let result = search_page(
         "search-1".into(),
-        SearchPage {
-            matches: vec![SearchMatch {
+        WorkspaceSearchPage {
+            matches: vec![WorkspaceSearchMatch {
                 path: "src/lib.rs".into(),
                 line_number: 7,
                 preview: "let needle = true;".into(),
-                ranges: vec![SearchMatchRange { start: 4, end: 10 }],
+                ranges: vec![WorkspaceSearchMatchRange { start: 4, end: 10 }],
             }],
             next_match: 1,
             completed: true,
@@ -53,7 +54,7 @@ fn maps_workspace_search_page_to_protocol_result() {
     );
     assert_eq!(
         result.matches[0].ranges,
-        [WorkspaceSearchMatchRange { start: 4, end: 10 }]
+        [WorkspaceSearchProtocolMatchRange { start: 4, end: 10 }]
     );
     assert_eq!(result.next_match, 1);
     assert!(result.completed);

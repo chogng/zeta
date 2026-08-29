@@ -1116,7 +1116,9 @@ impl AppServer {
         workspace: zeta_workspace::WorkspaceRoot,
         ripgrep: zeta_shell_command::RipgrepExecutable,
     ) -> Self {
-        let search = Arc::new(zeta_search::SearchService::new(workspace, ripgrep));
+        let search = Arc::new(zeta_workspace_search::WorkspaceSearchService::new(
+            workspace, ripgrep,
+        ));
         self.workspace_runtime_mut().workspace_search = Some(search);
         self
     }

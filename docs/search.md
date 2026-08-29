@@ -2,13 +2,13 @@
 
 > 本文是 workspace 内容搜索的跨进程 ownership、产品语义和演进边界的 canonical 文档。
 > 跨文件内容搜索的实现细节见
-> [`zeta-rs/search/README.md`](../zeta-rs/search/README.md)，App Server 的
+> [`zeta-rs/workspace-search/README.md`](../zeta-rs/workspace-search/README.md)，App Server 的
 > RPC 适配见 [`zeta-rs/app-server/README.md`](../zeta-rs/app-server/README.md)，wire DTO 与生成流程见
 > [`zeta-rs/app-server-protocol/README.md`](../zeta-rs/app-server-protocol/README.md)。
 
 ## 快速理解
 
-`zeta-search` 承担跨文件内容检索，默认作用域是当前主工作目录；App Server 只把 RPC 映射为
+`zeta-workspace-search` 承担跨文件内容检索，默认作用域是当前主工作目录；App Server 只把 RPC 映射为
 它的领域请求与结果；
 Desktop Search contrib 只拥有查询表单、取消时机、增量结果投影和可丢弃的视图状态。当前实现使用
 `workspace/search/start`、`workspace/search/read`、`workspace/search/cancel` 三个 pull RPC，
@@ -34,10 +34,10 @@ Desktop Search contrib 只拥有查询表单、取消时机、增量结果投影
 | 结果分组、高亮、状态和重新搜索取消 | Renderer | ✅ |
 | IPC sender、exact shape 与输入上限的快速校验 | Electron Main | ✅ |
 | workspace root 授权与 `rg` executable 冻结 | Rust / App Server composition | ✅ |
-| 查询校验、`rg` 进程、结果解析、分页与取消 | `zeta-search` | ✅ |
+| 查询校验、`rg` 进程、结果解析、分页与取消 | `zeta-workspace-search` | ✅ |
 | Agent `grep` 在 `ripgrep` / `fastRegex` 间选择 | App Server `AgentGrepService` | ✅ |
 | Agent 稀疏 n-gram 候选筛选与精确验证 | `zeta-fast-regex-search` | ✅ |
-| connection ID → `SearchOwner`、DTO 转换与稳定 RPC error | App Server | ✅ |
+| connection ID → `WorkspaceSearchOwner`、DTO 转换与稳定 RPC error | App Server | ✅ |
 | wire DTO、method registry、schema 与 TypeScript bindings | `zeta-app-server-protocol` | ✅ |
 | 文件路径 fuzzy match | `zeta-file-search` | ✅，与内容搜索无依赖 |
 | 点击结果后读取文件并打开编辑器 | Files / Editor vertical | 尚未完成 |
@@ -52,8 +52,8 @@ SearchViewPane
   → trusted zeta:workspace-search:* IPC
   → AppServerClient
   → workspace/search/start
-  → App Server maps DTO + connection to SearchQuery + SearchOwner
-  → zeta-search::SearchService job
+  → App Server maps DTO + connection to WorkspaceSearchQuery + WorkspaceSearchOwner
+  → zeta-workspace-search::WorkspaceSearchService job
   → frozen RipgrepExecutable under WorkspaceRoot
   → workspace/search/read batches
   → renderer groups and highlights matches
@@ -61,7 +61,7 @@ SearchViewPane
 ```
 
 `start` 冻结查询参数并返回 opaque `searchId`。App Server 把 connection ID 映射成不含传输语义的
-`SearchOwner`；搜索 crate 只比较 owner，不依赖 JSON-RPC。`read` 使用 `afterMatch` cursor 读取最多 200 条；
+`WorkspaceSearchOwner`；搜索 crate 只比较 owner，不依赖 JSON-RPC。`read` 使用 `afterMatch` cursor 读取最多 200 条；
 没有新结果且作业仍在运行时可以返回空 batch。Renderer 只在结果非空时推进 cursor。
 完成、取消或 Renderer 异常退出当前搜索流程时都会调用 `cancel`；完成作业也会在服务端延迟清理，
 因此 cleanup RPC 失败不改变已返回结果。
@@ -71,7 +71,7 @@ SearchViewPane
 - 查询不能为空，UTF-8 最多 16 KiB；单次搜索最多返回 5,000 条，Desktop 默认 2,000 条。
 - include/exclude 各最多 64 个 workspace-relative glob，每项最多 1 KiB；绝对路径、`..`、
   前导 `!` 和 NUL 被拒绝。
-- `zeta-search` 使用 host discovery 后冻结的 `rg` executable，使用 argument vector 和
+- `zeta-workspace-search` 使用 host discovery 后冻结的 `rg` executable，使用 argument vector 和
   `shell: false` 等价的进程 API，不做 shell 拼接。
 - `rg` 未安装时 stdio App Server 仍可启动，但 `workspaceSearch` capability 为 `false`，
   Search 调用返回 `SearchUnavailable`；Desktop 会把显式 `ZETA_RG_PATH` 透传给可信子进程。

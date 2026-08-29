@@ -1,6 +1,7 @@
 use crate::{
-    SearchCaseSensitivity, SearchError, SearchMatch, SearchMatchRange, SearchOwner, SearchPage,
-    SearchPattern, SearchQuery,
+    WorkspaceSearchCaseSensitivity, WorkspaceSearchError, WorkspaceSearchMatch,
+    WorkspaceSearchMatchRange, WorkspaceSearchOwner, WorkspaceSearchPage, WorkspaceSearchPattern,
+    WorkspaceSearchQuery,
 };
 use serde_json::Value;
 use std::collections::HashMap;
@@ -23,18 +24,18 @@ const MAX_GLOB_BYTES: usize = 1024;
 
 /// Runs bounded background content searches rooted at one workspace.
 ///
-/// The caller supplies a [`SearchOwner`] for each operation. A job can only be read or cancelled
+/// The caller supplies a [`WorkspaceSearchOwner`] for each operation. A job can only be read or cancelled
 /// by the owner that started it, while the host remains free to map that identity to a connection,
 /// session, or other caller boundary.
-pub struct SearchService {
+pub struct WorkspaceSearchService {
     workspace: RwLock<WorkspaceRoot>,
     workspace_authorization: RwLock<Option<TrustedWorkspace>>,
     ripgrep: RipgrepExecutable,
     next_search_id: AtomicU64,
-    jobs: Mutex<HashMap<String, SearchJob>>,
+    jobs: Mutex<HashMap<String, WorkspaceSearchJob>>,
 }
 
-impl SearchService {
+impl WorkspaceSearchService {
     /// Creates a search service with a host-selected workspace root and frozen ripgrep executable.
     pub fn new(workspace: WorkspaceRoot, ripgrep: RipgrepExecutable) -> Self {
         Self {
@@ -50,12 +51,12 @@ impl SearchService {
     pub fn new_authorized(
         workspace: TrustedWorkspace,
         ripgrep: RipgrepExecutable,
-    ) -> Result<Self, SearchError> {
+    ) -> Result<Self, WorkspaceSearchError> {
         workspace
             .ensure_active()
-            .map_err(|_| SearchError::Unavailable)?;
+            .map_err(|_| WorkspaceSearchError::Unavailable)?;
         if workspace.capability() != WorkspaceCapability::SearchRepositoryContent {
-            return Err(SearchError::InvalidInput);
+            return Err(WorkspaceSearchError::InvalidInput);
         }
         Ok(Self {
             workspace: RwLock::new(workspace.root().clone()),
@@ -81,23 +82,27 @@ impl SearchService {
     }
 
     /// Starts a query and returns its opaque search ID.
-    pub fn start(&self, owner: SearchOwner, query: SearchQuery) -> Result<String, SearchError> {
+    pub fn start(
+        &self,
+        owner: WorkspaceSearchOwner,
+        query: WorkspaceSearchQuery,
+    ) -> Result<String, WorkspaceSearchError> {
         validate_query(&query)?;
         let authorization = self
             .workspace_authorization
             .read()
-            .map_err(|_| SearchError::Busy)?
+            .map_err(|_| WorkspaceSearchError::Busy)?
             .clone();
         if authorization
             .as_ref()
             .is_some_and(|workspace| workspace.ensure_active().is_err())
         {
-            return Err(SearchError::Unavailable);
+            return Err(WorkspaceSearchError::Unavailable);
         }
-        let mut jobs = self.jobs.lock().map_err(|_| SearchError::Busy)?;
+        let mut jobs = self.jobs.lock().map_err(|_| WorkspaceSearchError::Busy)?;
         cleanup_jobs(&mut jobs);
         if jobs.len() >= MAX_ACTIVE_SEARCHES {
-            return Err(SearchError::Busy);
+            return Err(WorkspaceSearchError::Busy);
         }
 
         let search_id = format!(
@@ -105,10 +110,10 @@ impl SearchService {
             self.next_search_id.fetch_add(1, Ordering::Relaxed)
         );
         let cancellation = CancellationSource::new();
-        let state = Arc::new(Mutex::new(SearchJobState::default()));
+        let state = Arc::new(Mutex::new(WorkspaceSearchJobState::default()));
         jobs.insert(
             search_id.clone(),
-            SearchJob {
+            WorkspaceSearchJob {
                 owner,
                 cancellation: cancellation.clone(),
                 state: state.clone(),
@@ -137,28 +142,28 @@ impl SearchService {
     /// Reads at most `max_matches` entries after `after_match` for one owner-bound job.
     pub fn read(
         &self,
-        owner: SearchOwner,
+        owner: WorkspaceSearchOwner,
         search_id: &str,
         after_match: usize,
         max_matches: usize,
-    ) -> Result<SearchPage, SearchError> {
+    ) -> Result<WorkspaceSearchPage, WorkspaceSearchError> {
         if max_matches == 0 || max_matches > 200 {
-            return Err(SearchError::InvalidInput);
+            return Err(WorkspaceSearchError::InvalidInput);
         }
-        let mut jobs = self.jobs.lock().map_err(|_| SearchError::Busy)?;
+        let mut jobs = self.jobs.lock().map_err(|_| WorkspaceSearchError::Busy)?;
         cleanup_jobs(&mut jobs);
-        let job = jobs.get(search_id).ok_or(SearchError::NotFound)?;
+        let job = jobs.get(search_id).ok_or(WorkspaceSearchError::NotFound)?;
         if job.owner != owner {
-            return Err(SearchError::NotOwner);
+            return Err(WorkspaceSearchError::NotOwner);
         }
-        let state = job.state.lock().map_err(|_| SearchError::Busy)?;
+        let state = job.state.lock().map_err(|_| WorkspaceSearchError::Busy)?;
         if after_match > state.matches.len() {
-            return Err(SearchError::InvalidInput);
+            return Err(WorkspaceSearchError::InvalidInput);
         }
         let end = after_match
             .saturating_add(max_matches)
             .min(state.matches.len());
-        Ok(SearchPage {
+        Ok(WorkspaceSearchPage {
             matches: state.matches[after_match..end].to_vec(),
             next_match: end,
             completed: state.completed,
@@ -168,12 +173,16 @@ impl SearchService {
     }
 
     /// Cancels and releases one owner-bound job.
-    pub fn cancel(&self, owner: SearchOwner, search_id: &str) -> Result<(), SearchError> {
-        let mut jobs = self.jobs.lock().map_err(|_| SearchError::Busy)?;
+    pub fn cancel(
+        &self,
+        owner: WorkspaceSearchOwner,
+        search_id: &str,
+    ) -> Result<(), WorkspaceSearchError> {
+        let mut jobs = self.jobs.lock().map_err(|_| WorkspaceSearchError::Busy)?;
         cleanup_jobs(&mut jobs);
-        let job = jobs.get(search_id).ok_or(SearchError::NotFound)?;
+        let job = jobs.get(search_id).ok_or(WorkspaceSearchError::NotFound)?;
         if job.owner != owner {
-            return Err(SearchError::NotOwner);
+            return Err(WorkspaceSearchError::NotOwner);
         }
         let job = jobs
             .remove(search_id)
@@ -193,14 +202,14 @@ impl SearchService {
     }
 }
 
-struct SearchJob {
-    owner: SearchOwner,
+struct WorkspaceSearchJob {
+    owner: WorkspaceSearchOwner,
     cancellation: CancellationSource,
-    state: Arc<Mutex<SearchJobState>>,
+    state: Arc<Mutex<WorkspaceSearchJobState>>,
     created_at: Instant,
 }
 
-impl SearchJob {
+impl WorkspaceSearchJob {
     fn is_expired(&self, now: Instant) -> bool {
         let completed = self.state.lock().map_or(true, |state| state.completed);
         completed && now.duration_since(self.created_at) >= SEARCH_RETENTION
@@ -208,19 +217,19 @@ impl SearchJob {
 }
 
 #[derive(Default)]
-struct SearchJobState {
-    matches: Vec<SearchMatch>,
+struct WorkspaceSearchJobState {
+    matches: Vec<WorkspaceSearchMatch>,
     completed: bool,
     limit_hit: bool,
     error: Option<String>,
 }
 
-fn cleanup_jobs(jobs: &mut HashMap<String, SearchJob>) {
+fn cleanup_jobs(jobs: &mut HashMap<String, WorkspaceSearchJob>) {
     let now = Instant::now();
     jobs.retain(|_, job| !job.is_expired(now));
 }
 
-fn validate_query(query: &SearchQuery) -> Result<(), SearchError> {
+fn validate_query(query: &WorkspaceSearchQuery) -> Result<(), WorkspaceSearchError> {
     if query.query.is_empty()
         || query.query.len() > 16_384
         || query.query.contains('\0')
@@ -229,7 +238,7 @@ fn validate_query(query: &SearchQuery) -> Result<(), SearchError> {
         || query.include_patterns.len() > 64
         || query.exclude_patterns.len() > 64
     {
-        return Err(SearchError::InvalidInput);
+        return Err(WorkspaceSearchError::InvalidInput);
     }
     query
         .include_patterns
@@ -238,7 +247,7 @@ fn validate_query(query: &SearchQuery) -> Result<(), SearchError> {
         .try_for_each(|pattern| validate_glob(pattern))
 }
 
-fn validate_glob(pattern: &str) -> Result<(), SearchError> {
+fn validate_glob(pattern: &str) -> Result<(), WorkspaceSearchError> {
     let normalized = pattern.replace('\\', "/");
     if pattern.is_empty()
         || pattern.len() > MAX_GLOB_BYTES
@@ -250,7 +259,7 @@ fn validate_glob(pattern: &str) -> Result<(), SearchError> {
             .get(1..3)
             .is_some_and(|prefix| prefix.starts_with(":/"))
     {
-        return Err(SearchError::InvalidInput);
+        return Err(WorkspaceSearchError::InvalidInput);
     }
     Ok(())
 }
@@ -259,9 +268,9 @@ fn run_search(
     workspace: WorkspaceRoot,
     authorization: Option<TrustedWorkspace>,
     ripgrep: RipgrepExecutable,
-    query: SearchQuery,
+    query: WorkspaceSearchQuery,
     cancellation: CancellationSource,
-    state: Arc<Mutex<SearchJobState>>,
+    state: Arc<Mutex<WorkspaceSearchJobState>>,
 ) {
     let mut command = Command::new(ripgrep.path());
     command
@@ -328,7 +337,7 @@ fn run_search(
     }
 }
 
-fn search_arguments(query: &SearchQuery) -> Vec<String> {
+fn search_arguments(query: &WorkspaceSearchQuery) -> Vec<String> {
     let mut arguments = vec![
         "--no-config".into(),
         "--json".into(),
@@ -340,14 +349,14 @@ fn search_arguments(query: &SearchQuery) -> Vec<String> {
         "--max-filesize=16M".into(),
     ];
     match query.pattern {
-        SearchPattern::Literal => arguments.push("--fixed-strings".into()),
-        SearchPattern::Regex => {}
+        WorkspaceSearchPattern::Literal => arguments.push("--fixed-strings".into()),
+        WorkspaceSearchPattern::Regex => {}
     }
     arguments.push(
         match query.case_sensitivity {
-            SearchCaseSensitivity::Smart => "--smart-case",
-            SearchCaseSensitivity::Sensitive => "--case-sensitive",
-            SearchCaseSensitivity::Insensitive => "--ignore-case",
+            WorkspaceSearchCaseSensitivity::Smart => "--smart-case",
+            WorkspaceSearchCaseSensitivity::Sensitive => "--case-sensitive",
+            WorkspaceSearchCaseSensitivity::Insensitive => "--ignore-case",
         }
         .into(),
     );
@@ -365,7 +374,7 @@ fn parse_stdout(
     stdout: impl Read,
     max_results: usize,
     cancellation: &CancellationSource,
-    state: &Arc<Mutex<SearchJobState>>,
+    state: &Arc<Mutex<WorkspaceSearchJobState>>,
 ) -> Result<(), String> {
     for line in BufReader::new(stdout).lines() {
         if cancellation.token().is_cancelled() {
@@ -389,7 +398,7 @@ fn parse_stdout(
     Ok(())
 }
 
-fn parse_match(line: &str) -> Result<Option<SearchMatch>, String> {
+fn parse_match(line: &str) -> Result<Option<WorkspaceSearchMatch>, String> {
     let value: Value = serde_json::from_str(line)
         .map_err(|_| "Workspace search returned invalid JSON.".to_owned())?;
     if value.get("type").and_then(Value::as_str) != Some("match") {
@@ -423,7 +432,7 @@ fn parse_match(line: &str) -> Result<Option<SearchMatch>, String> {
         .filter_map(|range| {
             let start = usize::try_from(range.get("start")?.as_u64()?).ok()?;
             let end = usize::try_from(range.get("end")?.as_u64()?).ok()?;
-            Some(SearchMatchRange {
+            Some(WorkspaceSearchMatchRange {
                 start: byte_offset_to_utf16(&preview, start)?,
                 end: byte_offset_to_utf16(&preview, end)?,
             })
@@ -432,7 +441,7 @@ fn parse_match(line: &str) -> Result<Option<SearchMatch>, String> {
     if ranges.is_empty() {
         return Ok(None);
     }
-    Ok(Some(SearchMatch {
+    Ok(Some(WorkspaceSearchMatch {
         path: Path::new(&path).to_path_buf(),
         line_number,
         preview,
@@ -454,14 +463,14 @@ fn read_bounded_error(mut stderr: impl Read) -> String {
     String::from_utf8_lossy(&bytes).into_owned()
 }
 
-fn complete_with_error(state: &Arc<Mutex<SearchJobState>>, message: &str) {
+fn complete_with_error(state: &Arc<Mutex<WorkspaceSearchJobState>>, message: &str) {
     if let Ok(mut state) = state.lock() {
         state.error = Some(message.into());
         state.completed = true;
     }
 }
 
-fn set_error(state: &Arc<Mutex<SearchJobState>>, message: String) {
+fn set_error(state: &Arc<Mutex<WorkspaceSearchJobState>>, message: String) {
     if let Ok(mut state) = state.lock()
         && state.error.is_none()
     {

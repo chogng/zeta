@@ -8,7 +8,7 @@
 > [`docs/mcp.md`](../../docs/mcp.md)，Git/SCM 跨进程 ownership 见
 > [`docs/git.md`](../../docs/git.md)，Workspace identity 与 trust boundary 见
 > [`docs/workspace-security.md`](../../docs/workspace-security.md)。跨文件内容搜索的执行实现见
-> [`zeta-rs/search/README.md`](../search/README.md)。Desktop 浏览器能力的跨进程所有权和当前限制见
+> [`zeta-rs/workspace-search/README.md`](../workspace-search/README.md)。Desktop 浏览器能力的跨进程所有权和当前限制见
 > [`docs/zeta-desktop-architecture.md`](../../docs/zeta-desktop-architecture.md#7-浏览器能力)。Marketplace
 > Manager client composition、capability handoff、迁移边界和启动失败隔离见
 > [`docs/marketplace-integration.md`](../../docs/marketplace-integration.md)。
@@ -32,7 +32,7 @@ JSONL / in-process caller
    ├─ ConfigStore
    ├─ optional WorkspaceFileSystem + filesystem watcher
    ├─ optional GitRuntime → zeta-file-watcher + GitService → zeta-git
-   ├─ optional SearchService → zeta-search
+   ├─ optional WorkspaceSearchService → zeta-workspace-search
    ├─ AgentGrepService → frozen rg | zeta-fast-regex-search
    ├─ optional CodeIndexRuntime → zeta-code-index + filesystem watcher
    ├─ optional SymbolIndexRuntime → zeta-symbol-index + CodeIndex source/overlay authority
@@ -276,8 +276,8 @@ src/
 | `GitRuntime` | crate-private | 串行 operation、为每次 runtime incarnation 创建 `StreamInstanceId`、投影 workspace status、推进实例内 revision 并发布去重 notification | watcher event 不直接成为 Git truth |
 | `project_status` in `git_runtime` | private | `zeta-git` snapshot → renderer-safe protocol DTO | 不回传绝对 metadata path 或 internal stderr |
 | `file_type` in `fs_operations` | private | foundation file kind → protocol DTO | wire enum 只由 protocol crate 定义 |
-| `search_operations::{search_query, search_page}` | private | `WorkspaceSearch*` DTO 与 `zeta-search` 领域类型之间的显式转换 | 不复制查询校验、rg argv、job state 或 parsing |
-| `SearchService` | external crate | 持有 active workspace、frozen rg 和 owner-bound job map | App Server 不把 connection/DTO/UI 语义写入该 crate |
+| `search_operations::{search_query, search_page}` | private | `WorkspaceSearch*` DTO 与 `zeta-workspace-search` 领域类型之间的显式转换 | 不复制查询校验、rg argv、job state 或 parsing |
+| `WorkspaceSearchService` | external crate | 持有 active workspace、frozen rg 和 owner-bound job map | App Server 不把 connection/DTO/UI 语义写入该 crate |
 | `CodeIndexRuntime` | crate-private | 串行 rebuild/refresh，投影 lifecycle，并在返回前 materialize | 不拥有 scan/chunk/schema，也不创建网络请求 |
 | `CodeIndexRefreshWorker` | private | 单 wake + merged paths/rescan priority 的后台刷新 | 不阻塞 filesystem notification thread，不建立无界 event queue |
 | `SymbolIndexRuntime` | crate-private | 在 canonical source generation 后 reconcile，保持 last-ready/stale 状态，并暴露 current index | 不扫描 Workspace、不请求 LSP、不拥有 UI fusion |

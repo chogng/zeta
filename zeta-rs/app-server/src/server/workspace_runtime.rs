@@ -64,7 +64,7 @@ use zeta_model_provider::SemanticModelProvider;
 use zeta_model_provider_config::ModelProviderConfig;
 use zeta_protocol::ProviderId;
 use zeta_protocol::{CommandId, SessionId, TurnStatus};
-use zeta_search::SearchService;
+use zeta_workspace_search::WorkspaceSearchService;
 use zeta_shell_command::RipgrepExecutable;
 use zeta_symbol_index::SymbolIndexStorage;
 use zeta_tools::ToolRegistryGeneration;
@@ -84,10 +84,10 @@ pub(super) struct WorkspaceRuntime {
         BTreeMap<(SessionId, PathBuf), SessionAdditionalDirectoryWatcher>,
     pub(super) _git_watcher: Option<GitWatcher>,
     pub(super) git: Option<Arc<GitRuntime>>,
-    pub(super) workspace_search: Option<Arc<SearchService>>,
-    pub(super) folder_workspace_search: BTreeMap<String, Arc<SearchService>>,
+    pub(super) workspace_search: Option<Arc<WorkspaceSearchService>>,
+    pub(super) folder_workspace_search: BTreeMap<String, Arc<WorkspaceSearchService>>,
     pub(super) session_additional_directory_search:
-        BTreeMap<(SessionId, PathBuf), Arc<SearchService>>,
+        BTreeMap<(SessionId, PathBuf), Arc<WorkspaceSearchService>>,
     pub(super) ripgrep: Option<RipgrepExecutable>,
     pub(super) agent_grep: Option<Arc<AgentGrepService>>,
     pub(super) code_index: Option<Arc<CodeIndexRuntime>>,
@@ -1342,7 +1342,7 @@ impl AppServer {
                     primary_search.clone()
                 } else {
                     ripgrep.as_ref().map(|ripgrep| {
-                        Arc::new(SearchService::new(
+                        Arc::new(WorkspaceSearchService::new(
                             authorization.root().clone(),
                             ripgrep.clone(),
                         ))
@@ -1982,7 +1982,10 @@ impl AppServer {
             (current.workspace_search.clone(), current.terminals.clone())
         };
         let workspace_search = existing_search.unwrap_or_else(|| {
-            Arc::new(SearchService::new(workspace.clone(), local.ripgrep.clone()))
+            Arc::new(WorkspaceSearchService::new(
+                workspace.clone(),
+                local.ripgrep.clone(),
+            ))
         });
         let ripgrep = local.ripgrep.clone();
         workspace_search.cancel_all();
@@ -2438,7 +2441,7 @@ impl AppServer {
     pub(super) fn workspace_search_service_for(
         &self,
         workspace_folder_id: Option<&str>,
-    ) -> Result<Arc<SearchService>, RpcError> {
+    ) -> Result<Arc<WorkspaceSearchService>, RpcError> {
         let runtime = self
             .workspace_runtime
             .read()
@@ -2459,7 +2462,7 @@ impl AppServer {
     pub(super) fn workspace_search_service_for_session_directory(
         &self,
         selector: &zeta_app_server_protocol::protocol::workspace::WorkspaceSessionDirectorySelector,
-    ) -> Result<Arc<SearchService>, RpcError> {
+    ) -> Result<Arc<WorkspaceSearchService>, RpcError> {
         let workspace = self.session_additional_directory_workspace(
             &selector.session_id,
             &selector.root,
@@ -2481,7 +2484,7 @@ impl AppServer {
             .clone()
             .ok_or_else(|| RpcError::new(-32050, AppServerErrorName::SearchUnavailable))?;
         let search = Arc::new(
-            SearchService::new_authorized(workspace, ripgrep)
+            WorkspaceSearchService::new_authorized(workspace, ripgrep)
                 .map_err(|_| RpcError::new(-32043, AppServerErrorName::WorkspaceTrustRequired))?,
         );
         runtime
@@ -2920,7 +2923,7 @@ impl RerankInvoker for ConsentBoundRerankInvoker {
 
 fn retire_workspace_runtime(
     mut runtime: WorkspaceRuntime,
-    retained_search: Option<&Arc<SearchService>>,
+    retained_search: Option<&Arc<WorkspaceSearchService>>,
     retained_terminals: Option<&Arc<crate::terminal_service::TerminalService>>,
     retained_debug_adapters: Option<&Arc<crate::debug_service::DebugAdapterService>>,
 ) {

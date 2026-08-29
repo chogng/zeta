@@ -287,7 +287,7 @@ default。审批模型始终来自 User/managed configuration，Workspace 无权
 只覆盖该轮；不存在时读取当前 resolved snapshot。Core 在 `StartTurn` command、`TurnAccepted`
 event 和 Turn snapshot 中保存最终模式，因此 command replay 和进程恢复不会重新读取可变配置。
 
-`ResolvedConfig.agent_grep_backend` 由 App Server 的本地工具安全点读取。配置变化会重组后续 Agent 调用所使用的 `grep` 执行方式；已经开始的 Tool Call 保留原绑定。`ripgrep` 与 `fastRegex` 都不改变 `zeta-search` 的工作区 Search RPC。
+`ResolvedConfig.agent_grep_backend` 由 App Server 的本地工具安全点读取。配置变化会重组后续 Agent 调用所使用的 `grep` 执行方式；已经开始的 Tool Call 保留原绑定。`ripgrep` 与 `fastRegex` 都不改变 `zeta-workspace-search` 的工作区 Search RPC。
 
 `ConfigGeneration` 只在 consumer-visible resolved value 或 diagnostics gate 发生变化时递增。
 snapshot 不包含：

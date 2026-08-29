@@ -78,7 +78,7 @@ zeta-rmcp-client = { workspace = true }
 zeta-sandboxing = { workspace = true }
 zeta-workspace = { workspace = true }
 zeta-workspace-access = { workspace = true }
-zeta-search = { workspace = true }
+zeta-workspace-search = { workspace = true }
 zeta-secrets = { workspace = true }
 zeta-shell-command = { workspace = true }
 zeta-slash-commands = { workspace = true }
