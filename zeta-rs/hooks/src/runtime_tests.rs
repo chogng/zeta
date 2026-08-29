@@ -15,6 +15,7 @@ use zeta_config::HookEvent as ConfigHookEvent;
 use zeta_core::AfterToolHookRequest;
 use zeta_core::BeforeToolHookRequest;
 use zeta_core::HookOutcome;
+use zeta_core::{HookExecutionEvent, HookExecutionObserver};
 use zeta_protocol::ThreadId;
 use zeta_protocol::ToolCallId;
 use zeta_protocol::TurnId;
@@ -47,6 +48,29 @@ struct RecordingProcess {
     executions: Mutex<Vec<String>>,
     calls: AtomicUsize,
     decision: Mutex<crate::outcome::HookDecision>,
+}
+
+#[derive(Default)]
+struct RecordingObserver {
+    started: Mutex<Vec<HookExecutionEvent>>,
+    finished: Mutex<Vec<HookExecutionEvent>>,
+}
+
+impl HookExecutionObserver for RecordingObserver {
+    fn will_execute(&self, event: &HookExecutionEvent) -> Result<(), CoreError> {
+        self.started
+            .lock()
+            .expect("observer start lock")
+            .push(event.clone());
+        Ok(())
+    }
+
+    fn did_finish(&self, event: &HookExecutionEvent) {
+        self.finished
+            .lock()
+            .expect("observer finish lock")
+            .push(event.clone());
+    }
 }
 
 impl HookProcessExecutor for RecordingProcess {
@@ -189,6 +213,44 @@ fn runtime_matches_events_and_tool_filters_in_stable_order() {
             .expect("recording process lock")
             .as_slice(),
         ["user:hook:before-all", "user:hook:before-shell"]
+    );
+}
+
+#[test]
+fn managed_thread_hooks_use_the_thread_process_and_report_its_lifecycle() {
+    let (runtime, primary) = runtime([hook(
+        "user:hook:thread",
+        ConfigHookEvent::BeforeTool,
+        &[],
+        HookEnablement::Enabled,
+    )]);
+    let thread_process = Arc::new(RecordingProcess {
+        workspace: test_workspace(),
+        executions: Mutex::new(Vec::new()),
+        calls: AtomicUsize::new(0),
+        decision: Mutex::new(crate::outcome::HookDecision::Continue),
+    });
+    runtime.bind_thread_process(
+        ThreadId::new("thread-test").unwrap(),
+        thread_process.clone(),
+    );
+    let observer = Arc::new(RecordingObserver::default());
+    runtime.set_execution_observer(observer.clone());
+
+    runtime
+        .before_tool(
+            &before_request("shell-command"),
+            &CancellationSource::new().token(),
+        )
+        .expect("thread Hook run");
+
+    assert_eq!(primary.calls.load(Ordering::SeqCst), 0);
+    assert_eq!(thread_process.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(observer.started.lock().unwrap().len(), 1);
+    assert_eq!(observer.finished.lock().unwrap().len(), 1);
+    assert_eq!(
+        observer.started.lock().unwrap()[0].thread_id.as_str(),
+        "thread-test"
     );
 }
 

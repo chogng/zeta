@@ -23,6 +23,11 @@ use crate::ThreadController;
 use crate::ThreadUpdateSink;
 use crate::ToolService;
 use crate::TurnCompletedHookRequest;
+use crate::TurnExecutionFinished;
+use crate::TurnExecutionKind;
+use crate::TurnExecutionObserver;
+use crate::TurnExecutionStarted;
+use crate::TurnExecutionTerminalState;
 use crate::action_policy_service::UnavailableActionPolicyService;
 use crate::context::CONTEXT_CALIBRATION_REVISION;
 use crate::context::CONTEXT_ESTIMATOR_REVISION;
@@ -87,6 +92,7 @@ pub struct TurnExecutor {
     harness_context: Arc<dyn HarnessContextProvider>,
     context_source: Arc<dyn crate::ContextSource>,
     hooks: Arc<dyn HookService>,
+    execution_observer: Arc<dyn TurnExecutionObserver>,
     extensions: Arc<zeta_extension_api::ExtensionRegistry>,
     code_mode: CodeModeBroker,
 }
@@ -209,6 +215,7 @@ impl TurnExecutor {
             }),
             context_source: Arc::new(crate::NoContextSource),
             hooks: Arc::new(NoHooks),
+            execution_observer: Arc::new(crate::NoTurnExecutionObserver),
             extensions: Arc::new(zeta_extension_api::ExtensionRegistry::default()),
             code_mode,
         }
@@ -264,6 +271,12 @@ impl TurnExecutor {
     /// Installs the host-owned Hook runtime used at Core safe-points.
     pub fn with_hooks(mut self, hooks: Arc<dyn HookService>) -> Self {
         self.hooks = hooks;
+        self
+    }
+
+    /// Installs the host-owned durable workspace checkpoint observer.
+    pub fn with_execution_observer(mut self, observer: Arc<dyn TurnExecutionObserver>) -> Self {
+        self.execution_observer = observer;
         self
     }
 
@@ -431,18 +444,48 @@ impl TurnExecutor {
             .read_thread(thread_id)
             .map(|snapshot| snapshot.sequence)
             .unwrap_or(0);
-        let result = match self.execute_shell_steps(thread_id, turn_id, cancellation) {
-            Ok(completion) => Ok(completion),
-            Err(ExecutionFailure::Cancelled(error)) | Err(ExecutionFailure::Interrupted(error)) => {
-                self.threads.interrupt_execution(thread_id, turn_id)?;
-                Err(error)
-            }
-            Err(ExecutionFailure::Failed { error, stable }) => {
-                self.threads.fail_turn(thread_id, turn_id, stable)?;
-                Err(error)
-            }
-        };
+        let execution = self.execution_started(thread_id, turn_id, TurnExecutionKind::Shell)?;
+        if let Err(error) = self.execution_observer.will_execute(&execution) {
+            self.threads.fail_turn(
+                thread_id,
+                turn_id,
+                StableTurnError::workspace_capture_failed(),
+            )?;
+            self.publish_committed_after(thread_id, sequence_before_execution);
+            self.execution_observer.did_finish(&TurnExecutionFinished {
+                session_id: execution.session_id,
+                thread_id: execution.thread_id,
+                turn_id: execution.turn_id,
+                terminal_state: TurnExecutionTerminalState::Failed,
+            });
+            return Err(error);
+        }
+        let (result, terminal_state) =
+            match self.execute_shell_steps(thread_id, turn_id, cancellation) {
+                Ok(completion @ TurnExecutionOutcome::WaitingForApproval)
+                | Ok(completion @ TurnExecutionOutcome::WaitingForCapability) => {
+                    (Ok(completion), None)
+                }
+                Ok(completion) => (Ok(completion), Some(TurnExecutionTerminalState::Completed)),
+                Err(ExecutionFailure::Cancelled(error))
+                | Err(ExecutionFailure::Interrupted(error)) => {
+                    self.threads.interrupt_execution(thread_id, turn_id)?;
+                    (Err(error), Some(TurnExecutionTerminalState::Interrupted))
+                }
+                Err(ExecutionFailure::Failed { error, stable }) => {
+                    self.threads.fail_turn(thread_id, turn_id, stable)?;
+                    (Err(error), Some(TurnExecutionTerminalState::Failed))
+                }
+            };
         self.publish_committed_after(thread_id, sequence_before_execution);
+        if let Some(terminal_state) = terminal_state {
+            self.execution_observer.did_finish(&TurnExecutionFinished {
+                session_id: execution.session_id,
+                thread_id: execution.thread_id,
+                turn_id: execution.turn_id,
+                terminal_state,
+            });
+        }
         if matches!(&result, Ok(TurnExecutionOutcome::Completed(_))) {
             let _ = self.maybe_start_goal_continuation(thread_id, turn_id);
         }
@@ -535,22 +578,53 @@ impl TurnExecutor {
             .read_thread(thread_id)
             .map(|snapshot| snapshot.sequence)
             .unwrap_or(0);
-        let result = match self.execute_steps(thread_id, turn_id, cancellation) {
-            Ok(completion) => Ok(completion),
+        let execution_kind = if self.is_context_compaction_turn(thread_id, turn_id)? {
+            TurnExecutionKind::ContextCompaction
+        } else {
+            TurnExecutionKind::Agent
+        };
+        let execution = self.execution_started(thread_id, turn_id, execution_kind)?;
+        if let Err(error) = self.execution_observer.will_execute(&execution) {
+            self.threads.fail_turn(
+                thread_id,
+                turn_id,
+                StableTurnError::workspace_capture_failed(),
+            )?;
+            self.publish_committed_after(thread_id, sequence_before_execution);
+            self.execution_observer.did_finish(&TurnExecutionFinished {
+                session_id: execution.session_id,
+                thread_id: execution.thread_id,
+                turn_id: execution.turn_id,
+                terminal_state: TurnExecutionTerminalState::Failed,
+            });
+            return Err(error);
+        }
+        let (result, terminal_state) = match self.execute_steps(thread_id, turn_id, cancellation) {
+            Ok(completion @ TurnExecutionOutcome::WaitingForApproval)
+            | Ok(completion @ TurnExecutionOutcome::WaitingForCapability) => (Ok(completion), None),
+            Ok(completion) => (Ok(completion), Some(TurnExecutionTerminalState::Completed)),
             Err(ExecutionFailure::Cancelled(error)) => {
                 self.threads.interrupt_execution(thread_id, turn_id)?;
-                Err(error)
+                (Err(error), Some(TurnExecutionTerminalState::Interrupted))
             }
             Err(ExecutionFailure::Interrupted(error)) => {
                 self.threads.interrupt_execution(thread_id, turn_id)?;
-                Err(error)
+                (Err(error), Some(TurnExecutionTerminalState::Interrupted))
             }
             Err(ExecutionFailure::Failed { error, stable }) => {
                 self.threads.fail_turn(thread_id, turn_id, stable)?;
-                Err(error)
+                (Err(error), Some(TurnExecutionTerminalState::Failed))
             }
         };
         self.publish_committed_after(thread_id, sequence_before_execution);
+        if let Some(terminal_state) = terminal_state {
+            self.execution_observer.did_finish(&TurnExecutionFinished {
+                session_id: execution.session_id,
+                thread_id: execution.thread_id,
+                turn_id: execution.turn_id,
+                terminal_state,
+            });
+        }
         if !matches!(
             &result,
             Ok(TurnExecutionOutcome::WaitingForApproval
@@ -562,6 +636,21 @@ impl TurnExecutor {
             let _ = self.maybe_start_goal_continuation(thread_id, turn_id);
         }
         result
+    }
+
+    fn execution_started(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        kind: TurnExecutionKind,
+    ) -> Result<TurnExecutionStarted, CoreError> {
+        let snapshot = self.threads.read_thread(thread_id)?;
+        Ok(TurnExecutionStarted {
+            session_id: snapshot.session_id,
+            thread_id: thread_id.clone(),
+            turn_id: turn_id.clone(),
+            kind,
+        })
     }
 
     fn execute_steps(
@@ -1283,6 +1372,7 @@ impl TurnExecutor {
         .with_thread_updates(self.updates.clone())
         .with_hooks(self.hooks.clone())
         .with_code_mode(self.code_mode.clone())
+        .with_execution_observer(self.execution_observer.clone())
     }
 }
 

@@ -102,6 +102,7 @@ members = [
     "zeta-rs/theme",
     "zeta-rs/thread-store",
     "zeta-rs/thread-transcript",
+    "zeta-rs/turn-changes",
     "zeta-rs/tools",
     "zeta-rs/uds",
     "zeta-code/tui",
@@ -396,6 +397,7 @@ zeta-theme = { path = "zeta-rs/theme" }
 zeta-ui-theme = { path = "app/theme" }
 zeta-thread-store = { path = "zeta-rs/thread-store" }
 zeta-thread-transcript = { path = "zeta-rs/thread-transcript" }
+zeta-turn-changes = { path = "zeta-rs/turn-changes" }
 zeta-tools = { path = "zeta-rs/tools" }
 zeta-tui = { path = "zeta-code/tui" }
 zeta-uds = { path = "zeta-rs/uds" }

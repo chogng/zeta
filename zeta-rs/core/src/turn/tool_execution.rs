@@ -19,11 +19,15 @@ use crate::ToolOutputSink;
 use crate::ToolReplaySafety;
 use crate::ToolService;
 use crate::ToolUserInputOutcome;
+use crate::TurnExecutionObserver;
+use crate::TurnToolExecutionFinished;
+use crate::TurnToolExecutionStarted;
 use crate::action_policy_service::durable_sandbox_escalation_approval_request;
 use crate::thread_controller::RecordToolExecutionEscalation;
 use crate::thread_controller::RecordToolExecutionStart;
 use std::sync::Arc;
 use zeta_action_policy::ActionReviewRequest;
+use zeta_action_policy::CapabilityKind;
 use zeta_action_policy::ExecutionDecision;
 use zeta_action_policy::SandboxDenialEvidence;
 use zeta_async_utils::CancellationToken;
@@ -118,6 +122,7 @@ pub(super) struct ToolExecutionOrchestrator {
     tools: Arc<dyn ToolService>,
     policy: Arc<dyn ActionPolicyService>,
     updates: Arc<dyn ThreadUpdateSink>,
+    execution_observer: Arc<dyn TurnExecutionObserver>,
 }
 
 impl ToolExecutionOrchestrator {
@@ -126,12 +131,14 @@ impl ToolExecutionOrchestrator {
         tools: Arc<dyn ToolService>,
         policy: Arc<dyn ActionPolicyService>,
         updates: Arc<dyn ThreadUpdateSink>,
+        execution_observer: Arc<dyn TurnExecutionObserver>,
     ) -> Self {
         Self {
             threads,
             tools,
             policy,
             updates,
+            execution_observer,
         }
     }
 
@@ -152,6 +159,33 @@ impl ToolExecutionOrchestrator {
                 authority: execution_authority(&authorization),
             },
         )?;
+
+        if let Err(error) = self
+            .execution_observer
+            .tool_will_execute(&TurnToolExecutionStarted {
+                session_id: context.session_id.clone(),
+                thread_id: context.thread_id.clone(),
+                turn_id: context.turn_id.clone(),
+                tool_call_id: call.id.clone(),
+                name: call.name.clone(),
+                arguments: call.arguments.clone(),
+                write_capable: reviewed
+                    .action()
+                    .required_capabilities()
+                    .iter()
+                    .any(|capability| capability.kind() == &CapabilityKind::FileWrite),
+            })
+        {
+            self.threads.record_tool_result(
+                context.thread_id,
+                context.turn_id,
+                RecordToolResultRequest {
+                    tool_call_id: call.id,
+                    output: ToolCallOutput::Failure(error.to_string()),
+                },
+            )?;
+            return Ok(ToolExecutionCompletion::Complete);
+        }
 
         let (output, completion) =
             match self.execute_initial_attempt(context, &call, reviewed, authorization) {
@@ -416,6 +450,23 @@ impl ToolExecutionOrchestrator {
             interactions,
             &mut stream,
         );
+        let outcome_unknown = match &output {
+            Err(_) | Ok(ToolExecutionOutput::OutcomeUnknown(_)) => true,
+            Ok(ToolExecutionOutput::SandboxDenied(denial)) => {
+                denial.replay_safety() == ToolReplaySafety::MayHaveSideEffects
+            }
+            Ok(_) => false,
+        };
+        self.execution_observer
+            .tool_did_finish(&TurnToolExecutionFinished {
+                session_id: context.session_id.clone(),
+                thread_id: context.thread_id.clone(),
+                turn_id: context.turn_id.clone(),
+                tool_call_id: call.id.clone(),
+                name: call.name.clone(),
+                arguments: call.arguments.clone(),
+                outcome_unknown,
+            });
         for update in self
             .threads
             .thread_updates_after(context.thread_id, before_sequence)?

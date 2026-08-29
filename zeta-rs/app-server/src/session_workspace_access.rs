@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::RwLock;
 use zeta_protocol::SessionId;
+use zeta_protocol::ThreadId;
 use zeta_workspace::WorkspaceAuthorization;
 use zeta_workspace::WorkspaceCapability;
 use zeta_workspace::WorkspaceRoot;
@@ -20,6 +21,7 @@ use zeta_workspace_access::WorkspaceAccessSnapshot;
 #[derive(Default)]
 pub(crate) struct SessionWorkspaceAccess {
     authorities: RwLock<BTreeMap<SessionId, WorkspaceAccessAuthority>>,
+    thread_workspaces: RwLock<BTreeMap<ThreadId, WorkspaceAuthorization>>,
 }
 
 #[derive(Clone, Debug)]
@@ -56,6 +58,45 @@ impl SessionWorkspaceAccess {
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .remove(session_id);
+    }
+
+    pub(crate) fn bind_thread_workspace(&self, thread_id: ThreadId, root: WorkspaceRoot) {
+        self.thread_workspaces
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(
+                thread_id,
+                WorkspaceAuthorization::new(
+                    root,
+                    WorkspaceTrustDecision::Trusted(
+                        zeta_workspace::WorkspaceTrustSource::HostConfiguration,
+                    ),
+                ),
+            );
+    }
+
+    pub(crate) fn unbind_thread_workspace(&self, thread_id: &ThreadId) {
+        self.thread_workspaces
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(thread_id);
+    }
+
+    pub(crate) fn thread_workspace(
+        &self,
+        thread_id: &ThreadId,
+        capability: WorkspaceCapability,
+    ) -> Result<Option<zeta_workspace::TrustedWorkspace>, WorkspaceAccessError> {
+        self.thread_workspaces
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(thread_id)
+            .map(|authorization| authorization.require(capability))
+            .transpose()
+            .map_err(|error| WorkspaceAccessError::CapabilityUnavailable {
+                root: error.root().canonical_path().to_path_buf(),
+                capability,
+            })
     }
 
     pub(crate) fn add_directory(

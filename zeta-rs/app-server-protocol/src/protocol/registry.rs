@@ -88,6 +88,8 @@ use crate::protocol::common::TurnId;
 use crate::protocol::common::WorkspaceTrustHostCapability;
 use crate::protocol::config::AgentGrepBackendDto;
 use crate::protocol::config::ApprovalReviewModelSelectionDto;
+use crate::protocol::config::CommitMessageAuthorizeParams;
+use crate::protocol::config::CommitMessageRevokeParams;
 use crate::protocol::config::ConfigChanged;
 use crate::protocol::config::ConfigCommandDispositionDto;
 use crate::protocol::config::ConfigCommandResult;
@@ -554,6 +556,29 @@ use crate::protocol::turn::TurnInteractionResolveResult;
 use crate::protocol::turn::TurnInterruptResult;
 use crate::protocol::turn::TurnStartResult;
 use crate::protocol::turn::TurnSteerResult;
+use crate::protocol::turn_changes::ChangeSetId;
+use crate::protocol::turn_changes::ThreadWorkspaceBinding;
+use crate::protocol::turn_changes::ThreadWorkspaceRepositoryBindingDto;
+use crate::protocol::turn_changes::TurnChangeCaptureStateDto;
+use crate::protocol::turn_changes::TurnChangeCommitStateDto;
+use crate::protocol::turn_changes::TurnChangeFileDto;
+use crate::protocol::turn_changes::TurnChangeFileKindDto;
+use crate::protocol::turn_changes::TurnChangeFileStatisticsDto;
+use crate::protocol::turn_changes::TurnChangeMessageStateDto;
+use crate::protocol::turn_changes::TurnChangeSetSummary;
+use crate::protocol::turn_changes::TurnChangeTerminalStateDto;
+use crate::protocol::turn_changes::TurnChangesChanged;
+use crate::protocol::turn_changes::TurnChangesCommitParams;
+use crate::protocol::turn_changes::TurnChangesDiscardThreadParams;
+use crate::protocol::turn_changes::TurnChangesListParams;
+use crate::protocol::turn_changes::TurnChangesListResult;
+use crate::protocol::turn_changes::TurnChangesMutationParams;
+use crate::protocol::turn_changes::TurnChangesMutationResult;
+use crate::protocol::turn_changes::TurnChangesReadFileParams;
+use crate::protocol::turn_changes::TurnChangesReadFileResult;
+use crate::protocol::turn_changes::TurnChangesReadParams;
+use crate::protocol::turn_changes::TurnChangesReadResult;
+use crate::protocol::turn_changes::TurnChangesUpdateDraftParams;
 use crate::protocol::workspace::WorkspaceAdditionalDirectoryAddParams;
 use crate::protocol::workspace::WorkspaceAdditionalDirectoryContributionsDto;
 use crate::protocol::workspace::WorkspaceAdditionalDirectoryDto;
@@ -1102,6 +1127,41 @@ client_methods! {
         response: ThreadGoalClearResponse,
         serialization: GlobalExclusive,
     },
+    TurnChangesList => "turnChanges/list" {
+        params: TurnChangesListParams,
+        response: TurnChangesListResult,
+        serialization: SessionSharedRead,
+    },
+    TurnChangesRead => "turnChanges/read" {
+        params: TurnChangesReadParams,
+        response: TurnChangesReadResult,
+        serialization: SessionSharedRead,
+    },
+    TurnChangesReadFile => "turnChanges/readFile" {
+        params: TurnChangesReadFileParams,
+        response: TurnChangesReadFileResult,
+        serialization: SessionSharedRead,
+    },
+    TurnChangesGenerateMessage => "turnChanges/generateMessage" {
+        params: TurnChangesMutationParams,
+        response: TurnChangesMutationResult,
+        serialization: SessionExclusive,
+    },
+    TurnChangesUpdateDraft => "turnChanges/updateDraft" {
+        params: TurnChangesUpdateDraftParams,
+        response: TurnChangesMutationResult,
+        serialization: SessionExclusive,
+    },
+    TurnChangesCommit => "turnChanges/commit" {
+        params: TurnChangesCommitParams,
+        response: TurnChangesMutationResult,
+        serialization: SessionExclusive,
+    },
+    TurnChangesDiscardThread => "turnChanges/discardThread" {
+        params: TurnChangesDiscardThreadParams,
+        response: TurnChangesMutationResult,
+        serialization: SessionExclusive,
+    },
     SessionThreadSubscribe => "session/thread/subscribe" {
         params: SessionThreadSubscribeParams,
         response: SessionThreadSubscribeResult,
@@ -1359,6 +1419,16 @@ client_methods! {
     },
     SemanticCodeIndexRevoke => "workspace/codeIndex/semantic/revoke" {
         params: SemanticCodeIndexRevokeParams,
+        response: ConfigCommandResult,
+        serialization: GlobalExclusive,
+    },
+    CommitMessageAuthorize => "workspace/commitMessage/authorize" {
+        params: CommitMessageAuthorizeParams,
+        response: ConfigCommandResult,
+        serialization: GlobalExclusive,
+    },
+    CommitMessageRevoke => "workspace/commitMessage/revoke" {
+        params: CommitMessageRevokeParams,
         response: ConfigCommandResult,
         serialization: GlobalExclusive,
     },
@@ -2234,6 +2304,9 @@ server_notifications! {
     GitStatusChanged => "git/statusChanged" {
         params: GitStatusChanged,
     },
+    TurnChangesChanged => "turnChanges/changed" {
+        params: TurnChangesChanged,
+    },
     FsChanged => "fs/changed" {
         params: FsChanged,
     },
@@ -2451,6 +2524,8 @@ typescript_bindings! {
     SemanticCodeIndexConfigureParams,
     SemanticCodeIndexAuthorizeParams,
     SemanticCodeIndexRevokeParams,
+    CommitMessageAuthorizeParams,
+    CommitMessageRevokeParams,
     LanguageServerConfigureParams,
     LanguageServerRemoveParams,
     ProviderConfigureParams,
@@ -2710,6 +2785,29 @@ typescript_bindings! {
     TurnSteerResult,
     TurnInterruptResult,
     TurnInteractionResolveResult,
+    ChangeSetId,
+    TurnChangeCaptureStateDto,
+    TurnChangeMessageStateDto,
+    TurnChangeCommitStateDto,
+    TurnChangeTerminalStateDto,
+    TurnChangeFileKindDto,
+    TurnChangeFileDto,
+    TurnChangeFileStatisticsDto,
+    ThreadWorkspaceBinding,
+    ThreadWorkspaceRepositoryBindingDto,
+    TurnChangeSetSummary,
+    TurnChangesListParams,
+    TurnChangesListResult,
+    TurnChangesReadParams,
+    TurnChangesReadResult,
+    TurnChangesReadFileParams,
+    TurnChangesReadFileResult,
+    TurnChangesMutationParams,
+    TurnChangesUpdateDraftParams,
+    TurnChangesCommitParams,
+    TurnChangesDiscardThreadParams,
+    TurnChangesMutationResult,
+    TurnChangesChanged,
     TypstCompileParams,
     TypstCompileResult,
     TypstDiagnosticDto,

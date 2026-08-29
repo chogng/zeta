@@ -165,7 +165,9 @@ fn shell_executor_runs_in_the_session_authorized_additional_directory() {
         "arguments": ["-lc", "pwd"],
         "working_directory": additional.path(),
     }));
-    let (_, request, frozen_workspace) = reviewer.prepare_shell(&call, Some(&session_id)).unwrap();
+    let (_, request, frozen_workspace) = reviewer
+        .prepare_shell(&call, Some(&session_id), None)
+        .unwrap();
     assert_eq!(
         frozen_workspace.root().canonical_path(),
         additional.root().canonical_path()
@@ -178,6 +180,7 @@ fn shell_executor_runs_in_the_session_authorized_additional_directory() {
                 "working_directory": additional.path(),
             })),
             Some(&session_id),
+            None,
         )
         .expect("ripgrep should use the selected additional directory boundary");
 
@@ -367,7 +370,7 @@ fn apply_patch_reviewer_materializes_workspace_paths_before_policy() {
             "patch": "*** Begin Patch\n*** Add File: added.txt\n+hello\n*** End Patch"
         }),
     };
-    let (review, _, _) = reviewer.prepare_apply_patch(&patch, None).unwrap();
+    let (review, _, _) = reviewer.prepare_apply_patch(&patch, None, None).unwrap();
     assert!(matches!(
         LocalShellPolicy::default()
             .decide(&review, &CancellationSource::new().token())
@@ -382,7 +385,7 @@ fn apply_patch_reviewer_materializes_workspace_paths_before_policy() {
             "patch": "*** Begin Patch\n*** Add File: ../outside.txt\n+bad\n*** End Patch"
         }),
     };
-    assert!(reviewer.prepare_apply_patch(&escaping, None).is_err());
+    assert!(reviewer.prepare_apply_patch(&escaping, None, None).is_err());
 }
 
 #[test]
@@ -425,7 +428,7 @@ fn apply_patch_reviewer_selects_the_session_authorized_additional_directory() {
     };
 
     let (_, rewritten, workspace) = reviewer
-        .prepare_apply_patch(&call, Some(&session_id))
+        .prepare_apply_patch(&call, Some(&session_id), None)
         .unwrap();
 
     assert_eq!(workspace.root(), &additional.root());

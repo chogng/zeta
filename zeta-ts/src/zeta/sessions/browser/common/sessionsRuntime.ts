@@ -46,6 +46,7 @@ export class SessionsRuntime extends Disposable {
 			modelApi: api.model,
 			threadApi: api.thread,
 			turnApi: api.turn,
+			turnChangesApi: api.turnChanges,
 			skillApi: api.skills,
 			appServerApi: api.appServer,
 			eventApi: api.events,

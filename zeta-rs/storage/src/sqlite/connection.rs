@@ -3,7 +3,7 @@ use std::fs;
 use std::path::Path;
 use std::time::Duration;
 
-const STORAGE_SQLITE_SCHEMA_VERSION: u32 = 1;
+const STORAGE_SQLITE_SCHEMA_VERSION: u32 = 3;
 
 pub(super) fn open(path: &Path) -> Result<Connection, String> {
     if let Some(parent) = path.parent()
@@ -35,13 +35,12 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
         )
         .optional()
         .map_err(sql_error)?;
-    if let Some(version) = version {
-        if version != STORAGE_SQLITE_SCHEMA_VERSION {
-            return Err(format!(
-                "unsupported event-store SQLite schema version {version}"
-            ));
-        }
-        return Ok(connection);
+    if let Some(version) = version
+        && version > STORAGE_SQLITE_SCHEMA_VERSION
+    {
+        return Err(format!(
+            "unsupported event-store SQLite schema version {version}"
+        ));
     }
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -54,18 +53,10 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
         )
         .optional()
         .map_err(sql_error)?;
-    if let Some(version) = locked_version {
-        if version != STORAGE_SQLITE_SCHEMA_VERSION {
-            return Err(format!(
-                "unsupported event-store SQLite schema version {version}"
-            ));
-        }
-        transaction.commit().map_err(sql_error)?;
-        return Ok(connection);
-    }
-    transaction
-        .execute_batch(
-            "CREATE TABLE thread_streams (
+    match locked_version {
+        None => transaction
+            .execute_batch(
+                "CREATE TABLE thread_streams (
                  thread_id TEXT PRIMARY KEY,
                  current_sequence INTEGER NOT NULL
              );
@@ -106,16 +97,69 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
                  envelope_json TEXT NOT NULL,
                  PRIMARY KEY (session_id, sequence),
                  FOREIGN KEY (session_id) REFERENCES session_streams(session_id)
+             );
+             CREATE TABLE turn_change_sets (
+                 change_set_id TEXT PRIMARY KEY,
+                 thread_id TEXT NOT NULL,
+                 revision INTEGER NOT NULL,
+                 record_json TEXT NOT NULL
+             );
+             CREATE TABLE turn_change_commands (
+                 command_id TEXT PRIMARY KEY,
+                 fingerprint TEXT NOT NULL,
+                 response_json TEXT NOT NULL
              );",
-        )
-        .map_err(sql_error)?;
+            )
+            .map_err(sql_error)?,
+        Some(1) => transaction
+            .execute_batch(
+                "CREATE TABLE turn_change_sets (
+                     change_set_id TEXT PRIMARY KEY,
+                     thread_id TEXT NOT NULL,
+                     revision INTEGER NOT NULL,
+                     record_json TEXT NOT NULL
+                 );",
+            )
+            .map_err(sql_error)?,
+        Some(2) => transaction
+            .execute_batch(
+                "CREATE TABLE turn_change_commands (
+                     command_id TEXT PRIMARY KEY,
+                     fingerprint TEXT NOT NULL,
+                     response_json TEXT NOT NULL
+                 );",
+            )
+            .map_err(sql_error)?,
+        Some(STORAGE_SQLITE_SCHEMA_VERSION) => {}
+        Some(version) => {
+            return Err(format!(
+                "unsupported event-store SQLite schema version {version}"
+            ));
+        }
+    }
     transaction
-        .execute(
-            "INSERT INTO zeta_schema_migrations (component, version)
-             VALUES ('event-store', ?1)",
-            [STORAGE_SQLITE_SCHEMA_VERSION],
+        .execute_batch(
+            "CREATE INDEX IF NOT EXISTS turn_change_sets_thread_revision
+             ON turn_change_sets(thread_id, revision);",
         )
         .map_err(sql_error)?;
+    if locked_version.is_none() {
+        transaction
+            .execute(
+                "INSERT INTO zeta_schema_migrations (component, version)
+                 VALUES ('event-store', ?1)",
+                [STORAGE_SQLITE_SCHEMA_VERSION],
+            )
+            .map_err(sql_error)?;
+    } else if locked_version != Some(STORAGE_SQLITE_SCHEMA_VERSION) {
+        transaction
+            .execute(
+                "UPDATE zeta_schema_migrations SET version = ?1
+                 WHERE component = 'event-store'",
+                [STORAGE_SQLITE_SCHEMA_VERSION],
+            )
+            .map_err(sql_error)?;
+    }
     transaction.commit().map_err(sql_error)?;
     Ok(connection)
 }

@@ -24,6 +24,181 @@
   flex: 1 1 auto;
 }
 
+.zeta-session-inspector {
+  box-sizing: border-box;
+  display: flex;
+  flex: 0 0 min(360px, 42%);
+  min-width: 280px;
+  min-height: 0;
+  flex-direction: column;
+  border-left: 1px solid var(--zeta-border);
+  background: var(--zeta-side-bar-background);
+  color: var(--zeta-foreground);
+}
+
+.zeta-session-inspector[hidden] {
+  display: none;
+}
+
+.zeta-session-inspector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 36px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--zeta-border);
+}
+
+.zeta-session-inspector-header h2,
+.zeta-session-inspector-section h3,
+.zeta-session-inspector-change h4 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.zeta-session-inspector-close,
+.zeta-session-inspector-thread,
+.zeta-session-inspector-change-actions button,
+.zeta-session-inspector-discard {
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.zeta-session-inspector-close,
+.zeta-session-inspector-change-actions button,
+.zeta-session-inspector-discard {
+  padding: 4px 7px;
+}
+
+.zeta-session-inspector-close:hover,
+.zeta-session-inspector-thread:hover,
+.zeta-session-inspector-change-actions button:hover,
+.zeta-session-inspector-discard:hover {
+  background: var(--zeta-list-hover-background);
+}
+
+.zeta-session-inspector button:focus-visible,
+.zeta-session-inspector textarea:focus-visible {
+  outline: 1px solid var(--zeta-focus-border);
+  outline-offset: 1px;
+}
+
+.zeta-session-inspector button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.zeta-session-inspector-content {
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 10px 16px;
+}
+
+.zeta-session-inspector-section {
+  padding: 8px 0 12px;
+  border-bottom: 1px solid var(--zeta-border);
+}
+
+.zeta-session-inspector-section-body {
+  margin-top: 7px;
+}
+
+.zeta-session-inspector-empty,
+.zeta-session-inspector-detail,
+.zeta-session-inspector-activity {
+  margin: 4px 0;
+  color: var(--zeta-description-foreground);
+  font-size: 11px;
+}
+
+.zeta-session-inspector-plan,
+.zeta-session-inspector-files {
+  margin: 5px 0;
+  padding-inline-start: 20px;
+  font-size: 11px;
+}
+
+.zeta-session-inspector-plan li[data-status="completed"] {
+  color: var(--zeta-description-foreground);
+  text-decoration: line-through;
+}
+
+.zeta-session-inspector-threads {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.zeta-session-inspector-thread {
+  width: 100%;
+  padding-block: 5px;
+  text-align: left;
+}
+
+.zeta-session-inspector-thread.selected {
+  background: var(--zeta-list-active-selection-background);
+  color: var(--zeta-list-active-selection-foreground);
+}
+
+.zeta-session-inspector-change {
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--zeta-border);
+  border-radius: 5px;
+}
+
+.zeta-session-inspector-status {
+  margin: 5px 0;
+  color: var(--zeta-description-foreground);
+  font-size: 11px;
+}
+
+.zeta-session-inspector-status.error {
+  color: var(--zeta-error-foreground);
+}
+
+.zeta-session-inspector-message textarea {
+  box-sizing: border-box;
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--zeta-input-border, var(--zeta-border));
+  border-radius: 4px;
+  padding: 6px;
+  background: var(--zeta-input-background);
+  color: var(--zeta-input-foreground);
+  font: inherit;
+}
+
+.zeta-session-inspector-change-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.zeta-session-inspector-discard {
+  margin-top: 10px;
+  color: var(--zeta-error-foreground);
+}
+
+.zeta-chat-body.compact {
+  position: relative;
+}
+
+.zeta-chat-body.compact.inspector-visible .zeta-session-inspector {
+  position: absolute;
+  inset: 0 0 0 auto;
+  z-index: 2;
+  width: min(92%, 360px);
+  min-width: 0;
+  box-shadow: -4px 0 12px var(--zeta-widget-shadow);
+}
+
 .zeta-chat-pane-host > .zeta-chat {
   height: 100%;
 }
@@ -94,107 +269,6 @@
 .zeta-chat-empty {
   padding: 20px 4px;
   text-align: center;
-}
-.zeta-chat-agent-sidebar-view {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px;
-}
-
-.zeta-chat-agent-sidebar-empty {
-  color: var(--zeta-description-foreground);
-  margin: 8px 4px;
-  text-align: center;
-}
-.zeta-chat-agent-session {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.zeta-chat-agent-session-title {
-  color: var(--zeta-description-foreground);
-  font-size: 11px;
-  font-weight: 600;
-  margin: 8px 8px 3px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.zeta-chat-agent-tree {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-.zeta-chat-agent-thread-row {
-  align-items: center;
-  display: flex;
-  gap: 2px;
-  min-width: 0;
-}
-.zeta-chat-agent-thread {
-  align-items: flex-start;
-  background: transparent;
-  border: 0;
-  border-radius: 4px;
-  color: inherit;
-  cursor: pointer;
-  display: flex;
-  gap: 6px;
-  padding: 5px 8px;
-  text-align: left;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-.zeta-chat-agent-thread:hover, .zeta-chat-agent-thread.checked {
-  background: var(--zeta-list-hover-background);
-}
-.zeta-chat-agent-thread:focus-visible {
-  outline: 1px solid var(--zeta-focus-border);
-  outline-offset: -1px;
-}
-.zeta-chat-agent-thread:disabled { cursor: default; opacity: 0.65; }
-.zeta-chat-agent-thread-stop {
-  background: transparent;
-  border: 0;
-  border-radius: 4px;
-  color: var(--zeta-description-foreground);
-  cursor: pointer;
-  flex: 0 0 auto;
-  font-size: 11px;
-  margin-inline-end: 4px;
-  padding: 4px;
-}
-.zeta-chat-agent-thread-stop:hover { background: var(--zeta-list-hover-background); color: var(--zeta-foreground); }
-.zeta-chat-agent-thread-stop:focus-visible { outline: 1px solid var(--zeta-focus-border); }
-.zeta-chat-agent-thread-marker {
-  background: var(--zeta-description-foreground);
-  border-radius: 50%;
-  flex: 0 0 6px;
-  height: 6px;
-  margin-top: 6px;
-  opacity: 0.7;
-  width: 6px;
-}
-.zeta-chat-agent-thread.origin-agent-spawn > .zeta-chat-agent-thread-marker { background: var(--zeta-focus-border); }
-.zeta-chat-agent-thread.status-running > .zeta-chat-agent-thread-marker,
-.zeta-chat-agent-thread.status-waiting > .zeta-chat-agent-thread-marker { box-shadow: 0 0 0 2px color-mix(in srgb, var(--zeta-focus-border) 25%, transparent); }
-.zeta-chat-agent-thread-text {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-}
-.zeta-chat-agent-thread-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.zeta-chat-agent-session-detail {
-  color: var(--zeta-description-foreground);
-  font-size: 11px;
 }
 .zeta-chat-item {
   margin: 0 0 14px;

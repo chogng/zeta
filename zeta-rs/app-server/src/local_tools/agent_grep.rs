@@ -347,26 +347,25 @@ impl AgentGrepService {
             .map_or(FastRegexSearchStorage::Memory, |lease| {
                 FastRegexSearchStorage::Persistent(lease.directory().to_path_buf())
             });
-        let search = match (&self.indexes.worker_command, search_storage) {
-            (Some(command), FastRegexSearchStorage::Persistent(storage)) => {
-                FastRegexSearchHandle::Worker(FastRegexWorkerClient::open(
-                    command.clone(),
-                    root,
-                    storage,
-                    FastRegexSearchLimits::default(),
-                )?)
-            }
-            (Some(_), FastRegexSearchStorage::Memory) => {
-                return Err(FastRegexError::Worker(
-                    "worker-backed search requires persistent storage".to_owned(),
-                ));
-            }
-            (None, storage) => FastRegexSearchHandle::InProcess(Box::new(FastRegexSearch::open(
-                root.clone(),
-                storage,
-                FastRegexSearchLimits::default(),
-            )?)),
-        };
+        let search =
+            match (&self.indexes.worker_command, search_storage) {
+                (Some(command), FastRegexSearchStorage::Persistent(storage)) => {
+                    FastRegexSearchHandle::Worker(FastRegexWorkerClient::open(
+                        command.clone(),
+                        root,
+                        storage,
+                        FastRegexSearchLimits::default(),
+                    )?)
+                }
+                (Some(_), FastRegexSearchStorage::Memory) => {
+                    return Err(FastRegexError::Worker(
+                        "worker-backed search requires persistent storage".to_owned(),
+                    ));
+                }
+                (None, storage) => FastRegexSearchHandle::InProcess(Box::new(
+                    FastRegexSearch::open(root.clone(), storage, FastRegexSearchLimits::default())?,
+                )),
+            };
         let index = Arc::new(ManagedFastRegexSearch {
             search,
             _lease: lease,

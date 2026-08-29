@@ -21,10 +21,11 @@ execution、Skill 正文、Session/Thread 或 Core execution。
 | `WorkspaceExecPolicyConfig` | strict-read Workspace restrictions；validation 禁止 `AllowUnsandboxed` |
 | `compose_exec_policy` | 将 trusted Host/Organization layers、User rules 与 Workspace restrictions 组合成 immutable snapshot |
 | `LanguageServersConfig` / `LanguageServerConfig` | 持久化 stable server ID 对应的 Disabled/Automatic/Enabled 与可选绝对 executable override |
+| `CommitMessageConfig` | 保存按 `WorkspaceTrustId` 授权的 exact commit-message model 与 Provider endpoint 快照；配置变化会使旧授权失效 |
 | `resolve_scoped_config` | User + Workspace 的受限 merge、provenance 与 diagnostic |
 | `ConfigChange` | metadata commit 后的 revision/generation signal，包括 TOML 外部编辑与其他 connection 的提交 |
 
-`UserConfigDocument` 当前包含 Agent defaults、Provider map、standalone MCP declaration、Skill
+`UserConfigDocument` 当前包含 Agent defaults（包括独立的 `commitMessageModel`）、Provider map、standalone MCP declaration、Skill
 source/enablement、exact Plugin request、declarative Hook、language-server preference，以及 execution-policy
 rules 和 Workspace trust decision。Trust key
 由 host 对 canonical root 生成，`roots` 不保存本地路径；管理页使用同一 document 中不参与授权的
@@ -82,6 +83,10 @@ App Server 负责。
 App Server 在 model safe point 读取 resolved snapshot；Skill/MCP manager 订阅 `ConfigChange` 后在
 旁路 reconcile。Config commit 成功不等于 MCP 已连接、Skill 已可用、Plugin 已激活或 Hook 已执行，
 reconcile failure 不能回滚 desired document。
+
+`agent.commitMessageModel` 不继承 Session 当前模型，必须显式选择 provider/model。自动摘要读取源码和
+diff 前，还要由用户为当前 Workspace 授权该 exact model 和当时完整 Provider 配置；Provider endpoint、
+model 或选择变化后 `CommitMessageConfig::authorized_model` 会拒绝旧 grant。撤销授权不影响手写提交信息。
 
 当前 typed RPC mutation 会重新序列化完整 TOML document，因此键顺序保持确定，但手写注释和
 自定义排版可能被规范化；外部只改注释或排版不会推进 semantic generation。

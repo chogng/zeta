@@ -14,6 +14,9 @@ import { ChatTitleControl } from "./chatTitleControl.js";
 import { h } from "../../../../../base/browser/dom.js";
 import type { IChatContextPickService, ChatContextAttachment } from "../../../../services/chat/common/chatContextService.js";
 import type { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
+import { ContextKeyService, type IContextKey, type IContextKeyService } from "../../../../../platform/contextkey/common/contextkey.js";
+import { ChatSessionInspectorVisibleContext } from "../../common/chat.js";
+import { SessionInspector } from "./sessionInspector.js";
 
 let chatViewInstanceId = 0;
 let chatPaneInstanceId = 0;
@@ -38,12 +41,16 @@ export class ChatViewPane extends ViewPane {
 	private readonly commandService: ICommandService;
 	private readonly titleControl: ChatTitleControl;
 	private readonly paneHost: HTMLDivElement;
+	private readonly body: HTMLDivElement;
+	private readonly inspector: SessionInspector;
+	private readonly inspectorVisible: IContextKey<boolean>;
 	private readonly empty: HTMLDivElement;
 	private readonly panes = new Map<string, ChatPane>();
 	private readonly tabOrder: string[] = [];
 	private activePane: ChatPane | undefined;
 	private initialUntitledSessionId: string | undefined;
 	private viewDisposed = false;
+	private focusReturn: HTMLElement | undefined;
 
 	constructor(
 		container: HTMLElement,
@@ -57,6 +64,7 @@ export class ChatViewPane extends ViewPane {
 		private readonly layoutService: IWorkbenchLayoutService,
 		private readonly contextPickService: IChatContextPickService,
 		private readonly quickInputService: IQuickInputService,
+		contextKeyService?: IContextKeyService,
 	) {
 		super(container, options);
 		this.chatService = chatService;
@@ -83,10 +91,28 @@ export class ChatViewPane extends ViewPane {
 		this.empty = h(container.ownerDocument, "div");
 		this.empty.className = "zeta-chat-empty zeta-chat-view-empty";
 		this.empty.textContent = "Start a new chat to begin.";
-		const body = h(container.ownerDocument, "div");
-		body.className = "zeta-chat-body";
-		body.append(this.paneHost);
-		this.contentElement.append(body);
+		this.body = h(container.ownerDocument, "div");
+		this.body.className = "zeta-chat-body";
+		this.body.append(this.paneHost);
+		const inspectorContextKeys = contextKeyService ?? this._register(new ContextKeyService());
+		this.inspectorVisible = ChatSessionInspectorVisibleContext.bindTo(inspectorContextKeys);
+		this._register(toDisposable(() => this.inspectorVisible.reset()));
+		this.inspector = this._register(new SessionInspector(this.body, sessionService, {
+			close: () => this.setInspectorVisible(false),
+		}));
+		this.inspector.element.hidden = true;
+		this.contentElement.append(this.body);
+		this.body.addEventListener("keydown", (event) => {
+			if (event.key !== "Escape" || !this.inspectorVisible.get()) return;
+			event.preventDefault();
+			this.setInspectorVisible(false);
+		});
+		const ResizeObserver = container.ownerDocument.defaultView?.ResizeObserver;
+		if (ResizeObserver) {
+			const observer = new ResizeObserver(() => this.updateResponsiveLayout());
+			observer.observe(this.body);
+			this._register(toDisposable(() => observer.disconnect()));
+		}
 		this._register(sessionService.onDidChange(() => this.syncSessions()));
 		this._register(layoutService.onDidChangePartVisibility((event) => {
 			if (event.partId === "auxiliarybar" && event.visible) this.ensureTabForVisibleChat();
@@ -97,6 +123,7 @@ export class ChatViewPane extends ViewPane {
 			this.panes.clear();
 		}));
 		this.syncSessions();
+		this.updateResponsiveLayout();
 		this.ensureTabForVisibleChat();
 		void sessionService.initialize().then(() => {
 			if (this.viewDisposed) return;
@@ -107,6 +134,10 @@ export class ChatViewPane extends ViewPane {
 
 	override focus(): void {
 		this.activePane?.focus();
+	}
+
+	toggleInspector(): void {
+		this.setInspectorVisible(!this.inspectorVisible.get());
 	}
 
 	addContext(attachment: ChatContextAttachment): void {
@@ -188,6 +219,7 @@ export class ChatViewPane extends ViewPane {
 		const orderedEntries = this.orderEntries(entries, activePane);
 		this.paneHost.replaceChildren(...orderedEntries.map((entry) => entry.pane.element), this.empty);
 		this.activePane = activePane;
+		this.inspector.bind(this.activePane?.model);
 		for (const entry of orderedEntries) entry.pane.setVisible(entry.pane === this.activePane);
 		this.empty.hidden = orderedEntries.length > 0;
 		const activeTabId = this.activePane?.element.id;
@@ -315,6 +347,27 @@ export class ChatViewPane extends ViewPane {
 
 	private paneForTabId(tabId: string): ChatPane | undefined {
 		return [...this.panes.values()].find((pane) => pane.element.id === tabId);
+	}
+
+	private setInspectorVisible(visible: boolean): void {
+		if (visible === this.inspectorVisible.get()) return;
+		if (visible) {
+			const active = this.contentElement.ownerDocument.activeElement;
+			const HTMLElement = this.contentElement.ownerDocument.defaultView?.HTMLElement;
+			this.focusReturn = HTMLElement && active instanceof HTMLElement ? active : undefined;
+		}
+		this.inspectorVisible.set(visible);
+		this.body.classList.toggle("inspector-visible", visible);
+		this.inspector.element.hidden = !visible;
+		if (visible) this.inspector.focus();
+		else {
+			this.focusReturn?.focus();
+			this.focusReturn = undefined;
+		}
+	}
+
+	private updateResponsiveLayout(): void {
+		this.body.classList.toggle("compact", this.body.getBoundingClientRect().width < 720);
 	}
 
 }

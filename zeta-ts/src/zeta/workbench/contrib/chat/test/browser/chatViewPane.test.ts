@@ -124,6 +124,7 @@ function unavailableChatService(): IChatService {
 		onDidBecomeReady: neverEvent<void>(),
 		onDidChangeModels: neverEvent<void>(),
 		onDidChangeSkills: neverEvent<void>(),
+		onDidUpdateTurnChanges: neverEvent<import("../../../../services/chat/common/chatService.js").TurnChangesUpdate>(),
 		listModels: () => pending as Promise<readonly ModelCatalogEntry[]>,
 		listModelCatalog: () => pending as Promise<readonly ModelCatalogEntry[]>,
 		refreshModels: () => pending as Promise<readonly ModelCatalogEntry[]>,
@@ -139,6 +140,12 @@ function unavailableChatService(): IChatService {
 		steerTurn: () => pending as Promise<void>,
 		interruptTurn: () => pending as Promise<void>,
 		resolveInteraction: () => pending as Promise<void>,
+		listTurnChanges: () => pending,
+		readTurnChange: () => pending,
+		generateTurnChangeMessage: () => pending,
+		updateTurnChangeDraft: () => pending,
+		commitTurnChange: () => pending,
+		discardThreadChanges: () => pending,
 	};
 }
 

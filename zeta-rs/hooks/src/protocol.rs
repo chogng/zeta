@@ -18,6 +18,30 @@ pub(crate) enum HookInvocation<'a> {
 }
 
 impl HookInvocation<'_> {
+    pub(crate) fn session_id(&self) -> &zeta_protocol::SessionId {
+        match self {
+            Self::BeforeTool(request) => &request.session_id,
+            Self::AfterTool(request) => &request.session_id,
+            Self::TurnCompleted(request) => &request.session_id,
+        }
+    }
+
+    pub(crate) fn thread_id(&self) -> &zeta_protocol::ThreadId {
+        match self {
+            Self::BeforeTool(request) => &request.thread_id,
+            Self::AfterTool(request) => &request.thread_id,
+            Self::TurnCompleted(request) => &request.thread_id,
+        }
+    }
+
+    pub(crate) fn turn_id(&self) -> &zeta_protocol::TurnId {
+        match self {
+            Self::BeforeTool(request) => &request.turn_id,
+            Self::AfterTool(request) => &request.turn_id,
+            Self::TurnCompleted(request) => &request.turn_id,
+        }
+    }
+
     pub(crate) fn config_event(&self) -> ConfigHookEvent {
         match self {
             Self::BeforeTool(_) => ConfigHookEvent::BeforeTool,

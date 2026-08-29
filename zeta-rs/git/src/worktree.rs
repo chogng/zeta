@@ -5,7 +5,9 @@ use crate::GitClient;
 use crate::GitError;
 use crate::GitRepository;
 use crate::GitResult;
+use crate::objects::validate_checkout_path;
 use crate::path::path_from_git_bytes;
+use std::ffi::OsString;
 
 /// Whether one Git worktree inventory entry can be opened now.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -28,6 +30,41 @@ pub struct GitWorktree {
     head: String,
     branch: Option<String>,
     availability: GitWorktreeAvailability,
+}
+
+/// Inputs for creating one detached linked worktree at an immutable commit.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GitDetachedWorktreeRequest {
+    checkout_root: PathBuf,
+    start_object_id: String,
+}
+
+impl GitDetachedWorktreeRequest {
+    pub fn new(checkout_root: PathBuf, start_object_id: String) -> GitResult<Self> {
+        let checkout_root = validate_checkout_path(&checkout_root)?;
+        if !(40..=64).contains(&start_object_id.len())
+            || !start_object_id.bytes().all(|byte| byte.is_ascii_hexdigit())
+        {
+            return Err(GitError::InvalidConfiguration {
+                field: "worktree start object",
+                requirement: "must be a hexadecimal Git commit ID",
+            });
+        }
+        Ok(Self {
+            checkout_root,
+            start_object_id,
+        })
+    }
+
+    pub fn checkout_root(&self) -> &Path {
+        &self.checkout_root
+    }
+}
+
+/// Explicit acknowledgement that a linked worktree is safe to remove with all local contents.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum GitWorktreeRemovalMode {
+    DiscardVerifiedContents,
 }
 
 impl GitWorktree {
@@ -58,6 +95,100 @@ impl GitClient {
             )
             .await?;
         parse_worktrees(&output.stdout, &output.command)
+    }
+
+    /// Creates a detached linked worktree without checking out files.
+    pub async fn create_detached_worktree(
+        &self,
+        repository: &GitRepository,
+        request: &GitDetachedWorktreeRequest,
+    ) -> GitResult<GitRepository> {
+        let arguments = vec![
+            OsString::from("worktree"),
+            OsString::from("add"),
+            OsString::from("--detach"),
+            OsString::from("--no-checkout"),
+            request.checkout_root.as_os_str().to_owned(),
+            OsString::from(&request.start_object_id),
+        ];
+        self.run_mutation(repository.worktree_root(), arguments)
+            .await?
+            .require_success()?;
+        self.open_repository(&request.checkout_root).await
+    }
+
+    /// Locks a managed worktree so Git cleanup cannot prune it while its Thread is retained.
+    pub async fn lock_worktree(
+        &self,
+        repository: &GitRepository,
+        checkout_root: &Path,
+        reason: &str,
+    ) -> GitResult<()> {
+        if reason.trim().is_empty() {
+            return Err(GitError::InvalidConfiguration {
+                field: "worktree lock reason",
+                requirement: "must not be empty",
+            });
+        }
+        self.run_mutation(
+            repository.worktree_root(),
+            [
+                OsString::from("worktree"),
+                OsString::from("lock"),
+                OsString::from("--reason"),
+                OsString::from(reason),
+                checkout_root.as_os_str().to_owned(),
+            ],
+        )
+        .await?
+        .require_success()?;
+        Ok(())
+    }
+
+    /// Unlocks one managed worktree immediately before an approved removal.
+    pub async fn unlock_worktree(
+        &self,
+        repository: &GitRepository,
+        checkout_root: &Path,
+    ) -> GitResult<()> {
+        self.run_mutation(
+            repository.worktree_root(),
+            [
+                OsString::from("worktree"),
+                OsString::from("unlock"),
+                checkout_root.as_os_str().to_owned(),
+            ],
+        )
+        .await?
+        .require_success()?;
+        Ok(())
+    }
+
+    /// Removes one linked worktree after the ledger owner has verified discard eligibility.
+    pub async fn remove_linked_worktree(
+        &self,
+        repository: &GitRepository,
+        checkout_root: &Path,
+        _mode: GitWorktreeRemovalMode,
+    ) -> GitResult<()> {
+        if !checkout_root.is_absolute() || checkout_root == repository.worktree_root() {
+            return Err(GitError::InvalidConfiguration {
+                field: "linked worktree removal path",
+                requirement: "must identify another absolute checkout",
+            });
+        }
+        self.run_mutation(
+            repository.worktree_root(),
+            [
+                OsString::from("worktree"),
+                OsString::from("remove"),
+                OsString::from("--force"),
+                checkout_root.as_os_str().to_owned(),
+            ],
+        )
+        .await?
+        .require_success()?;
+        Ok(())
     }
 }
 

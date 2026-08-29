@@ -1,9 +1,9 @@
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
-import type { AgentResponse, IChatService, ModelCatalogEntry, SkillCommandDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnInteraction } from "../../../../services/chat/common/chatService.js";
+import type { AgentResponse, IChatService, ModelCatalogEntry, SkillCommandDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, TurnChangeSetSummary, TurnInteraction } from "../../../../services/chat/common/chatService.js";
 import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
 import type { ResolvedChatContext } from "../../../../services/chat/common/chatContextService.js";
-import type { IActiveSessionThread, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
+import type { IActiveSessionThread, IUntitledChatSession, ModelRef, Session, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
 import { chatTranscriptListItem, type IChatListItem } from "../list/chatListItems.js";
 
@@ -42,6 +42,9 @@ export class ChatPaneModel extends Disposable {
 	private _models: readonly ModelCatalogEntry[] = [];
 	private _slashCommands: readonly SlashCommandDefinition[] = [];
 	private _skillCommands: readonly SkillCommandDefinition[] = [];
+	private _changeSets: readonly TurnChangeSetSummary[] = [];
+	private readonly changeDetails = new Map<string, TurnChangeDetails>();
+	private changesGeneration = 0;
 
 	readonly onDidChange: Event<void> = this._onDidChange.event;
 
@@ -60,6 +63,10 @@ export class ChatPaneModel extends Disposable {
 		this._register(chatService.onDidBecomeReady(() => void this.reconnect()));
 		this._register(chatService.onDidChangeModels(() => void this.loadModels()));
 		this._register(chatService.onDidChangeSkills(() => void this.loadSkillCommands()));
+		this._register(chatService.onDidUpdateTurnChanges((update) => {
+			if (update.sessionId !== this.sessionId || update.threadId !== this.threadId) return;
+			this.acceptChangeSets(update.changeSets);
+		}));
 		this._register(toDisposable(() => {
 			this.generation++;
 			const active = this.activeSession;
@@ -87,6 +94,10 @@ export class ChatPaneModel extends Disposable {
 
 	get sessionId(): SessionId | undefined {
 		return this.activeSession?.session.sessionId;
+	}
+
+	get session(): Session | undefined {
+		return this.selection.kind === "session" ? this.selection.active.session : undefined;
 	}
 
 	get untitledSessionId(): string | undefined {
@@ -126,6 +137,36 @@ export class ChatPaneModel extends Disposable {
 		return this._interaction;
 	}
 
+	get changeSets(): readonly TurnChangeSetSummary[] {
+		return this._changeSets;
+	}
+
+	turnChangeDetails(changeSetId: string): TurnChangeDetails | undefined {
+		return this.changeDetails.get(changeSetId);
+	}
+
+	async generateChangeMessage(changeSet: TurnChangeSetSummary): Promise<void> {
+		const owner = this.requireChangeOwner();
+		this.acceptChangeSets(await this.chatService.generateTurnChangeMessage(owner.sessionId, owner.threadId, changeSet.changeSetId, changeSet.revision));
+	}
+
+	async updateChangeDraft(changeSet: TurnChangeSetSummary, message: string): Promise<void> {
+		const owner = this.requireChangeOwner();
+		this.acceptChangeSets(await this.chatService.updateTurnChangeDraft(owner.sessionId, owner.threadId, changeSet.changeSetId, changeSet.revision, message));
+		await this.loadChangeDetails(changeSet.changeSetId, this.changesGeneration);
+	}
+
+	async commitChange(changeSet: TurnChangeSetSummary): Promise<void> {
+		const owner = this.requireChangeOwner();
+		this.acceptChangeSets(await this.chatService.commitTurnChange(owner.sessionId, owner.threadId, changeSet.changeSetId, changeSet.revision));
+	}
+
+	async discardChanges(): Promise<void> {
+		const owner = this.requireChangeOwner();
+		const expectedRevision = Math.max(0, ...this._changeSets.map((changeSet) => changeSet.revision));
+		this.acceptChangeSets(await this.chatService.discardThreadChanges(owner.sessionId, owner.threadId, expectedRevision));
+	}
+
 	get canInterrupt(): boolean {
 		return activeTurn(this._thread) !== undefined;
 	}
@@ -147,6 +188,7 @@ export class ChatPaneModel extends Disposable {
 		this.selection = { kind: "session", active };
 		if (previousThreadId === active.threadId && this._thread?.threadId === active.threadId) {
 			if (!sameModel(previousModel, active.session.model)) void this.loadModels();
+			this._onDidChange.fire();
 			return;
 		}
 		if (previousThreadId !== active.threadId) {
@@ -382,6 +424,9 @@ export class ChatPaneModel extends Disposable {
 		this._thread = undefined;
 		this._interaction = undefined;
 		this.transcriptEntries = [];
+		this._changeSets = [];
+		this.changeDetails.clear();
+		this.changesGeneration++;
 		this.setState("loading");
 		if (oldThreadId && oldThreadId !== active.threadId) {
 			void this.chatService.unsubscribeThread(active.session.sessionId, oldThreadId);
@@ -397,6 +442,7 @@ export class ChatPaneModel extends Disposable {
 				}
 			}
 			this.setState("ready");
+			void this.loadTurnChanges(generation);
 		} catch (error) {
 			if (this.isDisposed || generation !== this.generation) return;
 			this.setError(error);
@@ -418,6 +464,43 @@ export class ChatPaneModel extends Disposable {
 			active ? this.subscribe(active) : Promise.resolve(),
 			this.loadCatalogs(),
 		]);
+	}
+
+	private async loadTurnChanges(threadGeneration: number): Promise<void> {
+		const owner = this.activeSession;
+		if (!owner) return;
+		const changesGeneration = ++this.changesGeneration;
+		try {
+			const changeSets = await this.chatService.listTurnChanges(owner.session.sessionId, owner.threadId);
+			if (this.isDisposed || threadGeneration !== this.generation || changesGeneration !== this.changesGeneration) return;
+			this._changeSets = changeSets;
+			this._onDidChange.fire();
+			for (const changeSet of changeSets) void this.loadChangeDetails(changeSet.changeSetId, changesGeneration);
+		} catch {
+			// Changes are auxiliary to the transcript; the next notification or reconnect retries them.
+		}
+	}
+
+	private acceptChangeSets(updates: readonly TurnChangeSetSummary[]): void {
+		const byId = new Map(this._changeSets.map((changeSet) => [changeSet.changeSetId, changeSet]));
+		for (const update of updates) byId.set(update.changeSetId, update);
+		this._changeSets = [...byId.values()];
+		this._onDidChange.fire();
+		const generation = this.changesGeneration;
+		for (const update of updates) void this.loadChangeDetails(update.changeSetId, generation);
+	}
+
+	private async loadChangeDetails(changeSetId: string, generation: number): Promise<void> {
+		const owner = this.activeSession;
+		if (!owner) return;
+		try {
+			const details = await this.chatService.readTurnChange(owner.session.sessionId, owner.threadId, changeSetId);
+			if (this.isDisposed || generation !== this.changesGeneration || details.summary.threadId !== this.threadId) return;
+			this.changeDetails.set(changeSetId, details);
+			this._onDidChange.fire();
+		} catch {
+			// Summary state remains useful while a detail read is retried by the next update.
+		}
 	}
 
 	private acceptCommittedEvent(update: ThreadUpdateEnvelope): void {
@@ -514,6 +597,12 @@ export class ChatPaneModel extends Disposable {
 
 	private get activeSession(): IActiveSessionThread | undefined {
 		return this.selection.kind === "session" ? this.selection.active : undefined;
+	}
+
+	private requireChangeOwner(): { readonly sessionId: SessionId; readonly threadId: ThreadId } {
+		const active = this.activeSession;
+		if (!active) throw new Error("Turn changes require a durable Session and Thread");
+		return { sessionId: active.session.sessionId, threadId: active.threadId };
 	}
 
 	private async ensureActiveSession(): Promise<IActiveSessionThread> {

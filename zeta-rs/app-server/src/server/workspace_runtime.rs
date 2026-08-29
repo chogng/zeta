@@ -1170,6 +1170,12 @@ impl AppServer {
             .map(|host| Arc::clone(&host.tools))
     }
 
+    pub(crate) fn local_hook_runtime(&self) -> Option<Arc<DeclarativeHookRuntime>> {
+        self.local_workspace_host
+            .as_ref()
+            .map(|host| Arc::clone(&host.hooks))
+    }
+
     pub(crate) fn workspace_runtime_control(&self) -> Option<WorkspaceRuntimeControl> {
         self.local_workspace_host
             .as_ref()

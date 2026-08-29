@@ -252,6 +252,10 @@ Desktop 当前实现和 Playwright 后续边界见
 | `session/thread/read` | Session + Thread | 读取 canonical Thread snapshot |
 | `session/thread/subscribe` | Session + Thread + connection | snapshot + `afterSequence` 之后的 durable gap |
 | `session/thread/unsubscribe` | Session + Thread + connection | 删除 child Thread 订阅 |
+| `turnChanges/list` / `read` / `readFile` | Session + Thread + ChangeSet | 读取 Thread 工作区绑定、Turn ChangeSet、文件元数据与有界文本内容 |
+| `turnChanges/generateMessage` / `updateDraft` | ChangeSet | 排队生成候选提交信息，或 revision-safe 保存用户 draft |
+| `turnChanges/commit` | ChangeSet + repository | 后台提交一个 sealed ChangeSet；首版 `changeSetIds` 长度必须为 1 |
+| `turnChanges/discardThread` | Thread workspace | 用户确认后丢弃该 Thread 全部未提交修改；运行中 Turn 会拒绝 |
 | `config/read` | config | 读取配置 |
 | `connector/list` | Connector authority | 读取不含 secret/reference 的外部账号连接投影 |
 | `connector/connect/apiToken` | Connector authority + secret store | retry-safe 保存 API token 并发布 connected account |
@@ -726,6 +730,25 @@ mutation gate 下重读 exact pending request，过期后持久化 `DeadlineElap
 失败为可重试 `InteractionDeadlineElapsed`；过期响应返回 `AgentInteractionExpired`。Core reducer
 只归约 durable fact，不运行 timer，TUI 也不拥有 deadline policy。
 
+### Turn ChangeSet
+
+Thread 创建在允许执行前先持久化独立工作区绑定。Git 工作区使用受管 linked worktree；非 Git
+工作区使用内容寻址目录快照，只提供读取和丢弃，不提供提交。`turnChanges/list` 返回当前 Thread
+的 `ThreadWorkspaceBinding` 和全部 `TurnChangeSetSummary`，内部受管路径不会进入 wire。
+
+每个 ChangeSet 分别返回 `captureState`、`messageState`、`commitState`、terminal 状态、文件统计、
+ChangeSet 依赖、初始工作区依赖路径、warning、冲突路径、可选 `failureMessage`、revision 和 commit ID。`open` 可读不可提交；
+`sealed` 才能提交；`incomplete` 表示归属无法证明并禁止提交。failed/interrupted Turn 仍可 sealed，
+由 terminal 状态提醒用户。
+
+四个 mutation 都携带 `commandId + expectedRevision`。相同 command 与相同 payload 重放首次持久化
+response；相同 command 配不同 payload 返回冲突。后台 message/commit job 的后续 revision 不会改变
+首次 command response。`turnChanges/changed` 携带 Session/Thread scope 和更新后的 summaries。
+
+提交只使用封存的 before/after tree，不读取当前 Thread 目录。目标分支最新 HEAD、checkout index、
+未暂存与未跟踪状态均通过 tree CAS 保护；冲突时不会静默更新 ref、index 或文件。提交完成后账本用
+commit object ID 建立关联，commit message 不添加 Session/Thread/Turn trailer。
+
 ## 8. 更新流
 
 与 Session/Thread 交互相关的 notification method 包括：
@@ -737,6 +760,7 @@ mutation gate 下重读 exact pending request，过期后持久化 `DeadlineElap
 - `skills/changed`，payload 为新的 catalog `generation`；
 - `marketplace/changed`，payload 为 profile Marketplace 安装状态的 `instanceId` 与新 `generation`；
 - `git/statusChanged`，payload 为新的 workspace Git status；
+- `turnChanges/changed`，payload 为一个 Session/Thread 下发生状态变化的 ChangeSet summaries；
 - `fs/changed`，payload 为相对路径变化或 scoped rescan hint。
 
 durable update 使用 `durableSequence`。Thread 的低延迟非 durable update 可额外携带
@@ -782,12 +806,17 @@ notification 是重新 `config/read` 的失效提示，不包含完整 desired d
 exact replay 不推进 revision/generation，也不发布 change。外部 TOML 编辑与同一 profile 的其他
 SQLite connection 提交也会被观察并投影。
 
-`config/read` 当前返回 Agent preference、Provider、standalone MCP、Skill source、exact Plugin
+`config/read` 当前返回 Agent preference（包括可选 `commitMessageModel`）、Provider、standalone MCP、Skill source、exact Plugin
 request、declarative Hook、language-server mode/path preference、semantic CodeIndex 配置和 Tool
 Search 配置，以及 User `execPolicyRules`。`toolSearch.embeddingStatus` 明确区分 `disabled`、`ready` 和带脱敏原因的
 `unavailable`；不能只根据 desired `mode` 推断 embedding 已可用。Plugin request 的 `enabled` 只表示期望参与未来 activation；
 Hook 的 `enabled` 也不表示 process 已获准或已经执行。两者的 runtime/lifecycle projection 必须由
 后续独立领域 API 返回，不能从 Config desired state 推断。
+
+`agent.commitMessageModel` 必须是 exact provider/model；它不继承当前 Session Agent 模型。自动提交
+信息还要求当前 Workspace 对该 model 以及当前 provider endpoint 有独立源码外发授权。provider、
+model 或 endpoint 变化会使旧授权立即失效；未配置或未授权时 ChangeSet 的 `messageState` 为
+`unconfigured`，用户仍可手写 draft。
 
 `toolSearch/configure` 的 `hybridEmbedding` 必须携带 exact `embeddingModel`。App Server 在 durable
 commit 前从 Provider Config 解析模型并发送固定 readiness probe；失败返回

@@ -97,6 +97,7 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
 		onDidBecomeReady: ready.event,
 		onDidChangeModels: ready.event,
 		onDidChangeSkills: ready.event,
+		onDidUpdateTurnChanges: () => toDisposable(() => {}),
 		async listModels() { return []; },
 		async listModelCatalog() { return []; },
 		async refreshModels() { return []; },
@@ -112,6 +113,12 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
 		async steerTurn() {},
 		async interruptTurn() {},
 		async resolveInteraction() {},
+		async listTurnChanges() { return []; },
+		async readTurnChange() { throw new Error("No ChangeSet"); },
+		async generateTurnChangeMessage() { return []; },
+		async updateTurnChangeDraft() { return []; },
+		async commitTurnChange() { return []; },
+		async discardThreadChanges() { return []; },
 	};
 	const viewService = new SessionsViewService(sessionService);
 	viewService.openNewSession("New code session");

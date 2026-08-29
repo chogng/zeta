@@ -19,6 +19,7 @@ zeta-history = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-session-store = { workspace = true }
 zeta-thread-store = { workspace = true }
+zeta-turn-changes = { workspace = true }
 
 [lints]
 workspace = true

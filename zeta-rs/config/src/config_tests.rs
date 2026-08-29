@@ -51,6 +51,33 @@ fn model_ref(provider: &str, model: &str) -> ModelRef {
 }
 
 #[test]
+fn desktop_worktree_settings_survive_resolution() {
+    let document = toml::from_str::<UserConfigDocument>(
+        r#"
+[desktop]
+git-worktree-root = "/tmp/zeta-worktrees"
+worktree-auto-cleanup-enabled = false
+worktree-keep-count = 4
+"#,
+    )
+    .unwrap();
+    let resolved = ResolvedConfig::from(&document);
+
+    assert_eq!(
+        resolved.desktop.get("git-worktree-root"),
+        Some(&serde_json::json!("/tmp/zeta-worktrees"))
+    );
+    assert_eq!(
+        resolved.desktop.get("worktree-auto-cleanup-enabled"),
+        Some(&serde_json::json!(false))
+    );
+    assert_eq!(
+        resolved.desktop.get("worktree-keep-count"),
+        Some(&serde_json::json!(4))
+    );
+}
+
+#[test]
 fn tool_search_defaults_to_lexical_and_requires_a_configured_embedding_model() {
     let default_document = toml::from_str::<UserConfigDocument>("").unwrap();
     assert_eq!(
@@ -138,6 +165,7 @@ fn update_preferences(
         command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
             preferred_model,
             approval_review_model: Patch::Missing,
+            commit_message_model: Patch::Missing,
             tool_mode: Patch::Missing,
             grep_backend: Patch::Missing,
         }),
@@ -167,6 +195,7 @@ fn tool_mode_defaults_to_direct_and_updates_durably() {
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                 preferred_model: Patch::Missing,
                 approval_review_model: Patch::Missing,
+                commit_message_model: Patch::Missing,
                 tool_mode: Patch::Value(zeta_protocol::ToolMode::CodeModeOnly),
                 grep_backend: Patch::Value(AgentGrepBackend::FastRegex),
             }),
@@ -232,6 +261,51 @@ fn semantic_code_index_egress_grants_are_bound_to_workspace_models_and_provider_
     config.revoke(&workspace);
     assert_eq!(
         config.authorized_remote_models(&workspace, &providers),
+        None
+    );
+}
+
+#[test]
+fn commit_message_egress_grant_is_bound_to_workspace_model_and_endpoint() {
+    let workspace = workspace_trust_id();
+    let provider = provider_id("openai-compatible");
+    let mut provider_config = ModelProviderConfig::new(provider.clone());
+    provider_config.base_url = Some("https://models.example.test/v1".into());
+    let mut providers = BTreeMap::from([(provider.clone(), provider_config.clone())]);
+    let first_model = model_ref("openai-compatible", "summary-v1");
+    let second_model = model_ref("openai-compatible", "summary-v2");
+    let mut config = CommitMessageConfig::default();
+
+    config
+        .authorize(workspace.clone(), Some(&first_model), &providers)
+        .unwrap();
+    assert_eq!(
+        config.authorized_model(&workspace, Some(&first_model), &providers),
+        Some(&first_model)
+    );
+    assert_eq!(
+        config.authorized_model(&workspace, Some(&second_model), &providers),
+        None
+    );
+
+    providers.get_mut(&provider).unwrap().base_url =
+        Some("https://different.example.test/v1".into());
+    assert_eq!(
+        config.authorized_model(&workspace, Some(&first_model), &providers),
+        None
+    );
+
+    providers.insert(provider, provider_config);
+    config
+        .authorize(workspace.clone(), Some(&second_model), &providers)
+        .unwrap();
+    assert_eq!(
+        config.authorized_model(&workspace, Some(&second_model), &providers),
+        Some(&second_model)
+    );
+    config.revoke(&workspace);
+    assert_eq!(
+        config.authorized_model(&workspace, Some(&second_model), &providers),
         None
     );
 }
@@ -708,6 +782,7 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                 preferred_model: Patch::Missing,
+                commit_message_model: Patch::Missing,
                 tool_mode: Patch::Missing,
                 grep_backend: Patch::Missing,
                 approval_review_model: Patch::Value(ApprovalReviewModelSelection::Explicit {
@@ -725,6 +800,7 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
             expected_revision: configured.revision,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                 preferred_model: Patch::Missing,
+                commit_message_model: Patch::Missing,
                 tool_mode: Patch::Missing,
                 grep_backend: Patch::Missing,
                 approval_review_model: Patch::Value(ApprovalReviewModelSelection::Explicit {

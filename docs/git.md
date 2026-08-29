@@ -60,7 +60,7 @@ VS Code 的 extension-host 进程布局。
 | Desktop `IGitService` 与 Electron bridge | client-safe Git domain、连接事件和 typed `git/*` transport | 已实现 | 保持 Git 专属；不改名为 SCM service |
 | App Server `GitRuntime` / `GitService` | Git operation serialization、workspace authority、projection 与通知 | 已实现 | 保持 Git 专属；不新增仅转发 Git DTO 的 `scm/*` facade |
 | `zeta-git` | Git executable、命令、解析和 failure semantics | 已实现 | 与 SCM UI 无依赖 |
-| `zeta-worktree` | 组合 `zeta-git` inventory、解析可切换 checkout 与 nested cwd、维护 Codex thread 归属 | 已实现后端 contract；尚未接入产品选择器 | 不启动 Git，不替换产品工作区 |
+| `zeta-worktree` | 组合 `zeta-git` inventory、维护 Thread 独占 checkout/目录和持久化绑定 | 已接入 App Server 的 Thread 创建与恢复 | 不拥有 Turn 归属、摘要或提交状态机 |
 
 前端迁移必须从调用者 contract 开始：先定义通用 `IScmService`、repository/provider 和 history
 provider，再让 Git adapter 注册实现，最后把现有 SCM panes 改为只依赖通用 contract。不能让
@@ -82,6 +82,14 @@ provider，再让 Git adapter 注册实现，最后把现有 SCM panes 改为只
 | `zeta-app-server-protocol` | Git query/mutation、`git/statusChanged`、DTO、capability 和 stable error name | process/runtime state |
 | `zeta-git` | system Git identity、仓库发现、porcelain-v2 snapshot、分页 graph、local/remote refs、credential-free remote identity、HEAD/worktree 文本 Diff 与增删行统计、typed mutation 与结构化 parsing | App Server lifecycle、workspace product boundary、Renderer state |
 | `zeta-worktree` | 同仓库 worktree 清单、按 branch/path 解析可用 target、源 workspace nested cwd 映射、Codex Desktop settings 与 `codex-thread.json` 归属 | Git process、Session lifecycle、产品 workspace replacement、选择器 UI |
+
+Thread 提交不走普通 `git/commit`。`zeta-turn-changes` 把每个 Turn 封存为不可变 before/after tree，
+`zeta-git::commit_tree_delta` 将这一个 delta 三方重放到目标分支最新 HEAD。目标 checkout 原有 index、
+未暂存和未跟踪内容先分别捕获并计算重放结果；ref 更新使用 expected HEAD CAS，checkout 安装前再比较
+tree 指纹。事务 journal 位于 Git common directory，进程重启后可以继续安装或确认已回滚状态。
+
+该路径不读取正在运行的 Thread 目录，也不执行 commit hooks。目标分支推进且重放干净时允许提交；
+同一路径冲突、分支删除、checkout 变为 detached、index/文件变化都会返回明确冲突，不静默带入其他 Turn。
 
 ## 当前状态
 
@@ -131,7 +139,7 @@ Native 的底栏分支按钮复用通用 `ContextMenu`，候选项来自 `git/br
 菜单保留并显示失败；成功后使用新的 typed projection 刷新 Files、HEAD、Changes 和 MultiDiff。
 `app` 不再依赖 `zeta-git`。
 
-`zeta-worktree` 已能从任意 repository nested cwd 列出 primary、linked、locked 与 prunable checkout，并按 branch 或 checkout path 返回可用 workspace target；Git lock 只阻止删除、移动或清理，不阻止进入该 checkout，只有 prunable target 被拒绝。目标保留 source cwd 的 repository-relative suffix。它同时读取 Codex Desktop worktree settings，并只允许 `<managed-root>/<4 hex>/<checkout>` linked worktree 原子绑定 `codex-thread.json`。该能力当前停在共享 Rust contract，产品选择器与 App Server workspace retarget 尚未消费，因此不能把 branch menu 的 linked-worktree failure 描述为已经解决。
+`zeta-worktree` 已能从任意 repository nested cwd 列出 primary、linked、locked 与 prunable checkout，并按 branch 或 checkout path 返回可用 workspace target。它还在 Thread 执行前创建持久化的独占受管工作区：Git 使用 detached linked worktree；非 Git 使用内容寻址快照支持的受管目录。失败时 Thread 创建失败，不会转回共享工作区。
 
 稳定失败边界为 `GitUnavailable`、`GitNotRepository` 和 `GitOperationFailed`。内部 executable、
 stderr、磁盘绝对路径和非 UTF-8 path 不进入 Renderer。

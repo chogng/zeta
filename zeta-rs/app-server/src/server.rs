@@ -120,6 +120,13 @@ mod symbol_index_runtime;
 mod syntax_operations;
 mod terminal_operations;
 mod turn_backend_router;
+mod turn_changes_commit;
+mod turn_changes_message;
+mod turn_changes_observer;
+mod turn_changes_operations;
+mod turn_changes_runtime;
+mod turn_changes_watcher;
+mod turn_changes_workspace;
 pub(crate) mod update_broker;
 pub(crate) mod update_plan_tool;
 mod workspace_customizations;
@@ -231,6 +238,7 @@ pub struct AppServer {
     _marketplace_watcher: Option<marketplace_runtime::MarketplaceChangeWatcher>,
     _tool_config_watcher: Option<crate::local::ToolConfigWatcher>,
     _interaction_deadline_watcher: interaction_runtime::InteractionDeadlineWatcher,
+    turn_changes: Option<Arc<turn_changes_runtime::TurnChangesRuntime>>,
     updates: Arc<UpdateBroker>,
 }
 
@@ -509,8 +517,69 @@ impl AppServer {
             _marketplace_watcher: None,
             _tool_config_watcher: None,
             _interaction_deadline_watcher: interaction_deadline_watcher,
+            turn_changes: None,
             updates,
         }
+    }
+
+    fn with_turn_changes_runtime(
+        mut self,
+        runtime: Arc<turn_changes_runtime::TurnChangesRuntime>,
+    ) -> Result<Self, String> {
+        let provisioner: Arc<dyn zeta_core::ThreadWorkspaceProvisioner> = runtime.clone();
+        self.sessions
+            .install_thread_workspace_provisioner(provisioner)
+            .map_err(|error| error.to_string())?;
+        let observer: Arc<dyn zeta_core::TurnExecutionObserver> = runtime.clone();
+        let executor = self
+            .workspace_runtime
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .turn_executor
+            .clone()
+            .with_execution_observer(observer);
+        self.turn_backend.install_executor(executor.clone());
+        self.workspace_runtime
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .turn_executor = executor;
+        self.turn_changes = Some(runtime);
+        Ok(self)
+    }
+
+    pub(crate) fn with_local_turn_changes(
+        self,
+        database_path: &std::path::Path,
+        profile_root: &std::path::Path,
+        workspace_root: &std::path::Path,
+    ) -> Result<Self, String> {
+        let config = self
+            .config
+            .as_ref()
+            .cloned()
+            .ok_or_else(|| "Turn changes require the ConfigStore".to_string())?;
+        let workspace_access = Arc::clone(
+            &self
+                .workspace_runtime
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .session_workspace_access,
+        );
+        let hooks = self
+            .local_hook_runtime()
+            .ok_or_else(|| "Turn changes require the local Hook runtime".to_string())?;
+        let runtime = turn_changes_runtime::TurnChangesRuntime::open(
+            database_path,
+            profile_root,
+            workspace_root,
+            config,
+            Arc::clone(&self.sessions),
+            Arc::clone(&self.model),
+            workspace_access,
+            hooks,
+            Arc::clone(&self.updates),
+        )?;
+        self.with_turn_changes_runtime(runtime)
     }
 
     pub fn connection(&self) -> ConnectionState {
@@ -1670,6 +1739,19 @@ impl AppServer {
             Some(ClientMethod::SessionThreadUnsubscribe) => {
                 self.session_thread_unsubscribe(connection, &request.params)
             }
+            Some(ClientMethod::TurnChangesList) => self.turn_changes_list(&request.params),
+            Some(ClientMethod::TurnChangesRead) => self.turn_changes_read(&request.params),
+            Some(ClientMethod::TurnChangesReadFile) => self.turn_changes_read_file(&request.params),
+            Some(ClientMethod::TurnChangesGenerateMessage) => {
+                self.turn_changes_generate_message(&request.params)
+            }
+            Some(ClientMethod::TurnChangesUpdateDraft) => {
+                self.turn_changes_update_draft(&request.params)
+            }
+            Some(ClientMethod::TurnChangesCommit) => self.turn_changes_commit(&request.params),
+            Some(ClientMethod::TurnChangesDiscardThread) => {
+                self.turn_changes_discard_thread(&request.params)
+            }
             Some(ClientMethod::TypstCompile) => self.typst_compile(connection, &request.params),
             Some(ClientMethod::ConfigRead) => self.config_read(),
             Some(ClientMethod::AccountRead) => self.account_read(),
@@ -1752,6 +1834,10 @@ impl AppServer {
             Some(ClientMethod::SemanticCodeIndexRevoke) => {
                 self.semantic_code_index_revoke(&request.params)
             }
+            Some(ClientMethod::CommitMessageAuthorize) => {
+                self.commit_message_authorize(&request.params)
+            }
+            Some(ClientMethod::CommitMessageRevoke) => self.commit_message_revoke(&request.params),
             Some(ClientMethod::LanguageServerConfigure) => {
                 self.language_server_configure(&request.params)
             }

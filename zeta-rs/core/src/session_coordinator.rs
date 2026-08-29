@@ -11,12 +11,15 @@ use crate::StartTurnResult;
 use crate::SteerTurnRequest;
 use crate::SteerTurnResult;
 use crate::ThreadController;
+use crate::ThreadWorkspaceProvisionRequest;
+use crate::ThreadWorkspaceProvisioner;
 use crate::WriterLease;
 use crate::reduce_session_event;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::RwLock;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::SystemTime;
@@ -187,6 +190,7 @@ pub struct SessionCoordinator {
     writer_lease: Option<Arc<dyn WriterLease<SessionId>>>,
     threads: Arc<ThreadController>,
     sessions: Mutex<BTreeMap<SessionId, SessionSnapshot>>,
+    thread_workspaces: RwLock<Arc<dyn ThreadWorkspaceProvisioner>>,
     next_id: AtomicU64,
 }
 
@@ -197,6 +201,7 @@ impl SessionCoordinator {
             writer_lease: None,
             threads,
             sessions: Mutex::new(BTreeMap::new()),
+            thread_workspaces: RwLock::new(Arc::new(crate::NoThreadWorkspaceProvisioner)),
             next_id: AtomicU64::new(1),
         }
     }
@@ -211,12 +216,24 @@ impl SessionCoordinator {
             writer_lease: Some(writer_lease),
             threads,
             sessions: Mutex::new(BTreeMap::new()),
+            thread_workspaces: RwLock::new(Arc::new(crate::NoThreadWorkspaceProvisioner)),
             next_id: AtomicU64::new(1),
         }
     }
 
     pub fn threads(&self) -> &Arc<ThreadController> {
         &self.threads
+    }
+
+    /// Installs the host authority that durably binds workspaces before Thread attachment.
+    pub fn install_thread_workspace_provisioner(
+        &self,
+        provisioner: Arc<dyn ThreadWorkspaceProvisioner>,
+    ) -> Result<(), CoreError> {
+        *self.thread_workspaces.write().map_err(|_| {
+            CoreError::Journal("Thread workspace provisioner lock poisoned".into())
+        })? = provisioner;
+        Ok(())
     }
 
     /// Starts a model Turn only while the owning Session and membership are active.
@@ -828,6 +845,14 @@ impl SessionCoordinator {
         }
         let title = planned.title.clone();
         let origin = planned.membership.origin.clone();
+        self.thread_workspaces
+            .read()
+            .map_err(|_| CoreError::Journal("Thread workspace provisioner lock poisoned".into()))?
+            .provision(&ThreadWorkspaceProvisionRequest {
+                session_id: snapshot.session_id.clone(),
+                thread_id: thread_id.clone(),
+                origin: origin.clone(),
+            })?;
         let agent_context_seed = planned.agent_context_seed.clone();
         match origin {
             ThreadOrigin::Rewind {

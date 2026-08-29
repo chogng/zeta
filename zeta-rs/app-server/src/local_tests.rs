@@ -2,6 +2,7 @@ use super::*;
 use crate::ConnectionState;
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::process::Command;
 use std::sync::Condvar;
 use std::sync::Mutex;
 use std::thread;
@@ -139,6 +140,14 @@ fn connector_count(server: &AppServer, connection: &mut ConnectionState, request
     response["result"]["connectors"].as_array().unwrap().len()
 }
 
+fn local_call(
+    server: &AppServer,
+    connection: &mut ConnectionState,
+    request: serde_json::Value,
+) -> serde_json::Value {
+    serde_json::from_str(&server.handle_json(connection, &request.to_string())).unwrap()
+}
+
 fn wait_for_connector_count(
     server: &AppServer,
     connection: &mut ConnectionState,
@@ -153,6 +162,34 @@ fn wait_for_connector_count(
         std::thread::sleep(Duration::from_millis(10));
     }
     panic!("Connector projection did not reach {expected} entries");
+}
+
+fn run_local_git(root: &Path, arguments: &[&str]) -> String {
+    let output = Command::new("git")
+        .current_dir(root)
+        .args([
+            "-c",
+            "user.name=Zeta App Server Test",
+            "-c",
+            "user.email=zeta-app-server@example.invalid",
+            "-c",
+            "commit.gpgSign=false",
+            "-c",
+            if cfg!(windows) {
+                "core.hooksPath=NUL"
+            } else {
+                "core.hooksPath=/dev/null"
+            },
+        ])
+        .args(arguments)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "git {arguments:?} failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout).unwrap().trim().to_string()
 }
 
 #[test]
@@ -177,6 +214,199 @@ fn local_composition_reads_empty_subscription_accounts_before_sign_in() {
     );
     let account: serde_json::Value = serde_json::from_str(&account).unwrap();
     assert_eq!(account["result"]["accounts"], serde_json::json!([]));
+}
+
+#[test]
+fn local_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
+    let profile = tempfile::tempdir().unwrap();
+    let workspace = tempfile::tempdir().unwrap();
+    run_local_git(
+        workspace.path(),
+        &["init", "--quiet", "--initial-branch=main"],
+    );
+    run_local_git(
+        workspace.path(),
+        &["config", "user.name", "Zeta App Server Test"],
+    );
+    run_local_git(
+        workspace.path(),
+        &["config", "user.email", "zeta-app-server@example.invalid"],
+    );
+    std::fs::write(workspace.path().join("README.md"), "initial\n").unwrap();
+    run_local_git(workspace.path(), &["add", "."]);
+    run_local_git(workspace.path(), &["commit", "--quiet", "-m", "initial"]);
+    let initial_head = run_local_git(workspace.path(), &["rev-parse", "HEAD"]);
+    let server = open_local_app_server(
+        LocalAppServerOptions::new(profile.path())
+            .without_built_in_skills()
+            .with_session_state_mode(SessionStateMode::Ephemeral)
+            .with_workspace_root(workspace.path()),
+    )
+    .unwrap();
+    let mut connection = server.connection();
+    let initialized = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":1,"method":"initialize",
+            "params":{"clientInfo":{"name":"turn-changes-test","version":"1"},"capabilities":{}}
+        }),
+    );
+    assert!(initialized["result"].is_object());
+    let session = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"session/create",
+            "params":{"commandId":"create-session","title":"Turn changes"}
+        }),
+    );
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":3,"method":"session/request",
+            "params":{
+                "commandId":"create-thread","sessionId":session_id,"expectedSequence":1,
+                "request":{"type":"createThread","title":"root"}
+            }
+        }),
+    );
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+    let session_sequence = thread["result"]["value"]["session"]["sequence"]
+        .as_u64()
+        .unwrap();
+    let approval = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":4,"method":"session/request",
+            "params":{
+                "commandId":"bypass-test-permissions","sessionId":session_id,
+                "expectedSequence":session_sequence,
+                "request":{"type":"setNextApprovalMode","approvalMode":"bypassPermissions"}
+            }
+        }),
+    );
+    assert_eq!(
+        approval["result"]["value"]["session"]["nextApprovalMode"],
+        "bypassPermissions"
+    );
+    let started = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":5,"method":"session/request",
+            "params":{
+                "commandId":"write-turn-file","sessionId":session_id,"expectedSequence":1,
+                "request":{
+                    "type":"startShellTurn","threadId":thread_id,
+                    "command":"printf 'sealed turn contents\\n' > turn.txt","workingDirectory":"."
+                }
+            }
+        }),
+    );
+    assert!(started["result"]["value"]["turnId"].is_string());
+    let thread_id_typed = zeta_protocol::ThreadId::new(thread_id).unwrap();
+    for _ in 0..200 {
+        let completed = server
+            .sessions()
+            .threads()
+            .read_thread(&thread_id_typed)
+            .unwrap()
+            .turns
+            .last()
+            .is_some_and(|turn| turn.status == zeta_protocol::TurnStatus::Completed);
+        if completed {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+
+    let mut request_id = 6;
+    let change_set = loop {
+        let listed = local_call(
+            &server,
+            &mut connection,
+            serde_json::json!({
+                "jsonrpc":"2.0","id":request_id,"method":"turnChanges/list",
+                "params":{"sessionId":session_id,"threadId":thread_id}
+            }),
+        );
+        if listed["result"]["changeSets"][0]["captureState"] == "sealed" {
+            break listed["result"]["changeSets"][0].clone();
+        }
+        request_id += 1;
+        assert!(request_id < 206, "ChangeSet did not seal: {listed}");
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    assert_eq!(change_set["statistics"]["files"], 1);
+    assert_eq!(change_set["messageState"], "unconfigured");
+    let change_set_id = change_set["changeSetId"].as_str().unwrap();
+    request_id += 1;
+    let drafted = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":request_id,"method":"turnChanges/updateDraft",
+            "params":{
+                "commandId":"draft-turn-message","sessionId":session_id,"threadId":thread_id,
+                "changeSetId":change_set_id,"expectedRevision":change_set["revision"],
+                "message":"test(turn-changes): commit sealed shell turn"
+            }
+        }),
+    );
+    let drafted_revision = drafted["result"]["changeSets"][0]["revision"]
+        .as_u64()
+        .unwrap();
+    request_id += 1;
+    let queued = local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":request_id,"method":"turnChanges/commit",
+            "params":{
+                "commandId":"commit-shell-turn","sessionId":session_id,"threadId":thread_id,
+                "changeSetIds":[change_set_id],"expectedRevision":drafted_revision
+            }
+        }),
+    );
+    assert_eq!(queued["result"]["changeSets"][0]["commitState"], "queued");
+    loop {
+        request_id += 1;
+        let listed = local_call(
+            &server,
+            &mut connection,
+            serde_json::json!({
+                "jsonrpc":"2.0","id":request_id,"method":"turnChanges/list",
+                "params":{"sessionId":session_id,"threadId":thread_id}
+            }),
+        );
+        let state = &listed["result"]["changeSets"][0]["commitState"];
+        if state == "committed" {
+            break;
+        }
+        assert!(
+            state == "queued" || state == "committing",
+            "commit failed: {listed}"
+        );
+        assert!(request_id < 406, "commit did not finish: {listed}");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+
+    assert_ne!(
+        run_local_git(workspace.path(), &["rev-parse", "HEAD"]),
+        initial_head
+    );
+    assert_eq!(
+        std::fs::read_to_string(workspace.path().join("turn.txt")).unwrap(),
+        "sealed turn contents\n"
+    );
+    assert_eq!(
+        run_local_git(workspace.path(), &["show", "-s", "--format=%s", "HEAD"]),
+        "test(turn-changes): commit sealed shell turn"
+    );
 }
 
 #[test]
@@ -697,6 +927,7 @@ fn select_model(
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                 preferred_model: Patch::Value(model_ref(model)),
                 approval_review_model: Patch::Missing,
+                commit_message_model: Patch::Missing,
                 tool_mode: Patch::Missing,
                 grep_backend: Patch::Missing,
             }),

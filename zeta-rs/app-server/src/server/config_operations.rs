@@ -10,6 +10,8 @@ use zeta_app_server_protocol::protocol::code_index::FastRegexDisableAndDeleteRes
 use zeta_app_server_protocol::protocol::code_index::LocalIndexClearOutcomeDto;
 use zeta_app_server_protocol::protocol::config::AgentGrepBackendDto;
 use zeta_app_server_protocol::protocol::config::ApprovalReviewModelSelectionDto;
+use zeta_app_server_protocol::protocol::config::CommitMessageAuthorizeParams;
+use zeta_app_server_protocol::protocol::config::CommitMessageRevokeParams;
 use zeta_app_server_protocol::protocol::config::ConfigCommandDispositionDto;
 use zeta_app_server_protocol::protocol::config::ConfigCommandResult;
 use zeta_app_server_protocol::protocol::config::ConfigReadResult;
@@ -161,6 +163,7 @@ impl AppServer {
                     approval_review_model: approval_review_model_update_from_dto(
                         params.approval_review_model,
                     )?,
+                    commit_message_model: model_ref_update_from_dto(params.commit_message_model)?,
                     tool_mode: params.tool_mode,
                     grep_backend: params.agent_grep_backend.map(agent_grep_backend_from_dto),
                 }),
@@ -185,6 +188,7 @@ impl AppServer {
                 command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                     preferred_model: Patch::Missing,
                     approval_review_model: Patch::Missing,
+                    commit_message_model: Patch::Missing,
                     tool_mode: Patch::Missing,
                     grep_backend: Patch::Value(AgentGrepBackend::Ripgrep),
                 }),
@@ -324,6 +328,44 @@ impl AppServer {
         }
         self.reconcile_semantic_code_index_runtime()
             .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodeIndexOperationFailed))?;
+        result(&config_command_result(outcome))
+    }
+
+    pub(super) fn commit_message_authorize(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: CommitMessageAuthorizeParams = decode(params)?;
+        let workspace = self
+            .active_workspace_trust_id()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let store = self
+            .config
+            .clone()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let outcome = store
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: UserConfigCommand::AuthorizeCommitMessageEgress { workspace },
+            })
+            .map_err(config_operation_error)?;
+        result(&config_command_result(outcome))
+    }
+
+    pub(super) fn commit_message_revoke(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: CommitMessageRevokeParams = decode(params)?;
+        let workspace = self
+            .active_workspace_trust_id()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let store = self
+            .config
+            .clone()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+        let outcome = store
+            .apply(ConfigCommandRequest {
+                command_id: params.command_id,
+                expected_revision: ConfigRevision::new(params.expected_revision),
+                command: UserConfigCommand::RevokeCommitMessageEgress { workspace },
+            })
+            .map_err(config_operation_error)?;
         result(&config_command_result(outcome))
     }
 
@@ -538,6 +580,17 @@ fn config_read_result(
     active_workspace: Option<&zeta_workspace::WorkspaceTrustId>,
     tool_search_status: ToolSearchEmbeddingStatus,
 ) -> ConfigReadResult {
+    let commit_message_active_workspace_authorized = active_workspace.is_some_and(|workspace| {
+        snapshot
+            .values
+            .commit_messages
+            .authorized_model(
+                workspace,
+                snapshot.values.commit_message_model.as_ref(),
+                &snapshot.values.providers,
+            )
+            .is_some()
+    });
     let semantic_code_index = SemanticCodeIndexConfigDto {
         selection: semantic_selection_dto(snapshot.values.semantic_code_index.selection.clone()),
         automatic_context: semantic_automatic_context_dto(
@@ -566,6 +619,8 @@ fn config_read_result(
         generation: snapshot.generation.get(),
         preferred_model: snapshot.values.preferred_model.map(model_ref_dto),
         approval_review_model: approval_review_model_dto(snapshot.values.approval_review_model),
+        commit_message_model: snapshot.values.commit_message_model.map(model_ref_dto),
+        commit_message_active_workspace_authorized,
         tool_mode: snapshot.values.tool_mode,
         agent_grep_backend: agent_grep_backend_dto(snapshot.values.agent_grep_backend),
         providers: snapshot

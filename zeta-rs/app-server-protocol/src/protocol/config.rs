@@ -405,6 +405,10 @@ pub struct ConfigReadResult {
     pub generation: u64,
     pub preferred_model: Option<ModelRefDto>,
     pub approval_review_model: ApprovalReviewModelSelectionDto,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub commit_message_model: Option<ModelRefDto>,
+    pub commit_message_active_workspace_authorized: bool,
     pub tool_mode: ToolMode,
     pub agent_grep_backend: AgentGrepBackendDto,
     pub providers: BTreeMap<String, ProviderConfigDto>,
@@ -488,6 +492,26 @@ pub struct SemanticCodeIndexRevokeParams {
     pub expected_revision: u64,
 }
 
+/// Authorizes the active Workspace to send bounded context and diff to the exact summary model.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitMessageAuthorizeParams {
+    pub command_id: CommandId,
+    #[schemars(range(min = 0))]
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+}
+
+/// Revokes automatic commit-message source egress for the active Workspace.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct CommitMessageRevokeParams {
+    pub command_id: CommandId,
+    #[schemars(range(min = 0))]
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+}
+
 /// Notification payload emitted after a durable Config authority commit.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -532,6 +556,10 @@ pub struct ConfigUpdateParams {
     #[schemars(with = "Option<ApprovalReviewModelSelectionDto>")]
     #[ts(as = "Option<ApprovalReviewModelSelectionDto>", optional = nullable)]
     pub approval_review_model: Patch<ApprovalReviewModelSelectionDto>,
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    #[schemars(with = "Option<ModelRefDto>")]
+    #[ts(as = "Option<ModelRefDto>", optional = nullable)]
+    pub commit_message_model: Patch<ModelRefDto>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     #[schemars(with = "Option<ToolMode>")]
     #[ts(as = "Option<ToolMode>", optional = nullable)]

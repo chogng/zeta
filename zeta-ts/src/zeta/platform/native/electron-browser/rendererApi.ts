@@ -39,6 +39,7 @@ import { createRemoteTunnelApi } from "../../remote/electron-browser/remoteTunne
 import { createMarketplaceApi } from "../../marketplace/electron-browser/marketplaceApi.js";
 import { createWorkspaceTrustApi } from "../../workspaceTrust/electron-browser/workspaceTrustApi.js";
 import { createAccountApi } from "../../accounts/electron-browser/accountApi.js";
+import { createTurnChangesApi } from "../../turnChanges/electron-browser/turnChangesApi.js";
 
 export type ElectronRendererCapabilityContribution = (appServer: IAppServerApi) => RendererHostCapabilities;
 
@@ -63,6 +64,7 @@ export function createElectronRendererApi(contributions: readonly ElectronRender
 		model: createModelApi(),
 		thread: createThreadApi(),
 		turn: createTurnApi(),
+		turnChanges: createTurnChangesApi(),
 		skills: createSkillApi(),
 		typst: createTypstApi(),
 		documentCollaboration: createDocumentCollaborationApi(),

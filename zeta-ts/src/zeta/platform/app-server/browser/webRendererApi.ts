@@ -22,6 +22,7 @@ import { createViteDevExtensionHostApi } from "../../extensionHost/browser/exten
 import { createViteDevMarketplaceApi } from "../../marketplace/browser/marketplaceApi.js";
 import { createViteDevWorkspaceTrustApi } from "../../workspaceTrust/browser/workspaceTrustApi.js";
 import { createViteDevAccountApi } from "../../accounts/browser/accountApi.js";
+import { createViteDevTurnChangesApi } from "../../turnChanges/browser/turnChangesApi.js";
 
 export type ViteDevRendererCapabilityContribution = (connection: ViteDevAppServerConnection, appServer: IRendererHost["appServer"]) => RendererHostCapabilities;
 
@@ -58,6 +59,7 @@ function createRendererHost(connection: ViteDevAppServerConnection, connectorHos
 		model: createViteDevModelApi(connection),
 		thread: createViteDevThreadApi(connection),
 		turn: createViteDevTurnApi(connection),
+		turnChanges: createViteDevTurnChangesApi(connection),
 		skills: createViteDevSkillApi(connection),
 		typst: createViteDevTypstApi(connection),
 		documentCollaboration: createViteDevDocumentCollaborationApi(connection),

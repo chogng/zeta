@@ -913,7 +913,7 @@ pub fn open_local_app_server_with_code_index_providers(
             ));
         }
     }
-    let (_database_path, sessions, config) = match (&profile_runtime, options.session_state_mode) {
+    let (database_path, sessions, config) = match (&profile_runtime, options.session_state_mode) {
         (Some(runtime), SessionStateMode::Durable) => (
             runtime.database_path.clone(),
             Arc::clone(&runtime.sessions),
@@ -1241,6 +1241,7 @@ pub fn open_local_app_server_with_code_index_providers(
             WorkspaceSwitchTrustPolicy::UserConfig(Arc::clone(&config)),
         )
         .map_err(|error| OpenAppServerError(error.to_string()))?;
+    let turn_changes_workspace_root = options.workspace_root.clone();
     if let Some(workspace_root) = options.workspace_root {
         match options.initial_workspace_trust {
             InitialWorkspaceTrust::HostConfiguration => server
@@ -1250,6 +1251,11 @@ pub fn open_local_app_server_with_code_index_providers(
                 .switch_local_workspace_root(workspace_root)
                 .map_err(|error| OpenAppServerError(error.to_string()))?,
         };
+    }
+    if let Some(workspace_root) = turn_changes_workspace_root {
+        server = server
+            .with_local_turn_changes(&database_path, &options.profile_root, &workspace_root)
+            .map_err(OpenAppServerError)?;
     }
     server
         .bind_active_workspace_session_extensions()

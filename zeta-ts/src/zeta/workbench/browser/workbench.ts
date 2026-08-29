@@ -456,7 +456,7 @@ export class Workbench extends Disposable {
 		}));
 		services.registerInstance(IConfigurationService, configuration);
 		services.registerInstance(IConfigurationResourceService, configuration);
-		const chatService = this._register(new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events, configurationService: configuration }));
+		const chatService = this._register(new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, turnChangesApi: api.turnChanges, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events, configurationService: configuration }));
 		services.registerInstance(IChatService, chatService);
 		const languagePackService = this._register(new MarketplaceLanguagePackService(marketplaceService, builtinLanguagePackCatalogs));
 		services.registerInstance(ILanguagePackService, languagePackService);

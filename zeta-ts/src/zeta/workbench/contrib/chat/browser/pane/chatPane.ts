@@ -19,7 +19,7 @@ import type { IQuickInputService } from "../../../../../platform/quickinput/comm
 /** Owns the content and interaction state for one local or durable Chat tab. */
 export class ChatPane extends Disposable {
 	readonly element: HTMLElement;
-	private readonly model: ChatPaneModel;
+	readonly model: ChatPaneModel;
 	private readonly listWidget: ChatListWidget;
 	private readonly inputPart: ChatInputPart;
 	private readonly goalElement: HTMLDivElement;

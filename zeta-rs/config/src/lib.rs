@@ -5,6 +5,7 @@
 
 mod code_index;
 mod command;
+mod commit_messages;
 mod document;
 mod exec_policy;
 mod hooks;
@@ -30,6 +31,7 @@ pub use command::{
     ConfigCommandDisposition, ConfigCommandError, ConfigCommandRequest, ConfigCommandResult,
     PreferencesUpdate, UserConfigCommand,
 };
+pub use commit_messages::{CommitMessageConfig, CommitMessageEgressGrant};
 pub use document::{
     AgentConfig, AgentGrepBackend, ApprovalReviewModelSelection, ConfigGeneration, ConfigRevision,
     ResolvedConfig, ResolvedConfigSnapshot, UserConfigDocument,

@@ -18,9 +18,13 @@ use zeta_core::AfterToolHookRequest;
 use zeta_core::BeforeToolHookDecision;
 use zeta_core::BeforeToolHookRequest;
 use zeta_core::CoreError;
+use zeta_core::HookExecutionEvent;
+use zeta_core::HookExecutionObserver;
 use zeta_core::HookService;
+use zeta_core::NoHookExecutionObserver;
 use zeta_core::TurnCompletedHookRequest;
 use zeta_protocol::SessionId;
+use zeta_protocol::ThreadId;
 use zeta_workspace::TrustedWorkspace;
 use zeta_workspace::WorkspaceRoot;
 
@@ -29,6 +33,11 @@ struct SessionHookBinding {
     discovery: TrustedWorkspace,
     execution: TrustedWorkspace,
     process: Arc<dyn HookProcessExecutor>,
+}
+
+struct ThreadHookBinding {
+    workspace: WorkspaceRoot,
+    process: Option<Arc<dyn HookProcessExecutor>>,
 }
 
 /// Shared host runtime for declarative Hooks.
@@ -40,7 +49,9 @@ pub struct DeclarativeHookRuntime {
     config: RwLock<HooksConfig>,
     policy: Arc<dyn ActionPolicyService>,
     process: RwLock<Option<Arc<dyn HookProcessExecutor>>>,
+    thread_bindings: RwLock<BTreeMap<ThreadId, ThreadHookBinding>>,
     session_bindings: RwLock<BTreeMap<SessionId, Vec<SessionHookBinding>>>,
+    execution_observer: RwLock<Arc<dyn HookExecutionObserver>>,
     runs: HookRunLog,
 }
 
@@ -51,7 +62,9 @@ impl DeclarativeHookRuntime {
             config: RwLock::new(config),
             policy,
             process: RwLock::new(None),
+            thread_bindings: RwLock::new(BTreeMap::new()),
             session_bindings: RwLock::new(BTreeMap::new()),
+            execution_observer: RwLock::new(Arc::new(NoHookExecutionObserver)),
             runs: HookRunLog::new(),
         }
     }
@@ -95,6 +108,46 @@ impl DeclarativeHookRuntime {
             .process
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+    }
+
+    /// Binds primary Hook execution for one Thread to its managed workspace.
+    pub fn bind_thread_workspace(
+        &self,
+        thread_id: ThreadId,
+        workspace: WorkspaceRoot,
+    ) -> Result<(), HookWorkspaceBindingError> {
+        let process = if has_enabled_hooks(
+            &self
+                .config
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        ) {
+            Some(Arc::new(
+                NativeHookProcessExecutor::new(workspace.clone())
+                    .map_err(|message| HookWorkspaceBindingError { message })?,
+            ) as Arc<dyn HookProcessExecutor>)
+        } else {
+            None
+        };
+        self.thread_bindings
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(thread_id, ThreadHookBinding { workspace, process });
+        Ok(())
+    }
+
+    pub fn unbind_thread_workspace(&self, thread_id: &ThreadId) {
+        self.thread_bindings
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(thread_id);
+    }
+
+    pub fn set_execution_observer(&self, observer: Arc<dyn HookExecutionObserver>) {
+        *self
+            .execution_observer
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = observer;
     }
 
     /// Replaces additional-directory Hook bindings for one Session.
@@ -160,9 +213,29 @@ impl DeclarativeHookRuntime {
             config: RwLock::new(config),
             policy,
             process: RwLock::new(Some(process)),
+            thread_bindings: RwLock::new(BTreeMap::new()),
             session_bindings: RwLock::new(BTreeMap::new()),
+            execution_observer: RwLock::new(Arc::new(NoHookExecutionObserver)),
             runs: HookRunLog::new(),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn bind_thread_process(
+        &self,
+        thread_id: ThreadId,
+        process: Arc<dyn HookProcessExecutor>,
+    ) {
+        self.thread_bindings
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(
+                thread_id,
+                ThreadHookBinding {
+                    workspace: process.workspace().clone(),
+                    process: Some(process),
+                },
+            );
     }
 
     fn run_event(
@@ -180,10 +253,13 @@ impl DeclarativeHookRuntime {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone();
         let process = self
-            .process
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone();
+            .thread_process(invocation.thread_id(), &config)?
+            .or_else(|| {
+                self.process
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone()
+            });
         if let Some(process) = process {
             let decision = self.run_config(&config, process.as_ref(), invocation, cancellation)?;
             if matches!(decision, HookDecision::Deny { .. }) {
@@ -238,7 +314,22 @@ impl DeclarativeHookRuntime {
                     cancellation,
                 )?;
                 let input = encode_input(hook, invocation, process.workspace().canonical_path())?;
-                process.execute(hook, input, authority, cancellation)
+                let event = HookExecutionEvent {
+                    session_id: invocation.session_id().clone(),
+                    thread_id: invocation.thread_id().clone(),
+                    turn_id: invocation.turn_id().clone(),
+                    hook_id: hook.id.to_string(),
+                    workspace: process.workspace().canonical_path().to_path_buf(),
+                };
+                let observer = self
+                    .execution_observer
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .clone();
+                observer.will_execute(&event)?;
+                let result = process.execute(hook, input, authority, cancellation);
+                observer.did_finish(&event);
+                result
             })();
             self.runs.finish(started, &result);
             let decision = result?;
@@ -248,6 +339,34 @@ impl DeclarativeHookRuntime {
         }
         Ok(HookDecision::Continue)
     }
+
+    fn thread_process(
+        &self,
+        thread_id: &ThreadId,
+        config: &HooksConfig,
+    ) -> Result<Option<Arc<dyn HookProcessExecutor>>, CoreError> {
+        let mut bindings = self
+            .thread_bindings
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let Some(binding) = bindings.get_mut(thread_id) else {
+            return Ok(None);
+        };
+        if binding.process.is_none() && has_enabled_hooks(config) {
+            binding.process = Some(Arc::new(
+                NativeHookProcessExecutor::new(binding.workspace.clone())
+                    .map_err(CoreError::Execution)?,
+            ));
+        }
+        Ok(binding.process.clone())
+    }
+}
+
+fn has_enabled_hooks(config: &HooksConfig) -> bool {
+    config
+        .hooks
+        .values()
+        .any(|hook| hook.enablement == HookEnablement::Enabled)
 }
 
 impl HookService for DeclarativeHookRuntime {

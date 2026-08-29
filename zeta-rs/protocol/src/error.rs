@@ -83,6 +83,14 @@ impl StableTurnError {
             retryable: false,
         }
     }
+
+    pub fn workspace_capture_failed() -> Self {
+        Self {
+            code: StableTurnErrorCode::WorkspaceCaptureFailed,
+            message: "Turn workspace baseline could not be captured".into(),
+            retryable: true,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -97,4 +105,5 @@ pub enum StableTurnErrorCode {
     InteractionDeadlineElapsed,
     ToolRepetition,
     UsageLimited,
+    WorkspaceCaptureFailed,
 }

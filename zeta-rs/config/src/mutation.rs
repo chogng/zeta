@@ -40,6 +40,17 @@ pub(crate) fn apply_command(
                 )));
             }
             if document
+                .agent
+                .commit_message_model
+                .as_ref()
+                .is_some_and(|model| model.provider == *provider)
+            {
+                return Err(ConfigError(format!(
+                    "cannot remove provider '{}' while it is the commit-message model provider",
+                    provider
+                )));
+            }
+            if document
                 .semantic_code_index
                 .selection
                 .remote_models()
@@ -182,6 +193,19 @@ pub(crate) fn apply_command(
         UserConfigCommand::RevokeSemanticCodeIndexEgress { workspace } => {
             document.semantic_code_index.revoke(workspace);
         }
+        UserConfigCommand::AuthorizeCommitMessageEgress { workspace } => {
+            document
+                .commit_messages
+                .authorize(
+                    workspace.clone(),
+                    document.agent.commit_message_model.as_ref(),
+                    &document.providers,
+                )
+                .map_err(|message| ConfigError(message.into()))?;
+        }
+        UserConfigCommand::RevokeCommitMessageEgress { workspace } => {
+            document.commit_messages.revoke(workspace);
+        }
         UserConfigCommand::SetWorkspaceTrust {
             workspace,
             setting,
@@ -239,6 +263,20 @@ fn apply_preferences(document: &mut UserConfigDocument, update: &PreferencesUpda
         }
         Patch::Value(selection) => {
             document.agent.approval_review_model = selection.clone();
+        }
+    }
+    match &update.commit_message_model {
+        Patch::Missing => {}
+        Patch::Null => {
+            if document.agent.commit_message_model.take().is_some() {
+                document.commit_messages.revoke_all();
+            }
+        }
+        Patch::Value(model) => {
+            if document.agent.commit_message_model.as_ref() != Some(model) {
+                document.agent.commit_message_model = Some(model.clone());
+                document.commit_messages.revoke_all();
+            }
         }
     }
     match &update.tool_mode {

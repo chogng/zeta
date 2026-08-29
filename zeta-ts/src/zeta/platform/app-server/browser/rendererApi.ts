@@ -22,6 +22,7 @@ import { createDisconnectedExtensionHostApi } from "../../extensionHost/browser/
 import { createDisconnectedMarketplaceApi } from "../../marketplace/browser/marketplaceApi.js";
 import { createDisconnectedWorkspaceTrustApi } from "../../workspaceTrust/browser/workspaceTrustApi.js";
 import { createDisconnectedAccountApi } from "../../accounts/browser/accountApi.js";
+import { createDisconnectedTurnChangesApi } from "../../turnChanges/browser/turnChangesApi.js";
 
 export { WebAppServerUnavailableError };
 
@@ -35,6 +36,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		model: createDisconnectedModelApi(unavailableOperation),
 		thread: createDisconnectedThreadApi(unavailableOperation),
 		turn: createDisconnectedTurnApi(unavailableOperation),
+		turnChanges: createDisconnectedTurnChangesApi(unavailableOperation),
 		skills: createDisconnectedSkillApi(unavailableOperation),
 		typst: createDisconnectedTypstApi(unavailableOperation),
 		documentCollaboration: createDisconnectedDocumentCollaborationApi(unavailableOperation),

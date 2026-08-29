@@ -14,10 +14,13 @@ path = "src/lib.rs"
 anyhow = { workspace = true }
 dunce = { workspace = true }
 fs2 = { workspace = true }
+ignore = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 tempfile = { workspace = true }
 zeta-git = { workspace = true }
+zeta-turn-changes = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }

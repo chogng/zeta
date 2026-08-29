@@ -29,6 +29,7 @@ use zeta_app_server_protocol::protocol::marketplace::MarketplaceChanged;
 use zeta_app_server_protocol::protocol::plugins::PluginsChanged;
 use zeta_app_server_protocol::protocol::registry::ServerNotificationMethod;
 use zeta_app_server_protocol::protocol::skills::SkillsChanged;
+use zeta_app_server_protocol::protocol::turn_changes::TurnChangesChanged;
 use zeta_app_server_protocol::rpc::JsonRpcNotification;
 use zeta_config::ConfigChange;
 use zeta_protocol::AgentRequestEnvelope;
@@ -763,6 +764,10 @@ impl UpdateBroker {
             queue.push(notification(ServerNotificationMethod::FsChanged, &changed));
             true
         });
+    }
+
+    pub(super) fn publish_turn_changes_changed(&self, changed: TurnChangesChanged) {
+        self.broadcast_notification(ServerNotificationMethod::TurnChangesChanged, &changed);
     }
 
     pub(super) fn publish_language_diagnostics(

@@ -1361,6 +1361,9 @@
         "GitUnavailable",
         "GitNotRepository",
         "GitOperationFailed",
+        "TurnChangesUnavailable",
+        "TurnChangesRevisionConflict",
+        "TurnChangesOperationFailed",
         "DiffOperationFailed",
         "SyntaxAnalysisFailed",
         "CodeIndexUnavailable",
@@ -1976,6 +1979,10 @@
       ],
       "type": "string"
     },
+    "ChangeSetId": {
+      "description": "Stable identity of one Turn/repository change set.",
+      "type": "string"
+    },
     "ClientCapabilities": {
       "properties": {
         "agentInteractions": {
@@ -2432,6 +2439,118 @@
             },
             "params": {
               "$ref": "#/$defs/ThreadGoalClearParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "turnChanges/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TurnChangesListParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "turnChanges/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TurnChangesReadParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "turnChanges/readFile",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TurnChangesReadFileParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "turnChanges/generateMessage",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TurnChangesMutationParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "turnChanges/updateDraft",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TurnChangesUpdateDraftParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "turnChanges/commit",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TurnChangesCommitParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "turnChanges/discardThread",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TurnChangesDiscardThreadParams"
             }
           },
           "required": [
@@ -3264,6 +3383,38 @@
             },
             "params": {
               "$ref": "#/$defs/SemanticCodeIndexRevokeParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workspace/commitMessage/authorize",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/CommitMessageAuthorizeParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workspace/commitMessage/revoke",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/CommitMessageRevokeParams"
             }
           },
           "required": [
@@ -5679,6 +5830,118 @@
         {
           "properties": {
             "method": {
+              "const": "turnChanges/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TurnChangesListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "turnChanges/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TurnChangesReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "turnChanges/readFile",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TurnChangesReadFileResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "turnChanges/generateMessage",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TurnChangesMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "turnChanges/updateDraft",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TurnChangesMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "turnChanges/commit",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TurnChangesMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "turnChanges/discardThread",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/TurnChangesMutationResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "session/thread/subscribe",
               "type": "string"
             },
@@ -6496,6 +6759,38 @@
           "properties": {
             "method": {
               "const": "workspace/codeIndex/semantic/revoke",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workspace/commitMessage/authorize",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "workspace/commitMessage/revoke",
               "type": "string"
             },
             "result": {
@@ -9112,6 +9407,42 @@
       "minLength": 1,
       "type": "string"
     },
+    "CommitMessageAuthorizeParams": {
+      "description": "Authorizes the active Workspace to send bounded context and diff to the exact summary model.",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision"
+      ],
+      "type": "object"
+    },
+    "CommitMessageRevokeParams": {
+      "description": "Revokes automatic commit-message source egress for the active Workspace.",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision"
+      ],
+      "type": "object"
+    },
     "ConfigChanged": {
       "description": "Notification payload emitted after a durable Config authority commit.",
       "properties": {
@@ -9171,6 +9502,19 @@
         },
         "approvalReviewModel": {
           "$ref": "#/$defs/ApprovalReviewModelSelectionDto"
+        },
+        "commitMessageActiveWorkspaceAuthorized": {
+          "type": "boolean"
+        },
+        "commitMessageModel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRefDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "execPolicyRules": {
           "items": {
@@ -9248,6 +9592,7 @@
         "revision",
         "generation",
         "approvalReviewModel",
+        "commitMessageActiveWorkspaceAuthorized",
         "toolMode",
         "agentGrepBackend",
         "providers",
@@ -9287,6 +9632,16 @@
         },
         "commandId": {
           "$ref": "#/$defs/CommandId"
+        },
+        "commitMessageModel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRefDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "expectedRevision": {
           "format": "uint64",
@@ -19816,6 +20171,22 @@
         {
           "properties": {
             "method": {
+              "const": "turnChanges/changed",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/TurnChangesChanged"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "fs/changed",
               "type": "string"
             },
@@ -21572,7 +21943,8 @@
         "completionPersistenceFailed",
         "interactionDeadlineElapsed",
         "toolRepetition",
-        "usageLimited"
+        "usageLimited",
+        "workspaceCaptureFailed"
       ],
       "type": "string"
     },
@@ -24686,6 +25058,56 @@
       ],
       "type": "object"
     },
+    "ThreadWorkspaceBinding": {
+      "description": "Public binding for a Thread workspace. Managed filesystem paths stay private to App Server.",
+      "properties": {
+        "baselineSummary": {
+          "type": "string"
+        },
+        "managedWorktreeId": {
+          "type": "string"
+        },
+        "repositories": {
+          "items": {
+            "$ref": "#/$defs/ThreadWorkspaceRepositoryBindingDto"
+          },
+          "type": "array"
+        },
+        "sourceWorkspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "managedWorktreeId",
+        "sourceWorkspaceId",
+        "repositories",
+        "baselineSummary"
+      ],
+      "type": "object"
+    },
+    "ThreadWorkspaceRepositoryBindingDto": {
+      "properties": {
+        "baselineObjectId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repositoryId": {
+          "type": "string"
+        },
+        "targetBranch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "repositoryId"
+      ],
+      "type": "object"
+    },
     "ToolCallBinding": {
       "description": "Durable binding between one Tool Call and the exact definition/source generation it selected.\n\nRuntime keys are intentionally absent. Recovery must compare this value with an available\nimmutable source snapshot and fail closed when the exact binding can no longer be restored.",
       "properties": {
@@ -25306,6 +25728,535 @@
         "turnId",
         "status",
         "items"
+      ],
+      "type": "object"
+    },
+    "TurnChangeCaptureStateDto": {
+      "enum": [
+        "open",
+        "sealed",
+        "incomplete",
+        "discarded"
+      ],
+      "type": "string"
+    },
+    "TurnChangeCommitStateDto": {
+      "enum": [
+        "idle",
+        "queued",
+        "committing",
+        "committed",
+        "conflict",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "TurnChangeFileDto": {
+      "properties": {
+        "additions": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "afterMode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "beforeMode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "binary": {
+          "type": "boolean"
+        },
+        "deletions": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "kind": {
+          "$ref": "#/$defs/TurnChangeFileKindDto"
+        },
+        "path": {
+          "type": "string"
+        },
+        "previousPath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "kind",
+        "binary",
+        "additions",
+        "deletions"
+      ],
+      "type": "object"
+    },
+    "TurnChangeFileKindDto": {
+      "enum": [
+        "added",
+        "modified",
+        "deleted",
+        "renamed",
+        "typeChanged"
+      ],
+      "type": "string"
+    },
+    "TurnChangeFileStatisticsDto": {
+      "properties": {
+        "additions": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "deletions": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "files": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "files",
+        "additions",
+        "deletions"
+      ],
+      "type": "object"
+    },
+    "TurnChangeMessageStateDto": {
+      "enum": [
+        "unconfigured",
+        "queued",
+        "generating",
+        "ready",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "TurnChangeSetSummary": {
+      "description": "Small record used by Session Inspector lists and notifications.",
+      "properties": {
+        "captureState": {
+          "$ref": "#/$defs/TurnChangeCaptureStateDto"
+        },
+        "changeSetId": {
+          "$ref": "#/$defs/ChangeSetId"
+        },
+        "commitId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "commitState": {
+          "$ref": "#/$defs/TurnChangeCommitStateDto"
+        },
+        "conflictPaths": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "dependencies": {
+          "items": {
+            "$ref": "#/$defs/ChangeSetId"
+          },
+          "type": "array"
+        },
+        "externalDependencyPaths": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "failureMessage": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "messageState": {
+          "$ref": "#/$defs/TurnChangeMessageStateDto"
+        },
+        "repositoryId": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "statistics": {
+          "$ref": "#/$defs/TurnChangeFileStatisticsDto"
+        },
+        "targetBranch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "terminalState": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TurnChangeTerminalStateDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        },
+        "turnId": {
+          "$ref": "#/$defs/TurnId"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "changeSetId",
+        "sessionId",
+        "threadId",
+        "turnId",
+        "repositoryId",
+        "statistics",
+        "captureState",
+        "messageState",
+        "commitState",
+        "dependencies",
+        "externalDependencyPaths",
+        "warnings",
+        "conflictPaths",
+        "revision"
+      ],
+      "type": "object"
+    },
+    "TurnChangeTerminalStateDto": {
+      "enum": [
+        "completed",
+        "failed",
+        "interrupted"
+      ],
+      "type": "string"
+    },
+    "TurnChangesChanged": {
+      "properties": {
+        "changeSets": {
+          "items": {
+            "$ref": "#/$defs/TurnChangeSetSummary"
+          },
+          "type": "array"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "threadId",
+        "changeSets"
+      ],
+      "type": "object"
+    },
+    "TurnChangesCommitParams": {
+      "properties": {
+        "changeSetIds": {
+          "items": {
+            "$ref": "#/$defs/ChangeSetId"
+          },
+          "type": "array"
+        },
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "commandId",
+        "sessionId",
+        "threadId",
+        "changeSetIds",
+        "expectedRevision"
+      ],
+      "type": "object"
+    },
+    "TurnChangesDiscardThreadParams": {
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "confirmed": {
+          "type": "boolean"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "commandId",
+        "sessionId",
+        "threadId",
+        "expectedRevision",
+        "confirmed"
+      ],
+      "type": "object"
+    },
+    "TurnChangesListParams": {
+      "properties": {
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "threadId"
+      ],
+      "type": "object"
+    },
+    "TurnChangesListResult": {
+      "properties": {
+        "changeSets": {
+          "items": {
+            "$ref": "#/$defs/TurnChangeSetSummary"
+          },
+          "type": "array"
+        },
+        "workspace": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ThreadWorkspaceBinding"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "changeSets"
+      ],
+      "type": "object"
+    },
+    "TurnChangesMutationParams": {
+      "properties": {
+        "changeSetId": {
+          "$ref": "#/$defs/ChangeSetId"
+        },
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "commandId",
+        "sessionId",
+        "threadId",
+        "changeSetId",
+        "expectedRevision"
+      ],
+      "type": "object"
+    },
+    "TurnChangesMutationResult": {
+      "properties": {
+        "changeSets": {
+          "items": {
+            "$ref": "#/$defs/TurnChangeSetSummary"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "changeSets"
+      ],
+      "type": "object"
+    },
+    "TurnChangesReadFileParams": {
+      "properties": {
+        "changeSetId": {
+          "$ref": "#/$defs/ChangeSetId"
+        },
+        "path": {
+          "type": "string"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "threadId",
+        "changeSetId",
+        "path"
+      ],
+      "type": "object"
+    },
+    "TurnChangesReadFileResult": {
+      "properties": {
+        "after": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "before": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "binary": {
+          "type": "boolean"
+        },
+        "path": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "path",
+        "binary",
+        "truncated"
+      ],
+      "type": "object"
+    },
+    "TurnChangesReadParams": {
+      "properties": {
+        "changeSetId": {
+          "$ref": "#/$defs/ChangeSetId"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "threadId",
+        "changeSetId"
+      ],
+      "type": "object"
+    },
+    "TurnChangesReadResult": {
+      "properties": {
+        "draftMessage": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/TurnChangeFileDto"
+          },
+          "type": "array"
+        },
+        "generatedMessage": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "summary": {
+          "$ref": "#/$defs/TurnChangeSetSummary"
+        }
+      },
+      "required": [
+        "summary",
+        "files"
+      ],
+      "type": "object"
+    },
+    "TurnChangesUpdateDraftParams": {
+      "properties": {
+        "changeSetId": {
+          "$ref": "#/$defs/ChangeSetId"
+        },
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "message": {
+          "type": "string"
+        },
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        },
+        "threadId": {
+          "$ref": "#/$defs/ThreadId"
+        }
+      },
+      "required": [
+        "commandId",
+        "sessionId",
+        "threadId",
+        "changeSetId",
+        "expectedRevision",
+        "message"
       ],
       "type": "object"
     },

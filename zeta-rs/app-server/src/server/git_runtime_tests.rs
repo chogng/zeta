@@ -147,11 +147,7 @@ fn unchanged_watcher_refresh_keeps_graph_cursor_alive() {
     runtime.repositories[0].refresh_from_watcher();
 
     let final_page = runtime
-        .graph(
-            1,
-            std::num::NonZeroUsize::new(1).unwrap(),
-            Some(&cursor),
-        )
+        .graph(1, std::num::NonZeroUsize::new(1).unwrap(), Some(&cursor))
         .unwrap();
     assert_eq!(final_page.commits.len(), 1);
     assert!(!final_page.has_more);

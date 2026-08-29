@@ -37,6 +37,7 @@ use zeta_file_system::LocalFileSystem;
 use zeta_file_system::WorkspaceFileSystem;
 use zeta_file_watcher::FileWatcherEvent;
 use zeta_protocol::SessionId;
+use zeta_protocol::ThreadId;
 use zeta_protocol::ToolCall;
 use zeta_protocol::ToolDefinition;
 use zeta_protocol::ToolExecutionOutput;
@@ -167,13 +168,26 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         value: &str,
         existing: bool,
         session_id: Option<&SessionId>,
+        thread_id: Option<&ThreadId>,
         capability: WorkspaceCapability,
     ) -> Result<ResolvedFilePath, String> {
         self.workspace
             .ensure_active()
             .map_err(|error| error.to_string())?;
         let path = PathBuf::from(value);
-        let mut roots = vec![self.workspace.root().clone()];
+        let thread_workspace = thread_id
+            .map(|thread_id| {
+                self.session_workspace_access
+                    .thread_workspace(thread_id, capability)
+                    .map_err(|error| error.to_string())
+            })
+            .transpose()?
+            .flatten();
+        let primary = thread_workspace
+            .as_ref()
+            .map(|workspace| workspace.root().clone())
+            .unwrap_or_else(|| self.workspace.root().clone());
+        let mut roots = vec![primary.clone()];
         if let Some(session_id) = session_id {
             if let Some(snapshot) = self
                 .session_workspace_access
@@ -190,20 +204,28 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
             }
         }
         let (root, relative) = if path.is_absolute() {
-            roots
-                .into_iter()
-                .filter_map(|root| {
-                    path.strip_prefix(root.canonical_path())
-                        .or_else(|_| path.strip_prefix(root.requested_path()))
-                        .ok()
-                        .map(|relative| (root, relative.to_path_buf()))
-                })
-                .max_by_key(|(root, _)| root.canonical_path().components().count())
-                .ok_or_else(|| {
-                    format!("path is outside the workspace and added directories: {value}")
-                })?
+            if let Some(workspace) = &thread_workspace
+                && let Ok(relative) = path
+                    .strip_prefix(self.workspace.root().canonical_path())
+                    .or_else(|_| path.strip_prefix(self.workspace.root().requested_path()))
+            {
+                (workspace.root().clone(), relative.to_path_buf())
+            } else {
+                roots
+                    .into_iter()
+                    .filter_map(|root| {
+                        path.strip_prefix(root.canonical_path())
+                            .or_else(|_| path.strip_prefix(root.requested_path()))
+                            .ok()
+                            .map(|relative| (root, relative.to_path_buf()))
+                    })
+                    .max_by_key(|(root, _)| root.canonical_path().components().count())
+                    .ok_or_else(|| {
+                        format!("path is outside the workspace and added directories: {value}")
+                    })?
+            }
         } else {
-            (self.workspace.root().clone(), path)
+            (primary, path)
         };
         let absolute = if relative.as_os_str().is_empty() {
             Ok(root.canonical_path().to_path_buf())
@@ -225,6 +247,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         call: &ToolCall,
         write: bool,
         session_id: Option<&SessionId>,
+        thread_id: Option<&ThreadId>,
     ) -> Result<ActionReviewRequest, CoreError> {
         let path = call
             .arguments
@@ -242,6 +265,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 path,
                 false,
                 session_id,
+                thread_id,
                 if write {
                     WorkspaceCapability::MutateRepository
                 } else {
@@ -299,6 +323,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         call: &ToolCall,
         scope: &str,
         session_id: Option<&SessionId>,
+        thread_id: Option<&ThreadId>,
     ) -> Result<ToolExecutionOutput, CoreError> {
         let path = string_arg(&call.arguments, "path")?;
         let resolved = self
@@ -306,6 +331,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 &path,
                 false,
                 session_id,
+                thread_id,
                 WorkspaceCapability::InspectRepository,
             )
             .map_err(CoreError::Execution)?;
@@ -375,6 +401,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         call: &ToolCall,
         scope: &str,
         session_id: Option<&SessionId>,
+        thread_id: Option<&ThreadId>,
     ) -> Result<ToolExecutionOutput, CoreError> {
         let path = string_arg(&call.arguments, "path")?;
         let content = string_arg(&call.arguments, "content")?;
@@ -383,6 +410,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 &path,
                 false,
                 session_id,
+                thread_id,
                 WorkspaceCapability::MutateRepository,
             )
             .map_err(CoreError::Execution)?;
@@ -454,6 +482,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         call: &ToolCall,
         scope: &str,
         session_id: Option<&SessionId>,
+        thread_id: Option<&ThreadId>,
     ) -> Result<ToolExecutionOutput, CoreError> {
         let path = string_arg(&call.arguments, "path")?;
         let old = string_arg(&call.arguments, "old_string")?;
@@ -469,6 +498,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 &path,
                 false,
                 session_id,
+                thread_id,
                 WorkspaceCapability::MutateRepository,
             )
             .map_err(CoreError::Execution)?;
@@ -564,6 +594,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         call: &ToolCall,
         cancellation: &CancellationToken,
         session_id: Option<&SessionId>,
+        thread_id: Option<&ThreadId>,
     ) -> Result<ToolExecutionOutput, CoreError> {
         let pattern = string_arg(&call.arguments, "pattern")?;
         let path = nullable_string(&call.arguments, "path")?
@@ -573,6 +604,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 &path,
                 false,
                 session_id,
+                thread_id,
                 WorkspaceCapability::InspectRepository,
             )
             .map_err(CoreError::Execution)?;
@@ -587,6 +619,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         call: &ToolCall,
         cancellation: &CancellationToken,
         session_id: Option<&SessionId>,
+        thread_id: Option<&ThreadId>,
     ) -> Result<ToolExecutionOutput, CoreError> {
         let pattern = string_arg(&call.arguments, "pattern")?;
         let path = nullable_string(&call.arguments, "path")?
@@ -596,6 +629,7 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 &path,
                 false,
                 session_id,
+                thread_id,
                 WorkspaceCapability::InspectRepository,
             )
             .map_err(CoreError::Execution)?;
@@ -657,8 +691,8 @@ impl<B: zeta_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
             return self.shell.prepare(call);
         }
         match call.name.as_str() {
-            "read_file" | "grep" | "glob" => self.review(call, false, None),
-            "write_file" | "edit" => self.review(call, true, None),
+            "read_file" | "grep" | "glob" => self.review(call, false, None, None),
+            "write_file" | "edit" => self.review(call, true, None, None),
             _ => Err(CoreError::Policy(format!(
                 "tool is not available: {}",
                 call.name
@@ -672,17 +706,33 @@ impl<B: zeta_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
         facts: &ToolExecutionFacts,
     ) -> Result<ActionReviewRequest, CoreError> {
         if call.name.as_str() == "shell-command" {
-            return self.shell.prepare(call);
+            let workspace = facts
+                .execution_identity()
+                .map(|identity| {
+                    self.session_workspace_access
+                        .thread_workspace(identity.thread_id(), WorkspaceCapability::ExecuteProcess)
+                })
+                .transpose()
+                .map_err(|error| CoreError::Policy(error.to_string()))?
+                .flatten();
+            return self.shell.prepare_in_workspace(call, workspace.as_ref());
         }
-        let session_id = facts
-            .execution_identity()
-            .map(|identity| identity.session_id())
-            .ok_or_else(|| {
-                CoreError::Policy("local tools require durable caller identity".into())
-            })?;
+        let identity = facts.execution_identity().ok_or_else(|| {
+            CoreError::Policy("local tools require durable caller identity".into())
+        })?;
         match call.name.as_str() {
-            "read_file" | "grep" | "glob" => self.review(call, false, Some(session_id)),
-            "write_file" | "edit" => self.review(call, true, Some(session_id)),
+            "read_file" | "grep" | "glob" => self.review(
+                call,
+                false,
+                Some(identity.session_id()),
+                Some(identity.thread_id()),
+            ),
+            "write_file" | "edit" => self.review(
+                call,
+                true,
+                Some(identity.session_id()),
+                Some(identity.thread_id()),
+            ),
             _ => Err(CoreError::Policy(format!(
                 "tool is not available: {}",
                 call.name
@@ -696,7 +746,7 @@ impl<B: zeta_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
         authorization: &ToolAuthorization,
         cancellation: &CancellationToken,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        self.execute_scoped(call, authorization, cancellation, "direct", None)
+        self.execute_scoped(call, authorization, cancellation, "direct", None, None)
     }
 
     fn execute_with_facts(
@@ -733,6 +783,7 @@ impl<B: zeta_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
                 &path.display().to_string(),
                 true,
                 Some(session_id),
+                Some(identity.thread_id()),
                 WorkspaceCapability::InspectRepository,
             ) {
                 self.read_paths
@@ -741,8 +792,14 @@ impl<B: zeta_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
                     .insert((scope.clone(), resolved.absolute));
             }
         }
-        let output =
-            self.execute_scoped(call, authorization, cancellation, &scope, Some(session_id))?;
+        let output = self.execute_scoped(
+            call,
+            authorization,
+            cancellation,
+            &scope,
+            Some(session_id),
+            Some(identity.thread_id()),
+        )?;
         if let ToolExecutionOutput::Success(text) = &output {
             sink.emit(ToolOutputStream::Stdout, text.clone())?;
         }
@@ -756,7 +813,8 @@ impl<B: zeta_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
         cancellation: &CancellationToken,
         sink: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        let output = self.execute_scoped(call, authorization, cancellation, "direct", None)?;
+        let output =
+            self.execute_scoped(call, authorization, cancellation, "direct", None, None)?;
         if let ToolExecutionOutput::Success(text) = &output {
             sink.emit(ToolOutputStream::Stdout, text.clone())?;
         }
@@ -772,19 +830,33 @@ impl<B: zeta_sandboxing::SandboxBackend> LocalToolSuite<B> {
         cancellation: &CancellationToken,
         scope: &str,
         session_id: Option<&SessionId>,
+        thread_id: Option<&ThreadId>,
     ) -> Result<ToolExecutionOutput, CoreError> {
         if call.name.as_str() == "shell-command" {
-            return self.shell.execute(call, authorization, cancellation);
+            let workspace = thread_id
+                .map(|thread_id| {
+                    self.session_workspace_access
+                        .thread_workspace(thread_id, WorkspaceCapability::ExecuteProcess)
+                })
+                .transpose()
+                .map_err(|error| CoreError::Execution(error.to_string()))?
+                .flatten();
+            return self.shell.execute_in_workspace(
+                call,
+                authorization,
+                cancellation,
+                workspace.as_ref(),
+            );
         }
         cancellation
             .check()
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
         match call.name.as_str() {
-            "read_file" => self.read_file(call, scope, session_id),
-            "write_file" => self.write_file(call, scope, session_id),
-            "edit" => self.edit(call, scope, session_id),
-            "grep" => self.grep(call, cancellation, session_id),
-            "glob" => self.glob(call, cancellation, session_id),
+            "read_file" => self.read_file(call, scope, session_id, thread_id),
+            "write_file" => self.write_file(call, scope, session_id, thread_id),
+            "edit" => self.edit(call, scope, session_id, thread_id),
+            "grep" => self.grep(call, cancellation, session_id, thread_id),
+            "glob" => self.glob(call, cancellation, session_id, thread_id),
             _ => Ok(ToolExecutionOutput::Failure(format!(
                 "tool is not available: {}",
                 call.name

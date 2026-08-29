@@ -1,5 +1,7 @@
 use super::SqliteSessionStore;
 use super::SqliteThreadStore;
+use super::SqliteTurnChangeStore;
+use super::TurnChangeCommandOutcome;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 use zeta_history::CURRENT_STORED_EVENT_SCHEMA_VERSION;
@@ -12,6 +14,7 @@ use zeta_protocol::SessionEvent;
 use zeta_protocol::SessionId;
 use zeta_protocol::ThreadEvent;
 use zeta_protocol::ThreadId;
+use zeta_protocol::TurnId;
 use zeta_session_store::CURRENT_SESSION_EVENT_SCHEMA_VERSION;
 use zeta_session_store::MINIMUM_SUPPORTED_SESSION_EVENT_SCHEMA_VERSION;
 use zeta_session_store::SessionCommandReceipt;
@@ -24,6 +27,13 @@ use zeta_session_store::StoredSessionEvent;
 use zeta_thread_store::ThreadEventBatch;
 use zeta_thread_store::ThreadStore;
 use zeta_thread_store::ThreadStoreError;
+use zeta_turn_changes::ChangeSetId;
+use zeta_turn_changes::MessageState;
+use zeta_turn_changes::TerminalTurnState;
+use zeta_turn_changes::TurnChangeSet;
+use zeta_turn_changes::TurnChangeSetDraft;
+use zeta_turn_changes::TurnChangeStore;
+use zeta_turn_changes::TurnChangeStoreError;
 
 fn database_path(label: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!(
@@ -34,6 +44,103 @@ fn database_path(label: &str) -> std::path::PathBuf {
             .unwrap()
             .as_nanos()
     ))
+}
+
+fn open_change_set(thread_id: ThreadId) -> TurnChangeSet {
+    TurnChangeSet::open(TurnChangeSetDraft {
+        change_set_id: ChangeSetId::new("changes-1").unwrap(),
+        session_id: SessionId::new("session-1").unwrap(),
+        thread_id,
+        turn_id: TurnId::new("turn-1").unwrap(),
+        repository_id: "repository-1".into(),
+        worktree_root: std::path::PathBuf::from("/workspace/repository-1"),
+        target_branch: Some("main".into()),
+        base_object_id: Some("head".into()),
+        before_tree: "before".into(),
+        snapshot_backend: zeta_turn_changes::SnapshotBackend::Git,
+        baseline_dependency_paths: std::collections::BTreeSet::new(),
+        message_state: MessageState::Unconfigured,
+    })
+    .unwrap()
+}
+
+#[test]
+fn sqlite_turn_changes_compare_and_swap_complete_records() {
+    let path = database_path("turn-changes-cas");
+    let thread_id = ThreadId::new("thread-1").unwrap();
+    let store = SqliteTurnChangeStore::open(&path).unwrap();
+    let original = open_change_set(thread_id.clone());
+    store.insert(&original).unwrap();
+
+    let mut sealed = original.clone();
+    sealed
+        .seal(
+            "after".into(),
+            TerminalTurnState::Completed,
+            Vec::new(),
+            Default::default(),
+        )
+        .unwrap();
+    store.compare_and_swap(original.revision, &sealed).unwrap();
+
+    assert_eq!(store.load(&sealed.change_set_id).unwrap(), sealed);
+    assert_eq!(
+        store.list_for_thread(&thread_id).unwrap(),
+        vec![sealed.clone()]
+    );
+    assert_eq!(
+        store.compare_and_swap(original.revision, &sealed),
+        Err(TurnChangeStoreError::RevisionConflict {
+            expected: original.revision,
+            actual: sealed.revision,
+        })
+    );
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn sqlite_turn_change_commands_replay_the_original_response() {
+    let path = database_path("turn-changes-command");
+    let thread_id = ThreadId::new("thread-1").unwrap();
+    let store = SqliteTurnChangeStore::open(&path).unwrap();
+    let original = open_change_set(thread_id);
+    store.insert(&original).unwrap();
+
+    let mut updated = original.clone();
+    updated
+        .update_draft("feat: keep the receipt".into())
+        .unwrap();
+    assert_eq!(
+        store
+            .apply_command(
+                "command-1",
+                "fingerprint-1",
+                None,
+                &[updated.clone()],
+                r#"{"revision":2}"#,
+            )
+            .unwrap(),
+        TurnChangeCommandOutcome::Applied
+    );
+
+    let mut advanced = updated.clone();
+    advanced.update_draft("feat: later edit".into()).unwrap();
+    store.compare_and_swap(updated.revision, &advanced).unwrap();
+    assert_eq!(
+        store.replay_command("command-1", "fingerprint-1").unwrap(),
+        Some(r#"{"revision":2}"#.into())
+    );
+    assert_eq!(
+        store
+            .apply_command("command-1", "fingerprint-1", None, &[updated], "ignored",)
+            .unwrap(),
+        TurnChangeCommandOutcome::Replayed(r#"{"revision":2}"#.into())
+    );
+    assert!(matches!(
+        store.replay_command("command-1", "different"),
+        Err(TurnChangeStoreError::CommandConflict(_))
+    ));
+    fs::remove_file(path).unwrap();
 }
 
 #[test]

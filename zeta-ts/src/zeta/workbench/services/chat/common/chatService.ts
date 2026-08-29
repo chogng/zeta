@@ -42,7 +42,7 @@ export type ThreadItem =
 export type TurnStatus = "created" | "running" | "waitingForApproval" | "waitingForUserInput" | "waitingForCapability" | "cancelling" | "completed" | "failed" | "interrupted";
 
 export interface TurnError {
-	readonly code: "modelInvocationFailed" | "contextOverflow" | "providerAuth" | "invalidRequest" | "invalidResponse" | "completionPersistenceFailed" | "interactionDeadlineElapsed" | "toolRepetition" | "usageLimited";
+	readonly code: "modelInvocationFailed" | "contextOverflow" | "providerAuth" | "invalidRequest" | "invalidResponse" | "completionPersistenceFailed" | "interactionDeadlineElapsed" | "toolRepetition" | "usageLimited" | "workspaceCaptureFailed";
 	readonly message: string;
 	readonly retryable: boolean;
 }
@@ -231,6 +231,52 @@ export interface SteerTurnOptions { readonly sessionId: SessionId; readonly thre
 export interface InterruptTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number }
 export interface ResolveInteractionOptions extends InterruptTurnOptions { readonly requestId: string; readonly response: AgentResponse }
 
+export type TurnChangeCaptureState = "open" | "sealed" | "incomplete" | "discarded";
+export type TurnChangeMessageState = "unconfigured" | "queued" | "generating" | "ready" | "failed";
+export type TurnChangeCommitState = "idle" | "queued" | "committing" | "committed" | "conflict" | "failed";
+
+export interface TurnChangeSetSummary {
+	readonly changeSetId: string;
+	readonly sessionId: SessionId;
+	readonly threadId: ThreadId;
+	readonly turnId: string;
+	readonly repositoryId: string;
+	readonly targetBranch?: string;
+	readonly statistics: { readonly files: number; readonly additions: number; readonly deletions: number };
+	readonly captureState: TurnChangeCaptureState;
+	readonly messageState: TurnChangeMessageState;
+	readonly commitState: TurnChangeCommitState;
+	readonly terminalState?: "completed" | "failed" | "interrupted";
+	readonly dependencies: readonly string[];
+	readonly externalDependencyPaths: readonly string[];
+	readonly warnings: readonly string[];
+	readonly conflictPaths: readonly string[];
+	readonly commitId?: string;
+	readonly revision: number;
+}
+
+export interface TurnChangeFile {
+	readonly path: string;
+	readonly previousPath?: string;
+	readonly kind: "added" | "modified" | "deleted" | "renamed" | "typeChanged";
+	readonly binary: boolean;
+	readonly additions: number;
+	readonly deletions: number;
+}
+
+export interface TurnChangeDetails {
+	readonly summary: TurnChangeSetSummary;
+	readonly files: readonly TurnChangeFile[];
+	readonly generatedMessage?: string;
+	readonly draftMessage?: string;
+}
+
+export interface TurnChangesUpdate {
+	readonly sessionId: SessionId;
+	readonly threadId: ThreadId;
+	readonly changeSets: readonly TurnChangeSetSummary[];
+}
+
 /** Frontend Chat operations, catalogs, and Thread update lifecycle. */
 export interface IChatService {
 	readonly onDidUpdateThread: Event<ThreadUpdateEnvelope>;
@@ -239,6 +285,7 @@ export interface IChatService {
 	readonly onDidBecomeReady: Event<void>;
 	readonly onDidChangeModels: Event<void>;
 	readonly onDidChangeSkills: Event<void>;
+	readonly onDidUpdateTurnChanges: Event<TurnChangesUpdate>;
 	listModels(): Promise<readonly ModelCatalogEntry[]>;
 	listModelCatalog(): Promise<readonly ModelCatalogEntry[]>;
 	refreshModels(): Promise<readonly ModelCatalogEntry[]>;
@@ -254,6 +301,12 @@ export interface IChatService {
 	steerTurn(options: SteerTurnOptions): Promise<void>;
 	interruptTurn(options: InterruptTurnOptions): Promise<void>;
 	resolveInteraction(options: ResolveInteractionOptions): Promise<void>;
+	listTurnChanges(sessionId: SessionId, threadId: ThreadId): Promise<readonly TurnChangeSetSummary[]>;
+	readTurnChange(sessionId: SessionId, threadId: ThreadId, changeSetId: string): Promise<TurnChangeDetails>;
+	generateTurnChangeMessage(sessionId: SessionId, threadId: ThreadId, changeSetId: string, expectedRevision: number): Promise<readonly TurnChangeSetSummary[]>;
+	updateTurnChangeDraft(sessionId: SessionId, threadId: ThreadId, changeSetId: string, expectedRevision: number, message: string): Promise<readonly TurnChangeSetSummary[]>;
+	commitTurnChange(sessionId: SessionId, threadId: ThreadId, changeSetId: string, expectedRevision: number): Promise<readonly TurnChangeSetSummary[]>;
+	discardThreadChanges(sessionId: SessionId, threadId: ThreadId, expectedRevision: number): Promise<readonly TurnChangeSetSummary[]>;
 }
 
 export const IChatService = createServiceIdentifier<IChatService>("chatService");

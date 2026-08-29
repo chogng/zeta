@@ -1,6 +1,6 @@
 #![allow(clippy::expect_used)]
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -13,6 +13,11 @@ use serde_json::Value;
 use serde_json::json;
 use tempfile::TempDir;
 
+use crate::ThreadWorkspaceKind;
+use crate::ThreadWorktreeCleanupEligibility;
+use crate::ThreadWorktreeProvisionRequest;
+use crate::ThreadWorktreeSource;
+use crate::ThreadWorktreeTarget;
 use crate::WorktreeAvailability;
 use crate::WorktreeKind;
 use crate::WorktreeManager;
@@ -325,6 +330,245 @@ async fn checkout_selector_requires_an_existing_absolute_worktree_root() {
     );
 }
 
+#[tokio::test(flavor = "current_thread")]
+async fn thread_provision_freezes_dirty_source_and_recovers_the_binding() {
+    let fixture = RepositoryFixture::new();
+    fs::write(fixture.repository.join(".gitignore"), "ignored/\n").expect("write ignore rules");
+    run_git(&fixture.repository, &["add", ".gitignore"]);
+    run_git(
+        &fixture.repository,
+        &["commit", "--quiet", "--no-gpg-sign", "-m", "ignore outputs"],
+    );
+    fs::write(fixture.repository.join("README.md"), "dirty source\n")
+        .expect("modify tracked source");
+    fs::write(
+        fixture.repository.join("untracked.txt"),
+        "untracked source\n",
+    )
+    .expect("write untracked source");
+    fs::create_dir_all(fixture.repository.join("ignored")).expect("create ignored directory");
+    fs::write(fixture.repository.join("ignored/output.bin"), b"ignored")
+        .expect("write ignored output");
+
+    let manager = fixture.manager();
+    let binding = manager
+        .provision_thread(&ThreadWorktreeProvisionRequest {
+            source: ThreadWorktreeSource::WorkspaceSnapshot {
+                source_directory: fixture.repository.clone(),
+            },
+            target: ThreadWorktreeTarget::SourceHead,
+            source_workspace_id: "workspace-1".into(),
+            thread_id: "thread-1".into(),
+        })
+        .await
+        .expect("provision Thread worktree");
+
+    assert_eq!(binding.target_branch(), Some("main"));
+    assert_eq!(
+        fs::read_to_string(binding.checkout_root().join("README.md")).unwrap(),
+        "dirty source\n"
+    );
+    assert_eq!(
+        fs::read_to_string(binding.checkout_root().join("untracked.txt")).unwrap(),
+        "untracked source\n"
+    );
+    assert!(!binding.checkout_root().join("ignored/output.bin").exists());
+    assert_eq!(
+        manager
+            .recover_thread(binding.checkout_root(), "thread-1")
+            .await
+            .expect("recover Thread worktree"),
+        binding
+    );
+
+    manager
+        .cleanup_thread(
+            &binding,
+            ThreadWorktreeCleanupEligibility::AllChangeSetsSettled,
+        )
+        .await
+        .expect("cleanup settled Thread worktree");
+    assert!(!binding.checkout_root().exists());
+    assert!(run_git(&fixture.repository, &["for-each-ref", "refs/zeta/threads"]).is_empty());
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn thread_provision_supports_an_unborn_target_without_creating_its_branch() {
+    let temporary = tempfile::tempdir().unwrap();
+    let repository = temporary.path().join("unborn");
+    let profile = temporary.path().join("profile");
+    fs::create_dir_all(&repository).unwrap();
+    fs::create_dir_all(&profile).unwrap();
+    run_git(&repository, &["init", "--quiet", "--initial-branch=main"]);
+    fs::write(repository.join("baseline.txt"), "initial baseline\n").unwrap();
+    let manager = WorktreeManager::new(WorktreeSettings::defaults(&profile));
+
+    let binding = manager
+        .provision_thread(&ThreadWorktreeProvisionRequest {
+            source: ThreadWorktreeSource::WorkspaceSnapshot {
+                source_directory: repository.clone(),
+            },
+            target: ThreadWorktreeTarget::SourceHead,
+            source_workspace_id: "unborn-workspace".into(),
+            thread_id: "unborn-thread".into(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(binding.target_branch(), Some("main"));
+    assert!(binding.target_unborn());
+    assert_eq!(
+        fs::read_to_string(binding.workspace_directory().join("baseline.txt")).unwrap(),
+        "initial baseline\n"
+    );
+    let branch = Command::new("git")
+        .current_dir(&repository)
+        .args(["show-ref", "--verify", "--quiet", "refs/heads/main"])
+        .status()
+        .unwrap();
+    assert!(!branch.success());
+
+    manager
+        .cleanup_thread(
+            &binding,
+            ThreadWorktreeCleanupEligibility::AllChangeSetsSettled,
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn thread_provision_maps_nested_repositories_to_independent_linked_worktrees() {
+    let fixture = RepositoryFixture::new();
+    fs::write(fixture.repository.join(".gitignore"), "nested/\n").unwrap();
+    run_git(&fixture.repository, &["add", ".gitignore"]);
+    run_git(
+        &fixture.repository,
+        &["commit", "--quiet", "--no-gpg-sign", "-m", "ignore nested"],
+    );
+    let nested = fixture.repository.join("nested");
+    fs::create_dir_all(&nested).unwrap();
+    run_git(&nested, &["init", "--quiet", "--initial-branch=main"]);
+    fs::write(nested.join("nested.txt"), "nested baseline\n").unwrap();
+    run_git(&nested, &["add", "nested.txt"]);
+    run_git(
+        &nested,
+        &[
+            "commit",
+            "--quiet",
+            "--no-gpg-sign",
+            "-m",
+            "nested baseline",
+        ],
+    );
+    let manager = fixture.manager();
+
+    let binding = manager
+        .provision_thread(&ThreadWorktreeProvisionRequest {
+            source: ThreadWorktreeSource::WorkspaceSnapshot {
+                source_directory: fixture.repository.clone(),
+            },
+            target: ThreadWorktreeTarget::SourceHead,
+            source_workspace_id: "nested-workspace".into(),
+            thread_id: "nested-thread".into(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(binding.repositories().len(), 2);
+    let nested_binding = binding
+        .repositories()
+        .iter()
+        .find(|repository| repository.relative_path() == Path::new("nested"))
+        .unwrap();
+    assert_eq!(
+        fs::read_to_string(nested_binding.worktree_root().join("nested.txt")).unwrap(),
+        "nested baseline\n"
+    );
+    fs::write(
+        nested_binding.worktree_root().join("nested.txt"),
+        "nested checkpoint\n",
+    )
+    .unwrap();
+    let git = zeta_git::GitClient::system();
+    let nested_repository = git
+        .open_repository(nested_binding.worktree_root())
+        .await
+        .unwrap();
+    let nested_checkpoint = git.capture_worktree_tree(&nested_repository).await.unwrap();
+    fs::write(
+        nested_binding.worktree_root().join("nested.txt"),
+        "parent moved on\n",
+    )
+    .unwrap();
+    let child = manager
+        .provision_thread(&ThreadWorktreeProvisionRequest {
+            source: ThreadWorktreeSource::ImmutableTree {
+                source_directory: binding.workspace_directory().to_path_buf(),
+                tree_id: binding.baseline_tree().to_string(),
+                repository_trees: BTreeMap::from([
+                    (PathBuf::from("."), binding.baseline_tree().to_string()),
+                    (
+                        PathBuf::from("nested"),
+                        nested_checkpoint.as_str().to_string(),
+                    ),
+                ]),
+            },
+            target: ThreadWorktreeTarget::Branch {
+                name: binding.target_branch().unwrap().to_string(),
+                object_id: binding.target_head().to_string(),
+            },
+            source_workspace_id: "nested-workspace".into(),
+            thread_id: "nested-child".into(),
+        })
+        .await
+        .unwrap();
+    let child_nested = child
+        .repositories()
+        .iter()
+        .find(|repository| repository.relative_path() == Path::new("nested"))
+        .unwrap();
+    assert_eq!(
+        fs::read_to_string(child_nested.worktree_root().join("nested.txt")).unwrap(),
+        "nested checkpoint\n"
+    );
+    assert_eq!(child_nested.target_branch(), Some("main"));
+    manager
+        .cleanup_thread(
+            &child,
+            ThreadWorktreeCleanupEligibility::AllChangeSetsSettled,
+        )
+        .await
+        .unwrap();
+    fs::write(nested.join("nested.txt"), "source moved on\n").unwrap();
+    assert_eq!(
+        fs::read_to_string(nested_binding.worktree_root().join("nested.txt")).unwrap(),
+        "parent moved on\n"
+    );
+    assert_eq!(
+        manager
+            .recover_thread(binding.checkout_root(), "nested-thread")
+            .await
+            .unwrap(),
+        binding
+    );
+
+    manager
+        .cleanup_thread(
+            &binding,
+            ThreadWorktreeCleanupEligibility::AllChangeSetsSettled,
+        )
+        .await
+        .unwrap();
+    assert!(!binding.checkout_root().exists());
+    assert_eq!(
+        run_git(&nested, &["worktree", "list", "--porcelain"])
+            .matches("worktree ")
+            .count(),
+        1
+    );
+}
+
 #[test]
 fn concurrent_thread_binding_publishes_exactly_one_owner() {
     let fixture = RepositoryFixture::new();
@@ -354,6 +598,54 @@ fn concurrent_thread_binding_publishes_exactly_one_owner() {
         .expect("read concurrent owner")
         .expect("owner was published");
     assert!(owner == "thread-one" || owner == "thread-two");
+}
+
+#[tokio::test]
+async fn non_git_threads_use_durable_managed_directory_snapshots() {
+    let temporary = tempfile::tempdir().expect("create temporary directory");
+    let workspace = temporary.path().join("plain-workspace");
+    let profile = temporary.path().join("profile");
+    fs::create_dir_all(&workspace).expect("create workspace");
+    fs::create_dir_all(&profile).expect("create profile");
+    fs::write(workspace.join("source.txt"), "baseline\n").expect("write source");
+    let manager = WorktreeManager::new(WorktreeSettings::defaults(&profile));
+    let binding = manager
+        .provision_thread(&ThreadWorktreeProvisionRequest {
+            source: ThreadWorktreeSource::WorkspaceSnapshot {
+                source_directory: workspace.clone(),
+            },
+            target: ThreadWorktreeTarget::SourceHead,
+            source_workspace_id: "workspace-id".into(),
+            thread_id: "plain-thread".into(),
+        })
+        .await
+        .expect("provision plain Thread");
+
+    assert_eq!(binding.kind(), ThreadWorkspaceKind::Directory);
+    assert_eq!(
+        fs::read_to_string(binding.workspace_directory().join("source.txt")).unwrap(),
+        "baseline\n"
+    );
+    assert!(!binding.workspace_directory().join(".git").exists());
+    fs::write(workspace.join("source.txt"), "main workspace changed\n").unwrap();
+    assert_eq!(
+        fs::read_to_string(binding.workspace_directory().join("source.txt")).unwrap(),
+        "baseline\n"
+    );
+
+    let recovered = manager
+        .recover_threads(&workspace, "workspace-id")
+        .await
+        .expect("recover plain Thread");
+    assert_eq!(recovered, vec![("plain-thread".into(), binding.clone())]);
+    manager
+        .cleanup_thread(
+            &binding,
+            ThreadWorktreeCleanupEligibility::AllChangeSetsSettled,
+        )
+        .await
+        .expect("clean plain Thread");
+    assert!(!binding.checkout_root().exists());
 }
 
 #[test]

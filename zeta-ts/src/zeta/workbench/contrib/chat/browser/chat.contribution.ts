@@ -10,20 +10,20 @@ import { ViewContainerLocation, type WorkbenchViewRegistry, ViewsRegistry } from
 import { IChatService } from "../../../services/chat/common/chatService.js";
 import { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";
 import { ISessionsManagementService } from "../../../../sessions/services/sessions/common/sessionsManagementService.js";
-import { CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID, CHAT_AGENT_SIDEBAR_VIEW_ID, CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID } from "../common/chat.js";
+import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID } from "../common/chat.js";
 import { ChatInputEditor } from "./input/stanzaChatInputEditor.js";
 import { ChatInputEditors } from "./input/chatInputEditor.js";
-import { ChatAgentSidebarViewPane } from "./view/chatAgentSidebarViewPane.js";
 import { ChatViewPane } from "./view/chatViewPane.js";
 import { IChatContextPickService } from "../../../services/chat/common/chatContextService.js";
 import { IQuickInputService } from "../../../../platform/quickinput/common/quickInput.js";
+import { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
 
 ChatInputEditors.registerStatic({
 	id: "stanza",
 	create: options => new ChatInputEditor(options),
 });
 
-/** Registers the fixed Chat view and its Workbench Agent Sidebar view. */
+/** Registers the fixed Chat view. */
 export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistry): void {
 	registry.registerStaticViewContainer({
 		id: CHAT_VIEW_CONTAINER_ID,
@@ -51,26 +51,8 @@ export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistr
 				IWorkbenchLayoutService,
 				IChatContextPickService,
 				IQuickInputService,
+				IContextKeyService,
 			],
-		}),
-	}]);
-	registry.registerStaticViewContainer({
-		id: CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID,
-		title: "Agent",
-		localizationKey: { bundle: "zeta.views", key: "agent" },
-		location: ViewContainerLocation.AgentSidebar,
-		icon: lxiconsLibrary.agent,
-		order: 1,
-		isDefault: true,
-	});
-	registry.registerStaticViews(CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID, [{
-		id: CHAT_AGENT_SIDEBAR_VIEW_ID,
-		title: "Agent Sessions",
-		localizationKey: { bundle: "zeta.views", key: "agentSessions" },
-		order: 1,
-		canToggleVisibility: false,
-		ctorDescriptor: new SyncDescriptor(ChatAgentSidebarViewPane, {
-			serviceDependencies: [ISessionsManagementService],
 		}),
 	}]);
 }

@@ -5,6 +5,29 @@ use zeta_protocol::ThreadId;
 use zeta_protocol::ToolCallId;
 use zeta_protocol::TurnId;
 
+/// One configured Hook process crossing its execution boundary.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct HookExecutionEvent {
+    pub session_id: SessionId,
+    pub thread_id: ThreadId,
+    pub turn_id: TurnId,
+    pub hook_id: String,
+    pub workspace: std::path::PathBuf,
+}
+
+/// Host observer for assigning Hook process writes to the matching Turn.
+pub trait HookExecutionObserver: Send + Sync {
+    fn will_execute(&self, _: &HookExecutionEvent) -> Result<(), CoreError> {
+        Ok(())
+    }
+
+    fn did_finish(&self, _: &HookExecutionEvent) {}
+}
+
+pub struct NoHookExecutionObserver;
+
+impl HookExecutionObserver for NoHookExecutionObserver {}
+
 /// Canonical request evaluated before a Tool crosses its execution boundary.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BeforeToolHookRequest {

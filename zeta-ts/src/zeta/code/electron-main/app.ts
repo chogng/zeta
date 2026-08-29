@@ -34,6 +34,7 @@ import { documentCollaborationIpcRoutes } from "../../platform/collaboration/ele
 import { syntaxIpcRoutes } from "../../platform/syntax/electron-main/syntaxIpcRoutes.js";
 import { languageIpcRoutes } from "../../platform/language/electron-main/languageIpcRoutes.js";
 import { gitIpcRoutes } from "../../platform/git/electron-main/gitIpcRoutes.js";
+import { turnChangesIpcRoutes } from "../../platform/turnChanges/electron-main/turnChangesIpcRoutes.js";
 import { codeIndexIpcRoutes } from "../../platform/codeIndex/electron-main/codeIndexIpcRoutes.js";
 import { symbolIndexIpcRoutes } from "../../platform/symbolIndex/electron-main/symbolIndexIpcRoutes.js";
 import { connectorIpcRoutes } from "../../platform/connectors/electron-main/connectorIpcRoutes.js";
@@ -685,6 +686,7 @@ export class ZetaApplication extends Disposable {
 			...syntaxIpcRoutes(supervisor),
 			...languageIpcRoutes(supervisor),
 			...gitIpcRoutes(supervisor),
+			...turnChangesIpcRoutes(supervisor),
 			...codeIndexIpcRoutes(supervisor),
 			...symbolIndexIpcRoutes(supervisor),
 			...connectorIpcRoutes(supervisor),

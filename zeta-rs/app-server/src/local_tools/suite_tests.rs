@@ -73,6 +73,7 @@ fn additional_root_resolution_is_bound_to_the_exact_session_and_lease() {
             &additional_file.display().to_string(),
             true,
             Some(&session_id),
+            None,
             WorkspaceCapability::InspectRepository,
         )
         .unwrap();
@@ -89,6 +90,7 @@ fn additional_root_resolution_is_bound_to_the_exact_session_and_lease() {
             ),
             "thread",
             Some(&session_id),
+            None,
         )
         .unwrap();
     assert!(matches!(read, ToolExecutionOutput::Success(text) if text.contains("extra")));
@@ -104,6 +106,7 @@ fn additional_root_resolution_is_bound_to_the_exact_session_and_lease() {
             ),
             "thread",
             Some(&session_id),
+            None,
         )
         .unwrap();
     assert!(matches!(write, ToolExecutionOutput::Success(_)));
@@ -114,6 +117,7 @@ fn additional_root_resolution_is_bound_to_the_exact_session_and_lease() {
                 &additional_file.display().to_string(),
                 true,
                 Some(&SessionId::new("other-session").unwrap()),
+                None,
                 WorkspaceCapability::InspectRepository,
             )
             .is_err()
@@ -129,6 +133,7 @@ fn additional_root_resolution_is_bound_to_the_exact_session_and_lease() {
                 &additional_file.display().to_string(),
                 true,
                 Some(&session_id),
+                None,
                 WorkspaceCapability::InspectRepository,
             )
             .is_err()

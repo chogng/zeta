@@ -10887,11 +10887,13 @@ dependencies = [
  "zeta-skills",
  "zeta-skills-extension",
  "zeta-slash-commands",
+ "zeta-storage",
  "zeta-symbol-index",
  "zeta-syntax",
  "zeta-thread-transcript",
  "zeta-tool-executor",
  "zeta-tools",
+ "zeta-turn-changes",
  "zeta-typst",
  "zeta-uds",
  "zeta-utils-pty",
@@ -10901,6 +10903,7 @@ dependencies = [
  "zeta-workspace-access",
  "zeta-workspace-index-storage",
  "zeta-workspace-search",
+ "zeta-worktree",
 ]
 
 [[package]]
@@ -11455,6 +11458,9 @@ version = "0.1.0"
 dependencies = [
  "dunce",
  "pretty_assertions",
+ "serde",
+ "serde_json",
+ "tempfile",
  "tokio",
  "zeta-diff",
 ]
@@ -12099,6 +12105,7 @@ dependencies = [
  "zeta-protocol",
  "zeta-session-store",
  "zeta-thread-store",
+ "zeta-turn-changes",
 ]
 
 [[package]]
@@ -12252,6 +12259,22 @@ dependencies = [
  "zeta-theme",
  "zeta-utils-image",
  "zeta-utils-path",
+]
+
+[[package]]
+name = "zeta-turn-changes"
+version = "0.1.0"
+dependencies = [
+ "dunce",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.19",
+ "tokio",
+ "zeta-git",
+ "zeta-protocol",
 ]
 
 [[package]]
@@ -12504,12 +12527,15 @@ dependencies = [
  "anyhow",
  "dunce",
  "fs2",
+ "ignore",
  "pretty_assertions",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tempfile",
  "tokio",
  "zeta-git",
+ "zeta-turn-changes",
 ]
 
 [[package]]

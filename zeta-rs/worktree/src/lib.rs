@@ -1,12 +1,20 @@
-//! Git worktree discovery and Codex-compatible ownership metadata.
+//! Managed Git worktrees and durable Thread workspace bindings.
 //!
-//! The crate resolves an existing checkout into explicit switch targets. It does not replace the
-//! caller's workspace, create sessions, or own product presentation.
+//! The crate discovers existing checkouts, provisions isolated Thread worktrees from immutable
+//! baselines, and cleans them only after the change ledger proves every ChangeSet settled.
 
+mod binding;
 mod manager;
 mod metadata;
 mod settings;
 
+pub use manager::ThreadRepositoryBinding;
+pub use manager::ThreadWorkspaceKind;
+pub use manager::ThreadWorktreeBinding;
+pub use manager::ThreadWorktreeCleanupEligibility;
+pub use manager::ThreadWorktreeProvisionRequest;
+pub use manager::ThreadWorktreeSource;
+pub use manager::ThreadWorktreeTarget;
 pub use manager::Worktree;
 pub use manager::WorktreeAvailability;
 pub use manager::WorktreeKind;

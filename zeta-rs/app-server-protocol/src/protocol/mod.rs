@@ -37,4 +37,5 @@ pub mod syntax;
 pub mod terminal;
 pub mod transcript;
 pub mod turn;
+pub mod turn_changes;
 pub mod workspace;

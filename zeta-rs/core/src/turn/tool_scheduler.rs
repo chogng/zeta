@@ -28,6 +28,7 @@ use crate::ToolAuthorization;
 use crate::ToolCallOutput;
 use crate::ToolExecutionFacts;
 use crate::ToolService;
+use crate::TurnExecutionObserver;
 use crate::action_policy_service::approval_matches_review;
 use crate::durable_approval_request;
 use std::sync::Arc;
@@ -57,6 +58,7 @@ pub(super) struct ToolScheduler {
     hooks: Arc<dyn HookService>,
     updates: Arc<dyn ThreadUpdateSink>,
     code_mode: Option<CodeModeBroker>,
+    execution_observer: Arc<dyn TurnExecutionObserver>,
 }
 
 impl ToolScheduler {
@@ -72,6 +74,7 @@ impl ToolScheduler {
             hooks: Arc::new(NoHooks),
             updates: Arc::new(NoThreadUpdates),
             code_mode: None,
+            execution_observer: Arc::new(crate::NoTurnExecutionObserver),
         }
     }
 
@@ -87,6 +90,14 @@ impl ToolScheduler {
 
     pub(super) fn with_code_mode(mut self, code_mode: CodeModeBroker) -> Self {
         self.code_mode = Some(code_mode);
+        self
+    }
+
+    pub(super) fn with_execution_observer(
+        mut self,
+        observer: Arc<dyn TurnExecutionObserver>,
+    ) -> Self {
+        self.execution_observer = observer;
         self
     }
 
@@ -203,6 +214,7 @@ impl ToolScheduler {
                     Arc::clone(&self.tools),
                     Arc::clone(&self.policy),
                     Arc::clone(&self.updates),
+                    Arc::clone(&self.execution_observer),
                 )
                 .complete_execution_interaction(
                     &execution,
@@ -269,6 +281,7 @@ impl ToolScheduler {
                                 Arc::clone(&self.tools),
                                 Arc::clone(&self.policy),
                                 Arc::clone(&self.updates),
+                                Arc::clone(&self.execution_observer),
                             )
                             .execute_approved_escalation(
                                 &execution,
@@ -503,6 +516,7 @@ impl ToolScheduler {
             Arc::clone(&self.tools),
             Arc::clone(&self.policy),
             Arc::clone(&self.updates),
+            Arc::clone(&self.execution_observer),
         );
         let persisted_binding = self
             .threads

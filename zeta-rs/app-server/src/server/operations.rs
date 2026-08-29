@@ -848,6 +848,11 @@ impl AppServer {
         for (thread_id, sequence) in thread_sequences {
             self.notify_thread_updates(&thread_id, sequence)?;
         }
+        if let Some(runtime) = &self.turn_changes
+            && let Err(error) = runtime.enforce_cleanup_policy()
+        {
+            log::warn!("Thread worktree cleanup policy failed: {error}");
+        }
         Ok(SessionResult {
             session: self
                 .sessions
@@ -873,6 +878,11 @@ impl AppServer {
         }
         .map_err(core_error)?;
         self.notify_session_updates(&mutation.session_id, mutation.expected_sequence)?;
+        if let Some(runtime) = &self.turn_changes
+            && let Err(error) = runtime.enforce_cleanup_policy()
+        {
+            log::warn!("Thread worktree cleanup policy failed: {error}");
+        }
         Ok(SessionResult {
             session: self
                 .sessions

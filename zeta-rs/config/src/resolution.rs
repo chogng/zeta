@@ -20,6 +20,7 @@ pub enum ConfigValueSource {
 pub struct ConfigProvenance {
     pub preferred_model: Option<ConfigValueSource>,
     pub approval_review_model: ConfigValueSource,
+    pub commit_message_model: Option<ConfigValueSource>,
     pub providers: BTreeMap<ProviderId, ConfigValueSource>,
     pub mcp_servers: BTreeMap<McpServerId, ConfigValueSource>,
     pub skill_sources: BTreeMap<SkillSourceId, ConfigValueSource>,
@@ -39,6 +40,11 @@ impl ConfigProvenance {
                 .as_ref()
                 .map(|_| ConfigValueSource::User),
             approval_review_model: ConfigValueSource::User,
+            commit_message_model: document
+                .agent
+                .commit_message_model
+                .as_ref()
+                .map(|_| ConfigValueSource::User),
             providers: document
                 .providers
                 .keys()

@@ -8,8 +8,8 @@
 `zeta-git` 是 Zeta 中“如何调用 Git、如何解释 Git 结果”的唯一实现 owner。完整 owner 不等于
 当前已经实现完整 SCM：本阶段提供仓库打开、结构化状态快照、本地 branch、remote、分页 commit
 graph、local/remote-tracking refs、credential-free remote identity、最近 commit、revision file content、HEAD-to-working-tree 文本 Diff/增删行统计、typed
-stage/unstage/discard/commit/fetch/pull/push、local branch switch、worktree inventory 和 patch check/apply；持续监听、
-状态缓存与 tag/worktree mutation 尚未实现。App Server 与 Desktop 已通过 Git SCM 纵向切片消费这些能力，但该 service/protocol/UI
+stage/unstage/discard/commit/fetch/pull/push、local branch switch、worktree inventory、linked worktree mutation、
+不可变 tree/blob 操作和基于 tree 的事务提交；持续监听、状态缓存与 tag mutation 尚未实现。App Server 与 Desktop 已通过 Git SCM 纵向切片消费这些能力，但该 service/protocol/UI
 不属于本 crate。
 
 ## 为什么不是普通 `git utils`
@@ -40,6 +40,8 @@ Git domain owner 下，而不是建立平级的 `zeta-git-utils`：
 | `src/content.rs` | 有界读取 HEAD 或 index 中一个 repository-relative file | `GitFileRevision`、`GitClient::read_file_at_revision` |
 | `src/text_diff.rs` | 从同一次状态快照构建 repository-wide 或 path-scoped 的有界 UTF-8 HEAD/worktree Diff 与文件级、聚合增删行统计 | `GitTextDiffSnapshot`、`GitTextDiff`、`GitDiffStatistics`、`GitClient::text_diff_snapshot[_under]` |
 | `src/worktree.rs` | 解析 primary/linked/locked/prunable worktree inventory，不决定产品工作区替换 | `GitWorktree`、`GitWorktreeAvailability`、`GitClient::worktrees` |
+| `src/objects.rs` | 捕获、固定、读取、比较与安装不可变 tree/blob；忽略 Git ignored 的未跟踪文件 | `GitTreeId`、`GitPrivateRef`、`GitClient::capture_worktree_tree` |
+| `src/immutable_commit.rs` | 把封存 Turn delta 重放到目标分支，保留 checkout 的 staged/unstaged/untracked 语义，并通过 journal + ref CAS 恢复中断事务 | `GitTreeCommitRequest`、`GitTreeCommitRecovery`、`GitClient::commit_tree_delta` |
 | `src/info.rs` | local branches、fetch/push remote URLs、credential-free remote identity、bounded recent history | `GitBranch`、`GitRemote`、`GitRemoteIdentity`、`GitRemoteProvider`、`GitCommitSummary` |
 | `src/graph.rs` | local/remote-tracking refs 与单次 `git log --all` traversal 的分页 graph page | `GitGraph`、`GitGraphCursor`、`GitReference`、`GitReferenceKind`、private `parse_references` |
 | `src/mutation.rs` | path set/commit request validation 与常用 index/worktree/branch/remote mutation | `GitPathspecSet`、`GitCommitRequest`、`GitCommitResult`、`GitClient::switch_branch` |
@@ -316,7 +318,7 @@ bazel test //zeta-rs/git:git-unit-tests
 
 当前限制：
 
-- local branch switch 已实现；尚无新建/删除/重命名 branch、tag 或 worktree mutation；
+- local branch switch 和受管 linked worktree 创建/清理已实现；尚无普通用户 branch 新建/删除/重命名与 tag mutation；
 - App Server 已有单 workspace projection、watch、revision/event 和 operation serialization，
   但尚无 multi-repository registry、可观测 queue、progress 或 caller cancellation；
 - 不支持 bare repository，`open_repository` 要求 working tree；

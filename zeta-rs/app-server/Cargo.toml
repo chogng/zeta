@@ -74,6 +74,7 @@ zeta-execpolicy = { workspace = true }
 zeta-plugins = { workspace = true }
 zeta-protocol = { workspace = true }
 zeta-rollout = { workspace = true }
+zeta-storage = { workspace = true }
 zeta-rmcp-client = { workspace = true }
 zeta-sandboxing = { workspace = true }
 zeta-workspace = { workspace = true }
@@ -88,10 +89,12 @@ zeta-skills-extension = { workspace = true }
 zeta-syntax = { workspace = true }
 zeta-symbol-index = { workspace = true }
 zeta-thread-transcript = { workspace = true }
+zeta-turn-changes = { workspace = true }
 zeta-tools = { workspace = true }
 zeta-web-search-extension = { workspace = true }
 zeta-typst = { workspace = true }
 zeta-utils-pty = { workspace = true }
+zeta-worktree = { workspace = true }
 
 [dev-dependencies]
 image = { workspace = true, features = ["png"] }

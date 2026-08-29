@@ -18,7 +18,7 @@ import type { ViewPaneContainer } from "../../../../../workbench/browser/parts/v
 import { ViewContainerLocation, WorkbenchViewRegistry } from "../../../../../workbench/common/views.js";
 import { chatTurnErrorListItem, type ChatTurnErrorAction } from "../../../../../workbench/contrib/chat/browser/list/chatListItems.js";
 import { ChatPaneModel } from "../../../../../workbench/contrib/chat/browser/pane/chatPaneModel.js";
-import { CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID, CHAT_AGENT_SIDEBAR_VIEW_ID, CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, TOGGLE_AGENT_SIDEBAR_COMMAND_ID } from "../../../../../workbench/contrib/chat/common/chat.js";
+import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, TOGGLE_SESSION_INSPECTOR_COMMAND_ID } from "../../../../../workbench/contrib/chat/common/chat.js";
 import { IPreferencesService, type IPreferencesService as PreferencesService } from "../../../../../workbench/services/preferences/common/preferences.js";
 import { PreferencesService as BrowserPreferencesService } from "../../../../../workbench/services/preferences/browser/preferencesService.js";
 import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';
@@ -111,14 +111,7 @@ test("Chat contribution owns the fixed Auxiliary Bar view", () => {
 		registry.getViews(CHAT_VIEW_CONTAINER_ID).map((view) => view.id),
 		[CHAT_VIEW_ID],
 	);
-	assert.equal(
-		registry.getDefaultViewContainer(ViewContainerLocation.AgentSidebar)?.id,
-		CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID,
-	);
-	assert.deepEqual(
-		registry.getViews(CHAT_AGENT_SIDEBAR_VIEW_CONTAINER_ID).map((view) => view.id),
-		[CHAT_AGENT_SIDEBAR_VIEW_ID],
-	);
+	assert.equal(registry.getDefaultViewContainer(ViewContainerLocation.AgentSidebar), undefined);
 });
 
 test("Chat title separates Session tabs from its action toolbar", async () => {
@@ -157,19 +150,10 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	using commands = new CommandService(services);
 	const menuService = new MenuService(commands, contextKeys);
 	const layout = testLayoutService();
-	let openedAgentSidebarViewId: string | undefined;
+	let chatView: InstanceType<typeof ChatViewPane> | undefined;
 	services.registerInstance(IWorkbenchLayoutService, layout);
 	services.registerInstance(IViewsService, {
-		openView: (viewId) => {
-			openedAgentSidebarViewId = viewId;
-			layout.showPart("agentSidebar");
-			return {
-				id: viewId,
-				focus() {},
-				isVisible: () => true,
-				setVisible() {},
-			};
-		},
+		openView: () => chatView,
 		focusView: () => true,
 	});
 	let shownContextMenuActions: readonly IAction[] = [];
@@ -193,7 +177,9 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		layout,
 		emptyChatContextPickService,
 		unavailableQuickInputService,
+		contextKeys,
 	);
+	chatView = pane;
 	const title = h(dom.window.document, "div");
 	title.className = "zeta-pane-composite-title";
 	title.append(chatTitleContent(pane), chatTitleActions(pane));
@@ -239,22 +225,14 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	assert.ok(toolbar?.querySelector(".zeta-button-label"));
 	assert.ok(toolbar?.querySelector("svg.zeta-icon"));
 	assert.ok(layoutToolbar?.querySelector(
-		`[data-action-id="${TOGGLE_AGENT_SIDEBAR_COMMAND_ID}"]`,
+		`[data-action-id="${TOGGLE_SESSION_INSPECTOR_COMMAND_ID}"]`,
 	));
-	await commands.executeCommand(TOGGLE_AGENT_SIDEBAR_COMMAND_ID);
-	assert.equal(openedAgentSidebarViewId, CHAT_AGENT_SIDEBAR_VIEW_ID);
-	assert.equal(layout.isPartVisible("agentSidebar"), true);
-	assert.equal(contextKeys.getValue("agentSidebarVisible"), true);
-	assert.equal(layoutToolbar?.hidden, true);
-	assert.deepEqual(
-		menuService.getMenuActions(MenuId.AgentSidebarTitle)
-			.flatMap(([, actions]) => actions)
-			.map((action) => action.id),
-		[TOGGLE_AGENT_SIDEBAR_COMMAND_ID],
-	);
-	await commands.executeCommand(TOGGLE_AGENT_SIDEBAR_COMMAND_ID);
-	assert.equal(layout.isPartVisible("agentSidebar"), false);
-	assert.equal(contextKeys.getValue("agentSidebarVisible"), false);
+	await commands.executeCommand(TOGGLE_SESSION_INSPECTOR_COMMAND_ID);
+	assert.equal(pane.element.querySelector<HTMLElement>(".zeta-session-inspector")?.hidden, false);
+	assert.equal(contextKeys.getValue("chatSessionInspectorVisible"), true);
+	await commands.executeCommand(TOGGLE_SESSION_INSPECTOR_COMMAND_ID);
+	assert.equal(pane.element.querySelector<HTMLElement>(".zeta-session-inspector")?.hidden, true);
+	assert.equal(contextKeys.getValue("chatSessionInspectorVisible"), false);
 	assert.equal(layoutToolbar?.hidden, false);
 	const chatActions = menuService.getMenuActions(MenuId.ChatTitle)
 		.filter(([group]) => group !== "navigation")
@@ -1254,6 +1232,7 @@ test("Turn error presentation is selected only from the stable error code", () =
 		{ code: "interactionDeadlineElapsed", retryable: true },
 		{ code: "toolRepetition", retryable: false },
 		{ code: "usageLimited", retryable: false },
+		{ code: "workspaceCaptureFailed", retryable: true },
 	];
 
 	assert.deepEqual(cases.map(({ code, retryable }) => {
@@ -1269,6 +1248,7 @@ test("Turn error presentation is selected only from the stable error code", () =
 		{ code: "interactionDeadlineElapsed", label: "Interaction expired", action: "retry", message },
 		{ code: "toolRepetition", label: "Repeated tool failure", action: "revise", message },
 		{ code: "usageLimited", label: "Usage limit", action: "chooseModel", message },
+		{ code: "workspaceCaptureFailed", label: "Workspace capture failed", action: "retry", message },
 	]);
 });
 
@@ -1355,7 +1335,7 @@ interface FakeOptions {
 }
 
 function createChatService(api: IRendererHost, configurationService?: WorkbenchConfigurationService): ChatService {
-	return new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events, ...(configurationService ? { configurationService } : {}) });
+	return new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, turnChangesApi: api.turnChanges, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events, ...(configurationService ? { configurationService } : {}) });
 }
 
 test("Chat service accepts committed fork-history import notifications", () => {

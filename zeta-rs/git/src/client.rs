@@ -215,6 +215,23 @@ impl GitClient {
         self.run(GitInvocation::mutation(cwd, args)).await
     }
 
+    pub(crate) async fn run_mutation_with_index<I, S>(
+        &self,
+        cwd: &Path,
+        args: I,
+        index_path: &Path,
+    ) -> GitResult<GitCommandOutput>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        self.run(
+            GitInvocation::mutation(cwd, args)
+                .with_environment("GIT_INDEX_FILE", index_path.as_os_str()),
+        )
+        .await
+    }
+
     pub(crate) fn start_query_stream<I, S>(&self, cwd: &Path, args: I) -> GitResult<GitQueryStream>
     where
         I: IntoIterator<Item = S>,
@@ -265,6 +282,12 @@ impl GitClient {
             .stderr(Stdio::piped())
             .kill_on_drop(true);
         invocation.profile.configure(&mut command);
+        command.envs(
+            invocation
+                .environment
+                .iter()
+                .map(|(name, value)| (name, value)),
+        );
         command.args(&invocation.args);
         if invocation.stdin.is_some() {
             command.stdin(Stdio::piped());
@@ -395,6 +418,7 @@ struct GitInvocation {
     args: Vec<OsString>,
     profile: GitCommandProfile,
     stdin: Option<Vec<u8>>,
+    environment: Vec<(OsString, OsString)>,
 }
 
 impl GitInvocation {
@@ -408,6 +432,7 @@ impl GitInvocation {
             args: collect_args(args),
             profile: GitCommandProfile::Query { fsmonitor },
             stdin: None,
+            environment: Vec::new(),
         }
     }
 
@@ -421,6 +446,7 @@ impl GitInvocation {
             args: collect_args(args),
             profile: GitCommandProfile::ConfigurationProbe,
             stdin: None,
+            environment: Vec::new(),
         }
     }
 
@@ -434,11 +460,17 @@ impl GitInvocation {
             args: collect_args(args),
             profile: GitCommandProfile::Mutation,
             stdin: None,
+            environment: Vec::new(),
         }
     }
 
     fn with_stdin(mut self, stdin: Vec<u8>) -> Self {
         self.stdin = Some(stdin);
+        self
+    }
+
+    fn with_environment(mut self, name: impl Into<OsString>, value: &OsStr) -> Self {
+        self.environment.push((name.into(), value.to_owned()));
         self
     }
 }

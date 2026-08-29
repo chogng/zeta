@@ -69,7 +69,7 @@ struct GitRepositoryRuntime {
     descriptor: GitRepositoryDto,
     service: GitService,
     stream_instance_id: StreamInstanceId,
-    operation: Mutex<()>,
+    operation: Arc<Mutex<()>>,
     state: Mutex<GitRuntimeState>,
     graph_sessions: Mutex<HashMap<u64, GraphSession>>,
     next_graph_token: AtomicU64,
@@ -152,12 +152,16 @@ impl GitRuntime {
                     &workspace,
                     &projection_root,
                 )?;
-                let runtime = Arc::new(GitRepositoryRuntime::new(
+                let Some(runtime) = GitRepositoryRuntime::new(
                     workspace.clone(),
                     projection_root,
                     descriptor,
                     Arc::clone(&updates),
-                )?);
+                )?
+                else {
+                    continue;
+                };
+                let runtime = Arc::new(runtime);
                 let Ok((repository, _)) = runtime.service.snapshot() else {
                     continue;
                 };
@@ -465,13 +469,17 @@ impl GitRepositoryRuntime {
         projection_root: PathBuf,
         descriptor: GitRepositoryDto,
         updates: Arc<UpdateBroker>,
-    ) -> Result<Self, GitRuntimeError> {
-        Ok(Self {
-            service: GitService::new(workspace, projection_root)
-                .map_err(GitRuntimeError::Service)?,
+    ) -> Result<Option<Self>, GitRuntimeError> {
+        let service =
+            GitService::new(workspace, projection_root).map_err(GitRuntimeError::Service)?;
+        let Ok((repository, _)) = service.snapshot() else {
+            return Ok(None);
+        };
+        Ok(Some(Self {
+            operation: zeta_git::repository_operation_lock(&repository),
+            service,
             descriptor,
             stream_instance_id: new_stream_instance_id()?,
-            operation: Mutex::new(()),
             state: Mutex::new(GitRuntimeState {
                 revision: 0,
                 repository: None,
@@ -480,7 +488,7 @@ impl GitRepositoryRuntime {
             graph_sessions: Mutex::new(HashMap::new()),
             next_graph_token: AtomicU64::new(1),
             updates,
-        })
+        }))
     }
 
     fn status(&self) -> Result<GitStatusResult, GitRuntimeError> {

@@ -5,7 +5,9 @@ mod sqlite;
 
 pub use lease::FileLease;
 pub use lease::LeaseDirectory;
-pub use sqlite::{SqliteSessionStore, SqliteThreadStore};
+pub use sqlite::{
+    SqliteSessionStore, SqliteThreadStore, SqliteTurnChangeStore, TurnChangeCommandOutcome,
+};
 
 #[cfg(test)]
 #[path = "sqlite_tests.rs"]

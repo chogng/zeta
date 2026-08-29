@@ -1,3 +1,4 @@
+use crate::CommitMessageConfig;
 use crate::ConfigDiagnostic;
 use crate::ConfigError;
 use crate::ConfigProvenance;
@@ -14,6 +15,7 @@ use crate::WorkspaceTrustConfig;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
+use std::collections::HashMap;
 use zeta_model_provider_config::ModelProviderConfig;
 use zeta_model_provider_config::ProviderConfigError;
 use zeta_model_provider_config::ProviderConfigRegistry;
@@ -107,6 +109,8 @@ pub struct AgentConfig {
     pub preferred_model: Option<ModelRef>,
     #[serde(default)]
     pub approval_review_model: ApprovalReviewModelSelection,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub commit_message_model: Option<ModelRef>,
     #[serde(default)]
     pub tool_mode: zeta_protocol::ToolMode,
     #[serde(default)]
@@ -139,9 +143,13 @@ pub struct UserConfigDocument {
     #[serde(default)]
     pub semantic_code_index: SemanticCodeIndexConfig,
     #[serde(default)]
+    pub commit_messages: CommitMessageConfig,
+    #[serde(default)]
     pub exec_policy: UserExecPolicyConfig,
     #[serde(default)]
     pub workspace_trust: WorkspaceTrustConfig,
+    #[serde(default)]
+    pub desktop: HashMap<String, serde_json::Value>,
 }
 
 impl UserConfigDocument {
@@ -170,6 +178,14 @@ impl UserConfigDocument {
         {
             return Err(ConfigError(format!(
                 "approval review model provider '{}' is not configured",
+                model.provider
+            )));
+        }
+        if let Some(model) = &self.agent.commit_message_model
+            && !self.providers.contains_key(&model.provider)
+        {
+            return Err(ConfigError(format!(
+                "commit-message model provider '{}' is not configured",
                 model.provider
             )));
         }
@@ -228,6 +244,7 @@ impl UserConfigDocument {
 pub struct ResolvedConfig {
     pub preferred_model: Option<ModelRef>,
     pub approval_review_model: ApprovalReviewModelSelection,
+    pub commit_message_model: Option<ModelRef>,
     pub tool_mode: zeta_protocol::ToolMode,
     pub agent_grep_backend: AgentGrepBackend,
     pub providers: BTreeMap<ProviderId, ModelProviderConfig>,
@@ -238,8 +255,10 @@ pub struct ResolvedConfig {
     pub language_servers: LanguageServersConfig,
     pub tool_search: ToolSearchConfig,
     pub semantic_code_index: SemanticCodeIndexConfig,
+    pub commit_messages: CommitMessageConfig,
     pub exec_policy: UserExecPolicyConfig,
     pub workspace_trust: WorkspaceTrustConfig,
+    pub desktop: HashMap<String, serde_json::Value>,
     pub workspace: Option<WorkspaceConfigIntent>,
 }
 
@@ -255,6 +274,29 @@ impl ResolvedConfig {
             ApprovalReviewModelSelection::Automatic => self.selected_provider(),
             ApprovalReviewModelSelection::Explicit { model } => self.providers.get(&model.provider),
         }
+    }
+
+    /// Resolves the exact user-selected model for commit-message generation.
+    pub fn resolve_commit_message_model(
+        &self,
+        registry: &ProviderConfigRegistry,
+    ) -> Result<ModelRef, ConfigError> {
+        let model = self.commit_message_model.clone().ok_or_else(|| {
+            ConfigError("automatic commit-message generation is not configured".into())
+        })?;
+        let provider = self.providers.get(&model.provider).ok_or_else(|| {
+            ConfigError(format!(
+                "commit-message model provider '{}' is not configured",
+                model.provider
+            ))
+        })?;
+        registry
+            .normalize_for(provider, &model.provider)
+            .map_err(provider_config_error)?;
+        registry
+            .validate_model_selection(&model)
+            .map_err(provider_config_error)?;
+        Ok(model)
     }
 
     /// Resolves and preflights the review model selected for the next approval assessment.
@@ -304,6 +346,7 @@ impl From<&UserConfigDocument> for ResolvedConfig {
         Self {
             preferred_model: document.agent.preferred_model.clone(),
             approval_review_model: document.agent.approval_review_model.clone(),
+            commit_message_model: document.agent.commit_message_model.clone(),
             tool_mode: document.agent.tool_mode,
             agent_grep_backend: document.agent.grep_backend,
             providers: document.providers.clone(),
@@ -314,8 +357,10 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             language_servers: document.language_servers.clone(),
             tool_search: document.tool_search.clone(),
             semantic_code_index: document.semantic_code_index.clone(),
+            commit_messages: document.commit_messages.clone(),
             exec_policy: document.exec_policy.clone(),
             workspace_trust: document.workspace_trust.clone(),
+            desktop: document.desktop.clone(),
             workspace: None,
         }
     }

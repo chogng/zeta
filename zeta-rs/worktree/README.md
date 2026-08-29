@@ -2,6 +2,6 @@
 
 > 本 README 拥有已有 Git worktree 的切换目标解析和 Codex 兼容归属元数据实现契约；跨 crate 产品状态见 [`docs/git.md`](../../docs/git.md)。
 
-1. `WorktreeManager::list` 和 `WorktreeManager::resolve` 通过 `zeta-git` 读取同一仓库的 Git worktree 清单，拒绝不可用目标，并把源工作区在仓库内的相对子目录映射到目标 checkout；crate 不启动 Git、不替换产品工作区、不启动 Session，也不拥有选择器 UI。
-2. `WorktreeSettings::defaults` 和 `WorktreeSettings::from_desktop_config` 保留 Codex Desktop 的 `git-worktree-root`、`worktree-auto-cleanup-enabled`、`worktree-keep-count` 语义；`bind_thread` 和 `owner` 只接受 `<root>/<4 hex>/<checkout>` 下的 linked worktree，并以不可覆盖的原子写入维护 `codex-thread.json`。
-3. `just test zeta-worktree` 覆盖 primary/linked 清单、nested cwd 映射、按分支和绝对路径解析、损坏 owner 隔离、并发归属、managed layout 拒绝与配置校验；新增创建、清理或保留策略前必须同时实现明确的文件变更和删除失败语义，不能把设置字段当成已经执行的清理能力。
+1. `WorktreeManager::list/resolve` 读取同仓库 worktree 清单；`provision_thread` 在 Thread 执行前持久化独占工作区：Git 使用 detached linked worktree，非 Git 使用内容寻址快照支持的受管目录，创建失败不会转回共享工作区。
+2. `ThreadWorktreeBinding` 固定来源工作区、目标 branch/HEAD、初始 baseline 与受管目录身份；恢复只接受 `<root>/<4 hex>/<digest>` 的有效绑定，清理必须收到全部 ChangeSet 已 settled 的证明。
+3. `WorktreeSettings` 保留 `git-worktree-root`、自动清理开关和保留数量语义；本 crate 只负责隔离目录和生命周期，不拥有 Turn 归属、提交信息、Git 提交或 Session Inspector。
