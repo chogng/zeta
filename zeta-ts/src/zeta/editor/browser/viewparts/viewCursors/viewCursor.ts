@@ -1,22 +1,33 @@
-import { computeScreenAwareSize, h } from '../../../../base/browser/dom.js';
-import { createFastDomNode, type FastDomNode } from '../../../../base/browser/fastDomNode.js';
+import * as dom from '../../../../base/browser/dom.js';
+import { FastDomNode, createFastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { AbstractDisposable } from '../../../../base/common/lifecycle.js';
+import * as strings from '../../../../base/common/strings.js';
+import { applyEditorFontInfo, type EditorDomFontInfo } from '../../config/domFontInfo.js';
 import { TextEditorCursorStyle } from '../../../common/config/editorOptions.js';
 import { TextSelection, TextSelectionSet } from '../../../common/core/selection.js';
 import { TextPosition, TextRange } from '../../../common/core/text.js';
-import { getTextGraphemeBoundaries } from '../../../common/core/textSegmentation.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type SemanticTokenSource } from '../../../common/services/semanticTokensStyling.js';
 import { createStanzaVisualSelectionGeometry } from '../../../common/viewModel/visualSelectionGeometry.js';
 import { type EditorLineVisibleRange, type EditorOverlayContext, type EditorRenderingContext, type EditorVisiblePosition } from '../../view/renderingContext.js';
+import { type EditorViewContext } from '../../view/viewPart.js';
 
 export interface ViewCursorOptions {
 	readonly style: TextEditorCursorStyle;
 	readonly lineWidth: number;
 	readonly lineHeight: number;
+	readonly fontInfo: EditorDomFontInfo;
 }
 
-export const enum CursorPlurality {
+export interface IViewCursorRenderData {
+	domNode: HTMLElement;
+	position: TextPosition;
+	contentLeft: number;
+	width: number;
+	height: number;
+}
+
+export enum CursorPlurality {
 	Single,
 	MultiPrimary,
 	MultiSecondary,
@@ -29,14 +40,16 @@ interface ViewCursorCharacterPresentation {
 	readonly textDecoration?: string;
 }
 
-interface ViewCursorRenderData {
-	readonly top: number;
-	readonly left: number;
-	readonly paddingLeft: number;
-	readonly width: number;
-	readonly height: number;
-	readonly textContent: string;
-	readonly presentation?: ViewCursorCharacterPresentation;
+class ViewCursorRenderData {
+	constructor(
+		public readonly top: number,
+		public readonly left: number,
+		public readonly paddingLeft: number,
+		public readonly width: number,
+		public readonly height: number,
+		public readonly textContent: string,
+		public readonly presentation: ViewCursorCharacterPresentation | undefined,
+	) {}
 }
 
 interface CursorGrapheme {
@@ -51,58 +64,78 @@ interface DomCaretGeometry extends EditorVisiblePosition {
 
 /** Owns one retained caret, its position, rendering data, and DOM writes. */
 export class ViewCursor extends AbstractDisposable {
-	public readonly domNode: HTMLDivElement;
 	private readonly fastDomNode: FastDomNode<HTMLDivElement>;
-	private readonly ownerWindow: Window;
+	private isVisible = true;
 	private position = TextPosition.at(0, 0);
 	private plurality = CursorPlurality.Single;
 	private style: TextEditorCursorStyle;
 	private lineWidth: number;
-	private readonly lineHeight: number;
-	private pauseMovementAnimation = true;
+	private lineHeight: number;
 	private renderData: ViewCursorRenderData | undefined;
 	private lastRenderedContent = '';
-	private lastPauseMovementAnimation: boolean | undefined;
 
 	constructor(
+		private readonly context: EditorViewContext,
 		host: HTMLElement,
 		selectionIndex: number,
 		options: ViewCursorOptions,
 		private readonly model: TextModel,
 		private readonly semanticTokenSource: SemanticTokenSource | undefined,
+		plurality: CursorPlurality,
 	) {
 		super();
-		const ownerWindow = host.ownerDocument.defaultView;
-		if (!ownerWindow) throw new ReferenceError('Editor cursor requires a browser window');
-		this.ownerWindow = ownerWindow;
 		this.style = options.style;
 		this.lineWidth = options.lineWidth;
 		this.lineHeight = options.lineHeight;
-		this.domNode = h(host.ownerDocument, 'div');
-		this.fastDomNode = createFastDomNode(this.domNode);
+		this.fastDomNode = createFastDomNode(dom.h(host.ownerDocument, 'div'));
 		this.fastDomNode.setClassName('stanza-editor-caret');
 		this.fastDomNode.setAttribute('data-selection-index', String(selectionIndex));
 		this.fastDomNode.setAttribute('aria-hidden', 'true');
+		this.fastDomNode.setHeight(this.context.layout.lineHeight);
+		this.fastDomNode.setTop(0);
+		this.fastDomNode.setLeft(0);
+		applyEditorFontInfo(this.fastDomNode.domNode, options.fontInfo);
 		this.fastDomNode.setDisplay('none');
-		host.append(this.domNode);
+		this.setPlurality(plurality);
+		host.append(this.fastDomNode.domNode);
 	}
 
-	public setPosition(position: TextPosition, plurality: CursorPlurality, pauseMovementAnimation: boolean): void {
-		this.position = position;
+	public getDomNode(): FastDomNode<HTMLElement> {
+		return this.fastDomNode;
+	}
+
+	public getPosition(): TextPosition {
+		return this.position;
+	}
+
+	public setPlurality(plurality: CursorPlurality): void {
 		this.plurality = plurality;
-		this.pauseMovementAnimation = pauseMovementAnimation;
 	}
 
-	public setPauseMovementAnimation(pauseMovementAnimation: boolean): void {
-		this.pauseMovementAnimation = pauseMovementAnimation;
+	public show(): void {
+		if (this.isVisible) return;
+		this.fastDomNode.setVisibility('inherit');
+		this.isVisible = true;
 	}
 
-	public setStyle(style: TextEditorCursorStyle): void {
-		this.style = style;
+	public hide(): void {
+		if (!this.isVisible) return;
+		this.fastDomNode.setVisibility('hidden');
+		this.isVisible = false;
 	}
 
-	public setLineWidth(lineWidth: number): void {
-		this.lineWidth = lineWidth;
+	public onConfigurationChanged(options: ViewCursorOptions): boolean {
+		this.style = options.style;
+		this.lineWidth = options.lineWidth;
+		this.lineHeight = options.lineHeight;
+		applyEditorFontInfo(this.fastDomNode.domNode, options.fontInfo);
+		return true;
+	}
+
+	public onCursorPositionChanged(position: TextPosition, pauseAnimation: boolean): boolean {
+		this.fastDomNode.domNode.style.transitionProperty = pauseAnimation ? 'none' : '';
+		this.position = position;
+		return true;
 	}
 
 	public prepareRender(context: EditorRenderingContext): void {
@@ -119,7 +152,7 @@ export class ViewCursor extends AbstractDisposable {
 		}
 		const characterWidth = caret.characterRange?.width ?? this.getCharacterWidth(overlay, grapheme);
 		const characterLeft = caret.characterRange?.left ?? (caret.isRightToLeft ? caret.left - characterWidth : caret.left);
-		const width = cursorWidth(this.ownerWindow, this.style, this.lineWidth, characterWidth);
+		const width = cursorWidth(dom.getWindow(this.fastDomNode.domNode), this.style, this.lineWidth, characterWidth);
 		let left = cursorLeft(this.style, caret.left, characterLeft);
 		let paddingLeft = 0;
 		if (this.style === TextEditorCursorStyle.Line && width >= 2 && left >= 1) {
@@ -129,22 +162,22 @@ export class ViewCursor extends AbstractDisposable {
 		const rowHeight = context.layout.lineHeight;
 		const height = cursorHeight(this.style, this.lineHeight, rowHeight);
 		const rendersCharacter = this.style === TextEditorCursorStyle.Block || (this.style === TextEditorCursorStyle.Line && width > 2);
-		this.renderData = Object.freeze({
-			top: context.viewportData.getLineTop(caret.visualLineIndex) + cursorTop(this.style, rowHeight, height),
+		this.renderData = new ViewCursorRenderData(
+			context.viewportData.getLineTop(caret.visualLineIndex) + cursorTop(this.style, rowHeight, height),
 			left,
 			paddingLeft,
 			width,
 			height,
-			textContent: rendersCharacter ? grapheme.character : '',
-			presentation: rendersCharacter ? this.getCharacterPresentation(grapheme.position) : undefined,
-		});
+			rendersCharacter ? grapheme.character : '',
+			rendersCharacter ? this.getCharacterPresentation(grapheme.position) : undefined,
+		);
 	}
 
-	public render(): void {
+	public render(_context: EditorRenderingContext): IViewCursorRenderData | null {
 		const renderData = this.renderData;
 		if (!renderData) {
 			this.fastDomNode.setDisplay('none');
-			return;
+			return null;
 		}
 		this.fastDomNode.setClassName([
 			'stanza-editor-caret',
@@ -155,15 +188,11 @@ export class ViewCursor extends AbstractDisposable {
 		].filter(Boolean).join(' '));
 		if (this.lastRenderedContent !== renderData.textContent) {
 			this.lastRenderedContent = renderData.textContent;
-			this.domNode.textContent = renderData.textContent;
+			this.fastDomNode.domNode.textContent = renderData.textContent;
 		}
 		this.fastDomNode.setFontStyle(renderData.presentation?.fontStyle ?? '');
 		this.fastDomNode.setFontWeight(renderData.presentation?.fontWeight ?? '');
 		this.fastDomNode.setTextDecoration(renderData.presentation?.textDecoration ?? '');
-		if (this.lastPauseMovementAnimation !== this.pauseMovementAnimation) {
-			this.lastPauseMovementAnimation = this.pauseMovementAnimation;
-			this.domNode.style.transitionProperty = this.pauseMovementAnimation ? 'none' : '';
-		}
 		this.fastDomNode.setDisplay('block');
 		this.fastDomNode.setTop(renderData.top);
 		this.fastDomNode.setLeft(renderData.left);
@@ -171,21 +200,22 @@ export class ViewCursor extends AbstractDisposable {
 		this.fastDomNode.setWidth(renderData.width);
 		this.fastDomNode.setHeight(renderData.height);
 		this.fastDomNode.setLineHeight(renderData.height);
+		return Object.freeze({
+			domNode: this.fastDomNode.domNode,
+			position: this.position,
+			contentLeft: renderData.left,
+			width: 2,
+			height: renderData.height,
+		});
 	}
 
 	protected override disposeCore(): void {
-		this.domNode.remove();
+		this.fastDomNode.domNode.remove();
 	}
 
 	private getGraphemeAwarePosition(): CursorGrapheme {
 		const line = this.model.getLineContent(this.position.lineIndex);
-		const boundaries = getTextGraphemeBoundaries(line);
-		let startColumn = 0;
-		for (const boundary of boundaries) {
-			if (boundary > this.position.columnIndex) break;
-			startColumn = boundary;
-		}
-		const endColumn = boundaries.find(boundary => boundary > startColumn) ?? startColumn;
+		const [startColumn, endColumn] = strings.getCharContainingOffset(line, this.position.columnIndex);
 		return Object.freeze({
 			position: TextPosition.at(this.position.lineIndex, startColumn),
 			endColumn,
@@ -263,8 +293,8 @@ function cursorPluralityClass(plurality: CursorPlurality): string {
 }
 
 function cursorWidth(ownerWindow: Window, style: TextEditorCursorStyle, lineWidth: number, characterWidth: number): number {
-	if (style === TextEditorCursorStyle.Line) return computeScreenAwareSize(ownerWindow, lineWidth > 0 ? lineWidth : 2);
-	if (style === TextEditorCursorStyle.LineThin) return computeScreenAwareSize(ownerWindow, 1);
+	if (style === TextEditorCursorStyle.Line) return dom.computeScreenAwareSize(ownerWindow, lineWidth > 0 ? lineWidth : 2);
+	if (style === TextEditorCursorStyle.LineThin) return dom.computeScreenAwareSize(ownerWindow, 1);
 	return Math.max(1, characterWidth);
 }
 

@@ -83,6 +83,15 @@ test("cursor layer retains nodes, animates stable moves, and resolves multi-curs
 	await expect(primary).toHaveCSS("background-color", "rgb(1, 2, 3)");
 	await expect(secondary).toHaveCSS("background-color", "rgb(4, 5, 6)");
 
+	await page.locator(".stanza-editor-input").focus();
+	await page.keyboard.press("Insert");
+	await page.evaluate(() => {
+		window.zetaTextModelIntegration.setValue("fn main() {\n  A👩‍🔧B answer();\n}\n");
+		window.zetaTextModelIntegration.setCursors([{ lineIndex: 1, columnIndex: 4 }]);
+	});
+	await expect(retainedCaret).toHaveText("👩‍🔧");
+	await page.keyboard.press("Insert");
+
 	await page.evaluate(() => {
 		window.zetaTextModelIntegration.setValue(Array.from({ length: 60 }, (_, index) => `fn main() { answer(); } // ${index}`).join("\n"));
 		window.zetaTextModelIntegration.setCursors([{ lineIndex: 59, columnIndex: 0 }]);

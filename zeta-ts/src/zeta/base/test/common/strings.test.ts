@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { commonPrefixLength, commonSuffixLength, containsRTL, escapeRegExpCharacters, GraphemeIterator, isBasicASCII, isHighSurrogate, isLowSurrogate, splitLines } from '../../common/strings.js';
+import { commonPrefixLength, commonSuffixLength, containsRTL, escapeRegExpCharacters, getCharContainingOffset, GraphemeIterator, isBasicASCII, isHighSurrogate, isLowSurrogate, splitLines } from '../../common/strings.js';
 
 test('escapeRegExpCharacters turns arbitrary text into a literal pattern', () => {
 	const value = 'a.*(b)+[c]?\\d^$|{}';
@@ -35,6 +35,8 @@ test('Unicode helpers preserve surrogate and grapheme boundaries', () => {
 	while (!iterator.eol()) lengths.push(iterator.nextGraphemeLength());
 
 	assert.deepEqual(lengths, [1, 5, 1]);
+	assert.deepEqual(getCharContainingOffset(value, 2), [1, 6]);
+	assert.deepEqual(getCharContainingOffset(value, value.length), [7, 7]);
 	assert.equal(isHighSurrogate('\u{1F680}'.charCodeAt(0)), true);
 	assert.equal(isLowSurrogate('\u{1F680}'.charCodeAt(1)), true);
 	assert.equal(containsRTL('plain text'), false);

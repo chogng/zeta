@@ -86,6 +86,19 @@ export class GraphemeIterator {
 	}
 }
 
+/** Returns the UTF-16 boundaries of the grapheme containing one offset. */
+export function getCharContainingOffset(value: string, offset: number): readonly [number, number] {
+	if (!Number.isSafeInteger(offset) || offset < 0 || offset > value.length) {
+		throw new RangeError('Grapheme offset is outside the string');
+	}
+	const boundaries = graphemeBoundaries(value);
+	for (let boundaryIndex = 1; boundaryIndex < boundaries.length; boundaryIndex += 1) {
+		const endOffset = boundaries[boundaryIndex]!;
+		if (offset < endOffset) return [boundaries[boundaryIndex - 1]!, endOffset];
+	}
+	return [value.length, value.length];
+}
+
 function graphemeBoundaries(value: string): readonly number[] {
 	const boundaries = [0];
 	for (const segment of new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(value)) {

@@ -1,5 +1,6 @@
 import { type Event } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
+import { type EditorDomFontInfo } from '../config/domFontInfo.js';
 import { type EditorSelectionChangeReason, type EditorSelectionController } from '../../common/cursor/editorSelectionController.js';
 import { type InternalGuidesOptions, type TextEditorCursorBlinkingStyle, type TextEditorCursorStyle } from '../../common/config/editorOptions.js';
 import { type TextRange } from '../../common/core/text.js';
@@ -35,6 +36,7 @@ export interface ViewOverlaysOptions {
 	readonly cursorSmoothCaretAnimation: 'off' | 'explicit' | 'on';
 	readonly cursorWidth: number;
 	readonly cursorHeight: number;
+	readonly fontInfo: EditorDomFontInfo;
 	readonly readGpuLineIndexes?: () => ReadonlySet<number>;
 }
 
@@ -86,6 +88,7 @@ export class ViewOverlays extends Disposable {
 			semanticTokenSource: options.semanticTokenSource,
 			lineWidth: options.cursorWidth,
 			lineHeight: options.cursorHeight,
+			fontInfo: options.fontInfo,
 		}, options.model, options.selectionController));
 		const gpuMark = options.readGpuLineIndexes
 			? this.register(new GpuMarkOverlay(context, options.contentElement, options.readGpuLineIndexes))

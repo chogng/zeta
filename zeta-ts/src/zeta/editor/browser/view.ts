@@ -676,6 +676,11 @@ export class View extends Disposable {
 			cursorSmoothCaretAnimation,
 			cursorWidth,
 			cursorHeight,
+			fontInfo: {
+				fontFamily: options.fontFamily,
+				fontSize: options.fontSize,
+				fontLigatures: this.viewLineOptions.fontLigatures,
+			},
 			...(this.viewLinesGpu ? { readGpuLineIndexes: () => this.viewLinesGpu!.gpuLineIndexes } : {}),
 		}));
 		this.margin = this.viewParts.register(new Margin({
