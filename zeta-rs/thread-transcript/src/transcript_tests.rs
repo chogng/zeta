@@ -29,6 +29,8 @@ fn snapshot_preserves_items_and_turn_plans_in_order() {
         turns: vec![zeta_protocol::Turn {
             turn_id: turn_id(),
             status: zeta_protocol::TurnStatus::Completed,
+            kind: zeta_protocol::TurnKind::Coding,
+            instructions: None,
             model: None,
             tool_profile: None,
             tool_mode: zeta_protocol::ToolMode::Direct,

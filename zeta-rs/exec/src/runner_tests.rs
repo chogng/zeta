@@ -306,6 +306,8 @@ fn turn(ids: &TestIds, status: TurnStatus, items: Vec<ThreadItem>) -> Turn {
     Turn {
         turn_id: ids.turn_id.clone(),
         status,
+        kind: zeta_protocol::TurnKind::Coding,
+        instructions: None,
         model: None,
         tool_profile: None,
         tool_mode: zeta_protocol::ToolMode::Direct,
