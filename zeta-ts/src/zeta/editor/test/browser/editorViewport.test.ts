@@ -179,7 +179,7 @@ test("EditorViewport uses browser range geometry for RTL selections and carets",
 		{ left: "20px", width: "15px" },
 		{ left: "50px", width: "20px" },
 	]);
-	assert.equal(requiredElement<HTMLElement>(requiredPartRow(viewport.element, "stanza-editor-line-cursors", 0), ".stanza-editor-caret").style.left, "35px");
+	assert.equal(requiredElement<HTMLElement>(requiredPartRow(viewport.element, "stanza-editor-line-cursors", 0), ".stanza-editor-caret").style.left, "34px");
 	assert.equal(viewport.getPositionContentCoordinates(TextPosition.at(0, 3)).left, 35);
 	dom.window.close();
 });
@@ -884,7 +884,7 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 	assert.equal(caretElements.length, 2);
 	assert.equal(caretElements.every(element => element.parentElement?.classList.contains("stanza-editor-line-cursors")), true);
 	assert.equal(caretElements[0]?.classList.contains("primary"), true);
-	assert.equal(caretElements[0]?.style.left, "68px");
+	assert.equal(caretElements[0]?.style.left, "67px");
 	assert.equal(
 		lineNumber(requiredLine(viewport.element, 0))
 			.classList.contains("active"),
@@ -905,7 +905,7 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 		requiredPartRow(viewport.element, "stanza-editor-line-cursors", 1)
 			.querySelector<HTMLElement>(".stanza-editor-caret")
 			?.style.left,
-		"78px",
+		"77px",
 	);
 	assert.equal(
 		lineNumber(requiredLine(viewport.element, 1))
@@ -924,7 +924,7 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 		requiredPartRow(viewport.element, "stanza-editor-line-cursors", 2)
 			.querySelector<HTMLElement>(".stanza-editor-caret")
 			?.style.left,
-		"78px",
+		"77px",
 	);
 	assert.equal(
 		lineNumber(requiredLine(viewport.element, 2)).textContent,
@@ -1084,6 +1084,53 @@ test('EditorViewport preserves line, gutter, focus, and multi-cursor highlight s
 	], 1));
 	assert.equal(requiredPartRow(viewport.element, 'stanza-editor-current-line-highlight', 0).classList.contains('highlight-line'), true);
 	assert.equal(requiredPartRow(viewport.element, 'stanza-editor-current-line-highlight', 2).classList.contains('highlight-line'), true);
+	dom.window.close();
+});
+
+test('EditorViewport matches line and thin-underline cursor geometry', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('abc');
+	using controller = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
+	using viewport = new EditorViewport({
+		container,
+		model,
+		lineHeight: 20,
+		textMeasurer: fixedTextMeasurer(10, 24),
+		selectionController: controller,
+		cursorStyle: 'line',
+		overtypeCursorStyle: 'underline-thin',
+		cursorBlinking: 'solid',
+		cursorWidth: 6,
+		cursorHeight: 12,
+	});
+	viewport.layout({ width: 200, height: 40 });
+	const caret = requiredElement<HTMLElement>(viewport.element, '.stanza-editor-caret');
+	const line = {
+		left: caret.style.left,
+		paddingLeft: caret.style.paddingLeft,
+		width: caret.style.width,
+		height: caret.style.height,
+		top: caret.style.top,
+		text: caret.textContent,
+	};
+
+	viewport.setOvertype(true);
+
+	assert.deepEqual({
+		line,
+		underlineThin: {
+			left: caret.style.left,
+			paddingLeft: caret.style.paddingLeft,
+			width: caret.style.width,
+			height: caret.style.height,
+			top: caret.style.top,
+			text: caret.textContent,
+		},
+	}, {
+		line: { left: '67px', paddingLeft: '1px', width: '6px', height: '12px', top: '4px', text: 'b' },
+		underlineThin: { left: '68px', paddingLeft: '0px', width: '10px', height: '1px', top: '19px', text: '' },
+	});
 	dom.window.close();
 });
 
@@ -1252,20 +1299,26 @@ test("Font metric refresh rebuilds authoritative horizontal width", () => {
 	const container = requiredElement(dom.window.document, "main");
 	const measurer = fixedTextMeasurer(10, 20);
 	using model = new TextModel("xxxx");
+	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using viewport = new EditorViewport({
 		container,
 		model,
 		lineHeight: 20,
 		textMeasurer: measurer,
+		selectionController: selections,
+		cursorBlinking: 'solid',
+		cursorWidth: 12,
 	});
 	viewport.layout({ width: 50, height: 20 });
 	assert.equal(viewport.viewportLayout.contentSize.width, 106);
+	assert.equal(requiredElement<HTMLElement>(viewport.element, '.stanza-editor-caret').style.width, '10px');
 
 	measurer.setCharacterWidth(20);
 	viewport.refreshFontMetrics();
 
 	assert.equal(viewport.viewportLayout.contentSize.width, 156);
 	assert.equal(viewport.viewportLayout.maximumScrollPosition.left, 106);
+	assert.equal(requiredElement<HTMLElement>(viewport.element, '.stanza-editor-caret').style.width, '12px');
 
 	dom.window.close();
 });
@@ -1408,6 +1461,34 @@ test('EditorViewport changes public view zones with content and margin ownership
 	viewport.changeViewZones(accessor => accessor.removeZone(id));
 	assert.equal(domNode.isConnected, false);
 	assert.equal(marginDomNode.isConnected, false);
+	dom.window.close();
+});
+
+test('EditorViewport resolves line-based and default view-zone heights after line-height changes', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('alpha\nbeta');
+	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer() });
+	viewport.layout({ width: 300, height: 100 });
+	const lineHeightNode = h(dom.window.document, 'div');
+	const defaultHeightNode = h(dom.window.document, 'div');
+	const fixedHeightNode = h(dom.window.document, 'div');
+	viewport.changeViewZones(accessor => {
+		accessor.addZone({ afterLineIndex: 0, heightInLines: 1.5, domNode: lineHeightNode });
+		accessor.addZone({ afterLineIndex: 0, domNode: defaultHeightNode });
+		accessor.addZone({ afterLineIndex: 0, heightInPixels: 18, heightInLines: 2, domNode: fixedHeightNode });
+	});
+	const before = { lineHeight: lineHeightNode.style.height, defaultHeight: defaultHeightNode.style.height, fixedHeight: fixedHeightNode.style.height };
+
+	viewport.setLineHeight(24);
+
+	assert.deepEqual({
+		before,
+		after: { lineHeight: lineHeightNode.style.height, defaultHeight: defaultHeightNode.style.height, fixedHeight: fixedHeightNode.style.height },
+	}, {
+		before: { lineHeight: '30px', defaultHeight: '20px', fixedHeight: '18px' },
+		after: { lineHeight: '36px', defaultHeight: '24px', fixedHeight: '18px' },
+	});
 	dom.window.close();
 });
 

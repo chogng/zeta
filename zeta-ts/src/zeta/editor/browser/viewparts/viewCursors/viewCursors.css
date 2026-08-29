@@ -28,10 +28,11 @@
   box-sizing: border-box;
   background: var(--zeta-editor-foreground);
 	opacity: calc(var(--stanza-editor-caret-opacity) * var(--stanza-editor-caret-base-opacity, 1));
-	transform: scaleX(var(--stanza-editor-caret-scale));
+	transform: scaleY(var(--stanza-editor-caret-scale));
 	transform-origin: center;
 }
 
+.stanza-editor-caret.cursor-style-line,
 .stanza-editor-caret.cursor-style-block {
 	color: var(--zeta-editor-background);
 	white-space: pre;

@@ -126,6 +126,10 @@ export class ViewOverlays extends Disposable {
 		this.viewCursors.setStyle(style);
 	}
 
+	setCursorLineWidth(lineWidth: number): void {
+		this.viewCursors.setLineWidth(lineWidth);
+	}
+
 	private register<TPart extends DynamicViewOverlay>(part: TPart): TPart {
 		this.parts.push(part);
 		this._register(part);

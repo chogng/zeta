@@ -103,7 +103,9 @@ export interface IOverlayWidget {
 
 export interface IViewZone {
 	afterLineIndex: number;
-	heightInPixels: number;
+	/** Preferred fixed height. Takes precedence over heightInLines. */
+	heightInPixels?: number;
+	/** Height in current editor lines. Defaults to one line when neither height is set. */
 	heightInLines?: number;
 	ordinal?: number;
 	minWidthInPixels?: number;

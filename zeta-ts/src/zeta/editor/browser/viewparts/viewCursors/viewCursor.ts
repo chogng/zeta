@@ -11,9 +11,11 @@ export interface ViewCursorOptions {
 export class ViewCursor {
 	public readonly domNode: HTMLDivElement;
 	private style: TextEditorCursorStyle;
+	private lineWidth: number;
 
 	constructor(host: HTMLElement, selectionIndex: number, private readonly options: ViewCursorOptions) {
 		this.style = options.style;
+		this.lineWidth = options.lineWidth;
 		this.domNode = h(host.ownerDocument, 'div');
 		this.domNode.className = 'stanza-editor-caret';
 		this.domNode.dataset.selectionIndex = String(selectionIndex);
@@ -27,11 +29,23 @@ export class ViewCursor {
 		this.style = style;
 	}
 
+	public setLineWidth(lineWidth: number): void {
+		this.lineWidth = lineWidth;
+	}
+
 	public render(row: HTMLElement, caretLeft: number, characterLeft: number, characterWidth: number, character: string, rowHeight: number, isPrimary: boolean): void {
 		this.domNode.classList.toggle('primary', isPrimary);
-		this.domNode.textContent = this.style === TextEditorCursorStyle.Block ? character : '';
-		this.domNode.style.left = `${cursorLeft(this.style, caretLeft, characterLeft)}px`;
-		this.domNode.style.width = `${cursorWidth(this.style, this.options.lineWidth, characterWidth)}px`;
+		const width = cursorWidth(this.style, this.lineWidth, characterWidth);
+		let left = cursorLeft(this.style, caretLeft, characterLeft);
+		let paddingLeft = 0;
+		if (this.style === TextEditorCursorStyle.Line && width >= 2 && left >= 1) {
+			paddingLeft = 1;
+			left -= paddingLeft;
+		}
+		this.domNode.textContent = this.style === TextEditorCursorStyle.Block || (this.style === TextEditorCursorStyle.Line && width > 2) ? character : '';
+		this.domNode.style.left = `${left}px`;
+		this.domNode.style.paddingLeft = `${paddingLeft}px`;
+		this.domNode.style.width = `${width}px`;
 		const height = cursorHeight(this.style, this.options.lineHeight, rowHeight);
 		this.domNode.style.height = `${height}px`;
 		this.domNode.style.lineHeight = `${height}px`;
@@ -63,7 +77,7 @@ function cursorWidth(style: TextEditorCursorStyle, lineWidth: number, characterW
 
 function cursorHeight(style: TextEditorCursorStyle, lineHeight: number, rowHeight: number): number {
 	if (style === TextEditorCursorStyle.Underline) return 2;
-	if (style === TextEditorCursorStyle.UnderlineThin) return 2;
+	if (style === TextEditorCursorStyle.UnderlineThin) return 1;
 	if (style === TextEditorCursorStyle.Line || style === TextEditorCursorStyle.LineThin) {
 		return lineHeight > 0 ? Math.min(lineHeight, rowHeight) : rowHeight;
 	}

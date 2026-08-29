@@ -56,6 +56,13 @@ export class ViewCursors extends DynamicViewOverlay {
 		this.renderNow(this.context.renderingContext);
 	}
 
+	public setLineWidth(lineWidth: number): void {
+		if (lineWidth === this.cursorOptions.lineWidth) return;
+		this.cursorOptions = Object.freeze({ ...this.cursorOptions, lineWidth });
+		for (const cursor of this.cursors.values()) cursor.setLineWidth(lineWidth);
+		this.renderNow(this.context.renderingContext);
+	}
+
 	public render(context: EditorRenderingContext): void {
 		const overlay = context.overlay;
 		if (!overlay) {

@@ -433,6 +433,7 @@ export class View extends Disposable {
 	private readonly renderLineHighlightOnlyWhenFocus: boolean;
 	private readonly cursorStyle: TextEditorCursorStyle;
 	private readonly overtypeCursorStyle: TextEditorCursorStyle;
+	private readonly configuredCursorWidth: number;
 	private readonly lineNumbers: InternalEditorRenderLineNumbersOptions;
 	private readonly showGlyphMargin: boolean;
 	private readonly guides: InternalGuidesOptions;
@@ -473,7 +474,7 @@ export class View extends Disposable {
 		this.cursorStyle = EditorOptions.cursorStyle.validate(options.cursorStyle);
 		this.overtypeCursorStyle = EditorOptions.overtypeCursorStyle.validate(options.overtypeCursorStyle);
 		const cursorBlinking = EditorOptions.cursorBlinking.validate(options.cursorBlinking);
-		const configuredCursorWidth = EditorOptions.cursorWidth.validate(options.cursorWidth);
+		this.configuredCursorWidth = EditorOptions.cursorWidth.validate(options.cursorWidth);
 		const cursorHeight = EditorOptions.cursorHeight.validate(options.cursorHeight);
 		this.lineNumbers = EditorOptions.lineNumbers.validate(options.lineNumbers ?? (this.presentation === 'embedded' ? 'off' : 'on'));
 		this.showGlyphMargin = this.presentation !== 'embedded' && (options.glyphMargin ?? true);
@@ -556,7 +557,7 @@ export class View extends Disposable {
 			options.textMeasurer ??
 			new DomTextMeasurer(this.textMetricsElement);
 		const cursorWidth = Math.min(
-			configuredCursorWidth,
+			this.configuredCursorWidth,
 			Math.max(1, this.textMeasurer.measureLineWidth(' ')),
 		);
 		this.lineWidths = this._register(new LineWidthIndex(
@@ -904,6 +905,10 @@ export class View extends Disposable {
 	refreshFontMetrics(): EditorViewportLayout {
 		if (!this.textMeasurer.refresh()) return this.viewport.layout;
 		this.viewLinesGpu?.invalidateFont();
+		this.viewOverlays.setCursorLineWidth(Math.min(
+			this.configuredCursorWidth,
+			Math.max(1, this.textMeasurer.measureLineWidth(' ')),
+		));
 		this.lineWidths.refresh();
 		if (this.softWrapping) this.updateWrapWidth(this.viewport.layout.viewportSize.width);
 		const layout = this.viewport.setContentWidth(this.measuredContentWidth);
@@ -914,6 +919,7 @@ export class View extends Disposable {
 	setLineHeight(lineHeight: number): EditorViewportLayout {
 		this.margin.setLineHeight(lineHeight);
 		const lineHeightLayout = this.viewport.setLineHeight(lineHeight);
+		this.viewZones.setLineHeight(lineHeight);
 		if (this.softWrapping) this.updateWrapWidth(lineHeightLayout.viewportSize.width);
 		const layout = this.viewport.setContentWidth(this.measuredContentWidth);
 		this.project(layout);
