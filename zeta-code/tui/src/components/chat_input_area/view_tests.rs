@@ -27,11 +27,13 @@ fn independently_sized_entries_stack_in_insertion_order() {
     let entries = [
         (ChatInputAreaHeightEntryKind::PlanProgress, 3),
         (ChatInputAreaHeightEntryKind::Queue, 4),
+        (ChatInputAreaHeightEntryKind::Steer, 3),
     ];
 
-    let areas = areas(Rect::new(0, 0, 80, 10), 3, &entries);
+    let areas = areas(Rect::new(0, 0, 80, 13), 3, &entries);
 
-    assert_eq!(areas.height_entries[0].area, Rect::new(0, 4, 80, 3));
-    assert_eq!(areas.height_entries[1].area, Rect::new(0, 0, 80, 4));
-    assert_eq!(areas.input, Rect::new(0, 7, 80, 3));
+    assert_eq!(areas.height_entries[0].area, Rect::new(0, 7, 80, 3));
+    assert_eq!(areas.height_entries[1].area, Rect::new(0, 3, 80, 4));
+    assert_eq!(areas.height_entries[2].area, Rect::new(0, 0, 80, 3));
+    assert_eq!(areas.input, Rect::new(0, 10, 80, 3));
 }

@@ -20,6 +20,7 @@ pub(crate) use request::read_older_thread_history;
 pub(crate) use request::read_thread;
 pub(crate) use request::read_thread_history;
 pub(crate) use request::resolve_interaction;
+pub(crate) use request::steer_prompt;
 pub(crate) use request::submit_prompt;
 pub(crate) use state::ThreadFeatureState;
 pub(crate) use subscription::ThreadSubscription;

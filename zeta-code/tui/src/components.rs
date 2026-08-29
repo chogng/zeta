@@ -12,6 +12,7 @@ pub(crate) mod plan_progress;
 pub(crate) mod query;
 pub(crate) mod queue;
 pub(crate) mod search_box;
+pub(crate) mod steer;
 pub(crate) mod tab_list;
 pub(crate) mod text_prompt;
 pub(crate) mod welcome;

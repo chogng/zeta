@@ -20,6 +20,7 @@ use crate::components::pane;
 use crate::components::plan_progress;
 use crate::components::query;
 use crate::components::queue;
+use crate::components::steer;
 use crate::components::text_prompt;
 use crate::ui::background;
 use crate::ui::bottom_anchored_area;
@@ -83,6 +84,9 @@ pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {
             }
             ChatInputAreaHeightEntryView::Queue(view) => {
                 queue::draw(frame, allocation.area, view);
+            }
+            ChatInputAreaHeightEntryView::Steer(view) => {
+                steer::draw(frame, allocation.area, &view);
             }
         }
     }
@@ -170,6 +174,7 @@ pub(crate) fn layout(app: &App, terminal_area: Rect) -> FrameLayout {
                     plan_progress::desired_height(view)
                 }
                 ChatInputAreaHeightEntryView::Queue(view) => queue::desired_height(view),
+                ChatInputAreaHeightEntryView::Steer(view) => steer::desired_height(&view),
             };
             (kind, height)
         })

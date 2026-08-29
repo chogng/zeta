@@ -81,6 +81,12 @@ pub(crate) enum Status {
     Error,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum TurnInputMode {
+    StartTurn,
+    SteerTurn,
+}
+
 #[derive(Debug)]
 pub(crate) struct App {
     chat_input_area: ChatInputArea,
@@ -92,6 +98,7 @@ pub(crate) struct App {
     interaction_bindings: BTreeMap<ChatInputAreaInteractionId, InteractionBinding>,
     root_escape_sequence: RootEscapeSequence,
     status: Status,
+    turn_input_mode: TurnInputMode,
     status_line: StatusLineModel,
     terminal_settings: TerminalSettings,
     approval_mode_status: ApprovalModeStatus,
@@ -128,6 +135,7 @@ impl App {
             interaction_bindings: BTreeMap::new(),
             root_escape_sequence: RootEscapeSequence::default(),
             status: Status::Ready,
+            turn_input_mode: TurnInputMode::StartTurn,
             status_line: StatusLineModel::new(),
             terminal_settings: TerminalSettings::default(),
             approval_mode_status: ApprovalModeStatus::default(),
@@ -156,6 +164,7 @@ impl App {
             interaction_bindings: BTreeMap::new(),
             root_escape_sequence: RootEscapeSequence::default(),
             status: Status::Ready,
+            turn_input_mode: TurnInputMode::StartTurn,
             status_line: StatusLineModel::new(),
             terminal_settings: TerminalSettings::default(),
             approval_mode_status: ApprovalModeStatus::default(),
@@ -216,7 +225,11 @@ impl App {
             return self.handle_app_key(key, now);
         }
 
-        let outcome = self.chat_input_area.handle_key(key);
+        let outcome = if self.turn_input_mode == TurnInputMode::SteerTurn {
+            self.chat_input_area.handle_active_turn_key(key)
+        } else {
+            self.chat_input_area.handle_key(key)
+        };
         if matches!(outcome, ChatInputAreaOutcome::Unhandled) {
             return self.handle_app_key(key, now);
         }
@@ -252,11 +265,32 @@ impl App {
                     .query_response(interaction_id, answers);
                 self.interaction_response_command(interaction_id, response)
             }
+            ChatInputAreaOutcome::Queue(submission) => {
+                self.thread.update(ThreadPresentationEvent::UserSubmitted(
+                    submission.display_text.clone(),
+                ));
+                Some(AppCommand::SubmitTurn { submission })
+            }
+            ChatInputAreaOutcome::SubmissionRejected(error) => {
+                self.thread
+                    .update(ThreadPresentationEvent::FailureReported(error));
+                None
+            }
             ChatInputAreaOutcome::Submit(submission) => {
                 self.thread.update(ThreadPresentationEvent::UserSubmitted(
                     submission.display_text.clone(),
                 ));
+                if self.turn_input_mode == TurnInputMode::SteerTurn {
+                    let steer_id = self
+                        .chat_input_area
+                        .begin_steer(submission.display_text.clone());
+                    return Some(AppCommand::SteerTurn {
+                        steer_id,
+                        submission,
+                    });
+                }
                 self.status = Status::Working;
+                self.turn_input_mode = TurnInputMode::SteerTurn;
                 Some(AppCommand::SubmitTurn { submission })
             }
             ChatInputAreaOutcome::TextPromptSubmitted { pane_id, value } => {
@@ -584,6 +618,7 @@ impl App {
                 self.thread
                     .update(ThreadPresentationEvent::FailureReported(error));
                 self.status = Status::Error;
+                self.turn_input_mode = TurnInputMode::StartTurn;
             }
         }
     }
@@ -748,6 +783,10 @@ impl App {
         &self.status
     }
 
+    pub(crate) fn steers_active_turn(&self) -> bool {
+        self.turn_input_mode == TurnInputMode::SteerTurn
+    }
+
     pub(crate) fn approval_mode_status(&self) -> ApprovalModeStatus {
         self.approval_mode_status
     }
@@ -789,6 +828,7 @@ impl App {
                         root.display()
                     )));
                 self.status = Status::Ready;
+                self.turn_input_mode = TurnInputMode::StartTurn;
             }
             AppEvent::ClipboardImageRead(Ok(bytes)) => self.attach_image_bytes(bytes),
             AppEvent::ClipboardImageRead(Err(error)) => self.record_clipboard_error(error),
@@ -806,6 +846,7 @@ impl App {
                         "Saved API key for {provider}"
                     )));
                 self.status = Status::Ready;
+                self.turn_input_mode = TurnInputMode::StartTurn;
             }
             AppEvent::PreferredModelReceived(model) => {
                 self.status_line.apply_preferred_model(model.as_ref())
@@ -818,11 +859,13 @@ impl App {
                 self.thread
                     .update(ThreadPresentationEvent::CommandCompleted { command, result });
                 self.status = Status::Ready;
+                self.turn_input_mode = TurnInputMode::StartTurn;
             }
             AppEvent::FailureReported(error) => {
                 self.thread
                     .update(ThreadPresentationEvent::FailureReported(error));
                 self.status = Status::Error;
+                self.turn_input_mode = TurnInputMode::StartTurn;
             }
             AppEvent::FileSearchSnapshotReceived(snapshot) => {
                 self.chat_input_area.apply_file_search_snapshot(snapshot);
@@ -842,11 +885,13 @@ impl App {
                         "could not interrupt turn: {error}"
                     )));
                 self.status = Status::Working;
+                self.turn_input_mode = TurnInputMode::SteerTurn;
             }
             AppEvent::ProductNotice(notice) => {
                 self.thread
                     .update(ThreadPresentationEvent::NoticeReceived(notice));
                 self.status = Status::Ready;
+                self.turn_input_mode = TurnInputMode::StartTurn;
             }
             AppEvent::InteractionRequestOpened(request) => self.show_interaction_request(request),
             AppEvent::InteractionResolved(interaction_id) => {
@@ -880,6 +925,16 @@ impl App {
             AppEvent::ListSelectionPaneOpened(model) => self.show_list_selection_pane(model),
             AppEvent::SkillsPaneOpened(view) => self.show_skills_pane(view),
             AppEvent::SkillsPaneReplaced(view) => self.replace_skills_pane(view),
+            AppEvent::SteerCompleted(steer_id) => {
+                self.chat_input_area.finish_steer(steer_id);
+            }
+            AppEvent::SteerSubmissionFailed { steer_id, error } => {
+                self.chat_input_area.finish_steer(steer_id);
+                self.thread
+                    .update(ThreadPresentationEvent::FailureReported(format!(
+                        "could not steer the active Turn: {error}"
+                    )));
+            }
             AppEvent::ThemePanesClosed => self.close_theme_panes(),
             AppEvent::ThemePaneOpened(view) => self.show_theme_pane(view),
             AppEvent::ThreadTranscriptSnapshotReceived(transcript) => {
@@ -900,15 +955,26 @@ impl App {
             AppEvent::TranscriptCleared => {
                 self.thread.update(ThreadPresentationEvent::Cleared);
                 self.transcript_scroll.follow_latest();
+                self.chat_input_area.clear_steers();
                 self.status = Status::Ready;
+                self.turn_input_mode = TurnInputMode::StartTurn;
             }
             AppEvent::TurnActivityChanged(activity) => {
                 self.status = match activity {
+                    TurnActivity::Starting => Status::Working,
                     TurnActivity::Working => Status::Working,
                     TurnActivity::WaitingForApproval => Status::WaitingForApproval,
                     TurnActivity::WaitingForUserInput => Status::WaitingForUserInput,
                     TurnActivity::WaitingForCapability => Status::WaitingForCapability,
                     TurnActivity::Cancelling => Status::Cancelling,
+                };
+                self.turn_input_mode = match activity {
+                    TurnActivity::Working => TurnInputMode::SteerTurn,
+                    TurnActivity::Starting
+                    | TurnActivity::WaitingForApproval
+                    | TurnActivity::WaitingForUserInput
+                    | TurnActivity::WaitingForCapability
+                    | TurnActivity::Cancelling => TurnInputMode::StartTurn,
                 };
             }
             AppEvent::TurnInputStatusChanged { plan, queued_turns } => {
@@ -932,11 +998,15 @@ impl App {
             }
             AppEvent::TurnCompleted => {
                 self.status = Status::Ready;
+                self.turn_input_mode = TurnInputMode::StartTurn;
+                self.chat_input_area.clear_steers();
                 self.chat_input_area.replace_turn_status(None, Vec::new());
             }
             AppEvent::TurnInterrupted => {
                 self.thread.update(ThreadPresentationEvent::Interrupted);
                 self.status = Status::Ready;
+                self.turn_input_mode = TurnInputMode::StartTurn;
+                self.chat_input_area.clear_steers();
                 self.chat_input_area.replace_turn_status(None, Vec::new());
             }
         }
@@ -1065,7 +1135,17 @@ impl App {
                 self.thread.update(ThreadPresentationEvent::UserSubmitted(
                     submission.display_text.clone(),
                 ));
+                if self.turn_input_mode == TurnInputMode::SteerTurn {
+                    let steer_id = self
+                        .chat_input_area
+                        .begin_steer(submission.display_text.clone());
+                    return Some(AppCommand::SteerTurn {
+                        steer_id,
+                        submission,
+                    });
+                }
                 self.status = Status::Working;
+                self.turn_input_mode = TurnInputMode::SteerTurn;
                 Some(AppCommand::SubmitTurn { submission })
             }
             (SlashCommandOrigin::Local, Some(_)) => {

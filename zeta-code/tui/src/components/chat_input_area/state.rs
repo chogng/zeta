@@ -30,6 +30,9 @@ use crate::components::query::QueryQuestion;
 use crate::components::query::QueryView;
 use crate::components::queue::Queue;
 use crate::components::queue::QueueView;
+use crate::components::steer::Steer;
+use crate::components::steer::SteerId;
+use crate::components::steer::SteerView;
 use crate::components::text_prompt::TextPrompt;
 use crate::components::text_prompt::TextPromptOutcome;
 use crate::components::text_prompt::TextPromptSpec;
@@ -59,6 +62,7 @@ pub(crate) enum ChatInputAreaHeightEntryKind {
     Pane,
     PlanProgress,
     Queue,
+    Steer,
 }
 
 #[derive(Debug)]
@@ -66,6 +70,7 @@ pub(crate) enum ChatInputAreaHeightEntryView<'a> {
     Pane(PaneEntryView<'a>),
     PlanProgress(PlanProgressView<'a>),
     Queue(QueueView<'a>),
+    Steer(SteerView<'a>),
 }
 
 #[derive(Debug)]
@@ -82,6 +87,7 @@ impl ChatInputAreaHeightEntryView<'_> {
             Self::Pane(_) => ChatInputAreaHeightEntryKind::Pane,
             Self::PlanProgress(_) => ChatInputAreaHeightEntryKind::PlanProgress,
             Self::Queue(_) => ChatInputAreaHeightEntryKind::Queue,
+            Self::Steer(_) => ChatInputAreaHeightEntryKind::Steer,
         }
     }
 }
@@ -106,6 +112,8 @@ pub(crate) enum ChatInputAreaOutcome {
         interaction_id: ChatInputAreaInteractionId,
         answers: Vec<QueryAnswer>,
     },
+    Queue(ChatSubmission),
+    SubmissionRejected(String),
     Submit(ChatSubmission),
     Unhandled,
     PaneDismissed(PaneId),
@@ -123,6 +131,7 @@ pub(crate) struct ChatInputArea {
     height_order: Vec<ChatInputAreaHeightEntryKind>,
     plan_progress: Option<PlanProgress>,
     queue: Queue,
+    steer: Steer,
     interaction: Option<AgentInteraction>,
     next_interaction_id: u64,
 }
@@ -169,6 +178,7 @@ impl ChatInputArea {
             height_order: Vec::new(),
             plan_progress: None,
             queue: Queue::default(),
+            steer: Steer::default(),
             interaction: None,
             next_interaction_id: 1,
         }
@@ -182,12 +192,25 @@ impl ChatInputArea {
             height_order: Vec::new(),
             plan_progress: None,
             queue: Queue::default(),
+            steer: Steer::default(),
             interaction: None,
             next_interaction_id: 1,
         }
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> ChatInputAreaOutcome {
+        self.handle_key_with_submission_target(key, SubmissionTarget::StartTurn)
+    }
+
+    pub(crate) fn handle_active_turn_key(&mut self, key: KeyEvent) -> ChatInputAreaOutcome {
+        self.handle_key_with_submission_target(key, SubmissionTarget::SteerTurn)
+    }
+
+    fn handle_key_with_submission_target(
+        &mut self,
+        key: KeyEvent,
+        submission_target: SubmissionTarget,
+    ) -> ChatInputAreaOutcome {
         if self.chat_input.query_answer_active() {
             return match self.chat_input.handle_key(key) {
                 ChatInputOutcome::QueryAnswerCancelled => ChatInputAreaOutcome::Consumed,
@@ -262,6 +285,24 @@ impl ChatInputArea {
                     ChatInputAreaOutcome::PaneDismissed(pane_id)
                 }
             };
+        }
+        if submission_target == SubmissionTarget::SteerTurn
+            && key.code == KeyCode::Tab
+            && key.modifiers.is_empty()
+            && self.suggest().is_none()
+        {
+            return map_queued_chat_input_outcome(self.chat_input.submit_current());
+        }
+        if submission_target == SubmissionTarget::SteerTurn
+            && key.code == KeyCode::Enter
+            && key.modifiers.is_empty()
+            && self.suggest().is_none()
+            && self.chat_input.submission_contains_skill()
+        {
+            return ChatInputAreaOutcome::SubmissionRejected(
+                "A running Turn cannot change its Skill; press Tab to queue this message for the next Turn"
+                    .into(),
+            );
         }
         map_chat_input_outcome(self.chat_input.handle_key(key))
     }
@@ -666,6 +707,25 @@ impl ChatInputArea {
         }
     }
 
+    pub(crate) fn begin_steer(&mut self, text: String) -> SteerId {
+        let id = self.steer.push(text);
+        self.ensure_height_entry(ChatInputAreaHeightEntryKind::Steer);
+        id
+    }
+
+    pub(crate) fn finish_steer(&mut self, id: SteerId) -> bool {
+        let removed = self.steer.remove(id);
+        if self.steer.is_empty() {
+            self.remove_height_entry(ChatInputAreaHeightEntryKind::Steer);
+        }
+        removed
+    }
+
+    pub(crate) fn clear_steers(&mut self) {
+        self.steer.clear();
+        self.remove_height_entry(ChatInputAreaHeightEntryKind::Steer);
+    }
+
     pub(crate) fn height_entries(&self) -> Vec<ChatInputAreaHeightEntryView<'_>> {
         self.height_order
             .iter()
@@ -681,6 +741,8 @@ impl ChatInputArea {
                     .map(|progress| ChatInputAreaHeightEntryView::PlanProgress(progress.view())),
                 ChatInputAreaHeightEntryKind::Queue => (!self.queue.is_empty())
                     .then(|| ChatInputAreaHeightEntryView::Queue(self.queue.view())),
+                ChatInputAreaHeightEntryKind::Steer => (!self.steer.is_empty())
+                    .then(|| ChatInputAreaHeightEntryView::Steer(self.steer.view())),
             })
             .collect()
     }
@@ -752,6 +814,12 @@ enum PaneInputOutcome {
     Unhandled,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SubmissionTarget {
+    StartTurn,
+    SteerTurn,
+}
+
 impl AgentInteraction {
     fn id(&self) -> ChatInputAreaInteractionId {
         match self {
@@ -788,6 +856,13 @@ fn map_chat_input_outcome(outcome: ChatInputOutcome) -> ChatInputAreaOutcome {
         }
         ChatInputOutcome::Submit(prompt) => ChatInputAreaOutcome::Submit(prompt),
         ChatInputOutcome::Unhandled => ChatInputAreaOutcome::Unhandled,
+    }
+}
+
+fn map_queued_chat_input_outcome(outcome: ChatInputOutcome) -> ChatInputAreaOutcome {
+    match outcome {
+        ChatInputOutcome::Submit(prompt) => ChatInputAreaOutcome::Queue(prompt),
+        outcome => map_chat_input_outcome(outcome),
     }
 }
 

@@ -428,7 +428,7 @@ value；但不能调用领域接口或保存 canonical aggregate。
 
 | Component | 拥有 | 不拥有 |
 | --- | --- | --- |
-| `chat_input_area/` | 常驻 `ChatInput`、Pane 栈、Queue/Plan 占高条目、覆盖交互和输入 routing | feature catalog、RPC、Thread lifecycle |
+| `chat_input_area/` | 常驻 `ChatInput`、Pane 栈、Queue/Steer/Plan 占高条目、覆盖交互和输入 routing | feature catalog、RPC、Thread lifecycle |
 | `chat_input/` | draft、Unicode cursor、attachments、paste bindings 和 `/`/`@`/`$` Suggest | Turn start、config mutation、App Server client |
 | `chat_history/` | plain-text visible row、wrapping 与 scroll | canonical Thread snapshot、sequence、transient cursor |
 | `pane/` | `PaneSpec`、`PaneId`、存活 `Pane` 和当前帧只读 `PaneView` | 具体产品动作、RPC |
@@ -874,11 +874,11 @@ lib.rs + lib_tests.rs
 - 根级 `keymap.rs` 已通过产品无关 `zeta-keybinding` 注册 Shift-Tab、根级 Esc 与 Ctrl-C/D/O/V/Z，并从同一静态声明生成 Resolver 规则和 `/shortcuts` 可配置项；Crossterm event 单向转换为标准 `KeyStroke`，修饰键精确匹配。运行时结构 `AppKeymap` 已拥有一至四段 Chord 的 pending、1 秒超时、上下文变化/Esc 取消、错误后续键透传和 footer 提示；当前内建表仍只声明单段组合。普通单键保持 component-first，只有 Chord prefix 在 component 前路由；`ChatInput` 编辑、`ListSelection` 导航与 `ChatHistory` 滚动继续由局部 component 拥有；
 - `features/keymap` 已读取 CLI 显式提供的 active profile 下 `zeta-code/keybindings.json`，在 event-loop Tick 中有界热重载 User command/blocker、平台覆盖与 `when`；`/shortcuts` 打开 Keymap 设置界面，汇总固定操作键和可配置应用级绑定，并提供可搜索的 All/Customized/Diagnostics 列表、action 菜单、单键/两段 Chord 录制和资源路径。保存要求打开界面时的 revision 仍有效，完整编译和 TUI Chord 安全校验成功后才原子替换文件与 `AppKeymap`；坏更新或保存失败保留上一份有效映射。资源不进入 App Server，也不从 Remote Workspace 读取客户端按键配置；
 - `App` 处理 presentation coordination 与 Keymap action，并把输入委托给 `ChatInputArea`。`ChatWidget` 统一分配 `ChatHistory + ChatInputArea + Footer`；
-- `ChatInput`、editor、attachment、paste 和 `/`/`@`/`$` Suggest 已迁入 `components/chat_input/`；Pane 栈、Queue/Plan 占高条目和 Approval/Query 覆盖交互已迁入 `components/chat_input_area/`；
+- `ChatInput`、editor、attachment、paste 和 `/`/`@`/`$` Suggest 位于 `components/chat_input/`；Pane 栈、Queue/Steer/Plan 占高条目和 Approval/Query 覆盖交互位于 `components/chat_input_area/`；
 - update-driven snapshot resync 先应用完整 canonical Thread，再把
   completed/waiting/failed/interrupted 映射为 presentation lifecycle；active Turn 的定时
   snapshot polling 已移除，Turn completion 不再单独追加 agent 文本；
-- `ChatInputArea` 底部常驻 `ChatInput`，栈顶 Pane、Queue 和可折叠 PlanProgress 可以分别占高叠加；`ListSelection` Pane 组合 `tab_list` 支持横向切页、搜索、过滤、循环选择和逐层出栈。`$` Skill、`/` command 和 `@` Mention 在一个 `SuggestView` 中同时最多显示一种；`/help` 只提供命令列表，`/shortcuts` 提供统一快捷键目录，`/skills` 从 typed `skills/list` 提供
+- `ChatInputArea` 底部常驻 `ChatInput`，栈顶 Pane、Queue、Steer 和可折叠 PlanProgress 可以分别占高叠加。Turn 为 Running 时 Enter 通过 typed `SteerTurn` 调整当前 Turn，Tab 通过 `StartTurn` 排队下一轮；Steer 条目从本地提交持续到服务端确认交付，成功消息留在历史区。`ListSelection` Pane 组合 `tab_list` 支持横向切页、搜索、过滤、循环选择和逐层出栈。`$` Skill、`/` command 和 `@` Mention 在一个 `SuggestView` 中同时最多显示一种；`/help` 只提供命令列表，`/shortcuts` 提供统一快捷键目录，`/skills` 从 typed `skills/list` 提供
   All/Enabled/Disabled/Errors catalog tabs；
 - `$name` 候选和 `/skills` 都只消费 App Server catalog snapshot，不读取 `zeta-skills` filesystem；候选选中后保留原子 `$name` 文本并绑定 exact pinned `SkillRef`；
   `Space` 将 exact `SkillId` 转成 revision-checked `skill/enablement/set`，成功后刷新页面；

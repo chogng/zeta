@@ -1,12 +1,12 @@
 # Zeta Code 聊天输入区架构
 
-> 类型：架构。状态：核心结构已实施，`Steer` 等待 TUI 产生明确的 steer 进行中状态后接入。
+> 类型：架构。状态：当前实现。
 > 本文定义 `ChatWidget`、`ChatInputArea`、`Suggest`、`Pane` 与 `View` 在 Zeta Code TUI 聊天界面中的长期职责和演进边界。
 > 本文是输入区的职责和结构准绳；整体 TUI 现状见 [`tui.md`](tui.md) 和 [`zeta-code/tui/README.md`](../zeta-code/tui/README.md)。
 
 ## 快速理解
 
-Zeta Code 的整个聊天界面由 `ChatWidget` 按上中下分成 `ChatHistory` 内容/历史区、`ChatInputArea` 输入区和 Footer。`ChatInputArea` 不是又一个可见弹层，也不是 `Pane` 的另一个名字；它只是统一保存输入区状态、分配高度和路由输入的组合组件。`ChatInput` 才是底部常驻的输入框，`Pane`、`Queue` 和 `PlanProgress` 在它上方占高，`Suggest`、`Approval` 和 `Query` 从它上沿向上覆盖。`Transcript` 是 `ChatHistory` 展示的持久内容，不是区域本身。
+Zeta Code 的整个聊天界面由 `ChatWidget` 按上中下分成 `ChatHistory` 内容/历史区、`ChatInputArea` 输入区和 Footer。`ChatInputArea` 不是又一个可见弹层，也不是 `Pane` 的另一个名字；它只是统一保存输入区状态、分配高度和路由输入的组合组件。`ChatInput` 才是底部常驻的输入框，`Pane`、`Queue`、`Steer` 和 `PlanProgress` 在它上方占高，`Suggest`、`Approval` 和 `Query` 从它上沿向上覆盖。`Transcript` 是 `ChatHistory` 展示的持久内容，不是区域本身。
 
 四个名字只对应四个层次：
 
@@ -27,7 +27,7 @@ Zeta Code 的整个聊天界面由 `ChatWidget` 按上中下分成 `ChatHistory`
 | Agent 请求动作批准 | `Approval` | 覆盖插槽，不占据高度 | 当前选择，完成后恢复原焦点所有者 | 否 |
 | Agent 请求回答一个或多个问题 | `Query` | 覆盖插槽，不占据高度 | 当前选择；自定义答案临时借用 `ChatInput` | 否 |
 | Turn 中有排队内容 | `Queue` | 独立占高类型，与其他类型叠加 | 不主动抢占焦点 | 否 |
-| Turn 正在接收 steer | `Steer`（待接入） | 将作为独立占高类型 | 不主动抢占焦点 | 否 |
+| Turn 正在接收 steer | `Steer` | 请求提交后到服务端确认交付前独立占高 | 不主动抢占焦点 | 否 |
 | Agent 更新 Plan | `PlanProgress` 的 `1/3` 和可折叠步骤 | 独立占高类型，折叠与展开各自计算高度 | 不改变当前焦点 | 否 |
 | 从子页面返回 | 上一层 `Pane`，最后回到常驻输入框 | 栈顶 Pane 重新计算高度 | 返回后的可见内容 | 按层退出 |
 
@@ -37,7 +37,7 @@ flowchart TB
     history[ChatHistory 内容/历史区<br/>绘制 Transcript]
     host[ChatInputArea 输入区]
     footer[Footer]
-    height[占高栈<br/>Pane / Queue / PlanProgress]
+    height[占高栈<br/>Pane / Queue / Steer / PlanProgress]
     overlay[覆盖层<br/>Suggest / Approval / Query]
     input[ChatInput 常驻输入框]
 
@@ -58,7 +58,7 @@ flowchart TB
 | 输入区调度 | `ChatInputArea` | 保存常驻输入框、占高条目和当前覆盖交互，统一分配高度、焦点和输入路由；它本身不是一个 Pane |
 | 聊天输入状态与输入框 | `ChatInput` | 常驻在输入区底部，拥有草稿、附件、输入历史、候选协调和提交组装，并可切换到独立的 Query 回答草稿 |
 | 轻量候选层 | `Suggest` | 统一承载 Slash Command、`@` Mention 和 Skill 候选，只提供绑定当前输入位置的单层选择 |
-| 占高叠加类型 | `ChatInputAreaHeightEntryView` | 栈顶 `Pane`、`Queue` 和 `PlanProgress` 可同时存在，各自计算高度；`Steer` 在有明确状态来源后按同样边界接入 |
+| 占高叠加类型 | `ChatInputAreaHeightEntryView` | 栈顶 `Pane`、`Queue`、`Steer` 和 `PlanProgress` 可同时存在，各自计算高度和结束生命周期 |
 | 覆盖插槽 | `ChatInputAreaOverlayView` | 显示一个 `Suggest`、`Approval` 或 `Query`，在明确覆盖边界内绘制且不改变 `ChatInputArea` 高度 |
 | 页面创建说明 | `PaneSpec<T>` | 取代 `PaneViewModel<T>`，只携带创建页面所需的正文数据和按键提示 |
 | 存活页面 | `Pane<T>` | 进入页面栈并拥有正文状态和生命周期 |
@@ -96,7 +96,7 @@ ChatWidget
 - 始终保留并绘制 `ChatInput`，完整页面只出现在它上方；
 - 在普通草稿、Query 自定义回答、覆盖层和占高条目之间路由键盘、粘贴和鼠标动作；
 - 对完整页面执行入栈、替换和出栈；
-- 在常驻输入框之上按出现顺序压入栈顶 `Pane`、`Queue` 和 `PlanProgress` 占高条目，不把它们合并成一个状态所有者；
+- 在常驻输入框之上按出现顺序压入栈顶 `Pane`、`Queue`、`Steer` 和 `PlanProgress` 占高条目，不把它们合并成一个状态所有者；
 - 在 `Suggest`、`Approval` 和 `Query` 中只选择一个当前覆盖类型，并优先显示等待用户回复的 Agent 交互；
 - 在批准或提问完成后销毁对应覆盖状态，把输入焦点交还给原来的所有者；
 - 把 `ChatInput` 与每个占高类型的期望高度相加，再用覆盖类型从输入框上沿向上计算实际覆盖区域；
@@ -163,7 +163,7 @@ PaneSpec<T> --push--> Pane<T> --每帧只读借用--> PaneView<'_, T> --draw--> 
 | 固定位置 | 是否占据高度 | 允许的类型 |
 | --- | --- | --- |
 | `ChatInputArea` 常驻输入框 | 是 | 一个 `ChatInput` |
-| `ChatInputArea` 占高栈 | 是 | 可选栈顶 `Pane`、`Queue` 和 `PlanProgress`，可同时存在 |
+| `ChatInputArea` 占高栈 | 是 | 可选栈顶 `Pane`、`Queue`、`Steer` 和 `PlanProgress`，可同时存在 |
 | `ChatInputArea` 覆盖层 | 否 | `Suggest`、`Approval` 或 `Query`，同时最多一个 |
 | `Pane` 内部 | 已包含在自身条目高度中 | 一个具体正文和对应按键提示 |
 | `ListSelection` 内部 | 由所属 `Pane` 计算 | 候选组、可选搜索、列表和可选预览 |
@@ -179,6 +179,7 @@ pub(crate) enum ChatInputAreaHeightEntryView<'a> {
     Pane(PaneEntryView<'a>),
     PlanProgress(PlanProgressView<'a>),
     Queue(QueueView<'a>),
+    Steer(SteerView<'a>),
 }
 
 pub(crate) enum PaneEntry {
@@ -195,7 +196,7 @@ pub(crate) enum PaneEntry {
 
 覆盖层的优先级固定为等待用户回复的 `Approval` 或 `Query` 高于文本触发的 `Suggest`。Agent 交互存在时暂停并隐藏 `Suggest`；交互完成或被外部解决后重新根据当前草稿和光标计算，而不是恢复一份可能已经过期的候选状态。
 
-`Pane`、`Queue` 和 `PlanProgress` 是已接入的独立占高类型。它们可以同时出现，每个类型自己返回 `desired_height(width)`，`ChatInputArea` 从常驻 `ChatInput` 开始按出现顺序向上分配区域并累加高度。例如 `PlanProgress` 已经存在时新增 `Queue`，`Queue` 会直接出现在 `PlanProgress` 上方。某个类型完成时只移除自己，不影响其他条目。`Steer` 不预先建空组件；等 TUI 拥有可观测的 steer 提交和进行中状态后，再以第四个明确分支接入。其中 `Pane` 的产品页面顺序仍由内部页面栈管理，占高栈只看到当前栈顶页面。
+`Pane`、`Queue`、`Steer` 和 `PlanProgress` 是独立占高类型。它们可以同时出现，每个类型自己返回 `desired_height(width)`，`ChatInputArea` 从常驻 `ChatInput` 开始按出现顺序向上分配区域并累加高度。例如 `PlanProgress` 已经存在时新增 `Queue`，`Queue` 会直接出现在 `PlanProgress` 上方；随后提交 Steer 时，`Steer` 再叠加到最上方。某个类型完成时只移除自己，不影响其他条目。其中 `Pane` 的产品页面顺序仍由内部页面栈管理，占高栈只看到当前栈顶页面。
 
 `PaneSpec<T>` 只能携带正文模型和按键提示，不能增加 `tabs`、`search`、`preview`、`children` 或 `keep_chat_focus` 等能力字段。Tab、搜索和预览属于 `ListSelection` 自己的内部结构，不能反向进入 `Pane` 或 `ChatInputArea`。`PaneEntry` 也只列出真正进入页面栈的正文；一次性的批准和提问不进入该枚举。
 
@@ -209,14 +210,14 @@ pub(crate) enum PaneEntry {
 
 ### 2.6 Agent 交互、进行中状态与 Plan
 
-`Approval` 和 `Query` 是一次性覆盖交互；`Queue` 和 `PlanProgress` 是可同时存在的占高条目。两者的生命周期都可以是临时的，但布局行为完全不同，因此不用“临时或持久”决定插槽。
+`Approval` 和 `Query` 是一次性覆盖交互；`Queue`、`Steer` 和 `PlanProgress` 是可同时存在的占高条目。它们的生命周期都可以是临时的，但布局行为完全不同，因此不用“临时或持久”决定插槽。
 
 | 内容 | 接入类型 | 完成后 | 产品与协议所有者 |
 | --- | --- | --- | --- |
 | 动作批准请求 | `ChatInputAreaOverlayView::Approval` | 服务端确认回复后销毁，恢复原焦点所有者 | `features/interactions/approval.rs` 绑定 Turn、Request 和批准响应 |
 | 一个或多个结构化问题 | `ChatInputAreaOverlayView::Query` | 单题完成后翻到下一题；最后一题回复成功后销毁 | `features/interactions/request_user_input.rs` 把协议 `RequestUserInput` 适配为 `Query` |
 | 排队内容 | `ChatInputAreaHeightEntryView::Queue` | 出队、取消或 Turn 结束时只移除该条目 | Queue 功能保存内容和状态 |
-| steer 状态（待接入） | 未创建空分支 | 等 TUI 拥有明确进行中状态后按占高条目接入 | Turn 功能保存 steer 状态 |
+| 正在提交的 steer | `ChatInputAreaHeightEntryView::Steer` | `SteerTurn` 返回后移除；成功消息留在 Transcript，失败原因写入历史区 | `features/thread/request.rs` 提交 typed `SteerTurn`，`Steer` 只保存本地待交付身份和文案 |
 | Plan 完成度与步骤 | `ChatInputAreaHeightEntryView::PlanProgress` | Plan 完成或 Turn 结束后移除，最终结果留在 Transcript | `features/thread` 保存 Plan 事实，`PlanProgress` 只保存折叠与滚动状态 |
 
 `Query` 的每页包含一个问题和固定选项。允许自定义回答时，最后一项是“自己输入”：选中它后覆盖层保留当前问题，焦点临时转到 `ChatInput`；Enter 提交该答案后不把文本作为普通聊天消息，而是写入当前 `Query`，然后焦点回到覆盖层并翻到下一页。最后一页完成后构造整个 Query 回复，最终结果写入 `Transcript`，再由 `ChatHistory` 绘制到终端。
@@ -328,6 +329,11 @@ zeta-code/tui/src/components/
 │   ├── state.rs
 │   ├── state_tests.rs
 │   └── view.rs
+├── steer.rs
+├── steer/
+│   ├── state.rs
+│   ├── state_tests.rs
+│   └── view.rs
 ├── plan_progress.rs
 ├── plan_progress/
 │   ├── state.rs
@@ -375,12 +381,12 @@ Rust 多文件组件统一使用“同名 `.rs` 模块根 + 同名目录”：�
 App / features
 ├── 产品状态、命令、副作用和请求绑定
 ├── interactions → Approval / Query
-├── thread → Transcript / PlanProgress / Queue
+├── thread → Transcript / PlanProgress / Queue / Steer
 └── ChatWidget
     ├── ChatHistory → Transcript
     ├── ChatInputArea
     │   ├── ChatInput · 常驻
-    │   ├── Height stack → Pane / Queue / PlanProgress
+    │   ├── Height stack → Pane / Queue / Steer / PlanProgress
     │   └── Overlay slot → Suggest / Approval / Query
     └── Footer
 
@@ -452,6 +458,8 @@ pub(crate) enum ChatInputAreaOutcome {
     Command(SlashCommandInvocation),
     ApprovalResponse { interaction_id: ChatInputAreaInteractionId, decision: ApprovalDecision },
     QueryResponse { interaction_id: ChatInputAreaInteractionId, answers: Vec<QueryAnswer> },
+    Queue(ChatSubmission),
+    SubmissionRejected(String),
     Submit(ChatSubmission),
     PaneDismissed(PaneId),
     Consumed,
@@ -465,7 +473,7 @@ impl ChatInput {
 }
 ```
 
-`ChatInputArea` 始终保存一个 `ChatInput`，同时暴露按布局顺序排列的 `ChatInputAreaHeightEntryView` 和可选 `ChatInputAreaOverlayView`。占高栈可包含栈顶 `PaneView`、`QueueView` 和 `PlanProgressView`；覆盖层是 `SuggestView`、`ApprovalView` 或 `QueryView`。绘制只读借用这些状态，选择和激活动作回到各自组件修改状态。
+`ChatInputArea` 始终保存一个 `ChatInput`，同时暴露按布局顺序排列的 `ChatInputAreaHeightEntryView` 和可选 `ChatInputAreaOverlayView`。占高栈可包含栈顶 `PaneView`、`QueueView`、`SteerView` 和 `PlanProgressView`；覆盖层是 `SuggestView`、`ApprovalView` 或 `QueryView`。绘制只读借用这些状态，选择和激活动作回到各自组件修改状态。
 
 完整页面通过 `PaneSpec<T>` 请求创建，再以带 `PaneId` 的 `Pane<T>` 进入页面栈；只有栈顶页面作为一个占高条目绘制在 `ChatInput` 上方。`ChatInputAreaOutcome` 保留每个输入类型的明确来源；产品功能把 Approval 和 Query 响应映射回当前 Agent 请求，不为它们分配 `PaneId`。
 
@@ -476,6 +484,9 @@ impl ChatInput {
 | 当前内容 | 输入事件 | 结果 |
 | --- | --- | --- |
 | 聊天输入，无候选 | 普通字符、编辑键、粘贴 | 修改草稿 |
+| Running Turn，无候选 | Enter | 提交 `SteerTurn`，服务端确认交付前显示 `Steer` 占高条目 |
+| Running 或 Created Turn，无候选 | Tab | 提交新的 `StartTurn`，作为下一轮 Queue |
+| Running Turn，草稿绑定 Skill | Enter | 保留草稿并提示当前 Turn 不能改变冻结的 Skill；Tab 仍可排队下一轮 |
 | `Suggest` 可见 | 普通字符、删除、移动光标 | 先修改草稿，再按新片段刷新候选 |
 | `Suggest` 可见 | 上下键 | 循环选择候选，不进入历史记录 |
 | `Suggest` 可见 | Esc | 只关闭当前候选，不清空草稿 |
@@ -507,10 +518,10 @@ UI 由对应组件自己绘制，上一层只分配区域并调用下一层，�
 | `ApprovalView` | 批准说明、选项、选中行和鼠标命中 | 协议身份和响应发送 |
 | `QueryView` | 当前问题、页码、选项、选中行和提交状态 | Agent 请求排队和响应发送 |
 | `PaneView` | 正文区域、间距和按键提示区域 | 具体正文的布局和交互 |
-| `QueueView` / `PlanProgressView` | 各自的期望高度、内容、折叠或命中 | 其他占高条目的顺序与高度 |
+| `QueueView` / `SteerView` / `PlanProgressView` | 各自的期望高度、内容、折叠或命中 | 其他占高条目的顺序与高度 |
 | `list_selection::view` | 标题、候选组、可选搜索、列表和预览 | Pane 入栈、出栈和聊天草稿 |
 
-`ChatInputArea` 始终在底部显示 `ChatInput`。占高栈使用封闭 `ChatInputAreaHeightEntryView` 按顺序把栈顶 `Pane`、`Queue` 或 `PlanProgress` 放到输入框上方；覆盖层使用 `ChatInputAreaOverlayView` 把 `Suggest`、`Approval` 或 `Query` 锚定到输入框上沿。这些是由枚举分支固定的组合关系，不是由调用方传入回调或能力开关的通用插槽。
+`ChatInputArea` 始终在底部显示 `ChatInput`。占高栈使用封闭 `ChatInputAreaHeightEntryView` 按顺序把栈顶 `Pane`、`Queue`、`Steer` 或 `PlanProgress` 放到输入框上方；覆盖层使用 `ChatInputAreaOverlayView` 把 `Suggest`、`Approval` 或 `Query` 锚定到输入框上沿。这些是由枚举分支固定的组合关系，不是由调用方传入回调或能力开关的通用插槽。
 
 `chat_widget::view` 先为 Footer 分配固定底部区域，再按 `chat_input_area::desired_height(...)` 分配输入区，剩余高度全部交给 `ChatHistory`。`ChatInputArea` 的期望高度等于 `ChatInput` 高度加上所有占高条目高度；任何 `ChatInputAreaOverlayView` 都不进入该总和。
 
@@ -564,9 +575,9 @@ UI 由对应组件自己绘制，上一层只分配区域并调用下一层，�
 | Pane 正文 | 已实施 | `ListSelection`、`DetailList`、`TextPrompt` 和 `KeyCapture` 是四种明确分支 |
 | `Suggest` | 已实施 | `/`、`@`、`$` 对外只暴露一个当前候选，`/commit` 保留为 Slash Command |
 | Agent 交互 | 已实施 | Approval 与多页 Query 是一次性覆盖交互，自定义答案使用独立输入草稿 |
-| 占高叠加 | 已实施 | 栈顶 Pane、Queue 和可折叠 PlanProgress 可同时存在，各自计算高度和移除 |
+| 占高叠加 | 已实施 | 栈顶 Pane、Queue、Steer 和可折叠 PlanProgress 可同时存在，各自计算高度和移除 |
 | `ChatHistory` 与目录收敛 | 已实施 | 旧 transcript/composer/interaction/selection 目录已收束到明确组件，TUI 不使用 `mod.rs` |
-| `Steer` 进行中展示 | 尚未接入 | TUI 尚无可用的 steer 提交/进行中状态，不预先建空组件 |
+| `Steer` 提交与进行中展示 | 已实施 | Running 时 Enter 提交 typed `SteerTurn`，Tab 创建排队 Turn；服务端确认交付前显示独立占高条目 |
 
 之后如果增加新的 Pane 正文或占高条目，直接更新封闭枚举、输入结果、绘制分派和对应测试；不保留旧模块转发、类型别名或能力布尔开关。
 
@@ -575,8 +586,10 @@ UI 由对应组件自己绘制，上一层只分配区域并调用下一层，�
 实现完成至少需要验证：
 
 - `chat_widget::view` 只把整帧分为 `ChatHistory`、`ChatInputArea` 和 Footer，`Transcript` 只是历史区内容；
-- `ChatInput` 始终在输入区底部可见，打开 `Pane`、`Queue` 或 `PlanProgress` 都不替换它；
-- 栈顶 `Pane`、`Queue` 和 `PlanProgress` 可同时存在，每个占高条目独立计算高度；
+- `ChatInput` 始终在输入区底部可见，打开 `Pane`、`Queue`、`Steer` 或 `PlanProgress` 都不替换它；
+- 栈顶 `Pane`、`Queue`、`Steer` 和 `PlanProgress` 可同时存在，每个占高条目独立计算高度；
+- Running 时 Enter 只提交 `SteerTurn`，Tab 只提交排队 `StartTurn`，Suggest 可见时 Tab 仍优先补全；Created 状态不发送 Steer；
+- 每个 Steer 请求用稳定本地身份完成或失败，移除一个 Steer 不影响其他占高条目；
 - 新占高条目出现在现有条目上方；移除任一条目不会重建或清空其他条目；
 - 页面栈只把栈顶 `Pane` 显示为一个占高条目，父子 Pane 不同时累加高度；
 - `/`、`@`、`$` 同时最多显示一个 `Suggest`；
@@ -621,7 +634,8 @@ UI 由对应组件自己绘制，上一层只分配区域并调用下一层，�
 - `Suggest` 永远是单层选择；完整导航进入 `Pane` 和页面栈。
 - `Suggest`、`Approval` 和 `Query` 是同一覆盖插槽中的三种明确类型；它们共用单列交互机制，不共用触发来源和结果语义。
 - 批准和 Query 是一次性覆盖交互，回复成功后销毁并恢复原焦点所有者；它们永远不进入页面栈。
-- 栈顶 `Pane`、`Queue` 和 `PlanProgress` 是可同时存在的占高条目；各自拥有高度和生命周期，完成时只移除自己。
+- 栈顶 `Pane`、`Queue`、`Steer` 和 `PlanProgress` 是可同时存在的占高条目；各自拥有高度和生命周期，完成时只移除自己。
+- `Steer` 只表示尚未收到 `SteerTurn` 交付确认的本地提交，不复制 canonical Turn 内容；确认后消息由 Transcript 和 `ChatHistory` 持续展示。
 - Plan 进行时由 `PlanProgress` 展示，完成后最终内容留在 Transcript；Plan 中需要回答的问题使用 `Query`。
 - `Pane` 是可入栈、可接收输入的存活页面；`View` 只是当前一帧的只读数据，永远不能进入页面栈。
 - 页面栈是页面顺序的唯一所有者；产品动作按 `PaneId` 绑定，不存在第二个平行栈。

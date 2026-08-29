@@ -1,6 +1,8 @@
 use super::ChatInputArea;
 use super::ChatInputAreaOutcome;
 use crate::components::chat_input::ChatInputItem;
+use crate::components::chat_input::SkillSelectorItem;
+use crate::components::chat_input::default_slash_command_catalog;
 use crate::components::chat_input_area::ChatInputAreaHeightEntryKind;
 use crate::components::list_selection::ListSelectionGroup;
 use crate::components::list_selection::ListSelectionItem;
@@ -14,9 +16,14 @@ use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
+use zeta_protocol::ContentDigest;
 use zeta_protocol::PlanStep;
 use zeta_protocol::PlanStepStatus;
 use zeta_protocol::PlanUpdate;
+use zeta_protocol::SkillId;
+use zeta_protocol::SkillName;
+use zeta_protocol::SkillRef;
+use zeta_protocol::SkillSourceId;
 
 #[test]
 fn pane_routes_submission_from_its_chat_input() {
@@ -139,6 +146,105 @@ fn queue_stacks_above_an_existing_plan_and_each_can_be_removed_independently() {
 
     area.replace_turn_status(None, Vec::new());
     assert!(area.height_entries().is_empty());
+}
+
+#[test]
+fn pending_steer_stacks_above_plan_and_queue_until_its_request_finishes() {
+    let mut area = ChatInputArea::new();
+    area.replace_turn_status(Some(active_plan()), vec!["follow up".into()]);
+
+    let steer_id = area.begin_steer("change direction".into());
+
+    assert_eq!(
+        area.height_entries()
+            .iter()
+            .map(|entry| entry.kind())
+            .collect::<Vec<_>>(),
+        [
+            ChatInputAreaHeightEntryKind::PlanProgress,
+            ChatInputAreaHeightEntryKind::Queue,
+            ChatInputAreaHeightEntryKind::Steer,
+        ]
+    );
+
+    assert!(area.finish_steer(steer_id));
+    assert_eq!(
+        area.height_entries()
+            .iter()
+            .map(|entry| entry.kind())
+            .collect::<Vec<_>>(),
+        [
+            ChatInputAreaHeightEntryKind::PlanProgress,
+            ChatInputAreaHeightEntryKind::Queue,
+        ]
+    );
+}
+
+#[test]
+fn active_turn_enter_steers_and_tab_queues_without_displacing_suggest() {
+    let mut area = ChatInputArea::new();
+    area.insert_text("steer me");
+
+    let ChatInputAreaOutcome::Submit(steer) =
+        area.handle_active_turn_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("expected steer submission");
+    };
+    assert_eq!(steer.display_text, "steer me");
+
+    area.insert_text("queue me");
+    let ChatInputAreaOutcome::Queue(queued) =
+        area.handle_active_turn_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE))
+    else {
+        panic!("expected queued submission");
+    };
+    assert_eq!(queued.display_text, "queue me");
+
+    area.insert_text("/");
+    assert_eq!(
+        area.handle_active_turn_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)),
+        ChatInputAreaOutcome::Consumed
+    );
+    assert!(!area.text().is_empty());
+}
+
+#[test]
+fn active_turn_keeps_a_skill_draft_until_it_is_queued() {
+    let mut area = ChatInputArea::new();
+    area.replace_chat_input_catalog(
+        default_slash_command_catalog(),
+        vec![SkillSelectorItem::new(
+            "commit".into(),
+            "draft a commit message".into(),
+            SkillRef::pinned(
+                SkillId::new(
+                    SkillSourceId::new("user:skill-source:test").unwrap(),
+                    SkillName::new("commit").unwrap(),
+                ),
+                ContentDigest::sha256(b"commit skill"),
+            ),
+        )],
+        Vec::new(),
+    );
+    area.insert_text("$com");
+    assert_eq!(
+        area.handle_active_turn_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)),
+        ChatInputAreaOutcome::Consumed
+    );
+    area.insert_text("staged changes");
+
+    let outcome = area.handle_active_turn_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert!(matches!(
+        outcome,
+        ChatInputAreaOutcome::SubmissionRejected(message)
+            if message.contains("press Tab to queue")
+    ));
+    assert_eq!(area.text(), "$commit staged changes");
+    assert!(matches!(
+        area.handle_active_turn_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE)),
+        ChatInputAreaOutcome::Queue(_)
+    ));
 }
 
 #[test]

@@ -49,6 +49,20 @@ fn empty_frame_uses_lightweight_chrome_and_a_welcome_banner() {
 }
 
 #[test]
+fn pending_steer_is_drawn_above_the_persistent_chat_input() {
+    let mut app = App::new();
+    app.insert_text("start");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.insert_text("check the tests first");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    let rendered = render(&app, 80, 20);
+
+    assert!(rendered.contains("Steer  1 sending"));
+    assert!(rendered.contains("↳ check the tests first"));
+}
+
+#[test]
 fn footer_uses_a_distinct_symbol_for_each_approval_mode() {
     let mut app = App::new();
     let ask_permissions = render(&app, 80, 20)
@@ -81,6 +95,21 @@ fn footer_uses_a_distinct_symbol_for_each_approval_mode() {
             "⏩  auto review on",
             "▶ bypass permissions on",
         ]
+    );
+}
+
+#[test]
+fn working_draft_explains_enter_steer_and_tab_queue() {
+    let mut app = App::new();
+    app.insert_text("start");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.insert_text("change direction");
+
+    let rendered = render(&app, 80, 20);
+
+    assert_eq!(
+        rendered.lines().last().unwrap().trim_end(),
+        "enter steer · tab queue"
     );
 }
 

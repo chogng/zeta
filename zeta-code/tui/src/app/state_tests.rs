@@ -1105,7 +1105,7 @@ fn control_c_interrupts_a_turn_waiting_for_user_input() {
 }
 
 #[test]
-fn working_turn_accepts_and_submits_a_follow_up_prompt() {
+fn enter_steers_the_working_turn_and_tracks_delivery() {
     let mut app = App::new();
     app.insert_text("first");
     app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -1114,10 +1114,89 @@ fn working_turn_accepts_and_submits_a_follow_up_prompt() {
     app.handle_paste("third".into());
     let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
-    assert!(matches!(action, Some(AppCommand::SubmitTurn { .. })));
+    let Some(AppCommand::SteerTurn {
+        steer_id,
+        submission,
+    }) = action
+    else {
+        panic!("expected active Turn steer");
+    };
+    assert_eq!(submission.display_text, "secondthird");
     assert_eq!(app.input(), "");
     assert_eq!(app.messages().len(), 2);
     assert_eq!(app.messages()[1].text, "secondthird");
+    assert!(matches!(
+        app.input_height_entries().as_slice(),
+        [ChatInputAreaHeightEntryView::Steer(view)] if view.items == ["secondthird"]
+    ));
+
+    app.update(AppEvent::SteerCompleted(steer_id));
+
+    assert!(app.input_height_entries().is_empty());
+    assert_eq!(app.status(), &Status::Working);
+}
+
+#[test]
+fn tab_queues_a_new_turn_while_the_current_turn_is_working() {
+    let mut app = App::new();
+    app.insert_text("first");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.insert_text("next turn");
+
+    let action = app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+
+    assert_eq!(
+        action,
+        Some(AppCommand::SubmitTurn {
+            submission: ChatSubmission {
+                display_text: "next turn".into(),
+                input: vec![ChatInputItem::Text("next turn".into())],
+            },
+        })
+    );
+    assert!(app.input_height_entries().is_empty());
+    assert_eq!(app.status(), &Status::Working);
+}
+
+#[test]
+fn a_created_turn_does_not_claim_the_running_steer_action() {
+    let mut app = App::new();
+    app.update(AppEvent::TurnActivityChanged(TurnActivity::Starting));
+    app.insert_text("after the queued turn");
+
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert!(matches!(&action, Some(AppCommand::SubmitTurn { .. })));
+    assert!(!matches!(&action, Some(AppCommand::SteerTurn { .. })));
+    assert_eq!(app.status(), &Status::Working);
+}
+
+#[test]
+fn rejected_steer_removes_only_its_pending_row_and_keeps_the_turn_working() {
+    let mut app = App::new();
+    app.insert_text("first");
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.insert_text("change direction");
+    let Some(AppCommand::SteerTurn { steer_id, .. }) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("expected active Turn steer");
+    };
+
+    app.update(AppEvent::SteerSubmissionFailed {
+        steer_id,
+        error: "sequence conflict".into(),
+    });
+
+    assert!(app.input_height_entries().is_empty());
+    assert_eq!(app.status(), &Status::Working);
+    assert!(
+        app.messages()
+            .last()
+            .unwrap()
+            .text
+            .contains("could not steer the active Turn: sequence conflict")
+    );
 }
 
 #[test]

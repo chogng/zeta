@@ -208,7 +208,7 @@ impl ChatInput {
                 KeyCode::Enter if key.modifiers.is_empty() => {
                     if let Some(command) = self.slash_commands.selected_command().cloned() {
                         self.complete_slash_command(&command);
-                        return self.submit();
+                        return self.submit_current();
                     }
                 }
                 _ => {}
@@ -222,7 +222,7 @@ impl ChatInput {
             return ChatInputOutcome::Consumed;
         }
         if key.code == KeyCode::Enter && key.modifiers.is_empty() {
-            return self.submit();
+            return self.submit_current();
         }
         match key.code {
             KeyCode::Up if !self.textarea.can_move_up() => return self.previous_history(),
@@ -327,7 +327,7 @@ impl ChatInput {
     pub(crate) fn activate_slash_command(&mut self, index: usize) -> Option<ChatInputOutcome> {
         let command = self.slash_commands.command_at(index)?.clone();
         self.complete_slash_command(&command);
-        Some(self.submit())
+        Some(self.submit_current())
     }
 
     pub(crate) fn select_slash_command(&mut self, index: usize) -> bool {
@@ -418,7 +418,7 @@ impl ChatInput {
         }
     }
 
-    fn submit(&mut self) -> ChatInputOutcome {
+    pub(crate) fn submit_current(&mut self) -> ChatInputOutcome {
         let Some(submission) = self.prepare_submission() else {
             return ChatInputOutcome::Consumed;
         };
@@ -438,6 +438,15 @@ impl ChatInput {
             },
             None => ChatInputOutcome::Submit(submission),
         }
+    }
+
+    pub(crate) fn submission_contains_skill(&self) -> bool {
+        self.prepare_submission().is_some_and(|submission| {
+            submission
+                .input
+                .iter()
+                .any(|item| matches!(item, ChatInputItem::Skill { .. }))
+        })
     }
 
     fn prepare_submission(&self) -> Option<ChatSubmission> {

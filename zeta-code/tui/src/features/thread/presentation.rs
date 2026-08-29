@@ -7,6 +7,7 @@ use zeta_protocol::TurnStatus;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum TurnActivity {
+    Starting,
     Working,
     WaitingForApproval,
     WaitingForUserInput,
@@ -66,9 +67,8 @@ pub(crate) fn evaluate_active_turn(
         TurnStatus::WaitingForCapability => {
             ActiveTurnUpdate::ActivityChanged(TurnActivity::WaitingForCapability)
         }
-        TurnStatus::Created | TurnStatus::Running => {
-            ActiveTurnUpdate::ActivityChanged(TurnActivity::Working)
-        }
+        TurnStatus::Created => ActiveTurnUpdate::ActivityChanged(TurnActivity::Starting),
+        TurnStatus::Running => ActiveTurnUpdate::ActivityChanged(TurnActivity::Working),
         TurnStatus::Cancelling => ActiveTurnUpdate::ActivityChanged(TurnActivity::Cancelling),
     }
 }

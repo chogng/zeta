@@ -16,6 +16,7 @@ use super::request_completion::interrupt_and_read;
 use super::request_completion::refresh_skills_and_registry;
 use super::request_completion::resolve_interaction_and_read;
 use super::request_completion::start_turn_and_read;
+use super::request_completion::steer_turn_and_read;
 use super::slash_command_registry;
 use crate::TuiError;
 use crate::TuiExit;
@@ -799,6 +800,45 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                                 },
                                 &mut app,
                             );
+                        }
+                    }
+                    AppCommand::SteerTurn {
+                        steer_id,
+                        submission,
+                    } => {
+                        draw_terminal(&mut terminal, &app)?;
+                        if pending_request.is_none() {
+                            if matches!(app.status(), Status::Working)
+                                && !app.steers_active_turn()
+                            {
+                                queued_actions.push_front(AppCommand::SteerTurn {
+                                    steer_id,
+                                    submission,
+                                });
+                            } else if let Some(turn_id) = active_turn.clone() {
+                                let request_client = client.clone();
+                                let scope = thread_request_scope(&conversation);
+                                let history = thread_subscription.history();
+                                pending_request = spawn_request(
+                                    "zeta-tui-steer-turn",
+                                    move || RequestCompletion::TurnSteered {
+                                        steer_id,
+                                        result: steer_turn_and_read(
+                                            request_client,
+                                            scope,
+                                            turn_id,
+                                            submission,
+                                            history,
+                                        ),
+                                    },
+                                    &mut app,
+                                );
+                            } else {
+                                app.update(AppEvent::SteerSubmissionFailed {
+                                    steer_id,
+                                    error: "the active Turn is no longer available".into(),
+                                });
+                            }
                         }
                     }
                 }

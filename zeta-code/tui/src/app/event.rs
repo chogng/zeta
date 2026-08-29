@@ -2,6 +2,7 @@ use crate::components::chat_input_area::ChatInputAreaInteractionId;
 use crate::components::detail_list::DetailList;
 use crate::components::list_selection::ListSelectionModel;
 use crate::components::pane::PaneSpec;
+use crate::components::steer::SteerId;
 use crate::features::additional_directories::AdditionalDirectoryPaneSpec;
 use crate::features::config::ConfigPaneSpec;
 use crate::features::config::TerminalSettings;
@@ -76,6 +77,11 @@ pub(crate) enum AppEvent {
     ListSelectionPaneOpened(PaneSpec<ListSelectionModel>),
     SkillsPaneOpened(SkillPaneSpec),
     SkillsPaneReplaced(SkillPaneSpec),
+    SteerCompleted(SteerId),
+    SteerSubmissionFailed {
+        steer_id: SteerId,
+        error: String,
+    },
     ThemePanesClosed,
     ThemePaneOpened(ThemePaneSpec),
     ThreadTranscriptSnapshotReceived(ThreadTranscriptSnapshot),

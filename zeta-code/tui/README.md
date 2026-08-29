@@ -173,7 +173,7 @@ src/
 │   ├── pane.rs / pane/             # PaneSpec, Pane, PaneId and readonly PaneView
 │   ├── list_selection.rs / list_selection/ # reusable list selection state and drawing
 │   ├── approval.rs / query.rs      # one-shot overlay interactions
-│   ├── queue.rs / plan_progress.rs # independently sized entries above ChatInput
+│   ├── queue.rs / steer.rs / plan_progress.rs # independently sized entries above ChatInput
 │   ├── tab_list.rs                # reusable horizontal tab state, mouse/keyboard input, wrapping and view
 │   └── detail_list.rs / text_prompt.rs / key_capture.rs # concrete Pane bodies
 ├── features/
@@ -236,7 +236,7 @@ src/
 | `client::map_event` / `ClientEvent` | crate-private | 把共享 connection event 映射为 agent request、skills/Git changed、Thread update 与 connection failure | 不保存 transport、不应用 projection |
 | `ThreadSubscription` | crate-private | 分开维护 durable sequence、stream-instance cursor 与 history Turn cursor，分类 duplicate/gap/runtime switch，消费 bounded snapshot 和 older-page resync | 不应用 `ThreadEvent` reducer、不保存 Thread history 或 transient projection |
 | `features::interactions` | crate-private | full agent request → approval/user-input view state → exact typed response | 不决定 policy、不选择 owner、不支持未声明的 dynamic Tool |
-| `ChatInputArea` | crate-private | 保存常驻 `ChatInput`、Pane 栈、Queue/Plan 占高条目和当前覆盖交互，统一路由 key/paste/mouse | 本身不是 Pane 或弹层，不保存 Plugin/Session 等产品状态 |
+| `ChatInputArea` | crate-private | 保存常驻 `ChatInput`、Pane 栈、Queue/Steer/Plan 占高条目和当前覆盖交互，统一路由 key/paste/mouse | 本身不是 Pane 或弹层，不保存 Plugin/Session 等产品状态 |
 | `components::tab_list::TabListState<T>` | crate-private | 拥有 tab 集合和当前项，处理左右/Tab 循环切换与鼠标命中，并由同模块按 Unicode 宽度统一换行和绘制 | 不拥有 pane 内容、搜索、选择或产品 action |
 | `components::list_selection::ListSelectionState` | crate-private | 可选 search/preview、Space search mode、过滤索引、候选高亮、选择与循环导航，并组合 `TabListState<ListSelectionGroup>` 切换候选集合 | 只承载真正的列表选择，不执行产品 action |
 | `components::list_selection::view` | crate-private | 绘制 title/search/items/preview/caption/footer，并把 tab 区域委托给 `components::tab_list::draw` | 只读 `ListSelectionState`，不解释产品 action |
@@ -253,7 +253,8 @@ src/
 | `SlashCommandInvocation` | crate-private | command identity、trimmed display arguments 与有序 text/image argument items | 不执行 RPC |
 | `features::sessions::ActiveConversation` | crate-private | 当前 Session/Thread identity、sequence、后端保存的下一次批准模式与 typed create/fork/resume/rewind/archive lifecycle | 不解析 `ChatInput` 文本、不拥有批准策略或 App Server |
 | `TextArea` | private | UTF-8 多行 buffer、byte-safe line/cursor movement、原子元素 insert/delete 与局部 keymap 扩展边界 | 不保存 paste payload，不解释 Enter submission 或 slash command；当前不承诺 Vim mode |
-| `features::thread::submit_prompt` | private | 从显式 `ThreadRequestScope` build typed `session/request` `StartTurn` operation 并返回 typed result | 不引用或更新 `App`、不手写 method string/JSON |
+| `features::thread::{submit_prompt,steer_prompt}` | private | 从显式 `ThreadRequestScope` 构造 typed `StartTurn` 或 `SteerTurn` 请求并返回 typed result | 不引用或更新 `App`、不手写 method string/JSON |
+| `Steer` | private | 按稳定本地身份保存尚未收到服务端交付确认的 Steer 文案，并提供独立高度和绘制数据 | 不发送请求、不复制 canonical Turn、不长期保存已交付消息 |
 | `App::approval_mode_status` | crate-private | 缓存 Session 的下一次模式与 active Turn 的冻结模式，供 footer 展示；Shift-Tab 只产生 Session mutation intent | 不成为权威状态、不判断或绕过批准策略 |
 | `app::request_completion::apply_thread_snapshot` | private | 安装 canonical snapshot、恢复最早 nonterminal Turn 作为执行队首并协调 presentation mapping | 不 drain notification；snapshot 是 authoritative UI source |
 | `features::thread::interrupt_turn` | private | 从显式 scope 执行 typed Turn interrupt 并返回结果 | 不引用或更新 `App` |
@@ -311,6 +312,7 @@ run(session, options)
       │  ├─ ReadClipboardImage → clipboard::read_image → AppEvent → App::update
       │  ├─ Quit → return
       │  ├─ SubmitTurn → RequestTask(submit_prompt + canonical read)
+      │  ├─ SteerTurn → RequestTask(steer_prompt + canonical read)
       │  └─ Interrupt → RequestTask(interrupt_turn + canonical read)
       ├─ left mouse down → ChatInputArea 共享几何命中
       │  ├─ Pane item hit → PaneId 对应的 `PaneActions`
@@ -405,7 +407,8 @@ non-terminal Turn，因此 follow-up queue 不会把 interrupt/status 错绑到�
 
 | Canonical `TurnStatus` | UI effect |
 | --- | --- |
-| `Created` / `Running` | `Status::Working` |
+| `Created` | `Status::Working`；输入继续创建排队 Turn，不发送 Steer |
+| `Running` | `Status::Working`；Enter Steer，Tab 排队 |
 | `WaitingForApproval` | waiting status；owner-directed approval Pane；仍可 interrupt |
 | `WaitingForUserInput` | waiting status；owner-directed multi-question Pane；仍可 interrupt |
 | `WaitingForCapability` | waiting status；当前不能 resolve |
@@ -452,12 +455,15 @@ Ready / Error
 Working / Waiting*
 ├─ Esc / Ctrl-C / empty Ctrl-D → Interrupt → Cancelling
 ├─ Working: Shift-Tab → cycle mode for later submissions
-├─ Working: typing/paste/editing accepted；Enter → queue follow-up Turn
+├─ Running: typing/paste/editing accepted；Enter → steer active Turn；Tab → queue follow-up Turn
+├─ Created: Enter/Tab → queue follow-up Turn
 └─ Waiting*: owner-directed interaction Pane owns input until resolved/interrupted
 
 Cancelling
 └─ further quit/interrupt keys ignored until snapshot terminal state
 ```
+
+Running 状态下 Suggest 可见时，Tab 仍先完成 Slash、Mention 或 Skill 候选；候选关闭后 Tab 才排队下一轮。当前 Turn 的 Skill 已在开始时冻结，因此包含 `$skill` 绑定的草稿不能通过 Enter Steer，界面会保留草稿并提示使用 Tab 排队。
 
 `AppEvent::InterruptFailed` 把状态恢复到 Working，使用户可以再次请求 interrupt；ordinary
 client failure 通过 `AppEvent::FailureReported` 进入 Error 并允许输入新 prompt。
@@ -500,10 +506,10 @@ Ctrl-Z 复用同一个 `restore → SIGTSTP → reacquire` 生命周期；reacqu
 当前 layout 是底部锚定的三段：
 
 1. expandable、无外框的 transcript；空会话显示由 `components::welcome` 拥有的 responsive Welcome Banner，宽终端使用双栏，窄终端降级为单栏，并在 `Ready when you are` 下方显示 home-relative workspace 路径；
-2. `ChatInputArea`：底部常驻三至八行 `ChatInput`，上方可同时叠加栈顶 Pane、Queue 和 PlanProgress；`ChatInput` 正文随逻辑行增长、最多显示六行，超出后跟随光标纵向滚动；
+2. `ChatInputArea`：底部常驻三至八行 `ChatInput`，上方可同时叠加栈顶 Pane、Queue、Steer 和 PlanProgress；`ChatInput` 正文随逻辑行增长、最多显示六行，超出后跟随光标纵向滚动；
 3. 一行 footer 布局区域；普通状态由 `features::status_line` 从左到右显示已启用的权限、模型、Git 分支和 Git 变更，宽度不足时使用短值并从右侧省略。Chord 等操作提示由 `app/frame/footer.rs` 临时覆盖普通 status line。
 
-所有输入相关内容都以 terminal 底部为锚点。Footer 和 `ChatInput` 始终保留；栈顶 Pane、Queue 和 PlanProgress 各自占高并从 `ChatInput` 向上叠加。Suggest、Approval 和 Query 同时最多显示一个，从 `ChatInput` 上沿向上覆盖，不改变布局高度。`ListSelection` Pane 包含标题、可换行 Tabs、搜索框、可滚动窗口和按键提示；关闭后原聊天草稿仍然存在。
+所有输入相关内容都以 terminal 底部为锚点。Footer 和 `ChatInput` 始终保留；栈顶 Pane、Queue、Steer 和 PlanProgress 各自占高并从 `ChatInput` 向上叠加。Suggest、Approval 和 Query 同时最多显示一个，从 `ChatInput` 上沿向上覆盖，不改变布局高度。`ListSelection` Pane 包含标题、可换行 Tabs、搜索框、可滚动窗口和按键提示；关闭后原聊天草稿仍然存在。
 
 Transcript marker 使用 user/agent/reasoning/plan/tool/error 等 role-specific color，正文和 Tool
 detail 仍是 plain text。PageUp/PageDown 按五行移动，Ctrl-Home/End 到首尾；新提交默认恢复

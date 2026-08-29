@@ -10,6 +10,7 @@ use crate::components::chat_input::MentionPluginItem;
 use crate::components::chat_input::SkillSelectorItem;
 use crate::components::chat_input::SlashCommandCatalog;
 use crate::components::chat_input_area::ChatInputAreaInteractionId;
+use crate::components::steer::SteerId;
 use crate::features::config;
 use crate::features::interactions::InteractionResponse;
 use crate::features::sessions::ConversationChange;
@@ -27,6 +28,7 @@ use crate::features::thread::interrupt_turn;
 use crate::features::thread::read_thread_history;
 use crate::features::thread::recover_active_turn;
 use crate::features::thread::resolve_interaction;
+use crate::features::thread::steer_prompt;
 use crate::features::thread::submit_prompt;
 use zeta_app_server_client::AppServerRequestHandle;
 use zeta_app_server_client::ClientError;
@@ -36,6 +38,7 @@ use zeta_app_server_protocol::protocol::skills::SkillListParams;
 use zeta_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
 use zeta_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
 use zeta_app_server_protocol::protocol::turn::TurnStartResult;
+use zeta_app_server_protocol::protocol::turn::TurnSteerResult;
 use zeta_protocol::Thread;
 use zeta_protocol::ThreadItem;
 #[cfg(test)]
@@ -64,6 +67,10 @@ pub(super) enum RequestCompletion {
     ThreadRefreshed(Result<LatestThreadSnapshot, ClientError>),
     ThreadHistoryPage(Result<OlderThreadHistoryPage, ClientError>),
     TurnInterrupted(Result<LatestThreadSnapshot, ClientError>),
+    TurnSteered {
+        steer_id: SteerId,
+        result: Result<(TurnSteerResult, LatestThreadSnapshot), ClientError>,
+    },
     TurnStarted(Result<(TurnStartResult, LatestThreadSnapshot), ClientError>),
 }
 
@@ -157,6 +164,20 @@ pub(super) fn start_turn_and_read(
     let start = submit_prompt(&mut client, scope, submission)?;
     let snapshot = read_thread_history(&mut client, &session_id, &thread_id, history)?;
     Ok((start, snapshot))
+}
+
+pub(super) fn steer_turn_and_read(
+    mut client: AppServerRequestHandle,
+    scope: ThreadRequestScope,
+    turn_id: TurnId,
+    submission: ChatSubmission,
+    history: ThreadSnapshotHistory,
+) -> Result<(TurnSteerResult, LatestThreadSnapshot), ClientError> {
+    let session_id = scope.session_id().clone();
+    let thread_id = scope.thread_id().clone();
+    let steer = steer_prompt(&mut client, scope, turn_id, submission)?;
+    let snapshot = read_thread_history(&mut client, &session_id, &thread_id, history)?;
+    Ok((steer, snapshot))
 }
 
 pub(super) fn finish_conversation_request(
@@ -315,6 +336,24 @@ pub(super) fn apply_request_completion(
         }
         RequestCompletion::TurnStarted(Err(error)) => {
             report_turn_start_failure(app, active_turn, error.to_string());
+        }
+        RequestCompletion::TurnSteered {
+            steer_id,
+            result: Ok((steer, snapshot)),
+        } => {
+            conversation.set_thread_sequence(snapshot.thread.sequence.max(steer.sequence));
+            thread_subscription.apply_latest_snapshot(&snapshot.thread, snapshot.boundary);
+            app.update(AppEvent::SteerCompleted(steer_id));
+            apply_thread_snapshot(app, active_turn, snapshot.thread, snapshot.transcript);
+        }
+        RequestCompletion::TurnSteered {
+            steer_id,
+            result: Err(error),
+        } => {
+            app.update(AppEvent::SteerSubmissionFailed {
+                steer_id,
+                error: error.to_string(),
+            });
         }
         RequestCompletion::InteractionResolved {
             interaction_id,

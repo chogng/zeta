@@ -22,6 +22,7 @@ use zeta_app_server_protocol::protocol::turn::InputItem;
 use zeta_app_server_protocol::protocol::turn::TurnInteractionResolveResult;
 use zeta_app_server_protocol::protocol::turn::TurnInterruptResult;
 use zeta_app_server_protocol::protocol::turn::TurnStartResult;
+use zeta_app_server_protocol::protocol::turn::TurnSteerResult;
 use zeta_protocol::AgentResponse;
 use zeta_protocol::ImageAttachmentRef;
 use zeta_protocol::ImageDetail;
@@ -69,16 +70,7 @@ pub(crate) fn submit_prompt<T>(
 where
     T: JsonRpcTransport,
 {
-    let mut input = Vec::with_capacity(submission.input.len());
-    for item in submission.input {
-        input.push(match item {
-            ChatInputItem::Text(text) => InputItem::Text { text },
-            ChatInputItem::Image { url } => InputItem::ImageAttachment {
-                attachment: materialize_image(client, &url)?,
-            },
-            ChatInputItem::Skill { skill } => InputItem::Skill { skill },
-        });
-    }
+    let input = materialize_submission(client, submission)?;
     match client.request_session(SessionRequestParams {
         command_id: new_command_id("turn"),
         session_id: scope.session_id,
@@ -94,6 +86,53 @@ where
             "session request returned {other:?} for StartTurn"
         ))),
     }
+}
+
+pub(crate) fn steer_prompt<T>(
+    client: &mut AppServerClient<T>,
+    scope: ThreadRequestScope,
+    turn_id: TurnId,
+    submission: ChatSubmission,
+) -> Result<TurnSteerResult, ClientError>
+where
+    T: JsonRpcTransport,
+{
+    let input = materialize_submission(client, submission)?;
+    match client.request_session(SessionRequestParams {
+        command_id: new_command_id("steer"),
+        session_id: scope.session_id,
+        expected_sequence: scope.expected_sequence,
+        request: SessionRequest::SteerTurn {
+            thread_id: scope.thread_id,
+            turn_id,
+            input,
+        },
+    })? {
+        SessionRequestResult::TurnSteer(result) => Ok(result),
+        other => Err(ClientError::Protocol(format!(
+            "session request returned {other:?} for SteerTurn"
+        ))),
+    }
+}
+
+fn materialize_submission<T>(
+    client: &mut AppServerClient<T>,
+    submission: ChatSubmission,
+) -> Result<Vec<InputItem>, ClientError>
+where
+    T: JsonRpcTransport,
+{
+    let mut input = Vec::with_capacity(submission.input.len());
+    for item in submission.input {
+        input.push(match item {
+            ChatInputItem::Text(text) => InputItem::Text { text },
+            ChatInputItem::Image { url } => InputItem::ImageAttachment {
+                attachment: materialize_image(client, &url)?,
+            },
+            ChatInputItem::Skill { skill } => InputItem::Skill { skill },
+        });
+    }
+    Ok(input)
 }
 
 fn materialize_image<T>(
@@ -308,3 +347,7 @@ where
         ))),
     }
 }
+
+#[cfg(test)]
+#[path = "request_tests.rs"]
+mod tests;
