@@ -1,5 +1,5 @@
 [package]
-name = "zeta-workspace"
+name = "zeta-utils-absolute-path"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -7,19 +7,19 @@ publish.workspace = true
 
 [lib]
 doctest = false
-name = "zeta_workspace"
+name = "zeta_utils_absolute_path"
 path = "src/lib.rs"
 
 [dependencies]
+dirs = { workspace = true }
 dunce = { workspace = true }
 schemars = { workspace = true }
-serde = { workspace = true }
-sha2 = { workspace = true }
-thiserror = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 ts-rs = { workspace = true }
-zeta-utils-absolute-path = { workspace = true }
 
 [dev-dependencies]
+pretty_assertions = { workspace = true }
+serde_json = { workspace = true }
 tempfile = { workspace = true }
 
 [lints]

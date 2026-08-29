@@ -12290,12 +12290,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "zeta-utils-absolute-path"
+version = "0.1.0"
+dependencies = [
+ "dirs",
+ "dunce",
+ "pretty_assertions",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "ts-rs",
+]
+
+[[package]]
 name = "zeta-utils-cache"
 version = "0.1.0"
 dependencies = [
  "lru 0.18.3",
  "sha1",
  "tokio",
+]
+
+[[package]]
+name = "zeta-utils-home-dir"
+version = "0.1.0"
+dependencies = [
+ "dirs",
+ "pretty_assertions",
+ "tempfile",
+ "zeta-utils-absolute-path",
 ]
 
 [[package]]
@@ -12477,6 +12501,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.19",
  "ts-rs",
+ "zeta-utils-absolute-path",
 ]
 
 [[package]]

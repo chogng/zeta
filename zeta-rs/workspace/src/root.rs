@@ -2,6 +2,7 @@ use crate::WorkspaceTrustId;
 use std::hash::{Hash, Hasher};
 use std::path::{Component, Path, PathBuf};
 use thiserror::Error;
+use zeta_utils_absolute_path::AbsolutePathBuf;
 
 /// Failure to establish or project one workspace filesystem boundary.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
@@ -18,12 +19,14 @@ pub enum WorkspacePathError {
 
 /// Stable identity and filesystem boundary for one existing workspace directory.
 ///
-/// Identity uses the canonical path. The originally requested absolute path is retained because
+/// Identity uses the canonical path. The originally requested path is retained because
 /// operating-system watcher events can use a lexical alias such as macOS `/var` while filesystem
-/// and Git APIs report `/private/var`.
+/// and Git APIs report `/private/var`. That alias is lexically normalized so observed paths can be
+/// matched by prefix, while canonicalization runs on the caller's original spelling so `..` after
+/// a symlinked component keeps operating-system semantics.
 #[derive(Clone, Debug)]
 pub struct WorkspaceRoot {
-    requested: PathBuf,
+    requested: AbsolutePathBuf,
     canonical: PathBuf,
 }
 
@@ -31,17 +34,17 @@ impl WorkspaceRoot {
     /// Opens one existing directory and freezes both its requested and canonical namespaces.
     pub fn open(path: impl AsRef<Path>) -> Result<Self, WorkspacePathError> {
         let path = path.as_ref();
-        let requested =
-            std::path::absolute(path).map_err(|error| WorkspacePathError::RootUnavailable {
-                path: path.to_path_buf(),
-                message: error.to_string(),
-            })?;
-        let canonical = dunce::canonicalize(&requested).map_err(|error| {
+        let requested = AbsolutePathBuf::resolve_against_current_dir(path).map_err(|error| {
             WorkspacePathError::RootUnavailable {
-                path: requested.clone(),
+                path: path.to_path_buf(),
                 message: error.to_string(),
             }
         })?;
+        let canonical =
+            dunce::canonicalize(path).map_err(|error| WorkspacePathError::RootUnavailable {
+                path: requested.to_path_buf(),
+                message: error.to_string(),
+            })?;
         let metadata =
             canonical
                 .metadata()
@@ -60,7 +63,7 @@ impl WorkspaceRoot {
 
     /// Returns the absolute path supplied by the host before symlink and platform-alias collapse.
     pub fn requested_path(&self) -> &Path {
-        &self.requested
+        self.requested.as_path()
     }
 
     /// Returns the canonical directory used for identity, containment, and filesystem access.

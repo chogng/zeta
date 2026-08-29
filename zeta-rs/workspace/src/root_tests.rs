@@ -11,6 +11,41 @@ fn opens_a_directory_with_absolute_namespaces() {
 }
 
 #[test]
+fn normalizes_parent_segments_in_the_requested_namespace() {
+    let directory = tempfile::tempdir().unwrap();
+    let nested = directory.path().join("nested");
+    fs::create_dir(&nested).unwrap();
+
+    let root = WorkspaceRoot::open(nested.join("../nested")).unwrap();
+
+    assert_eq!(root.requested_path(), nested);
+    assert_eq!(
+        root.project_observed_path(nested.join("created.txt")),
+        Some(PathBuf::from("created.txt"))
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn canonicalizes_the_original_spelling_rather_than_the_lexical_alias() {
+    let linked = tempfile::tempdir().unwrap();
+    let sibling = linked.path().join("sibling");
+    let target = linked.path().join("target");
+    fs::create_dir(&sibling).unwrap();
+    fs::create_dir(&target).unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    let link = directory.path().join("link");
+    create_directory_symlink(&target, &link);
+
+    let root = WorkspaceRoot::open(link.join("../sibling")).unwrap();
+
+    assert_eq!(
+        root.canonical_path(),
+        dunce::canonicalize(&sibling).unwrap()
+    );
+}
+
+#[test]
 fn rejects_files_as_workspace_roots() {
     let directory = tempfile::tempdir().unwrap();
     let file = directory.path().join("file.txt");
