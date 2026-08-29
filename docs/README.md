@@ -36,6 +36,7 @@
 | 加 / 改一个工具 | [`agent-tools-spec.md`](agent-tools-spec.md) → [`tools.md`](tools.md)（契约层） |
 | 改协议 / 加 App Server 方法 | [`protocol.md`](protocol.md) → [`zeta-app-server-api.md`](zeta-app-server-api.md) → [`app-server-client.md`](app-server-client.md) |
 | 权限 / 审批 / 沙箱 | [`permissions.md`](permissions.md) → [`auto-review.md`](auto-review.md) → [`sandboxing.md`](sandboxing.md) |
+| 环境选择与目录访问 | [`environment-access.md`](environment-access.md)（长期目标）→ [`workspace-security.md`](workspace-security.md)（当前实现） |
 | 接 / 改模型供应商 | [`model-provider.md`](model-provider.md) → [`model-provider-config.md`](model-provider-config.md) → [`models-manager.md`](models-manager.md) |
 | 接 / 改独立 Marketplace | [`marketplace-integration.md`](marketplace-integration.md) → [`localization.md`](localization.md) 或对应 [`plugins.md`](plugins.md)、[`lsp.md`](lsp.md)、[`skills.md`](skills.md) 或 [`mcp.md`](mcp.md) → 对应 crate README |
 | 改 Desktop UI | [`zeta-desktop-architecture.md`](zeta-desktop-architecture.md) → [`ui-styling-ownership.md`](ui-styling-ownership.md) |
@@ -95,7 +96,8 @@
 ### 安全与权限
 
 [`permissions.md`](permissions.md)、[`auto-review.md`](auto-review.md)、
-[`sandboxing.md`](sandboxing.md)、[`workspace-security.md`](workspace-security.md)、
+[`sandboxing.md`](sandboxing.md)、[`environment-access.md`](environment-access.md)（长期目标）、
+[`workspace-security.md`](workspace-security.md)（当前实现）、
 [`windows-sandbox-acceptance-runbook.md`](windows-sandbox-acceptance-runbook.md)（参考/手册）
 
 ### 界面与体验

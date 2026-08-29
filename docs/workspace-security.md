@@ -1,6 +1,8 @@
 # 工作区安全边界
 
 > 本文拥有跨 crate 的工作区身份、目录作用域和信任语义。Rust 精确契约由 [`zeta-rs/workspace/README.md`](../zeta-rs/workspace/README.md) 与 [`zeta-rs/workspace-access/README.md`](../zeta-rs/workspace-access/README.md) 分别维护。Agent 自定义 artifact 与外部 Import/source registration 的生命周期由 [`agent-customizations.md`](agent-customizations.md) 维护。
+>
+> 文档状态：Current。本文只描述整改前仍在执行的安全契约；删除 Workspace 与目录级 Trust 的长期目标由 [`environment-access.md`](environment-access.md) 维护。
 
 ## 快速理解
 
