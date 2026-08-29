@@ -11,7 +11,14 @@ fn primary_root_stays_first_while_additional_roots_are_sorted_and_deduplicated()
     )
     .unwrap();
 
-    assert_eq!(roots.as_slice(), &[workspace, alpha, zeta]);
+    assert_eq!(
+        roots
+            .as_slice()
+            .iter()
+            .map(AbsolutePathBuf::as_path)
+            .collect::<Vec<_>>(),
+        [&workspace, &alpha, &zeta]
+    );
 }
 
 #[test]

@@ -13,7 +13,7 @@
 ## 所有权
 
 - 定义 `AgentEnvironmentSnapshot`、`HostEnvironment` 和 `RepositoryEnvironment` 的不可变值契约。
-- 定义 `WorkspaceRoots` 的主根优先、附加根绝对路径校验、排序与去重不变量。
+- 用 `AbsolutePathBuf` 保存 cwd 与 `WorkspaceRoots`，并固定主根优先、附加根排序与去重不变量。
 - 确定性渲染 `<environment_context>`，并对所有宿主文本和路径执行 XML 转义。
 
 App Server 负责采集 Git、平台、shell 和日期，并从 Session Workspace authority 取得仍有效的根目录。Core 只消费快照，负责上下文预算、位置和模型调用生命周期。若本 crate 开始依赖 Core、App Server、Workspace trust、Git、Tool 或 RPC，说明职责已经漂移。

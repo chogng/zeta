@@ -18,6 +18,7 @@ thiserror = { workspace = true }
 ts-rs = { workspace = true, features = ["serde-compat"] }
 url = { workspace = true }
 urlencoding = { workspace = true }
+zeta-utils-absolute-path = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }

@@ -1,14 +1,15 @@
 use crate::AgentEnvironmentError;
 use crate::WorkspaceRoots;
-use crate::error::validate_absolute_path;
+use crate::error::absolute_path;
 use crate::error::validate_text;
 use std::path::Path;
 use std::path::PathBuf;
+use zeta_utils_absolute_path::AbsolutePathBuf;
 
 /// Host facts captured for one Workspace lifecycle.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HostEnvironment {
-    cwd: PathBuf,
+    cwd: AbsolutePathBuf,
     platform: String,
     os_version: String,
     shell: String,
@@ -24,7 +25,7 @@ impl HostEnvironment {
         shell: String,
         current_date: String,
     ) -> Result<Self, AgentEnvironmentError> {
-        validate_absolute_path("cwd", &cwd)?;
+        let cwd = absolute_path("cwd", cwd)?;
         validate_text("platform", &platform)?;
         validate_text("os version", &os_version)?;
         validate_text("shell", &shell)?;

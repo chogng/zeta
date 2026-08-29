@@ -10773,6 +10773,9 @@ dependencies = [
 [[package]]
 name = "zeta-agent-environment"
 version = "0.1.0"
+dependencies = [
+ "zeta-utils-absolute-path",
+]
 
 [[package]]
 name = "zeta-agent-import"
@@ -12371,6 +12374,7 @@ dependencies = [
  "ts-rs",
  "url",
  "urlencoding",
+ "zeta-utils-absolute-path",
 ]
 
 [[package]]

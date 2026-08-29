@@ -1,5 +1,6 @@
 use std::fmt;
-use std::path::Path;
+use std::path::PathBuf;
+use zeta_utils_absolute_path::AbsolutePathBuf;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 /// Rejects invalid host facts before they enter a model-visible environment snapshot.
@@ -23,20 +24,17 @@ impl fmt::Display for AgentEnvironmentError {
 
 impl std::error::Error for AgentEnvironmentError {}
 
-pub(crate) fn validate_absolute_path(
+pub(crate) fn absolute_path(
     field: &'static str,
-    value: &Path,
-) -> Result<(), AgentEnvironmentError> {
+    value: PathBuf,
+) -> Result<AbsolutePathBuf, AgentEnvironmentError> {
     if value.as_os_str().is_empty() {
         return Err(AgentEnvironmentError::EmptyPath { field });
     }
-    if !value.is_absolute() {
-        return Err(AgentEnvironmentError::PathMustBeAbsolute {
-            field,
-            value: value.display().to_string(),
-        });
-    }
-    Ok(())
+    AbsolutePathBuf::from_absolute(&value).map_err(|_| AgentEnvironmentError::PathMustBeAbsolute {
+        field,
+        value: value.display().to_string(),
+    })
 }
 
 pub(crate) fn validate_text(field: &'static str, value: &str) -> Result<(), AgentEnvironmentError> {

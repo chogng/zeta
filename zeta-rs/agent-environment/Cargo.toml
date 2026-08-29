@@ -11,5 +11,8 @@ doctest = false
 name = "zeta_agent_environment"
 path = "src/lib.rs"
 
+[dependencies]
+zeta-utils-absolute-path = { workspace = true }
+
 [lints]
 workspace = true

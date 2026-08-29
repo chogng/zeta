@@ -15,7 +15,7 @@ remote execution boundary 上传递文件位置的 contract，不替代当前 Ap
 | API / type | 当前职责 | 明确不做 |
 | --- | --- | --- |
 | `PathUri::parse` | 校验并 canonicalize `file:` URI | 不接受其他 scheme、query、fragment、port 或 credentials |
-| `from_absolute_path` / `to_host_path` | 当前 host absolute path 的 lossless round trip | 不把 foreign Windows path 映射成 POSIX path，反之亦然 |
+| `from_absolute_path` / `to_host_path` | 在 `AbsolutePathBuf` 与当前 host URI 之间 lossless round trip | 不接受未先建立绝对路径不变量的 `PathBuf`，也不把 foreign Windows path 映射成 POSIX path，反之亦然 |
 | `from_native_path` | 按显式 `PathConvention` 解析 POSIX、drive 或 UNC path | 不访问文件系统 |
 | `basename` / `parent` / `ancestors` / `join` | 跨 host lexical path operations | 不解析 symlink、case alias 或 Unicode filesystem normalization |
 | `starts_with` / `relative_path_from` | 按 authority 与 URI segment 做 containment | encoded `/` 或 Windows `\` fail closed |

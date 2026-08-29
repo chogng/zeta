@@ -9,11 +9,13 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use std::str::FromStr;
 use thiserror::Error;
 use ts_rs::TS;
 use url::Url;
+use zeta_utils_absolute_path::AbsolutePathBuf;
 
 pub const FILE_SCHEME: &str = "file";
 const OPAQUE_PATH_PREFIX: &str = "file:///%00/zeta/opaque-path/";
@@ -37,21 +39,14 @@ impl PathUri {
     /// Converts an absolute path on the current host to a `file:` URI.
     ///
     /// Paths that cannot be represented losslessly as an ordinary URL use a
-    /// reserved opaque URI. Relative paths are rejected.
-    pub fn from_absolute_path(path: impl AsRef<Path>) -> io::Result<Self> {
-        let path = path.as_ref();
-        if !path.is_absolute() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                PathUriParseError::RelativeHostPath(path.to_path_buf()),
-            ));
-        }
+    /// reserved opaque URI.
+    pub fn from_absolute_path(path: &AbsolutePathBuf) -> Self {
         if let Ok(url) = Url::from_file_path(path)
             && let Ok(uri) = Self::try_from(url)
         {
-            return Ok(uri);
+            return uri;
         }
-        Ok(Self::from_opaque_path_bytes(&host_path_bytes(path)))
+        Self::from_opaque_path_bytes(&host_path_bytes(path))
     }
 
     /// Parses an absolute path using an explicit POSIX or Windows convention.
@@ -90,13 +85,15 @@ impl PathUri {
     ///
     /// Foreign path conventions are rejected rather than projected onto an
     /// unrelated local path.
-    pub fn to_host_path(&self) -> io::Result<PathBuf> {
+    pub fn to_host_path(&self) -> io::Result<AbsolutePathBuf> {
         if self.infer_path_convention() != Some(PathConvention::native()) {
             return Err(invalid_host_path(self));
         }
         if let Some(bytes) = self.opaque_path_bytes() {
             let path = path_from_host_bytes(bytes).ok_or_else(|| invalid_host_path(self))?;
-            if path.is_absolute() && Self::from_absolute_path(&path).is_ok_and(|uri| uri == *self) {
+            if let Ok(path) = AbsolutePathBuf::from_absolute(path)
+                && Self::from_absolute_path(&path) == *self
+            {
                 return Ok(path);
             }
             return Err(invalid_host_path(self));
@@ -105,9 +102,7 @@ impl PathUri {
             .0
             .to_file_path()
             .map_err(|()| invalid_host_path(self))?;
-        path.is_absolute()
-            .then_some(path)
-            .ok_or_else(|| invalid_host_path(self))
+        AbsolutePathBuf::from_absolute(path).map_err(|_| invalid_host_path(self))
     }
 
     /// Returns a clone of the canonical URL.
@@ -236,8 +231,6 @@ pub enum PathUriParseError {
         path: String,
         convention: PathConvention,
     },
-    #[error("host path `{0}` must be absolute")]
-    RelativeHostPath(PathBuf),
 }
 
 fn invalid_host_path(path: &PathUri) -> io::Error {

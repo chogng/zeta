@@ -12,3 +12,5 @@
 just test zeta-utils-json-to-toml
 bazel test //zeta-rs/utils/json-to-toml:json-to-toml-unit-tests
 ```
+
+当前 Zeta 尚未提供 Codex App Server 和 MCP Server 中“请求级 JSON 配置覆盖”对应的入口，因此本 crate 暂无正式调用方。后续只有在 JSON 请求值确实进入 TOML 配置合并层时才建立依赖；现有 SQLite 配置迁移直接反序列化完整配置文档，不能改用本转换，因为 `null` 映射为空字符串会改变迁移语义。

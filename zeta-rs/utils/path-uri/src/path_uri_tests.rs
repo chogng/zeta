@@ -154,9 +154,10 @@ fn join_normalizes_components_without_escaping_roots() {
 #[test]
 fn host_paths_round_trip_on_the_current_platform() {
     let directory = tempfile::tempdir().unwrap();
-    let uri = PathUri::from_absolute_path(directory.path()).unwrap();
+    let path = AbsolutePathBuf::from_absolute(directory.path()).unwrap();
+    let uri = PathUri::from_absolute_path(&path);
 
-    assert_eq!(uri.to_host_path().unwrap(), directory.path());
+    assert_eq!(uri.to_host_path().unwrap(), path);
 }
 
 #[cfg(unix)]
@@ -166,16 +167,10 @@ fn non_utf8_host_paths_round_trip_losslessly() {
     use std::os::unix::ffi::OsStringExt;
 
     let path = std::path::PathBuf::from(OsString::from_vec(b"/tmp/zeta-\xFF".to_vec()));
-    let uri = PathUri::from_absolute_path(&path).unwrap();
+    let path = AbsolutePathBuf::from_absolute(path).unwrap();
+    let uri = PathUri::from_absolute_path(&path);
 
     assert!(uri.to_string().contains("%FF"));
     assert_eq!(uri.to_host_path().unwrap(), path);
     assert_eq!(uri.basename().as_deref(), Some("zeta-%FF"));
-}
-
-#[test]
-fn relative_host_paths_are_rejected() {
-    let error = PathUri::from_absolute_path("relative/path").unwrap_err();
-
-    assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
 }

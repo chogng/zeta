@@ -1,7 +1,8 @@
 use crate::AgentEnvironmentError;
-use crate::error::validate_absolute_path;
+use crate::error::absolute_path;
 use std::path::Path;
 use std::path::PathBuf;
+use zeta_utils_absolute_path::AbsolutePathBuf;
 
 /// Ordered filesystem roots visible to the Agent.
 ///
@@ -9,7 +10,7 @@ use std::path::PathBuf;
 /// changing the primary working directory.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WorkspaceRoots {
-    roots: Vec<PathBuf>,
+    roots: Vec<AbsolutePathBuf>,
 }
 
 impl WorkspaceRoots {
@@ -18,15 +19,12 @@ impl WorkspaceRoots {
         primary_root: PathBuf,
         additional_roots: impl IntoIterator<Item = PathBuf>,
     ) -> Result<Self, AgentEnvironmentError> {
-        validate_absolute_path("primary workspace root", &primary_root)?;
+        let primary_root = absolute_path("primary workspace root", primary_root)?;
         let mut additional_roots = additional_roots
             .into_iter()
-            .filter(|root| root != &primary_root)
-            .map(|root| {
-                validate_absolute_path("additional workspace root", &root)?;
-                Ok(root)
-            })
+            .map(|root| absolute_path("additional workspace root", root))
             .collect::<Result<Vec<_>, AgentEnvironmentError>>()?;
+        additional_roots.retain(|root| root != &primary_root);
         additional_roots.sort();
         additional_roots.dedup();
         let mut roots = Vec::with_capacity(additional_roots.len().saturating_add(1));
@@ -43,7 +41,7 @@ impl WorkspaceRoots {
     }
 
     /// Returns the primary root followed by sorted additional roots.
-    pub fn as_slice(&self) -> &[PathBuf] {
+    pub fn as_slice(&self) -> &[AbsolutePathBuf] {
         &self.roots
     }
 }

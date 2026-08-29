@@ -76,10 +76,9 @@ Deserialize
 
 ## 集成与测试
 
-- [`zeta-workspace`](../../workspace/README.md) 的 `WorkspaceRoot::requested` 用本类型持有 host 给的路径别名：词法折叠 `..` 让 watcher 事件能按前缀匹配，而 `canonical` 仍由 `dunce::canonicalize` 对原始写法求值，保留 symlink 的操作系统语义；
-- 需要 workspace 内相对路径的 RPC 继续用相对 `PathBuf`，由 Rust authority 做 root confinement；
-- 需要跨 host 传递文件位置时用 `PathUri`，不用 `AbsolutePathBuf`；
-- 持有 `AbsolutePathBuf` 不代表获得读写授权，consumer 必须另行验证 workspace 或 capability 边界。
+- [`zeta-workspace`](../../workspace/README.md) 用本类型保存宿主给出的根目录写法，[`zeta-agent-environment`](../../agent-environment/README.md) 用它保存 cwd 与 Workspace roots，[`zeta-utils-home-dir`](../home-dir/README.md) 用它返回统一 profile root。
+- [`zeta-utils-path-uri`](../path-uri/README.md) 只在当前宿主的 `PathUri` 转换边界接收和返回本类型；跨宿主文件身份使用 `PathUri`，Workspace 内 RPC 继续使用由 Rust 权限边界约束的相对 `PathBuf`。
+- 持有 `AbsolutePathBuf` 不代表获得读写授权，调用方仍须验证 Workspace 或能力边界。
 
 ```text
 just test zeta-utils-absolute-path
@@ -90,7 +89,7 @@ bazel test //zeta-rs/utils/absolute-path:absolute-path-unit-tests
 
 ## 当前限制与扩展点
 
-- Current：crate 已实现但尚无 production consumer。
+- Current：`zeta-workspace`、`zeta-agent-environment`、`zeta-utils-home-dir` 与 `zeta-utils-path-uri` 已在各自的绝对路径边界使用本类型。
 - Current：只表示当前 host 的路径写法；在 Linux 上不解析 Windows drive 写法，需要跨 host 时用 `PathUri`。
 - Current：`with_base_directory` 与 `with_home_directory` 是线程局部的，跨线程或跨 `.await` 的反序列化不继承作用域。
 - Current：比较大小写敏感；filesystem 的 case-folding 属于 consumer。
