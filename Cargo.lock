@@ -11252,6 +11252,7 @@ dependencies = [
  "zeta-thread-store",
  "zeta-utils-image",
  "zeta-utils-stream-parser",
+ "zeta-utils-template",
 ]
 
 [[package]]
@@ -12400,6 +12401,13 @@ dependencies = [
 
 [[package]]
 name = "zeta-utils-stream-parser"
+version = "0.1.0"
+dependencies = [
+ "pretty_assertions",
+]
+
+[[package]]
+name = "zeta-utils-template"
 version = "0.1.0"
 dependencies = [
  "pretty_assertions",

@@ -1,6 +1,8 @@
 use std::fmt;
 use zeta_prompts::PromptArtifact;
 use zeta_prompts::RenderedPrompt;
+use zeta_utils_template::TemplateError;
+use zeta_utils_template::render;
 
 const GOAL_INSTRUCTIONS_TEXT: &str = include_str!("../../templates/context/active_goal.md");
 const GOAL_INSTRUCTIONS: PromptArtifact = PromptArtifact::new(
@@ -31,20 +33,35 @@ impl<'a> GoalPromptContext<'a> {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum GoalPromptError {
     EmptyObjective,
+    Template(TemplateError),
 }
 
 impl fmt::Display for GoalPromptError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::EmptyObjective => formatter.write_str("active goal objective must not be empty"),
+            Self::Template(error) => error.fmt(formatter),
         }
     }
 }
 
-impl std::error::Error for GoalPromptError {}
+impl std::error::Error for GoalPromptError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::EmptyObjective => None,
+            Self::Template(error) => Some(error),
+        }
+    }
+}
+
+impl From<TemplateError> for GoalPromptError {
+    fn from(error: TemplateError) -> Self {
+        Self::Template(error)
+    }
+}
 
 pub(crate) fn render_goal_instructions(
     objective: &str,
@@ -59,10 +76,13 @@ pub(crate) fn render_goal_instructions(
         None => GoalBudget::Unbounded,
     };
     let context = GoalPromptContext::new(objective, budget)?;
-    let body = GOAL_INSTRUCTIONS
-        .body()
-        .replace("{{ budget }}", &budget_text(context.budget))
-        .replace("{{ objective }}", &escape_xml_text(context.objective));
+    let body = render(
+        GOAL_INSTRUCTIONS.body(),
+        [
+            ("budget", budget_text(context.budget)),
+            ("objective", escape_xml_text(context.objective)),
+        ],
+    )?;
     Ok(GOAL_INSTRUCTIONS.render(body))
 }
 
