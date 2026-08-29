@@ -36,6 +36,7 @@ export const hoverBackground = alias("editor.hoverBackground", componentHoverBac
 export const hoverBorder = alias("editor.hoverBorder", componentHoverBorder, "Border around editor Hovers.");
 export const inlayHintForeground = alias("editor.inlayHintForeground", mutedForeground, "Foreground for editor inlay hints.");
 export const inlineCompletionForeground = alias("editor.inlineCompletionForeground", mutedForeground, "Foreground for inline completions.");
+export const compositionBorder = color("editor.compositionBorder", "#a0a0a0", "#a0a0a0", "Border under text in an active input method composition.");
 
 export const diffRemovedLineBackground = color("diffEditor.removedLineBackground", "#4b1818", "#ffebe9", "Background for removed diff lines.");
 export const diffInsertedLineBackground = color("diffEditor.insertedLineBackground", "#173d24", "#dafbe1", "Background for inserted diff lines.");

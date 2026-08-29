@@ -253,7 +253,7 @@ button, input, select, textarea { font: inherit; }
   border-radius: 6px;
   color: var(--zeta-foreground);
   background: var(--zeta-editor-background, var(--zeta-workbench-background));
-  box-shadow: 0 4px 16px rgb(0 0 0 / 20%);
+  box-shadow: 0 4px 16px var(--zeta-widget-shadow);
   pointer-events: auto;
 }
 

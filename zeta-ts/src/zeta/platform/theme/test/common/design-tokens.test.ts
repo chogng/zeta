@@ -19,6 +19,8 @@ test("CSS consumes registered design tokens and isolates intentional color sampl
 	]);
 	const intentionalColorFiles = new Set([
 		"base/browser/ui/icon/icon.css",
+		"editor/browser/viewparts/decorations/decorations.css",
+		"editor/contrib/colorPicker/browser/media/colorPicker.css",
 	]);
 	const sourceRoot = join(process.cwd(), "src", "zeta");
 	const unknownVariables: string[] = [];

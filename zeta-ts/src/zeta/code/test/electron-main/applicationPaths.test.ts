@@ -8,8 +8,8 @@ import { resolveApplicationDataPaths, resolvePackagedRendererRoot } from '../../
 
 test('Desktop data paths use the single Zeta application identity', () => {
 	assert.deepEqual(resolveApplicationDataPaths('/application-data'), {
-		userDataPath: '/application-data/Zeta',
-		sessionDataPath: '/application-data/Zeta/session-data',
+		userDataPath: join('/application-data', 'Zeta'),
+		sessionDataPath: join('/application-data', 'Zeta', 'session-data'),
 	});
 });
 

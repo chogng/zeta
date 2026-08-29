@@ -22,8 +22,8 @@ test("Desktop packages the shared backend host instead of the Zeta Code CLI", ()
 		assert.equal(contents.includes(forbiddenProductCrate), false, `${name} must not reference the Zeta Code CLI crate`);
 		assert.equal(contents.includes(forbiddenProductPath), false, `${name} must not reference the Zeta Code CLI source path`);
 	}
-	assert.match(packageScript, /cargoBuild\("zeta-server-host", \["--bin", "zeta-server"\], \["zeta-server"\]\)/u);
-	assert.match(packageScript, /cargoBuild\("zeta-app-server-daemon", \["--bin", "zeta-app-server-daemon"\], \["zeta-app-server-daemon"\]\)/u);
+	assert.match(packageScript, /cargoBuild\("zeta-server-host", \["--bin", "zeta-server"\], \["zeta-server"\], cargoEnvironment\)/u);
+	assert.match(packageScript, /cargoBuild\("zeta-app-server-daemon", \["--bin", "zeta-app-server-daemon"\], \["zeta-app-server-daemon"\], cargoEnvironment\)/u);
 	assert.match(packageManifest, /-p zeta-server-host -p zeta-app-server-daemon --bins/u);
 	assert.match(packageScript, /"--profile",\s*"dev-small"/u);
 	assert.match(watcher, /"--profile", "dev-small"/u);

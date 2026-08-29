@@ -130,7 +130,7 @@ export const SettingsNavigation = [
 				id: 'code-intelligence',
 				label: 'Code intelligence',
 				description: 'Configure completions, hints, and provider annotations.',
-				settings: ['editor.suggest.*', 'editor.inlineSuggest.*', 'editor.parameterHints.*', 'editor.inlayHints.*', 'editor.codeLens'],
+				settings: ['editor.suggest.*', 'editor.inlineSuggest.*', 'editor.parameterHints.*', 'editor.inlayHints.*', 'editor.codeLens', 'editor.colorDecorators', 'editor.colorDecoratorsActivatedOn', 'editor.colorDecoratorsLimit', 'editor.defaultColorDecorators'],
 			},
 			{
 				id: 'workspace-search',

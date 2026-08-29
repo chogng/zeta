@@ -722,6 +722,26 @@
       }
     },
     {
+      "id": "button.border",
+      "kind": "color",
+      "cssVariable": "--zeta-button-border",
+      "owner": "platform.theme.components",
+      "description": "Border around buttons that request an explicit outline.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "foreground",
+        "light": "foreground",
+        "high-contrast-dark": "foreground",
+        "high-contrast-light": "foreground"
+      },
+      "values": {
+        "dark": "#cccccc",
+        "light": "#3b3b3b",
+        "high-contrast-dark": "#cccccc",
+        "high-contrast-light": "#3b3b3b"
+      }
+    },
+    {
       "id": "button.background",
       "kind": "color",
       "cssVariable": "--zeta-button-background",
@@ -1219,6 +1239,26 @@
         "light": "#0000001f",
         "high-contrast-dark": "#00000026",
         "high-contrast-light": "#0000001f"
+      }
+    },
+    {
+      "id": "textLink.activeForeground",
+      "kind": "color",
+      "cssVariable": "--zeta-text-link-active-foreground",
+      "owner": "platform.theme.components",
+      "description": "Foreground for active links and link-like editor actions.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#4e94ce",
+        "light": "#006ab1",
+        "high-contrast-dark": "#4e94ce",
+        "high-contrast-light": "#006ab1"
+      },
+      "values": {
+        "dark": "#4e94ce",
+        "light": "#006ab1",
+        "high-contrast-dark": "#4e94ce",
+        "high-contrast-light": "#006ab1"
       }
     },
     {
@@ -1839,6 +1879,26 @@
         "light": "#767676",
         "high-contrast-dark": "#8f8f8f",
         "high-contrast-light": "#767676"
+      }
+    },
+    {
+      "id": "editor.compositionBorder",
+      "kind": "color",
+      "cssVariable": "--zeta-editor-composition-border",
+      "owner": "editor.presentation",
+      "description": "Border under text in an active input method composition.",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#a0a0a0",
+        "light": "#a0a0a0",
+        "high-contrast-dark": "#a0a0a0",
+        "high-contrast-light": "#a0a0a0"
+      },
+      "values": {
+        "dark": "#a0a0a0",
+        "light": "#a0a0a0",
+        "high-contrast-dark": "#a0a0a0",
+        "high-contrast-light": "#a0a0a0"
       }
     },
     {
