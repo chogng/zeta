@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createToggleBlockCommentCommand } from "../../common/blockCommentCommands.js";
-import { EditorSelectionController } from "../../../../common/cursor/cursor.js";
+import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 
 test("Block comments wrap and unwrap directional selections in isolated undo steps", () => {
 	using model = new TextModel("alpha beta");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(
+	using selections = new CursorsController(model, TextSelectionSet.single(
 		TextSelection.from(TextPosition.at(0, 10), TextPosition.at(0, 6)),
 	));
 	const options = { open: "/*", close: "*/" };
@@ -31,7 +31,7 @@ test("Block comments wrap and unwrap directional selections in isolated undo ste
 
 test("Block comments place collapsed carets inside the generated pair and support independent cursors", () => {
 	using model = new TextModel("one two");
-	using selections = new EditorSelectionController(model, TextSelectionSet.withPrimary([
+	using selections = new CursorsController(model, TextSelectionSet.withPrimary([
 		TextSelection.collapsedAt(TextPosition.at(0, 0)),
 		TextSelection.collapsedAt(TextPosition.at(0, 4)),
 	], 1));

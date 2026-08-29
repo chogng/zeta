@@ -1,7 +1,7 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { jumpToMatchingBrackets } from "../common/bracketNavigation.js";
-import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type LanguageBracketPairs } from "../../../common/languages/languageBracketPairs.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
@@ -10,7 +10,7 @@ export class BracketNavigationController extends Disposable {
 	constructor(
 		input: HTMLElement,
 		private readonly viewport: EditorViewport,
-		private readonly selections: EditorSelectionController,
+		private readonly selections: CursorsController,
 		private readonly bracketPairs: LanguageBracketPairs,
 	) {
 		super();

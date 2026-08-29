@@ -3,7 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { CodeEditorContributionContext } from "../../../browser/widget/codeEditor/codeEditorContributions.js";
-import { EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { CursorsController } from "../../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { TextPosition } from "../../../common/core/text.js";
 import { TextModel } from "../../../common/model/textModel.js";
@@ -35,7 +35,7 @@ test("CodeEditorWidget owns one canonical browser editing surface", () => {
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	const editor = new CodeEditorWidget({ container, model, selectionController: selections, lineHeight: 20, ariaLabel: "Code" });
 
 	editor.layout({ width: 320, height: 80 });
@@ -57,7 +57,7 @@ test("CodeEditorWidget owns padding, placeholder, and current-line presentation 
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using editor = new CodeEditorWidget({
 		container,
 		model,
@@ -85,7 +85,7 @@ test("PlaceholderTextContribution follows model emptiness and editor layout", ()
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel();
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using editor = new CodeEditorWidget({
 		container,
 		model,
@@ -124,7 +124,7 @@ test("CodeEditorWidget stages and owns per-instance contributions", () => {
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	const events: string[] = [];
 	const service = { kind: "test" };
 	const serviceId = createServiceIdentifier<typeof service>("test.codeEditorContribution");
@@ -184,7 +184,7 @@ test("CodeEditorWidget rejects a selection controller from another model", () =>
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha");
 	using otherModel = new TextModel("beta");
-	using selections = new EditorSelectionController(otherModel, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(otherModel, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 
 	assert.throws(() => new CodeEditorWidget({ container, model, selectionController: selections, lineHeight: 20 }), /must match/);
 	dom.window.close();
@@ -195,7 +195,7 @@ test("CodeEditorWidget leaves text drops available to its host", () => {
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using editor = new CodeEditorWidget({ container, model, selectionController: selections, lineHeight: 20 });
 	const drop = textDropEvent(dom.window, "dropped");
 

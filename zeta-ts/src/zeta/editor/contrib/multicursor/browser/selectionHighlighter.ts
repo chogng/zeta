@@ -2,8 +2,8 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { type EditorView } from '../../../browser/view.js';
 import { type TextSelection } from '../../../common/core/selection.js';
 import { type TextRange } from '../../../common/core/text.js';
-import { type EditorSelectionController } from '../../../common/cursor/cursor.js';
-import { getWordSelectionRange } from '../../../common/cursor/cursorWordOperations.js';
+import { type CursorsController } from '../../../common/cursor/cursor.js';
+import { WordOperations } from '../../../common/cursor/cursorWordOperations.js';
 import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
 import { findTextMatches } from '../../../common/model/textModelSearch.js';
 import { TrackedRangeStickiness } from '../../../common/model/trackedRange.js';
@@ -34,7 +34,7 @@ export class SelectionHighlighter extends Disposable {
 
 	constructor(
 		view: EditorView,
-		private readonly selections: EditorSelectionController,
+		private readonly selections: CursorsController,
 		private readonly decorations: TextDecorationCollection<boolean>,
 		options: SelectionHighlighterOptions,
 	) {
@@ -75,7 +75,7 @@ export class SelectionHighlighter extends Disposable {
 		if (!text || /^\s+$/u.test(text) || (this.maxLength > 0 && text.length > this.maxLength)) return Object.freeze([]);
 		if (!selectionsContainSameText(this.selections, selected, text)) return Object.freeze([]);
 		const wordPattern = this.wordPattern?.();
-		const wordRange = getWordSelectionRange(this.selections.textModel, source.range.start, wordPattern);
+		const wordRange = WordOperations.getWordSelectionRange(this.selections.textModel, source.range.start, wordPattern);
 		const wholeWord = rangesEqual(wordRange, source.range);
 		const matches = findTextMatches(this.selections.textModel, {
 			pattern: text,
@@ -84,13 +84,13 @@ export class SelectionHighlighter extends Disposable {
 		}, { resultLimit: MAX_SELECTION_HIGHLIGHTS });
 		return Object.freeze(matches.flatMap(match => {
 			if (selected.some(selection => rangesIntersect(this.selections, match.range, selection.range))) return [];
-			if (wholeWord && wordPattern && !rangesEqual(getWordSelectionRange(this.selections.textModel, match.range.start, wordPattern), match.range)) return [];
+			if (wholeWord && wordPattern && !rangesEqual(WordOperations.getWordSelectionRange(this.selections.textModel, match.range.start, wordPattern), match.range)) return [];
 			return [match.range];
 		}));
 	}
 }
 
-function validateSelectionHighlighter(view: EditorView, selections: EditorSelectionController, decorations: TextDecorationCollection<boolean>, options: SelectionHighlighterOptions): void {
+function validateSelectionHighlighter(view: EditorView, selections: CursorsController, decorations: TextDecorationCollection<boolean>, options: SelectionHighlighterOptions): void {
 	if (view.viewport.textModel !== selections.textModel || selections.textModel !== decorations.textModel) throw new TypeError('Selection highlighter dependencies must share one text model');
 	if (!options || typeof options !== 'object' || !options.languageId || !options.languageFeaturesService) throw new TypeError('Selection highlighter requires language services');
 	if (options.enabled !== undefined && typeof options.enabled !== 'boolean') throw new TypeError('Selection highlighter enabled option must be boolean');
@@ -100,11 +100,11 @@ function validateSelectionHighlighter(view: EditorView, selections: EditorSelect
 	if (options.wordPattern !== undefined && typeof options.wordPattern !== 'function') throw new TypeError('Selection highlighter word pattern resolver must be a function');
 }
 
-function selectionsContainSameText(controller: EditorSelectionController, selections: readonly TextSelection[], text: string): boolean {
+function selectionsContainSameText(controller: CursorsController, selections: readonly TextSelection[], text: string): boolean {
 	return selections.every(selection => controller.textModel.getTextInRange(selection.range) === text);
 }
 
-function rangesIntersect(controller: EditorSelectionController, left: TextRange, right: TextRange): boolean {
+function rangesIntersect(controller: CursorsController, left: TextRange, right: TextRange): boolean {
 	const leftStart = controller.textModel.offsetAt(left.start);
 	const leftEnd = controller.textModel.offsetAt(left.end);
 	const rightStart = controller.textModel.offsetAt(right.start);

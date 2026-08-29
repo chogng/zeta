@@ -4,7 +4,7 @@ import { disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
 import { Disposable, MutableDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { createEditorEditCommand } from '../../../common/commands/editorCommand.js';
-import { type EditorSelectionController } from '../../../common/cursor/cursor.js';
+import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { type TextPosition } from '../../../common/core/text.js';
 import { RGBA8 } from '../../../common/core/misc/rgba.js';
 import { type EditorViewport } from '../../../browser/view.js';
@@ -36,7 +36,7 @@ export class ColorPickerController extends Disposable {
 	constructor(
 		private readonly editorInput: HTMLElement,
 		private readonly viewport: EditorViewport,
-		private readonly selections: EditorSelectionController,
+		private readonly selections: CursorsController,
 		private readonly service: ColorService,
 		private readonly detector: ColorDetector,
 		private readonly languageId: string,

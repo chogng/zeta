@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
-import { EditorSelectionController } from "../../common/cursor/cursor.js";
+import { CursorsController } from "../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { TextPosition } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
@@ -32,7 +32,7 @@ test("core commands select all", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one\n  two\nthree");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -56,7 +56,7 @@ test("line selection remains an independent editor extension", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one\ntwo\nthree");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 400, height: 100 });
 	using input = new EditorView(viewport, selections);
@@ -76,8 +76,8 @@ test("core commands reject dependencies from different text models", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	using model = new TextModel("one");
 	using otherModel = new TextModel("two");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
-	using otherSelections = new EditorSelectionController(otherModel, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using otherSelections = new CursorsController(otherModel, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using viewport = new EditorViewport({
 		container: dom.window.document.querySelector<HTMLElement>("main")!,
 		model,

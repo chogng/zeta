@@ -1,7 +1,7 @@
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { findTextMatches, type TextSearchMatch } from "../../../common/model/textModelSearch.js";
-import { getWordSelectionRange } from "../../../common/cursor/cursorWordOperations.js";
+import { WordOperations } from "../../../common/cursor/cursorWordOperations.js";
 
 const MAX_OCCURRENCE_SELECTIONS = 100_000;
 
@@ -55,7 +55,7 @@ export function selectAllOccurrences(model: TextModel, selections: TextSelection
 function sourceSelection(model: TextModel, selections: TextSelectionSet, wordPattern: RegExp | undefined): TextSelection | undefined {
 	const primary = selections.primary;
 	if (!primary.collapsed) return primary;
-	const range = getWordSelectionRange(model, primary.active, wordPattern);
+	const range = WordOperations.getWordSelectionRange(model, primary.active, wordPattern);
 	if (range.empty) return undefined;
 	return TextSelection.from(range.start, range.end);
 }

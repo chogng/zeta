@@ -1,7 +1,7 @@
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
-import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type LanguageCompletionSnippet } from "./snippetParser.js";
 import { applyLanguageCompletionSnippetTransform, type LanguageCompletionSnippetTransform } from "./snippetTransform.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
@@ -25,7 +25,7 @@ export class LanguageCompletionSnippetSession extends Disposable {
 
 	constructor(
 		model: TextModel,
-		private readonly selections: EditorSelectionController,
+		private readonly selections: CursorsController,
 		insertionStartOffset: number,
 		snippet: LanguageCompletionSnippet,
 		finalOffsetWithinInsertion = snippet.text.length,

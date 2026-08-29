@@ -1,7 +1,7 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { createToggleBlockCommentCommand } from "../common/blockCommentCommands.js";
-import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type LanguageConfigurationSource } from "../../../common/languages/languageConfiguration.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { type LanguageLexicalContextSource } from "../../../common/languages/languageLexicalContext.js";
@@ -20,7 +20,7 @@ export class BlockCommentController extends Disposable {
 	constructor(
 		input: HTMLElement,
 		private readonly viewport: EditorViewport,
-		private readonly selections: EditorSelectionController,
+		private readonly selections: CursorsController,
 		private readonly options: BlockCommentControllerOptions,
 		private readonly executeCommand: EditorCommandExecutor = (_commandId, operation) => operation(),
 	) {

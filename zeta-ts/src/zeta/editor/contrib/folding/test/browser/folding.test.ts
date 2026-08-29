@@ -3,7 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../../../base/common/platform.js";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
-import { EditorSelectionController } from "../../../../common/cursor/cursor.js";
+import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { EditorFoldingModel } from "../../browser/foldingModel.js";
 import { EditorHiddenRangeModel } from "../../browser/hiddenRangeModel.js";
 import { FoldingDecorationProvider } from "../../browser/foldingDecorations.js";
@@ -36,7 +36,7 @@ test("Folding controller routes platform chords and gutter toggles through the f
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	using model = new TextModel("header\nbody\nend\nafter");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(1, 1))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(1, 1))));
 	using folding = new EditorFoldingModel(model);
 	using hiddenRanges = new EditorHiddenRangeModel(model, folding);
 	folding.setRanges([{ startLineIndex: 0, endLineIndex: 2 }]);
@@ -85,7 +85,7 @@ test("Folding controller routes macOS Command+K chords without accepting Control
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	using model = new TextModel("first\n  nested\nsecond\n  nested");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(1, 1))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(1, 1))));
 	using folding = new EditorFoldingModel(model);
 	using hiddenRanges = new EditorHiddenRangeModel(model, folding);
 	folding.setRanges([{ startLineIndex: 0, endLineIndex: 1 }, { startLineIndex: 2, endLineIndex: 3 }]);
@@ -111,7 +111,7 @@ test("Folding controller collapses and expands every range through Ctrl+K chords
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	using model = new TextModel("first\n  nested\nsecond\n  nested");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(1, 1))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(1, 1))));
 	using folding = new EditorFoldingModel(model);
 	using hiddenRanges = new EditorHiddenRangeModel(model, folding);
 	folding.setRanges([{ startLineIndex: 0, endLineIndex: 1 }, { startLineIndex: 2, endLineIndex: 3 }]);
@@ -135,7 +135,7 @@ test("Folding controller recursively folds nested regions through platform prefi
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	using model = new TextModel("outer\nchild\ngrandchild\nend child\nend outer");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(1, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(1, 0))));
 	using folding = new EditorFoldingModel(model);
 	using hiddenRanges = new EditorHiddenRangeModel(model, folding);
 	folding.setRanges([{ startLineIndex: 0, endLineIndex: 4 }, { startLineIndex: 1, endLineIndex: 3 }, { startLineIndex: 2, endLineIndex: 3 }]);
@@ -162,7 +162,7 @@ test("Folding controller creates and removes manual ranges through macOS prefix 
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	using model = new TextModel("first\nmanual start\nbody\nmanual end\nlast");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.from(TextPosition.at(1, 0), TextPosition.at(4, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.from(TextPosition.at(1, 0), TextPosition.at(4, 0))));
 	using folding = new EditorFoldingModel(model);
 	using hiddenRanges = new EditorHiddenRangeModel(model, folding);
 	using decorations = new FoldingDecorationProvider(folding);
@@ -186,7 +186,7 @@ test("Folding controller collapses macOS prefix levels without hiding shallower 
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	using model = new TextModel("outer\nchild\ngrandchild\nend grandchild\nend child\nend outer");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using folding = new EditorFoldingModel(model);
 	using hiddenRanges = new EditorHiddenRangeModel(model, folding);
 	folding.setRanges([{ startLineIndex: 0, endLineIndex: 5 }, { startLineIndex: 1, endLineIndex: 4 }, { startLineIndex: 2, endLineIndex: 3 }]);
@@ -211,7 +211,7 @@ function renderedLogicalLines(root: ParentNode): readonly string[] {
 function foldingControllerContext(
 	input: HTMLTextAreaElement,
 	viewport: InstanceType<typeof EditorViewport>,
-	selections: EditorSelectionController,
+	selections: CursorsController,
 	folding: EditorFoldingModel,
 ): TextEditorContributionContext {
 	return {

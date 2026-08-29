@@ -3,7 +3,7 @@ import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../
 import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { TextPosition } from '../../../common/core/text.js';
 import { getTextWordSegments } from '../../../common/core/textSegmentation.js';
-import { getWordSelectionRange } from '../../../common/cursor/cursorWordOperations.js';
+import { WordOperations } from '../../../common/cursor/cursorWordOperations.js';
 import { DocumentHighlightKind, type DocumentHighlight, type DocumentHighlightProvider, type DocumentHighlightRequest, type DocumentHighlightTarget, type MultiDocumentHighlightProvider } from '../../../common/languages/documentHighlights.js';
 import { findTextMatches } from '../../../common/model/textModelSearch.js';
 import { type TextModel } from '../../../common/model/textModel.js';
@@ -26,7 +26,7 @@ class TextualDocumentHighlightProvider implements DocumentHighlightProvider, Mul
 	}
 
 	provideMultiDocumentHighlights(request: DocumentHighlightRequest, targets: readonly DocumentHighlightTarget[], token: CancellationToken): ReadonlyMap<DocumentHighlightTarget['resource'], readonly DocumentHighlight[]> {
-		const sourceRange = getWordSelectionRange(request.model, request.position, request.wordPattern);
+		const sourceRange = WordOperations.getWordSelectionRange(request.model, request.position, request.wordPattern);
 		if (sourceRange.empty || !isWordRange(request.model, sourceRange.start.columnIndex, sourceRange.end.columnIndex, sourceRange.start.lineIndex, request.wordPattern)) return new ResourceMap();
 		const text = request.model.getTextInRange(sourceRange);
 		const result = new ResourceMap<readonly DocumentHighlight[]>();
@@ -69,7 +69,7 @@ function acquireTextualHighlightProviders(service: ILanguageFeaturesService): ID
 function findHighlights(model: TextModel, position: DocumentHighlightRequest['position'], wordPattern: RegExp | undefined, token: CancellationToken): readonly DocumentHighlight[] {
 	if (token.isCancellationRequested) return Object.freeze([]);
 	if (model.isDisposed) return Object.freeze([]);
-	const range = getWordSelectionRange(model, position, wordPattern);
+	const range = WordOperations.getWordSelectionRange(model, position, wordPattern);
 	if (range.empty || !isWordRange(model, range.start.columnIndex, range.end.columnIndex, range.start.lineIndex, wordPattern)) return Object.freeze([]);
 	return findText(model, model.getTextInRange(range), wordPattern, token);
 }
@@ -91,7 +91,7 @@ function findText(model: TextModel, text: string, wordPattern: RegExp | undefine
 
 function isWordRange(model: TextModel, startColumn: number, endColumn: number, lineIndex: number, wordPattern: RegExp | undefined): boolean {
 	if (wordPattern) {
-		const range = getWordSelectionRange(model, TextPosition.at(lineIndex, startColumn), wordPattern);
+		const range = WordOperations.getWordSelectionRange(model, TextPosition.at(lineIndex, startColumn), wordPattern);
 		return range.start.columnIndex === startColumn && range.end.columnIndex === endColumn;
 	}
 	return Boolean(getTextWordSegments(model.getLineContent(lineIndex)).find(segment => segment.wordLike && segment.start === startColumn && segment.end === endColumn));

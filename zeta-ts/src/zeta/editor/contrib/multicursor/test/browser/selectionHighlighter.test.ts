@@ -5,7 +5,7 @@ import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.j
 import { createStanzaDecorationSource } from '../../../../browser/viewparts/decorations/decorations.js';
 import { TextSelection, TextSelectionSet } from '../../../../common/core/selection.js';
 import { TextPosition, TextRange } from '../../../../common/core/text.js';
-import { EditorSelectionController } from '../../../../common/cursor/cursor.js';
+import { CursorsController } from '../../../../common/cursor/cursor.js';
 import { TextDecorationCollection } from '../../../../common/model/decorationCollection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../test/common/testLanguageFeaturesService.js';
@@ -59,7 +59,7 @@ function createHarness(text: string, languages: LanguageFeaturesService, initial
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const model = new TextModel(text);
-	const selections = new EditorSelectionController(model, TextSelectionSet.single(initialSelection));
+	const selections = new CursorsController(model, TextSelectionSet.single(initialSelection));
 	const decorations = new TextDecorationCollection<boolean>(model);
 	const viewport = new EditorViewport({
 		container,
@@ -82,7 +82,7 @@ class SelectionHarness implements Disposable {
 	constructor(
 		private readonly dom: JSDOM,
 		readonly model: TextModel,
-		readonly selections: EditorSelectionController,
+		readonly selections: CursorsController,
 		readonly decorations: TextDecorationCollection<boolean>,
 		readonly viewport: InstanceType<typeof EditorViewport>,
 		readonly view: InstanceType<typeof EditorView>,

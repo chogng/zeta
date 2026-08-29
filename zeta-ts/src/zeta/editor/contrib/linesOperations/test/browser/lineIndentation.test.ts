@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { EditorIndentationKind } from "../../../../common/core/misc/indentation.js";
-import { EditorSelectionController } from "../../../../common/cursor/cursor.js";
+import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
@@ -32,7 +32,7 @@ test("Line operations controller routes selected-line Tab and Shift+Tab through 
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one\n  two\nthree");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -66,8 +66,8 @@ test("Line operations controller validates model ownership and indentation optio
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one");
 	using otherModel = new TextModel("two");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
-	using otherSelections = new EditorSelectionController(otherModel, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using otherSelections = new CursorsController(otherModel, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using viewport = new EditorViewport({
 		container,
 		model,

@@ -3,7 +3,7 @@ import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.j
 import { type Event } from "../../../../../base/common/event.js";
 import { IME } from "../../../../../base/common/ime.js";
 import { type IAccessibilityService } from "../../../../../platform/accessibility/common/accessibility.js";
-import { type EditorSelectionController } from "../../../../common/cursor/cursor.js";
+import { type CursorsController } from "../../../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { type TextModel } from "../../../../common/model/textModel.js";
@@ -17,7 +17,7 @@ export interface NativeScreenReaderSupportOptions {
 	readonly element: HTMLElement;
 	readonly model: TextModel;
 	readonly viewport: EditorViewport;
-	readonly selectionController: EditorSelectionController;
+	readonly selectionController: CursorsController;
 	/** Logical focus events from NativeEditContext; they hide the IME bridge hop. */
 	readonly onDidFocus?: Event<void>;
 	readonly onDidBlur?: Event<void>;

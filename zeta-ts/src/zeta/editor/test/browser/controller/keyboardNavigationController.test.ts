@@ -7,7 +7,7 @@ import { type TextMeasurer } from "../../../browser/config/fontMeasurements.js";
 import { resolveStanzaKeyboardNavigation } from "../../../browser/view/viewController.js";
 import { ViewUserInputEvents } from "../../../browser/view/viewUserInputEvents.js";
 import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../../../common/cursor/cursorMoveOperations.js";
-import { EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { CursorsController } from "../../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { TextPosition } from "../../../common/core/text.js";
 import { TextModel } from "../../../common/model/textModel.js";
@@ -125,7 +125,7 @@ test("Keyboard controller retains columns, routes multi-selection, and reveals p
 		"line",
 		"abcdefghijklmnopqrstuvwxyz",
 	].join("\n"));
-	using selections = new EditorSelectionController(
+	using selections = new CursorsController(
 		model,
 		TextSelectionSet.single(caret(0, 5)),
 	);
@@ -231,7 +231,7 @@ test("Keyboard controller moves by measured visual rows when soft wrapping is en
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("abcdef\nghij");
-	using selections = new EditorSelectionController(
+	using selections = new CursorsController(
 		model,
 		TextSelectionSet.single(caret(0, 1)),
 	);
@@ -280,17 +280,38 @@ test("Keyboard controller moves by measured visual rows when soft wrapping is en
 	dom.window.close();
 });
 
+test('Keyboard controller applies sticky tab stops to indentation movement', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = dom.window.document.querySelector('main');
+	assert.ok(container);
+	using model = new TextModel('        value');
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(0, 8)));
+	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	const userInputEvents = new ViewUserInputEvents();
+	using keyboard = new KeyboardNavigationController(
+		viewport,
+		selections,
+		userInputEvents,
+		{ operatingSystem: OperatingSystem.Windows, stickyTabStops: true, tabSize: 4 },
+	);
+
+	emitKeyDown(userInputEvents, keyboardEvent(dom.window, 'ArrowLeft'));
+	assert.deepEqual(selections.selections.primary, caret(0, 4));
+
+	dom.window.close();
+});
+
 test("Keyboard controller rejects cross-model wiring and invalid OS options", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("alpha");
 	using otherModel = new TextModel("beta");
-	using selections = new EditorSelectionController(
+	using selections = new CursorsController(
 		otherModel,
 		TextSelectionSet.single(caret(0, 0)),
 	);
-	using ownSelections = new EditorSelectionController(
+	using ownSelections = new CursorsController(
 		model,
 		TextSelectionSet.single(caret(0, 0)),
 	);

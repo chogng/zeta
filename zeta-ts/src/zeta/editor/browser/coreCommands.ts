@@ -1,6 +1,6 @@
 import { addDisposableListener, stopEvent } from "../../base/browser/dom.js";
 import { type IDisposable } from "../../base/common/lifecycle.js";
-import { type EditorSelectionController } from "../common/cursor/cursor.js";
+import { type CursorsController } from "../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../common/core/selection.js";
 import { type TextModel } from "../common/model/textModel.js";
 import { registerEditorContribution } from "./editorExtensions.js";
@@ -13,7 +13,7 @@ export const EditorCoreCommandId = Object.freeze({
 export interface CoreTextEditorCommandContext {
 	readonly model: TextModel;
 	readonly viewport: EditorViewport;
-	readonly selections: EditorSelectionController;
+	readonly selections: CursorsController;
 }
 
 /** Executes the built-in text-editor Select All command. */
@@ -30,7 +30,7 @@ export function selectAll(context: CoreTextEditorCommandContext): void {
 export function installCoreTextEditorCommands(
 	input: HTMLElement,
 	viewport: EditorViewport,
-	selections: EditorSelectionController,
+	selections: CursorsController,
 ): IDisposable {
 	if (viewport.textModel !== selections.textModel) {
 		throw new TypeError("Editor core command dependencies must share one text model");

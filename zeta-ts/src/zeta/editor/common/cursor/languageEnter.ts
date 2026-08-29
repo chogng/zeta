@@ -1,5 +1,5 @@
 import { getEditorIndentationUnit, getLeadingIndentation, normalizeEditorIndentation, normalizeEditorIndentationText, resolveEditorIndentationOptions, unshiftEditorIndentation, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from "../core/misc/indentation.js";
-import { createSelectionEditCommand, type EditorSelectionEdit } from "./cursorTypeEditOperations.js";
+import { TypeWithoutInterceptorsOperation, type SelectionEdit } from './cursorTypeEditOperations.js';
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../commands/editorEditCommand.js";
 import { LanguageIndentAction, type LanguageEnterAction, type LanguageOnEnterRule, type ResolvedLanguageConfiguration } from "../languages/languageConfiguration.js";
 import { type LanguageLexicalContextSource } from "../languages/languageLexicalContext.js";
@@ -17,10 +17,10 @@ export function createLanguageEnterCommand(model: TextModel, selections: TextSel
 	assertOptions(model, configuration, options);
 	const resolvedIndentation = resolveEditorIndentationOptions(options.indentation);
 	const edits = selections.selections.map(selection => createEnterEdit(model, selection, configuration, resolvedIndentation, options.lexicalContext));
-	return createSelectionEditCommand(model, selections, edits, EditorCommandHistoryMode.BeginCoalescedTyping);
+	return TypeWithoutInterceptorsOperation.getEdits(model, selections, edits, EditorCommandHistoryMode.BeginCoalescedTyping);
 }
 
-function createEnterEdit(model: TextModel, selection: TextSelection, configuration: ResolvedLanguageConfiguration, indentation: ResolvedEditorIndentationOptions, lexicalContext: LanguageLexicalContextSource | undefined): EditorSelectionEdit {
+function createEnterEdit(model: TextModel, selection: TextSelection, configuration: ResolvedLanguageConfiguration, indentation: ResolvedEditorIndentationOptions, lexicalContext: LanguageLexicalContextSource | undefined): SelectionEdit {
 	const startLine = model.getLineContent(selection.range.start.lineIndex);
 	const endLine = model.getLineContent(selection.range.end.lineIndex);
 	const originalBeforeText = startLine.slice(0, selection.range.start.columnIndex);

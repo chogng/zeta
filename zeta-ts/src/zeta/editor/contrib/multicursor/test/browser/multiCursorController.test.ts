@@ -3,7 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../../../base/common/platform.js";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
-import { EditorSelectionController } from "../../../../common/cursor/cursor.js";
+import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
@@ -29,7 +29,7 @@ test("Multi-cursor shortcut adds a logical adjacent caret through Stanza common 
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("zero\none\ntwo");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(1, 1))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(1, 1))));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 60 });
 	const input = h(dom.window.document, "textarea");
@@ -51,7 +51,7 @@ test("Multi-cursor shortcut replaces selected rows with line-end carets", () => 
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("zero\none\ntwo");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 1), TextPosition.at(2, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 1), TextPosition.at(2, 0))));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 60 });
 	const input = h(dom.window.document, "textarea");
@@ -93,8 +93,8 @@ test("Multi-cursor controller rejects cross-model wiring", () => {
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one");
 	using other = new TextModel("two");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
-	using otherSelections = new EditorSelectionController(other, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using otherSelections = new CursorsController(other, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	const input = h(dom.window.document, "textarea");
 	assert.throws(() => new MultiCursorController(input, viewport, otherSelections), /must share one text model/);

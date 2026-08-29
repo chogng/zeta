@@ -1,6 +1,6 @@
 import { stopEvent } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { type EditorSelectionController } from '../../../common/cursor/cursor.js';
+import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, type LanguageCompletionContext } from '../../../common/languages/completion/languageCompletionProviders.js';
 import { type LanguageCompletionService } from '../../../common/languages/completion/languageCompletionService.js';
 import { type EditorView, type EditorViewDidEditEvent, type EditorViewTextUpdateEvent } from '../../../browser/view.js';
@@ -29,7 +29,7 @@ export class SuggestController extends Disposable {
 
 	constructor(
 		private readonly view: EditorView,
-		private readonly selectionController: EditorSelectionController,
+		private readonly selectionController: CursorsController,
 		private readonly service: LanguageCompletionService,
 		private readonly session: LanguageCompletionSessionController,
 		private readonly languageId: string,

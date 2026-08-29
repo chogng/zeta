@@ -1,17 +1,17 @@
 import { Disposable, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
-import { type EditorSelectionController } from "../../common/cursor/cursor.js";
-import { createEditorColumnSelectionSet } from "../../common/cursor/cursorColumnSelection.js";
+import { type CursorsController } from "../../common/cursor/cursor.js";
+import { ColumnSelection } from "../../common/cursor/cursorColumnSelection.js";
 import { SelectionDirection, TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";
 import { type TextModel } from "../../common/model/textModel.js";
 import { TrackedRangeStickiness, type TrackedRange } from "../../common/model/trackedRange.js";
-import { getWordSelectionRange } from "../../common/cursor/cursorWordOperations.js";
+import { WordOperations } from "../../common/cursor/cursorWordOperations.js";
 import { type EditorViewport } from "../view.js";
 import { DragScrolling } from "./dragScrolling.js";
 import { PointerHandler } from "./pointerHandler.js";
 import { MouseTargetFactory, MouseTargetKind } from "./mouseTarget.js";
 import { EditorHitTargetKind, type EditorHitTarget } from "../../common/viewModel/pointerHitTest.js";
-import { PointerMultiCursorModifier, combineStanzaPointerSelection, findStanzaPointerToggleCandidate, isStanzaPointerMultiCursorGesture, readStanzaPointerMultiCursorModifier } from "../../common/cursor/cursorMoveCommands.js";
+import { CursorMoveCommands, PointerMultiCursorModifier, type PointerModifierState } from "../../common/cursor/cursorMoveCommands.js";
 
 enum MouseSelectionKind {
 	Character = "character",
@@ -66,12 +66,12 @@ export class MouseHandler extends Disposable {
 
 	constructor(
 		private readonly viewport: EditorViewport,
-		private readonly selectionController: EditorSelectionController,
+		private readonly selectionController: CursorsController,
 		options: MouseHandlerOptions = {},
 	) {
 		super();
 		try {
-			this.multiCursorModifier = readStanzaPointerMultiCursorModifier(
+			this.multiCursorModifier = CursorMoveCommands.readPointerMultiCursorModifier(
 				options.multiCursorModifier,
 			);
 			if (options.wordPattern !== undefined && typeof options.wordPattern !== "function") {
@@ -105,7 +105,7 @@ export class MouseHandler extends Disposable {
 		this.viewport.element.focus({ preventScroll: true });
 		this.stopPointerSelection();
 		const pointerId = readPointerId(event);
-		const addSelection = isStanzaPointerMultiCursorGesture(
+		const addSelection = CursorMoveCommands.isPointerMultiCursorGesture(
 			event,
 			this.multiCursorModifier,
 		);
@@ -198,7 +198,7 @@ export class MouseHandler extends Disposable {
 				);
 			} else {
 				kind = MouseSelectionKind.Word;
-				anchorRange = getWordSelectionRange(this.viewport.textModel, hitTarget.position, this.wordPattern?.());
+				anchorRange = WordOperations.getWordSelectionRange(this.viewport.textModel, hitTarget.position, this.wordPattern?.());
 			}
 		} else {
 			kind = MouseSelectionKind.Character;
@@ -245,7 +245,7 @@ export class MouseHandler extends Disposable {
 				direction: selection.direction,
 			})),
 			primaryIndex: base.primaryIndex,
-			toggleCandidateIndex: findStanzaPointerToggleCandidate(
+			toggleCandidateIndex: CursorMoveCommands.findPointerToggleCandidate(
 				base,
 				initialSelection,
 			),
@@ -288,7 +288,7 @@ export class MouseHandler extends Disposable {
 		if (!active) return;
 		const anchorRange = active.anchor.range;
 		if (active.kind === MouseSelectionKind.Column) {
-			this.selectionController.setSelections(createEditorColumnSelectionSet(
+			this.selectionController.setSelections(ColumnSelection.columnSelect(
 				this.viewport.textModel,
 				anchorRange.start,
 				hitTarget.position,
@@ -308,7 +308,7 @@ export class MouseHandler extends Disposable {
 			return;
 		}
 		const base = trackedSelectionSet(additional);
-		this.selectionController.setSelections(combineStanzaPointerSelection(
+		this.selectionController.setSelections(CursorMoveCommands.combinePointerSelection(
 			base,
 			selection,
 			additional.toggleCandidateIndex,
@@ -382,14 +382,14 @@ function trackedSelectionSet(additional: AdditionalMouseSelections): TextSelecti
 }
 
 function wordSelection(model: TextModel, anchorRange: TextRange, activePosition: TextPosition, wordPattern: RegExp | undefined): TextSelection {
-	const activeRange = getWordSelectionRange(model, activePosition, wordPattern);
+	const activeRange = WordOperations.getWordSelectionRange(model, activePosition, wordPattern);
 	return activeRange.start.compareTo(anchorRange.start) < 0
 		? TextSelection.from(anchorRange.end, activeRange.start)
 		: TextSelection.from(anchorRange.start, activeRange.end);
 }
 
 function extendSelectionToWord(model: TextModel, anchor: TextPosition, activePosition: TextPosition, wordPattern: RegExp | undefined): TextSelection {
-	const activeRange = getWordSelectionRange(model, activePosition, wordPattern);
+	const activeRange = WordOperations.getWordSelectionRange(model, activePosition, wordPattern);
 	const active = activeRange.start.compareTo(anchor) < 0
 		? activeRange.start
 		: activeRange.end;

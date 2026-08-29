@@ -7,7 +7,7 @@ import { ContentWidgetPositionPreference, type IContentWidgetPosition, OverlayWi
 import { type TextMeasurer } from "../../browser/config/fontMeasurements.js";
 import { createStanzaDecorationSource, DecorationPresentation, GlyphMarginLane } from "../../browser/viewparts/decorations/decorations.js";
 import { type BracketColorizationSource } from '../../browser/viewparts/viewLines/viewLine.js';
-import { EditorSelectionController } from "../../common/cursor/cursor.js";
+import { CursorsController } from "../../common/cursor/cursor.js";
 import { EditorFoldingModel } from "../../contrib/folding/browser/foldingModel.js";
 import { EditorHiddenRangeModel } from "../../contrib/folding/browser/hiddenRangeModel.js";
 import { FoldingDecorationProvider } from "../../contrib/folding/browser/foldingDecorations.js";
@@ -157,7 +157,7 @@ test("EditorViewport uses browser range geometry for RTL selections and carets",
 		},
 	});
 	using model = new TextModel("abc אבג");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -203,7 +203,7 @@ test("EditorViewport selection geometry includes selected newlines on empty line
 		},
 	});
 	using model = new TextModel("alpha\n\nomega");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -269,7 +269,7 @@ test("EditorViewport announces cursor and selection changes through its live reg
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha\nbeta");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: fixedTextMeasurer(), selectionController: selections });
 
 	const status = requiredElement(viewport.element, ".stanza-editor-accessibility-status");
@@ -391,7 +391,7 @@ test("EditorViewport lets a direct host own its focus outline and omits active l
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using embeddedViewport = new EditorViewport({
 		container,
 		model,
@@ -836,7 +836,7 @@ test("Selection controller projects gutter state, ranges, and carets", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("abcd\nefgh\nij");
-	using controller = new EditorSelectionController(
+	using controller = new CursorsController(
 		model,
 		TextSelectionSet.withPrimary([
 			TextSelection.from(
@@ -970,7 +970,7 @@ test('EditorViewport places RTL block cursors over their following glyph or trai
 		},
 	});
 	using model = new TextModel('讗');
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -1004,7 +1004,7 @@ test('EditorViewport renders active bracket and indentation guides from the stru
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('{\n    value\n}\ntail');
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(1, 4))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(1, 4))));
 	const bracketSource: BracketColorizationSource = {
 		textModel: model,
 		getLineBrackets: () => Object.freeze([]),
@@ -1042,7 +1042,7 @@ test('EditorViewport preserves line, gutter, focus, and multi-cursor highlight s
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('alpha\nbeta\ngamma');
-	using controller = new EditorSelectionController(model, TextSelectionSet.withPrimary([
+	using controller = new CursorsController(model, TextSelectionSet.withPrimary([
 		TextSelection.from(TextPosition.at(0, 0), TextPosition.at(0, 2)),
 		TextSelection.collapsedAt(TextPosition.at(2, 1)),
 	], 1));
@@ -1088,7 +1088,7 @@ test('EditorViewport matches line and thin-underline cursor geometry', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('abc');
-	using controller = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
+	using controller = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -1135,7 +1135,7 @@ test('EditorViewport normalizes a block cursor to the complete containing graphe
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('a😊b');
-	using controller = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 2))));
+	using controller = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 2))));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -1161,7 +1161,7 @@ test('EditorViewport gives every cursor one shared blinking animation', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('alpha;\nbeta;');
-	using controller = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 5))));
+	using controller = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 5))));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -1196,7 +1196,7 @@ test('EditorViewport animates stable explicit cursor movement and pauses cursor-
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('alpha\nbeta');
-	using controller = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using controller = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -1243,7 +1243,7 @@ test('EditorViewport snaps line cursors to physical pixels', () => {
 	Object.defineProperty(dom.window, 'devicePixelRatio', { configurable: true, value: 1.25 });
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('abc');
-	using controller = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
+	using controller = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -1283,7 +1283,7 @@ test('EditorViewport keeps token font styling on characters redrawn inside curso
 		get lines() { return Object.freeze([Object.freeze({ lineIndex: 0, tokens })]); },
 		getLineTokens: () => tokens,
 	};
-	using controller = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
+	using controller = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -1330,7 +1330,7 @@ test('EditorViewport sizes block cursors from contextual tab advances', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('a\tb\nabcd\tb');
-	using controller = new EditorSelectionController(model, TextSelectionSet.withPrimary([
+	using controller = new CursorsController(model, TextSelectionSet.withPrimary([
 		TextSelection.collapsedAt(TextPosition.at(0, 1)),
 		TextSelection.collapsedAt(TextPosition.at(1, 4)),
 	], 0));
@@ -1430,7 +1430,7 @@ test("Font metric refresh rebuilds authoritative horizontal width", () => {
 	const container = requiredElement(dom.window.document, "main");
 	const measurer = fixedTextMeasurer(10, 20);
 	using model = new TextModel("xxxx");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -1525,7 +1525,7 @@ test('EditorViewport renders relative, interval, and custom line numbers', () =>
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel(lines(12).join('\n'));
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(5, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(5, 0))));
 	using relative = new EditorViewport({
 		container,
 		model,
@@ -1720,7 +1720,7 @@ test('EditorViewport limits selection whitespace to the current selections', () 
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('a b c');
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 1), TextPosition.at(0, 2))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 1), TextPosition.at(0, 2))));
 	using viewport = new EditorViewport({
 		container,
 		model,

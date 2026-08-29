@@ -8,8 +8,8 @@ import { type EditorView } from '../../../browser/view.js';
 import { createStanzaDecorationSource } from '../../../browser/viewparts/decorations/decorations.js';
 import { TextSelection, TextSelectionSet } from '../../../common/core/selection.js';
 import { type TextPosition, type TextRange } from '../../../common/core/text.js';
-import { EditorSelectionChangeReason, type EditorSelectionChange, type EditorSelectionController } from '../../../common/cursor/cursor.js';
-import { getWordSelectionRange } from '../../../common/cursor/cursorWordOperations.js';
+import { CursorChangeReason, type CursorStateChangedEvent, type CursorsController } from '../../../common/cursor/cursor.js';
+import { WordOperations } from '../../../common/cursor/cursorWordOperations.js';
 import { DocumentHighlightKind, type DocumentHighlight, type DocumentHighlightProvider, type DocumentHighlightRequest, type DocumentHighlightTarget, type MultiDocumentHighlightProvider } from '../../../common/languages/documentHighlights.js';
 import { type LanguageFeatureProviderMetadata, type LanguageFeatureProviderRegistry } from '../../../common/languageFeatureRegistry.js';
 import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
@@ -51,7 +51,7 @@ class WordHighlighter extends Disposable {
 
 	constructor(
 		private readonly view: EditorView,
-		private readonly selections: EditorSelectionController,
+		private readonly selections: CursorsController,
 		private readonly decorations: TextDecorationCollection<DocumentHighlightKind | undefined>,
 		options: WordHighlighterOptions,
 	) {
@@ -147,11 +147,11 @@ class WordHighlighter extends Disposable {
 		return this.decorations.size > 0;
 	}
 
-	private handleSelectionChange(change: EditorSelectionChange): void {
+	private handleSelectionChange(change: CursorStateChangedEvent): void {
 		if (this.changingSelection) return;
 		this.cancelRequest();
 		this.coordinator.clear();
-		if (change.reason === EditorSelectionChangeReason.Explicit || change.reason === EditorSelectionChangeReason.CursorOperation || change.reason === EditorSelectionChangeReason.CursorUndo) this.schedule();
+		if (change.reason === CursorChangeReason.Explicit || change.reason === CursorChangeReason.CursorOperation || change.reason === CursorChangeReason.CursorUndo) this.schedule();
 	}
 
 	private handleModelChange(): void {
@@ -207,7 +207,7 @@ class WordHighlighter extends Disposable {
 		if (this.selections.selections.selections.length !== 1) return undefined;
 		const selection = this.selections.selections.primary;
 		if (!selectionFitsModel(this.textModel, selection.range) || selection.range.start.lineIndex !== selection.range.end.lineIndex) return undefined;
-		const range = getWordSelectionRange(this.textModel, selection.range.start, this.currentWordPattern);
+		const range = WordOperations.getWordSelectionRange(this.textModel, selection.range.start, this.currentWordPattern);
 		if (range.empty || range.start.compareTo(selection.range.start) > 0 || range.end.compareTo(selection.range.end) < 0) return undefined;
 		return selection.range.start;
 	}
@@ -371,7 +371,7 @@ function acquireCoordinator(service: ILanguageFeaturesService, controller: WordH
 	return coordinator;
 }
 
-function validateControllerDependencies(view: EditorView, selections: EditorSelectionController, decorations: TextDecorationCollection<DocumentHighlightKind | undefined>, options: WordHighlighterOptions): void {
+function validateControllerDependencies(view: EditorView, selections: CursorsController, decorations: TextDecorationCollection<DocumentHighlightKind | undefined>, options: WordHighlighterOptions): void {
 	if (view.viewport.textModel !== selections.textModel || selections.textModel !== decorations.textModel) throw new TypeError('Word highlighter dependencies must share one text model');
 	if (!options || typeof options !== 'object' || !options.resource || !options.languageId || !options.languageFeaturesService) throw new TypeError('Word highlighter requires resource and language services');
 	if (options.mode !== undefined && options.mode !== 'off' && options.mode !== 'singleFile' && options.mode !== 'multiFile') throw new TypeError('Word highlighter mode is invalid');
@@ -392,7 +392,7 @@ export class WordHighlighterContribution extends Disposable {
 	static readonly ID = 'editor.contrib.wordHighlighter';
 	private readonly wordHighlighter: WordHighlighter;
 
-	constructor(view: EditorView, selections: EditorSelectionController, decorations: TextDecorationCollection<DocumentHighlightKind | undefined>, options: WordHighlighterOptions) {
+	constructor(view: EditorView, selections: CursorsController, decorations: TextDecorationCollection<DocumentHighlightKind | undefined>, options: WordHighlighterOptions) {
 		super();
 		this.wordHighlighter = this._register(new WordHighlighter(view, selections, decorations, options));
 	}

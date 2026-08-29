@@ -2,7 +2,7 @@ import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.j
 import { isCancellationError } from "../../../../base/common/errors.js";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type TextSelectionSet } from "../../../common/core/selection.js";
 import { type TextRange, type TextSnapshot } from "../../../common/core/text.js";
 import { type EditorViewport } from "../../../browser/view.js";
@@ -15,7 +15,7 @@ export class SmartSelectController extends Disposable {
 	private readonly history: TextSelectionSet[] = [];
 	private request: AbortController | undefined;
 
-	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly languageId: string, private readonly selectionRanges: SelectionRangeService, private readonly wordPattern: (() => RegExp | undefined) | undefined, private readonly onError: (error: unknown) => void) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, private readonly languageId: string, private readonly selectionRanges: SelectionRangeService, private readonly wordPattern: (() => RegExp | undefined) | undefined, private readonly onError: (error: unknown) => void) {
 		super();
 		if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza smart select dependencies must share a text model");
 		this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event), true));

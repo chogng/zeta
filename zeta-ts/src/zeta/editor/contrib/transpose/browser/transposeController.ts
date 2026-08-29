@@ -3,7 +3,7 @@ import { registerEditorContribution } from "../../../browser/editorExtensions.js
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { createTransposeCharactersCommand } from "../common/transpose.js";
-import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { type EditorCommandExecutor } from '../../../browser/editorExtensions.js';
 
@@ -20,7 +20,7 @@ export class TransposeController extends Disposable {
 	constructor(
 		input: HTMLElement,
 		private readonly viewport: EditorViewport,
-		private readonly selections: EditorSelectionController,
+		private readonly selections: CursorsController,
 		options: TransposeControllerOptions = {},
 		private readonly executeCommand: EditorCommandExecutor = (_commandId, operation) => operation(),
 	) {

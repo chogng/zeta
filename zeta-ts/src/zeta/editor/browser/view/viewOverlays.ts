@@ -1,7 +1,7 @@
 import { type Event } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { type EditorDomFontInfo } from '../config/domFontInfo.js';
-import { type EditorSelectionChangeReason, type EditorSelectionController } from '../../common/cursor/cursor.js';
+import { type CursorChangeReason, type CursorsController } from '../../common/cursor/cursor.js';
 import { type InternalGuidesOptions, type TextEditorCursorBlinkingStyle, type TextEditorCursorStyle } from '../../common/config/editorOptions.js';
 import { type TextRange } from '../../common/core/text.js';
 import { type TextModel } from '../../common/model/textModel.js';
@@ -24,7 +24,7 @@ import { type EditorRenderingContext, EditorViewContext } from './viewPart.js';
 export interface ViewOverlaysOptions {
 	readonly contentElement: HTMLDivElement;
 	readonly model: TextModel;
-	readonly selectionController: EditorSelectionController | undefined;
+	readonly selectionController: CursorsController | undefined;
 	readonly semanticTokenSource: SemanticTokenSource | undefined;
 	readonly bracketColorizationSource: BracketColorizationSource | undefined;
 	readonly decorationSources: readonly DecorationSource[];
@@ -118,7 +118,7 @@ export class ViewOverlays extends Disposable {
 		}
 	}
 
-	renderSelection(context: EditorRenderingContext, reason: EditorSelectionChangeReason): void {
+	renderSelection(context: EditorRenderingContext, reason: CursorChangeReason): void {
 		this.indentGuides.renderNow(context);
 		this.whitespace.renderNow(context);
 		this.currentLineHighlight.renderNow(context);

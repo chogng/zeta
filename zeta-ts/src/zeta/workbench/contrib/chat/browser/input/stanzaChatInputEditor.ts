@@ -4,7 +4,7 @@ import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { EditorLineWrapping } from "../../../../../editor/common/config/editorOptions.js";
 import { CodeEditorWidget } from "../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js";
-import { EditorSelectionController } from "../../../../../editor/common/cursor/cursor.js";
+import { CursorsController } from "../../../../../editor/common/cursor/cursor.js";
 import { LanguageCompletionService } from "../../../../../editor/common/languages/completion/languageCompletionService.js";
 import { LanguageCompletionProviderRegistry } from "../../../../../editor/common/languages/completion/languageCompletionProviders.js";
 import { LanguageCompletionSessionController } from "../../../../../editor/contrib/suggest/common/suggestModel.js";
@@ -25,7 +25,7 @@ const CHAT_INPUT_MAX_HEIGHT = 320;
 export class ChatInputEditor extends Disposable implements IChatInputEditor {
 	readonly element: HTMLDivElement;
 	private readonly model = this._register(new TextModel());
-	private readonly selections = this._register(new EditorSelectionController(this.model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0)))));
+	private readonly selections = this._register(new CursorsController(this.model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0)))));
 	private readonly editor: CodeEditorWidget;
 	private readonly _onDidChange = this._register(new Emitter<string>());
 	private readonly _onDidSubmit = this._register(new Emitter<void>());

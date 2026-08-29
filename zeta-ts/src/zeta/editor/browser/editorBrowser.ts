@@ -4,7 +4,7 @@ import { Emitter, type Event } from "../../base/common/event.js";
 import { Disposable, type IDisposable, toDisposable } from "../../base/common/lifecycle.js";
 import { isFiniteNumber, isSafeInteger } from "../../base/common/numbers.js";
 import type { URI } from "../../base/common/uri.js";
-import { EditorSelectionController } from "../common/cursor/cursor.js";
+import { CursorsController } from "../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../common/core/selection.js";
 import type { IPosition } from '../common/core/position.js';
 import { TextPosition, type TextRange } from "../common/core/text.js";
@@ -15,11 +15,11 @@ import { LanguageConfigurationService, type ILanguageConfigurationService } from
 import { LanguageFeaturesService } from '../common/services/languageFeaturesService.js';
 import { type TextModel } from "../common/model/textModel.js";
 import { type PositionAffinity } from '../common/model.js';
-import { type EditorIndentationOptions } from "../common/core/misc/indentation.js";
+import { resolveEditorIndentationOptions, type EditorIndentationOptions } from '../common/core/misc/indentation.js';
 import { type EditorRuler, type EditorTextDirection, type EditorView, type EditorViewport, type EditorViewportPresentation } from "./view.js";
 import { CodeEditorWidget, type CodeEditorViewPositionState, type CodeEditorViewSelectionState, type CodeEditorViewState } from "./widget/codeEditor/codeEditorWidget.js";
 import { type EditorHitTarget } from "../common/viewModel/pointerHitTest.js";
-import { type EditorLineWrapping, type IEditorMinimapOptions, type IEditorOptions, type WrappingIndent } from "../common/config/editorOptions.js";
+import { EditorOptions, type EditorLineWrapping, type IEditorMinimapOptions, type IEditorOptions, type WrappingIndent } from '../common/config/editorOptions.js';
 import { type LanguageLocation } from "../contrib/gotoSymbol/common/languageNavigation.js";
 import { type LanguageWorkspaceEdit } from "../common/languages/languageWorkspaceEdit.js";
 import { type ILanguageDiagnosticsService } from "../common/services/languageDiagnosticsService.js";
@@ -197,6 +197,7 @@ export interface EditorBrowserOptions {
 	readonly onDidChangeLanguageSupport?: Event<void>;
 	readonly onLanguageError?: (error: unknown) => void;
 	readonly indentation?: EditorIndentationOptions;
+	readonly stickyTabStops?: IEditorOptions['stickyTabStops'];
 	readonly lineWrapping?: EditorLineWrapping;
 	readonly wrappingIndent?: WrappingIndent;
 	readonly fontFamily?: string;
@@ -270,7 +271,7 @@ export interface IEditorBrowser extends IDisposable {
 	readonly onDidChange: Event<void>;
 	readonly codeEditor: CodeEditorWidget;
 	readonly viewport: EditorViewport;
-	readonly selections: EditorSelectionController;
+	readonly selections: CursorsController;
 	readonly view: EditorView;
 	announceAccessibilityStatus(message: string): void;
 	layout(dimension: IDimension): void;
@@ -297,7 +298,7 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 	readonly onDidChange: Event<void>;
 	readonly codeEditor: CodeEditorWidget;
 	readonly viewport: EditorViewport;
-	readonly selections: EditorSelectionController;
+	readonly selections: CursorsController;
 	readonly view: EditorView;
 
 	constructor(options: EditorBrowserOptions) {
@@ -322,7 +323,7 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 			const languageFeaturesService = options.languageFeaturesService ?? this._register(new LanguageFeaturesService(languageConfigurationService));
 			const semanticTokensStylingService = this._register(new SemanticTokensStylingService());
 			const configurations = languageConfigurationService;
-			this.selections = this._register(new EditorSelectionController(
+			this.selections = this._register(new CursorsController(
 				model,
 				TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))),
 				{ readOnly: options.input.readOnly },
@@ -435,6 +436,8 @@ export class EditorBrowser extends Disposable implements IEditorBrowser {
 				wordPattern: () => configurations.getLanguageConfiguration(languageId).wordPattern,
 				keyboardNavigation: {
 					wordPattern: () => configurations.getLanguageConfiguration(languageId).wordPattern,
+					stickyTabStops: EditorOptions.stickyTabStops.validate(options.stickyTabStops) as boolean,
+					tabSize: resolveEditorIndentationOptions(options.indentation).tabSize,
 				},
 				mouseHandler: {
 					wordPattern: () => configurations.getLanguageConfiguration(languageId).wordPattern,

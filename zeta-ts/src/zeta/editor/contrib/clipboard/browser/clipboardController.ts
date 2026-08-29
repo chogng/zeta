@@ -3,10 +3,10 @@ import { UriList } from '../../../../base/common/dataTransfer.js';
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { isWindows } from '../../../../base/common/platform.js';
 import { type IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
-import { createCutCommand } from '../../../common/cursor/cursorDeleteOperations.js';
-import { createDistributedPasteTextCommand, createLinePasteCommand, createPasteTextCommand } from "../../../common/cursor/cursorTypeOperations.js";
+import { DeleteOperations } from '../../../common/cursor/cursorDeleteOperations.js';
+import { TypeOperations } from "../../../common/cursor/cursorTypeOperations.js";
 import { type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
-import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type TextSelection, type TextSelectionSet } from "../../../common/core/selection.js";
 import { TextPosition, TextRange } from '../../../common/core/text.js';
 import { type TextModel } from "../../../common/model/textModel.js";
@@ -79,7 +79,7 @@ export class ClipboardController extends Disposable {
 	constructor(
 		target: EditContext | HTMLElement,
 		private readonly viewport: EditorViewport,
-		private readonly selectionController: EditorSelectionController,
+		private readonly selectionController: CursorsController,
 		private readonly clipboardService: IClipboardService,
 		options: ClipboardControllerOptions = {},
 	) {
@@ -188,7 +188,7 @@ export class ClipboardController extends Disposable {
 			const uriList = readUriList(nativeClipboard.getData('text/uri-list'));
 			if (uriList) {
 				event.setHandled();
-				this.selectionController.execute(createPasteTextCommand(this.viewport.textModel, this.selectionController.selections, uriList));
+				this.selectionController.execute(TypeOperations.paste(this.viewport.textModel, this.selectionController.selections, uriList));
 				this.afterEdit();
 				return;
 			}
@@ -202,7 +202,7 @@ export class ClipboardController extends Disposable {
 				this.selectionController.selections,
 				clipboardData,
 			)
-			: createPasteTextCommand(
+			: TypeOperations.paste(
 				this.viewport.textModel,
 				this.selectionController.selections,
 				text,
@@ -229,7 +229,7 @@ export class ClipboardController extends Disposable {
 			) {
 				return;
 			}
-			this.selectionController.execute(createPasteTextCommand(model, expectedSelections, text));
+			this.selectionController.execute(TypeOperations.paste(model, expectedSelections, text));
 			this.afterEdit();
 		}).catch(() => {
 			// Clipboard permission failures leave the model unchanged.
@@ -254,7 +254,7 @@ export class ClipboardController extends Disposable {
 	}
 
 	private executeCut(entries: readonly EditorClipboardEntry[]): void {
-		this.selectionController.execute(createCutCommand(
+		this.selectionController.execute(DeleteOperations.cut(
 			this.viewport.textModel,
 			this.selectionController.selections,
 			entries.map(entry => entry.sourceRange),
@@ -303,7 +303,7 @@ export class ClipboardController extends Disposable {
 		event.setHandled();
 		void file.text().then(text => {
 			if (text.length > TEXT_FILE_TRANSFER_MAX_BYTES || this.isDisposed || request !== this.asynchronousPasteRequest || !this.isEditingAllowed() || model.version !== expectedVersion || !selectionSetsEqual(this.selectionController.selections, expectedSelections)) return;
-			this.selectionController.execute(createPasteTextCommand(model, expectedSelections, text));
+			this.selectionController.execute(TypeOperations.paste(model, expectedSelections, text));
 			this.afterEdit();
 		}).catch(() => {
 			// The supplied file could not be decoded as text.
@@ -507,8 +507,8 @@ function readUriList(value: string): string | undefined {
 function createMetadataPasteCommand(model: TextModel, selections: TextSelectionSet, data: EditorClipboardPasteData): EditorEditCommand {
 	return data.modes.every(mode => mode === EditorClipboardPasteMode.Line) &&
 		canPasteCompleteLines(selections)
-		? createLinePasteCommand(model, selections, data.texts)
-		: createDistributedPasteTextCommand(model, selections, data.texts);
+		? TypeOperations.linePaste(model, selections, data.texts)
+		: TypeOperations.distributedPaste(model, selections, data.texts);
 }
 
 function canPasteCompleteLines(selections: TextSelectionSet): boolean {

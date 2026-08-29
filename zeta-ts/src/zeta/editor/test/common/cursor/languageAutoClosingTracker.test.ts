@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { CursorsController } from "../../../common/cursor/cursor.js";
 import { LanguageAutoClosingTracker } from "../../../common/cursor/languageAutoClosingTracker.js";
 import { registerBuiltinLanguageConfigurations } from "../../../common/languages/languageBuiltinConfigurations.js";
 import { LanguageConfigurationRegistry } from "../../../common/languages/languageConfiguration.js";
@@ -11,7 +11,7 @@ import { TextModel } from "../../../common/model/textModel.js";
 
 test("Auto-closing trust follows external edits and rejects a changed closer", () => {
 	using model = new TextModel("x");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(1)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(1)));
 	using configurations = new LanguageConfigurationRegistry();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using tracker = new LanguageAutoClosingTracker(model, selections);
@@ -28,7 +28,7 @@ test("Auto-closing trust follows external edits and rejects a changed closer", (
 
 test("Leaving an auto-closed pair invalidates its trust permanently", () => {
 	using model = new TextModel("");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(0)));
 	using configurations = new LanguageConfigurationRegistry();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using tracker = new LanguageAutoClosingTracker(model, selections);
@@ -43,7 +43,7 @@ test("Leaving an auto-closed pair invalidates its trust permanently", () => {
 
 test("User-authored pairs cannot be overtyped or pair-deleted", () => {
 	using model = new TextModel("()");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(1)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(1)));
 	using configurations = new LanguageConfigurationRegistry();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using tracker = new LanguageAutoClosingTracker(model, selections);
@@ -60,7 +60,7 @@ test("User-authored pairs cannot be overtyped or pair-deleted", () => {
 
 test("Multi-selection auto-closing entries retain independent ownership", () => {
 	using model = new TextModel("a b");
-	using selections = new EditorSelectionController(model, TextSelectionSet.withPrimary([caret(1), caret(3)], 0));
+	using selections = new CursorsController(model, TextSelectionSet.withPrimary([caret(1), caret(3)], 0));
 	using configurations = new LanguageConfigurationRegistry();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using tracker = new LanguageAutoClosingTracker(model, selections);
@@ -77,7 +77,7 @@ test("Multi-selection auto-closing entries retain independent ownership", () => 
 
 test("Undo removes provenance and redo does not invent it again", () => {
 	using model = new TextModel("");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(0)));
 	using configurations = new LanguageConfigurationRegistry();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using tracker = new LanguageAutoClosingTracker(model, selections);
@@ -94,7 +94,7 @@ test("Undo removes provenance and redo does not invent it again", () => {
 
 test("Stale recording is ignored and disposal leaves borrowed dependencies alive", () => {
 	using model = new TextModel("");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(0)));
 	using configurations = new LanguageConfigurationRegistry();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	const tracker = new LanguageAutoClosingTracker(model, selections);
@@ -112,7 +112,7 @@ test("Stale recording is ignored and disposal leaves borrowed dependencies alive
 	assert.equal(model.getText(), "x()");
 });
 
-function executeAndRecord(selections: EditorSelectionController, tracker: LanguageAutoClosingTracker, command: LanguagePairTypeCommand): TextModelChange {
+function executeAndRecord(selections: CursorsController, tracker: LanguageAutoClosingTracker, command: LanguagePairTypeCommand): TextModelChange {
 	const change = selections.execute(command.command);
 	assert.ok(change);
 	tracker.record(command.autoClosingActions, change.version);

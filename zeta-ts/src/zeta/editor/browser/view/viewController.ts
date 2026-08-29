@@ -4,15 +4,15 @@ import { Disposable, toDisposable, type IDisposable } from '../../../base/common
 import { operatingSystem, OperatingSystem } from '../../../base/common/platform.js';
 import { type EditorEditCommand } from '../../common/commands/editorEditCommand.js';
 import { EditorLineWrapping } from '../../common/config/editorOptions.js';
-import { EditorCursorNavigationCommand, EditorCursorNavigationMode, navigateEditorCursors } from '../../common/cursor/cursorMoveOperations.js';
-import { createBackspaceCommand, createDeleteForwardCommand, createDeleteToLineEndCommand, createDeleteToLineStartCommand } from '../../common/cursor/cursorDeleteOperations.js';
+import { EditorCursorNavigationCommand, EditorCursorNavigationMode, MoveOperations } from '../../common/cursor/cursorMoveOperations.js';
+import { DeleteOperations } from '../../common/cursor/cursorDeleteOperations.js';
 import { LanguageAutoClosingTracker } from '../../common/cursor/languageAutoClosingTracker.js';
 import { createLanguageEnterCommand } from '../../common/cursor/languageEnter.js';
 import { createLanguagePairBackspaceCommand, createLanguagePairTypeCommand } from '../../common/cursor/languagePairEditing.js';
-import { createDeleteWordBackwardCommand, createDeleteWordForwardCommand } from '../../common/cursor/cursorWordOperations.js';
-import { type EditorSelectionController } from '../../common/cursor/cursor.js';
-import { createOvertypeTextCommand } from '../../common/cursor/cursorTypeEditOperations.js';
-import { createTypeTextCommand } from '../../common/cursor/cursorTypeOperations.js';
+import { WordOperations } from '../../common/cursor/cursorWordOperations.js';
+import { type CursorsController } from '../../common/cursor/cursor.js';
+import { AutoClosingOvertypeOperation } from '../../common/cursor/cursorTypeEditOperations.js';
+import { TypeOperations } from '../../common/cursor/cursorTypeOperations.js';
 import { TextSelection, TextSelectionSet } from '../../common/core/selection.js';
 import { type TextModelChange } from '../../common/core/text.js';
 import { resolveEditorIndentationOptions, type EditorIndentationOptions } from '../../common/core/misc/indentation.js';
@@ -86,7 +86,7 @@ export class ViewController extends Disposable {
 
 	constructor(
 		private readonly viewport: EditorViewport,
-		private readonly selectionController: EditorSelectionController,
+		private readonly selectionController: CursorsController,
 		options: ViewControllerOptions = {},
 	) {
 		super();
@@ -142,33 +142,33 @@ export class ViewController extends Disposable {
 
 	public deleteBackward(inputType = 'deleteContentBackward'): TextModelChange | undefined {
 		return this.execute(
-			this.languageEditing?.createBackspaceCommand(this.selectionController.selections) ?? createBackspaceCommand(this.viewport.textModel, this.selectionController.selections),
+			this.languageEditing?.createBackspaceCommand(this.selectionController.selections) ?? DeleteOperations.deleteLeft(this.viewport.textModel, this.selectionController.selections),
 			inputType,
 		);
 	}
 
 	public deleteForward(inputType = 'deleteContentForward'): TextModelChange | undefined {
-		return this.execute(createDeleteForwardCommand(this.viewport.textModel, this.selectionController.selections), inputType);
+		return this.execute(DeleteOperations.deleteRight(this.viewport.textModel, this.selectionController.selections), inputType);
 	}
 
 	public deleteWordBackward(inputType = 'deleteWordBackward'): TextModelChange | undefined {
-		return this.execute(createDeleteWordBackwardCommand(this.viewport.textModel, this.selectionController.selections, this.currentWordPattern), inputType);
+		return this.execute(WordOperations.deleteWordLeft(this.viewport.textModel, this.selectionController.selections, this.currentWordPattern), inputType);
 	}
 
 	public deleteWordForward(inputType = 'deleteWordForward'): TextModelChange | undefined {
-		return this.execute(createDeleteWordForwardCommand(this.viewport.textModel, this.selectionController.selections, this.currentWordPattern), inputType);
+		return this.execute(WordOperations.deleteWordRight(this.viewport.textModel, this.selectionController.selections, this.currentWordPattern), inputType);
 	}
 
 	public deleteSoftLineBackward(inputType = 'deleteSoftLineBackward'): TextModelChange | undefined {
-		return this.execute(createDeleteToLineStartCommand(this.viewport.textModel, this.selectionController.selections), inputType);
+		return this.execute(DeleteOperations.deleteToBeginningOfLine(this.viewport.textModel, this.selectionController.selections), inputType);
 	}
 
 	public deleteSoftLineForward(inputType = 'deleteSoftLineForward'): TextModelChange | undefined {
-		return this.execute(createDeleteToLineEndCommand(this.viewport.textModel, this.selectionController.selections), inputType);
+		return this.execute(DeleteOperations.deleteToEndOfLine(this.viewport.textModel, this.selectionController.selections), inputType);
 	}
 
 	public insertTab(): TextModelChange | undefined {
-		return this.execute(createTypeTextCommand(this.viewport.textModel, this.selectionController.selections, '\t'), 'insertText', '\t', undefined, false);
+		return this.execute(TypeOperations.typeWithoutInterceptors(this.viewport.textModel, this.selectionController.selections, '\t'), 'insertText', '\t', undefined, false);
 	}
 
 	public applyTextUpdate(update: EditContextTextUpdate): TextModelChange | undefined {
@@ -179,14 +179,14 @@ export class ViewController extends Disposable {
 			if (inputType === 'insertLineBreak' || inputType === 'insertParagraph') return this.executeEnter(selections, inputType, update.text);
 			return this.executeType(selections, update.text, inputType);
 		}
-		if (inputType === 'deleteContentForward') return this.execute(createDeleteForwardCommand(model, selections), inputType);
+		if (inputType === 'deleteContentForward') return this.execute(DeleteOperations.deleteRight(model, selections), inputType);
 		if (inputType === 'deleteContentBackward') {
 			return this.execute(
-				this.languageEditing?.createBackspaceCommand(selections) ?? createBackspaceCommand(model, selections),
+				this.languageEditing?.createBackspaceCommand(selections) ?? DeleteOperations.deleteLeft(model, selections),
 				inputType,
 			);
 		}
-		return this.execute(createTypeTextCommand(model, selections, ''), inputType);
+		return this.execute(TypeOperations.typeWithoutInterceptors(model, selections, ''), inputType);
 	}
 
 	public undo(): void {
@@ -203,13 +203,13 @@ export class ViewController extends Disposable {
 		const languageTypeCommand = this.languageEditing?.createTypeCommand(selections, text);
 		const insertedText = languageTypeCommand?.insertedText === false ? undefined : text;
 		const command = languageTypeCommand?.command ?? (this.overtype
-			? createOvertypeTextCommand(this.viewport.textModel, selections, text)
-			: createTypeTextCommand(this.viewport.textModel, selections, text));
+			? AutoClosingOvertypeOperation.getEdits(this.viewport.textModel, selections, text)
+			: TypeOperations.typeWithoutInterceptors(this.viewport.textModel, selections, text));
 		return this.execute(command, inputType, insertedText, languageTypeCommand?.afterExecute);
 	}
 
 	private executeEnter(selections: TextSelectionSet, inputType: string, text = '\n'): TextModelChange | undefined {
-		const command = this.languageEditing?.createEnterCommand(selections) ?? createTypeTextCommand(this.viewport.textModel, selections, text);
+		const command = this.languageEditing?.createEnterCommand(selections) ?? TypeOperations.typeWithoutInterceptors(this.viewport.textModel, selections, text);
 		return this.execute(command, inputType);
 	}
 
@@ -295,7 +295,7 @@ export class LanguageEditingAdapter extends Disposable implements EditorLanguage
 	private readonly autoClosingTracker: LanguageAutoClosingTracker;
 	private readonly lexicalContext: LanguageLexicalContextSource;
 
-	constructor(readonly textModel: TextModel, private readonly selections: EditorSelectionController, private readonly languageId: string, private readonly configurations: LanguageConfigurationSource, lexicalContext: LanguageLexicalContextSource | undefined = undefined, private readonly indentation: EditorIndentationOptions | undefined = undefined) {
+	constructor(readonly textModel: TextModel, private readonly selections: CursorsController, private readonly languageId: string, private readonly configurations: LanguageConfigurationSource, lexicalContext: LanguageLexicalContextSource | undefined = undefined, private readonly indentation: EditorIndentationOptions | undefined = undefined) {
 		super();
 		assertLanguageId(languageId);
 		if (!configurations || typeof configurations.getLanguageConfiguration !== "function") throw new TypeError("Stanza text input language requires a configuration source");
@@ -334,6 +334,8 @@ export interface KeyboardNavigationControllerOptions {
 	readonly operatingSystem?: OperatingSystem;
 	/** Resolves the active language word matcher for word navigation. */
 	readonly wordPattern?: () => RegExp | undefined;
+	readonly stickyTabStops?: boolean;
+	readonly tabSize?: number;
 }
 
 export interface KeyboardNavigationCommand {
@@ -347,13 +349,14 @@ export interface KeyboardNavigationCommand {
 export class KeyboardNavigationController extends Disposable {
 	private readonly targetOperatingSystem: OperatingSystem;
 	private readonly wordPattern: (() => RegExp | undefined) | undefined;
+	private readonly atomicTabSize: number | undefined;
 	private preferredColumns: readonly number[] | undefined;
 	private preferredVisualHorizontalOffsets: readonly number[] | undefined;
 	private applyingNavigation = false;
 
 	constructor(
 		private readonly viewport: EditorViewport,
-		private readonly selectionController: EditorSelectionController,
+		private readonly selectionController: CursorsController,
 		userInputEvents: ViewUserInputEvents,
 		options: KeyboardNavigationControllerOptions = {},
 	) {
@@ -365,7 +368,14 @@ export class KeyboardNavigationController extends Disposable {
 			if (options.wordPattern !== undefined && typeof options.wordPattern !== "function") {
 				throw new TypeError("Stanza keyboard word pattern resolver must be a function");
 			}
+			if (options.stickyTabStops !== undefined && typeof options.stickyTabStops !== 'boolean') {
+				throw new TypeError('Stanza sticky tab stops must be boolean');
+			}
+			if (options.tabSize !== undefined && (!Number.isSafeInteger(options.tabSize) || options.tabSize < 1)) {
+				throw new RangeError('Stanza keyboard tab size must be a positive safe integer');
+			}
 			this.wordPattern = options.wordPattern;
+			this.atomicTabSize = options.stickyTabStops ? options.tabSize ?? 4 : undefined;
 		} catch (error) {
 			this.dispose();
 			throw error;
@@ -430,13 +440,14 @@ export class KeyboardNavigationController extends Disposable {
 					getNearestPosition: (visualLineIndex, horizontalOffset) => this.viewport.getNearestPositionAtVisualHorizontalOffset(visualLineIndex, horizontalOffset),
 				},
 			)
-			: navigateEditorCursors(
+			: MoveOperations.navigate(
 				this.viewport.textModel,
 				this.selectionController.selections,
 				{
 					...navigation,
 					pageLineCount,
 					...(this.wordPattern ? { wordPattern: this.wordPattern() } : {}),
+					...(this.atomicTabSize === undefined ? {} : { atomicTabSize: this.atomicTabSize }),
 					preferredColumns: this.preferredColumns,
 				},
 			);

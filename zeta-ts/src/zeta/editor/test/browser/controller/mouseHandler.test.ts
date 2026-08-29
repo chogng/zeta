@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../browser/config/fontMeasurements.js";
-import { EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { CursorsController } from "../../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { TextPosition, TextRange } from "../../../common/core/text.js";
 import { TextModel } from "../../../common/model/textModel.js";
@@ -47,7 +47,7 @@ test("Pointer selection supports clicks, Shift, drag, gutter, and cancellation",
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("abcd\nefgh\nijkl\nmnop");
-	using selections = new EditorSelectionController(
+	using selections = new CursorsController(
 		model,
 		TextSelectionSet.single(
 			TextSelection.collapsedAt(TextPosition.at(0, 0)),
@@ -252,7 +252,7 @@ test("Pointer and viewport selection wiring rejects different text models", () =
 	assert.ok(container);
 	using model = new TextModel("alpha");
 	using otherModel = new TextModel("beta");
-	using selections = new EditorSelectionController(
+	using selections = new CursorsController(
 		otherModel,
 		TextSelectionSet.single(
 			TextSelection.collapsedAt(TextPosition.at(0, 0)),
@@ -291,7 +291,7 @@ test("Alt+Shift pointer drag creates a front-end column selection", () => {
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("abcdef\nab\n12345\nxy");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -339,7 +339,7 @@ test("Pointer drag anchor tracks model edits and window blur ends capture", () =
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("abc\ndef");
-	using selections = new EditorSelectionController(
+	using selections = new CursorsController(
 		model,
 		TextSelectionSet.single(
 			TextSelection.collapsedAt(TextPosition.at(0, 0)),

@@ -2,8 +2,8 @@ import { clamp } from "../../../base/common/numbers.js";
 import { TextSelection, TextSelectionSet } from "../core/selection.js";
 import { TextPosition } from "../core/text.js";
 import { type TextModel } from "../model/textModel.js";
-import { getTextGraphemeBoundaries } from "../core/textSegmentation.js";
-import { getTextWordRanges } from "./cursorWordOperations.js";
+import { getTextGraphemeBoundaries, getTextWordSegments } from '../core/textSegmentation.js';
+import { AtomicTabMoveOperations, Direction } from './cursorAtomicMoveOperations.js';
 
 export enum EditorCursorNavigationCommand {
 	CharacterLeft = "characterLeft",
@@ -31,6 +31,7 @@ export interface EditorCursorNavigationRequest {
 	readonly pageLineCount?: number;
 	readonly preferredColumns?: readonly number[];
 	readonly wordPattern?: RegExp;
+	readonly atomicTabSize?: number;
 }
 
 export interface EditorCursorNavigationResult {
@@ -44,31 +45,46 @@ export interface EditorCursorNavigationResult {
  * Vertical commands retain caller-owned preferred UTF-16 columns. Exact
  * duplicate results coalesce while preserving the primary selection mapping.
  */
-export function navigateEditorCursors(model: TextModel, selections: TextSelectionSet, request: EditorCursorNavigationRequest): EditorCursorNavigationResult {
-	validateRequest(model, selections, request);
-	const vertical = isVerticalCommand(request.command);
-	const preferredColumns = vertical
-		? resolvePreferredColumns(selections, request.preferredColumns)
-		: undefined;
-	const navigated = selections.selections.map((selection, index) => {
-		const target = navigationTarget(
-			model,
-			selection,
-			request.command,
-			request.pageLineCount ?? 1,
-			preferredColumns?.[index],
-			request.mode,
-			request.wordPattern,
+export class MoveOperations {
+	public static navigate(model: TextModel, selections: TextSelectionSet, request: EditorCursorNavigationRequest): EditorCursorNavigationResult {
+		validateRequest(model, selections, request);
+		const vertical = isVerticalCommand(request.command);
+		const preferredColumns = vertical
+			? resolvePreferredColumns(selections, request.preferredColumns)
+			: undefined;
+		const navigated = selections.selections.map((selection, index) => {
+			const target = navigationTarget(
+				model,
+				selection,
+				request.command,
+				request.pageLineCount ?? 1,
+				preferredColumns?.[index],
+				request.mode,
+				request.wordPattern,
+				request.atomicTabSize,
+			);
+			return request.mode === EditorCursorNavigationMode.Extend
+				? TextSelection.from(selection.anchor, target)
+				: TextSelection.collapsedAt(target);
+		});
+		return normalizeResult(
+			navigated,
+			selections.primaryIndex,
+			preferredColumns,
 		);
-		return request.mode === EditorCursorNavigationMode.Extend
-			? TextSelection.from(selection.anchor, target)
-			: TextSelection.collapsedAt(target);
-	});
-	return normalizeResult(
-		navigated,
-		selections.primaryIndex,
-		preferredColumns,
-	);
+	}
+
+	public static leftPosition(model: TextModel, position: TextPosition, atomicTabSize?: number): TextPosition {
+		const atomicColumn = atomicTabSize === undefined ? -1 : AtomicTabMoveOperations.atomicPosition(model.getLineContent(position.lineIndex), position.columnIndex, atomicTabSize, Direction.Left);
+		if (atomicColumn >= 0) return TextPosition.at(position.lineIndex, atomicColumn);
+		return previousCharacter(model, position);
+	}
+
+	public static rightPosition(model: TextModel, position: TextPosition, atomicTabSize?: number): TextPosition {
+		const atomicColumn = atomicTabSize === undefined ? -1 : AtomicTabMoveOperations.atomicPosition(model.getLineContent(position.lineIndex), position.columnIndex, atomicTabSize, Direction.Right);
+		if (atomicColumn >= 0) return TextPosition.at(position.lineIndex, atomicColumn);
+		return nextCharacter(model, position);
+	}
 }
 
 function navigationTarget(
@@ -79,6 +95,7 @@ function navigationTarget(
 	preferredColumn: number | undefined,
 	mode: EditorCursorNavigationMode,
 	wordPattern: RegExp | undefined,
+	requestAtomicTabSize: number | undefined,
 ): TextPosition {
 	if (
 		mode === EditorCursorNavigationMode.Move &&
@@ -101,9 +118,9 @@ function navigationTarget(
 	const active = selection.active;
 	switch (command) {
 		case EditorCursorNavigationCommand.CharacterLeft:
-			return previousCharacter(model, active);
+			return MoveOperations.leftPosition(model, active, requestAtomicTabSize);
 		case EditorCursorNavigationCommand.CharacterRight:
-			return nextCharacter(model, active);
+			return MoveOperations.rightPosition(model, active, requestAtomicTabSize);
 		case EditorCursorNavigationCommand.WordLeft:
 			return previousWord(model, active, wordPattern);
 		case EditorCursorNavigationCommand.WordRight:
@@ -284,6 +301,9 @@ function validateRequest(model: TextModel, selections: TextSelectionSet, request
 	) {
 		throw new RangeError("preferredColumns must match selections");
 	}
+	if (request.atomicTabSize !== undefined && (!Number.isSafeInteger(request.atomicTabSize) || request.atomicTabSize < 1)) {
+		throw new RangeError('atomicTabSize must be a positive safe integer');
+	}
 	for (const selection of selections.selections) {
 		model.offsetAt(selection.anchor);
 		model.offsetAt(selection.active);
@@ -319,4 +339,19 @@ function boundaryAtOrBefore(boundaries: readonly number[], column: number): numb
 function selectionsEqual(left: TextSelection, right: TextSelection): boolean {
 	return left.anchor.compareTo(right.anchor) === 0 &&
 		left.active.compareTo(right.active) === 0;
+}
+
+function getTextWordRanges(text: string, wordPattern: RegExp | undefined): readonly { readonly start: number; readonly end: number }[] {
+	if (!wordPattern) return getTextWordSegments(text).flatMap(segment => segment.wordLike ? [{ start: segment.start, end: segment.end }] : []);
+	const flags = wordPattern.flags.replaceAll('y', '').includes('g') ? wordPattern.flags.replaceAll('y', '') : `${wordPattern.flags.replaceAll('y', '')}g`;
+	const matcher = new RegExp(wordPattern.source, flags);
+	const ranges: Array<{ readonly start: number; readonly end: number }> = [];
+	for (let match = matcher.exec(text); match; match = matcher.exec(text)) {
+		if (match[0].length === 0) {
+			matcher.lastIndex += 1;
+			continue;
+		}
+		ranges.push({ start: match.index, end: match.index + match[0].length });
+	}
+	return ranges;
 }

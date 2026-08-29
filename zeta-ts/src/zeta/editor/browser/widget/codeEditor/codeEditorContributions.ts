@@ -1,7 +1,7 @@
 import { addDisposableListener, getWindow } from '../../../../base/browser/dom.js';
 import { DisposableMap, Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { runWhenWindowIdle, scheduleAtNextAnimationFrame } from '../../../../base/browser/scheduler.js';
-import { type EditorSelectionController } from '../../../common/cursor/cursor.js';
+import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type IInstantiationService, type SyncDescriptor } from '../../../../platform/instantiation/common/instantiation.js';
 import { type EditorView } from '../../view.js';
@@ -16,7 +16,7 @@ export { CodeEditorContributionInstantiation };
 export interface CodeEditorContributionContext {
 	readonly editor: CodeEditorWidget;
 	readonly model: TextModel;
-	readonly selectionController: EditorSelectionController;
+	readonly selectionController: CursorsController;
 	readonly viewport: EditorViewport;
 	readonly view: EditorView;
 	readonly placeholder: string | undefined;

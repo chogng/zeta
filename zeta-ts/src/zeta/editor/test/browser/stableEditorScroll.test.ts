@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { type TextMeasurer } from '../../browser/config/fontMeasurements.js';
-import { EditorSelectionController } from '../../common/cursor/cursor.js';
+import { CursorsController } from '../../common/cursor/cursor.js';
 import { TextPosition } from '../../common/core/position.js';
 import { TextSelection, TextSelectionSet } from '../../common/core/selection.js';
 import { TextModel } from '../../common/model/textModel.js';
@@ -132,7 +132,7 @@ test('StableEditorScrollState restores the cursor relative to the viewport', () 
 		'seven',
 		'eight',
 	].join('\n'));
-	using selections = new EditorSelectionController(
+	using selections = new CursorsController(
 		model,
 		TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(1, 0))),
 	);

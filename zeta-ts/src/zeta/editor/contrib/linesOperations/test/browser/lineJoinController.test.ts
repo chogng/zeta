@@ -3,7 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../../../base/common/platform.js";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
-import { EditorSelectionController } from "../../../../common/cursor/cursor.js";
+import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
@@ -29,7 +29,7 @@ test("Join-lines shortcut runs locally and leaves unrelated chords alone", () =>
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("first\n  second");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 2))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 2))));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 60 });
 	const input = h(dom.window.document, "textarea");
@@ -51,7 +51,7 @@ test("Join-lines uses Command+J on macOS", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("first\nsecond");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	const input = h(dom.window.document, "textarea");
 	container.append(input);

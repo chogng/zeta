@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { EditorSelectionController } from "../../../../common/cursor/cursor.js";
+import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { createJoinLinesCommand } from "../../common/lineJoin.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
@@ -8,7 +8,7 @@ import { TextModel } from "../../../../common/model/textModel.js";
 
 test("Join lines removes indentation, retains one separator, and restores undo", () => {
 	using model = new TextModel("hello\n  world\nhello \n\tworld\n\nlast");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 2)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(0, 2)));
 
 	selections.execute(createJoinLinesCommand(model, selections.selections));
 	assert.equal(model.getText(), "hello world\nhello \n\tworld\n\nlast");
@@ -24,7 +24,7 @@ test("Join lines removes indentation, retains one separator, and restores undo",
 
 test("Join lines joins ranges, reduces overlapping cursors, and preserves the primary group", () => {
 	using model = new TextModel("zero\none\ntwo\nthree\nfour\nfive");
-	using selections = new EditorSelectionController(model, TextSelectionSet.withPrimary([
+	using selections = new CursorsController(model, TextSelectionSet.withPrimary([
 		caret(0, 1),
 		caret(1, 2),
 		TextSelection.from(TextPosition.at(3, 1), TextPosition.at(4, 2)),
@@ -40,7 +40,7 @@ test("Join lines joins ranges, reduces overlapping cursors, and preserves the pr
 
 test("Join lines at the final line leaves collapsed and range selections unchanged", () => {
 	using model = new TextModel("first\nlast");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.from(
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.from(
 		TextPosition.at(1, 1),
 		TextPosition.at(1, 3),
 	)));

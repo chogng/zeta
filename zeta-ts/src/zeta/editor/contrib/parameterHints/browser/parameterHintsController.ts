@@ -3,7 +3,7 @@ import { registerEditorContribution } from "../../../browser/editorExtensions.js
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { ParameterHintsService, type LanguageParameterHints, type LanguageParameterHintsContext } from "../common/parameterHints.js";
-import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 /** Routes the signature-help shortcut and owns the accessible parameter widget. */
@@ -11,7 +11,7 @@ export class ParameterHintsController extends Disposable {
 	private readonly element: HTMLDivElement;
 	private request: AbortController | undefined;
 
-	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: ParameterHintsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza parameter hints failed", error)) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, private readonly service: ParameterHintsService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza parameter hints failed", error)) {
 		super();
 		this.element = h(viewport.element.ownerDocument, "div");
 		this.element.className = "stanza-editor-parameter-hints";

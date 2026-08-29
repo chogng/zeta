@@ -2,7 +2,7 @@ import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.j
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { createJoinLinesCommand } from "../common/lineJoin.js";
-import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { type EditorCommandExecutor } from '../../../browser/editorExtensions.js';
 
@@ -18,7 +18,7 @@ export class LineJoinController extends Disposable {
 	constructor(
 		input: HTMLElement,
 		private readonly viewport: EditorViewport,
-		private readonly selections: EditorSelectionController,
+		private readonly selections: CursorsController,
 		options: LineJoinControllerOptions = {},
 	) {
 		super();

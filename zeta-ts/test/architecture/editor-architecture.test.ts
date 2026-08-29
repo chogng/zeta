@@ -33,6 +33,31 @@ test("Cursor files keep the upstream owner layout plus Zeta language editing", (
 	]);
 });
 
+test('Cursor owner files expose their canonical API names', () => {
+	const expectedClasses = new Map([
+		['cursor.ts', 'CursorsController'],
+		['cursorAtomicMoveOperations.ts', 'AtomicTabMoveOperations'],
+		['cursorCollection.ts', 'CursorCollection'],
+		['cursorColumnSelection.ts', 'ColumnSelection'],
+		['cursorContext.ts', 'CursorContext'],
+		['cursorDeleteOperations.ts', 'DeleteOperations'],
+		['cursorMoveCommands.ts', 'CursorMoveCommands'],
+		['cursorMoveOperations.ts', 'MoveOperations'],
+		['cursorTypeOperations.ts', 'TypeOperations'],
+		['cursorWordOperations.ts', 'WordOperations'],
+		['oneCursor.ts', 'Cursor'],
+	]);
+	for (const [file, className] of expectedClasses) {
+		const source = readFileSync(join(editorRoot, 'common/cursor', file), 'utf8');
+		assert.match(source, new RegExp(`export (?:abstract )?class ${className}\\b`, 'u'), file);
+	}
+	const typeEditOperations = readFileSync(join(editorRoot, 'common/cursor/cursorTypeEditOperations.ts'), 'utf8');
+	assert.match(typeEditOperations, /export class TypeWithoutInterceptorsOperation\b/u);
+	assert.match(typeEditOperations, /export class AutoClosingOvertypeOperation\b/u);
+	const cursorSources = collectFiles(join(editorRoot, 'common/cursor')).map(file => readFileSync(file, 'utf8')).join('\n');
+	assert.doesNotMatch(cursorSources, /export (?:class|function|interface|type|enum) (?:EditorSelectionController|createEditorColumnSelectionSet|navigateEditorCursors|createTypeTextCommand|createBackspaceCommand)\b/u);
+});
+
 test("Editor production code does not depend on Workbench or generated transport DTOs", () => {
 	for (const file of collectFiles(editorRoot)) {
 		if (!file.endsWith(".ts") || file.includes(`${join("editor", "test")}`)) continue;

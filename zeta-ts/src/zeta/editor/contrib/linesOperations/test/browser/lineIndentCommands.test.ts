@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { EditorIndentationKind } from "../../../../common/core/misc/indentation.js";
-import { EditorSelectionController } from "../../../../common/cursor/cursor.js";
+import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { createLineIndentCommand, EditorLineIndentDirection } from "../../browser/lineIndentCommands.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
@@ -13,7 +13,7 @@ test("line indent touches selected rows once and preserves selection direction",
 		TextSelection.from(TextPosition.at(1, 3), TextPosition.at(0, 0)),
 		TextSelection.collapsedAt(TextPosition.at(1, 2)),
 	], 0);
-	using selections = new EditorSelectionController(model, initial);
+	using selections = new CursorsController(model, initial);
 
 	selections.execute(createLineIndentCommand(model, selections.selections, EditorLineIndentDirection.Indent, {
 		kind: EditorIndentationKind.Spaces,
@@ -31,7 +31,7 @@ test("line indent touches selected rows once and preserves selection direction",
 test("line outdent removes one mixed indentation unit and excludes an ending line start", () => {
 	using model = new TextModel("\talpha\n   beta\n  untouched");
 	const initial = TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 0), TextPosition.at(2, 0)));
-	using selections = new EditorSelectionController(model, initial);
+	using selections = new CursorsController(model, initial);
 
 	selections.execute(createLineIndentCommand(model, selections.selections, EditorLineIndentDirection.Outdent, { tabSize: 2 }));
 

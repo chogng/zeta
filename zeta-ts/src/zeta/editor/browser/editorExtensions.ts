@@ -1,7 +1,7 @@
 import { type IDisposable } from "../../base/common/lifecycle.js";
 import { type Event } from '../../base/common/event.js';
 import { type SyncDescriptor } from "../../platform/instantiation/common/instantiation.js";
-import { type EditorSelectionController } from "../common/cursor/cursor.js";
+import { type CursorsController } from "../common/cursor/cursor.js";
 import { type LanguageConfigurationSource } from "../common/languages/languageConfiguration.js";
 import { type TextModel } from "../common/model/textModel.js";
 import { type DocumentTextStyleAttributes } from "../common/model/documentSchema.js";
@@ -48,7 +48,7 @@ export interface TextEditorContributionConfigurationContext {
 	readonly languageFeaturesService: ILanguageFeaturesService;
 	readonly semanticTokensStylingService: ISemanticTokensStylingService;
 	readonly configurations: LanguageConfigurationSource;
-	readonly selections: EditorSelectionController;
+	readonly selections: CursorsController;
 	readonly tabFocus: TabFocus;
 	readonly onLanguageError: (error: unknown) => void;
 	readonly getCapability: <T>(capability: EditorCapability<T>) => T;
@@ -72,7 +72,7 @@ export interface TextEditorContributionContext {
 	readonly configurations: LanguageConfigurationSource;
 	readonly view: EditorView;
 	readonly viewport: EditorViewport;
-	readonly selections: EditorSelectionController;
+	readonly selections: CursorsController;
 	readonly tabFocus: TabFocus;
 	readonly onLanguageError: (error: unknown) => void;
 	readonly onDidExecuteCommand: Event<EditorCommandEvent>;

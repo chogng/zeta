@@ -1,6 +1,6 @@
 import './whitespace.css';
 import { h, reset } from '../../../../base/browser/dom.js';
-import { type EditorSelectionController } from '../../../common/cursor/cursor.js';
+import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { TextPosition, TextRange } from '../../../common/core/text.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
@@ -18,7 +18,7 @@ export class WhitespaceOverlay extends DynamicViewOverlay {
 		context: EditorViewContext,
 		host: HTMLElement,
 		private readonly model: TextModel,
-		private readonly selectionController: EditorSelectionController | undefined,
+		private readonly selectionController: CursorsController | undefined,
 		private readonly mode: WhitespaceRenderingMode,
 	) {
 		super(context);

@@ -6,7 +6,7 @@ import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.j
 import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { extendEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { type EditorEditCommand } from "../../../common/commands/editorEditCommand.js";
-import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { TextRange, type TextEdit } from "../../../common/core/text.js";
 import { TrackedRangeStickiness, type TrackedRange } from "../../../common/model/trackedRange.js";
 import { LinkedEditingService } from "../common/linkedEditing.js";
@@ -20,7 +20,7 @@ export class LinkedEditingController extends Disposable {
 	private request: AbortController | undefined;
 	private wordPattern: RegExp | undefined;
 
-	constructor(private readonly view: EditorView, private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: LinkedEditingService, private readonly languageId: string, private readonly defaultWordPattern: () => RegExp | undefined, private readonly onError: (error: unknown) => void = error => console.error("Stanza linked editing failed", error)) {
+	constructor(private readonly view: EditorView, private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, private readonly service: LinkedEditingService, private readonly languageId: string, private readonly defaultWordPattern: () => RegExp | undefined, private readonly onError: (error: unknown) => void = error => console.error("Stanza linked editing failed", error)) {
 		super();
 		if (viewport.textModel !== selections.textModel || service.textModel !== selections.textModel) throw new TypeError("Stanza linked editing dependencies must share a text model");
 		this._register(addDisposableListener(input, "keydown", event => { if (event.defaultPrevented || event.isComposing || !event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.altKey || event.key.toLowerCase() !== "l") return; stopEvent(event); void this.activate(); }, true));

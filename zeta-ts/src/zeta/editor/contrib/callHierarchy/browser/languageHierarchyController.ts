@@ -3,7 +3,7 @@ import { Disposable, DisposableStore, toDisposable } from "../../../../base/comm
 import { type URI } from "../../../../base/common/uri.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { type TextPosition } from "../../../common/core/text.js";
-import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { type LanguageLocation } from "../../gotoSymbol/common/languageNavigation.js";
 import { PeekViewWidget } from "../../peekView/browser/peekViewWidget.js";
@@ -23,7 +23,7 @@ export class LanguageHierarchyController extends Disposable {
 	private readonly peek = this._register(new DisposableStore());
 	private request: AbortController | undefined;
 
-	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: LanguageHierarchyService, private readonly resource: URI, private readonly languageId: string, private readonly openLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor language hierarchy failed", error)) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, private readonly service: LanguageHierarchyService, private readonly resource: URI, private readonly languageId: string, private readonly openLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor language hierarchy failed", error)) {
 		super();
 		this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
 		this._register(viewport.textModel.onDidChange(() => this.closePeek()));

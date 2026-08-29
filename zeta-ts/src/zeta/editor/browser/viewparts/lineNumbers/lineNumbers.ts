@@ -1,6 +1,6 @@
 import "./lineNumbers.css";
 import { h, reset } from "../../../../base/browser/dom.js";
-import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type InternalEditorRenderLineNumbersOptions, RenderLineNumbersType } from '../../../common/config/editorOptions.js';
 import { type EditorVisualLineProjection } from "../../../common/viewModel/modelLineProjection.js";
 import { EditorViewPart, type EditorRenderingContext } from "../../view/viewPart.js";
@@ -9,7 +9,7 @@ import { ViewPartRows } from "../../view/viewLayer.js";
 export interface LineNumbersOverlayOptions {
 	readonly host: HTMLElement;
 	readonly lineNumbers: InternalEditorRenderLineNumbersOptions;
-	readonly selectionController: EditorSelectionController | undefined;
+	readonly selectionController: CursorsController | undefined;
 	readonly readVisualProjection: () => EditorVisualLineProjection;
 }
 
@@ -17,7 +17,7 @@ export interface LineNumbersOverlayOptions {
 export class LineNumbersOverlay extends EditorViewPart {
 	public readonly domNode: HTMLElement;
 	private readonly lineNumbers: InternalEditorRenderLineNumbersOptions;
-	private readonly selectionController: EditorSelectionController | undefined;
+	private readonly selectionController: CursorsController | undefined;
 	private readonly readVisualProjection: () => EditorVisualLineProjection;
 	private readonly rows: ViewPartRows;
 

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
-import { EditorSelectionController } from "../../../../common/cursor/cursor.js";
+import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { registerBuiltinLanguageConfigurations } from "../../../../common/languages/languageBuiltinConfigurations.js";
 import { LanguageConfigurationRegistry } from "../../../../common/languages/languageConfiguration.js";
 import { LanguageCompletionSessionController } from "../../common/suggestModel.js";
@@ -251,8 +251,8 @@ function completionResult(request: LanguageCompletionProviderRequest, label: str
 	};
 }
 
-function controllerAt(model: TextModel, position: TextPosition): EditorSelectionController {
-	return new EditorSelectionController(
+function controllerAt(model: TextModel, position: TextPosition): CursorsController {
+	return new CursorsController(
 		model,
 		TextSelectionSet.single(TextSelection.collapsedAt(position)),
 	);

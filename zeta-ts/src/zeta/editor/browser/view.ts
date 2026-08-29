@@ -8,7 +8,7 @@ import { runWhenWindowIdle } from '../../base/browser/scheduler.js';
 import { type ISize } from '../../base/common/layout.js';
 import { clamp, isFiniteNumber } from '../../base/common/numbers.js';
 import { type IAccessibilityService } from '../../platform/accessibility/common/accessibility.js';
-import { type EditorSelectionController } from '../common/cursor/cursor.js';
+import { type CursorsController } from '../common/cursor/cursor.js';
 import { resolveEditorIndentationOptions, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from '../common/core/misc/indentation.js';
 import { TextPosition, type TextRange } from '../common/core/text.js';
 import { type TextModel } from '../common/model/textModel.js';
@@ -65,7 +65,7 @@ export type { EventCallback, EditorViewMouseTargetKind, EditorViewMouseTarget, E
 export interface EditorViewOptions {
 	readonly container: HTMLElement;
 	readonly model: TextModel;
-	readonly selectionController: EditorSelectionController;
+	readonly selectionController: CursorsController;
 	readonly lineHeight: number;
 	readonly ariaLabel?: string;
 	/** Stable identity used by host code that needs to address this view. */
@@ -95,7 +95,7 @@ export interface EditorViewOptions {
 export class EditorView extends Disposable {
 	readonly ownerId: string;
 	readonly viewport: View;
-	readonly selectionController: EditorSelectionController;
+	readonly selectionController: CursorsController;
 	readonly editContext: EditContext;
 	/** Compatibility alias for integrations that call the browser surface input. */
 	readonly input: EditContext;
@@ -111,10 +111,10 @@ export class EditorView extends Disposable {
 
 	constructor(options: EditorViewOptions);
 	/** Test and low-level integration overload for an already-created viewport. */
-	constructor(viewport: View, selectionController: EditorSelectionController, options?: Pick<EditorViewOptions, 'ariaLabel' | 'accessibilityService' | 'renderRichScreenReaderContent' | 'accessibilityPageSize' | 'semanticTokenSource' | 'bracketColorizationSource' | 'languageEditing' | 'wordPattern' | 'userInputEvents'>);
+	constructor(viewport: View, selectionController: CursorsController, options?: Pick<EditorViewOptions, 'ariaLabel' | 'accessibilityService' | 'renderRichScreenReaderContent' | 'accessibilityPageSize' | 'semanticTokenSource' | 'bracketColorizationSource' | 'languageEditing' | 'wordPattern' | 'userInputEvents'>);
 	constructor(
 		optionsOrViewport: EditorViewOptions | View,
-		legacySelectionController?: EditorSelectionController,
+		legacySelectionController?: CursorsController,
 		legacyOptions?: Pick<EditorViewOptions, 'ariaLabel' | 'accessibilityService' | 'renderRichScreenReaderContent' | 'accessibilityPageSize' | 'semanticTokenSource' | 'bracketColorizationSource' | 'languageEditing' | 'wordPattern' | 'userInputEvents'>,
 	) {
 		super();
@@ -354,7 +354,7 @@ export interface EditorViewportOptions {
 	readonly overscanLineCount?: number;
 	readonly ariaLabel?: string;
 	readonly textMeasurer?: TextMeasurer;
-	readonly selectionController?: EditorSelectionController;
+	readonly selectionController?: CursorsController;
 	readonly decorationSources?: readonly DecorationSource[];
 	readonly semanticTokenSource?: SemanticTokenSource;
 	readonly bracketColorizationSource?: BracketColorizationSource;
@@ -427,7 +427,7 @@ export class View extends Disposable {
 	private readonly textMeasurer: TextMeasurer;
 	private readonly lineWidths: LineWidthIndex;
 	private readonly viewModelLines: ViewModelLines;
-	private readonly selectionController: EditorSelectionController | undefined;
+	private readonly selectionController: CursorsController | undefined;
 	private readonly presentation: EditorViewportPresentation;
 	private readonly focusOutlineOwner: EditorFocusOutlineOwner;
 	private readonly renderLineHighlight: NonNullable<IEditorOptions['renderLineHighlight']>;

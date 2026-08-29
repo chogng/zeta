@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { CursorsController } from "../../../common/cursor/cursor.js";
 import { LanguageAutoClosingTracker } from "../../../common/cursor/languageAutoClosingTracker.js";
 import { registerBuiltinLanguageConfigurations } from "../../../common/languages/languageBuiltinConfigurations.js";
 import { LanguageConfigurationRegistry } from "../../../common/languages/languageConfiguration.js";
@@ -12,7 +12,7 @@ import { TextModel } from "../../../common/model/textModel.js";
 
 test("Language pair typing auto-closes and overtypes one existing closer", () => {
 	using model = new TextModel("call");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(4)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(4)));
 	using configurations = new LanguageConfigurationRegistry();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using tracker = new LanguageAutoClosingTracker(model, selections);
@@ -41,7 +41,7 @@ test("Language pair typing auto-closes and overtypes one existing closer", () =>
 
 test("Language pair backspace removes both empty sides and remains one undo step", () => {
 	using model = new TextModel("");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(0)));
 	using configurations = new LanguageConfigurationRegistry();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using tracker = new LanguageAutoClosingTracker(model, selections);
@@ -65,7 +65,7 @@ test("Language pair backspace removes both empty sides and remains one undo step
 test("Language pair typing surrounds directional selections and auto-closes collapsed cursors", () => {
 	using model = new TextModel("alpha beta");
 	const backward = TextSelection.from(TextPosition.at(0, 5), TextPosition.at(0, 0));
-	using selections = new EditorSelectionController(model, TextSelectionSet.withPrimary([backward, caret(10)], 1));
+	using selections = new CursorsController(model, TextSelectionSet.withPrimary([backward, caret(10)], 1));
 	using configurations = new LanguageConfigurationRegistry();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	const result = createLanguagePairTypeCommand(model, selections.selections, "\"", configurations.getLanguageConfiguration("typescript"));
@@ -85,7 +85,7 @@ test("Language pair typing surrounds directional selections and auto-closes coll
 
 test("Auto-closing respects following text and supports multi-token pairs", () => {
 	using model = new TextModel("name");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(0)));
 	using configurations = new LanguageConfigurationRegistry();
 	using custom = configurations.register("template", {
 		autoClosingPairs: [{ open: "<%", close: "%>" }],
@@ -117,7 +117,7 @@ test("Auto-closing notIn keeps string and comment input single while code still 
 	const configuration = configurations.getLanguageConfiguration("typescript");
 
 	using stringModel = new TextModel("\"value \"");
-	using stringSelections = new EditorSelectionController(stringModel, TextSelectionSet.single(caret(7)));
+	using stringSelections = new CursorsController(stringModel, TextSelectionSet.single(caret(7)));
 	using stringContext = new LanguageLexicalContextIndex(stringModel, "typescript", configurations);
 	const stringQuote = createLanguagePairTypeCommand(stringModel, stringSelections.selections, "'", configuration, {
 		lexicalContext: stringContext,
@@ -127,7 +127,7 @@ test("Auto-closing notIn keeps string and comment input single while code still 
 	assert.deepEqual(stringQuote.autoClosingActions, []);
 
 	using commentModel = new TextModel("// note ");
-	using commentSelections = new EditorSelectionController(commentModel, TextSelectionSet.single(caret(8)));
+	using commentSelections = new CursorsController(commentModel, TextSelectionSet.single(caret(8)));
 	using commentContext = new LanguageLexicalContextIndex(commentModel, "typescript", configurations);
 	const commentQuote = createLanguagePairTypeCommand(commentModel, commentSelections.selections, "'", configuration, {
 		lexicalContext: commentContext,
@@ -136,7 +136,7 @@ test("Auto-closing notIn keeps string and comment input single while code still 
 	assert.equal(commentModel.getText(), "// note '");
 
 	using codeModel = new TextModel("");
-	using codeSelections = new EditorSelectionController(codeModel, TextSelectionSet.single(caret(0)));
+	using codeSelections = new CursorsController(codeModel, TextSelectionSet.single(caret(0)));
 	using codeContext = new LanguageLexicalContextIndex(codeModel, "typescript", configurations);
 	const codeQuote = createLanguagePairTypeCommand(codeModel, codeSelections.selections, "'", configuration, {
 		lexicalContext: codeContext,

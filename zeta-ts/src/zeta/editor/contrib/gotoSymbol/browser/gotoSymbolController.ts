@@ -2,7 +2,7 @@ import "./media/gotoSymbol.css";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
-import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type GotoSymbolService, type LanguageSymbolMatch } from "../common/gotoSymbol.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
@@ -15,7 +15,7 @@ export class GotoSymbolController extends Disposable {
 	private request: AbortController | undefined;
 	private matches: readonly LanguageSymbolMatch[] = [];
 
-	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: GotoSymbolService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza goto symbol failed", error)) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, private readonly service: GotoSymbolService, private readonly languageId: string, private readonly onError: (error: unknown) => void = error => console.error("Stanza goto symbol failed", error)) {
 		super();
 		const ownerDocument = viewport.element.ownerDocument;
 		this.element = h(ownerDocument, "div");

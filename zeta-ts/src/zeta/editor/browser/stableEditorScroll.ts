@@ -1,14 +1,14 @@
-import { type EditorSelectionController } from '../common/cursor/cursor.js';
+import { type CursorsController } from '../common/cursor/cursor.js';
 import { TextPosition } from '../common/core/position.js';
 import { EditorViewport } from './view.js';
 
 /** A viewport host accepted by stable-scroll helpers. */
 export interface StableEditorScrollTarget {
 	readonly viewport: EditorViewport;
-	readonly selections?: EditorSelectionController;
-	readonly selectionController?: EditorSelectionController;
+	readonly selections?: CursorsController;
+	readonly selectionController?: CursorsController;
 	readonly view?: {
-		readonly selectionController: EditorSelectionController;
+		readonly selectionController: CursorsController;
 	};
 }
 
@@ -21,11 +21,11 @@ export class StableEditorScrollState {
 	private readonly visiblePosition: TextPosition | undefined;
 	private readonly visiblePositionScrollDelta: number;
 	private readonly cursorPosition: TextPosition | undefined;
-	private readonly selectionController: EditorSelectionController | undefined;
+	private readonly selectionController: CursorsController | undefined;
 
 	public static capture(
 		editor: StableEditor,
-		selectionController?: EditorSelectionController,
+		selectionController?: CursorsController,
 	): StableEditorScrollState {
 		const viewport = resolveViewport(editor);
 		const layout = viewport.currentLayout;
@@ -72,7 +72,7 @@ export class StableEditorScrollState {
 		visiblePosition: TextPosition | undefined,
 		visiblePositionScrollDelta: number,
 		cursorPosition: TextPosition | undefined,
-		selectionController: EditorSelectionController | undefined,
+		selectionController: CursorsController | undefined,
 	) {
 		this.initialScrollTop = initialScrollTop;
 		this.initialContentHeight = initialContentHeight;
@@ -108,7 +108,7 @@ export class StableEditorScrollState {
 	 */
 	public restoreRelativeVerticalPositionOfCursor(
 		editor: StableEditor,
-		selectionController?: EditorSelectionController,
+		selectionController?: CursorsController,
 	): void {
 		const viewport = resolveViewport(editor);
 		const layout = viewport.currentLayout;
@@ -204,8 +204,8 @@ function resolveViewport(editor: StableEditor): EditorViewport {
 
 function resolveSelections(
 	editor: StableEditor,
-	selectionController: EditorSelectionController | undefined = undefined,
-): EditorSelectionController | undefined {
+	selectionController: CursorsController | undefined = undefined,
+): CursorsController | undefined {
 	if (selectionController) return selectionController;
 	if (!(editor instanceof EditorViewport)) {
 		return editor.selections ?? editor.selectionController ?? editor.view?.selectionController;

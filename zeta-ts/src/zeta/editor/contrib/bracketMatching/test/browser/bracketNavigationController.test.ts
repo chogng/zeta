@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
-import { EditorSelectionController } from "../../../../common/cursor/cursor.js";
+import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { LanguageConfigurationRegistry } from "../../../../common/languages/languageConfiguration.js";
 import { LanguageBracketPairs } from "../../../../common/languages/languageBracketPairs.js";
 import { LanguageLexicalContextIndex } from "../../../../common/languages/languageLexicalContext.js";
@@ -31,7 +31,7 @@ test("Go-to-bracket shortcut uses the shared structural bracket index", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("(value)");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using configurations = configurationsForBrackets();
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
@@ -54,7 +54,7 @@ test("Bracket navigation controller rejects cross-model wiring and unrelated cho
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("()");
 	using other = new TextModel("()");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using configurations = configurationsForBrackets();
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using otherLexical = new LanguageLexicalContextIndex(other, "typescript", configurations);

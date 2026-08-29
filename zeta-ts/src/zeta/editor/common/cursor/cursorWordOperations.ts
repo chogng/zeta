@@ -1,28 +1,47 @@
-import { EditorCursorNavigationCommand, EditorCursorNavigationMode, navigateEditorCursors } from "./cursorMoveOperations.js";
+import { EditorCursorNavigationCommand, EditorCursorNavigationMode, MoveOperations } from './cursorMoveOperations.js';
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../commands/editorEditCommand.js";
-import { createSelectionEditCommand, type EditorSelectionEdit } from "./cursorTypeEditOperations.js";
+import { TypeWithoutInterceptorsOperation, type SelectionEdit } from './cursorTypeEditOperations.js';
 import { TextSelectionSet } from "../core/selection.js";
 import { TextPosition, TextRange } from "../core/text.js";
 import { type TextModel } from "../model/textModel.js";
 import { getTextWordSegments } from "../core/textSegmentation.js";
 
 /** Deletes each selection or the preceding editor word segment. */
-export function createDeleteWordBackwardCommand(model: TextModel, selections: TextSelectionSet, wordPattern?: RegExp): EditorEditCommand {
-	return createDeleteWordCommand(model, selections, EditorCursorNavigationCommand.WordLeft, EditorCommandHistoryMode.CoalesceBackspace, wordPattern);
-}
+export class WordOperations {
+	public static deleteWordLeft(model: TextModel, selections: TextSelectionSet, wordPattern?: RegExp): EditorEditCommand {
+		return createDeleteWordCommand(model, selections, EditorCursorNavigationCommand.WordLeft, EditorCommandHistoryMode.CoalesceBackspace, wordPattern);
+	}
 
 /** Deletes each selection or the following editor word segment. */
-export function createDeleteWordForwardCommand(model: TextModel, selections: TextSelectionSet, wordPattern?: RegExp): EditorEditCommand {
-	return createDeleteWordCommand(model, selections, EditorCursorNavigationCommand.WordRight, EditorCommandHistoryMode.CoalesceDelete, wordPattern);
+	public static deleteWordRight(model: TextModel, selections: TextSelectionSet, wordPattern?: RegExp): EditorEditCommand {
+		return createDeleteWordCommand(model, selections, EditorCursorNavigationCommand.WordRight, EditorCommandHistoryMode.CoalesceDelete, wordPattern);
+	}
+
+	public static getWordSelectionRange(model: TextModel, position: TextPosition, wordPattern?: RegExp): TextRange {
+		model.offsetAt(position);
+		const line = model.getLineContent(position.lineIndex);
+		if (line.length === 0) return TextRange.emptyAt(position);
+		const probe = position.columnIndex === line.length ? line.length - 1 : position.columnIndex;
+		const patternRange = wordPatternRange(line, probe, wordPattern);
+		if (patternRange) return TextRange.from(TextPosition.at(position.lineIndex, patternRange.start), TextPosition.at(position.lineIndex, patternRange.end));
+		const segment = getTextWordSegments(line).find(candidate => probe >= candidate.start && probe < candidate.end);
+		if (!segment) throw new RangeError('Word-selection probe is outside the line');
+		return TextRange.from(TextPosition.at(position.lineIndex, segment.start), TextPosition.at(position.lineIndex, segment.end));
+	}
+
+	public static getTextWordRanges(text: string, wordPattern?: RegExp): readonly { readonly start: number; readonly end: number }[] {
+		if (wordPattern) return Object.freeze(wordPatternRanges(text, wordPattern));
+		return Object.freeze(getTextWordSegments(text).flatMap(segment => segment.wordLike ? [{ start: segment.start, end: segment.end }] : []));
+	}
 }
 
 function createDeleteWordCommand(model: TextModel, selections: TextSelectionSet, navigation: EditorCursorNavigationCommand, historyMode: EditorCommandHistoryMode, wordPattern: RegExp | undefined): EditorEditCommand {
-	return createSelectionEditCommand(
+	return TypeWithoutInterceptorsOperation.getEdits(
 		model,
 		selections,
 		selections.selections.map(selection => {
 			const range = selection.collapsed
-				? navigateEditorCursors(model, TextSelectionSet.single(selection), {
+				? MoveOperations.navigate(model, TextSelectionSet.single(selection), {
 					command: navigation,
 					mode: EditorCursorNavigationMode.Extend,
 					...(wordPattern ? { wordPattern } : {}),
@@ -34,30 +53,13 @@ function createDeleteWordCommand(model: TextModel, selections: TextSelectionSet,
 	);
 }
 
-function emptySelectionEdit(range: TextRange): EditorSelectionEdit {
+function emptySelectionEdit(range: TextRange): SelectionEdit {
 	return {
 		range,
 		text: "",
 		anchorOffsetInText: 0,
 		activeOffsetInText: 0,
 	};
-}
-
-export function getWordSelectionRange(model: TextModel, position: TextPosition, wordPattern?: RegExp): TextRange {
-	model.offsetAt(position);
-	const line = model.getLineContent(position.lineIndex);
-	if (line.length === 0) return TextRange.emptyAt(position);
-	const probe = position.columnIndex === line.length ? line.length - 1 : position.columnIndex;
-	const patternRange = wordPatternRange(line, probe, wordPattern);
-	if (patternRange) return TextRange.from(TextPosition.at(position.lineIndex, patternRange.start), TextPosition.at(position.lineIndex, patternRange.end));
-	const segment = getTextWordSegments(line).find(candidate => probe >= candidate.start && probe < candidate.end);
-	if (!segment) throw new RangeError("Word-selection probe is outside the line");
-	return TextRange.from(TextPosition.at(position.lineIndex, segment.start), TextPosition.at(position.lineIndex, segment.end));
-}
-
-export function getTextWordRanges(text: string, wordPattern?: RegExp): readonly { readonly start: number; readonly end: number }[] {
-	if (wordPattern) return Object.freeze(wordPatternRanges(text, wordPattern));
-	return Object.freeze(getTextWordSegments(text).flatMap(segment => segment.wordLike ? [{ start: segment.start, end: segment.end }] : []));
 }
 
 function wordPatternRange(line: string, probe: number, pattern: RegExp | undefined): { readonly start: number; readonly end: number } | undefined {

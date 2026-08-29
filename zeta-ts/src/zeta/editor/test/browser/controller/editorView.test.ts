@@ -4,7 +4,7 @@ import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../../base/common/platform.js";
 import { type TextMeasurer } from "../../../browser/config/fontMeasurements.js";
 import { EditorIndentationKind } from "../../../common/core/misc/indentation.js";
-import { EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { CursorsController } from "../../../common/cursor/cursor.js";
 import { registerBuiltinLanguageConfigurations } from "../../../common/languages/languageBuiltinConfigurations.js";
 import { LanguageConfigurationRegistry, LanguageIndentAction } from "../../../common/languages/languageConfiguration.js";
 import { LanguageLexicalContextIndex } from "../../../common/languages/languageLexicalContext.js";
@@ -53,7 +53,7 @@ test("Textarea routes navigation, typing, history, deletion, and Tab", () => {
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("ab\ncd");
-	using selections = new EditorSelectionController(
+	using selections = new CursorsController(
 		model,
 		TextSelectionSet.single(caret(0, 1)),
 	);
@@ -187,7 +187,7 @@ test("Textarea keyboard fallback routes undo and redo without browser history in
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("value");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 5)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(0, 5)));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -215,7 +215,7 @@ test("Textarea routes browser soft-line deletion through Stanza commands", () =>
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("alpha\nbeta");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 3)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(0, 3)));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	using input = new EditorView(viewport, selections);
 
@@ -235,7 +235,7 @@ test("Textarea accepts an isolated composing dead-key commit without a compositi
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("e");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 1)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(0, 1)));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	using input = new EditorView(viewport, selections);
 
@@ -259,7 +259,7 @@ test("Textarea mirrors the focused document and primary selection for assistive 
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("alpha\nbeta");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 2)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(0, 2)));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	using input = new EditorView(viewport, selections, { ariaLabel: "Source file" });
 
@@ -304,7 +304,7 @@ test("Textarea bounds its accessibility mirror around the primary selection", ()
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("x".repeat(40_000));
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 20_000)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(0, 20_000)));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	using input = new EditorView(viewport, selections);
 
@@ -322,7 +322,7 @@ test("Textarea inherits the viewport direction for macOS accessibility text serv
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("שלום");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 0)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(0, 0)));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -342,7 +342,7 @@ test("Textarea toggles transient overtype mode for ordinary input", () => {
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("a😊bc");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 1)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(0, 1)));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -382,7 +382,7 @@ test("Textarea rejects cross-model wiring without owning either model", () => {
 	assert.ok(container);
 	using model = new TextModel("alpha");
 	using otherModel = new TextModel("beta");
-	using selections = new EditorSelectionController(
+	using selections = new CursorsController(
 		otherModel,
 		TextSelectionSet.single(caret(0, 0)),
 	);
@@ -397,7 +397,7 @@ test("Textarea rejects cross-model wiring without owning either model", () => {
 		() => new EditorView(viewport, selections),
 		/must share one text model/,
 	);
-	using compatibleSelections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 0)));
+	using compatibleSelections = new CursorsController(model, TextSelectionSet.single(caret(0, 0)));
 	assert.throws(() => new EditorView(viewport, compatibleSelections, {
 		languageEditing: new LanguageEditingAdapter(model, compatibleSelections, "*", { getLanguageConfiguration: () => { throw new Error("unreachable"); } }),
 	}), /Language ID/);
@@ -425,7 +425,7 @@ test("Textarea applies current language pair configuration through editor comman
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("item");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 4)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(0, 4)));
 	using configurations = new LanguageConfigurationRegistry();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using viewport = new EditorViewport({
@@ -477,7 +477,7 @@ test("Textarea command transformers keep linked input and undo atomic", () => {
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("tag tag");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 1)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(0, 1)));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	using input = new EditorView(viewport, selections);
 	using linked = input.registerCommandTransformer(command => extendEditorEditCommand(model, command, [{ range: TextRange.emptyAt(TextPosition.at(0, 5)), text: "X" }]));
@@ -495,7 +495,7 @@ test("Textarea does not trust matching pairs that it did not auto-close", () => 
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("()");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 1)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(0, 1)));
 	using configurations = new LanguageConfigurationRegistry();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using viewport = new EditorViewport({
@@ -527,7 +527,7 @@ test("Textarea applies current on-enter rules with editor-owned indentation", ()
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("{}");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 1)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(0, 1)));
 	using configurations = new LanguageConfigurationRegistry();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using viewport = new EditorViewport({
@@ -575,7 +575,7 @@ test("Textarea Enter ignores structural brackets inside lexical string tokens", 
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("const value = \"{\"");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, model.getText().length)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(0, model.getText().length)));
 	using configurations = new LanguageConfigurationRegistry();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using viewport = new EditorViewport({
@@ -605,7 +605,7 @@ test("Textarea respects auto-closing notIn inside lexical string tokens", () => 
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("\"value \"");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 7)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(0, 7)));
 	using configurations = new LanguageConfigurationRegistry();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using viewport = new EditorViewport({

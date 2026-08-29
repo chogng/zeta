@@ -26,13 +26,13 @@ import { type LanguageWorkspaceEdit } from "../../../../editor/common/languages/
 import { type ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
 import { type OwnedDecorationSource } from "../../../../editor/browser/viewparts/decorations/decorations.js";
 import { type TextModel } from "../../../../editor/common/model/textModel.js";
-import type { EditorSelectionController } from "../../../../editor/common/cursor/cursor.js";
+import type { CursorsController } from "../../../../editor/common/cursor/cursor.js";
 import type { EditorPaneStatus } from "../../../browser/parts/editor/editorPane.js";
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 
 export interface EditorPanePart extends IDisposable {
 	readonly onDidChange?: Event<void>;
-	readonly selections?: EditorSelectionController;
+	readonly selections?: CursorsController;
 	layout(dimension: IDimension): void;
 	focus(): void;
 	getValue(): string;

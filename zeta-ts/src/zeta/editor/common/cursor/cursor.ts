@@ -1,20 +1,14 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { IME } from "../../../base/common/ime.js";
-import { Disposable, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
-import { EditorCompositionSession } from "./oneCursor.js";
-import { calculateResultLength, selectionSetFromOffsets, selectionSetsEqual, validateSelectionOffsets, validateSelectionSet } from "./cursorCollection.js";
-import { CursorContext, type EditorSelectionControllerOptions } from "./cursorContext.js";
-import { SelectionDirection, TextSelection, TextSelectionSet } from "../core/selection.js";
-import { TextEditHistoryGroup, TextEditHistoryMergeMode, TextModelChangeReason, type TextModelChange } from "../core/text.js";
+import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { CursorCollection } from './cursorCollection.js';
+import { CursorContext } from './cursorContext.js';
+import { TextSelectionSet } from '../core/selection.js';
+import { normalizeTextLineEndings, TextEditHistoryGroup, TextEditHistoryMergeMode, TextModelChangeReason, TextRange, type TextModelChange } from '../core/text.js';
 import { TextModel } from "../model/textModel.js";
-import { TrackedRangeStickiness, type TrackedRange } from "../model/trackedRange.js";
 import { EditorCommandHistoryMode, type EditorEditCommand, type TextSelectionOffsets } from "../commands/editorEditCommand.js";
 
-export { EditorCommandHistoryMode } from "../commands/editorEditCommand.js";
-export type { EditorEditCommand, TextSelectionOffsets } from "../commands/editorEditCommand.js";
-export type { EditorSelectionControllerOptions } from "./cursorContext.js";
-
-export enum EditorSelectionChangeReason {
+export enum CursorChangeReason {
 	Explicit = "explicit",
 	Command = "command",
 	Undo = "undo",
@@ -25,20 +19,34 @@ export enum EditorSelectionChangeReason {
 	CursorUndo = "cursorUndo",
 }
 
-export interface EditorSelectionChange {
+export interface CursorStateChangedEvent {
 	readonly selections: TextSelectionSet;
-	readonly reason: EditorSelectionChangeReason;
+	readonly reason: CursorChangeReason;
 	readonly modelVersion: number;
+}
+
+export interface CompositionUpdate {
+	readonly text: string;
+	readonly selection: TextSelectionOffsets;
+}
+
+interface CursorsControllerOptions {
+	readonly selectionHistoryLimit?: number;
+	readonly cursorHistoryLimit?: number;
+	readonly readOnly?: boolean;
+}
+
+interface CompositionHost {
+	isActive(): boolean;
+	assertActive(): void;
+	apply(command: EditorEditCommand): TextModelChange | undefined;
+	commit(): void;
+	cancel(): TextModelChange | undefined;
 }
 
 interface SelectionHistoryEntry {
 	readonly before: TextSelectionSet;
 	readonly after: TextSelectionSet;
-}
-
-interface TrackedSelection {
-	readonly range: TrackedRange;
-	readonly direction: SelectionDirection;
 }
 
 interface ActiveComposition {
@@ -53,39 +61,37 @@ interface ActiveComposition {
  * Text remains document-owned. This controller owns only one editor instance's
  * tracked selections and command-level selection history.
  */
-export class EditorSelectionController extends Disposable {
+export class CursorsController extends Disposable {
 	private readonly context: CursorContext;
 	private readonly changeEmitter =
-		this._register(new Emitter<EditorSelectionChange>());
-	private readonly trackedSelectionResources =
-		this._register(new DisposableStore());
+		this._register(new Emitter<CursorStateChangedEvent>());
+	private readonly cursors: CursorCollection;
 	private readonly selectionHistory =
 		new Map<number, SelectionHistoryEntry>();
 	private readonly selectionHistoryOrder: number[] = [];
 	private readonly cursorHistory: TextSelectionSet[] = [];
-	private trackedSelections: TrackedSelection[] = [];
 	private currentSelections: TextSelectionSet;
 	private activeHistoryGroup: TextEditHistoryGroup | undefined;
 	private activeHistoryMode: EditorCommandHistoryMode | undefined;
 	private activeComposition: ActiveComposition | undefined;
 	private executingCommand = false;
 
-	readonly onDidChange: Event<EditorSelectionChange> =
+	readonly onDidChange: Event<CursorStateChangedEvent> =
 		this.changeEmitter.event;
 
 	constructor(
 		private readonly model: TextModel,
 		initialSelections: TextSelectionSet,
-		options: EditorSelectionControllerOptions = {},
+		options: CursorsControllerOptions = {},
 	) {
 		super();
 		this.context = new CursorContext(model, options);
 		this.currentSelections = initialSelections;
+		this.cursors = this._register(new CursorCollection(model, initialSelections));
 		try {
 			this.installSelections(initialSelections);
 			this._register(model.onDidChange(change => this.acceptModelChange(change)));
 			this._register(toDisposable(() => {
-				this.trackedSelections = [];
 				this.selectionHistory.clear();
 				this.selectionHistoryOrder.length = 0;
 				this.cursorHistory.length = 0;
@@ -123,7 +129,7 @@ export class EditorSelectionController extends Disposable {
 		this.cursorHistory.length = 0;
 		this.installSelections(
 			selections,
-			EditorSelectionChangeReason.Explicit,
+			CursorChangeReason.Explicit,
 		);
 	}
 
@@ -132,9 +138,9 @@ export class EditorSelectionController extends Disposable {
 		this.assertNotDisposed();
 		this.assertNoActiveComposition("set cursor selections");
 		this.breakHistoryGroup();
-		if (selectionSetsEqual(this.currentSelections, selections)) return;
+		if (CursorCollection.selectionsEqual(this.currentSelections, selections)) return;
 		this.rememberCursorSelections(this.currentSelections);
-		this.installSelections(selections, EditorSelectionChangeReason.CursorOperation);
+		this.installSelections(selections, CursorChangeReason.CursorOperation);
 	}
 
 	/** Restores the preceding cursor-only selection state without changing document undo history. */
@@ -144,7 +150,7 @@ export class EditorSelectionController extends Disposable {
 		this.breakHistoryGroup();
 		const previous = this.cursorHistory.pop();
 		if (!previous) return false;
-		this.installSelections(previous, EditorSelectionChangeReason.CursorUndo);
+		this.installSelections(previous, CursorChangeReason.CursorUndo);
 		return true;
 	}
 
@@ -168,7 +174,7 @@ export class EditorSelectionController extends Disposable {
 		);
 	}
 
-	beginComposition(): EditorCompositionSession {
+	beginComposition(): CompositionSession {
 		this.assertNotDisposed();
 		this.assertNoActiveComposition("begin another composition");
 		if (this.context.readOnly) throw new Error("Cannot begin composition in a read-only editor");
@@ -192,7 +198,7 @@ export class EditorSelectionController extends Disposable {
 		};
 		this.model.beginHistoryRevision(state.historyGroup);
 		this.activeComposition = state;
-		return new EditorCompositionSession(
+		return new CompositionSession(
 			this.model,
 			startOffset,
 			endOffset,
@@ -233,7 +239,7 @@ export class EditorSelectionController extends Disposable {
 						}
 						this.installSelections(
 							initialSelections,
-							EditorSelectionChangeReason.HistoryCancellation,
+							CursorChangeReason.HistoryCancellation,
 						);
 					}
 					return change;
@@ -247,8 +253,8 @@ export class EditorSelectionController extends Disposable {
 		historyGroup: TextEditHistoryGroup | undefined,
 		historyMergeMode: TextEditHistoryMergeMode,
 	): TextModelChange | undefined {
-		const resultLength = calculateResultLength(this.model, command.edits);
-		validateSelectionOffsets(
+		const resultLength = CursorCollection.calculateResultLength(this.model, command.edits);
+		CursorCollection.validateSelectionOffsets(
 			command.selectionsAfter,
 			command.primarySelectionIndex,
 			resultLength,
@@ -275,7 +281,7 @@ export class EditorSelectionController extends Disposable {
 			this.breakHistoryGroup();
 			this.invalidateActiveComposition();
 			this.refreshTrackedSelections(
-				EditorSelectionChangeReason.ModelChange,
+				CursorChangeReason.ModelChange,
 				true,
 				true,
 			);
@@ -285,7 +291,7 @@ export class EditorSelectionController extends Disposable {
 			this.breakHistoryGroup();
 			this.invalidateActiveComposition();
 			this.refreshTrackedSelections(
-				EditorSelectionChangeReason.ModelChange,
+				CursorChangeReason.ModelChange,
 			);
 			return undefined;
 		}
@@ -296,14 +302,14 @@ export class EditorSelectionController extends Disposable {
 			this.breakHistoryGroup();
 		}
 
-		const after = selectionSetFromOffsets(
+		const after = CursorCollection.selectionSetFromOffsets(
 			this.model,
 			command.selectionsAfter,
 			command.primarySelectionIndex,
 		);
 		this.installSelections(
 			after,
-			EditorSelectionChangeReason.Command,
+			CursorChangeReason.Command,
 		);
 		if (change) {
 			this.rememberSelectionHistory(
@@ -335,7 +341,7 @@ export class EditorSelectionController extends Disposable {
 	private acceptModelChange(change: TextModelChange): void {
 		if (this.executingCommand) {
 			this.refreshTrackedSelections(
-				EditorSelectionChangeReason.ModelChange,
+				CursorChangeReason.ModelChange,
 				false,
 			);
 			return;
@@ -351,14 +357,14 @@ export class EditorSelectionController extends Disposable {
 		if (history && change.reason === TextModelChangeReason.Undo) {
 			this.installSelections(
 				history.before,
-				EditorSelectionChangeReason.Undo,
+				CursorChangeReason.Undo,
 			);
 			return;
 		}
 		if (history && change.reason === TextModelChangeReason.Redo) {
 			this.installSelections(
 				history.after,
-				EditorSelectionChangeReason.Redo,
+				CursorChangeReason.Redo,
 			);
 			return;
 		}
@@ -368,33 +374,25 @@ export class EditorSelectionController extends Disposable {
 		) {
 			this.installSelections(
 				history.before,
-				EditorSelectionChangeReason.HistoryCancellation,
+				CursorChangeReason.HistoryCancellation,
 			);
 			this.forgetSelectionHistory(change.transactionId);
 			return;
 		}
 		this.refreshTrackedSelections(
-			EditorSelectionChangeReason.ModelChange,
+			CursorChangeReason.ModelChange,
 		);
 	}
 
 	private installSelections(
 		selections: TextSelectionSet,
-		reason?: EditorSelectionChangeReason,
+		reason?: CursorChangeReason,
 	): void {
-		validateSelectionSet(this.model, selections);
+		CursorCollection.validateSelectionSet(this.model, selections);
 		const previous = this.currentSelections;
-		this.trackedSelectionResources.clear();
-		this.trackedSelections = selections.selections.map(selection => {
-			const range = this.model.trackRange(
-				selection.range,
-				TrackedRangeStickiness.NeverGrowsAtEdges,
-			);
-			this.trackedSelectionResources.add(toDisposable(() => range.dispose()));
-			return { range, direction: selection.direction };
-		});
+		this.cursors.setSelections(selections);
 		this.currentSelections = selections;
-		if (reason && !selectionSetsEqual(previous, selections)) {
+		if (reason && !CursorCollection.selectionsEqual(previous, selections)) {
 			this.changeEmitter.fire(Object.freeze({
 				selections,
 				reason,
@@ -404,22 +402,14 @@ export class EditorSelectionController extends Disposable {
 	}
 
 	private refreshTrackedSelections(
-		reason: EditorSelectionChangeReason,
+		reason: CursorChangeReason,
 		notify = true,
 		forceNotify = false,
 	): void {
-		const selections = TextSelectionSet.withPrimary(
-			this.trackedSelections.map(tracked => {
-				const range = tracked.range.range;
-				return tracked.direction === SelectionDirection.Backward
-					? TextSelection.from(range.end, range.start)
-					: TextSelection.from(range.start, range.end);
-			}),
-			this.currentSelections.primaryIndex,
-		);
+		const selections = this.cursors.getSelections();
 		const previous = this.currentSelections;
 		this.currentSelections = selections;
-		if (notify && (forceNotify || !selectionSetsEqual(previous, selections))) {
+		if (notify && (forceNotify || !CursorCollection.selectionsEqual(previous, selections))) {
 			this.changeEmitter.fire(Object.freeze({
 				selections,
 				reason,
@@ -517,4 +507,79 @@ export class EditorSelectionController extends Disposable {
 		this.activeComposition = undefined;
 	}
 
+}
+
+export class CompositionSession {
+	private currentEndOffset: number;
+	private closed = false;
+
+	constructor(
+		private readonly model: TextModel,
+		private readonly startOffset: number,
+		endOffset: number,
+		private readonly host: CompositionHost,
+	) {
+		this.currentEndOffset = endOffset;
+	}
+
+	public get active(): boolean {
+		return !this.closed && this.host.isActive();
+	}
+
+	public get currentRange(): TextRange {
+		this.ensureActive();
+		this.host.assertActive();
+		return TextRange.from(this.model.positionAt(this.startOffset), this.model.positionAt(this.currentEndOffset));
+	}
+
+	public update(update: CompositionUpdate): TextModelChange | undefined {
+		this.ensureActive();
+		this.host.assertActive();
+		if (typeof update.text !== 'string') throw new TypeError('CompositionUpdate.text must be a string');
+		const text = normalizeTextLineEndings(update.text);
+		validateRelativeSelection(update.selection, text.length);
+		const change = this.host.apply({
+			edits: [{
+				range: TextRange.from(this.model.positionAt(this.startOffset), this.model.positionAt(this.currentEndOffset)),
+				text,
+			}],
+			selectionsAfter: [{
+				anchorOffset: this.startOffset + update.selection.anchorOffset,
+				activeOffset: this.startOffset + update.selection.activeOffset,
+			}],
+			primarySelectionIndex: 0,
+		});
+		this.host.assertActive();
+		this.currentEndOffset = this.startOffset + text.length;
+		return change;
+	}
+
+	public commit(): void {
+		this.ensureActive();
+		this.host.assertActive();
+		this.closed = true;
+		this.host.commit();
+	}
+
+	public cancel(): TextModelChange | undefined {
+		this.ensureActive();
+		this.host.assertActive();
+		this.closed = true;
+		return this.host.cancel();
+	}
+
+	private ensureActive(): void {
+		if (this.closed) throw new ReferenceError('Editor composition is already closed');
+	}
+}
+
+function validateRelativeSelection(selection: TextSelectionOffsets, textLength: number): void {
+	assertRelativeOffset(selection.anchorOffset, textLength, 'selection.anchorOffset');
+	assertRelativeOffset(selection.activeOffset, textLength, 'selection.activeOffset');
+}
+
+function assertRelativeOffset(offset: number, textLength: number, name: string): void {
+	if (!Number.isSafeInteger(offset) || offset < 0 || offset > textLength) {
+		throw new RangeError(`${name} must be between 0 and ${textLength}`);
+	}
 }

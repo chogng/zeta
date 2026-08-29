@@ -1,7 +1,7 @@
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
-import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { type TextPosition } from "../../../common/core/text.js";
 import { type EditorViewport } from "../../../browser/view.js";
@@ -15,7 +15,7 @@ export class LanguageNavigationController extends Disposable {
 	private readonly peek = this._register(new DisposableStore());
 	private request: AbortController | undefined;
 
-	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: LanguageNavigationService, private readonly resource: URI, private readonly languageId: string, private readonly openLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor language navigation failed", error)) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, private readonly service: LanguageNavigationService, private readonly resource: URI, private readonly languageId: string, private readonly openLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor language navigation failed", error)) {
 		super();
 		if (viewport.textModel !== selections.textModel) throw new TypeError("Language navigation dependencies must share one text model");
 		this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));

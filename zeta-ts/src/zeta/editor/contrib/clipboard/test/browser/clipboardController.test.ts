@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
-import { EditorSelectionController } from "../../../../common/cursor/cursor.js";
+import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
@@ -122,7 +122,7 @@ const { EditorView } = await import("../../../../browser/view.js");
 function attachClipboard(
 	input: InstanceType<typeof EditorView>,
 	viewport: InstanceType<typeof EditorViewport>,
-	selections: EditorSelectionController,
+	selections: CursorsController,
 	options: ClipboardControllerOptions = {},
 	clipboardService: IClipboardService = inertClipboardService,
 ): InstanceType<typeof ClipboardController> {
@@ -141,7 +141,7 @@ test("Clipboard copies, distributes paste, cuts, and restores isolated history",
 		selection(0, 0, 0, 3),
 		selection(1, 0, 1, 5),
 	], 1);
-	using selections = new EditorSelectionController(model, copiedSelections);
+	using selections = new CursorsController(model, copiedSelections);
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -218,7 +218,7 @@ test("Clipboard repeats external text and copies an empty selection as a line", 
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("a b");
-	using selections = new EditorSelectionController(
+	using selections = new CursorsController(
 		model,
 		TextSelectionSet.withPrimary([caret(0, 0), caret(0, 2)], 0),
 	);
@@ -279,7 +279,7 @@ test("Clipboard round-trips complete lines and preserves target columns", () => 
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("one\ntwo\nthree");
-	using selections = new EditorSelectionController(
+	using selections = new CursorsController(
 		model,
 		TextSelectionSet.withPrimary([caret(0, 1), caret(2, 2)], 1),
 	);
@@ -360,7 +360,7 @@ test("Mixed line and selection metadata falls back to selection paste", () => {
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("a\nb");
-	using selections = new EditorSelectionController(
+	using selections = new CursorsController(
 		model,
 		TextSelectionSet.withPrimary([
 			caret(0, 1),
@@ -410,7 +410,7 @@ test("Empty-selection clipboard policy may explicitly preserve browser behavior"
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("abc");
-	using selections = new EditorSelectionController(
+	using selections = new CursorsController(
 		model,
 		TextSelectionSet.single(caret(0, 1)),
 	);
@@ -441,7 +441,7 @@ test("Clipboard copies escaped HTML and safely falls back to external HTML text"
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("if (a < b && c > d) {}");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(selection(0, 0, 0, model.getLineContent(0).length)));
+	using selections = new CursorsController(model, TextSelectionSet.single(selection(0, 0, 0, model.getLineContent(0).length)));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -473,7 +473,7 @@ test("Clipboard preserves current semantic token markup in portable HTML", () =>
 	assert.ok(container);
 	dom.window.document.documentElement.style.setProperty("--zeta-editor-token-keyword-foreground", "rgb(1, 2, 3)");
 	using model = new TextModel("const value\nnext");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(selection(0, 0, 1, model.getLineContent(1).length)));
+	using selections = new CursorsController(model, TextSelectionSet.single(selection(0, 0, 1, model.getLineContent(1).length)));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -529,7 +529,7 @@ test('Clipboard reads system text only for an empty event transfer', async () =>
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("one");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 3)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(0, 3)));
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -572,7 +572,7 @@ test('Clipboard owns URI-list and bounded text-file paste', async () => {
 	const container = dom.window.document.querySelector('main');
 	assert.ok(container);
 	using model = new TextModel('one');
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 3)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(0, 3)));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	using input = new EditorView(viewport, selections);
 	using clipboard = attachClipboard(input, viewport, selections);
@@ -599,7 +599,7 @@ test('Clipboard writes system text and delays cut until it succeeds', async () =
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("one");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(selection(0, 0, 0, 3)));
+	using selections = new CursorsController(model, TextSelectionSet.single(selection(0, 0, 0, 3)));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	const clipboardService = new DeferredClipboardService();
 	using input = new EditorView(viewport, selections);
@@ -630,7 +630,7 @@ test("Clipboard preserves an active IME composition by rejecting mutable clipboa
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("one");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 3)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(0, 3)));
 	using viewport = new EditorViewport({
 		container,
 		model,

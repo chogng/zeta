@@ -2,7 +2,7 @@ import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.j
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
-import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 export interface CursorUndoControllerOptions {
@@ -13,7 +13,7 @@ export interface CursorUndoControllerOptions {
 export class CursorUndoController extends Disposable {
 	private readonly targetOperatingSystem: OperatingSystem;
 
-	constructor(input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, options: CursorUndoControllerOptions = {}) {
+	constructor(input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, options: CursorUndoControllerOptions = {}) {
 		super();
 		try {
 			this.targetOperatingSystem = readOperatingSystem(options.operatingSystem);

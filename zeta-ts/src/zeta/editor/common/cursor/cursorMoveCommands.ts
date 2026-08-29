@@ -2,22 +2,50 @@ import { TextSelection, TextSelectionSet } from "../core/selection.js";
 import { TextPosition } from "../core/text.js";
 import { type TextModel } from "../model/textModel.js";
 
-/** Selects which adjacent physical line receives an additional caret. */
-export enum EditorCursorInsertionDirection {
-	Above = "above",
-	Below = "below",
-}
-
 /**
  * Adds a caret adjacent to every existing selection's active position.
  *
  * The existing selections remain unchanged. New carets clamp to the target
  * line length and never duplicate or overlap a retained selection.
  */
-export function addAdjacentLineCursors(model: TextModel, selections: TextSelectionSet, direction: EditorCursorInsertionDirection): TextSelectionSet {
-	if (!Object.values(EditorCursorInsertionDirection).includes(direction)) {
-		throw new TypeError("Unknown editor cursor insertion direction");
+export class CursorMoveCommands {
+	public static addCursorDown(model: TextModel, selections: TextSelectionSet): TextSelectionSet {
+		return addAdjacentLineCursors(model, selections, 'below');
 	}
+
+	public static addCursorUp(model: TextModel, selections: TextSelectionSet): TextSelectionSet {
+		return addAdjacentLineCursors(model, selections, 'above');
+	}
+
+	public static addCursorsToLineEnds(model: TextModel, selections: TextSelectionSet): TextSelectionSet {
+		return addCursorsToSelectedLineEnds(model, selections);
+	}
+
+	public static readPointerMultiCursorModifier(value: PointerMultiCursorModifier | undefined): PointerMultiCursorModifier {
+		const resolved = value ?? PointerMultiCursorModifier.Alt;
+		if (resolved !== PointerMultiCursorModifier.Alt && resolved !== PointerMultiCursorModifier.ControlOrMeta) {
+			throw new TypeError('Unknown Stanza pointer multi-cursor modifier');
+		}
+		return resolved;
+	}
+
+	public static isPointerMultiCursorGesture(state: PointerModifierState, modifier: PointerMultiCursorModifier): boolean {
+		if (state.shiftKey) return false;
+		if (modifier === PointerMultiCursorModifier.Alt) return state.altKey && !state.ctrlKey && !state.metaKey;
+		return (state.ctrlKey || state.metaKey) && !state.altKey;
+	}
+
+	public static combinePointerSelection(base: TextSelectionSet, active: TextSelection, toggleCandidateIndex: number | undefined): TextSelectionSet {
+		return combinePointerSelection(base, active, toggleCandidateIndex);
+	}
+
+	public static findPointerToggleCandidate(base: TextSelectionSet, selection: TextSelection): number | undefined {
+		const index = base.selections.findIndex(candidate => selectionsHaveSameRange(candidate, selection));
+		return index >= 0 ? index : undefined;
+	}
+}
+
+function addAdjacentLineCursors(model: TextModel, selections: TextSelectionSet, direction: 'above' | 'below'): TextSelectionSet {
 	const nextSelections = [...selections.selections];
 	let primaryIndex = selections.primaryIndex;
 	for (const selection of selections.selections) {
@@ -32,7 +60,7 @@ export function addAdjacentLineCursors(model: TextModel, selections: TextSelecti
 }
 
 /** Replaces non-empty selections with carets at the selected physical line ends. */
-export function addCursorsToSelectedLineEnds(model: TextModel, selections: TextSelectionSet): TextSelectionSet {
+function addCursorsToSelectedLineEnds(model: TextModel, selections: TextSelectionSet): TextSelectionSet {
 	const nextSelections: TextSelection[] = [];
 	let primaryIndex: number | undefined;
 	for (let selectionIndex = 0; selectionIndex < selections.selections.length; selectionIndex += 1) {
@@ -54,8 +82,8 @@ export function addCursorsToSelectedLineEnds(model: TextModel, selections: TextS
 	return TextSelectionSet.withPrimary(nextSelections, primaryIndex ?? 0);
 }
 
-function adjacentLinePosition(model: TextModel, position: TextPosition, direction: EditorCursorInsertionDirection): TextPosition | undefined {
-	const lineIndex = position.lineIndex + (direction === EditorCursorInsertionDirection.Above ? -1 : 1);
+function adjacentLinePosition(model: TextModel, position: TextPosition, direction: 'above' | 'below'): TextPosition | undefined {
+	const lineIndex = position.lineIndex + (direction === 'above' ? -1 : 1);
 	if (lineIndex < 0 || lineIndex >= model.lineCount) return undefined;
 	return TextPosition.at(lineIndex, Math.min(position.columnIndex, model.getLineContent(lineIndex).length));
 }
@@ -82,21 +110,7 @@ export interface PointerModifierState {
 	readonly shiftKey: boolean;
 }
 
-export function readStanzaPointerMultiCursorModifier(value: PointerMultiCursorModifier | undefined): PointerMultiCursorModifier {
-	const resolved = value ?? PointerMultiCursorModifier.Alt;
-	if (resolved !== PointerMultiCursorModifier.Alt && resolved !== PointerMultiCursorModifier.ControlOrMeta) {
-		throw new TypeError("Unknown Stanza pointer multi-cursor modifier");
-	}
-	return resolved;
-}
-
-export function isStanzaPointerMultiCursorGesture(state: PointerModifierState, modifier: PointerMultiCursorModifier): boolean {
-	if (state.shiftKey) return false;
-	if (modifier === PointerMultiCursorModifier.Alt) return state.altKey && !state.ctrlKey && !state.metaKey;
-	return (state.ctrlKey || state.metaKey) && !state.altKey;
-}
-
-export function combineStanzaPointerSelection(base: TextSelectionSet, active: TextSelection, toggleCandidateIndex: number | undefined): TextSelectionSet {
+function combinePointerSelection(base: TextSelectionSet, active: TextSelection, toggleCandidateIndex: number | undefined): TextSelectionSet {
 	validateToggleCandidate(base, toggleCandidateIndex);
 	if (toggleCandidateIndex !== undefined && selectionsHaveSameRange(base.selections[toggleCandidateIndex]!, active)) {
 		if (base.selections.length === 1) return base;
@@ -112,11 +126,6 @@ export function combineStanzaPointerSelection(base: TextSelectionSet, active: Te
 	const nonOverlapping = retained.filter(selection => !selectionRangesOverlap(selection, active));
 	if (nonOverlapping.length === 0) return TextSelectionSet.single(active);
 	return TextSelectionSet.withPrimary([...nonOverlapping, active], nonOverlapping.length);
-}
-
-export function findStanzaPointerToggleCandidate(base: TextSelectionSet, selection: TextSelection): number | undefined {
-	const index = base.selections.findIndex(candidate => selectionsHaveSameRange(candidate, selection));
-	return index >= 0 ? index : undefined;
 }
 
 function selectionsHaveSameRange(left: TextSelection, right: TextSelection): boolean {

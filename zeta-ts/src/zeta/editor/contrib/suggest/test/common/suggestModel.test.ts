@@ -1,6 +1,7 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { EditorCommandHistoryMode, EditorSelectionController } from "../../../../common/cursor/cursor.js";
+import { EditorCommandHistoryMode } from '../../../../common/commands/editorEditCommand.js';
+import { CursorsController } from '../../../../common/cursor/cursor.js';
 import { LanguageCompletionDetailsStatus, LanguageCompletionSessionChangeReason, LanguageCompletionSessionController } from "../../common/suggestModel.js";
 import { LanguageResultAcceptance } from "../../../../common/languages/languageResultStore.js";
 import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind, createLanguageCompletionStore, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest } from "../../../../common/languages/completion/languageCompletions.js";
@@ -416,8 +417,8 @@ function completion(id: string, label: string, preselect = false, range = TextRa
 	};
 }
 
-function controllerAt(model: TextModel, position: TextPosition): EditorSelectionController {
-	return new EditorSelectionController(
+function controllerAt(model: TextModel, position: TextPosition): CursorsController {
+	return new CursorsController(
 		model,
 		TextSelectionSet.single(TextSelection.collapsedAt(position)),
 	);

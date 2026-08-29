@@ -3,7 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
-import { EditorSelectionController } from "../../../../common/cursor/cursor.js";
+import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
@@ -166,7 +166,7 @@ test("replace current and replace all use isolated undo transactions", () => {
 interface Fixture extends Disposable {
 	readonly dom: JSDOM;
 	readonly model: TextModel;
-	readonly selections: EditorSelectionController;
+	readonly selections: CursorsController;
 	readonly decorations: TextDecorationCollection<void>;
 	readonly viewport: InstanceType<typeof EditorViewport>;
 	readonly editorInput: HTMLTextAreaElement;
@@ -177,7 +177,7 @@ function createFixture(text: string, anchor = TextPosition.at(0, 0), active = an
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	const model = new TextModel(text);
-	const selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.from(anchor, active)));
+	const selections = new CursorsController(model, TextSelectionSet.single(TextSelection.from(anchor, active)));
 	const decorations = new TextDecorationCollection<void>(model);
 	const viewport = new EditorViewport({
 		container,

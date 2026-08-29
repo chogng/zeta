@@ -1,5 +1,5 @@
 import "./selections.css";
-import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { h, reset } from '../../../../base/browser/dom.js';
 import { createStanzaVisualSelectionGeometry } from '../../../common/viewModel/visualSelectionGeometry.js';
 import { type EditorLineVisibleRange, type EditorOverlayContext } from '../../view/renderingContext.js';
@@ -10,10 +10,10 @@ import { ViewPartRows } from '../../view/viewLayer.js';
 /** Projects selection ranges and current-line state without owning selection state. */
 export class SelectionsOverlay extends DynamicViewOverlay {
 	public readonly domNode: HTMLElement;
-	private readonly selectionController: EditorSelectionController | undefined;
+	private readonly selectionController: CursorsController | undefined;
 	private readonly rows: ViewPartRows;
 
-	constructor(context: EditorViewContext, host: HTMLElement, selectionController: EditorSelectionController | undefined) {
+	constructor(context: EditorViewContext, host: HTMLElement, selectionController: CursorsController | undefined) {
 		super(context);
 		this.rows = this._register(new ViewPartRows(host, 'stanza-editor-selections-layer', 'stanza-editor-line-selections'));
 		this.domNode = this.rows.domNode;
@@ -30,7 +30,7 @@ export class SelectionsOverlay extends DynamicViewOverlay {
 	}
 }
 
-function projectStanzaSelectionOverlays(context: EditorOverlayContext, controller: EditorSelectionController | undefined, rows: ReadonlyMap<number, HTMLElement>): void {
+function projectStanzaSelectionOverlays(context: EditorOverlayContext, controller: CursorsController | undefined, rows: ReadonlyMap<number, HTMLElement>): void {
 	for (const row of rows.values()) reset(row);
 	if (!controller) return;
 	const domSelections = new Map<number, readonly EditorLineVisibleRange[]>();

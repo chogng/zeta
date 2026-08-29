@@ -4,8 +4,8 @@ import { Emitter, Event, type Event as EditorEvent } from "../../../../base/comm
 import { IME } from "../../../../base/common/ime.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type TextSelectionOffsets } from "../../../common/commands/editorEditCommand.js";
-import { type EditorCompositionSession } from "../../../common/cursor/oneCursor.js";
-import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { type CompositionSession } from '../../../common/cursor/cursor.js';
+import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { normalizeTextLineEndings, type TextPosition } from "../../../common/core/text.js";
 import { type EditorViewport } from "../../view.js";
 import { type EditorViewTextUpdateEvent, type ViewController } from "../../view/viewController.js";
@@ -303,7 +303,7 @@ function hasPrimaryModifier(event: Pick<KeyboardEvent, "ctrlKey" | "altKey" | "m
 }
 
 interface ActiveComposition {
-	readonly session: EditorCompositionSession;
+	readonly session: CompositionSession;
 	text: string;
 	selection: TextSelectionOffsets;
 	updated: boolean;
@@ -324,7 +324,7 @@ export class CompositionController extends Disposable {
 	constructor(
 		input: EditContext,
 		private readonly viewport: EditorViewport,
-		private readonly selectionController: EditorSelectionController,
+		private readonly selectionController: CursorsController,
 	) {
 		super();
 		if (viewport.textModel !== selectionController.textModel) {

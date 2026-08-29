@@ -1,8 +1,8 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { createTypeTextCommand } from "../../../common/cursor/cursorTypeOperations.js";
+import { TypeOperations } from "../../../common/cursor/cursorTypeOperations.js";
 import { EditorIndentationKind } from "../../../common/core/misc/indentation.js";
-import { EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { CursorsController } from "../../../common/cursor/cursor.js";
 import { registerBuiltinLanguageConfigurations } from "../../../common/languages/languageBuiltinConfigurations.js";
 import { LanguageConfigurationRegistry, LanguageIndentAction } from "../../../common/languages/languageConfiguration.js";
 import { createLanguageEnterCommand } from "../../../common/cursor/languageEnter.js";
@@ -13,7 +13,7 @@ import { TextModel } from "../../../common/model/textModel.js";
 
 test("Language Enter creates an indented line between configured brackets", () => {
 	using model = new TextModel("if (ok) {}");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(9)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(9)));
 	using configurations = new LanguageConfigurationRegistry();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 
@@ -30,7 +30,7 @@ test("Language Enter creates an indented line between configured brackets", () =
 
 test("Rust Enter continues line comments and applies Rust bracket indentation", () => {
 	using commentModel = new TextModel("  // explain");
-	using commentSelections = new EditorSelectionController(commentModel, TextSelectionSet.single(caret(12)));
+	using commentSelections = new CursorsController(commentModel, TextSelectionSet.single(caret(12)));
 	using configurations = new LanguageConfigurationRegistry();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	const indentation = { kind: EditorIndentationKind.Spaces, tabSize: 2 } as const;
@@ -39,14 +39,14 @@ test("Rust Enter continues line comments and applies Rust bracket indentation", 
 	assert.equal(commentModel.getText(), "  // explain\n  // ");
 
 	using blockModel = new TextModel("fn main() {}");
-	using blockSelections = new EditorSelectionController(blockModel, TextSelectionSet.single(caret(11)));
+	using blockSelections = new CursorsController(blockModel, TextSelectionSet.single(caret(11)));
 	blockSelections.execute(createLanguageEnterCommand(blockModel, blockSelections.selections, configurations.getLanguageConfiguration("rust"), { indentation }));
 	assert.equal(blockModel.getText(), "fn main() {\n  \n}");
 });
 
 test("Explicit on-enter rules precede bracket fallback and continue documentation comments", () => {
 	using model = new TextModel("/** */");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(3)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(3)));
 	using configurations = new LanguageConfigurationRegistry();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 
@@ -63,7 +63,7 @@ test("Explicit on-enter rules precede bracket fallback and continue documentatio
 
 test("On-enter rules observe previous, before, and after text in registration order", () => {
 	using model = new TextModel("header\n  beginEND");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.from(TextPosition.at(1, 7), TextPosition.at(1, 10))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.from(TextPosition.at(1, 7), TextPosition.at(1, 10))));
 	using configurations = new LanguageConfigurationRegistry();
 	using rules = configurations.register("demo", {
 		onEnterRules: [
@@ -104,24 +104,24 @@ test("Indentation rules increase, decrease, and ignore matching lines", () => {
 	const indentation = { kind: EditorIndentationKind.Spaces, tabSize: 2 } as const;
 
 	using increaseModel = new TextModel("  block:");
-	using increaseSelections = new EditorSelectionController(increaseModel, TextSelectionSet.single(caret(8)));
+	using increaseSelections = new CursorsController(increaseModel, TextSelectionSet.single(caret(8)));
 	increaseSelections.execute(createLanguageEnterCommand(increaseModel, increaseSelections.selections, configuration, { indentation }));
 	assert.equal(increaseModel.getText(), "  block:\n    ");
 
 	using decreaseModel = new TextModel("    valueend");
-	using decreaseSelections = new EditorSelectionController(decreaseModel, TextSelectionSet.single(caret(9)));
+	using decreaseSelections = new CursorsController(decreaseModel, TextSelectionSet.single(caret(9)));
 	decreaseSelections.execute(createLanguageEnterCommand(decreaseModel, decreaseSelections.selections, configuration, { indentation }));
 	assert.equal(decreaseModel.getText(), "    value\n  end");
 
 	using ignoredModel = new TextModel("  *:");
-	using ignoredSelections = new EditorSelectionController(ignoredModel, TextSelectionSet.single(caret(4)));
+	using ignoredSelections = new CursorsController(ignoredModel, TextSelectionSet.single(caret(4)));
 	ignoredSelections.execute(createLanguageEnterCommand(ignoredModel, ignoredSelections.selections, configuration, { indentation }));
 	assert.equal(ignoredModel.getText(), "  *:\n  ");
 });
 
 test("Language Enter maps multiple cursors through one pre-change transaction", () => {
 	using model = new TextModel("{} []");
-	using selections = new EditorSelectionController(model, TextSelectionSet.withPrimary([caret(1), caret(4)], 1));
+	using selections = new CursorsController(model, TextSelectionSet.withPrimary([caret(1), caret(4)], 1));
 	using configurations = new LanguageConfigurationRegistry();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 
@@ -141,17 +141,17 @@ test("Language Enter maps multiple cursors through one pre-change transaction", 
 
 test("Language Enter starts a new typing history group that following text may join", () => {
 	using model = new TextModel("{");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(1)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(1)));
 	using configurations = new LanguageConfigurationRegistry();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
-	selections.execute(createTypeTextCommand(model, selections.selections, " "));
+	selections.execute(TypeOperations.typeWithoutInterceptors(model, selections.selections, " "));
 	selections.execute(createLanguageEnterCommand(model, selections.selections, configurations.getLanguageConfiguration("typescript"), {
 		indentation: {
 			kind: EditorIndentationKind.Spaces,
 			tabSize: 2,
 		},
 	}));
-	selections.execute(createTypeTextCommand(model, selections.selections, "x"));
+	selections.execute(TypeOperations.typeWithoutInterceptors(model, selections.selections, "x"));
 	assert.equal(model.getText(), "{ \n  x");
 
 	selections.undo();
@@ -163,7 +163,7 @@ test("Language Enter starts a new typing history group that following text may j
 
 test("Language Enter normalizes removeText and validates editor indentation before mutation", () => {
 	using model = new TextModel("    stop");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(8)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(8)));
 	using configurations = new LanguageConfigurationRegistry();
 	using rule = configurations.register("demo", {
 		onEnterRules: [{
@@ -224,7 +224,7 @@ test("Language Enter rejects lexical context from another model or language", ()
 
 function enterWithLexicalContext(initialText: string, position: TextPosition): { readonly text: string; readonly position: TextPosition } {
 	using model = new TextModel(initialText);
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(position)));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(position)));
 	using configurations = new LanguageConfigurationRegistry();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
 	using lexicalContext = new LanguageLexicalContextIndex(model, "typescript", configurations);

@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createBackspaceCommand, createCutCommand, createDeleteForwardCommand, createDeleteToLineEndCommand, createDeleteToLineStartCommand } from "../../common/cursor/cursorDeleteOperations.js";
-import { createDeleteWordBackwardCommand, createDeleteWordForwardCommand } from "../../common/cursor/cursorWordOperations.js";
-import { createDistributedPasteTextCommand, createPasteTextCommand, createTypeTextCommand } from "../../common/cursor/cursorTypeOperations.js";
-import { EditorSelectionController } from "../../common/cursor/cursor.js";
+import { DeleteOperations } from "../../common/cursor/cursorDeleteOperations.js";
+import { WordOperations } from "../../common/cursor/cursorWordOperations.js";
+import { TypeOperations } from "../../common/cursor/cursorTypeOperations.js";
+import { CursorsController } from "../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { TextPosition } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
@@ -14,9 +14,9 @@ test("Typing replaces multiple selections and coalesces with following text", ()
 		TextSelection.from(TextPosition.at(0, 3), TextPosition.at(0, 1)),
 		caret(0, 8),
 	], 1);
-	using controller = new EditorSelectionController(model, initial);
+	using controller = new CursorsController(model, initial);
 
-	controller.execute(createTypeTextCommand(
+	controller.execute(TypeOperations.typeWithoutInterceptors(
 		model,
 		controller.selections,
 		"X",
@@ -32,7 +32,7 @@ test("Typing replaces multiple selections and coalesces with following text", ()
 		], 1),
 	});
 
-	controller.execute(createTypeTextCommand(
+	controller.execute(TypeOperations.typeWithoutInterceptors(
 		model,
 		controller.selections,
 		"Y",
@@ -50,12 +50,12 @@ test("Typing replaces multiple selections and coalesces with following text", ()
 
 test("Backspace deletes graphemes and joins lines", () => {
 	using model = new TextModel("a😀b\ncd");
-	using controller = new EditorSelectionController(
+	using controller = new CursorsController(
 		model,
 		TextSelectionSet.single(caret(0, 3)),
 	);
 
-	controller.execute(createBackspaceCommand(model, controller.selections));
+	controller.execute(DeleteOperations.deleteLeft(model, controller.selections));
 	assert.deepEqual({
 		text: model.getText(),
 		selection: controller.selections.primary,
@@ -65,7 +65,7 @@ test("Backspace deletes graphemes and joins lines", () => {
 	});
 
 	controller.setSelections(TextSelectionSet.single(caret(1, 0)));
-	controller.execute(createBackspaceCommand(model, controller.selections));
+	controller.execute(DeleteOperations.deleteLeft(model, controller.selections));
 	assert.deepEqual({
 		text: model.getText(),
 		selection: controller.selections.primary,
@@ -77,12 +77,12 @@ test("Backspace deletes graphemes and joins lines", () => {
 
 test("Forward Delete removes graphemes and line breaks", () => {
 	using model = new TextModel("a😀b\ncd");
-	using controller = new EditorSelectionController(
+	using controller = new CursorsController(
 		model,
 		TextSelectionSet.single(caret(0, 1)),
 	);
 
-	controller.execute(createDeleteForwardCommand(
+	controller.execute(DeleteOperations.deleteRight(
 		model,
 		controller.selections,
 	));
@@ -95,7 +95,7 @@ test("Forward Delete removes graphemes and line breaks", () => {
 	});
 
 	controller.setSelections(TextSelectionSet.single(caret(0, 2)));
-	controller.execute(createDeleteForwardCommand(
+	controller.execute(DeleteOperations.deleteRight(
 		model,
 		controller.selections,
 	));
@@ -110,28 +110,28 @@ test("Forward Delete removes graphemes and line breaks", () => {
 
 test("Word deletion uses shared editor word boundaries and coalesces by direction", () => {
 	using model = new TextModel("alpha beta gamma");
-	using controller = new EditorSelectionController(model, TextSelectionSet.single(caret(0, 10)));
+	using controller = new CursorsController(model, TextSelectionSet.single(caret(0, 10)));
 
-	controller.execute(createDeleteWordBackwardCommand(model, controller.selections));
-	controller.execute(createDeleteWordBackwardCommand(model, controller.selections));
+	controller.execute(WordOperations.deleteWordLeft(model, controller.selections));
+	controller.execute(WordOperations.deleteWordLeft(model, controller.selections));
 	assert.equal(model.getText(), " gamma");
 	assert.deepEqual(controller.selections.primary, caret(0, 0));
 	controller.undo();
 	assert.equal(model.getText(), "alpha beta gamma");
 
 	controller.setSelections(TextSelectionSet.single(caret(0, 0)));
-	controller.execute(createDeleteWordForwardCommand(model, controller.selections));
+	controller.execute(WordOperations.deleteWordRight(model, controller.selections));
 	assert.equal(model.getText(), "beta gamma");
 });
 
 test("Line-boundary deletion is isolated, multi-cursor aware, and preserves selected ranges", () => {
 	using model = new TextModel("alpha\nbeta");
-	using controller = new EditorSelectionController(model, TextSelectionSet.withPrimary([
+	using controller = new CursorsController(model, TextSelectionSet.withPrimary([
 		caret(0, 3),
 		caret(1, 1),
 	], 1));
 
-	controller.execute(createDeleteToLineStartCommand(model, controller.selections));
+	controller.execute(DeleteOperations.deleteToBeginningOfLine(model, controller.selections));
 	assert.deepEqual({ text: model.getText(), selections: controller.selections }, {
 		text: "ha\neta",
 		selections: TextSelectionSet.withPrimary([caret(0, 0), caret(1, 0)], 1),
@@ -140,7 +140,7 @@ test("Line-boundary deletion is isolated, multi-cursor aware, and preserves sele
 	assert.equal(model.getText(), "alpha\nbeta");
 
 	controller.setSelections(TextSelectionSet.single(TextSelection.from(TextPosition.at(0, 1), TextPosition.at(1, 2))));
-	controller.execute(createDeleteToLineEndCommand(model, controller.selections));
+	controller.execute(DeleteOperations.deleteToEndOfLine(model, controller.selections));
 	assert.deepEqual({ text: model.getText(), selection: controller.selections.primary }, {
 		text: "ata",
 		selection: caret(0, 1),
@@ -149,12 +149,12 @@ test("Line-boundary deletion is isolated, multi-cursor aware, and preserves sele
 
 test("Typing normalizes line endings before calculating carets", () => {
 	using model = new TextModel("ab");
-	using controller = new EditorSelectionController(
+	using controller = new CursorsController(
 		model,
 		TextSelectionSet.single(caret(0, 1)),
 	);
 
-	controller.execute(createTypeTextCommand(
+	controller.execute(TypeOperations.typeWithoutInterceptors(
 		model,
 		controller.selections,
 		"\r\n",
@@ -170,16 +170,16 @@ test("Typing normalizes line endings before calculating carets", () => {
 
 test("Delete boundaries are no-ops and overlapping selections fail early", () => {
 	using model = new TextModel("abc");
-	using controller = new EditorSelectionController(
+	using controller = new CursorsController(
 		model,
 		TextSelectionSet.single(caret(0, 0)),
 	);
 
 	const version = model.version;
-	controller.execute(createBackspaceCommand(model, controller.selections));
+	controller.execute(DeleteOperations.deleteLeft(model, controller.selections));
 	assert.equal(model.version, version);
 	controller.setSelections(TextSelectionSet.single(caret(0, 3)));
-	controller.execute(createDeleteForwardCommand(
+	controller.execute(DeleteOperations.deleteRight(
 		model,
 		controller.selections,
 	));
@@ -190,7 +190,7 @@ test("Delete boundaries are no-ops and overlapping selections fail early", () =>
 		TextSelection.from(TextPosition.at(0, 1), TextPosition.at(0, 3)),
 	], 0);
 	assert.throws(
-		() => createTypeTextCommand(model, overlapping, "X"),
+		() => TypeOperations.typeWithoutInterceptors(model, overlapping, "X"),
 		/must not overlap/,
 	);
 	assert.equal(model.getText(), "abc");
@@ -202,9 +202,9 @@ test("Adjacent deletions merge converged carets while history restores sources",
 		caret(0, 1),
 		caret(0, 2),
 	], 1);
-	using controller = new EditorSelectionController(model, initial);
+	using controller = new CursorsController(model, initial);
 
-	controller.execute(createBackspaceCommand(model, controller.selections));
+	controller.execute(DeleteOperations.deleteLeft(model, controller.selections));
 	assert.deepEqual({
 		text: model.getText(),
 		selections: controller.selections,
@@ -227,7 +227,7 @@ test("Adjacent deletions merge converged carets while history restores sources",
 
 test("Paste commands support shared and distributed isolated text", () => {
 	using model = new TextModel("ab cd");
-	using controller = new EditorSelectionController(
+	using controller = new CursorsController(
 		model,
 		TextSelectionSet.withPrimary([
 			TextSelection.from(TextPosition.at(0, 0), TextPosition.at(0, 2)),
@@ -235,7 +235,7 @@ test("Paste commands support shared and distributed isolated text", () => {
 		], 1),
 	);
 
-	controller.execute(createDistributedPasteTextCommand(
+	controller.execute(TypeOperations.distributedPaste(
 		model,
 		controller.selections,
 		["A\r\nB", "C"],
@@ -251,7 +251,7 @@ test("Paste commands support shared and distributed isolated text", () => {
 		], 1),
 	});
 
-	controller.execute(createPasteTextCommand(model, controller.selections, "!"));
+	controller.execute(TypeOperations.paste(model, controller.selections, "!"));
 	assert.equal(model.getText(), "A\nB! C!");
 	controller.undo();
 	assert.equal(model.getText(), "A\nB C");
@@ -259,7 +259,7 @@ test("Paste commands support shared and distributed isolated text", () => {
 	assert.equal(model.getText(), "ab cd");
 
 	assert.throws(
-		() => createDistributedPasteTextCommand(model, controller.selections, ["only one"]),
+		() => TypeOperations.distributedPaste(model, controller.selections, ["only one"]),
 		/match the selection count/,
 	);
 });
@@ -270,9 +270,9 @@ test("Cut preserves collapsed cursors and restores history", () => {
 		TextSelection.from(TextPosition.at(0, 2), TextPosition.at(0, 0)),
 		caret(0, 7),
 	], 0);
-	using controller = new EditorSelectionController(model, initial);
+	using controller = new CursorsController(model, initial);
 
-	controller.execute(createCutCommand(model, controller.selections, controller.selections.selections.map(selection => selection.range)));
+	controller.execute(DeleteOperations.cut(model, controller.selections, controller.selections.selections.map(selection => selection.range)));
 	assert.deepEqual({
 		text: model.getText(),
 		selections: controller.selections,

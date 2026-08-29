@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { EditorSelectionController } from "../../../../common/cursor/cursor.js";
+import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
@@ -19,7 +19,7 @@ test("regular-expression replacement expands captures and named captures", () =>
 
 test("replace match is isolated, positions the caret, and rejects stale results", () => {
 	using model = new TextModel("one two");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	const match = findTextMatches(model, { pattern: "one" })[0]!;
 
 	selections.execute(createReplaceTextMatchCommand(model, match, "first"));
@@ -33,7 +33,7 @@ test("replace match is isolated, positions the caret, and rejects stale results"
 
 test("replace all maps the result caret and undoes as one transaction", () => {
 	using model = new TextModel("a a a");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	const matches = findTextMatches(model, { pattern: "a", matchCase: true });
 
 	selections.execute(createReplaceAllTextMatchesCommand(model, matches, ["long", "", "x"]));

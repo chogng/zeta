@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createToggleLineCommentCommand } from "../../common/lineCommentCommands.js";
-import { EditorSelectionController } from "../../../../common/cursor/cursor.js";
+import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition, TextRange } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 
 test("Toggle line comment inserts after indentation and restores one isolated undo step", () => {
 	using model = new TextModel("  alpha\n\tbeta\n\n gamma");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(
+	using selections = new CursorsController(model, TextSelectionSet.single(
 		TextSelection.from(TextPosition.at(0, 2), TextPosition.at(3, 1)),
 	));
 
@@ -29,7 +29,7 @@ test("Toggle line comment inserts after indentation and restores one isolated un
 
 test("Toggle line comment removes only when all selected content lines are commented", () => {
 	using model = new TextModel("// alpha\n  // beta\n\n// gamma");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(
+	using selections = new CursorsController(model, TextSelectionSet.single(
 		TextSelection.from(TextPosition.at(0, 0), TextPosition.at(3, 8)),
 	));
 

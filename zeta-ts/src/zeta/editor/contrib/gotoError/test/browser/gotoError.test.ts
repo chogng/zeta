@@ -3,7 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../browser/config/fontMeasurements.js";
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
-import { EditorSelectionController } from "../../../../common/cursor/cursor.js";
+import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { LanguageDiagnosticSeverity, type LanguageDiagnostic } from "../../../../common/languages/languageResults.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition, TextRange } from "../../../../common/core/text.js";
@@ -20,7 +20,7 @@ test("F8 navigates current diagnostics in both directions", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one\ntwo\nthree");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using diagnostics = new TextDecorationCollection<LanguageDiagnostic>(model);
 	diagnostics.add({ range: TextRange.from(TextPosition.at(0, 1), TextPosition.at(0, 2)), stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: diagnostic("first") });
 	diagnostics.add({ range: TextRange.from(TextPosition.at(2, 1), TextPosition.at(2, 3)), stickiness: TrackedRangeStickiness.NeverGrowsAtEdges, metadata: diagnostic("last") });

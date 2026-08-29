@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../browser/config/fontMeasurements.js";
-import { EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { CursorsController } from "../../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { TextPosition } from "../../../common/core/text.js";
 import { TextModel } from "../../../common/model/textModel.js";
@@ -85,7 +85,7 @@ test("Pointer drag autoscroll advances selection and stops at boundaries", () =>
 	using model = new TextModel(
 		Array.from({ length: 20 }, () => "abcdefghij").join("\n"),
 	);
-	using selections = new EditorSelectionController(
+	using selections = new CursorsController(
 		model,
 		TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))),
 	);

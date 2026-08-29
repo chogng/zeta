@@ -3,7 +3,7 @@ import { h, reset } from '../../../../base/browser/dom.js';
 import { FastDomNode, createFastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { TextEditorCursorBlinkingStyle, TextEditorCursorStyle } from '../../../common/config/editorOptions.js';
-import { EditorSelectionChangeReason, type EditorSelectionController } from '../../../common/cursor/cursor.js';
+import { CursorChangeReason, type CursorsController } from '../../../common/cursor/cursor.js';
 import { type TextRange } from '../../../common/core/text.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { TrackedRangeStickiness, type TrackedRange } from '../../../common/model/trackedRange.js';
@@ -27,7 +27,7 @@ export class ViewCursors extends DynamicViewOverlay {
 	public readonly domNode: HTMLElement;
 	private readonly fastDomNode: FastDomNode<HTMLElement>;
 	private readonly model: TextModel;
-	private readonly selectionController: EditorSelectionController | undefined;
+	private readonly selectionController: CursorsController | undefined;
 	private readonly semanticTokenSource: SemanticTokenSource | undefined;
 	private readonly compositionRows: ViewPartRows;
 	private readonly smoothCaretAnimation: 'off' | 'explicit' | 'on';
@@ -39,7 +39,7 @@ export class ViewCursors extends DynamicViewOverlay {
 	private movementRenderGeneration = 0;
 	private renderData: IViewCursorRenderData[] = [];
 
-	constructor(context: EditorViewContext, options: ViewCursorsOptions, model: TextModel, selectionController: EditorSelectionController | undefined) {
+	constructor(context: EditorViewContext, options: ViewCursorsOptions, model: TextModel, selectionController: CursorsController | undefined) {
 		super(context);
 		this.domNode = h(options.host.ownerDocument, 'div');
 		this.fastDomNode = createFastDomNode(this.domNode);
@@ -109,7 +109,7 @@ export class ViewCursors extends DynamicViewOverlay {
 		return this.renderData;
 	}
 
-	public renderSelection(context: EditorRenderingContext, reason: EditorSelectionChangeReason): void {
+	public renderSelection(context: EditorRenderingContext, reason: CursorChangeReason): void {
 		const selectionCount = this.selectionController?.selections.selections.length ?? 0;
 		this.pauseMovementAnimation = !this.shouldAnimateMovement(reason, selectionCount);
 		this.previousSelectionCount = selectionCount;
@@ -158,10 +158,10 @@ export class ViewCursors extends DynamicViewOverlay {
 		}
 	}
 
-	private shouldAnimateMovement(reason: EditorSelectionChangeReason, selectionCount: number): boolean {
+	private shouldAnimateMovement(reason: CursorChangeReason, selectionCount: number): boolean {
 		if (this.smoothCaretAnimation === 'off' || selectionCount !== this.previousSelectionCount) return false;
 		if (this.smoothCaretAnimation === 'on') return true;
-		return reason === EditorSelectionChangeReason.Explicit || reason === EditorSelectionChangeReason.CursorOperation || reason === EditorSelectionChangeReason.CursorUndo;
+		return reason === CursorChangeReason.Explicit || reason === CursorChangeReason.CursorOperation || reason === CursorChangeReason.CursorUndo;
 	}
 }
 

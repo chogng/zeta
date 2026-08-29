@@ -2,12 +2,12 @@ import { addDisposableListener } from "../../../../base/browser/dom.js";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { EditorStateModel } from "../common/editorState.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 /** Binds browser focus, selection, and scroll events into the common editor-state model. */
 export class EditorStateController extends Disposable {
-	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly state: EditorStateModel) {
+	constructor(private readonly input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, private readonly state: EditorStateModel) {
 		super();
 		this._register(addDisposableListener(input, "focus", () => state.setFocused(true)));
 		this._register(addDisposableListener(input, "blur", () => state.setFocused(false)));

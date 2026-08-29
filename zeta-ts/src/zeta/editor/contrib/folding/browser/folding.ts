@@ -1,7 +1,7 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { EditorFoldingModel } from "./foldingModel.js";
 import { type EditorFoldingRegion } from "./foldingRanges.js";
 import { TextPosition } from "../../../common/core/text.js";
@@ -31,7 +31,7 @@ export interface FoldingControllerOptions {
 export class FoldingController extends Disposable {
 	private readonly targetOperatingSystem: OperatingSystem;
 	private readonly viewport: EditorViewport;
-	private readonly selections: EditorSelectionController;
+	private readonly selections: CursorsController;
 	private readonly folding: EditorFoldingModel;
 	private readonly mouseTargets: MouseTargetFactory;
 	private awaitingChord = false;

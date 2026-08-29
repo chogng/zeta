@@ -3,7 +3,7 @@ import test from "node:test";
 import { JSDOM } from "jsdom";
 import { IME } from "../../../../base/common/ime.js";
 import { type TextMeasurer } from "../../../browser/config/fontMeasurements.js";
-import { EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { CursorsController } from "../../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { TextPosition, TextRange } from "../../../common/core/text.js";
 import { TextModel } from "../../../common/model/textModel.js";
@@ -48,7 +48,7 @@ test("Textarea composition commits one revision and positions the IME input", ()
 	assert.ok(container);
 	using model = new TextModel("hello");
 	const initial = TextSelectionSet.single(selection(0, 1, 0, 4));
-	using selections = new EditorSelectionController(model, initial);
+	using selections = new CursorsController(model, initial);
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -145,7 +145,7 @@ test("Escape, blur, and disposal cancel active textarea composition", () => {
 	assert.ok(container);
 	using model = new TextModel("abc");
 	const initial = TextSelectionSet.single(caret(0, 1));
-	using selections = new EditorSelectionController(model, initial);
+	using selections = new CursorsController(model, initial);
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -206,7 +206,7 @@ test("Empty composition end commits deletion while a stray end is ignored", () =
 	assert.ok(container);
 	using model = new TextModel("abc");
 	const initial = TextSelectionSet.single(selection(0, 1, 0, 2));
-	using selections = new EditorSelectionController(model, initial);
+	using selections = new CursorsController(model, initial);
 	using viewport = new EditorViewport({
 		container,
 		model,
@@ -245,7 +245,7 @@ test("IME coordination, multi-cursor rejection, and external invalidation are sa
 	const container = dom.window.document.querySelector("main");
 	assert.ok(container);
 	using model = new TextModel("a\nbc");
-	using selections = new EditorSelectionController(
+	using selections = new CursorsController(
 		model,
 		TextSelectionSet.withPrimary([caret(1, 1), caret(0, 0)], 0),
 	);

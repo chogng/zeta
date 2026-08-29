@@ -1,5 +1,5 @@
-import { getPreviousDeleteRange } from "./cursorDeleteOperations.js";
-import { createSelectionEditCommand, type EditorSelectionEdit } from "./cursorTypeEditOperations.js";
+import { DeleteOperations } from './cursorDeleteOperations.js';
+import { TypeWithoutInterceptorsOperation, type SelectionEdit } from './cursorTypeEditOperations.js';
 import { EditorCommandHistoryMode, type EditorEditCommand } from "../commands/editorEditCommand.js";
 import { type LanguageAutoClosingPair, type LanguageCharacterPair, type ResolvedLanguageConfiguration } from "../languages/languageConfiguration.js";
 import { type LanguageLexicalContextSource } from "../languages/languageLexicalContext.js";
@@ -32,7 +32,7 @@ export interface LanguagePairTypeOptions {
 }
 
 interface PairTypeEdit {
-	readonly edit: EditorSelectionEdit;
+	readonly edit: SelectionEdit;
 	readonly didInsertText: boolean;
 	readonly autoClosingPair?: LanguageAutoClosingPair;
 }
@@ -47,7 +47,7 @@ export function createLanguagePairTypeCommand(model: TextModel, selections: Text
 	const closingPairs = configuration.autoClosingPairs.filter(pair => pair.close === text);
 	if (!surroundingPair && !autoClosingPair && closingPairs.length === 0) return undefined;
 	const pairEdits = selections.selections.map(selection => createPairTypeEdit(model, selection, text, configuration, surroundingPair, autoClosingPair, closingPairs, options));
-	const command = createSelectionEditCommand(model, selections, pairEdits.map(result => result.edit), EditorCommandHistoryMode.CoalesceTyping);
+	const command = TypeWithoutInterceptorsOperation.getEdits(model, selections, pairEdits.map(result => result.edit), EditorCommandHistoryMode.CoalesceTyping);
 	return Object.freeze({
 		command,
 		didInsertText: pairEdits.some(result => result.didInsertText),
@@ -66,10 +66,10 @@ export function createLanguagePairBackspaceCommand(model: TextModel, selections:
 			paired = true;
 			return collapsedEdit(pairRange);
 		}
-		return collapsedEdit(getPreviousDeleteRange(model, selection.active));
+		return collapsedEdit(DeleteOperations.getPreviousDeleteRange(model, selection.active));
 	});
 	if (!paired) return undefined;
-	return createSelectionEditCommand(model, selections, edits, EditorCommandHistoryMode.CoalesceBackspace);
+	return TypeWithoutInterceptorsOperation.getEdits(model, selections, edits, EditorCommandHistoryMode.CoalesceBackspace);
 }
 
 function createPairTypeEdit(model: TextModel, selection: TextSelection, text: string, configuration: ResolvedLanguageConfiguration, surroundingPair: LanguageCharacterPair | undefined, autoClosingPair: LanguageAutoClosingPair | undefined, closingPairs: readonly LanguageAutoClosingPair[], options: LanguagePairTypeOptions): PairTypeEdit {
@@ -170,7 +170,7 @@ function createAutoClosingActions(model: TextModel, pairEdits: readonly PairType
 	return Object.freeze(actions);
 }
 
-function collapsedEdit(range: TextRange): EditorSelectionEdit {
+function collapsedEdit(range: TextRange): SelectionEdit {
 	return {
 		range,
 		text: "",

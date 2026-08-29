@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { EditorSelectionController } from "../../common/cursor/cursor.js";
+import { CursorsController } from "../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { TextPosition } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
@@ -8,7 +8,7 @@ import { createTransposeCharactersCommand } from "../../contrib/transpose/common
 
 test("Transpose swaps complete graphemes for multiple carets and undoes atomically", () => {
 	using model = new TextModel("a😊b\néx");
-	using selections = new EditorSelectionController(model, TextSelectionSet.withPrimary([
+	using selections = new CursorsController(model, TextSelectionSet.withPrimary([
 		caret(0, 1),
 		caret(1, 3),
 	], 1));
@@ -26,7 +26,7 @@ test("Transpose swaps complete graphemes for multiple carets and undoes atomical
 
 test("Transpose swaps a line break with the following grapheme at a line start", () => {
 	using model = new TextModel("ab\ncd");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(caret(1, 0)));
+	using selections = new CursorsController(model, TextSelectionSet.single(caret(1, 0)));
 	const command = createTransposeCharactersCommand(model, selections.selections);
 	assert.ok(command);
 	selections.execute(command);
@@ -36,7 +36,7 @@ test("Transpose swaps a line break with the following grapheme at a line start",
 
 test("Transpose ignores ranges and resolves overlapping cursor edits in favor of the primary cursor", () => {
 	using model = new TextModel("abc");
-	using selections = new EditorSelectionController(model, TextSelectionSet.withPrimary([
+	using selections = new CursorsController(model, TextSelectionSet.withPrimary([
 		caret(0, 1),
 		caret(0, 2),
 		TextSelection.from(TextPosition.at(0, 0), TextPosition.at(0, 1)),

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
-import { EditorSelectionController } from '../../common/cursor/cursor.js';
+import { CursorsController } from '../../common/cursor/cursor.js';
 import { TextSelection, TextSelectionSet } from '../../common/core/selection.js';
 import { TextPosition } from '../../common/core/text.js';
 import { TextModel } from '../../common/model/textModel.js';
@@ -30,7 +30,7 @@ test('EditorView gives its input context a stable owner id and releases it', () 
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = dom.window.document.querySelector('main')!;
 	using model = new TextModel('alpha');
-	using selections = new EditorSelectionController(
+	using selections = new CursorsController(
 		model,
 		TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))),
 	);
@@ -57,7 +57,7 @@ test('EditorView refreshes minimap canvas dimensions when the window pixel ratio
 	const container = dom.window.document.querySelector('main')!;
 	Object.defineProperty(dom.window, 'devicePixelRatio', { configurable: true, value: 2 });
 	using model = new TextModel('alpha\nbeta');
-	using selections = new EditorSelectionController(
+	using selections = new CursorsController(
 		model,
 		TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))),
 	);

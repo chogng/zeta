@@ -15,7 +15,7 @@ import { type IPosition, TextPosition } from '../common/core/position.js';
 import { Point } from '../common/core/2d/point.js';
 import { LineRange } from '../common/core/ranges/lineRange.js';
 import { TextSelection, type TextSelectionSet } from '../common/core/selection.js';
-import { type EditorSelectionController } from '../common/cursor/cursor.js';
+import { type CursorsController } from '../common/cursor/cursor.js';
 import { type TextModel } from '../common/model/textModel.js';
 import { type EditorViewportLayout } from '../common/viewLayout/viewLayout.js';
 import { type IClipboardPasteEvent } from './controller/editContext/clipboardUtils.js';

@@ -6,7 +6,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { type EditorCommandExecutor } from '../../../../browser/editorExtensions.js';
 import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
 import { LanguageFeatureProviderRegistry } from '../../../../common/languageFeatureRegistry.js';
-import { EditorSelectionController } from '../../../../common/cursor/cursor.js';
+import { CursorsController } from '../../../../common/cursor/cursor.js';
 import { TextSelection, TextSelectionSet } from '../../../../common/core/selection.js';
 import { TextPosition, TextRange } from '../../../../common/core/text.js';
 import { TextModel } from '../../../../common/model/textModel.js';
@@ -35,7 +35,7 @@ test('Rename reports its command after applying the provider edit', async () => 
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const resource = URI.file('C:\\project\\rename.ts');
 	using model = new TextModel('abc');
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 40 });
 	const editorInput = h(dom.window.document, 'textarea');

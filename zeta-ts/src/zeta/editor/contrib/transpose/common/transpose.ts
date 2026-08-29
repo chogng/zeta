@@ -2,7 +2,7 @@ import { EditorCommandHistoryMode, type EditorEditCommand } from "../../../commo
 import { type TextSelectionSet } from "../../../common/core/selection.js";
 import { TextPosition, TextRange, type TextEdit } from "../../../common/core/text.js";
 import { type TextModel } from "../../../common/model/textModel.js";
-import { nextCursorAtomicPosition, previousCursorAtomicPosition } from "../../../common/cursor/cursorAtomicMoveOperations.js";
+import { MoveOperations } from '../../../common/cursor/cursorMoveOperations.js';
 
 interface TransposeOperation {
 	readonly selectionIndex: number;
@@ -44,9 +44,9 @@ export function createTransposeCharactersCommand(model: TextModel, selections: T
 
 function createTransposeOperation(model: TextModel, position: TextPosition, selectionIndex: number): TransposeOperation | undefined {
 	const line = model.getLineContent(position.lineIndex);
-	const end = position.columnIndex === line.length ? position : nextCursorAtomicPosition(model, position);
-	const middle = previousCursorAtomicPosition(model, end);
-	const begin = previousCursorAtomicPosition(model, middle);
+	const end = position.columnIndex === line.length ? position : MoveOperations.rightPosition(model, position);
+	const middle = MoveOperations.leftPosition(model, end);
+	const begin = MoveOperations.leftPosition(model, middle);
 	if (begin.compareTo(middle) === 0 || middle.compareTo(end) === 0) return undefined;
 	const range = TextRange.from(begin, end);
 	const left = model.getTextInRange(TextRange.from(begin, middle));

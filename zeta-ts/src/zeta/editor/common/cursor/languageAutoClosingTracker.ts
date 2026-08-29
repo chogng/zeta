@@ -1,5 +1,5 @@
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { type EditorSelectionController } from "./cursor.js";
+import { type CursorsController } from "./cursor.js";
 import { type LanguageCharacterPair } from "../languages/languageConfiguration.js";
 import { type LanguageAutoClosingAction, type LanguageAutoClosingTrust } from "./languagePairEditing.js";
 import { TextPosition, TextRange } from "../core/text.js";
@@ -23,7 +23,7 @@ interface AutoClosingEntry {
 export class LanguageAutoClosingTracker extends Disposable implements LanguageAutoClosingTrust {
 	private entries: AutoClosingEntry[] = [];
 
-	constructor(private readonly model: TextModel, private readonly selections: EditorSelectionController) {
+	constructor(private readonly model: TextModel, private readonly selections: CursorsController) {
 		super();
 		if (model !== selections.textModel) {
 			this.dispose();

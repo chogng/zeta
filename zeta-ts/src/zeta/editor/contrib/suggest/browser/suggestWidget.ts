@@ -1,7 +1,7 @@
 import "./media/completionWidget.css";
 import { addDisposableListener, fragment as createFragment, h, isElement, reset, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { LanguageCompletionDetailsStatus, type LanguageCompletionSessionState, LanguageCompletionSessionController } from "../common/suggestModel.js";
 import { LanguageCompletionItemKind } from "../../../common/languages/completion/languageCompletions.js";
 import { type EditorViewport } from "../../../browser/view.js";
@@ -20,7 +20,7 @@ export class CompletionWidget extends Disposable {
 	constructor(
 		private readonly inputElement: HTMLElement,
 		private readonly viewport: EditorViewport,
-		private readonly selectionController: EditorSelectionController,
+		private readonly selectionController: CursorsController,
 		private readonly session: LanguageCompletionSessionController,
 		container: HTMLElement | undefined = undefined,
 	) {

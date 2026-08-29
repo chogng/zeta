@@ -7,7 +7,7 @@ import { LanguageBracketPairs } from "../../../../common/languages/languageBrack
 import { LanguageConfigurationRegistry } from "../../../../common/languages/languageConfiguration.js";
 import { LanguageLexicalContextIndex } from "../../../../common/languages/languageLexicalContext.js";
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
-import { EditorSelectionController } from "../../../../common/cursor/cursor.js";
+import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
 import { TextModel } from "../../../../common/model/textModel.js";
@@ -35,7 +35,7 @@ test("Bracket match controller projects current pairs and clears them for a rang
 	using registration = configurations.register("typescript", {
 		brackets: [{ open: "(", close: ")" }, { open: "{", close: "}" }],
 	});
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(
+	using selections = new CursorsController(model, TextSelectionSet.single(
 		TextSelection.collapsedAt(TextPosition.at(0, 17)),
 	));
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
@@ -83,7 +83,7 @@ test("Bracket match controller distinguishes near, always, and never modes", () 
 	using registration = configurations.register("typescript", { brackets: [{ open: "{", close: "}" }] });
 	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	using bracketPairs = new LanguageBracketPairs(model, lexical);
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 3))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 3))));
 
 	using nearDecorations = new TextDecorationCollection<void>(model);
 	using near = new BracketMatchController(selections, bracketPairs, nearDecorations, "near");

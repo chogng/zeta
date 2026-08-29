@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 import { h } from '../../../../../base/browser/dom.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
-import { EditorSelectionController } from '../../../../common/cursor/cursor.js';
+import { CursorsController } from '../../../../common/cursor/cursor.js';
 import { TextSelection, TextSelectionSet } from '../../../../common/core/selection.js';
 import { TextPosition, TextRange } from '../../../../common/core/text.js';
 import { TextDecorationCollection } from '../../../../common/model/decorationCollection.js';
@@ -83,7 +83,7 @@ test('Selection anchor keybindings use the two-key commands and leave navigation
 function createFixture(text: string): {
 	readonly dom: JSDOM;
 	readonly model: TextModel;
-	readonly selections: EditorSelectionController;
+	readonly selections: CursorsController;
 	readonly decorations: TextDecorationCollection<void>;
 	readonly viewport: InstanceType<typeof EditorViewport>;
 	readonly input: HTMLTextAreaElement;
@@ -93,7 +93,7 @@ function createFixture(text: string): {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const model = new TextModel(text);
-	const selections = new EditorSelectionController(model, singleCaret(0, 0));
+	const selections = new CursorsController(model, singleCaret(0, 0));
 	const decorations = new TextDecorationCollection<void>(model);
 	const viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	const input = h(dom.window.document, 'textarea') as unknown as HTMLTextAreaElement;

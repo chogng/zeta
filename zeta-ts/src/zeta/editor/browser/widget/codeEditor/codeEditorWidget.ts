@@ -1,7 +1,7 @@
 import { isHTMLElement } from "../../../../base/browser/dom.js";
 import { getClientArea, type IDimension } from "../../../../base/browser/geometry.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { TextPosition, type TextRange } from "../../../common/core/text.js";
 import { type TextModel } from "../../../common/model/textModel.js";
@@ -20,7 +20,7 @@ export type CodeEditorWidgetViewportOptions = EditorViewViewportOptions;
 export interface CodeEditorWidgetOptions extends Omit<EditorViewOptions, "container" | "model" | "selectionController" | "lineHeight"> {
 	readonly container: HTMLElement;
 	readonly model: TextModel;
-	readonly selectionController: EditorSelectionController;
+	readonly selectionController: CursorsController;
 	readonly lineHeight: number;
 	/** Optional placeholder text consumed by the registered placeholder contribution. */
 	readonly placeholder?: string;
@@ -57,7 +57,7 @@ export interface CodeEditorViewState {
  * drop/paste behavior belongs to the host's contribution composition.
  */
 export class CodeEditorWidget extends Disposable {
-	private readonly selectionController: EditorSelectionController;
+	private readonly selectionController: CursorsController;
 	readonly ownerId: string;
 	readonly view: EditorView;
 	readonly viewport: EditorViewport;

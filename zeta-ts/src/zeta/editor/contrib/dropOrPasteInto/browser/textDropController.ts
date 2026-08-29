@@ -3,8 +3,8 @@ import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createReadableClipboardData, readEditorClipboardText } from '../../../browser/controller/editContext/clipboardUtils.js';
 import { registerEditorContribution } from '../../../browser/editorExtensions.js';
 import { type EditorViewport } from '../../../browser/view.js';
-import { type EditorSelectionController } from '../../../common/cursor/cursor.js';
-import { createPasteTextCommand } from '../../../common/cursor/cursorTypeOperations.js';
+import { type CursorsController } from '../../../common/cursor/cursor.js';
+import { TypeOperations } from '../../../common/cursor/cursorTypeOperations.js';
 import { TextSelection, TextSelectionSet } from '../../../common/core/selection.js';
 import { type TextPosition } from '../../../common/core/text.js';
 import { TEXT_FILE_TRANSFER_MAX_BYTES, selectTextFileTransfer } from './textFileTransfer.js';
@@ -13,7 +13,7 @@ import { TEXT_FILE_TRANSFER_MAX_BYTES, selectTextFileTransfer } from './textFile
 export class TextDropController extends Disposable {
 	private asynchronousDropRequest = 0;
 
-	constructor(private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController) {
+	constructor(private readonly viewport: EditorViewport, private readonly selections: CursorsController) {
 		super();
 		if (viewport.textModel !== selections.textModel) {
 			this.dispose();
@@ -44,7 +44,7 @@ export class TextDropController extends Disposable {
 		}
 		stopEvent(event);
 		this.viewport.element.focus({ preventScroll: true });
-		this.selections.execute(createPasteTextCommand(this.viewport.textModel, TextSelectionSet.single(TextSelection.collapsedAt(target.position)), text));
+		this.selections.execute(TypeOperations.paste(this.viewport.textModel, TextSelectionSet.single(TextSelection.collapsedAt(target.position)), text));
 		this.viewport.revealPosition(this.selections.selections.primary.active);
 	}
 
@@ -58,7 +58,7 @@ export class TextDropController extends Disposable {
 		this.viewport.element.focus({ preventScroll: true });
 		void file.text().then(text => {
 			if (this.isDisposed || request !== this.asynchronousDropRequest || text.length > TEXT_FILE_TRANSFER_MAX_BYTES || model.version !== expectedVersion) return;
-			this.selections.execute(createPasteTextCommand(model, TextSelectionSet.single(TextSelection.collapsedAt(position)), text));
+			this.selections.execute(TypeOperations.paste(model, TextSelectionSet.single(TextSelection.collapsedAt(position)), text));
 			this.viewport.revealPosition(this.selections.selections.primary.active);
 		}).catch(() => {
 			// The supplied file could not be decoded as text.

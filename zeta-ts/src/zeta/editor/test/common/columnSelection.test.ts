@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createEditorColumnSelectionSet } from "../../common/cursor/cursorColumnSelection.js";
+import { ColumnSelection } from "../../common/cursor/cursorColumnSelection.js";
 import { TextSelection } from "../../common/core/selection.js";
 import { TextPosition } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 test("Column selection creates directional same-column selections for every physical line", () => {
 	using model = new TextModel("abcdef\nab\n12345\nxy");
-	const selections = createEditorColumnSelectionSet(
+	const selections = ColumnSelection.columnSelect(
 		model,
 		TextPosition.at(3, 2),
 		TextPosition.at(0, 5),
@@ -24,5 +24,5 @@ test("Column selection creates directional same-column selections for every phys
 
 test("Column selection validates both positions against its text model", () => {
 	using model = new TextModel("one");
-	assert.throws(() => createEditorColumnSelectionSet(model, TextPosition.at(0, 0), TextPosition.at(1, 0)), /lineIndex/);
+	assert.throws(() => ColumnSelection.columnSelect(model, TextPosition.at(0, 0), TextPosition.at(1, 0)), /lineIndex/);
 });

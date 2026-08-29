@@ -4,7 +4,7 @@ import { h } from "../../../../../base/browser/dom.js";
 import { FastDomNode } from "../../../../../base/browser/fastDomNode.js";
 import { type Event } from "../../../../../base/common/event.js";
 import { type CompositionController, type EditContextCompositionEvent, EditContext, type EditContextOptions, type EditContextPosition, type EditContextState } from "../editContext.js";
-import { type EditorSelectionController } from '../../../../common/cursor/cursor.js';
+import { type CursorsController } from '../../../../common/cursor/cursor.js';
 import { TextSelection, TextSelectionSet } from '../../../../common/core/selection.js';
 import { TextRange } from '../../../../common/core/text.js';
 import { type TextModel } from '../../../../common/model/textModel.js';
@@ -160,7 +160,7 @@ export class TextAreaAccessibilityController extends Disposable {
 	constructor(
 		private readonly input: TextAreaEditContext,
 		private readonly viewport: EditorViewport,
-		private readonly selectionController: EditorSelectionController,
+		private readonly selectionController: CursorsController,
 		private readonly compositionController: CompositionController,
 	) {
 		super();

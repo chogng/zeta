@@ -1,7 +1,7 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
-import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type LanguageDiagnostic } from "../../../common/languages/languageResults.js";
 import { TextSelection, TextSelectionSet } from "../../../common/core/selection.js";
 import { type TextPosition } from "../../../common/core/text.js";
@@ -9,7 +9,7 @@ import { type EditorViewport } from "../../../browser/view.js";
 
 /** Moves the primary selection through current-version diagnostics with F8. */
 export class DiagnosticNavigationController extends Disposable {
-	constructor(input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly diagnostics: TextDecorationCollection<LanguageDiagnostic>) {
+	constructor(input: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, private readonly diagnostics: TextDecorationCollection<LanguageDiagnostic>) {
 		super();
 		if (viewport.textModel !== selections.textModel || diagnostics.textModel !== selections.textModel) {
 			this.dispose();

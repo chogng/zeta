@@ -1,8 +1,8 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
-import { addAdjacentLineCursors, addCursorsToSelectedLineEnds, EditorCursorInsertionDirection } from "../../../common/cursor/cursorMoveCommands.js";
-import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { CursorMoveCommands } from '../../../common/cursor/cursorMoveCommands.js';
+import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { type EditorViewport } from "../../../browser/view.js";
 
 export interface MultiCursorControllerOptions {
@@ -16,7 +16,7 @@ export class MultiCursorController extends Disposable {
 	constructor(
 		input: HTMLElement,
 		private readonly viewport: EditorViewport,
-		private readonly selections: EditorSelectionController,
+		private readonly selections: CursorsController,
 		options: MultiCursorControllerOptions = {},
 	) {
 		super();
@@ -35,7 +35,7 @@ export class MultiCursorController extends Disposable {
 	private handleKeydown(event: KeyboardEvent): void {
 		if (event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
 		if (event.shiftKey && event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === "i") {
-			const next = addCursorsToSelectedLineEnds(this.viewport.textModel, this.selections.selections);
+			const next = CursorMoveCommands.addCursorsToLineEnds(this.viewport.textModel, this.selections.selections);
 			if (next === this.selections.selections) return;
 			stopEvent(event);
 			this.selections.setCursorSelections(next);
@@ -45,18 +45,20 @@ export class MultiCursorController extends Disposable {
 		const direction = resolveStanzaAdjacentCursorDirection(event, this.targetOperatingSystem);
 		if (!direction) return;
 		stopEvent(event);
-		const next = addAdjacentLineCursors(this.viewport.textModel, this.selections.selections, direction);
+		const next = direction === 'up'
+			? CursorMoveCommands.addCursorUp(this.viewport.textModel, this.selections.selections)
+			: CursorMoveCommands.addCursorDown(this.viewport.textModel, this.selections.selections);
 		this.selections.setCursorSelections(next);
 		this.viewport.revealPosition(next.primary.active);
 	}
 }
 
 /** Resolves the non-conflicting VS Code add-cursor chord for a host platform. */
-export function resolveStanzaAdjacentCursorDirection(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">, targetOperatingSystem: OperatingSystem): EditorCursorInsertionDirection | undefined {
+export function resolveStanzaAdjacentCursorDirection(event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'metaKey'>, targetOperatingSystem: OperatingSystem): 'up' | 'down' | undefined {
 	const direction = event.key === "ArrowUp"
-		? EditorCursorInsertionDirection.Above
+		? 'up'
 		: event.key === "ArrowDown"
-			? EditorCursorInsertionDirection.Below
+			? 'down'
 			: undefined;
 	if (!direction) return undefined;
 	if (targetOperatingSystem === OperatingSystem.Macintosh) {

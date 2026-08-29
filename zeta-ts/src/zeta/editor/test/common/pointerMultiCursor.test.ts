@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PointerMultiCursorModifier, combineStanzaPointerSelection, isStanzaPointerMultiCursorGesture, readStanzaPointerMultiCursorModifier } from "../../common/cursor/cursorMoveCommands.js";
+import { CursorMoveCommands, PointerMultiCursorModifier, type PointerModifierState } from "../../common/cursor/cursorMoveCommands.js";
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { TextPosition } from "../../common/core/text.js";
 
@@ -12,29 +12,29 @@ test("Pointer multi-cursor modifiers require their exact configured chord", () =
 		shiftKey = false,
 	) => ({ altKey, ctrlKey, metaKey, shiftKey });
 
-	assert.equal(isStanzaPointerMultiCursorGesture(
+	assert.equal(CursorMoveCommands.isPointerMultiCursorGesture(
 		state(true, false, false),
 		PointerMultiCursorModifier.Alt,
 	), true);
-	assert.equal(isStanzaPointerMultiCursorGesture(
+	assert.equal(CursorMoveCommands.isPointerMultiCursorGesture(
 		state(true, false, false, true),
 		PointerMultiCursorModifier.Alt,
 	), false);
-	assert.equal(isStanzaPointerMultiCursorGesture(
+	assert.equal(CursorMoveCommands.isPointerMultiCursorGesture(
 		state(true, true, false),
 		PointerMultiCursorModifier.Alt,
 	), false);
-	assert.equal(isStanzaPointerMultiCursorGesture(
+	assert.equal(CursorMoveCommands.isPointerMultiCursorGesture(
 		state(false, true, false),
 		PointerMultiCursorModifier.ControlOrMeta,
 	), true);
-	assert.equal(isStanzaPointerMultiCursorGesture(
+	assert.equal(CursorMoveCommands.isPointerMultiCursorGesture(
 		state(false, false, true),
 		PointerMultiCursorModifier.ControlOrMeta,
 	), true);
-	assert.equal(readStanzaPointerMultiCursorModifier(undefined), PointerMultiCursorModifier.Alt);
+	assert.equal(CursorMoveCommands.readPointerMultiCursorModifier(undefined), PointerMultiCursorModifier.Alt);
 	assert.throws(
-		() => readStanzaPointerMultiCursorModifier("shift" as PointerMultiCursorModifier),
+		() => CursorMoveCommands.readPointerMultiCursorModifier("shift" as PointerMultiCursorModifier),
 		/Unknown Stanza pointer multi-cursor modifier/,
 	);
 });
@@ -46,20 +46,20 @@ test("Pointer multi-cursor combination adds, toggles, and deduplicates", () => {
 	const base = TextSelectionSet.withPrimary([first, second], 1);
 
 	assert.deepEqual(
-		combineStanzaPointerSelection(base, third, undefined),
+		CursorMoveCommands.combinePointerSelection(base, third, undefined),
 		TextSelectionSet.withPrimary([first, second, third], 2),
 	);
 	assert.deepEqual(
-		combineStanzaPointerSelection(base, first, 0),
+		CursorMoveCommands.combinePointerSelection(base, first, 0),
 		TextSelectionSet.single(second),
 	);
 	assert.equal(
-		combineStanzaPointerSelection(TextSelectionSet.single(first), first, 0)
+		CursorMoveCommands.combinePointerSelection(TextSelectionSet.single(first), first, 0)
 			.selections.length,
 		1,
 	);
 	assert.deepEqual(
-		combineStanzaPointerSelection(base, second, 0),
+		CursorMoveCommands.combinePointerSelection(base, second, 0),
 		TextSelectionSet.single(second),
 	);
 });
@@ -75,11 +75,11 @@ test("Pointer multi-cursor combination replaces overlapping ranges", () => {
 	const base = TextSelectionSet.withPrimary([first, inside, outside], 2);
 
 	assert.deepEqual(
-		combineStanzaPointerSelection(base, active, undefined),
+		CursorMoveCommands.combinePointerSelection(base, active, undefined),
 		TextSelectionSet.withPrimary([outside, active], 1),
 	);
 	assert.throws(
-		() => combineStanzaPointerSelection(base, active, 3),
+		() => CursorMoveCommands.combinePointerSelection(base, active, 3),
 		/outside the selection set/,
 	);
 });

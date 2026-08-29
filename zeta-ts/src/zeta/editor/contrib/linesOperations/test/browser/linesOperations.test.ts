@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { EditorSelectionController } from "../../../../common/cursor/cursor.js";
+import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { createDeleteLinesCommand, createDuplicateLinesCommand, createInsertLineCommand, createMoveLinesCommand, EditorLineDuplicateDirection, EditorLineInsertDirection, EditorLineMoveDirection } from "../../browser/linesOperations.js";
 import { TextSelection, TextSelectionSet } from "../../../../common/core/selection.js";
 import { TextPosition } from "../../../../common/core/text.js";
@@ -8,7 +8,7 @@ import { TextModel } from "../../../../common/model/textModel.js";
 
 test("Delete lines removes selected physical line groups and keeps a valid final line", () => {
 	using model = new TextModel("zero\none\ntwo\nthree\nfour");
-	using selections = new EditorSelectionController(model, TextSelectionSet.withPrimary([
+	using selections = new CursorsController(model, TextSelectionSet.withPrimary([
 		caret(1, 1),
 		TextSelection.from(TextPosition.at(3, 0), TextPosition.at(4, 0)),
 	], 1));
@@ -33,7 +33,7 @@ test("Delete lines removes selected physical line groups and keeps a valid final
 
 test("Duplicate lines supports multi-line groups, document edges, and isolated undo", () => {
 	using model = new TextModel("zero\none\ntwo\nthree");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(
+	using selections = new CursorsController(model, TextSelectionSet.single(
 		TextSelection.from(TextPosition.at(1, 0), TextPosition.at(3, 0)),
 	));
 
@@ -75,7 +75,7 @@ test("Duplicate line command validates its direction before mutation", () => {
 
 test("Move lines swaps selected groups with their neighboring rows and keeps directional selections", () => {
 	using model = new TextModel("zero\none\ntwo\nthree\nfour");
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(
+	using selections = new CursorsController(model, TextSelectionSet.single(
 		TextSelection.from(TextPosition.at(2, 3), TextPosition.at(1, 1)),
 	));
 
@@ -99,7 +99,7 @@ test("Move lines swaps selected groups with their neighboring rows and keeps dir
 
 test("Move lines preserves disjoint selected groups and rejects invalid directions", () => {
 	using model = new TextModel("zero\none\ntwo\nthree\nfour");
-	using selections = new EditorSelectionController(model, TextSelectionSet.withPrimary([
+	using selections = new CursorsController(model, TextSelectionSet.withPrimary([
 		caret(1, 1),
 		caret(3, 2),
 	], 1));
@@ -122,7 +122,7 @@ test("Move lines preserves disjoint selected groups and rejects invalid directio
 
 test("Insert lines deduplicates selected groups, places carets on blank rows, and undoes atomically", () => {
 	using model = new TextModel("zero\none\ntwo\nthree");
-	using selections = new EditorSelectionController(model, TextSelectionSet.withPrimary([
+	using selections = new CursorsController(model, TextSelectionSet.withPrimary([
 		caret(0, 1),
 		TextSelection.from(TextPosition.at(2, 0), TextPosition.at(3, 0)),
 	], 1));

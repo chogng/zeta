@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import { autorun } from '../../../base/common/observable.js';
-import { EditorSelectionController } from '../../common/cursor/cursor.js';
+import { CursorsController } from '../../common/cursor/cursor.js';
 import { TextSelection, TextSelectionSet } from '../../common/core/selection.js';
 import { TextPosition } from '../../common/core/text.js';
 import { TextModel } from '../../common/model/textModel.js';
@@ -31,7 +31,7 @@ test('observable code editor tracks canonical model, selections, and layout', ()
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('alpha');
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 0))));
 	using editor = new CodeEditorWidget({ container, model, selectionController: selections, lineHeight: 20 });
 	using observableEditor = observableCodeEditor(editor);
 

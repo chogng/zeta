@@ -5,7 +5,7 @@ import { bindColorTheme } from '../../../platform/theme/browser/themeStyles.js';
 import { EditorBrowser, type EditorBrowserOptions, type EditorTextViewState, type IContentWidget, type IEditorBrowser, type IOverlayWidget, type IViewZoneChangeAccessor } from '../../browser/editorBrowser.js';
 import type { EditorView, EditorViewport } from '../../browser/view.js';
 import type { CodeEditorWidget } from '../../browser/widget/codeEditor/codeEditorWidget.js';
-import type { EditorSelectionController } from '../../common/cursor/cursor.js';
+import type { CursorsController } from '../../common/cursor/cursor.js';
 import type { TextRange } from '../../common/core/text.js';
 import type { TextModel } from '../../common/model/textModel.js';
 
@@ -20,7 +20,7 @@ export class StandaloneCodeEditor extends Disposable implements IStandaloneCodeE
 	public readonly onDidChange: Event<void>;
 	public readonly codeEditor: CodeEditorWidget;
 	public readonly viewport: EditorViewport;
-	public readonly selections: EditorSelectionController;
+	public readonly selections: CursorsController;
 	public readonly view: EditorView;
 
 	constructor(options: EditorBrowserOptions, private readonly model: TextModel, ownsModel: boolean, themeService: Parameters<typeof bindColorTheme>[0]) {

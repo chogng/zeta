@@ -6,7 +6,7 @@ import { h } from '../../../../../base/browser/dom.js';
 import { type TextMeasurer } from '../../../../browser/config/fontMeasurements.js';
 import { TriggerInlineEditCommandsRegistry } from '../../../../browser/triggerInlineEditCommandsRegistry.js';
 import { LanguageFeatureProviderRegistry } from '../../../../common/languageFeatureRegistry.js';
-import { EditorSelectionController } from '../../../../common/cursor/cursor.js';
+import { CursorsController } from '../../../../common/cursor/cursor.js';
 import { TextSelection, TextSelectionSet } from '../../../../common/core/selection.js';
 import { TextPosition } from '../../../../common/core/text.js';
 import { TextModel } from '../../../../common/model/textModel.js';
@@ -35,7 +35,7 @@ test('Registered editor commands retrigger inline completions after their edit',
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('abc');
-	using selections = new EditorSelectionController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 3))));
+	using selections = new CursorsController(model, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 3))));
 	using viewport = new EditorViewport({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 40 });
 	const input = h(dom.window.document, 'textarea');

@@ -1,6 +1,6 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { createToggleLineCommentCommand } from "../common/lineCommentCommands.js";
 import { type LanguageConfigurationSource } from "../../../common/languages/languageConfiguration.js";
 import { type EditorViewport } from "../../../browser/view.js";
@@ -21,7 +21,7 @@ export class LineCommentController extends Disposable {
 	constructor(
 		input: HTMLElement,
 		private readonly viewport: EditorViewport,
-		private readonly selections: EditorSelectionController,
+		private readonly selections: CursorsController,
 		private readonly options: LineCommentControllerOptions,
 		private readonly executeCommand: EditorCommandExecutor = (_commandId, operation) => operation(),
 	) {

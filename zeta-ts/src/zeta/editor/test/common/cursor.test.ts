@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DisposableTracker, installDisposableTracker } from "../../../base/common/lifecycle.js";
-import { EditorSelectionChangeReason, EditorSelectionController } from "../../common/cursor/cursor.js";
+import { CursorChangeReason, CursorsController } from "../../common/cursor/cursor.js";
 import { TextSelection, TextSelectionSet } from "../../common/core/selection.js";
 import { TextPosition, TextRange } from "../../common/core/text.js";
 import { TextModel } from "../../common/model/textModel.js";
@@ -24,13 +24,13 @@ const single = (
 	),
 );
 
-test("EditorSelectionController restores command selections", () => {
+test("CursorsController restores command selections", () => {
 	using model = new TextModel("hello");
-	using controller = new EditorSelectionController(
+	using controller = new CursorsController(
 		model,
 		single(4, 1),
 	);
-	const reasons: EditorSelectionChangeReason[] = [];
+	const reasons: CursorChangeReason[] = [];
 	using listener = controller.onDidChange(
 		event => reasons.push(event.reason),
 	);
@@ -63,16 +63,16 @@ test("EditorSelectionController restores command selections", () => {
 		afterUndo: single(4, 1),
 		afterRedo: single(2, 2),
 		reasons: [
-			EditorSelectionChangeReason.Command,
-			EditorSelectionChangeReason.Undo,
-			EditorSelectionChangeReason.Redo,
+			CursorChangeReason.Command,
+			CursorChangeReason.Undo,
+			CursorChangeReason.Redo,
 		],
 	});
 });
 
 test("Read-only editor instances preserve selection while rejecting document commands", () => {
 	using model = new TextModel("abc");
-	using controller = new EditorSelectionController(model, single(0, 0), { readOnly: true });
+	using controller = new CursorsController(model, single(0, 0), { readOnly: true });
 
 	const command = {
 		edits: [{ range: range(0, 0), text: "X" }],
@@ -92,8 +92,8 @@ test("Read-only editor instances preserve selection while rejecting document com
 
 test("Cursor-only selection history restores multi-cursor operations without changing document undo", () => {
 	using model = new TextModel("abc");
-	using controller = new EditorSelectionController(model, single(0, 0), { cursorHistoryLimit: 1 });
-	const reasons: EditorSelectionChangeReason[] = [];
+	using controller = new CursorsController(model, single(0, 0), { cursorHistoryLimit: 1 });
+	const reasons: CursorChangeReason[] = [];
 	using listener = controller.onDidChange(event => reasons.push(event.reason));
 	const first = TextSelectionSet.withPrimary([
 		TextSelection.collapsedAt(position(0, 0)),
@@ -115,17 +115,17 @@ test("Cursor-only selection history restores multi-cursor operations without cha
 	assert.equal(controller.undoCursorOperation(), false);
 	assert.equal(model.version, 1);
 	assert.deepEqual(reasons, [
-		EditorSelectionChangeReason.CursorOperation,
-		EditorSelectionChangeReason.CursorOperation,
-		EditorSelectionChangeReason.CursorUndo,
-		EditorSelectionChangeReason.CursorOperation,
-		EditorSelectionChangeReason.Explicit,
+		CursorChangeReason.CursorOperation,
+		CursorChangeReason.CursorOperation,
+		CursorChangeReason.CursorUndo,
+		CursorChangeReason.CursorOperation,
+		CursorChangeReason.Explicit,
 	]);
 });
 
-test("EditorSelectionController maps external model edits", () => {
+test("CursorsController maps external model edits", () => {
 	using model = new TextModel("abc");
-	using controller = new EditorSelectionController(
+	using controller = new CursorsController(
 		model,
 		single(2, 1),
 	);
@@ -143,15 +143,15 @@ test("EditorSelectionController maps external model edits", () => {
 		selections: single(3, 2),
 		events: [{
 			selections: single(3, 2),
-			reason: EditorSelectionChangeReason.ModelChange,
+			reason: CursorChangeReason.ModelChange,
 			modelVersion: 2,
 		}],
 	});
 });
 
-test("EditorSelectionController projects tracked selections before downstream command listeners", () => {
+test("CursorsController projects tracked selections before downstream command listeners", () => {
 	using model = new TextModel("const value = 1;\n");
-	using controller = new EditorSelectionController(
+	using controller = new CursorsController(
 		model,
 		TextSelectionSet.single(TextSelection.from(
 			TextPosition.at(0, 0),
@@ -178,12 +178,12 @@ test("EditorSelectionController projects tracked selections before downstream co
 	assert.deepEqual(controller.selections, TextSelectionSet.single(TextSelection.collapsedAt(TextPosition.at(0, 1))));
 });
 
-test("EditorSelectionController releases tracked ranges without taking their model ownership", () => {
+test("CursorsController releases tracked ranges without taking their model ownership", () => {
 	const tracker = new DisposableTracker();
 	{
 		using installation = installDisposableTracker(tracker);
 		using model = new TextModel("abc");
-		using controller = new EditorSelectionController(model, single(0, 0));
+		using controller = new CursorsController(model, single(0, 0));
 
 		controller.setSelections(single(2, 2));
 	}
@@ -193,8 +193,8 @@ test("EditorSelectionController releases tracked ranges without taking their mod
 
 test("Shared editors retain independent selection ownership", () => {
 	using model = new TextModel("abc");
-	using first = new EditorSelectionController(model, single(1, 1));
-	using second = new EditorSelectionController(model, single(3, 3));
+	using first = new CursorsController(model, single(1, 1));
+	using second = new CursorsController(model, single(3, 3));
 
 	first.execute({
 		edits: [{ range: range(1, 1), text: "X" }],
@@ -232,9 +232,9 @@ test("Shared editors retain independent selection ownership", () => {
 	});
 });
 
-test("EditorSelectionController validates commands before mutation", () => {
+test("CursorsController validates commands before mutation", () => {
 	using model = new TextModel("abc");
-	using controller = new EditorSelectionController(
+	using controller = new CursorsController(
 		model,
 		single(0, 0),
 	);
@@ -258,9 +258,9 @@ test("EditorSelectionController validates commands before mutation", () => {
 	});
 });
 
-test("EditorSelectionController disposal does not own the model", () => {
+test("CursorsController disposal does not own the model", () => {
 	using model = new TextModel("abc");
-	const controller = new EditorSelectionController(
+	const controller = new CursorsController(
 		model,
 		single(0, 0),
 	);
@@ -274,13 +274,13 @@ test("EditorSelectionController disposal does not own the model", () => {
 	assert.equal(model.getText(), "Abc");
 });
 
-test("EditorSelectionController rejects stale post-command selections", () => {
+test("CursorsController rejects stale post-command selections", () => {
 	using model = new TextModel("abc");
-	using controller = new EditorSelectionController(
+	using controller = new CursorsController(
 		model,
 		single(0, 0),
 	);
-	const reasons: EditorSelectionChangeReason[] = [];
+	const reasons: CursorChangeReason[] = [];
 	using controllerListener = controller.onDidChange(
 		event => reasons.push(event.reason),
 	);
@@ -308,6 +308,6 @@ test("EditorSelectionController rejects stale post-command selections", () => {
 		text: "XabcY",
 		version: 3,
 		selections: single(1, 1),
-		reasons: [EditorSelectionChangeReason.ModelChange],
+		reasons: [CursorChangeReason.ModelChange],
 	});
 });

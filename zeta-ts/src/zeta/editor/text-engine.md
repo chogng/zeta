@@ -10,7 +10,7 @@ Stanza Text Engine 是 Zeta 唯一的行式文本编辑权威。文本、版本�
 
 | 场景 | Canonical owner | 关键保证 |
 | --- | --- | --- |
-| 输入、删除、undo/redo | `TextModel` + `EditorSelectionController` | 一个同步事务，不等待 IPC |
+| 输入、删除、undo/redo | `TextModel` + `CursorsController` | 一个同步事务，不等待 IPC |
 | 换行、折叠、可见行和滚动 | `common/viewModel` + `common/viewLayout` | DOM-free、版本绑定 |
 | DOM、光标、选区和 decoration | `browser/view` + `browser/viewparts` | 只投影，不创建第二套模型或滚动权威 |
 | token、诊断、补全、折叠、符号和结构选择 | `common/languages`、通用 provider contract 与 frontend service | 异步结果必须通过 model identity 与 version gate；App Server provider 由 Workbench 注册 |
@@ -21,7 +21,7 @@ Stanza Text Engine 是 Zeta 唯一的行式文本编辑权威。文本、版本�
 
 - `TextModel` 是文本、版本、事务、文档历史、snapshot 和 tracked range 的唯一同步 mutation authority。
 - 文本位置使用 0-based line、UTF-16 column；range 有序且 end-exclusive；进入模型的换行统一为 LF。
-- `EditorSelectionController` 拥有一个 editor instance 的 selection、composition 和 cursor history，不把 selection 写入共享 `TextModel`。
+- `CursorsController` 拥有一个 editor instance 的 selection、composition 和 cursor history，不把 selection 写入共享 `TextModel`。
 - model、view model、layout 和 browser projection 依赖单向流动；`common` 不依赖 DOM、Workbench、Electron 或 generated DTO。
 - 输入热路径不等待 Worker、Rust、App Server、文件系统或语言服务。
 - 异步结果必须绑定准确的 model identity、model version 和 request identity；过期结果不得映射到当前文档。
@@ -71,7 +71,7 @@ flowchart LR
 
 ### Selection、command 和 composition
 
-一个 `TextModel` 可以被多个 `EditorSelectionController` 投影。Controller 通过 `EditorEditCommand` 提交有序 edit 和明确的 post-selection；undo/redo 使用稳定 transaction identity 恢复各自的 selection，而不把 selection history 放入共享模型。
+一个 `TextModel` 可以被多个 `CursorsController` 投影。Controller 通过 `EditorEditCommand` 提交有序 edit 和明确的 post-selection；undo/redo 使用稳定 transaction identity 恢复各自的 selection，而不把 selection history 放入共享模型。
 
 IME composition 使用受保护的 history revision。Provisional updates 可以产生可观察 model version，但 commit 只保留一个 undo step，cancel 必须无损恢复初始文本和 selection。Composition 活跃时，普通 edit、selection change 和 history command 不能绕过该边界。
 

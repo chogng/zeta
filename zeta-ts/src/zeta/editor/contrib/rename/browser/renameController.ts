@@ -3,7 +3,7 @@ import { registerEditorContribution } from "../../../browser/editorExtensions.js
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
-import { type EditorSelectionController } from "../../../common/cursor/cursor.js";
+import { type CursorsController } from "../../../common/cursor/cursor.js";
 import { createEditorEditCommand } from "../../../common/commands/editorCommand.js";
 import { type EditorViewport } from "../../../browser/view.js";
 import { RenameService } from "../common/rename.js";
@@ -19,7 +19,7 @@ export class RenameController extends Disposable {
 	private readonly status: HTMLSpanElement;
 	private request: AbortController | undefined;
 
-	constructor(private readonly editorInput: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: EditorSelectionController, private readonly service: RenameService, private readonly languageId: string, private readonly resource: URI, private readonly applyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor rename failed", error), private readonly executeCommand: EditorCommandExecutor = (_commandId, operation) => operation()) {
+	constructor(private readonly editorInput: HTMLElement, private readonly viewport: EditorViewport, private readonly selections: CursorsController, private readonly service: RenameService, private readonly languageId: string, private readonly resource: URI, private readonly applyWorkspaceEdit: ((edit: LanguageWorkspaceEdit) => void | Promise<void>) | undefined, private readonly onError: (error: unknown) => void = error => console.error("Editor rename failed", error), private readonly executeCommand: EditorCommandExecutor = (_commandId, operation) => operation()) {
 		super();
 		if (viewport.textModel !== selections.textModel) throw new TypeError("Stanza rename dependencies must share one text model");
 		const ownerDocument = viewport.element.ownerDocument;
