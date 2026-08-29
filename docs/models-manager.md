@@ -118,6 +118,7 @@ model provider 负责“如何用已选模型执行一次调用”
 - model lifecycle、availability、metadata quality 和 freshness projection；
 - capability/workload/visibility filter；
 - `(ProviderId, ModelId)` 的解析、校验和稳定排序；
+- 所选模型基础 instructions 的资产、revision 与选择；
 - immutable `ModelCatalogSnapshot` 及 generation 变化；
 - cache/refresh/merge 的诊断信息和不含秘密的 telemetry。
 
@@ -125,7 +126,7 @@ model provider 负责“如何用已选模型执行一次调用”
 
 - API key、OAuth token、secret persistence 或 credential refresh；
 - provider HTTP DTO、认证 header、endpoint 拼接和分页 wire codec；
-- completions/responses/messages 请求执行；
+- completions/responses/messages 请求执行和最终 context 组装；
 - prompt/context KV cache 的创建、breakpoint、TTL、usage 解析或计费语义；
 - SSE/NDJSON/WebSocket 的 ping、空行、注释帧、读超时和断线重连；
 - 本地模型进程的预热、驻留和卸载；

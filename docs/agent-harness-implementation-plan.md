@@ -92,7 +92,7 @@ AL-201 至 AL-205 已完成，S2 收口；统一工具面与 durable 计划由 S
 | AL-301 | 已实现 | ToolProfile contract | `coding-v1` 在 Turn 接受安全点冻结 exact 工具名、顺序、definition digest、profile revision 与并行调用设置；每次模型调用前复核冻结定义 | 默认 profile 同时暴露 `apply_patch` 与 `edit`；Core-managed 本地 Provider 复用同一 snapshot，不按模型或 Provider 名称推断工具面；定义漂移在调用模型前 fail closed |
 | AL-302 | 已实现 | 统一文件工具 ownership | Agent 文件工具统一由 direct `LocalToolSuite` 提供，shell 与 patch 各由单一 canonical executor 提供；legacy operation-enum 不进入 Agent 工具面 | 模型不可见重复或同名不同义工具；审批 provenance 和路径 capability 保持精确；`edit` 保持 Thread scoped 读后编辑、唯一命中、磁盘 revision 复核与原子单文件写入 |
 | AL-303 | 已实现 | `update_plan` | 模型可见工具提交 durable `PlanUpdated`，Turn 保存 canonical plan，Desktop 只投影该状态 | 更新幂等、replay/restart 不丢失；同一时刻最多一个 `in_progress`；计划状态不依赖 transient stream |
-| AL-304 | 已实现 | 工具 schema 与提示词回归 | 固定统一 profile 的工具顺序、schema、描述和 digest fixture；system prompt 升至 `system-v4` 并固定编辑选择 guidance | 同一 snapshot 组装稳定；两个不同 Provider/model 使用相同 canonical schema；提示词明确 `apply_patch` 默认、`edit` 微编辑/降级；definition 变化要求新 revision/digest |
+| AL-304 | 已实现 | 工具 schema 与提示词回归 | 固定统一 profile 的工具顺序、schema、描述和 digest fixture；工具使用边界由各 `ToolDefinition` owner 维护，模型基础 instructions 只要求服从 host exact schema | 同一 snapshot 组装稳定；两个不同 Provider/model 使用相同 canonical schema；definition 变化要求新 revision/digest；模型基础 instructions 不复制具体工具契约 |
 | AL-305 | 已实现 | 多工具调用顺序 | 保持 `parallel_tool_calls: true`，执行侧继续按 durable 调用顺序串行 | 一次模型响应中的多个调用先完整持久化，再依次批准和执行；取消后未开始调用不得执行；不引入并行写副作用 |
 
 S3 已完成；模型行为指标和发布门属于 S7 的后置可选工作，不要求 PR 或 S3 依赖真实模型 API。

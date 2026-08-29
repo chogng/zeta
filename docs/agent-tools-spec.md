@@ -3,12 +3,11 @@
 > 状态：Accepted（2026-08-23）
 > 定位：[`agent-harness-design.md`](agent-harness-design.md) §5 工具面的实现规格：逐工具的
 > JSON schema、**描述正文（模型可见的实际英文文本）**、参数校验规则、错误文案、输出格式与
-> 限幅、capability 注记；附录 A 是系统提示词的工具指导与输出风格扩写正文（M0 时移入
-> `zeta-prompts` 模板并 bump revision）。
+> 限幅、capability 注记。工具指导由各工具定义拥有，不复制到模型基础 instructions。
 >
 > 工具的三层契约（定义/绑定/执行接口）归 [`tools.md`](tools.md)；审批/沙箱/升级语义归
 > [`core.md`](core.md) §11。本文写"每个工具具体长什么样"。描述与错误文案是模型可见提示词
-> 的一部分：修改需要与 system prompt 同级 review，并跑
+> 的一部分：修改需要按模型可见契约 review，并跑
 > [`agent-harness-design.md` §14](agent-harness-design.md#14-评测) 的评测对比。
 
 ## 快速理解
@@ -552,11 +551,9 @@ delegation result。Desktop Agent Sidebar 只消费该 projection；`session/thr
 重新读取 canonical projection，旧 Thread sequence 通知会被忽略。中断使用节点的 exact
 `threadId/currentTurnId/threadSequence` 中断单个目标。
 
-## 附录 A：系统提示词扩写正文
+## 附录 A：工具行为评测基线
 
-以下为 `SYSTEM_PROMPT` 的工具指导与输出风格扩写段，M0 时追加进
-`zeta-rs/prompts/templates/system/`（工具指导按 profile 分模板）并 bump revision。现有
-base.md 的身份/优先级/防注入/工作行为四段保留在前。
+以下文字是工具描述、模型基础 instructions 和行为测试的评测基线，不作为要复制进中央 system prompt 的模板。具体工具名、参数和失败语义只在对应 `ToolDefinition` owner 中维护；模型基础 instructions 只要求遵守 host 提供的 exact schema。
 
 ### A.1 工具指导（共享段）
 
@@ -615,6 +612,6 @@ base.md 的身份/优先级/防注入/工作行为四段保留在前。
 修改本文任何工具的 schema、描述或错误文案时同步：
 
 1. 对应实现 crate 的 schema/文案常量与测试；
-2. `zeta-prompts` 中引用该工具名的指导段（附录 A）与 revision；
+2. 若模型基础 instructions 确实引用了该契约，同步 `zeta-models-manager` 中对应资产与 revision；
 3. [`agent-harness-design.md` §14](agent-harness-design.md#14-评测) 的组装快照和行为测试；
 4. 运行对应的现有单元/集成测试；只有启用版本化模型 benchmark 时，才补充 T1/T2 对比。
