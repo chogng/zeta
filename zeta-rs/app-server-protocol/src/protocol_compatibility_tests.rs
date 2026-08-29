@@ -1,9 +1,14 @@
-use crate::protocol::common::{SchemaHash, ServerInfo};
-use crate::protocol::initialize::{
-    APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, CapabilityContract, InitializeResult,
-    ProtocolCompatibilityError, ProtocolVersion, REQUIRED_SESSION_CAPABILITIES, ServerCapabilities,
-    ensure_protocol_compatible,
-};
+use crate::protocol::common::SchemaHash;
+use crate::protocol::common::ServerInfo;
+use crate::protocol::initialize::APP_SERVER_CAPABILITY_VERSION;
+use crate::protocol::initialize::APP_SERVER_PROTOCOL_MAJOR;
+use crate::protocol::initialize::CapabilityContract;
+use crate::protocol::initialize::InitializeResult;
+use crate::protocol::initialize::ProtocolCompatibilityError;
+use crate::protocol::initialize::ProtocolVersion;
+use crate::protocol::initialize::REQUIRED_SESSION_CAPABILITIES;
+use crate::protocol::initialize::ServerCapabilities;
+use crate::protocol::initialize::ensure_protocol_compatible;
 use std::collections::BTreeMap;
 
 fn initialization() -> InitializeResult {

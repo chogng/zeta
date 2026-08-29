@@ -1,14 +1,24 @@
 use crate::protocol::error::AppServerError;
-use crate::protocol::registry::{
-    CLIENT_METHODS, ClientRequestSchema, ClientResultSchema, HOST_METHODS, HostRequestSchema,
-    HostResultSchema, SERVER_NOTIFICATIONS, ServerNotificationSchema, TYPESCRIPT_BINDINGS,
-};
-use crate::rpc::{
-    JsonRpcError, JsonRpcFailure, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse,
-};
-use schemars::{JsonSchema, Schema, schema_for};
+use crate::protocol::registry::CLIENT_METHODS;
+use crate::protocol::registry::ClientRequestSchema;
+use crate::protocol::registry::ClientResultSchema;
+use crate::protocol::registry::HOST_METHODS;
+use crate::protocol::registry::HostRequestSchema;
+use crate::protocol::registry::HostResultSchema;
+use crate::protocol::registry::SERVER_NOTIFICATIONS;
+use crate::protocol::registry::ServerNotificationSchema;
+use crate::protocol::registry::TYPESCRIPT_BINDINGS;
+use crate::rpc::JsonRpcError;
+use crate::rpc::JsonRpcFailure;
+use crate::rpc::JsonRpcNotification;
+use crate::rpc::JsonRpcRequest;
+use crate::rpc::JsonRpcResponse;
+use schemars::JsonSchema;
+use schemars::Schema;
+use schemars::schema_for;
 use serde_json::Value;
-use sha2::{Digest, Sha256};
+use sha2::Digest;
+use sha2::Sha256;
 
 /// Checked-in JSON Schema fixture, relative to this crate's manifest directory.
 pub const JSON_SCHEMA_FIXTURE: &str = "schema/json/schema.json";

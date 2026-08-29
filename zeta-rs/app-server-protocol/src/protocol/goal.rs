@@ -1,7 +1,8 @@
 use crate::protocol::common::ThreadId;
 use crate::protocol::common::TurnId;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use ts_rs::TS;
 use zeta_protocol::ThreadGoal;
 use zeta_protocol::ThreadGoalStatus;

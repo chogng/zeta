@@ -1,5 +1,6 @@
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::path::PathBuf;
 use ts_rs::TS;
 use zeta_protocol::CommandId;

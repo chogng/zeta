@@ -6,7 +6,11 @@ mod export;
 pub mod protocol;
 pub mod rpc;
 
-pub use export::{JSON_SCHEMA_FIXTURE, TYPESCRIPT_FIXTURE, json_schema, schema_hash, typescript};
+pub use export::JSON_SCHEMA_FIXTURE;
+pub use export::TYPESCRIPT_FIXTURE;
+pub use export::json_schema;
+pub use export::schema_hash;
+pub use export::typescript;
 
 #[cfg(test)]
 #[path = "schema_fixtures.rs"]

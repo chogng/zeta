@@ -1,7 +1,8 @@
 //! Stable leaf values that may cross the RPC boundary.
 
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use ts_rs::TS;
 
 pub use zeta_protocol::CommandId;

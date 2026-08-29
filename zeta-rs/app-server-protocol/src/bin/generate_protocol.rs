@@ -1,5 +1,7 @@
-use std::path::{Path, PathBuf};
-use zeta_app_server_protocol::{json_schema, typescript};
+use std::path::Path;
+use std::path::PathBuf;
+use zeta_app_server_protocol::json_schema;
+use zeta_app_server_protocol::typescript;
 
 const USAGE: &str = "usage: generate_protocol <json|typescript> --out <directory>";
 
@@ -93,7 +95,8 @@ fn write_artifact(directory: &Path, file_name: &str, contents: String) -> std::i
 
 #[cfg(test)]
 mod tests {
-    use super::{Artifact, Command};
+    use super::Artifact;
+    use super::Command;
     use std::path::PathBuf;
 
     #[test]

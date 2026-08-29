@@ -1,5 +1,6 @@
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use ts_rs::TS;
 
 /// Inputs for one presentation-independent comparison of two text snapshots.

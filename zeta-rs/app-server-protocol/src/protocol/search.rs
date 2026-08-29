@@ -1,6 +1,7 @@
 use crate::protocol::workspace::WorkspaceSessionDirectorySelector;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::path::PathBuf;
 use ts_rs::TS;
 

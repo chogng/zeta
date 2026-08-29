@@ -1,6 +1,7 @@
 use crate::protocol::common::TurnId;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use ts_rs::TS;
 use zeta_protocol::ImageAttachmentRef;
 use zeta_protocol::SkillRef;

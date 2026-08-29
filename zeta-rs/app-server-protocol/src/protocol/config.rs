@@ -1,8 +1,11 @@
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::BTreeMap;
 use ts_rs::TS;
-use zeta_protocol::{CommandId, Patch, ToolMode};
+use zeta_protocol::CommandId;
+use zeta_protocol::Patch;
+use zeta_protocol::ToolMode;
 
 /// Selects the implementation behind the Agent-only `grep` Tool.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

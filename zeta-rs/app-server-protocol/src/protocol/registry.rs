@@ -66,11 +66,29 @@ use crate::protocol::collaboration::DocumentCollaborationSubmitParams;
 use crate::protocol::collaboration::DocumentCollaborationSubmitResult;
 use crate::protocol::collaboration::DocumentCollaborationUpdate;
 use crate::protocol::common::AgentInteractionCapability;
+use crate::protocol::common::BrowserCapability;
+use crate::protocol::common::ClientCapabilities;
+use crate::protocol::common::ClientInfo;
+use crate::protocol::common::CommandId;
+use crate::protocol::common::EmptyParams;
+use crate::protocol::common::ItemId;
+use crate::protocol::common::RequestId;
+use crate::protocol::common::SchemaHash;
+use crate::protocol::common::ServerInfo;
+use crate::protocol::common::SessionId;
+use crate::protocol::common::StreamInstanceId;
+use crate::protocol::common::ThreadId;
+use crate::protocol::common::ToolCallId;
+use crate::protocol::common::ToolName;
+use crate::protocol::common::TurnId;
 use crate::protocol::common::WorkspaceTrustHostCapability;
-use crate::protocol::common::{
-    BrowserCapability, ClientCapabilities, ClientInfo, CommandId, EmptyParams, ItemId, RequestId,
-    SchemaHash, ServerInfo, SessionId, StreamInstanceId, ThreadId, ToolCallId, ToolName, TurnId,
-};
+use crate::protocol::config::AgentGrepBackendDto;
+use crate::protocol::config::ApprovalReviewModelSelectionDto;
+use crate::protocol::config::ConfigChanged;
+use crate::protocol::config::ConfigCommandDispositionDto;
+use crate::protocol::config::ConfigCommandResult;
+use crate::protocol::config::ConfigReadResult;
+use crate::protocol::config::ConfigUpdateParams;
 use crate::protocol::config::ExecPolicyActionKindDto;
 use crate::protocol::config::ExecPolicyEffectDto;
 use crate::protocol::config::ExecPolicyHostMatcherDto;
@@ -80,24 +98,51 @@ use crate::protocol::config::ExecPolicyRuleUpsertParams;
 use crate::protocol::config::ExecPolicyScopeMatcherDto;
 use crate::protocol::config::ExecPolicySelectorDto;
 use crate::protocol::config::ExecPolicyTokenDto;
-use crate::protocol::config::{
-    AgentGrepBackendDto, ApprovalReviewModelSelectionDto, ConfigChanged,
-    ConfigCommandDispositionDto, ConfigCommandResult, ConfigReadResult, ConfigUpdateParams,
-    HookActionDto, HookConfigDto, HookEnablementDto, HookEventDto, HookMatcherDto,
-    HookRemoveParams, HookSetEnablementParams, HookUpsertParams, LanguageServerConfigDto,
-    LanguageServerConfigureParams, LanguageServerModeDto, LanguageServerRemoveParams,
-    McpCredentialBindingDto, McpServerConfigDto, McpServerEnablementDto, McpServerRemoveParams,
-    McpServerSetEnablementParams, McpServerUpsertParams, McpTransportDto, ModelContextConfigDto,
-    ModelRefDto, PluginRequestDto, PluginRequestEnablementDto, PluginRequestRemoveParams,
-    PluginRequestSetEnablementParams, PluginRequestUpsertParams, ProviderConfigDto,
-    ProviderConfigureParams, ProviderRemoveParams, SemanticCodeIndexAuthorizeParams,
-    SemanticCodeIndexAutomaticContextDto, SemanticCodeIndexConfigDto,
-    SemanticCodeIndexConfigureParams, SemanticCodeIndexModelsDto, SemanticCodeIndexRevokeParams,
-    SemanticCodeIndexSelectionDto, SkillSourceAddParams, SkillSourceConfigDto,
-    SkillSourceEnablementDto, SkillSourceRemoveParams, SkillSourceSetEnablementParams,
-    ToolSearchConfigDto, ToolSearchConfigureParams, ToolSearchEmbeddingStatusDto,
-    ToolSearchModeDto,
-};
+use crate::protocol::config::HookActionDto;
+use crate::protocol::config::HookConfigDto;
+use crate::protocol::config::HookEnablementDto;
+use crate::protocol::config::HookEventDto;
+use crate::protocol::config::HookMatcherDto;
+use crate::protocol::config::HookRemoveParams;
+use crate::protocol::config::HookSetEnablementParams;
+use crate::protocol::config::HookUpsertParams;
+use crate::protocol::config::LanguageServerConfigDto;
+use crate::protocol::config::LanguageServerConfigureParams;
+use crate::protocol::config::LanguageServerModeDto;
+use crate::protocol::config::LanguageServerRemoveParams;
+use crate::protocol::config::McpCredentialBindingDto;
+use crate::protocol::config::McpServerConfigDto;
+use crate::protocol::config::McpServerEnablementDto;
+use crate::protocol::config::McpServerRemoveParams;
+use crate::protocol::config::McpServerSetEnablementParams;
+use crate::protocol::config::McpServerUpsertParams;
+use crate::protocol::config::McpTransportDto;
+use crate::protocol::config::ModelContextConfigDto;
+use crate::protocol::config::ModelRefDto;
+use crate::protocol::config::PluginRequestDto;
+use crate::protocol::config::PluginRequestEnablementDto;
+use crate::protocol::config::PluginRequestRemoveParams;
+use crate::protocol::config::PluginRequestSetEnablementParams;
+use crate::protocol::config::PluginRequestUpsertParams;
+use crate::protocol::config::ProviderConfigDto;
+use crate::protocol::config::ProviderConfigureParams;
+use crate::protocol::config::ProviderRemoveParams;
+use crate::protocol::config::SemanticCodeIndexAuthorizeParams;
+use crate::protocol::config::SemanticCodeIndexAutomaticContextDto;
+use crate::protocol::config::SemanticCodeIndexConfigDto;
+use crate::protocol::config::SemanticCodeIndexConfigureParams;
+use crate::protocol::config::SemanticCodeIndexModelsDto;
+use crate::protocol::config::SemanticCodeIndexRevokeParams;
+use crate::protocol::config::SemanticCodeIndexSelectionDto;
+use crate::protocol::config::SkillSourceAddParams;
+use crate::protocol::config::SkillSourceConfigDto;
+use crate::protocol::config::SkillSourceEnablementDto;
+use crate::protocol::config::SkillSourceRemoveParams;
+use crate::protocol::config::SkillSourceSetEnablementParams;
+use crate::protocol::config::ToolSearchConfigDto;
+use crate::protocol::config::ToolSearchConfigureParams;
+use crate::protocol::config::ToolSearchEmbeddingStatusDto;
+use crate::protocol::config::ToolSearchModeDto;
 use crate::protocol::connectors::ConnectorAccountDto;
 use crate::protocol::connectors::ConnectorApiTokenConnectParams;
 use crate::protocol::connectors::ConnectorAvailableActionDto;
@@ -135,11 +180,13 @@ use crate::protocol::diff::DiffComputeRowDto;
 use crate::protocol::diff::DiffHunkDto;
 use crate::protocol::diff::DiffRangeDto;
 use crate::protocol::diff::DiffRowKindDto;
-use crate::protocol::document::{
-    TypstCompileParams, TypstCompileResult, TypstDiagnosticDto, TypstDiagnosticSeverityDto,
-    TypstSourceRangeDto,
-};
-use crate::protocol::error::{AppServerError, AppServerErrorName};
+use crate::protocol::document::TypstCompileParams;
+use crate::protocol::document::TypstCompileResult;
+use crate::protocol::document::TypstDiagnosticDto;
+use crate::protocol::document::TypstDiagnosticSeverityDto;
+use crate::protocol::document::TypstSourceRangeDto;
+use crate::protocol::error::AppServerError;
+use crate::protocol::error::AppServerErrorName;
 use crate::protocol::extension_host::ExtensionHostCancellationReasonDto;
 use crate::protocol::extension_host::ExtensionHostChanged;
 use crate::protocol::extension_host::ExtensionHostExtensionDto;
@@ -172,67 +219,168 @@ use crate::protocol::extensions::ExtensionListResult;
 use crate::protocol::extensions::ExtensionResourceOpenParams;
 use crate::protocol::extensions::ExtensionResourceOpenResult;
 use crate::protocol::extensions::ExtensionSourceKindDto;
-use crate::protocol::fs::{
-    FsChanged, FsCreateFileParams, FsDeleteMode, FsDeleteParams, FsExistingTargetBehavior,
-    FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsMissingTargetBehavior,
-    FsReadBinaryFileParams, FsReadBinaryFileResult, FsReadDirectoryEntry, FsReadDirectoryParams,
-    FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsRenameParams, FsWriteFileParams,
-    FsWriteFileResult,
-};
-use crate::protocol::git::{
-    GitBranchDto, GitBranchListResult, GitBranchSwitchParams, GitChangeFileComparisonDto,
-    GitChangeFileParams, GitChangeFileResult, GitChangeStatusDto, GitCommitChangeDto,
-    GitCommitChangesParams, GitCommitChangesResult, GitCommitFileContentDto, GitCommitFileParams,
-    GitCommitFileResult, GitCommitParams, GitCommitResult, GitCommitSummaryDto,
-    GitDiffStatisticsDto, GitGraphParams, GitGraphResult, GitHeadDto, GitHistoryResult,
-    GitOperationResult, GitPathsParams, GitReferenceDto, GitReferenceKindDto, GitRemoteDto,
-    GitRemoteProviderDto, GitRepositoriesResult, GitRepositoryChangeDto, GitRepositoryDto,
-    GitRepositoryIdentityDto, GitRepositoryParams, GitStatusChanged, GitStatusResult,
-    GitSubmoduleStateDto, GitTextDiffDto, GitTextDiffResult, GitUpstreamDto,
-};
-use crate::protocol::goal::{
-    ThreadGoalClearParams, ThreadGoalClearResponse, ThreadGoalClearedNotification,
-    ThreadGoalGetParams, ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse,
-    ThreadGoalUpdatedNotification,
-};
-use crate::protocol::initialize::{
-    CapabilityContract, InitializeParams, InitializeResult, ProtocolVersion, ServerCapabilities,
-};
-use crate::protocol::language::{
-    LanguageCloseParams, LanguageCodeActionDiagnosticDto, LanguageCodeActionDto,
-    LanguageCodeActionsParams, LanguageCodeActionsResult, LanguageCodeLensDto,
-    LanguageCodeLensesResult, LanguageColorDto, LanguageColorPresentationDto,
-    LanguageColorPresentationsParams, LanguageColorPresentationsResult, LanguageCommandDto,
-    LanguageCompletionDetailsResult, LanguageCompletionInsertTextFormatDto,
-    LanguageCompletionItemDto, LanguageCompletionItemKindDto, LanguageCompletionTriggerKindDto,
-    LanguageCompletionsParams, LanguageCompletionsResult, LanguageDiagnosticReportKindDto,
-    LanguageDiagnosticSeverityDto, LanguageDiagnosticsNotification, LanguageDocumentColorDto,
-    LanguageDocumentColorsResult, LanguageDocumentDiagnosticsParams,
-    LanguageDocumentDiagnosticsResult, LanguageDocumentDto, LanguageDocumentFeaturesParams,
-    LanguageDocumentFormattingParams, LanguageDocumentLinkDto, LanguageDocumentLinksResult,
-    LanguageDocumentSymbolDto, LanguageDocumentSymbolsResult, LanguageExecuteCommandParams,
-    LanguageFoldingRangeDto, LanguageFoldingRangeKindDto, LanguageFoldingRangesResult,
-    LanguageFormattingOptionsDto, LanguageFormattingResult, LanguageHierarchyEntryDto,
-    LanguageHierarchyItemDto, LanguageHierarchyKindDto, LanguageHierarchyParams,
-    LanguageHierarchyResultDto, LanguageHoverParams, LanguageHoverResult, LanguageInlayHintDto,
-    LanguageInlayHintKindDto, LanguageInlayHintsParams, LanguageInlayHintsResult,
-    LanguageLinkedEditingRangesParams, LanguageLinkedEditingRangesResult, LanguageLocationDto,
-    LanguageLocationKindDto, LanguageLocationsParams, LanguageLocationsResult,
-    LanguageParameterInformationDto, LanguagePositionDto, LanguagePrepareRenameParams,
-    LanguagePrepareRenameResult, LanguageRangeDto, LanguageRangeFormattingParams,
-    LanguageRenameParams, LanguageRenamePreparationDto, LanguageResolveCodeActionParams,
-    LanguageResolveCodeLensParams, LanguageResolveCompletionParams,
-    LanguageResolveDocumentLinkParams, LanguageSemanticTokenDto, LanguageSemanticTokensParams,
-    LanguageSemanticTokensResult, LanguageServerMessageNotification,
-    LanguageServerMessageSeverityDto, LanguageServerMessageSourceDto,
-    LanguageServerProgressNotification, LanguageServerStateDto, LanguageServerStateNotification,
-    LanguageSignatureHelpParams, LanguageSignatureHelpResult, LanguageSignatureHelpTriggerKindDto,
-    LanguageSignatureInformationDto, LanguageSynchronizeParams, LanguageTextDocumentEditDto,
-    LanguageTextEditDto, LanguageWorkspaceDiagnosticSnapshotDto,
-    LanguageWorkspaceDiagnosticsParams, LanguageWorkspaceDiagnosticsResult,
-    LanguageWorkspaceEditDto, LanguageWorkspaceEditEntryDto, LanguageWorkspaceSymbolDto,
-    LanguageWorkspaceSymbolsParams, LanguageWorkspaceSymbolsResult,
-};
+use crate::protocol::fs::FsChanged;
+use crate::protocol::fs::FsCreateFileParams;
+use crate::protocol::fs::FsDeleteMode;
+use crate::protocol::fs::FsDeleteParams;
+use crate::protocol::fs::FsExistingTargetBehavior;
+use crate::protocol::fs::FsFileType;
+use crate::protocol::fs::FsGetMetadataParams;
+use crate::protocol::fs::FsGetMetadataResult;
+use crate::protocol::fs::FsMissingTargetBehavior;
+use crate::protocol::fs::FsReadBinaryFileParams;
+use crate::protocol::fs::FsReadBinaryFileResult;
+use crate::protocol::fs::FsReadDirectoryEntry;
+use crate::protocol::fs::FsReadDirectoryParams;
+use crate::protocol::fs::FsReadDirectoryResult;
+use crate::protocol::fs::FsReadFileParams;
+use crate::protocol::fs::FsReadFileResult;
+use crate::protocol::fs::FsRenameParams;
+use crate::protocol::fs::FsWriteFileParams;
+use crate::protocol::fs::FsWriteFileResult;
+use crate::protocol::git::GitBranchDto;
+use crate::protocol::git::GitBranchListResult;
+use crate::protocol::git::GitBranchSwitchParams;
+use crate::protocol::git::GitChangeFileComparisonDto;
+use crate::protocol::git::GitChangeFileParams;
+use crate::protocol::git::GitChangeFileResult;
+use crate::protocol::git::GitChangeStatusDto;
+use crate::protocol::git::GitCommitChangeDto;
+use crate::protocol::git::GitCommitChangesParams;
+use crate::protocol::git::GitCommitChangesResult;
+use crate::protocol::git::GitCommitFileContentDto;
+use crate::protocol::git::GitCommitFileParams;
+use crate::protocol::git::GitCommitFileResult;
+use crate::protocol::git::GitCommitParams;
+use crate::protocol::git::GitCommitResult;
+use crate::protocol::git::GitCommitSummaryDto;
+use crate::protocol::git::GitDiffStatisticsDto;
+use crate::protocol::git::GitGraphParams;
+use crate::protocol::git::GitGraphResult;
+use crate::protocol::git::GitHeadDto;
+use crate::protocol::git::GitHistoryResult;
+use crate::protocol::git::GitOperationResult;
+use crate::protocol::git::GitPathsParams;
+use crate::protocol::git::GitReferenceDto;
+use crate::protocol::git::GitReferenceKindDto;
+use crate::protocol::git::GitRemoteDto;
+use crate::protocol::git::GitRemoteProviderDto;
+use crate::protocol::git::GitRepositoriesResult;
+use crate::protocol::git::GitRepositoryChangeDto;
+use crate::protocol::git::GitRepositoryDto;
+use crate::protocol::git::GitRepositoryIdentityDto;
+use crate::protocol::git::GitRepositoryParams;
+use crate::protocol::git::GitStatusChanged;
+use crate::protocol::git::GitStatusResult;
+use crate::protocol::git::GitSubmoduleStateDto;
+use crate::protocol::git::GitTextDiffDto;
+use crate::protocol::git::GitTextDiffResult;
+use crate::protocol::git::GitUpstreamDto;
+use crate::protocol::goal::ThreadGoalClearParams;
+use crate::protocol::goal::ThreadGoalClearResponse;
+use crate::protocol::goal::ThreadGoalClearedNotification;
+use crate::protocol::goal::ThreadGoalGetParams;
+use crate::protocol::goal::ThreadGoalGetResponse;
+use crate::protocol::goal::ThreadGoalSetParams;
+use crate::protocol::goal::ThreadGoalSetResponse;
+use crate::protocol::goal::ThreadGoalUpdatedNotification;
+use crate::protocol::initialize::CapabilityContract;
+use crate::protocol::initialize::InitializeParams;
+use crate::protocol::initialize::InitializeResult;
+use crate::protocol::initialize::ProtocolVersion;
+use crate::protocol::initialize::ServerCapabilities;
+use crate::protocol::language::LanguageCloseParams;
+use crate::protocol::language::LanguageCodeActionDiagnosticDto;
+use crate::protocol::language::LanguageCodeActionDto;
+use crate::protocol::language::LanguageCodeActionsParams;
+use crate::protocol::language::LanguageCodeActionsResult;
+use crate::protocol::language::LanguageCodeLensDto;
+use crate::protocol::language::LanguageCodeLensesResult;
+use crate::protocol::language::LanguageColorDto;
+use crate::protocol::language::LanguageColorPresentationDto;
+use crate::protocol::language::LanguageColorPresentationsParams;
+use crate::protocol::language::LanguageColorPresentationsResult;
+use crate::protocol::language::LanguageCommandDto;
+use crate::protocol::language::LanguageCompletionDetailsResult;
+use crate::protocol::language::LanguageCompletionInsertTextFormatDto;
+use crate::protocol::language::LanguageCompletionItemDto;
+use crate::protocol::language::LanguageCompletionItemKindDto;
+use crate::protocol::language::LanguageCompletionTriggerKindDto;
+use crate::protocol::language::LanguageCompletionsParams;
+use crate::protocol::language::LanguageCompletionsResult;
+use crate::protocol::language::LanguageDiagnosticReportKindDto;
+use crate::protocol::language::LanguageDiagnosticSeverityDto;
+use crate::protocol::language::LanguageDiagnosticsNotification;
+use crate::protocol::language::LanguageDocumentColorDto;
+use crate::protocol::language::LanguageDocumentColorsResult;
+use crate::protocol::language::LanguageDocumentDiagnosticsParams;
+use crate::protocol::language::LanguageDocumentDiagnosticsResult;
+use crate::protocol::language::LanguageDocumentDto;
+use crate::protocol::language::LanguageDocumentFeaturesParams;
+use crate::protocol::language::LanguageDocumentFormattingParams;
+use crate::protocol::language::LanguageDocumentLinkDto;
+use crate::protocol::language::LanguageDocumentLinksResult;
+use crate::protocol::language::LanguageDocumentSymbolDto;
+use crate::protocol::language::LanguageDocumentSymbolsResult;
+use crate::protocol::language::LanguageExecuteCommandParams;
+use crate::protocol::language::LanguageFoldingRangeDto;
+use crate::protocol::language::LanguageFoldingRangeKindDto;
+use crate::protocol::language::LanguageFoldingRangesResult;
+use crate::protocol::language::LanguageFormattingOptionsDto;
+use crate::protocol::language::LanguageFormattingResult;
+use crate::protocol::language::LanguageHierarchyEntryDto;
+use crate::protocol::language::LanguageHierarchyItemDto;
+use crate::protocol::language::LanguageHierarchyKindDto;
+use crate::protocol::language::LanguageHierarchyParams;
+use crate::protocol::language::LanguageHierarchyResultDto;
+use crate::protocol::language::LanguageHoverParams;
+use crate::protocol::language::LanguageHoverResult;
+use crate::protocol::language::LanguageInlayHintDto;
+use crate::protocol::language::LanguageInlayHintKindDto;
+use crate::protocol::language::LanguageInlayHintsParams;
+use crate::protocol::language::LanguageInlayHintsResult;
+use crate::protocol::language::LanguageLinkedEditingRangesParams;
+use crate::protocol::language::LanguageLinkedEditingRangesResult;
+use crate::protocol::language::LanguageLocationDto;
+use crate::protocol::language::LanguageLocationKindDto;
+use crate::protocol::language::LanguageLocationsParams;
+use crate::protocol::language::LanguageLocationsResult;
+use crate::protocol::language::LanguageParameterInformationDto;
+use crate::protocol::language::LanguagePositionDto;
+use crate::protocol::language::LanguagePrepareRenameParams;
+use crate::protocol::language::LanguagePrepareRenameResult;
+use crate::protocol::language::LanguageRangeDto;
+use crate::protocol::language::LanguageRangeFormattingParams;
+use crate::protocol::language::LanguageRenameParams;
+use crate::protocol::language::LanguageRenamePreparationDto;
+use crate::protocol::language::LanguageResolveCodeActionParams;
+use crate::protocol::language::LanguageResolveCodeLensParams;
+use crate::protocol::language::LanguageResolveCompletionParams;
+use crate::protocol::language::LanguageResolveDocumentLinkParams;
+use crate::protocol::language::LanguageSemanticTokenDto;
+use crate::protocol::language::LanguageSemanticTokensParams;
+use crate::protocol::language::LanguageSemanticTokensResult;
+use crate::protocol::language::LanguageServerMessageNotification;
+use crate::protocol::language::LanguageServerMessageSeverityDto;
+use crate::protocol::language::LanguageServerMessageSourceDto;
+use crate::protocol::language::LanguageServerProgressNotification;
+use crate::protocol::language::LanguageServerStateDto;
+use crate::protocol::language::LanguageServerStateNotification;
+use crate::protocol::language::LanguageSignatureHelpParams;
+use crate::protocol::language::LanguageSignatureHelpResult;
+use crate::protocol::language::LanguageSignatureHelpTriggerKindDto;
+use crate::protocol::language::LanguageSignatureInformationDto;
+use crate::protocol::language::LanguageSynchronizeParams;
+use crate::protocol::language::LanguageTextDocumentEditDto;
+use crate::protocol::language::LanguageTextEditDto;
+use crate::protocol::language::LanguageWorkspaceDiagnosticSnapshotDto;
+use crate::protocol::language::LanguageWorkspaceDiagnosticsParams;
+use crate::protocol::language::LanguageWorkspaceDiagnosticsResult;
+use crate::protocol::language::LanguageWorkspaceEditDto;
+use crate::protocol::language::LanguageWorkspaceEditEntryDto;
+use crate::protocol::language::LanguageWorkspaceSymbolDto;
+use crate::protocol::language::LanguageWorkspaceSymbolsParams;
+use crate::protocol::language::LanguageWorkspaceSymbolsResult;
 use crate::protocol::marketplace::MarketplaceAcquireCapabilityParams;
 use crate::protocol::marketplace::MarketplaceAcquiredCapabilityDto;
 use crate::protocol::marketplace::MarketplaceActivationSpecDto;
@@ -285,44 +433,73 @@ use crate::protocol::mcp::McpServerRuntimeIntentResult;
 use crate::protocol::mcp::McpServerRuntimeStateDto;
 use crate::protocol::mcp::McpServerStatusDto;
 use crate::protocol::mcp::McpServerStatusResult;
-use crate::protocol::model::{ModelCatalogEntry, ModelListResult};
-use crate::protocol::notification::{
-    SessionUpdateEnvelope, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope,
-};
+use crate::protocol::model::ModelCatalogEntry;
+use crate::protocol::model::ModelListResult;
+use crate::protocol::notification::SessionUpdateEnvelope;
+use crate::protocol::notification::ThreadTranscriptUpdateEnvelope;
+use crate::protocol::notification::ThreadUpdateEnvelope;
 use crate::protocol::plugins::PluginCommandDispositionDto;
 use crate::protocol::plugins::PluginCommandResultDto;
 use crate::protocol::plugins::PluginListResult;
 use crate::protocol::plugins::PluginPackageCommandParams;
 use crate::protocol::plugins::PluginPackageDto;
 use crate::protocol::plugins::PluginsChanged;
-use crate::protocol::provider::{
-    ProviderApiKeyDto, ProviderApiKeyPolicyDto, ProviderApiKeySetParams, ProviderApiKeySetResult,
-    ProviderCatalogEntryDto, ProviderListResult,
-};
-use crate::protocol::resources::{
-    ResourceMetadataParams, ResourceMetadataResult, ResourceReadParams, ResourceReadResult,
-    ResourceReleaseParams,
-};
-use crate::protocol::search::{
-    WorkspaceSearchCancelParams, WorkspaceSearchCaseSensitivity, WorkspaceSearchMatch,
-    WorkspaceSearchMatchRange, WorkspaceSearchPatternKind, WorkspaceSearchReadParams,
-    WorkspaceSearchReadResult, WorkspaceSearchStartParams, WorkspaceSearchStartResult,
-};
-use crate::protocol::session::{
-    SessionCreateParams, SessionListResult, SessionReadParams, SessionRequest,
-    SessionRequestParams, SessionRequestResult, SessionResult, SessionRewriteResult,
-    SessionSubscribeParams, SessionSubscribeResult, SessionThreadProjection,
-    SessionThreadReadParams, SessionThreadReadResult, SessionThreadResult,
-    SessionThreadSubscribeParams, SessionThreadSubscribeResult, SessionThreadUnsubscribeParams,
-    SessionUnsubscribeParams, ThreadHistoryBoundary, ThreadSnapshotHistory,
-};
-use crate::protocol::skills::{
-    SkillCatalogReloadDto, SkillCompatibilityDto, SkillDiagnosticCodeDto, SkillDiagnosticDto,
-    SkillDto, SkillEnablementDto, SkillListParams, SkillListResult, SkillResourceKindDto,
-    SkillResourceOpenParams, SkillResourceOpenResult, SkillSetEnablementParams, SkillSourceKindDto,
-    SkillsChanged,
-};
-use crate::protocol::slash_commands::{SlashCommandArgumentModeDto, SlashCommandDefinition};
+use crate::protocol::provider::ProviderApiKeyDto;
+use crate::protocol::provider::ProviderApiKeyPolicyDto;
+use crate::protocol::provider::ProviderApiKeySetParams;
+use crate::protocol::provider::ProviderApiKeySetResult;
+use crate::protocol::provider::ProviderCatalogEntryDto;
+use crate::protocol::provider::ProviderListResult;
+use crate::protocol::resources::ResourceMetadataParams;
+use crate::protocol::resources::ResourceMetadataResult;
+use crate::protocol::resources::ResourceReadParams;
+use crate::protocol::resources::ResourceReadResult;
+use crate::protocol::resources::ResourceReleaseParams;
+use crate::protocol::search::WorkspaceSearchCancelParams;
+use crate::protocol::search::WorkspaceSearchCaseSensitivity;
+use crate::protocol::search::WorkspaceSearchMatch;
+use crate::protocol::search::WorkspaceSearchMatchRange;
+use crate::protocol::search::WorkspaceSearchPatternKind;
+use crate::protocol::search::WorkspaceSearchReadParams;
+use crate::protocol::search::WorkspaceSearchReadResult;
+use crate::protocol::search::WorkspaceSearchStartParams;
+use crate::protocol::search::WorkspaceSearchStartResult;
+use crate::protocol::session::SessionCreateParams;
+use crate::protocol::session::SessionListResult;
+use crate::protocol::session::SessionReadParams;
+use crate::protocol::session::SessionRequest;
+use crate::protocol::session::SessionRequestParams;
+use crate::protocol::session::SessionRequestResult;
+use crate::protocol::session::SessionResult;
+use crate::protocol::session::SessionRewriteResult;
+use crate::protocol::session::SessionSubscribeParams;
+use crate::protocol::session::SessionSubscribeResult;
+use crate::protocol::session::SessionThreadProjection;
+use crate::protocol::session::SessionThreadReadParams;
+use crate::protocol::session::SessionThreadReadResult;
+use crate::protocol::session::SessionThreadResult;
+use crate::protocol::session::SessionThreadSubscribeParams;
+use crate::protocol::session::SessionThreadSubscribeResult;
+use crate::protocol::session::SessionThreadUnsubscribeParams;
+use crate::protocol::session::SessionUnsubscribeParams;
+use crate::protocol::session::ThreadHistoryBoundary;
+use crate::protocol::session::ThreadSnapshotHistory;
+use crate::protocol::skills::SkillCatalogReloadDto;
+use crate::protocol::skills::SkillCompatibilityDto;
+use crate::protocol::skills::SkillDiagnosticCodeDto;
+use crate::protocol::skills::SkillDiagnosticDto;
+use crate::protocol::skills::SkillDto;
+use crate::protocol::skills::SkillEnablementDto;
+use crate::protocol::skills::SkillListParams;
+use crate::protocol::skills::SkillListResult;
+use crate::protocol::skills::SkillResourceKindDto;
+use crate::protocol::skills::SkillResourceOpenParams;
+use crate::protocol::skills::SkillResourceOpenResult;
+use crate::protocol::skills::SkillSetEnablementParams;
+use crate::protocol::skills::SkillSourceKindDto;
+use crate::protocol::skills::SkillsChanged;
+use crate::protocol::slash_commands::SlashCommandArgumentModeDto;
+use crate::protocol::slash_commands::SlashCommandDefinition;
 use crate::protocol::symbol_index::SymbolIndexSearchHitDto;
 use crate::protocol::symbol_index::SymbolIndexSearchParams;
 use crate::protocol::symbol_index::SymbolIndexSearchResult;
@@ -365,12 +542,14 @@ use crate::protocol::terminal::TerminalReadResult;
 use crate::protocol::terminal::TerminalReconnectLease;
 use crate::protocol::terminal::TerminalResizeParams;
 use crate::protocol::terminal::TerminalWriteParams;
-use crate::protocol::transcript::{
-    ThreadTranscriptChange, ThreadTranscriptEntry, ThreadTranscriptSnapshot,
-};
-use crate::protocol::turn::{
-    InputItem, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult,
-};
+use crate::protocol::transcript::ThreadTranscriptChange;
+use crate::protocol::transcript::ThreadTranscriptEntry;
+use crate::protocol::transcript::ThreadTranscriptSnapshot;
+use crate::protocol::turn::InputItem;
+use crate::protocol::turn::TurnInteractionResolveResult;
+use crate::protocol::turn::TurnInterruptResult;
+use crate::protocol::turn::TurnStartResult;
+use crate::protocol::turn::TurnSteerResult;
 use crate::protocol::workspace::WorkspaceAdditionalDirectoryAddParams;
 use crate::protocol::workspace::WorkspaceAdditionalDirectoryContributionsDto;
 use crate::protocol::workspace::WorkspaceAdditionalDirectoryDto;
@@ -398,49 +577,127 @@ use crate::protocol::workspace::WorkspaceTrustSetParams;
 use crate::protocol::workspace::WorkspaceTrustSettingDto;
 use crate::protocol::workspace::WorkspaceTrustStateDto;
 use schemars::JsonSchema;
-use ts_rs::{Config, TS};
+use ts_rs::Config;
+use ts_rs::TS;
+use zeta_protocol::ActionApprovalCapability;
+use zeta_protocol::ActionApprovalCapabilityKind;
+use zeta_protocol::ActionApprovalDecision;
+use zeta_protocol::ActionApprovalRequest;
+use zeta_protocol::ActionApprovalResponse;
+use zeta_protocol::AgentContextContent;
+use zeta_protocol::AgentContextMode;
+use zeta_protocol::AgentContextSeed;
+use zeta_protocol::AgentContextSource;
+use zeta_protocol::AgentDefinitionSelectionReason;
+use zeta_protocol::AgentInteractionKind;
+use zeta_protocol::AgentJoin;
+use zeta_protocol::AgentJoinId;
+use zeta_protocol::AgentJoinPolicy;
+use zeta_protocol::AgentJoinStatus;
+use zeta_protocol::AgentMaterializedContext;
+use zeta_protocol::AgentMessage;
+use zeta_protocol::AgentMessageContent;
+use zeta_protocol::AgentMessageId;
+use zeta_protocol::AgentMessageProvenance;
+use zeta_protocol::AgentRequest;
 use zeta_protocol::AgentRequestEnvelope;
+use zeta_protocol::AgentResponse;
+use zeta_protocol::AgentRoleSnapshot;
+use zeta_protocol::AgentTreeExecutionStatus;
+use zeta_protocol::AgentTreeNodeProjection;
+use zeta_protocol::AgentTreeProjection;
+use zeta_protocol::AgentTreeWaitingReason;
 use zeta_protocol::ApprovalMode;
 use zeta_protocol::CapabilitySupport;
+use zeta_protocol::ContentDigest;
 use zeta_protocol::ContentPart;
+use zeta_protocol::ContextCheckpoint;
+use zeta_protocol::ContextCheckpointId;
+use zeta_protocol::ContextCheckpointVerification;
+use zeta_protocol::ContextSeedDigest;
+use zeta_protocol::ContextSourceDigest;
+use zeta_protocol::ContextSourceRange;
+use zeta_protocol::DelegatedCapabilityScope;
+use zeta_protocol::DelegatedPolicyCeiling;
+use zeta_protocol::DelegatedTask;
+use zeta_protocol::DelegationArtifactRef;
+use zeta_protocol::DelegationId;
+use zeta_protocol::DelegationResult;
+use zeta_protocol::DelegationResultDigest;
+use zeta_protocol::DelegationResultStatus;
+use zeta_protocol::DynamicToolCall;
+use zeta_protocol::DynamicToolOutput;
+use zeta_protocol::DynamicToolResponse;
+use zeta_protocol::ForkedAgentContext;
+use zeta_protocol::FrozenAgentDefinitionRef;
+use zeta_protocol::FrozenSkillActivation;
 use zeta_protocol::ImageAttachmentRef;
 use zeta_protocol::ImageDetail;
 use zeta_protocol::ImageMediaType;
+use zeta_protocol::InteractionCancelReason;
+use zeta_protocol::InteractionDeadline;
+use zeta_protocol::ItemDelta;
 use zeta_protocol::ModelAccess;
 use zeta_protocol::ModelCapabilities;
+use zeta_protocol::ModelContextUsage;
+use zeta_protocol::ModelContextUsageSource;
+use zeta_protocol::ModelInputEstimate;
 use zeta_protocol::ModelOutputTransport;
+use zeta_protocol::ModelUsage;
+use zeta_protocol::ModelUsageSummary;
+use zeta_protocol::ModelUsageTotal;
+use zeta_protocol::PendingInteraction;
 use zeta_protocol::Personality;
+use zeta_protocol::PlanStep;
+use zeta_protocol::PlanStepStatus;
+use zeta_protocol::PlanUpdate;
+use zeta_protocol::ProcessExecutionOutput;
+use zeta_protocol::ProcessExitStatus;
 use zeta_protocol::ReasoningEffort;
+use zeta_protocol::RequestUserInput;
+use zeta_protocol::RequestUserInputResponse;
+use zeta_protocol::SandboxDenialOutput;
+use zeta_protocol::Session;
+use zeta_protocol::SessionEvent;
+use zeta_protocol::SessionStatus;
+use zeta_protocol::SessionThread;
+use zeta_protocol::SessionThreadStatus;
+use zeta_protocol::SessionUpdate;
+use zeta_protocol::SkillActivationReason;
+use zeta_protocol::SkillId;
+use zeta_protocol::SkillName;
+use zeta_protocol::SkillRef;
+use zeta_protocol::SkillSourceId;
+use zeta_protocol::SkillVersionSelector;
+use zeta_protocol::StableTurnError;
+use zeta_protocol::StableTurnErrorCode;
+use zeta_protocol::StreamCursor;
+use zeta_protocol::Thread;
+use zeta_protocol::ThreadEvent;
+use zeta_protocol::ThreadGoal;
+use zeta_protocol::ThreadGoalStatus;
+use zeta_protocol::ThreadItem;
+use zeta_protocol::ThreadOrigin;
+use zeta_protocol::ThreadSequenceRange;
+use zeta_protocol::ThreadStatus;
+use zeta_protocol::ThreadUpdate;
 use zeta_protocol::ToolCallBinding;
 use zeta_protocol::ToolCallCaller;
+use zeta_protocol::ToolExecutionAuthority;
 use zeta_protocol::ToolMode;
+use zeta_protocol::ToolOutputStream;
+use zeta_protocol::ToolProfileSnapshot;
+use zeta_protocol::ToolReplaySafety;
 use zeta_protocol::ToolSourceProvenance;
+use zeta_protocol::Turn;
+use zeta_protocol::TurnExecutionBinding;
+use zeta_protocol::TurnInteraction;
+use zeta_protocol::TurnStatus;
+use zeta_protocol::UserInputAnswer;
+use zeta_protocol::UserInputOption;
+use zeta_protocol::UserInputQuestion;
 use zeta_protocol::WorkspaceBinding;
 use zeta_protocol::WorkspaceTrustId;
-use zeta_protocol::{
-    ActionApprovalCapability, ActionApprovalCapabilityKind, ActionApprovalDecision,
-    ActionApprovalRequest, ActionApprovalResponse, AgentContextContent, AgentContextMode,
-    AgentContextSeed, AgentContextSource, AgentDefinitionSelectionReason, AgentInteractionKind,
-    AgentJoin, AgentJoinId, AgentJoinPolicy, AgentJoinStatus, AgentMaterializedContext,
-    AgentMessage, AgentMessageContent, AgentMessageId, AgentMessageProvenance, AgentRequest,
-    AgentResponse, AgentRoleSnapshot, AgentTreeExecutionStatus, AgentTreeNodeProjection,
-    AgentTreeProjection, AgentTreeWaitingReason, ContentDigest, ContextCheckpoint,
-    ContextCheckpointId, ContextCheckpointVerification, ContextSeedDigest, ContextSourceDigest,
-    ContextSourceRange, DelegatedCapabilityScope, DelegatedPolicyCeiling, DelegatedTask,
-    DelegationArtifactRef, DelegationId, DelegationResult, DelegationResultDigest,
-    DelegationResultStatus, DynamicToolCall, DynamicToolOutput, DynamicToolResponse,
-    ForkedAgentContext, FrozenAgentDefinitionRef, FrozenSkillActivation, InteractionCancelReason,
-    InteractionDeadline, ItemDelta, ModelContextUsage, ModelContextUsageSource, ModelInputEstimate,
-    ModelUsage, ModelUsageSummary, ModelUsageTotal, PendingInteraction, PlanStep, PlanStepStatus,
-    PlanUpdate, ProcessExecutionOutput, ProcessExitStatus, RequestUserInput,
-    RequestUserInputResponse, SandboxDenialOutput, Session, SessionEvent, SessionStatus,
-    SessionThread, SessionThreadStatus, SessionUpdate, SkillActivationReason, SkillId, SkillName,
-    SkillRef, SkillSourceId, SkillVersionSelector, StableTurnError, StableTurnErrorCode,
-    StreamCursor, Thread, ThreadEvent, ThreadGoal, ThreadGoalStatus, ThreadItem, ThreadOrigin,
-    ThreadSequenceRange, ThreadStatus, ThreadUpdate, ToolExecutionAuthority, ToolOutputStream,
-    ToolProfileSnapshot, ToolReplaySafety, Turn, TurnExecutionBinding, TurnInteraction, TurnStatus,
-    UserInputAnswer, UserInputOption, UserInputQuestion,
-};
 
 /// Selects whether equal scheduling keys exclude or share execution.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

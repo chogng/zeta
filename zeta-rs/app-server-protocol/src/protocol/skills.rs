@@ -1,7 +1,8 @@
 use crate::protocol::common::CommandId;
 use crate::protocol::resources::ResourceMetadataResult;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use ts_rs::TS;
 use zeta_protocol::ContentDigest;
 use zeta_protocol::SkillId;

@@ -5,7 +5,8 @@
 //! same RPC semantics without changing the business protocol.
 
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Generic JSON-RPC error returned by a client-hosted method implementation.
 #[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
